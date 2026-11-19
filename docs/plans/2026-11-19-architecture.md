@@ -93,64 +93,153 @@ in four settings:
 
 Every contract a client implements uses one interface system. That covers object
 capabilities, `TransformModel`, `BlockProvider`, `SnapshotProvider`, `AnyBvhSource`,
-commands, tools and gizmos. coredcc's internal polymorphism can still use ordinary virtual
-classes.
+`Command`, `Tool` and `Gizmo`. coredcc's internal polymorphism may still use ordinary
+virtual classes.
+
+This section was revised after a pressure test that compiled experiments with clang-cl,
+MSVC and emcc. See the record at the end of the plan.
 
 ### Why not multiple inheritance
 - **Adaptors need a wrapper object per entity.** With multiple inheritance, an
   implementation must be a C++ subclass of the interface. To adapt an Unreal actor or a
-  ubertopo `Complex`, you allocate a wrapper per entity and keep its lifetime in sync.
-  You can't add an interface to a type you don't own.
-- **Pointer adjustment breaks void\*-based bindings.** Casting `Derived*` to `IFoo*`
-  changes the address when `IFoo` isn't the first base. litestl's binding passes `self`
-  as `void*`, and its `Struct::inherit` copies parent offsets unadjusted. One missed
-  `static_cast` before a `void*` round trip is silent undefined behaviour.
-- **It needs a query mechanism anyway.** With RTTI off there is no `dynamic_cast` for
-  cross-casting, so we'd build `queryInterface` on top of the inheritance regardless.
-- **Foreign implementations multiply.** A TS object can't be a C++ subclass, so each
-  interface needs a C++ shim. A TS object implementing three interfaces needs a shim
-  class combining all three.
-- **The binding system can't express it.** It has no polymorphism and no base-pointer
-  conversion.
+  ubertopo `Complex`, you allocate a wrapper per entity. You can't add an interface to a
+  type you don't own.
+- **Pointer adjustment breaks void\*-based bindings.** Casting to a non-first base changes
+  the address, but litestl's method thunk does `static_cast<class_type*>(void*)`
+  (`binding_method.h:142`). One missed cast is silent undefined behaviour.
+- **It needs a query mechanism anyway.** With RTTI off there is no `dynamic_cast`.
+- **Foreign implementations multiply.** A TS object can't be a C++ subclass, so every
+  combination of interfaces would need its own shim class.
+
+The strongest alternative is a stateless virtual adaptor object paired with `self`. It
+gets `override`, defaults and readable debugger names for free. It loses a known vtable
+layout, though, and with it the ability to generate foreign vtables from the same
+declaration. That ability decided the choice.
 
 ### Design: fat interface references plus an external registry
 This is the Rust trait-object / Go interface model.
-- **Interface definition.** An interface `I` is a `VTable` struct of function pointers
-  whose first argument is `void *self`, plus a header holding `InterfaceId` (a hashed
-  stable name) and `size` (for appending methods compatibly).
-  - Interface inheritance embeds the base vtable as the first member, so an upcast is
-    free.
-- **`Iface<I> {const I::VTable *vt; void *self;}`** is a non-owning fat pointer.
-  - Inline forwarding methods give it ordinary call syntax: `spatial.rayCast(ray, hit)`.
-  - **`Owned<I>`** adds a `destroy` slot. It is used when coredcc owns the
-    implementation, for example a Command instance.
-- **Registry.** `(TypeId, InterfaceId) -> const VTable*` lives in the Runtime.
-  - An adaptor registers a vtable for a type it doesn't own. For example, the Spatial
-    interface can be implemented directly over `UStaticMeshComponent` with no wrapper
-    object.
-- **Lookup for a datablock** `query<I>(BlockHandle)` checks, in order:
-  1. a per-block override table (used by foreign objects);
-  2. the `(blockType, I)` registry;
-  3. the provider's `queryInterface(block, InterfaceId)` hook, for adaptors that decide
-     per instance. An example is an actor that may or may not have a mesh component.
-- **C++ authoring.** `registerImpl<I, T>(runtime)` generates the vtable from `T`'s
-  methods, and a concept (`I::Implementable<T>`) checks conformance at compile time.
-  - `T` can be a plain class, a class with virtual methods, or an adaptor with static
-    functions over someone else's type.
-  - Each interface is declared once, in a single macro or X-macro list. That list
-    generates the vtable struct, the forwarding wrapper, the concept and the binding
-    registration. The exact form is decided in P0.
-- **Bindings.** `Iface<I>` is an ordinary litestl-bound struct whose methods are the
-  forwarding functions, so the binding system needs no polymorphism support.
-- **Foreign implementations.** A TS or Python implementation is a vtable built at
-  runtime, with each slot a trampoline: Emscripten `addFunction`, or `napi_ref`.
-  - One foreign object can expose any set of interfaces through the per-block override
-    table, with no combinatorial shim classes. This replaces §13's Foreign* shim classes.
-- **Lifetime.** An `Iface<I>` is transient, like `PointerRef`. Stored references hold a
-  `BlockHandle` plus an `InterfaceId` and query again on use.
-- **Cost.** An indirect call through the vtable costs the same as a virtual call. Query
-  results are cached by the caller for the duration of an operation. Hot inner loops,
-  such as BVH leaf tests, use the templated path (`Bvh<S>`), not interfaces.
+
+**Declaration.** Each interface is one non-template struct, such as `Spatial`. The
+template form `Iface<I>` was dropped, because litestl's TS generator keys output files on
+the type name and merges every instantiation into one file.
+- A classic X-macro lists the slots, with argument names for TS. A `REQ` entry is a
+  required slot and an `OPT` entry an optional one. A classic X-macro works under MSVC's
+  traditional preprocessor; the `__VA_OPT__` form would need `/Zc:preprocessor`, which
+  Unreal may not enable.
+- Forwarders are written by hand, one line each, so the debugger and the IDE behave
+  normally.
+- A default for an optional slot lives in its forwarder. A null slot falls back to it.
+- `CDCC_INTERFACE(Name, "stable.name", SLOTS)` generates:
+  - `kId`;
+  - the `VTable` struct, with a header holding the interface id, `implType` and flags;
+  - per-slot conformance checks;
+  - `makeVTable<T>()`;
+  - `makeForeignVTable()`;
+  - `defineBindings()`;
+  - `vt` / `self` and `as<T>()`.
+
+```cpp
+#define SPATIAL_SLOTS(REQ, OPT) \
+  REQ(rayCast, "ray", "hit")    \
+  REQ(count)                    \
+  OPT(cost)
+struct Spatial {
+  bool rayCast(const Ray &ray, Hit &hit) const { return vt->rayCast(self, ray, hit); }
+  int count() const { return vt->count(self); }
+  double cost() const { return vt->cost ? vt->cost(self) : count() * 2.0; }
+  CDCC_INTERFACE(Spatial, "coredcc.Spatial", SPATIAL_SLOTS)
+};
+```
+
+**Declaration rules:**
+- No overloads in an interface, because the TS runtime keeps only the last method of each
+  name.
+- No template methods.
+- A const method gets a `const void*` slot, and return types must match exactly. Both are
+  needed to catch a non-const implementation of a const method, or a `double` returned for
+  a `bool`.
+
+**Conformance checks.** They are member templates that call the method, rather than
+taking `&T::m`. This makes overloads and default arguments in `T` resolve, and it avoids
+an MSVC hard error (C2039) that the in-lambda `requires` form hits.
+
+**Implementing.**
+- `registerImpl<I, T>(rt, TypeName)` generates the vtable from `T`. `T` can be:
+  - a plain class;
+  - a virtual class;
+  - a static adaptor over a type we don't own, such as `UStaticMeshComponent`.
+- Type names are always **explicit**, through `CDCC_TYPE_NAME(T, "stable.name")`. Names
+  derived by the compiler differ between clang and MSVC.
+
+**Inheritance.**
+- An interface may embed its base vtable as the first member, so upcasting to the first
+  base costs nothing. Upcasting to any other base is an offset.
+- In a diamond, the base vtable is duplicated, so vtable pointer identity never means type
+  identity.
+- Registration adds a registry entry for every base sub-vtable, so `query<Base>` finds
+  it.
+- There is no `size`/versioning field.
+  - It can't protect derived interfaces, because growing a base shifts their slots.
+  - coredcc is a single module, so every vtable comes from the same binary.
+  - If versioning is ever needed, the embedded base becomes a `const Base::VTable*`.
+
+**Downcasting.** `as<T>()` checks `implType` in the header. `Command::foldFrom` needs it.
+
+**Query.**
+- `query<I>(BlockHandle)` checks, in order:
+  1. the per-block override table, skipped unless the block's `hasOverrides` bit is set;
+  2. a per-BlockType cache over the `(TypeId, InterfaceId)` registry;
+  3. the provider's `queryInterface` hook.
+- A query costs about 8 ns uncached.
+
+**Bindings.**
+- Each interface struct is bound normally.
+- `query<I>` is a template, so it is bound as `queryRaw(block, InterfaceId)` together with
+  a generated checked constructor, `Spatial(RawIface)`.
+- `Owned<I>` is never bound. Bindings use handles.
+- P0b adds two things to litestl:
+  - `Binder<const T>`, without which no `const T&` parameter compiles;
+  - noexcept `MethodTraits`.
+
+**Foreign implementations.**
+- Each interface has one compile-time foreign vtable, generated from the same X-macro.
+  Every slot calls a single host dispatcher, `(self, ifaceId, slotOffset, void **args, ret)`,
+  which is litestl's existing `MethodThunk` ABI. That works the same under WASM and
+  N-API, and needs no per-slot `addFunction` and no per-signature ABI lowering.
+- The vtable is copied per JS class, and optional slots the class doesn't implement are
+  nulled so the C++ defaults apply.
+
+**Threads.**
+- Every foreign vtable sets a `threadAffine` flag. Two experiments show why:
+  - Under `wasm-mt` a foreign slot called from a pthread traps.
+  - Under N-API, a synchronous call from inside `parallel_for` deadlocks.
+- Parallel algorithms (BVH build, graph evaluation) check the flag. If it is set they
+  either run serially, or gather the foreign data on the main thread first.
+
+**Errors.**
+- The dispatcher catches every JS exception: try/catch in WASM, and the pending-exception
+  check in N-API. In the experiment, an uncaught JS exception skipped C++ destructors and
+  left an RAII guard set.
+- Foreign-implementable slots return `Status`. Slots that can't instead set a sticky
+  Runtime error, which the executor checks after each call.
+
+**Visitors and outputs.**
+- No `function_ref` or function-pointer parameters.
+- Outputs go through bound `Vector&` out-parameters, or through a `Sink` interface.
+
+**Lifetimes.**
+- An interface value is transient, like `PointerRef`. Stored references hold a `BlockId`
+  plus an `InterfaceId`, and query again on use.
+- A foreign slot that returns an interface may return only a `BlockHandle`, or an
+  interface of an object already strongly held by the override table. A transient JS
+  `self` has no owner.
+- TS wrappers around arguments point into the C++ stack, so they are invalidated after
+  the call returns.
+- Debug builds carry the `BlockHandle` in the interface value and check its generation on
+  each call, to catch use after the host has destroyed the object.
+
+**Cost.** A call through a slot costs the same as a virtual call. Hot inner loops such as
+BVH leaf tests use the templated path (`Bvh<S>`).
 
 ## 3. Repository layout
 
@@ -318,20 +407,20 @@ list of `ApiMember`s.
 ### CommandDef and Command
 - `CommandDef` holds `id` (`"mesh.extrude"`), uiName, description, icon, flags (Private,
   NoUndo, UndoBarrier), input and output `PropertyDef`s, and a factory.
-- `Command` holds the `inputs`/`outputs` bags and these virtuals:
+- `Command` is a §2a interface. The executor owns each instance through `Owned<Command>`
+  and keeps its `inputs`/`outputs` bags. The slots are:
   - `canRun(Context&) -> Refusal` (with a reason);
   - `exec(Context&) -> Status`;
   - `undo(Context&)`;
-  - `redo(Context&)`;
+  - `redo(Context&)` (optional);
   - `memSize()`;
   - `discard()`;
-  - `foldKey()` / `foldFrom(Command&)`.
+  - `foldKey()` / `foldFrom(Command)`. `foldFrom` downcasts with `as<T>()`.
 - **Redo:**
-  - The default `redo` runs `exec` again. That is only correct for deterministic,
-    input-driven commands.
-  - Interactive commands must override `redo`, either by replaying recorded samples or
-    through a journal. Registering an interactive command class that doesn't override it
-    is a debug assert.
+  - When the optional `redo` slot is null, the forwarder runs `exec` again. That is only
+    correct for deterministic, input-driven commands.
+  - An interactive command must fill the `redo` slot, either by replaying recorded samples
+    or through a journal. Registration fails with a Status if the slot is null.
 - **Sub-commands:** `ctx.runSub(cmd)` inside `exec` runs `cmd` and appends it to an
   implicit group owned by the current command.
   - The group is undone in reverse before the parent's own `undo`.
@@ -456,23 +545,23 @@ How it works:
 ## 8. Objects and transforms (`scene/`)
 
 ### TransformModel
-`TransformModel` is client-implemented and agnostic about how the matrix is built. Every
-method receives the parent context.
+`TransformModel` is a §2a interface, agnostic about how the matrix is built. Every
+method receives the parent context. `parent` is a nullable interface value (null at the root).
 
 - `local(EvalCtx&) -> mat4d`.
 - `components(EvalCtx&) -> TransformComponents`. This returns the global rotation and
   scale and the local scale, which children with FBX inherit types need.
   - The default implementation decomposes `local`, so a TRS parent works under an FBX
     child.
-- `world(EvalCtx&, const mat4d &parentWorld, const TransformModel *parent) -> mat4d`.
+- `world(EvalCtx&, const mat4d &parentWorld, TransformModel parent) -> mat4d`.
   - The default is `parentWorld * local`.
   - FBX RrSs and RSrs use the parent's global R and S. Rrs uses the parent's local scale
     via `parent->components(ctx)`.
-- `setWorld(EvalCtx&, const mat4d &target, const mat4d &parentWorld, const TransformModel *parent, SetMode) -> Status`.
+- `setWorld(EvalCtx&, const mat4d &target, const mat4d &parentWorld, TransformModel parent, SetMode) -> Status`.
   - The model inverts its own inheritance rule. This is not
     `parentWorld⁻¹ · target` in general.
   - It returns an error when the target can't be represented.
-- `applyDelta(EvalCtx&, const TransformDelta&, const mat4d &parentWorld, const TransformModel *parent)`.
+- `applyDelta(EvalCtx&, const TransformDelta&, const mat4d &parentWorld, TransformModel parent)`.
   - The delta is a translate, rotate or scale with a space and a pivot.
   - Gizmos use it so accumulated rotation doesn't wrap Euler angles.
   - The default goes through `setWorld`.
@@ -720,7 +809,9 @@ So:
 - **Build:** binned SAH with 16 bins. It uses `parallel_for`, which is serial with one
   worker.
 - **Updates:** `refit()`, plus an explicit `rebuild()`.
-- **Type-erased wrapper:** `AnyBvhSource` (virtual) for bindings and foreign sources.
+- **Type-erased wrapper:** `AnyBvhSource` (a §2a interface) for bindings and foreign
+  sources. When a foreign source is `threadAffine`, the build gathers its bounds on the
+  main thread before splitting in parallel.
 
 ### Built-in sources
 - `TriangleSource`.
@@ -917,22 +1008,26 @@ path.ux (xmlpage), Unreal (Slate), ImGui (debug). Each binds widgets to batched
 faberforge's geometry providers, tools, transform models and snapshot providers are
 written in TS. During migration TS must be able to implement coredcc interfaces. litestl
 has no path from JS into C++ callbacks today. So:
-- A foreign implementation is a runtime-built vtable for any §2a interface. No per-interface
-  shim classes are needed. `bind/` provides `buildForeignVTable(InterfaceId, callbacks)`,
-  driven by the interface's binding descriptor.
-- The vtable slots are filled by:
-  - under WASM: Emscripten `addFunction` and an `EM_JS` trampoline;
-  - under N-API: `napi_ref` plus `napi_call_function`, with a threadsafe function if it is
-    ever called off the main thread. It never is in v1.
-- The generic callback mechanism goes into litestl's binding system (P0b/P1). The foreign
-  vtable builder lives in `bind/`.
+- A foreign implementation uses the interface's compile-time foreign vtable (§2a). Every
+  slot calls one host dispatcher with the `MethodThunk` ABI. No per-interface shim classes
+  are needed.
+- The dispatcher is:
+  - under WASM: one `EM_JS` function;
+  - under N-API: `napi_ref` plus `napi_call_function`.
+  - Under both, it catches JS exceptions and converts them to Status.
+- Foreign vtables are `threadAffine`. Off-thread calls deadlock or trap, so parallel
+  algorithms check the flag (§2a).
+- The dispatcher hook goes into litestl's binding system (P0b). The per-JS-class vtable
+  copies live in `bind/`.
 
 ### Required litestl work
 This is the P0b branch. Without it nothing else can proceed.
 - **String and array marshalling** in both the TS runtime (`buildArgs`) and N-API
   (`marshalArg`). Without it the P1 spike can't pass a path string.
 - **The TS return-buffer leak.**
-- **The JS→C++ callback type** (above).
+- **The JS dispatcher hook** for foreign vtables (above).
+- **`Binder<const T>`** (a 4-line partial specialization) and **noexcept
+  `MethodTraits`**. Without these, no interface with `const T&` parameters can be bound.
 - **Embedding hygiene** (§2):
   - `#undef _` after `binding_number.h`;
   - prefix `force_inline`, `array_size` and `flatten_inline`;
@@ -1249,3 +1344,59 @@ knowledge, not from running code.
 - Whether `FGCObject` plus the cross-heap rule is enough in practice.
 
 All three go to the P4 Unreal spike.
+
+## Pressure test record: interfaces (§2a)
+
+The section was pressure-tested on 2026-11-19 by a fresh subagent. It compiled experiments
+with clang-cl, MSVC (without `/Zc:preprocessor`) and emcc 3.1.53 under node. The
+experiments are in the session scratchpad, under `iface/`.
+
+**Verdict:** fat pointers plus a registry hold up against multiple inheritance with
+COM-style query, the Microsoft `proxy` library, dyno/te, and `std::function` bundles.
+
+### Survived
+- **The case against multiple inheritance:** a wrapper per entity, and the
+  `static_cast<T*>(void*)` thunk at `binding_method.h:142`.
+- **Query cost:** about 8 ns per uncached query.
+- **TypeIds from hashed names,** provided the names are explicit.
+- **Foreign vtables under `wasm-st`,** including struct, by-value, i64 and scalar-struct
+  returns.
+- **`registerImpl` conformance checking,** after two fixes:
+  - member-template checks, needed for MSVC;
+  - exact const-ness and return types.
+- **One-place declaration** with a classic X-macro.
+
+### Broke, and what changed
+- **A templated `Iface<I>` cannot be bound.** All instantiations land in one TS file, and
+  the generated return types are invalid.
+  - Change: one non-template struct per interface.
+- **`const T&` and `noexcept` methods cannot be bound.** `Binder<const T>` and the
+  noexcept `MethodTraits` are missing.
+  - Change: both added to P0b.
+- **"Foreign vtables are never called off the main thread."**
+  - Under `wasm-mt` the call traps. Under N-API it deadlocks inside `parallel_for`.
+  - Change: a `threadAffine` flag, and serial fallback or main-thread gathering.
+- **JS exceptions unwound through C++ frames and skipped destructors.**
+  - Change: the dispatcher catches them, and slots return Status or set a sticky error.
+- **`addFunction` per slot** needed per-signature ABI lowering and leaked table slots.
+  - Change: one compile-time foreign vtable per interface, through a single
+    `MethodThunk` dispatcher.
+- **The `size` versioning field** cannot protect derived interfaces with embedded bases.
+  - Change: the field is dropped, since coredcc is a single module.
+- **TypeIds for types we don't own** cannot be inferred.
+  - Change: explicit type names.
+- **There was no downcast,** yet `foldFrom` needs one.
+  - Change: `implType` in the header and `as<T>()`.
+- **`query<I>` is a template and cannot be bound.**
+  - Change: `queryRaw` plus a checked constructor.
+- **`Owned<I>` can't be bound,** because it is move-only.
+  - Change: bindings use handles.
+- **The plan contradicted itself:** Command, AnyBvhSource and TransformModel were
+  described as virtual classes or with pointer parameters.
+  - Change: all three rewritten as interfaces.
+
+### Still unverified
+- Whether Unreal compiles with `/Zc:preprocessor`. The classic X-macro avoids the
+  question.
+- How the generated thunks look in a debugger. A natvis entry may be needed.
+- The N-API foreign path. It was reasoned about but not built.
