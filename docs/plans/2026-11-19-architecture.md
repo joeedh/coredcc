@@ -89,13 +89,77 @@ in four settings:
   - Per-object geometry BVHs are templated on the scalar type.
   - Overlay geometry is `float` relative to a `double` origin (§10).
 
+## 2a. Interfaces (`base/iface`)
+
+Every contract a client implements uses one interface system. That covers object
+capabilities, `TransformModel`, `BlockProvider`, `SnapshotProvider`, `AnyBvhSource`,
+commands, tools and gizmos. coredcc's internal polymorphism can still use ordinary virtual
+classes.
+
+### Why not multiple inheritance
+- **Adaptors need a wrapper object per entity.** With multiple inheritance, an
+  implementation must be a C++ subclass of the interface. To adapt an Unreal actor or a
+  ubertopo `Complex`, you allocate a wrapper per entity and keep its lifetime in sync.
+  You can't add an interface to a type you don't own.
+- **Pointer adjustment breaks void\*-based bindings.** Casting `Derived*` to `IFoo*`
+  changes the address when `IFoo` isn't the first base. litestl's binding passes `self`
+  as `void*`, and its `Struct::inherit` copies parent offsets unadjusted. One missed
+  `static_cast` before a `void*` round trip is silent undefined behaviour.
+- **It needs a query mechanism anyway.** With RTTI off there is no `dynamic_cast` for
+  cross-casting, so we'd build `queryInterface` on top of the inheritance regardless.
+- **Foreign implementations multiply.** A TS object can't be a C++ subclass, so each
+  interface needs a C++ shim. A TS object implementing three interfaces needs a shim
+  class combining all three.
+- **The binding system can't express it.** It has no polymorphism and no base-pointer
+  conversion.
+
+### Design: fat interface references plus an external registry
+This is the Rust trait-object / Go interface model.
+- **Interface definition.** An interface `I` is a `VTable` struct of function pointers
+  whose first argument is `void *self`, plus a header holding `InterfaceId` (a hashed
+  stable name) and `size` (for appending methods compatibly).
+  - Interface inheritance embeds the base vtable as the first member, so an upcast is
+    free.
+- **`Iface<I> {const I::VTable *vt; void *self;}`** is a non-owning fat pointer.
+  - Inline forwarding methods give it ordinary call syntax: `spatial.rayCast(ray, hit)`.
+  - **`Owned<I>`** adds a `destroy` slot. It is used when coredcc owns the
+    implementation, for example a Command instance.
+- **Registry.** `(TypeId, InterfaceId) -> const VTable*` lives in the Runtime.
+  - An adaptor registers a vtable for a type it doesn't own. For example, the Spatial
+    interface can be implemented directly over `UStaticMeshComponent` with no wrapper
+    object.
+- **Lookup for a datablock** `query<I>(BlockHandle)` checks, in order:
+  1. a per-block override table (used by foreign objects);
+  2. the `(blockType, I)` registry;
+  3. the provider's `queryInterface(block, InterfaceId)` hook, for adaptors that decide
+     per instance. An example is an actor that may or may not have a mesh component.
+- **C++ authoring.** `registerImpl<I, T>(runtime)` generates the vtable from `T`'s
+  methods, and a concept (`I::Implementable<T>`) checks conformance at compile time.
+  - `T` can be a plain class, a class with virtual methods, or an adaptor with static
+    functions over someone else's type.
+  - Each interface is declared once, in a single macro or X-macro list. That list
+    generates the vtable struct, the forwarding wrapper, the concept and the binding
+    registration. The exact form is decided in P0.
+- **Bindings.** `Iface<I>` is an ordinary litestl-bound struct whose methods are the
+  forwarding functions, so the binding system needs no polymorphism support.
+- **Foreign implementations.** A TS or Python implementation is a vtable built at
+  runtime, with each slot a trampoline: Emscripten `addFunction`, or `napi_ref`.
+  - One foreign object can expose any set of interfaces through the per-block override
+    table, with no combinatorial shim classes. This replaces §13's Foreign* shim classes.
+- **Lifetime.** An `Iface<I>` is transient, like `PointerRef`. Stored references hold a
+  `BlockHandle` plus an `InterfaceId` and query again on use.
+- **Cost.** An indirect call through the vtable costs the same as a virtual call. Query
+  results are cached by the caller for the duration of an operation. Hot inner loops,
+  such as BVH leaf tests, use the templated path (`Bvh<S>`), not interfaces.
+
 ## 3. Repository layout
 
 ```
 source/
   litestl/              git submodule, pinned at master 608afca or later, plus the P0b branch
   coredcc/
-    base/               Status, type ids, generational handles + HandlePool, Signal, Runtime
+    base/               Status, type ids, generational handles + HandlePool, Signal, Runtime,
+                        iface/ (interface definitions, registry, Iface<I>, Owned<I>)
     props/              PropertyDef, PropValue, units, enum items, PropertyBag
     api/                datapath: ApiStruct, ApiMember, Path parser, resolver, ChangeBus
     command/            CommandDef, Command, executor, UndoHistory, LinearHistory,
@@ -165,12 +229,17 @@ implementation.
 ### References
 - **`PointerRef {void *data; StructId type; OwnerId owner;}`** is a transient C++-only
   reference, valid only during one call. It is never stored and never bound.
-- **`StableRef {OwnerId owner; StructId type; Key key;}`** is the storable form.
+- **`StableRef {OwnerKey owner; StructId type; Key key;}`** is the storable form.
   - `Key` is a path of stable keys from the owner.
   - It is resolved again on every use and fails cleanly when the target is gone.
-  - It is what undo records, PropValue pointers and the host language hold.
-- **`OwnerId`** is a generational handle (index plus generation), so a reused slot can't
-  alias an old reference (the ABA problem).
+  - It is what undo records and the host language hold.
+  - Block references stored *inside* a block are library refs (§8a), not `StableRef`s.
+- **`OwnerKey`** is one of two kinds:
+  - a `BlockId` (§8a) with a cached `BlockHandle`. Identity survives undo, redo, snapshot
+    restore and save, because it never depends on the handle;
+  - a **runtime owner**: tool settings, preferences, LastUsedStore, `Context::root()`
+    and UI state. Runtime owners are registered by a stable name. They are excluded from
+    GC and from library files, but can still own undoable and notifiable data.
 
 ### ApiStruct
 `ApiStruct` has an id, uiName, description, an optional parent struct, and an ordered
@@ -209,8 +278,11 @@ list of `ApiMember`s.
   suggestions.
 - `ResolvedPath` is C++-only and transient.
 - **Canonicalisation:** `canonicalize(ctx, path)` rewrites indirect segments (`.active`,
-  numeric indices) into stable keys. For example `objects.active.location` becomes
-  `objects[#h].location`.
+  numeric indices, hops through block refs) into a `StableRef` rooted at the
+  **innermost block** that owns the member.
+  - For example, `objects.active.data.radius` becomes `{owner: meshBlockId, key: radius}`.
+    It does not keep the hop through `data`, which could be reassigned outside the
+    history.
   - Undo records always store canonical paths.
   - Without this, undo writes into whatever object is active at undo time.
 - `getValue` / `setValue` / `getMeta`. `setValue` is the single write path:
@@ -326,9 +398,12 @@ separate.
 ### Socket types and values
 - `SocketTypeRegistry` belongs to the Runtime. Each entry has an id and value operations:
   default, copy, equal, hash and serialize.
-- Built-ins: bool, int, float, vec2/3/4, mat4, quat, string, enum, and `Ref<T>`.
-  - `Ref<T>` is a refcounted, immutable payload for heavy data, shared along edges and
-    copied before writing.
+- Built-ins: bool, int, float, vec2/3/4, mat4, quat, string, enum, and `Payload<T>`.
+  - `Payload<T>` is a refcounted, immutable payload for heavy data, shared along edges and
+    copied before writing. It was called `Ref<T>` in the first draft, which clashed with
+    the library's block references.
+  - A payload that aliases a block's data holds a host pin on that block (§8a), so GC
+    cannot free memory the graph is still reading.
 
 ### Node types and graph definitions
 - `NodeType` has an id, socket declarations, parameters (`PropertyDef`s, exposed through
@@ -421,8 +496,8 @@ Euler conversion and no matrix decompose. P0b fixes the quaternion type and adds
 - `id` (a generational handle), `name`, flags, a parent handle, `transform()`,
   `structId()`.
 - `localBounds() -> AABB<double3>`. World bounds transform all 8 corners.
-- `capability(CapabilityId) -> void*`. Capabilities are named after faberforge's
-  `geometry-contract.md` where one exists there:
+- Capabilities are interfaces (§2a), queried with `query<I>(objectBlock)`. They are
+  named after faberforge's `geometry-contract.md` where one exists there:
   - **Invalidation** (v1): `invalidate(Topology|Positions|Attributes|Selection|Materials)`.
     The scene evaluator and SceneBvh use it to choose between refit and rebuild.
   - **Spatial** (v1): `closestElements(co, radius, domain)` for snapping, plus the
@@ -435,7 +510,9 @@ Euler conversion and no matrix decompose. P0b fixes the quaternion type and adds
 
 ### Scene and the scene evaluator
 - `Scene` holds:
-  - an object `HandlePool`;
+  - a strong ref list of its objects. An object's id *is* its `BlockHandle`; there is no
+    separate pool. Per-element instances, such as 1M scattered copies, are not blocks;
+    they live inside an instancer block's data.
   - the active object and selection;
   - parenting, with cycle checks;
   - a `SceneBvh`.
@@ -449,6 +526,186 @@ Euler conversion and no matrix decompose. P0b fixes the quaternion type and adds
 - `evaluate()` runs the graph, then the apply phase (§7), then updates SceneBvh from
   Invalidation flags.
 - The full datablock library is still out of scope (§15).
+
+## 8a. Datablocks (`lib/`)
+
+Datablocks exist mainly to solve references. Every block has a unique id, and there is an
+API for one block to reference another. Requirements from the user, 2026-11-19:
+- A datablock is separate from its underlying data, so blocks can wrap data owned by
+  anyone, Unreal included.
+- Clients can attach arbitrary data to any block.
+- Blocks list their references explicitly, for garbage collection.
+- References come in non-nullable and nullable (weak) kinds.
+- The client builds a block's local id. The full id is that local id plus the client's
+  own id.
+
+This section was revised after a pressure test. See the record at the end of the plan.
+
+### Terms
+- **Client:** the system that provides datablocks and owns the data behind them. Examples
+  are coredcc itself, an Unreal adapter, ubertopo, and faberforge (through foreign
+  vtables, §2a).
+  - A client registers under a stable name such as `"unreal.actor"`.
+  - `ClientId` is a 64-bit SipHash of the name. The collision chance is negligible.
+  - The name is stored in files.
+  - A client may declare **alias names**, so that renaming a client doesn't turn every
+    old block into a placeholder.
+- **`BlockType`:** registered by a client. It has a hashed type id, the client, a
+  `StructId`, a payload version, and a `BlockProvider` (an interface, §2a).
+- **`Datablock`:** a coredcc-side record that clients never subclass. It holds:
+  - `BlockId`, type, name and flags;
+  - a **state**;
+  - a pin count;
+  - per-block ref slot tables;
+  - attachments.
+
+### Ids and identity
+- **`BlockId = {ClientId client; LocalId local}`.** `LocalId` is 128 bits.
+- **The client guarantees uniqueness within itself.** Derived or deterministic ids
+  aren't unique across documents (ubertopo's operator-derived ids), and Unreal may repeat
+  actor GUIDs under PIE or Level Instances; this is checked in the P4 spike. So the
+  adapter guide requires clients to **salt `LocalId`s per document or instance**.
+- **The built-in `coredcc` client** takes `LocalId`s from a Runtime entropy source,
+  backed by a host GUID function or OS randomness, never a seeded PRNG.
+- **`BlockHandle`** is a generational, session-local cache, used only for speed.
+  - Everything persistent or undo-related stores `BlockId`.
+  - Handles are re-bound by `BlockId` after a snapshot restore or a revert.
+- **Identity across undo.** A create command records the `BlockId`s it generated. Redo
+  revives them with `lib.reviveAs(BlockId)` rather than drawing new ids, so later
+  commands' references still resolve. This mirrors Blender's `session_uid`.
+
+### Block states
+Each block is in one of these states:
+- **Live.**
+- **InHistory:** deleted, but restorable by undo. The record is kept and the data is
+  owned by the history.
+- **Detached:** the host destroyed the data out from under coredcc, for example an actor
+  deleted in Unreal's Outliner. The record and slots are kept.
+- **Placeholder:** a missing client or type. The record keeps the original type name and
+  payload bytes, so the file round-trips.
+
+Rules that follow from the states:
+- `data()` resolves on every use. The Unreal adapter, for example, goes through a
+  `TWeakObjectPtr`.
+- Hosts report out-of-band changes with `onHostDestroyed(BlockId)` and
+  `onHostRestored(BlockId)`. An Unreal Ctrl+Z that resurrects an actor moves its block
+  from Detached back to Live.
+
+### References: the provider enumerates, the library caches
+The first draft synced a slot table on every write. The pressure test showed this drifts:
+- faberforge's `lib_users` drift needed a validator and a recount at load.
+- ubertopo DEC-015 dropped refcounts for this reason.
+- Physical journal undo, snapshot restore and Unreal transactions all change client data
+  without calling `setRef`.
+
+So:
+- **`BlockProvider::foreachRef(block, visitor)` is the single source of truth.** Each
+  block's references are listed explicitly, but by the client, from its own data, on
+  demand. This is Blender's `foreach_id` and Unreal's reflected GC.
+  - GC, save, remap, import and "who uses me" all pull from it.
+- **Incoming relations** are computed lazily and cached by a library epoch, which is
+  bumped by any ref write or restore. This is Blender's `BKE_main_relations`. They are
+  never maintained incrementally.
+- **A debug audit** at `collect()` checks the cached relations against a fresh
+  enumeration.
+- **Ref kinds.** Strength and nullability are independent:
+  - `Ref<T>`: strong, with a non-null record.
+  - `OptRef<T>`: strong and nullable, for an optional material slot or an empty
+    object's data.
+  - `WeakRef<T>`: not strong, and nullable.
+  - Every kind stores a `BlockId` plus a cached handle.
+  - "Non-null" promises a record, not data. `get()` returns null for a target that is
+    Detached, a Placeholder or InHistory, and callers must handle that.
+  - A weak ref is never actively nulled. It simply resolves to null while its target is
+    absent, and resolves again if the target comes back, for instance on reload or redo.
+  - The client hook `onWeakTargetLost` lets, for example, a child keep its world
+    transform when its parent goes away.
+- **Element-level references** go through a per-block indexed slot table, like Blender's
+  material slots. 1M faces using one material cost one slot, not 1M refs.
+- **Datapath.** Any Pointer-kind member stored inside a block is a ref, and is enumerated
+  by `foreachRef`. That includes GraphDef node parameters and attachment members. This
+  means GC, remap and import see them. `StableRef` Pointer values are reserved for
+  transient and undo-record use.
+- **Slot keys** are namespaced `(provider or attachment type, key)`, so a block's client
+  and an attaching client can't collide.
+
+### Lifetime and garbage collection
+- **Algorithm.** Mark and sweep over strong refs, enumerated by `foreachRef`.
+  - **Roots:** Root and FakeUser flags, the Scene root, history pins, and host pins.
+    Graph payloads and the evaluated state hold host pins on blocks whose data they
+    alias.
+- **When it runs.** Orphans persist until the user saves, does an explicit purge, or
+  reloads, as in Blender. There is no idle collection.
+  - This means a block that a script has created but not yet assigned is never freed out
+    from under it.
+  - `collect()` returns Busy while evaluation is running or an interactive command is
+    open.
+- **Two-phase sweep:**
+  1. Sever every ref out of the garbage set.
+  2. Call `destroy` on each block.
+  - Library mutations from inside `destroy` are deferred to after the sweep. This is
+    needed because a TS `destroy` might call into the library.
+- **Deletion cascades with a preview.**
+  - Nullable refs to the deleted block resolve to null.
+  - Users whose non-null `Ref` would break are listed in a preview, and deleted with it
+    if the user confirms.
+  - The delete is a command, so undo restores everything from the InHistory state.
+  - `forceUnlink` exists for refs held by placeholders, which have no UI to edit.
+- **Cross-heap rule (Unreal).**
+  - Blocks with strong incoming refs keep their UObject alive through `FGCObject`.
+  - A UObject that holds a host pin on a block must not be kept alive by that same
+    block's strong refs, or neither GC can ever collect the cycle.
+  - The adapter guide documents both rules. A debug check detects such cycles.
+- **History pins under host-owned undo.** They are released in the `FCommandChange` or
+  `MPxCommand` destructor.
+  - Unverified: whether Unreal destroys its transaction buffer after coredcc's module
+    shuts down. If it does, the destructor would call into a dead Runtime. The P4 spike
+    checks this.
+
+### BlockProvider (an interface, §2a)
+- `data(block) -> void*`. This may return null when the block is Detached.
+- `foreachRef(block, visitor)`.
+- `destroy(block)`. For a host-owned block it releases only the wrapper.
+- Optional `serialize` / `deserialize`, with the payload version.
+- Optional `duplicate(span<blocks>, IdMap&)`, which duplicates several blocks at once.
+  Refs among the duplicated blocks are rewritten through the map.
+- Optional `rekey(payload, IdMap&)`, for import.
+- **Payload rule.** A payload refers to other blocks only through ref slots, never by
+  embedding a `BlockId`. Then rekeying never needs to understand the payload.
+
+### Attachments
+- `attach(block, AttachmentTypeId, data)` and `detach` are commands, so they are
+  undoable.
+- An attachment type registers:
+  - a copy callback;
+  - a duplicate policy: copy or drop;
+  - an optional serializer;
+  - an optional `StructId`.
+- When the attaching client unloads, or its type is unknown at load, its attachments
+  become **opaque bytes**, as faberforge's `OpaqueCustomDataElem` does. They round-trip
+  and never run unloaded code.
+
+### Files, linking and import
+- Block records, ref slots (as `BlockId`s), attachments and provider payloads are
+  written to the file.
+- **On load:**
+  - A missing strong-ref target becomes a placeholder that records its source file.
+  - A missing weak target creates nothing; the weak ref just resolves to null.
+- **Append** (copying blocks in from another file) always rekeys coredcc-client blocks.
+  For other clients it calls `rekey`, or refuses the append.
+- **Link** (referencing blocks that stay in another file, as Blender library links and
+  Unreal soft pointers do) needs `BlockId` to carry a source-library scope. It is
+  deferred, but ids leave room for it.
+
+### Relation to other sections
+- `Object`, `Scene` and `GraphDef` are block types of the built-in `coredcc` client.
+  - An object's parent is a `WeakRef`, and its data is an `OptRef`.
+  - Scene membership is strong.
+- A GraphDef's list of its instances is runtime bookkeeping, not refs.
+- Tool settings, preferences and defaults are runtime owners (§5), not blocks.
+- **Testing:** the library has a quarantine mode that never reuses freed handle slots,
+  so a forgotten root shows up as a dangling reference in tests. ubertopo learned this
+  the hard way.
 
 ## 9. BVH (`bvh/`)
 
@@ -660,15 +917,15 @@ path.ux (xmlpage), Unreal (Slate), ImGui (debug). Each binds widgets to batched
 faberforge's geometry providers, tools, transform models and snapshot providers are
 written in TS. During migration TS must be able to implement coredcc interfaces. litestl
 has no path from JS into C++ callbacks today. So:
-- Shim classes `ForeignCommand`, `ForeignObject`, `ForeignCapability<T>`,
-  `ForeignTransformModel` and `ForeignSnapshotProvider` implement the C++ interfaces by
-  calling through a function table.
-- The table is filled by:
+- A foreign implementation is a runtime-built vtable for any §2a interface. No per-interface
+  shim classes are needed. `bind/` provides `buildForeignVTable(InterfaceId, callbacks)`,
+  driven by the interface's binding descriptor.
+- The vtable slots are filled by:
   - under WASM: Emscripten `addFunction` and an `EM_JS` trampoline;
   - under N-API: `napi_ref` plus `napi_call_function`, with a threadsafe function if it is
     ever called off the main thread. It never is in v1.
-- The generic callback mechanism goes into litestl's binding system (P0b/P1). The shims
-  live in `bind/`.
+- The generic callback mechanism goes into litestl's binding system (P0b/P1). The foreign
+  vtable builder lives in `bind/`.
 
 ### Required litestl work
 This is the P0b branch. Without it nothing else can proceed.
@@ -703,6 +960,11 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
 - `coredcc_` targets and presets.
 - `base/`: Status, hashed type ids, generational `HandlePool` (`util::Pool` has no
   generations), Signal, Runtime.
+- The interface system (§2a): the declaration macro, registry, `Iface<I>`, `Owned<I>`
+  and `registerImpl`.
+  - Proved with one interface implemented three ways: a plain class, an adaptor over a
+    foreign type, and a hand-built vtable that stands in for a foreign one.
+  - Bound through litestl and called from a native binding test.
 - Test harness wiring and the `compile_embed` test (expected to fail until P0b).
 
 ### P0b — litestl branch
@@ -711,6 +973,10 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
   the branch.
 
 ### P1 — Application spine
+- The library core (§8a): clients, block types, ids and handles, block states, the ref
+  kinds, `foreachRef` with lazily cached relations, `reviveAs`, GC with pins and the
+  two-phase sweep, attachments, runtime owners, and quarantine mode. File IO for the
+  library follows in P2.
 - props, api (canonicalisation, ChangeBus), the command executor, LinearHistory,
   SetPropertyCommand, sub-commands, the interactive protocol, LastUsedStore and the
   invocation parser.
@@ -719,12 +985,13 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
     1. Resolve a path.
     2. Get and set a value.
     3. Undo.
-    4. Implement one `ForeignCommand` in TS.
+    4. Implement the Command interface in TS through a foreign vtable.
   - A fuzz test for the path parser.
   - Interleaving tests: an interactive command combined with a set or an undo.
 
-### P2 — Layout
+### P2 — Layout and library IO
 - Builder, XML subset parser, `toJson`, validator, example layouts.
+- Library file section: placeholders for missing blocks, and import remapping.
 
 ### P3 — Objects and BVH
 - TransformModel, TrsTransform and FbxTransform (with tests for the three inherit types).
@@ -754,7 +1021,7 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
 ### P6 — Integration
 - N-API addon build, against sculptcore's N-API runtime.
 - A faberforge spike: a property sheet from a layout, and a gizmo tool, with a TS object
-  implemented through ForeignObject.
+  implemented in TS through foreign vtables.
 - A ubertopo spike: commands delegating to `Editor<C>`.
 - `UnrealHistory` if the P4 spike succeeded.
 
@@ -766,13 +1033,20 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
 - Cyclic graph regions.
 - Content-addressed and parallel graph evaluation.
 - Animation.
-- Scene file format and a datablock library.
+- A full scene file format beyond the library section.
 - The Attributes, Triangles and ActiveElement capabilities.
 
 ## 15. Open questions
 
-1. **Datablock library and scene file format.** faberforge needs one: users, relinking,
-   per-block IO, a stand-in for missing types. Should coredcc own it, or the hosts?
+1. **Datablocks.** coredcc owns the library (§8a). The pressure test settled the
+   sub-questions, pending the user's confirmation:
+   - A nullable strong ref is needed, as `OptRef`.
+   - Deleting a strongly referenced block cascades, with a preview.
+   - A 64-bit `ClientId` is enough.
+
+   One question is genuinely open: do we accept that a block's references are
+   *enumerated by its client* (`foreachRef`), rather than stored in a coredcc-maintained
+   list? The user's first sketch was a stored list.
 2. **sculptcore's `source/props`.** Should it migrate onto coredcc props?
 3. **Cyclic graphs.** Is rejecting them in v1 acceptable, given that faberforge supports
    fixed-point cycles?
@@ -912,3 +1186,66 @@ MSVC, clang-cl and emcc.
   there was no UE install to test against.
 - **A single `UInteractiveTool` adapter with PDI/FCanvas is enough.** The P4 spike checks
   this.
+
+## Pressure test record: datablocks (§8a)
+
+The section was pressure-tested on 2026-11-19 by a fresh subagent. It read faberforge's
+`lib_api.ts`, `missing_addon.ts` and undo code; ubertopo DEC-009 and DEC-015 to DEC-017;
+and litestl's rng, hash128 and pool store. Points about Blender and Unreal came from
+knowledge, not from running code.
+
+### Survived
+- **Mark and sweep with a FakeUser root** is sound inside one heap. It matches DEC-015.
+- **A 64-bit SipHash `ClientId` with the name stored** is enough.
+- **Placeholders round-trip** when refs live in the library section. This matches
+  faberforge's `MissingDataBlock`.
+- **The 128-bit `LocalId` size** is adequate.
+- **History pins can be released** from host undo-record destructors.
+
+### Broke, and what changed
+- **Keeping a stored ref list in sync on every write drifts from client data.**
+  - Journal undo, snapshot restore and Unreal transactions bypass `setRef`, and faberforge's
+    `lib_users` drift shows the same failure.
+  - Change: `foreachRef` is the source of truth, relations are cached lazily, and a debug
+    audit compares the two.
+- **Block refs stored as `StableRef` PropValues** (graph node parameters, for example)
+  bypassed GC and remap.
+  - Change: Pointer members inside blocks are refs.
+- **"`Ref<T>` always points at a live block"** fails when the host deletes or re-instances
+  objects, and for placeholders and empties.
+  - Change: block states (Live, InHistory, Detached, Placeholder), host events, and
+    "non-null" meaning a non-null record. Strength and nullability are now independent,
+    with `OptRef` added.
+- **Undo identity built on handles** breaks on redo of a create and on snapshot restore.
+  - Change: persistent refs store `BlockId`, creates are revived with `reviveAs`, and
+    handles are only caches.
+- **A Scene `HandlePool` duplicating `BlockHandle`.**
+  - Change: an object's id is its block handle, and instances are not blocks.
+- **"Only blocks own undoable data"** excluded tool settings, preferences and defaults.
+  - Change: runtime owners.
+- **`LocalId` uniqueness.** Derived ids collide across documents, Unreal may repeat GUIDs
+  (to be confirmed in the P4 spike), and a seeded Philox repeats across sessions.
+  - Change: per-document salting, and the coredcc client uses an entropy source.
+- **`duplicate -> LocalId` couldn't handle import or duplicating several blocks at once.**
+  - Change: `duplicate(span, IdMap&)`, `rekey`, and the rule that payloads never embed
+    `BlockId`s.
+- **Attachments ran unloaded code**, and slot keys collided.
+  - Change: unknown attachments become opaque bytes, and slot keys are namespaced.
+- **Sweep order and re-entrancy.**
+  - Change: a two-phase sweep, with library mutations from `destroy` deferred.
+- **Graph and evaluated state aliasing block data was not rooted.**
+  - Change: host pins, and `collect()` returns Busy during evaluation or an interactive
+    command.
+- **Name clash** between the graph's and the library's `Ref<T>`.
+  - Change: the graph's is now `Payload<T>`.
+- **Canonical paths kept hops through refs.**
+  - Change: re-root at the innermost block.
+- **Refusing a delete is poor UX, and idle GC freed fresh orphans.**
+  - Change: deletion cascades with a preview, and orphans persist until save or purge.
+
+### Still unverified
+- Whether Unreal repeats `ActorGuid` under PIE and Level Instances.
+- Whether Unreal's transaction buffer outlives the coredcc module.
+- Whether `FGCObject` plus the cross-heap rule is enough in practice.
+
+All three go to the P4 Unreal spike.
