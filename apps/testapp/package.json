@@ -1,0 +1,24 @@
+{
+  "name": "coredcc-testapp",
+  "private": true,
+  "type": "module",
+  "main": "nwjs/window.html",
+  "window": {
+    "title": "coredcc test app",
+    "width": 1280,
+    "height": 800,
+    "show": false
+  },
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --format=esm --target=chrome140 --sourcemap --outfile=dist/app.js",
+    "typecheck": "tsc -p . && tsc -p tests",
+    "test": "pnpm run build && node --test --test-concurrency=4 \"tests/**/*.test.ts\"",
+    "launch": "pnpm run build && node nwjs/launch.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.0",
+    "nw": "0.112.0-sdk",
+    "typescript": "^5.9.0"
+  }
+}

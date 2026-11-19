@@ -72,4 +72,5 @@ Set up before the first worktree, following sculptcore and faberforge:
 - sccache is not installed on this machine yet (checked 2026-11-19); install it first.
 
 ## Current focus
-- Pressure-test the P0/P0b plan (running). The test app plan is pressure-tested.
+- Pressure-test the P0/P0b plan (running).
+- Test app TA0 is done (6 tests pass): `cd apps/testapp && pnpm install && pnpm test`.
