@@ -1366,7 +1366,18 @@ All three go to the P4 Unreal spike.
 
 ## Pressure test record: interfaces, draft 1 (X-macro fat pointers)
 
-This record covers draft 1 of §2a. Draft 2, built on the binding system, kept thesefindings:- `threadAffine`;- the exception-catching dispatcher;- explicit type names;- `as<T>()`;- `queryRaw`;- never binding `Owned<I>`;- the `const T&` and noexcept litestl fixes.It dropped the X-macro, the compile-time foreign vtable and the embedded base vtables.
+This record covers draft 1 of §2a. Draft 2, built on the binding system, kept these
+findings:
+- `threadAffine`;
+- the exception-catching dispatcher;
+- explicit type names;
+- `as<T>()`;
+- `queryRaw`;
+- never binding `Owned<I>`;
+- the `const T&` and noexcept litestl fixes.
+
+It dropped the X-macro, the compile-time foreign vtable and the embedded base vtables.
+
 The section was pressure-tested on 2026-11-19 by a fresh subagent. It compiled experiments
 with clang-cl, MSVC (without `/Zc:preprocessor`) and emcc 3.1.53 under node. The
 experiments are in the session scratchpad, under `iface/`.
