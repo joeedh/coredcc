@@ -12,7 +12,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | # | Plan | Phase | Depends on | State | Feature report |
 |---|---|---|---|---|---|
 | 1 | [Architecture](plans/2026-11-19-architecture.md) | all | — | pressure-tested | — |
-| 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | planning | — |
+| 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | pressure-tested | — |
 | 3 | [P0 scaffold and interface system](plans/2026-11-19-p0-scaffold-interfaces.md) | P0 | 1, 4 | planning | interfaces |
 | 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | planning | — |
 | 5 | P1 application spine: library, props, datapath, commands | P1 | 3 | todo | datablocks; props and datapath; commands and undo |
@@ -72,4 +72,4 @@ Set up before the first worktree, following sculptcore and faberforge:
 - sccache is not installed on this machine yet (checked 2026-11-19); install it first.
 
 ## Current focus
-- Pressure-test the test app plan and the P0/P0b plan.
+- Pressure-test the P0/P0b plan (running). The test app plan is pressure-tested.
