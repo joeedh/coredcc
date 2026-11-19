@@ -1133,8 +1133,9 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
 - Every litestl change goes up as a pull request against `joeedh/litestl`, the way
   ubertopo's `ubertopo/p4-support` did (merged as PR #2). Split it into reviewable PRs
   along the §13 groups rather than one large branch.
-- Work happens in a sibling worktree of `C:\dev\litestl`, never in that checkout: another
-  session has it on `litestl/napi-bindings`.
+- Work happens inside coredcc's own submodule checkout (`source/litestl`), which is a
+  separate clone. The shared `C:\dev\litestl` checkout is never touched; another session
+  has it on `litestl/napi-bindings`.
 - coredcc's submodule pins the PR branch until the PR merges, then moves to master.
 
 ### P1 — Application spine
