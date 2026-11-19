@@ -98,16 +98,17 @@ virtual classes.
 
 **History of this section:**
 - **Draft 1** was hand-rolled fat pointers declared with an X-macro. It was
-  pressure-tested and then revised (record 2 at the end of the plan).
-- **Draft 2** (this one, 2026-11-19, at the user's suggestion) builds interfaces on
-  litestl's binding system instead. A litestl method descriptor already carries a name,
-  parameter names and types, a return type, a const flag, and a
-  `MethodThunk(void *self, void **args, void *ret)`. That is a vtable slot in all but
-  name, and it is the ABI that foreign implementations use anyway. So the binding
-  descriptors are the single source of truth.
+  pressure-tested and then revised.
+- **Draft 2** (at the user's suggestion) builds interfaces on litestl's binding system.
+  A litestl method descriptor already carries a name, parameter names and types, a
+  return type, a const flag, and a `MethodThunk(void *self, void **args, void *ret)`.
+  That is a vtable slot in all but name, and it is the ABI that foreign implementations
+  use anyway.
+- Draft 2 was pressure-tested by building a working prototype with clang-cl, MSVC and
+  emcc. It was then revised into the text below.
+- Both records are at the end of the plan.
 
 ### Why not multiple inheritance
-These reasons are unchanged from draft 1:
 - An adaptor would need a wrapper object per entity, and you can't add an interface to a
   type you don't own.
 - Pointer adjustment breaks litestl's `static_cast<T*>(void*)` thunks.
@@ -115,146 +116,191 @@ These reasons are unchanged from draft 1:
 - Foreign implementations would need a shim class for every combination of interfaces.
 
 ### Declaring an interface
-An interface is an ordinary bound struct whose descriptor is marked `isInterface`. It
-has no fields and no constructors except "copy". Its `defineBindings()` is the slot
-list. Forwarders are written by hand.
+An interface is a bound struct whose descriptor is marked `isInterface`. It has no fields
+and no constructors except "copy". Its bound methods are the slot list. Forwarders are
+written by hand.
 
 ```cpp
 struct Spatial : IfaceRef {   // IfaceRef = {const IfaceTable *table; void *self;}
-  bool rayCast(const Ray &ray, Hit &hit) const { return invoke<bool>(CDCC_SLOT(rayCast), ray, hit); }
-  int count() const { return invoke<int>(CDCC_SLOT(count)); }
-  double cost() const { return has(CDCC_SLOT(cost)) ? invoke<double>(CDCC_SLOT(cost)) : count() * 2.0; }
+  bool rayCast(const Ray &ray, Hit &hit) const { return CDCC_CALL(rayCast, ray, hit); }
+  int count() const { return CDCC_CALL(count); }
+  double cost() const { return CDCC_HAS(cost) ? CDCC_CALL(cost) : count() * 2.0; }
 
-  static auto *defineBindings() {
-    auto *st = interfaceStruct<Spatial>("coredcc.Spatial");
+  CDCC_INTERFACE(Spatial, "coredcc.Spatial") {   // body of a cached defineBindings()
     BIND_STRUCT_METHOD(st, rayCast, MARGS("ray", "hit"));
     BIND_STRUCT_METHOD(st, count, MARGS());
     BIND_OPTIONAL_METHOD(st, cost, MARGS());
-    return st;
   }
 };
 ```
 
-- **Slot index.** A slot's index is its position in the descriptor.
-  - `CDCC_SLOT(name)` resolves the index by name once, into a function-local static, so
-    forwarders never hard-code a number.
-  - A forwarder whose name isn't in the descriptor is a startup error in debug builds.
-- **Invocation.** `invoke<R>(slot, args...)` packs pointers to the arguments into a
-  `void*[]` on the stack, then:
-  - for a C++ table, calls the slot's thunk;
-  - for a foreign table, calls the table's dispatcher with the slot index.
-- **Optional slots.** A default for an optional slot lives in its forwarder.
-- **Declaration rules:**
-  - no overloads, because the TS runtime keeps only the last method of each name;
-  - no template methods;
-  - no function-pointer or `function_ref` parameters. Outputs use bound `Vector&`
-    out-parameters or a `Sink` interface.
+- **`CDCC_CALL(name, args...)` is mandatory.** It takes the return type and parameter
+  types from the forwarder's own member pointer (`Fwd<&Self::name>`), which is the same
+  pointer the descriptor was built from, so the two cannot diverge.
+  - A misspelled name is a compile error.
+  - The draft's `invoke<R>(slot, args...)` took its types from the call expression and
+    checked nothing. In the prototype, passing an `int` to an int64 slot returned
+    garbage, and a wrong `R` overflowed the return buffer.
+- **Slot index.** It is resolved by name on first call and cached in a function-local
+  static.
+  - That cache is immutable once set. It is a documented exception to the "no global
+    mutable state" rule, because binding descriptors are process-wide anyway.
+  - Its guard costs about 0.4 ns.
+- **`CDCC_INTERFACE` caches its descriptor before binding any methods.** Self-referencing
+  interfaces need this: `TransformModel::world(..., TransformModel parent)` and
+  `Command::foldFrom(Command)` overflowed the stack without the cache.
+- **Optional slots.** A null thunk falls back to the default in the forwarder.
+
+**Declaration rules:**
+- No overloads, because the TS runtime keeps only the last method of each name.
+- No template methods.
+- No function-pointer or `function_ref` parameters.
+- No `Span` parameters (there is no binder for it). Use `Vector&` or a `Sink` interface.
+- No reference returns, which litestl cannot bind.
+- No primitive out-parameters, because JS receives a primitive pointer as a plain number.
+  Use a bound struct.
+- A class that implements several interfaces shouldn't need the same slot name with
+  different signatures. The escape hatch is an adaptor.
 
 ### Implementing an interface
-- **A bound class** implements an interface if its own `defineBindings()` binds methods
-  with matching names and signatures. Many implementations already are bound classes,
-  because they need to be visible to TypeScript.
+- **A bound class** implements an interface when its own bindings have methods with
+  matching names and signatures. Extra methods are fine.
   - Registration: `registerImpl(runtime, Spatial, MeshImpl, "test.MeshImpl") -> Status`.
-  - The type name is always explicit, because compiler-derived names differ between
-    clang and MSVC.
-- **Matching** happens at registration, by method name. Signatures are compared by each
-  type's full name, not by descriptor pointer, because primitive descriptors are
-  re-created on each `Bind<>()`. The rules:
-  - Return types must match exactly.
-  - A const slot needs a const method. A const method can satisfy a non-const slot.
-  - Missing required slots or mismatched signatures fail registration with a Status that
-    names each bad slot.
-- **The resulting `IfaceTable`** holds:
-  - the interface id;
-  - `implType`;
-  - flags, including `threadAffine`;
-  - one thunk per slot, null for an unimplemented optional slot.
-- **Adaptors** over types we don't own bind free functions as methods of the adapted
-  type, with `BIND_ADAPTOR_METHOD(def, name, &fn, MARGS(...))`, where `fn` is
-  `R fn(Adapted&, A...)`. No adaptor object is allocated: `self` is the adapted object.
-
-```cpp
-struct StaticMeshSpatial {            // adaptor over a type we don't own
-  static bool rayCast(const UStaticMeshComponent &c, const Ray &r, Hit &h);
-  static int count(const UStaticMeshComponent &c);
-  static auto *defineBindings() {
-    auto *st = adaptorStruct<UStaticMeshComponent>("unreal.StaticMeshComponent");
-    BIND_ADAPTOR_METHOD(st, rayCast, &StaticMeshSpatial::rayCast, MARGS("ray", "hit"));
-    BIND_ADAPTOR_METHOD(st, count, &StaticMeshSpatial::count, MARGS());
-    return st;
-  }
-};
-```
+  - Type names are always explicit, because compiler-derived names differ between clang
+    and MSVC.
+  - A template implementation, such as a `Bvh<S>` source, needs `->template` in the
+    binding macros; this is a P0b fix.
+- **Matching happens at registration, by method name.**
+  - Types are compared by full name *and* size *and* a per-C++-type key (`&typeKey<T>`)
+    stored on the `Struct`. Full names alone failed in the prototype: a type bound under
+    another type's name was accepted, and corrupted memory.
+  - Descriptors record const-ness (P0b fix), so `const Ray&` and `Ray&` no longer match.
+    In the prototype const was erased, and an implementation wrote through a caller's
+    `const` object.
+  - Return types must match exactly. A const slot needs a const method.
+  - A mismatch fails with a Status naming the slot and the candidate, for example
+    `slot count [int32 count() const]: candidate int64 count(): return type int64 != int32`.
+  - Each implementation's descriptor is built once per Runtime and cached.
+- **The resulting `IfaceTable`** holds the interface id, `implType`, flags (including
+  `threadAffine`), and one thunk per slot.
+- **Adaptors** over types we don't own use `BIND_ADAPTOR_METHOD(def, name, &fn, MARGS(...))`
+  with `fn` of the form `R fn(Adapted&, A...)`.
+  - No adaptor object is allocated: `self` is the adapted object.
+  - It is a small litestl extension: `std::invoke` in `MethodBuilder`, an 8-line
+    free-function `MethodTraits` specialization, and the macro.
+  - Adaptor descriptors are never registered with `BindingManager`, because two adaptors
+    of one type share its name.
 
 ### Losing compile-time conformance
-Draft 1 checked conformance at compile time. Here the interface is runtime data, so a
-mismatch is caught at registration. The mitigations:
-- `Runtime::validateAll()` runs at startup in debug builds and in every test binary. It
-  re-checks every registered implementation and fails fast, listing each bad slot.
-- If litestl's planned constexpr redesign of the binding system lands, these checks can
-  move back to compile time without any change to declarations.
+- Forwarder-to-slot typing *is* checked at compile time, by `CDCC_CALL`.
+- Implementation-to-interface conformance is checked at registration.
+- `Runtime::validateAll()` runs at startup in debug builds and in every test binary.
+  - It took about 2.5 ms for 300 interfaces × 8 slots.
+  - Registering all of them, including building the descriptors, took about 46 ms.
+- If litestl's planned constexpr redesign of the binding system lands, conformance can
+  move to compile time without any change to declarations.
 
 ### Inheritance
-- `interfaceStruct<Derived>(name, Base1, Base2...)` concatenates the base slot lists ahead
-  of the derived slots. litestl's `Struct::inherit` is not used, because it is broken.
-- Registering an implementation of `Derived` also builds a separate `IfaceTable` for each
-  base. Upcasting is a table lookup, not a pointer offset, so diamonds are harmless.
+- **Single base:** `interfaceStruct<Derived>(name, Base)` puts the base's slots first,
+  so slot indices coincide.
+- **Other bases** are reached by explicit upcast through their own per-base `IfaceTable`,
+  which registration builds.
+- Concatenating several bases is forbidden. In the prototype it ran the wrong slot,
+  because each base's forwarder indices are relative to that base.
 
 ### Query and downcast
 - The registry maps `(TypeId, InterfaceId) -> IfaceTable` and lives in the Runtime.
 - `query<I>(BlockHandle)` checks, in order:
   1. the per-block override table, skipped unless the block's `hasOverrides` bit is set;
-  2. a per-BlockType cache over the registry;
+  2. a per-BlockType cache;
   3. the provider's `queryInterface` hook.
-- `as<T>()` checks `implType`. `Command::foldFrom` needs it.
+- `as<T>()` checks `implType`.
 
 ### Bindings and foreign implementations
-- **Calling from TS or Python.** Interface structs are bound like any struct, so script
-  code calls implementations through the forwarders.
-  - `query<I>` is a template, so it is bound as `queryRaw(block, InterfaceId)`, which
-    returns an `IfaceRef`, plus a checked constructor such as `Spatial(IfaceRef)`.
-  - `Owned<I>` is never bound. Bindings use handles.
+- **Calling from TS or Python.** Interface structs are bound like any struct.
+  - `query<I>` is bound as `queryRaw(block, InterfaceId)`, which returns an `IfaceRef`,
+    plus a checked constructor.
+  - `Owned<I>` is never bound.
 - **Implementing in TS.** The generator emits interface structs as implementable TS
-  interfaces, so `class Foo implements Spatial` is checked by the TypeScript compiler.
-  - `rt.implement(block or typeName, "coredcc.Spatial", jsObject)` builds a foreign
-    `IfaceTable` per JS class.
-  - A slot is null when the JS class doesn't implement an optional method, so the C++
-    default applies. Draft 1's foreign vtable got this wrong: it came back `cost=0` with
-    the error flag set.
+  interfaces:
+  - no `[Symbol.dispose]` or `new` members;
+  - `name?(...)` for optional slots;
+  - `Readonly<>` for const references;
+  - `bigint` for int64.
+
+  The TypeScript compiler then checks `class JsMesh implements Spatial`.
+- **Foreign tables.** `rt.implement(block or typeName, "coredcc.Spatial", jsObject)`
+  builds a foreign `IfaceTable` per JS class. Slots for missing optional methods are null.
 - **The dispatcher.** There is one per host: `EM_JS` under WASM, and `napi_call_function`
   under N-API.
-  - It receives `(self, ifaceId, slotIndex, void **args, ret)` and marshals arguments
-    using the slot's parameter descriptors.
+  - It marshals arguments using the slot's parameter descriptors. Each slot's marshal
+    closure is precompiled when the table is built.
+  - **Return ownership.** The dispatcher copy-constructs the JS result into `ret`, then
+    disposes any temporary the JS side owned. In the prototype, a struct created in JS
+    and returned leaked.
   - It catches every JS exception and reports failure.
   - Slots that can return `Status` do. The rest set a sticky Runtime error, which the
     executor checks after each call.
-- **Threads.** Foreign tables are always `threadAffine`. Parallel algorithms (BVH build,
-  graph evaluation) check the flag, and either run serially or gather the foreign data on
-  the main thread first.
+- **Cost (prototype, WASM).** 85 ns for a scalar slot, and 2.3 µs for a slot with two
+  struct arguments. The 2.3 µs comes from the naive marshalling; precompiling the
+  closures is aimed at that.
+- **Threads.** Foreign tables are always `threadAffine`. Parallel algorithms check the
+  flag, and either run serially or gather the foreign data on the main thread first.
 
-### Lifetimes and cost
-- An interface value is transient, like `PointerRef`. Stored references hold a `BlockId`
-  plus an `InterfaceId`, and query again on use.
-- A foreign slot that returns an interface may return only a `BlockHandle`, or an
-  interface of an object already held by the override table.
-- TS wrappers around arguments point into the C++ stack, so they are invalidated after
-  the call returns.
-- Debug builds carry the `BlockHandle` in the interface value and check its generation on
-  each call.
-- **Cost:** a call is a virtual call plus argument packing, which is a few nanoseconds.
-  That is irrelevant at object granularity. Hot inner loops, such as BVH leaf tests, use
-  the templated path (`Bvh<S>`).
+### Lifetimes, cost and build time
+- **Lifetimes:**
+  - An interface value is transient. Stored references hold a `BlockId` plus an
+    `InterfaceId`.
+  - A foreign slot that returns an interface may return only a `BlockHandle`, or an
+    interface of an object held by the override table.
+  - TS wrappers around arguments point into the C++ stack, so they are invalidated after
+    the call returns.
+  - Debug builds check the `BlockHandle` generation on each call.
+- **Native call cost** (clang-cl /O2; MSVC figures in brackets):
+
+  | Call | Direct virtual | Draft 2 interface |
+  |---|---|---|
+  | `rayCast` | 0.96 ns [1.78] | 1.74 ns [2.56] |
+  | `count` | 0.84 ns [1.50] | 1.24 ns [2.11] |
+  | struct return | — | 3.0 ns [4.0] |
+
+  That is irrelevant at object granularity. Hot inner loops use the templated path
+  (`Bvh<S>`).
+- **Build time.** Bound methods compile slowly: about 40–80 ms per method at /O2, against
+  4 s for 1000 plain virtual methods.
+  - Binding code therefore lives in per-module `bindings.cc` translation units, following
+    sculptcore's pattern. It is never in headers.
+  - P0 measures the real cost on the first modules. This cost already applies to
+    everything bound for TS.
+- **Debugging.** At /Od there are five frames between a forwarder and its implementation.
+  A `.natstepfilter` steps over them. Release builds show just the thunk.
 
 ### litestl work this needs (P0b)
-- An `isInterface` flag on struct descriptors.
-  - The TS generator emits an implementable interface for such structs, and the Python
-    stub generator does the same.
-- An optional-method marker, `BIND_OPTIONAL_METHOD`.
-- Free functions bound as methods (`BIND_ADAPTOR_METHOD`), together with adaptor
-  structs that describe a type we don't own.
-- A method lookup by name on `Struct`.
-- `Binder<const T>` (a 4-line partial specialization) and noexcept `MethodTraits`.
-- The foreign dispatcher hook in the TS runtime and in N-API.
+- **New descriptor fields:** `isInterface` on `Struct` and `isOptional` on `Method`, each
+  mirrored in the `BindingInfo` offsets and the TS classes.
+  - `findMethod(name)`.
+  - A per-C++-type key on `Struct`.
+- **Const-recording descriptors:** `Binder<const T&>` and `Binder<const T*>` record
+  const-ness in the full name. noexcept `MethodTraits`.
+- **Adaptor methods:** `std::invoke` in `MethodBuilder::invokeImpl`, the free-function
+  `MethodTraits` specialization, and `BIND_ADAPTOR_METHOD`.
+- **Macro fixes:** `->template` in the binding macros. `BIND_OPTIONAL_METHOD` must be
+  variadic, because `MARGS` expands to a type containing a comma.
+- **TS generator:**
+  - implementable interfaces;
+  - optional methods;
+  - `Readonly<>`;
+  - `bigint` for int64.
+- **TS runtime:**
+  - an Enum case in `getBoundPointer`;
+  - reading reference arguments through `ptrType`;
+  - a new return writer of about 40 lines. The existing `setBoundPointer` keys on C names
+    and destructs uninitialized storage.
+  - the dispatcher hook.
+- **N-API:** the matching reverse-direction marshalling. This is unverified.
+- **Smaller fixes:**
+  - make `PermanentGuard` thread-safe, or per-thread;
+  - use `.c_str()` in the `std::format` calls, needed for emsdk 3.1.53.
 
 ## 3. Repository layout
 
@@ -771,7 +817,7 @@ So:
 - `foreachRef(block, visitor)`.
 - `destroy(block)`. For a host-owned block it releases only the wrapper.
 - Optional `serialize` / `deserialize`, with the payload version.
-- Optional `duplicate(span<blocks>, IdMap&)`, which duplicates several blocks at once.
+- Optional `duplicate(const Vector<BlockHandle>&, IdMap&)`, which duplicates several blocks at once.
   Refs among the duplicated blocks are rewritten through the map.
 - Optional `rekey(payload, IdMap&)`, for import.
 - **Payload rule.** A payload refers to other blocks only through ref slots, never by
@@ -1431,3 +1477,79 @@ COM-style query, the Microsoft `proxy` library, dyno/te, and `std::function` bun
   question.
 - How the generated thunks look in a debugger. A natvis entry may be needed.
 - The N-API foreign path. It was reasoned about but not built.
+
+## Pressure test record: interfaces, draft 2 (binding descriptors)
+
+The section was pressure-tested on 2026-11-19 by a fresh subagent that built a working
+prototype.
+- **Prototype:** `iface2/` in the session scratchpad, with a locally patched litestl copy.
+- **Compilers:** clang-cl and MSVC (`/GR- /EHs-c-`), with identical results, and emcc
+  3.1.53 under node 24, running the real TS runtime.
+
+**Verdict:** draft 2 beats draft 1, provided the five most severe fixes below are made.
+- Draft 1 already needed a bound non-template struct per interface for TS, so the
+  binding descriptors were needed anyway.
+- In draft 2, the C++ slot list and the TS slot list come from one place.
+
+### Survived
+- **Descriptors work as a slot list.** They give order, names, parameters, const-ness and
+  return types. `isInterface` and `isOptional` are cheap to add.
+- **Matching by name and signature** catches every ordinary mismatch, with clear
+  messages. Overloads in the implementation and extra methods are fine.
+- **Calls through the thunk.** References write through with no copy. Struct returns are
+  placement-constructed into `ret`, and the object count balanced to zero. noexcept
+  implementations work.
+- **Adaptor methods** are a small extension. They also let one class implement two
+  interfaces whose same-named slots differ.
+- **The function-local slot cache** is correct with 16 threads racing on the first call,
+  and lazy enough to survive static initialisation.
+- **The TS generator** can emit implementable interfaces. tsc accepted a correct class and
+  rejected an incomplete one.
+- **A foreign dispatcher under emcc** drove a JS implementation through the real TS
+  runtime: a scalar, a struct by reference, a struct return, int64, and an optional slot
+  falling back to the C++ default.
+
+### Broke, and what changed (most severe first)
+1. **`invoke<R>(slot, args...)` checked no types.** It returned garbage and overflowed the
+   return buffer.
+   - Change: `CDCC_CALL` is mandatory, and takes its types from the forwarder's member
+     pointer.
+2. **Concatenating several base interfaces ran the wrong slot.**
+   - Change: one concatenated base only; other bases by upcast.
+3. **Self-referencing interfaces overflowed the stack.**
+   - Change: `CDCC_INTERFACE` caches the descriptor first.
+4. **Descriptors erased const,** so writes went through `const` objects in C++ and from JS.
+   - Change: const-recording binders, and `Readonly<>` in TS.
+5. **Type identity was only a name string,** so an aliased name was accepted and memory
+   was corrupted.
+   - Change: compare size and a per-C++-type key as well.
+6. **Foreign return ownership** leaked a JS-created struct. **int64** was typed as
+   `number` but passed as a BigInt.
+   - Change: copy into `ret` then dispose, and `bigint`.
+7. **Template implementations** couldn't use the binding macros.
+   - Change: `->template`.
+8. **Signatures the binding system can't express:** reference returns, primitive
+   out-parameters and `Span` parameters.
+   - Change: added to the declaration rules. §8a's `duplicate` now takes a
+     `Vector<BlockHandle>`.
+
+Also changed:
+- **A missing forwarder slot** was caught on first call, not at startup. Now
+  `CDCC_CALL` catches it at compile time.
+- **`registerImpl`** rebuilt the implementation's descriptor once per interface. It is
+  now cached per Runtime.
+
+### Measured
+- **Native call:** 1.24–1.74 ns, against 0.84–0.96 ns for a direct virtual call
+  (clang-cl).
+- **Startup:** 300 interfaces registered in about 46 ms, and `validateAll` took about
+  2.5 ms.
+- **Foreign call (WASM):** 85 ns for a scalar, and 2.3 µs for two struct arguments
+  through the naive runtime.
+- **Build time:** about 40–80 ms per bound method at /O2.
+  - Change: binding code lives in per-module `bindings.cc` translation units.
+  - P0 measures the real cost.
+
+### Still unverified
+- The N-API reverse marshalling.
+- Two Runtimes in one process. This was reasoned about but not run.
