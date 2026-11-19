@@ -306,7 +306,7 @@ struct Spatial : IfaceRef {   // IfaceRef = {const IfaceTable *table; void *self
 
 ```
 source/
-  litestl/              git submodule, pinned at master 608afca or later, plus the P0b branch
+  litestl/              git submodule, pinned at master 8a98264 or later, or a P0b PR branch
   coredcc/
     base/               Status, type ids, generational handles + HandlePool, Signal, Runtime,
                         iface/ (interface definitions, registry, Iface<I>, Owned<I>)
@@ -1098,9 +1098,9 @@ This is the P0b branch. Without it nothing else can proceed.
   - move the Eigen include out of the public `matrix.h`, behind the matrix
     implementation.
 - **Math:** quaternion, Euler, decompose and transform helpers (§8).
-- **N-API runtime.** ubertopo DEC-006 defers moving it into litestl. Until someone
-  schedules that move, P6 builds against sculptcore's copy (vendored by path), and the
-  move is tracked in §15.
+- **N-API runtime.** Another session is moving it into litestl (branch
+  `litestl/napi-bindings`, arriving as a PR on litestl's GitHub repo). P6 builds against
+  that once it merges.
 
 ### Other language targets
 - Python is deferred. It will use the same surface.
@@ -1127,10 +1127,15 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
       message.
 - Test harness wiring and the `compile_embed` test (expected to fail until P0b).
 
-### P0b — litestl branch
-- Marshalling, the leak fix, the callback type, embedding hygiene and math (§13).
-- Merging this into litestl's master is the user's call. Until it merges, coredcc pins
-  the branch.
+### P0b — litestl changes, as PRs
+- Marshalling, the leak fix, the callback type, embedding hygiene and math (§13), plus
+  the interface support listed in §2a.
+- Every litestl change goes up as a pull request against `joeedh/litestl`, the way
+  ubertopo's `ubertopo/p4-support` did (merged as PR #2). Split it into reviewable PRs
+  along the §13 groups rather than one large branch.
+- Work happens in a sibling worktree of `C:\dev\litestl`, never in that checkout: another
+  session has it on `litestl/napi-bindings`.
+- coredcc's submodule pins the PR branch until the PR merges, then moves to master.
 
 ### P1 — Application spine
 - The library core (§8a): clients, block types, ids and handles, block states, the ref
@@ -1179,7 +1184,7 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
 - It needs P3 and P5.
 
 ### P6 — Integration
-- N-API addon build, against sculptcore's N-API runtime.
+- N-API addon build, against litestl's N-API runtime (see §13).
 - A faberforge spike: a property sheet from a layout, and a gizmo tool, with a TS object
   implemented in TS through foreign vtables.
 - A ubertopo spike: commands delegating to `Editor<C>`.
@@ -1196,24 +1201,18 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
 - A full scene file format beyond the library section.
 - The Attributes, Triangles and ActiveElement capabilities.
 
-## 15. Open questions
+## 15. Decisions on the former open questions (user, 2026-11-19)
 
-1. **Datablocks.** coredcc owns the library (§8a). The pressure test settled the
-   sub-questions, pending the user's confirmation:
-   - A nullable strong ref is needed, as `OptRef`.
-   - Deleting a strongly referenced block cascades, with a preview.
-   - A 64-bit `ClientId` is enough.
-
-   One question is genuinely open: do we accept that a block's references are
-   *enumerated by its client* (`foreachRef`), rather than stored in a coredcc-maintained
-   list? The user's first sketch was a stored list.
-2. **sculptcore's `source/props`.** Should it migrate onto coredcc props?
-3. **Cyclic graphs.** Is rejecting them in v1 acceptable, given that faberforge supports
-   fixed-point cycles?
-4. **N-API runtime.** Who moves it into litestl, and when? Until then P6 uses
-   sculptcore's copy.
-5. **The P0b litestl branch.** Should it merge to master, or stay pinned as a branch for
-   now?
+1. **Datablock references are enumerated by the client** (`foreachRef`), not stored in a
+   coredcc-maintained list. `OptRef`, cascade-with-preview delete and the 64-bit
+   `ClientId` are accepted too.
+2. **sculptcore's `source/props` will migrate onto coredcc props** eventually. Not
+   scheduled; props should not paint themselves into a corner that blocks it.
+3. **Rejecting graph cycles in v1 is fine.**
+4. **The N-API runtime** is being moved into litestl by another session, and will arrive
+   as a litestl PR.
+5. **litestl changes go up as PRs** against litestl's GitHub repo, as ubertopo's did.
+   ubertopo's `ubertopo/p4-support` branch is now merged into litestl master (`8a98264`).
 
 ## Pressure test record
 
