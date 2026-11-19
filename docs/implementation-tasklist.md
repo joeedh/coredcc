@@ -13,8 +13,8 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 |---|---|---|---|---|---|
 | 1 | [Architecture](plans/2026-11-19-architecture.md) | all | — | pressure-tested | — |
 | 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | planning | — |
-| 3 | P0 scaffold and interface system | P0 | 1, 4 | todo | interfaces |
-| 4 | P0b litestl PRs | P0b | 1 | todo | — |
+| 3 | [P0 scaffold and interface system](plans/2026-11-19-p0-scaffold-interfaces.md) | P0 | 1, 4 | planning | interfaces |
+| 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | planning | — |
 | 5 | P1 application spine: library, props, datapath, commands | P1 | 3 | todo | datablocks; props and datapath; commands and undo |
 | 6 | P2 layout and library IO | P2 | 5 | todo | layout |
 | 7 | P3 objects, transforms and BVH | P3 | 5 | todo | objects and transforms; BVH |
@@ -46,6 +46,8 @@ then.
   to parallelize until P1 is done.
 - **litestl changes** are made in coredcc's own submodule checkout (`source/litestl`) on a
   branch, and go up as PRs against `joeedh/litestl`. Never in `C:\dev\litestl`.
+  - The gitlink on master only points at litestl master commits. coredcc work that needs
+    an unmerged PR waits on one local branch until the PR merges.
 - **Parallel phase: worktrees, at most 3 at a time.** After P1, P2, P3 and P5 are
   independent. Then P4 (after P3) and P5c (after P3 and P5).
   - Worktrees are siblings of the repo: `C:\dev\coredcc-<branch>`.
@@ -70,5 +72,4 @@ Set up before the first worktree, following sculptcore and faberforge:
 - sccache is not installed on this machine yet (checked 2026-11-19); install it first.
 
 ## Current focus
-- Pressure-test the test app plan.
-- Write and pressure-test the P0 and P0b plans.
+- Pressure-test the test app plan and the P0/P0b plan.

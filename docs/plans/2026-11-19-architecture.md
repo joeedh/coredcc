@@ -306,7 +306,7 @@ struct Spatial : IfaceRef {   // IfaceRef = {const IfaceTable *table; void *self
 
 ```
 source/
-  litestl/              git submodule, pinned at master 8a98264 or later, or a P0b PR branch
+  litestl/              git submodule, pinned at a litestl master commit, 8a98264 or later
   coredcc/
     base/               Status, type ids, generational handles + HandlePool, Signal, Runtime,
                         iface/ (interface definitions, registry, Iface<I>, Owned<I>)
@@ -1136,7 +1136,8 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
 - Work happens inside coredcc's own submodule checkout (`source/litestl`), which is a
   separate clone. The shared `C:\dev\litestl` checkout is never touched; another session
   has it on `litestl/napi-bindings`.
-- coredcc's submodule pins the PR branch until the PR merges, then moves to master.
+- coredcc's gitlink only ever points at litestl master. Work that needs an unmerged PR
+  waits on a local coredcc branch until the PR merges (see the P0 plan).
 
 ### P1 — Application spine
 - The library core (§8a): clients, block types, ids and handles, block states, the ref
