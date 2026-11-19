@@ -305,8 +305,9 @@ struct Spatial : IfaceRef {   // IfaceRef = {const IfaceTable *table; void *self
 ## 3. Repository layout
 
 ```
-source/
+extern/
   litestl/              git submodule, pinned at a litestl master commit, 8a98264 or later
+source/
   coredcc/
     base/               Status, type ids, generational handles + HandlePool, Signal, Runtime,
                         iface/ (interface definitions, registry, Iface<I>, Owned<I>)
@@ -325,7 +326,8 @@ source/
 tests/                  native tests (litestl harness), benchmarks, compile_embed/
 ```
 
-- The include root is `source/`.
+- The include root is `source/`. litestl lives in `extern/` so that adding it `SYSTEM`
+  doesn't make `source/` a system include directory (P0 pressure test).
 - CMake targets are prefixed `coredcc_`. coredcc adds litestl only
   `if(NOT TARGET util)`, so a parent project such as ubertopo, which has its own litestl
   submodule, can supply litestl instead. The two pins must be compatible. The parent's
@@ -696,7 +698,8 @@ This section was revised after a pressure test. See the record at the end of the
   are coredcc itself, an Unreal adapter, ubertopo, and faberforge (through foreign
   vtables, §2a).
   - A client registers under a stable name such as `"unreal.actor"`.
-  - `ClientId` is a 64-bit SipHash of the name. The collision chance is negligible.
+  - `ClientId` is a 64-bit hash of the name: the same constexpr FNV-1a 64 used for type
+    ids, with a `client:` domain tag (P0 plan). The collision chance is negligible.
   - The name is stored in files.
   - A client may declare **alias names**, so that renaming a client doesn't turn every
     old block into a placeholder.
@@ -1133,7 +1136,7 @@ Each phase ends with tests passing on native. P1 onward also builds as `wasm-st`
 - Every litestl change goes up as a pull request against `joeedh/litestl`, the way
   ubertopo's `ubertopo/p4-support` did (merged as PR #2). Split it into reviewable PRs
   along the §13 groups rather than one large branch.
-- Work happens inside coredcc's own submodule checkout (`source/litestl`), which is a
+- Work happens inside coredcc's own submodule checkout (`extern/litestl`), which is a
   separate clone. The shared `C:\dev\litestl` checkout is never touched; another session
   has it on `litestl/napi-bindings`.
 - coredcc's gitlink only ever points at litestl master. Work that needs an unmerged PR
