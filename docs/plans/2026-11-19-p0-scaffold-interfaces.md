@@ -239,6 +239,48 @@ Re-check against `2360bc9`:
 7. The feature review of the interface system, written up as
    `docs/reports/feature-report-interfaces-<date>.md`.
 
+## Implementation notes (2026-11-20, on `spine`)
+- **Where it lives:** `source/coredcc/base/iface/`.
+  - `iface.h` holds `IfaceTable`, `IfaceRef`, the forwarder, the `CDCC_*` macros and `upcast`.
+  - `registry.h/.cc` holds `IfaceRegistry` (owned by `Runtime`) and the template entry
+    points: `registerInterface<I>`, `registerImpl<I, Impl>(rt, name)`,
+    `registerAdaptor<I, Adapted>(rt, name, bindFn)`, `implementForeign<I>` and `query<I>`.
+  - `owned.h` holds `Owned<I>` and `own<I>()`.
+  - `Runtime::validateAll()`.
+- **Built against** litestl `coredcc/integration`: master plus #4 (B), #5 (A) and #6 (C1).
+- **Forwarder:** it is matched on the member pointer's *type*. Partial specializations on
+  the member pointer *value*, as in the prototype, are ambiguous under MSVC (C2752) once
+  noexcept variants exist.
+- **Const:** litestl records it as `isConst` flags on `Pointer` and `Reference`, not in
+  `buildFullName()`, so litestl's registration keys don't change. coredcc's matcher and
+  its error messages print the const.
+- **Type identity:** kind, const flags, struct size and `typeKey`, then the full name.
+  When two types print the same name, the error says "different C++ types with the same
+  name".
+- **Declaration rules checked at registration:** overloaded slots, reference returns, and
+  primitive out-parameters (a non-const reference or pointer to a number or bool).
+- **Upcasts:** `CDCC_UPCASTS(Other...)` in the interface. Registering an implementation
+  builds a table per extra base. Each is linked for `upcast<Other>()` and is also
+  queryable directly.
+- **`compile_embed`** (`tests/compile_embed.cc`, Windows only) uses `<windows.h>` without
+  `NOMINMAX`, plus `check`/`verify`/`ensure` macros. Two deviations from the plan:
+  - litestl headers stay SYSTEM. Unreal wraps third-party headers in
+    `THIRD_PARTY_INCLUDES_START`. At `/W4`, litestl still emits C4267 size_t→int warnings
+    throughout its containers; litestl #5 leaves them alone.
+  - litestl's own copy of this check is `test_embed_windows` (litestl #5).
+- **Build time (2026-11-20, `/O2`):** a file with 50 bound methods (5 signature shapes,
+  struct arguments and a struct return) against the same file without bindings, best of
+  three, including the devshell start-up time:
+
+  | Compiler | Without bindings | 50 bound methods | Per method |
+  |---|---|---|---|
+  | MSVC (VS 18) | 1.93 s | 2.62 s | ~14 ms |
+  | clang-cl | 1.84 s | 3.06 s | ~24 ms |
+
+  This is below architecture §2a's 40–80 ms per method.
+- **Not done yet:** C2 (TS generator for implementable interfaces, and the foreign-dispatch
+  hook in `IBindingBackend`) and the interfaces feature report.
+
 ## Exit criteria
 - Native builds and tests pass under `native-clang` and `native-msvc`, Debug and
   RelWithDebInfo, including the warning probe.

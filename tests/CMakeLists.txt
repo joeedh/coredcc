@@ -3,6 +3,10 @@ coredcc_test(test_base_id SOURCES base/test_id.cc DEPS coredcc_base)
 coredcc_test(test_base_handle_pool SOURCES base/test_handle_pool.cc DEPS coredcc_base)
 coredcc_test(test_base_signal SOURCES base/test_signal.cc DEPS coredcc_base)
 coredcc_test(test_base_runtime SOURCES base/test_runtime.cc DEPS coredcc_base)
+coredcc_test(test_base_iface SOURCES base/test_iface.cc DEPS coredcc_base)
+if(WIN32)
+  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_base)
+endif()
 
 # Compile-fail tests. Each also builds the same file without the define, which must succeed.
 if(COREDCC_WERROR)
@@ -21,4 +25,12 @@ endif()
 coredcc_compile_fail(result_of_status
   SOURCE compile_fail/result_of_status.cc
   REGEX "use Status directly"
+  DEPS coredcc_base)
+coredcc_compile_fail(iface_misspelled_slot
+  SOURCE compile_fail/iface_misspelled_slot.cc
+  REGEX "C2039|no member named"
+  DEPS coredcc_base)
+coredcc_compile_fail(iface_wrong_args
+  SOURCE compile_fail/iface_wrong_args.cc
+  REGEX "C2660|C2664|too few arguments|no matching function"
   DEPS coredcc_base)

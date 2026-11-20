@@ -23,9 +23,14 @@ endif()
 if(NOT TARGET util)
   set(LITESTL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
   add_subdirectory(extern/litestl EXCLUDE_FROM_ALL SYSTEM)
+  # binding.cc's offsetof on descriptor classes is by design (litestl sets this for
+  # WASM), and it uses POSIX strdup.
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(binding PRIVATE -Wno-invalid-offsetof -Wno-deprecated-declarations)
+  endif()
 endif()
 # When a host supplied litestl non-SYSTEM, its header warnings would hit coredcc's /WX.
-foreach(_lt util platform math)
+foreach(_lt util platform math binding)
   if(TARGET ${_lt})
     set_property(TARGET ${_lt} PROPERTY SYSTEM ON)
   endif()

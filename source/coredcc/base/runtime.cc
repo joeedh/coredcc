@@ -1,11 +1,29 @@
 #include "coredcc/base/runtime.h"
 
+#include "coredcc/base/iface/registry.h"
+
+#include "litestl/util/alloc.h"
+
 #include <cstdio>
 #include <string>
 
 namespace coredcc {
 
 using litestl::util::string;
+
+Runtime::Runtime() : ifaces_(litestl::alloc::New<IfaceRegistry>("coredcc::IfaceRegistry", this))
+{
+}
+
+Runtime::~Runtime()
+{
+  litestl::alloc::Delete(ifaces_);
+}
+
+Status Runtime::validateAll() const
+{
+  return ifaces_->validateAll();
+}
 
 Result<uint64_t> Runtime::registerName(IdDomain domain, std::string_view name)
 {

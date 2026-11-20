@@ -18,11 +18,28 @@ namespace coredcc {
  * rejects collisions. Later phases add the interface, struct, command and tool
  * registries.
  */
+class IfaceRegistry;
+
 class Runtime {
  public:
-  Runtime() = default;
+  Runtime();
+  ~Runtime();
   Runtime(const Runtime &) = delete;
   Runtime &operator=(const Runtime &) = delete;
+
+  /** Interfaces and their implementations (coredcc/base/iface/registry.h). */
+  IfaceRegistry &ifaces()
+  {
+    return *ifaces_;
+  }
+  const IfaceRegistry &ifaces() const
+  {
+    return *ifaces_;
+  }
+
+  /** Re-checks every registry's invariants. Run at startup in debug builds and in
+   * every test binary. */
+  Status validateAll() const;
 
   /**
    * Register `name` in `domain`, returning its id. Registering the same name twice is
@@ -52,6 +69,7 @@ class Runtime {
 
  private:
   litestl::util::Map<uint64_t, litestl::util::string> names_[3];
+  IfaceRegistry *ifaces_;
 };
 
 } // namespace coredcc
