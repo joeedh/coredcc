@@ -1,0 +1,9 @@
+coredcc_library(coredcc_base
+  SOURCES
+    assert.cc
+    runtime.cc
+    status.cc
+  DEPS
+    util
+    platform
+)

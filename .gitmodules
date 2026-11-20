@@ -1,0 +1,3 @@
+[submodule "extern/litestl"]
+	path = extern/litestl
+	url = https://github.com/joeedh/litestl.git

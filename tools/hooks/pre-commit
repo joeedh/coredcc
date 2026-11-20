@@ -1,0 +1,21 @@
+#!/bin/sh
+# Reject a staged extern/litestl gitlink that isn't on litestl's master. litestl PRs are
+# rebase-merged, so a gitlink to a PR-branch commit would point at a commit that never
+# lands on master. Install with: git config core.hooksPath tools/hooks
+sub=extern/litestl
+staged=$(git diff --cached --raw --no-abbrev -- "$sub" | awk '{print $4}')
+[ -z "$staged" ] && exit 0
+case "$staged" in 0000000*) exit 0 ;; esac  # submodule removed
+
+git -C "$sub" fetch --quiet origin master 2>/dev/null
+if ! git -C "$sub" cat-file -e "$staged^{commit}" 2>/dev/null; then
+  echo "pre-commit: staged $sub gitlink $staged is not a known commit" >&2
+  exit 1
+fi
+if ! git -C "$sub" merge-base --is-ancestor "$staged" origin/master; then
+  echo "pre-commit: staged $sub gitlink $staged is not on litestl origin/master." >&2
+  echo "  Only merged litestl commits may be pinned (see docs/plans/2026-11-19-p0-scaffold-interfaces.md)." >&2
+  echo "  Unstage it with: git restore --staged $sub" >&2
+  exit 1
+fi
+exit 0
