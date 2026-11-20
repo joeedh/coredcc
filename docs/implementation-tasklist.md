@@ -14,7 +14,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 1 | [Architecture](plans/2026-11-19-architecture.md) | all | — | pressure-tested | — |
 | 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | in progress (TA0 done) | — |
 | 3 | [P0 scaffold and interface system](plans/2026-11-19-p0-scaffold-interfaces.md) | P0 | 1, 4 | in progress (scaffold, base done; interfaces blocked on litestl #3) | interfaces |
-| 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | in progress (B open as litestl #4) | — |
+| 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | in review (litestl #4 B, #5 A, #6 C1) | — |
 | 5 | P1 application spine: library, props, datapath, commands | P1 | 3 | todo | datablocks; props and datapath; commands and undo |
 | 6 | P2 layout and library IO | P2 | 5 | todo | layout |
 | 7 | P3 objects, transforms and BVH | P3 | 5 | todo | objects and transforms; BVH |
@@ -75,9 +75,11 @@ Set up before the first worktree, following sculptcore and faberforge:
 - P0 scaffold and `base/` are done on master (Status, ids, HandlePool, Signal, Runtime;
   tests pass on msvc/clang-cl x Debug/RelWithDebInfo).
 - litestl PR #3 merged; coredcc pins litestl master `2360bc9` (2026-11-20).
-- P0b: PR B is open as litestl #4. PR A (embedding hygiene) and PR C1 (interface descriptors)
-  are next; the interface system starts on `spine` against `coredcc/integration` once C1
-  is up.
+- P0b: litestl #4 (B: inherit, per-thread PermanentGuard), #5 (A: embedding hygiene) and
+  #6 (C1: interface descriptors) are open. They cherry-pick cleanly together onto
+  litestl master as the local submodule branch `coredcc/integration`.
+- The interface system is being built on the local `spine` branch against
+  `coredcc/integration`. C2 (TS generator, foreign-dispatch hook) follows it.
 - Next: the P1 plan. Parts of P1 that don't need interfaces (props, the path parser,
   LinearHistory) can start on master; the rest waits with the interface system.
 - Test app TA0 is done (6 tests pass): `cd apps/testapp && pnpm install && pnpm test`.
