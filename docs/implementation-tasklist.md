@@ -72,5 +72,5 @@ Set up before the first worktree, following sculptcore and faberforge:
 - sccache is not installed on this machine yet (checked 2026-11-19); install it first.
 
 ## Current focus
-- P0: scaffold and base/ on master. litestl PRs wait on the user's answer about PR #3.
+- P0: scaffold and base/ on master. litestl PRs, and so the interface system, wait for litestl PR #3 to merge (user, 2026-11-20).
 - Test app TA0 is done (6 tests pass): `cd apps/testapp && pnpm install && pnpm test`.

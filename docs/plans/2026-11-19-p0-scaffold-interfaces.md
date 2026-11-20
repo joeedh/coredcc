@@ -1,7 +1,8 @@
 # P0 and P0b: scaffold, base, interface system, litestl PRs
 
-Status: pressure-tested 2026-11-19 and revised; the record is at the end. One decision is
-pending with the user: how the litestl PRs relate to litestl PR #3 (see "litestl PRs").
+Status: pressure-tested 2026-11-19 and revised; the record is at the end. Decision
+(user, 2026-11-20): the litestl PRs wait for litestl PR #3 to merge, then branch from
+litestl master.
 
 Covers rows 3 and 4 of `docs/implementation-tasklist.md`: architecture plan §14 P0 and
 P0b, and the interface system of §2a.
@@ -172,9 +173,10 @@ It rewrites the files these PRs touch (`binding_method.h`, `binding_struct.h`,
 - an N-API runtime behind an `IBindingBackend` interface shared with WASM, and WASM
   builds with plain clang and WASI instead of Emscripten.
 
-Whether our PRs stack on #3 or wait for it is the user's call (pending). The split below
-assumes they **stack on #3**, which the pressure test showed is the only way to avoid
-rewriting them after it merges.
+**Decision (user, 2026-11-20): wait for #3 to merge**, then branch every PR from litestl
+master. Before writing each PR, re-check its items against post-#3 master and drop what
+#3 already did. Until then the interface system is blocked; P0 does the scaffold and
+`base/`.
 
 | PR | Contents | Needed by |
 |---|---|---|
@@ -196,15 +198,15 @@ rewriting them after it merges.
   rebase conflicts. The smallest one goes first.
 - **Gates for each PR:** builds, and litestl's tests (including #3's binding conformance
   suite) pass, on MSVC and clang-cl locally. litestl CI after #3 adds linux gcc and clang.
-- **Coordination:** tell the `litestl-c2` session about the stacked PRs and which of its
-  files they touch, once the user has decided.
+- **Coordination:** before opening each PR, check litestl's open PRs for overlap, as the
+  PR rules require.
 
 ## Order of work
 1. Scaffold: submodule at `extern/litestl`, CMake, presets, devshell, the test helpers
    and warning probe, the pre-commit hook, the CLAUDE.md build section,
    `docs/embedding.md`. Commit on master.
 2. `base/`: Status, ids, HandlePool, Signal, Runtime, with tests. Commit on master.
-3. litestl PRs A, B and C1, based as the user decides.
+3. When #3 has merged: litestl PRs A, B and C1, from litestl master.
 4. On `spine`: the interface system against `coredcc/integration`, then C2, then
    `compile_embed`.
 5. P1 continues on `spine` while the PRs are in review.
