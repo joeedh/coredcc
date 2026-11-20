@@ -178,6 +178,31 @@ master. Before writing each PR, re-check its items against post-#3 master and dr
 #3 already did. Until then the interface system is blocked; P0 does the scaffold and
 `base/`.
 
+**#3 merged (2026-11-20, `2360bc9`); coredcc's gitlink is bumped and all tests pass.**
+Re-check against `2360bc9`:
+- **Done by #3, dropped:** the return-buffer leak. By-value struct returns are owned
+  wrappers, freed on dispose or GC (`manager.ts`, `wrapOwned`).
+- **Moved to the P1 WASM toolchain decision:** the `.c_str()`-in-`std::format` item.
+  `util/string.h` now has a `std::formatter` for `String`; whether emsdk builds it depends
+  on the emsdk version chosen.
+- **Still needed, confirmed in the code:**
+  - `#undef _` comes before the `_` definition in `binding_number.h`, with none after it.
+  - `flatten_inline` tests `defined(MSVC)`, which the compiler never defines, so MSVC gets
+    `[[gnu::flatten]]` (C5030).
+  - The unprefixed `force_inline` / `array_size` / `flatten_inline`.
+  - Unparenthesized `std::min(` / `std::max(` in the listed headers.
+  - The `dtl` include in `test_util.h`.
+  - The stray `;` in both `inherit` loops.
+  - `allocatingPermanent` is a process-wide atomic, so a guard on one thread marks every
+    thread's allocations permanent. The fix is a `thread_local` counter. Every guard in
+    litestl and sculptcore opens and closes on one thread.
+  - All of C1: only free functions have noexcept traits.
+  - All of C2: `IBindingBackend` has no foreign-dispatch hook.
+  - All of D.
+- **To verify in `compile_embed`:** whether C4099 on `String` still fires. Only one
+  declaration (`struct`) was found.
+- No litestl PRs were open on 2026-11-20.
+
 | PR | Contents | Needed by |
 |---|---|---|
 | A. Embedding hygiene | `#undef _` after its last use (it's currently undefined *before* the definition); `LSTL_`-prefix `force_inline`, `array_size`, `flatten_inline`; fix C4458 in `binding_constructor.h`; `<windows.h>`-safe min/max in `vector.h`, `string.h`, `task.h`, `boolvector.h`, `sort.h`, `math/vector.h`, `path/path.h`; MSVC C5030 on `[[gnu::flatten]]`; C4099 on `String`; drop the unused `dtl` include from `test_util.h` | `compile_embed` |
