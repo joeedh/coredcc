@@ -576,8 +576,160 @@ static void test_set_value_undo_inside_exec()
   test_assert(s.ex.undo(s.ctx).ok() && s.w.tool.count == 4);
 }
 
+/* ---- test gaps the review listed ---- */
+
+/* Runs test.parent (itself two test.add subs) as a sub, then fails if g_flag. */
+struct GrandParent {
+  Status canRun(Context &) const
+  {
+    return Status();
+  }
+  Status exec(Context &ctx)
+  {
+    const CommandDef *parent = ctx.runtime().ext<CommandRegistry>().find("test.parent");
+    CDCC_TRY(ctx.executor()->runSub(ctx, *parent, parent->newInputs()).status());
+    return g_flag ? Status::error(StatusCode::Internal, "grandparent failed") : Status();
+  }
+  void undo(Context &)
+  {
+    g_log += "grandparent-undo;";
+  }
+  uint64_t memSize() const
+  {
+    return 0;
+  }
+  void discard() {}
+  BIND_ALL(GrandParent, "review::GrandParent", )
+};
+
+/* Counts instances and discards; fails each one discarded twice. `refuse`, `fail`
+ * and `key` (fold, 0 never) come from the inputs; `mem` is its memSize. */
+static int g_made = 0;
+static int g_discards = 0;
+struct Counted {
+  int64_t key = 0;
+  int64_t mem = 0;
+  bool discarded = false;
+  Counted()
+  {
+    g_made++;
+  }
+  Status canRun(Context &ctx) const
+  {
+    return inputInt(ctx, "refuse") ? Status::error(StatusCode::FailedPrecondition, "refused")
+                                   : Status();
+  }
+  Status exec(Context &ctx)
+  {
+    key = inputInt(ctx, "key");
+    mem = inputInt(ctx, "mem");
+    return inputInt(ctx, "fail") ? Status::error(StatusCode::Internal, "failed") : Status();
+  }
+  void undo(Context &) {}
+  uint64_t memSize() const
+  {
+    return uint64_t(mem);
+  }
+  void discard()
+  {
+    test_assert(!discarded);
+    discarded = true;
+    g_discards++;
+  }
+  uint64_t foldKey() const
+  {
+    return uint64_t(key);
+  }
+  bool foldFrom(Command)
+  {
+    return true;
+  }
+  BIND_ALL(Counted, "review::Counted", BIND_STRUCT_METHOD(st, foldKey, MARGS());
+           BIND_STRUCT_METHOD(st, foldFrom, MARGS("next")))
+};
+
+static void test_nested_sub_commands()
+{
+  Setup s;
+  test_assert(addNativeCommand<GrandParent>(s.w.rt, CommandDef("review.grandparent")).ok());
+  g_flag = false;
+  test_assert(s.ex.run(s.ctx, "review.grandparent", PropertyBag()).ok());
+  test_assert(s.w.tool.count == 15 && s.history.at(0).subCount() == 1);
+  g_log.clear();
+  test_assert(s.ex.undo(s.ctx).ok() && s.w.tool.count == 4);
+  test_assert(g_log == "undo;undo;parent-undo;grandparent-undo;");
+  g_log.clear();
+  test_assert(s.ex.redo(s.ctx).ok() && s.w.tool.count == 15); /* re-exec at depth */
+  test_assert(g_log == "discard;discard;exec1;exec10;" && s.history.at(0).subCount() == 1);
+  /* A failure at the top rolls back every level, innermost last-run first. */
+  test_assert(s.ex.undo(s.ctx).ok());
+  g_flag = true;
+  g_log.clear();
+  test_assert(hasMsg(s.ex.run(s.ctx, "review.grandparent", PropertyBag()).status(),
+                     "grandparent failed"));
+  g_flag = false;
+  test_assert(s.w.tool.count == 4);
+  test_assert(g_log == "exec1;exec10;undo;undo;parent-undo;discard;discard;");
+}
+
+static void test_budget_across_a_barrier()
+{
+  Setup s;
+  const CommandDef *barrier = *addNativeCommand<AddCount>(
+      s.w.rt, CommandDef("review.barrier")
+                  .flags(CommandFlags::UndoBarrier)
+                  .input(PropertyDef::intProp("amount"))
+                  .input(PropertyDef::intProp("mem")));
+  test_assert(s.runAdd(1, 100).ok() && s.runAdd(1, 100).ok());
+  test_assert(s.ex.run(s.ctx, *barrier, barrier->newInputs()).ok());
+  test_assert(s.runAdd(1, 100).ok());
+  test_assert(s.ex.undo(s.ctx).ok() && !s.history.canUndo()); /* the barrier holds */
+  test_assert(s.ex.redo(s.ctx).ok());
+  s.history.setMemoryBudget(150); /* the two before the barrier go */
+  test_assert(s.history.size() == 1 && s.history.memoryUsed() == 100);
+  test_assert(s.history.validate().ok() && s.history.canUndo());
+  test_assert(s.ex.undo(s.ctx).ok() && !s.history.canUndo());
+}
+
+static void test_discard_exactly_once()
+{
+  g_made = g_discards = 0;
+  {
+    Setup s;
+    CommandDef d("review.counted");
+    for (const char *in : {"refuse", "fail", "key", "mem"}) {
+      d.input(PropertyDef::intProp(in));
+    }
+    const CommandDef *def = *addNativeCommand<Counted>(s.w.rt, std::move(d));
+    auto run = [&](int64_t refuse, int64_t fail, int64_t key, int64_t mem) {
+      PropertyBag in = def->newInputs();
+      test_assert(in.set("refuse", PropValue::ofInt(refuse)).ok());
+      test_assert(in.set("fail", PropValue::ofInt(fail)).ok());
+      test_assert(in.set("key", PropValue::ofInt(key)).ok());
+      test_assert(in.set("mem", PropValue::ofInt(mem)).ok());
+      return s.ex.run(s.ctx, *def, std::move(in)).status();
+    };
+    test_assert(!run(1, 0, 0, 0).ok() && g_discards == 1); /* canRun refused */
+    test_assert(!run(0, 1, 0, 0).ok() && g_discards == 2); /* exec failed */
+    test_assert(run(0, 0, 5, 0).ok() && run(0, 0, 5, 0).ok() && g_discards == 3); /* fold */
+    test_assert(s.ex.undo(s.ctx).ok() && run(0, 0, 0, 0).ok() && g_discards == 4); /* truncation */
+    PropertyBag again = def->newInputs();
+    test_assert(s.ex.rerunHead(s.ctx, std::move(again)).ok() && g_discards == 5);
+    PropertyBag bad = def->newInputs();
+    test_assert(bad.set("fail", PropValue::ofInt(1)).ok());
+    test_assert(!s.ex.rerunHead(s.ctx, std::move(bad)).ok() && g_discards == 6);
+    test_assert(run(0, 0, 0, 1000).ok());
+    s.history.setMemoryBudget(999); /* the older entry goes */
+    test_assert(g_discards == 7 && s.history.size() == 1);
+  } /* the history's destructor discards the rest */
+  test_assert(g_made == g_discards);
+}
+
 int main()
 {
+  test_nested_sub_commands();
+  test_budget_across_a_barrier();
+  test_discard_exactly_once();
   test_reentrancy();
   test_failed_redo_rolls_back();
   test_input_bags_are_checked();

@@ -156,10 +156,10 @@
   - `-inf`, multi-bit flags, and overflowing literals;
   - a bad LastUsed line;
   - registration retry, memSize call counts, and setValueUndo inside exec.
+- *Added after the fixes:* nested `runSub` (undo order, redo by re-exec, and rollback at
+  depth), budget eviction across a barrier, and "discarded exactly once" on every path
+  (refusal, failed exec, fold, truncation, rerunHead both ways, budget, destruction).
 - *Not added (tracked for the P1f test pass):*
-  - nested `runSub` at depth;
-  - budget eviction across a barrier;
-  - discard counts on every path;
   - slot (element-level) refs in the cascade;
   - Detached and Placeholder users in the preview.
 - `test_command.cc` was split into `test_command_history`, `_values` and `_blocks`,
