@@ -1,0 +1,9 @@
+coredcc_library(coredcc_parse
+  SOURCES
+    invocation.cc
+    lex.cc
+    path.cc
+    path_cache.cc
+  DEPS
+    coredcc_base
+)

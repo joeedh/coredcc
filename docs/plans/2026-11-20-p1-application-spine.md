@@ -79,7 +79,9 @@ Status: pressure-tested (2026-11-20) and revised; the record is at the end.
   pre-commit gate, because the native builds can't catch this.
 
 ## Module layering
-`base` ← `props` ← `lib` ← `api` ← `command` ← `bind`
+`base` ← `props`, `parse` ← `lib` ← `api` ← `command` ← `bind`
+
+`parse` (the path and invocation parsers, and `PathCache`) depends only on `base`.
 
 - **Binders live with their types.**
   - Every type in a slot needs its `Binder` visible where the interface is declared.
@@ -411,6 +413,35 @@ Status: pressure-tested (2026-11-20) and revised; the record is at the end.
   `foreachRef` from TS providers during GC.
 - **Scope:** P1 is the largest phase. If it slips, TA1 moves to P2 without blocking P2,
   P3 or P5.
+
+## Implementation notes
+### P1a and P1b (2026-11-21)
+Where the code differs from the plan above:
+- **Parse errors** are `Result<T>` plus an optional `size_t *errorOffset` out-parameter,
+  not a `ParseError` struct. The message names the offset too.
+- **`parse` is its own module** (`coredcc_parse`), not part of `api/`, so `command/`'s
+  invocation parsing doesn't need the resolver.
+- **Metadata:** no `VectorMeta`. `NumericMeta` applies to each component of vectors,
+  `Quat` and `Mat4`. `TargetMeta {StructId}` was added for Pointer and Collection.
+- **An infinite soft-range bound** means the hard range's bound, so a def can set
+  `range()` without `softRange()`.
+- **`coerce` additions:** Bool from Int 0 or 1. A flag key set is a string, `"X|Z"`
+  (`""` is no flags, and an empty piece is an error).
+- **Invocation tuples hold scalars only.** They don't nest: litestl `Vector` stores
+  elements inline, so it can't hold its own type, and flat tuples leave the fuzzer no
+  recursion depth to exhaust. A Mat4 is written as 16 numbers.
+- **`PathCache`** is indexed by the text's hash. A collision between two texts leaves
+  the second uncached, which is correct, only slower.
+- **Suggestions** use optimal string alignment distance, so a swap of adjacent letters
+  (`SHRAP`) counts as one edit.
+- **Not done yet:**
+  - `PropValue`'s binding is deferred to P1f, with the rest of `bind/`.
+  - The wasm-st pre-commit gate waits for the toolchain (P1f).
+- **Fuzzing:**
+  - About 20% of the generated inputs are valid, so the round-trip property is
+    exercised.
+  - At `COREDCC_TEST_SCALE=20`, 800,000 inputs pass in 6 s.
+  - A planted bug in `Path::toString` (index + 1) failed on the first valid input.
 
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
