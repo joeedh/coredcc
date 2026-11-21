@@ -822,128 +822,282 @@ experiments with emcc 5.0.6, node 24, tsc, clang-cl and a small N-API addon.
 - **Not covered:** the Emscripten EM_JS host. coredcc's wasm-st gate compiles it. The
   spike (step 5) is its first run.
 
-## P1f step 4: `bind/` design (2026-11-21)
-`source/coredcc/bind/` (target `coredcc_bind`) is what scripts see: one BindingManager,
-facades over the C++ API in shapes the binding system can carry, and foreign `Command`
-implementations. It links every other module; nothing links it except hosts and tests.
+## P1f step 4: `bind/` design (2026-11-21, revised after its pressure test)
+`source/coredcc/bind/` (target `coredcc_bind`) is what scripts see:
+- one BindingManager;
+- facades over the C++ API, in shapes the binding system can carry;
+- foreign `Command` implementations.
+
+It links every other module. Nothing links it except hosts and tests.
+
+### Prerequisites in `command/` (bugs the pressure test found; native code hits them too)
+- **Redo must see the sticky error.**
+  - A failed foreign slot returns a value-initialized result (an *ok* `Status`), and
+    only sets the sticky error.
+  - `CommandRecord::redo` and `LinearHistory::redo` branch on the returned status, so
+    a redo that failed this way advanced the cursor. The next undo then undid a command
+    that was never redone.
+  - **Fix:** `CommandRecord::redo` folds the Runtime's sticky error into its status after
+    each slot call (`exec` for redo-by-exec, `redo`), before deciding to roll back.
+    `undo` can't be rolled back, so it is unchanged: its error still reaches the caller
+    through the executor's `collect`.
+- **Registration checks run before anything is registered.**
+  - `CommandRegistry::add` checked these after the implementation was already
+    registered, so a failed `add` left the implementation's table behind, and a retry
+    then failed with "already implements":
+    - an Interactive command without `redo`;
+    - `foldKey` without `foldFrom`, or the reverse;
+    - an id hash collision.
+  - **Fix:**
+    - `checkDef` also refuses a colliding id.
+    - A new `CommandRegistry::checkSlots(def, hasSlot)` makes the slot checks from a
+      predicate. `add` calls it with the table.
+    - `addNativeCommand` calls it before `registerImpl`, from the Impl's descriptor.
+    - The foreign path calls it from the slot names.
+  - `addForeign` still registers the impl's TypeId name before it fails. That entry is
+    harmless, and is left alone.
 
 ### What the binding system can't carry, and the facade rule
-- `std::string_view` parameters, `Result<T>`, `std::optional`, `std::span` and
-  `Owned<I>` aren't bindable.
+- These aren't bindable: `std::string_view` parameters, `Result<T>`, `std::optional`,
+  `std::span`, `Owned<I>`, and `Vector<string>` arguments on WASM. (`buildArgs` fills
+  vectors with `writeScalar`.)
 - Facades are free functions in `coredcc::script`, with JS names `coredcc::<name>`.
-  They take `const litestl::util::string &` and return:
+  They take `const litestl::util::string &` and return one of:
   - a `Status`;
   - a value struct;
   - a result struct `{Status status; T value;}`.
 
   They never set the sticky error.
-- **Result structs:** `ValueResult` (a PropValue), `StringResult` and `BagResult` (a
-  PropertyBag). Each is bound with its two members and a copy constructor. The TS layer
-  (step 5) turns a failed status into an exception.
+- **Misuse from a script returns an error. It never aborts.** Methods whose misuse
+  aborts (`PropValue::as*` on the wrong type, `component(i)` out of range, `Status::error`
+  with `Ok`, an unchecked bag index) are not bound. Checked facades replace them.
+- **Result structs:** `BoolResult`, `IntResult` (int64), `FloatResult` (double),
+  `StringResult`, `ValueResult` (a PropValue) and `BagResult` (a PropertyBag).
+  - Each is bound with its two members and a copy constructor.
+  - The TS layer (step 5) turns a failed status into an exception.
+  - The agent compiled them under clang-cl /W4 /WX with no offsetof warning.
 
 ### Bound types (additions)
 - **`StatusCode`:** an enum.
 - **`Status`:**
   - a default constructor (ok);
-  - a named constructor `"error"(StatusCode, const string &)`;
-  - `code()`, added to the existing `ok` and `message`.
-- **`PropValue`:**
-  - a copy constructor;
-  - `type()`, as the bound enum `PropValue::Type`;
-  - `asBool`, `asInt`, `asFloat`, `asString`, `asEnum`, `asFlags`, `componentCount`
-    and `component(i)`.
-  - Facades make values: `valueBool`, `valueInt`, `valueFloat`, `valueString`,
-    `valueVec2`, `valueVec3` and `valueVec4`.
-  - Pointer and Mat4 values can be read as a type and a component count, but are not
-    yet made from TS.
-- **`PropertyBag`:** no methods of its own (they take string_view). Facades instead:
+  - `code()`, added to `ok` and `message`;
+  - the facade `statusError(code, message)`, which maps `Ok` to InvalidArgument instead
+    of aborting.
+- **`PropValue`:** a copy constructor, `type()` (the bound enum `PropValue::Type`), and
+  `componentCount()`. Checked facades do everything else:
+  - **makers:** `makeBool`, `makeInt`, `makeFloat`, `makeString`, `makeVec2`, `makeVec3`
+    and `makeVec4`;
+  - **readers:**
+    - `readBool`, `readInt`, `readFloat` and `readString` return result structs. The
+      wrong type is InvalidArgument.
+    - `readComponent(v, i)` returns a FloatResult. An out-of-range `i` is OutOfRange.
+  - Pointer and Mat4 values can be read as a type and a component count, but are not yet
+    made from TS.
+- **`PropertyBag`:** read-only facades only. A script that could write to a bag could
+  rewrite a recorded command's inputs, which LastUsed and rerunHead read later.
   - `bagGet(bag, name)` returns a ValueResult. A missing name is NotFound.
-  - `bagSet(bag, name, value)` returns a Status.
-  - `bagSize`, and `bagName(bag, i)`.
-- **`Context`:** `inputs()` and `outputs()`, bound as borrowed pointers. Its other
-  accessors aren't needed by scripts yet.
+  - `bagSize(bag)`.
+  - `bagName(bag, i)` returns a StringResult, with a range check.
+- **`Context`:** no bound accessors. A command's bags are reached by facades instead:
+  - `inputGet(ctx, name)` returns a ValueResult;
+  - `outputSet(ctx, name, value)` returns a Status;
+  - `outputGet(ctx, name)` returns a ValueResult.
+
+  Outside a command slot they return FailedPrecondition.
+- **Also added to the manager:**
+  - `Command`, so the generator emits `CommandImpl`;
+  - `ForeignFactory`;
+  - `CommandDef`, as an opaque, owned builder.
 
 ### Facades over Context (the spike's steps 1-3)
-- `canonicalPath(ctx, path)`: a StringResult with the canonical form, through
-  `canonicalize`. This is step 1, "resolves a path".
-- `getValue(ctx, path)`: a ValueResult.
-- `setValue(ctx, path, value)`: `setValueUndo`, so the set is undoable. It needs an
-  executor on the context.
-- `writeValue(ctx, path, value)`: the raw `api::setValue`, which isn't recorded. It is
-  for use inside a command's own exec and undo.
-- `invoke(ctx, invocation)`: a BagResult with the outputs, through the invocation
-  parser (`"mesh.extrude(distance=2)"`). This keeps PropertyBag construction out of
-  TS.
-- `undo(ctx)` and `redo(ctx)`: through `ctx.executor()`. Without an executor they
-  return FailedPrecondition.
+- **`resolvePath(ctx, path)`** returns a Status. It is ok if the path resolves, and
+  otherwise the resolver's error with suggestions. This is step 1, "resolves a path".
+  `canonicalize`'s StableRef prints only a debug form, so it isn't used.
+- **`getValue(ctx, path)`** returns a ValueResult.
+- **`setValue(ctx, path, value)`** calls `setValueUndo`, so the set is undoable. It
+  needs an executor on the context.
+  - At top level it is a command in the history.
+  - Inside a command's exec it becomes a sub-command (`runSub`), undone before its
+    parent.
+- **`writeValue(ctx, path, value)`** calls the raw `api::setValue`, which isn't
+  recorded. A command's exec and undo use it on state they capture themselves.
+  - Don't set the same member through both `setValue` and `writeValue` in one command.
+- **`invoke(ctx, invocation)`** returns a BagResult with the outputs, through the
+  invocation parser (`"mesh.extrude(distance=2)"`).
+- **`undo(ctx)` and `redo(ctx)`** go through `ctx.executor()`. Without an executor
+  they return FailedPrecondition.
+- **Reentrancy guard.** `ForeignBindings` counts the foreign calls in progress (the
+  dispatcher increments it).
+  - While the count is above 0, `invoke`, `undo` and `redo` return Busy. So does
+    `setValue`, unless the executor is running a command (inside exec).
+  - Without the guard, a script's `discard`, run when the host clears the history,
+    could push into the history it is being cleared from. That hits `HistoryCall`'s
+    check and aborts.
+- **No `gestureId`**, so TS can't fold drags yet.
 - **Deviation:** `getValues` (several paths at once) is left out. Nothing in P1 needs
   it.
 
 ### Foreign commands
-- **`ForeignBindings`** is a Runtime extension. It owns the one `ScriptDispatcher`
-  (a `ForeignDispatcher`) and the factory handles it has been given. It releases the
-  handles when it is destroyed.
+- **`ForeignBindings`** is a Runtime extension. It holds:
+  - the one `ScriptDispatcher` (a `ForeignDispatcher`);
+  - the foreign-call depth;
+  - the factory handles it has been given, which it releases when it is destroyed.
 - **`ScriptDispatcher::call(table, self, slot, args, ret)`:**
-  - `self` holds the instance's foreign handle, as `void *` (handles start at 1).
-  - It calls `litestl::binding::foreign::call(handle, table.ifaceDesc->methods[slot],
-    args, ret, &err)`.
-  - On failure it returns Internal with `err`. `FwdCall` then sets the sticky error, and
-    the executor folds that into the command's result (`collect`).
+  - `self` holds the instance's foreign handle, as `void *`.
+  - It raises the depth, then calls `litestl::binding::foreign::call(handle,
+    table.ifaceDesc->methods[slot], args, ret, &err)`.
+  - On failure it returns Internal with `err`. `FwdCall` sets the sticky error, and the
+    executor folds that in: through `collect`, and now through `CommandRecord::redo`.
 - **`ForeignFactory`** is an interface struct (`isInterface`) with one slot,
-  `uint32_t make()`. It returns a new instance's handle, from `foreignHandle(new Cls())`.
-  - The generator gives TS a `ForeignFactoryImpl`.
-  - It is only ever called through `foreign::call`, so it never gets a table of its
-    own.
-- **`newCommandDef(id)`** returns an owned CommandDef builder (bound, opaque). Facades
-  build it:
+  `uint32_t make()`.
+  - `make` returns a new instance's handle, with a fresh count (`foreignHandle(new
+    Cls())`). The TS layer writes `make`, so no script returns a cached handle.
+  - It is called only through `foreign::call`, never through a table.
+- **`newCommandDef(id)`** returns an owned CommandDef. Facades build it:
   - `defUiName(def, s)`;
   - `defFlags(def, uint32)`;
-  - `defInput(def, name, PropValue default)` adds a PropertyDef of the default's type:
-    Bool, Int, Float, String or Vec2-4. Other types are InvalidArgument.
-- **`registerForeignCommand(rt, def, factoryHandle, slots)`**, where `slots` is a
-  `Vector<string>` of the method names the JS class has. In order:
-  1. `checkDef`.
-  2. Refuse an interface with slots that can't be implemented from TS: `void *` or
-     `QueryAnswer` in a parameter or return. Command has none, but the check is general
-     (`foreignImplementable(desc)`).
-  3. `registerForeign<Command>(rt, implName, dispatcher, nullptr, slots)`. This rejects
-     a missing required slot.
-  4. `def.impl(implName, factory)`, then `CommandRegistry::add`.
-  5. On success, take one count of `factoryHandle`. On failure, leave the count with the
-     caller.
+  - `defInput(def, name, PropValue default)`, which adds a PropertyDef of the default's
+    type (Bool, Int, Float, String or Vec2-4). Other types are InvalidArgument.
+- **`registerForeignCommand(ctx, def, factoryHandle, slots)`.** `slots` is one string
+  of space-separated slot names; the TS layer intersects the class's methods with the
+  Command slots.
+  - **C++ always takes the factory count**, and releases it on failure. This is the C2
+    contract: a handle given to C++ is released exactly once.
+  - **In order:**
+    1. `checkDef`, and `checkSlots` from the names.
+    2. Refuse `foldKey`/`foldFrom`: folding isn't supported from TS yet.
+       - The native fold protocol downcasts `next`, which a foreign command can't do.
+       - A native `next` read as a handle could alias a live JS object.
+    3. Refuse an interface with slots that can't be implemented from TS: `void *` or
+       `QueryAnswer` in a parameter or return (`foreignImplementable(desc)`, which is
+       general). Command has none.
+    4. `registerForeign<Command>(rt, implName, dispatcher, nullptr, slots)`.
+    5. `def.impl(implName, factory)`, then `CommandRegistry::add`. Nothing can fail
+       here any more except allocation.
 - **The factory**, per run:
   - It calls `make` on the factory handle.
-  - If that fails, the run fails with the error.
-  - Otherwise it returns `Owned<Command>`, holding the table found under the impl name
-    and the new handle. Its deleter calls `foreign::release(handle)`, so each instance
-    handle is released exactly once.
+  - A failure, or a returned handle of 0, fails the run with a message. A 0 handle is
+    never released.
+  - Otherwise it returns `Owned<Command>` holding the table and the new handle. Its
+    deleter calls `foreign::release(handle)`.
+  - The agent's prototype showed exactly one release per instance on every path:
+    - refusal, failed exec, fold;
+    - redo truncation, budget eviction;
+    - cancel, rerunHead;
+    - history teardown.
 - **Threads:** `foreign::call` refuses off the main thread (Emscripten) and off the
-  host's thread (N-API), so `ThreadAffine` needs no separate check here.
+  host's thread (N-API).
+- **Teardown order:** the host destroys the executor and the history before the
+  Runtime.
+  - Records hold `Owned<Command>`s whose tables, dispatcher and handles belong to the
+    Runtime and its extensions. Destroying the Runtime first is a use-after-free.
+  - A script's `discard` or `undo` that throws during a host-initiated `history.clear()`
+    leaves a sticky error. The host takes it (`rt.takeStickyError()`). If it doesn't,
+    the next top-level executor call reports "an earlier error was never collected".
 
 ### Hosts and the manager
 - `coredcc::script::bindings()` returns the BindingManager with every bound coredcc type
-  and facade. It is built once and kept by its caller. It is created on first use
-  inside a `PermanentGuard`, which matches litestl's fixture.
+  and facade.
+  - It is built once, on first use, inside a `PermanentGuard`, and never changes after.
+  - Like the binding descriptors it collects, it is write-once static data. It is not a
+    registry: registries live in a `Runtime`.
 - A WASM module exports `CDCC_GetManager` (`bind/wasm_entry.cc`, compiled only under
-  Emscripten). The host-side setup (Runtime, Library, root struct) belongs to the
-  spike, in step 5.
+  Emscripten).
+- The host-side setup (Runtime, Library, root struct, executor, history) belongs to the
+  spike, in step 5. `Context`'s constructor isn't bindable.
+
+### The TS layer (step 5, recorded here because it constrains step 4)
+- `registerCommand(ctx, spec, Cls)`:
+  - builds the def;
+  - writes the factory's `make`;
+  - intersects `Cls`'s methods with the Command slot names;
+  - installs the `coredcc::Status` `ret` converter: `undefined` is ok, a thrown Error
+    becomes an error result, and a bound Status passes through.
+- `Cls` implements a hand-written `ScriptCommand` interface, not the generated
+  `CommandImpl`. Two reasons:
+  - `CommandImpl.exec` is typed to return `Status`, which rules out `undefined`;
+  - `memSize` is typed bigint.
+
+  The compiler still checks `class TsCommand implements ScriptCommand`.
 
 ### Tests (native, step 4)
+- **`tests/command/`:**
+  - a redo whose slot fails through the sticky error leaves the cursor in place;
+  - a failed `add` (an Interactive command without redo, or a lone foldKey) leaves no
+    table behind, and a corrected retry succeeds.
 - **`tests/bind/test_bind_foreign.cc`** installs a fake `litestl::binding::foreign::Host`
   with `setHost`. Its "JS objects" are C++ structs looked up by handle, with methods
   selected by name. It checks:
-  - registration: a missing required slot is refused, and nothing is left registered;
-  - `exec` and `undo` through the executor, with `redo` absent, so redo re-runs exec;
-  - a failing slot shows up as the run's error status, with the host's message;
-  - a failing `make` fails the run;
-  - instance handles are released exactly once each: after discard, after a failed
-    exec, and at runtime teardown;
-  - a second registration of the same id is refused, and the factory count is left
-    with the caller.
-- **`tests/bind/test_bind_facades.cc`:** `getValue`, `setValue` plus `undo`,
-  `writeValue`, `canonicalPath`, `invoke`, and the bag facades, run on the native
-  fixture struct the api tests use.
-- **The generated TS** (`coredcc_gen_ts`) is type-checked against the runtime in step 5.
+  - registration:
+    - a missing required slot is refused;
+    - a fold slot is refused;
+    - in both cases nothing stays registered and the factory count is released;
+  - exec and undo through the executor;
+  - redo with `redo` absent, which re-runs exec;
+  - a failing slot is the run's error status, with the host's message;
+  - a failing redo leaves the history consistent;
+  - a failing `make`, and a `make` that returns 0;
+  - every instance handle is released exactly once, ending in history teardown before
+    Runtime teardown;
+  - the reentrancy guard: a foreign `discard` calling `invoke` during `clear()` gets
+    Busy, not an abort.
+- **`tests/bind/test_bind_facades.cc`:**
+  - `resolvePath`, `getValue`, `setValue` plus `undo`, `writeValue` and `invoke`;
+  - the bag, input and output facades;
+  - the checked readers on the wrong type and out of range.
+
+  They run on the native fixture struct the api tests use.
+- **The generated TS** (`coredcc_gen_ts`) is type-checked in step 5.
+
+### Pressure test (2026-11-21)
+A fresh agent got the design and the code, but not the author's reasoning. It built a
+native prototype of the dispatcher, factory and registration with a fake host
+(experiments A-F).
+- **Survived:**
+  - `addForeign` rejects a missing required slot and stores no table;
+  - the table can be found by impl name, and table pointers are stable;
+  - `void *self` can carry a handle (`as<T>()` is null for foreign tables, and a native
+    `foldFrom` given a foreign `next` returns false);
+  - a failing exec, canRun or `make` becomes the run's status;
+  - `Owned<Command>` releases exactly once on every executor and history path;
+  - a fake host drives everything natively;
+  - executor reentrancy from exec is refused;
+  - wrappers outliving a call throw;
+  - string parameters, borrowed pointer returns, by-value struct returns and int64
+    returns bind as described;
+  - the result structs are standard layout;
+  - extension teardown order is safe once the history goes first.
+- **Broke, and what changed:**
+  - Registration leaked a table on failed `add` checks → the `command/` checks move
+    first.
+  - A foreign redo failure corrupted the history (cursor advanced; a later undo ran
+    twice) → `CommandRecord::redo` folds the sticky error.
+  - A script `discard` during `history.clear()` could reenter and abort → the
+    foreign-call depth guard.
+  - `Status`'s named error constructor doesn't compile, and `Ok` aborts →
+    `statusError`.
+  - `Vector<string>` can't be passed on WASM → a space-separated string.
+  - "Leave the count with the caller" contradicted C2 and leaked factories → C++
+    always takes it.
+- **Gaps closed:**
+  - registration takes a `Context` (Runtime isn't bound);
+  - `Command`, `ForeignFactory` and `CommandDef` are in the manager;
+  - folding is refused from TS;
+  - slot names are intersected in TS;
+  - aborting accessors are replaced by checked facades;
+  - bags are read-only to scripts;
+  - `setValue` inside exec is documented;
+  - a 0 handle is refused;
+  - the teardown order and the host's sticky error after `clear()` are documented;
+  - the TS layer's types are decided;
+  - "resolves a path" uses `resolvePath`;
+  - the manager is write-once static data.
+- **Not verified:**
+  - the generated TS type-checking, including name collisions such as the nested
+    `PropValue::Type`;
+  - WASM runtime behaviour (read from the code);
+  - threads.
 
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
