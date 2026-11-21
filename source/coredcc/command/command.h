@@ -16,6 +16,7 @@
 #include "litestl/util/map.h"
 #include "litestl/util/vector.h"
 
+#include <cstring>
 #include <string>
 #include <string_view>
 
@@ -211,6 +212,9 @@ class CommandRegistry {
   /** add's checks on the def alone (id, bags), without its implementation: for callers
    * that register the implementation first and must not leave it behind on failure. */
   Status checkDef(const CommandDef &def) const;
+  /** add's checks on the implementation's slots, from which of them it has: an
+   * Interactive command needs `redo`, and `foldKey` comes with `foldFrom`. */
+  static Status checkSlots(const CommandDef &def, bool hasRedo, bool hasFoldKey, bool hasFoldFrom);
   const CommandDef *find(CommandId id) const;
   const CommandDef *find(std::string_view id) const;
   /** NotFound for `id`, with suggestions. */
@@ -249,6 +253,24 @@ template <class Impl> Result<const CommandDef *> addNativeCommand(Runtime &rt, C
   const std::string impl = std::string(def.name().c_str()) + "#impl";
   /* Check first: a failed add after registerImpl would leave the impl name taken. */
   if (Status s = rt.ext<CommandRegistry>().checkDef(def); !s.ok()) {
+    return s;
+  }
+  const lbt::_StructBase *desc = nullptr;
+  {
+    litestl::alloc::PermanentGuard guard; /* as registerImpl does */
+    desc = Impl::defineBindings();
+  }
+  auto has = [desc](const char *slot) {
+    for (const lbt::Method *m : desc->methods) {
+      if (strcmp(m->name.c_str(), slot) == 0) {
+        return true;
+      }
+    }
+    return false;
+  };
+  if (Status s = CommandRegistry::checkSlots(def, has("redo"), has("foldKey"), has("foldFrom"));
+      !s.ok())
+  {
     return s;
   }
   if (Status s = registerImpl<Command, Impl>(rt, impl); !s.ok()) {

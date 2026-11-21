@@ -122,8 +122,34 @@ Status CommandRegistry::checkDef(const CommandDef &def) const
     return Status::error(StatusCode::AlreadyExists,
                          ("command '" + name + "': already registered").c_str());
   }
+  const char *taken = rt_.nameOf(CommandId::of(name));
+  if (taken && name != taken) {
+    return Status::error(StatusCode::AlreadyExists,
+                         ("command '" + name + "': its id collides with '" + taken + "'").c_str());
+  }
   CDCC_TRY(checkBag(name, "input", def, true));
   return checkBag(name, "output", def, false);
+}
+
+Status CommandRegistry::checkSlots(const CommandDef &def,
+                                   bool hasRedo,
+                                   bool hasFoldKey,
+                                   bool hasFoldFrom)
+{
+  const std::string name = def.name().c_str();
+  if (def.has(CommandFlags::Interactive) && !hasRedo) {
+    return Status::error(StatusCode::InvalidArgument,
+                         ("command '" + name +
+                          "': an Interactive command needs a redo slot (exec can't replay a drag)")
+                             .c_str());
+  }
+  if (hasFoldKey != hasFoldFrom) {
+    return Status::error(StatusCode::InvalidArgument,
+                         ("command '" + name +
+                          "': foldKey and foldFrom come together: implement both or neither")
+                             .c_str());
+  }
+  return Status();
 }
 
 Result<const CommandDef *> CommandRegistry::add(CommandDef def)
@@ -145,18 +171,10 @@ Result<const CommandDef *> CommandRegistry::add(CommandDef def)
   if (!table) {
     return fail(StatusCode::NotFound, "its implementation isn't registered as a Command");
   }
-  if (def.has(CommandFlags::Interactive)) {
-    const detail::SlotRef redo = detail::slotOf<Command>("redo");
-    if (!table->hasSlot(redo.index)) {
-      return fail(StatusCode::InvalidArgument,
-                  "an Interactive command needs a redo slot (exec can't replay a drag)");
-    }
-  }
-  const bool hasKey = table->hasSlot(detail::slotOf<Command>("foldKey").index);
-  if (hasKey != table->hasSlot(detail::slotOf<Command>("foldFrom").index)) {
-    return fail(StatusCode::InvalidArgument,
-                "foldKey and foldFrom come together: implement both or neither");
-  }
+  auto has = [table](const char *slot) {
+    return table->hasSlot(detail::slotOf<Command>(slot).index);
+  };
+  CDCC_TRY(checkSlots(def, has("redo"), has("foldKey"), has("foldFrom")));
   CommandDef *stored = litestl::alloc::New<CommandDef>("coredcc::CommandDef", std::move(def));
   defs_.append(stored);
   byId_.add(id->value, stored);

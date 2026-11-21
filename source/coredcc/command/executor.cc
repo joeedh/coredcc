@@ -158,6 +158,18 @@ void CommandRecord::undo(Context &ctx)
   cmd_.get().undo(ctx);
 }
 
+/* `s`, with a sticky error set by the slot call folded in: a failed foreign slot only sets
+ * the sticky error, and returns an ok Status. */
+static Status withSticky(Context &ctx, Status s)
+{
+  Runtime &rt = ctx.runtime();
+  if (!rt.hasStickyError()) {
+    return s;
+  }
+  Status sticky = rt.takeStickyError();
+  return s.ok() ? sticky : combine(s, "; also: ", sticky);
+}
+
 Status CommandRecord::redo(Context &ctx)
 {
   if (!cmd_.get().hasRedo()) {
@@ -168,7 +180,7 @@ Status CommandRecord::redo(Context &ctx)
     subs_.clear();
     /* exec runs its sub-commands again; ctx's executor must collect them. */
     CommandExecutor *ex = ctx.executor();
-    Status s = ex ? ex->execFrame(ctx, *this) : exec(ctx);
+    Status s = withSticky(ctx, ex ? ex->execFrame(ctx, *this) : exec(ctx));
     if (!s.ok()) {
       rollBackSubs(ctx);
     }
@@ -184,7 +196,7 @@ Status CommandRecord::redo(Context &ctx)
   }
   if (s.ok()) {
     BagScope scope(ctx, *this);
-    s = cmd_.get().redo(ctx);
+    s = withSticky(ctx, cmd_.get().redo(ctx));
   }
   if (!s.ok()) {
     for (int i = done - 1; i >= 0; i--) {

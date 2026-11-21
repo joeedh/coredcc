@@ -5,6 +5,7 @@
 #include "coredcc/parse/invocation.h"
 
 #include <climits>
+#include <cstring>
 #include <cmath>
 #include <string>
 
@@ -725,6 +726,87 @@ static void test_discard_exactly_once()
   test_assert(g_made == g_discards);
 }
 
+/* ---- from the bind/ pressure test (plan, "P1f step 4") ---- */
+
+/* Fails only through the sticky error, as a failed foreign slot does: exec when
+ * g_stickyExec is set, redo (when bound) when g_stickyRedo is set. */
+static bool g_stickyExec = false;
+static bool g_stickyRedo = false;
+struct StickyInc : Inc {
+  Status exec(Context &ctx)
+  {
+    if (g_stickyExec) {
+      ctx.runtime().setStickyError(Status::error(StatusCode::Internal, "exec threw"));
+      return Status();
+    }
+    return Inc::exec(ctx);
+  }
+  Status redo(Context &ctx)
+  {
+    if (g_stickyRedo) {
+      ctx.runtime().setStickyError(Status::error(StatusCode::Internal, "redo threw"));
+      return Status();
+    }
+    return Inc::exec(ctx);
+  }
+  BIND_ALL(StickyInc, "review::StickyInc", )
+};
+struct StickyIncRedo : StickyInc {
+  BIND_ALL(StickyIncRedo, "review::StickyIncRedo", BIND_STRUCT_METHOD(st, redo, MARGS("ctx")))
+};
+/* foldKey without foldFrom. */
+struct HalfFold : Inc {
+  uint64_t foldKey() const
+  {
+    return 1;
+  }
+  BIND_ALL(HalfFold, "review::HalfFold", BIND_OPTIONAL_METHOD(st, foldKey, MARGS()))
+};
+
+template <class T> static void checkStickyRedo(const char *id)
+{
+  Setup s;
+  test_assert(addNativeCommand<T>(s.w.rt, CommandDef(id)).ok());
+  const int64_t start = s.w.tool.count;
+  g_stickyExec = g_stickyRedo = false;
+  test_assert(s.ex.run(s.ctx, id, PropertyBag()).ok() && s.ex.undo(s.ctx).ok());
+  g_stickyExec = g_stickyRedo = true;
+  Status r = s.ex.redo(s.ctx);
+  g_stickyExec = g_stickyRedo = false;
+  test_assert(!r.ok() && strstr(r.message(), "threw") != nullptr);
+  /* Not redone, so nothing to undo: the cursor stayed put. */
+  test_assert(s.w.tool.count == start && !s.history.canUndo() && s.history.validate().ok());
+  test_assert(!s.ex.undo(s.ctx).ok() && s.w.tool.count == start);
+  test_assert(!s.w.rt.hasStickyError());
+}
+
+static void test_redo_sees_the_sticky_error()
+{
+  checkStickyRedo<StickyInc>("review.stickyExec");     /* redo by exec */
+  checkStickyRedo<StickyIncRedo>("review.stickyRedo"); /* a redo slot */
+}
+
+static void test_failed_add_registers_nothing()
+{
+  Setup s;
+  Runtime &rt = s.w.rt;
+  const int tables = rt.ifaces().tableCount();
+  /* Interactive without redo; then the same id with a redo slot. */
+  test_assert(!addNativeCommand<Inc>(rt, CommandDef("review.live").flags(CommandFlags::Interactive)).ok());
+  test_assert(rt.ifaces().tableCount() == tables);
+  test_assert(addNativeCommand<StickyIncRedo>(rt, CommandDef("review.live").flags(CommandFlags::Interactive)).ok());
+  /* A lone foldKey; then the same id without it. */
+  const int tables2 = rt.ifaces().tableCount();
+  test_assert(!addNativeCommand<HalfFold>(rt, CommandDef("review.half")).ok());
+  test_assert(rt.ifaces().tableCount() == tables2);
+  test_assert(addNativeCommand<Inc>(rt, CommandDef("review.half")).ok());
+  /* An id collision is refused before the implementation is registered. */
+  test_assert(rt.debugRegisterNameAs(IdDomain::Command, CommandId::of("review.collide").value, "review.other").ok());
+  const int tables3 = rt.ifaces().tableCount();
+  Status c = addNativeCommand<Inc>(rt, CommandDef("review.collide")).status();
+  test_assert(c.code() == StatusCode::AlreadyExists && rt.ifaces().tableCount() == tables3);
+}
+
 int main()
 {
   test_nested_sub_commands();
@@ -744,5 +826,7 @@ int main()
   test_registration_retry();
   test_memsize_once_per_push();
   test_set_value_undo_inside_exec();
+  test_redo_sees_the_sticky_error();
+  test_failed_add_registers_nothing();
   return test_end();
 }
