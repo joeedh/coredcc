@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <string>
+#include <utility>
 
 namespace coredcc {
 
@@ -23,6 +24,18 @@ Runtime::~Runtime()
 Status Runtime::validateAll() const
 {
   return ifaces_->validateAll();
+}
+
+void Runtime::setStickyError(Status status)
+{
+  if (stickyError_.ok()) {
+    stickyError_ = std::move(status);
+  }
+}
+
+Status Runtime::takeStickyError()
+{
+  return std::exchange(stickyError_, Status());
 }
 
 Result<uint64_t> Runtime::registerName(IdDomain domain, std::string_view name)

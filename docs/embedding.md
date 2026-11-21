@@ -34,3 +34,16 @@ Unreal, coredcc is exactly one module, so they exist once.
 - Foreign (JS) interface implementations are thread-affine. Parallel algorithms check
   the `threadAffine` flag and either run serially or gather foreign data on the main
   thread first.
+
+## Interfaces across binary images
+Interface identity is per binary image. These are all statics or addresses inside the
+image that compiled them:
+- `typeKeyOf<T>`;
+- every `defineBindings()` cache;
+- `CDCC_INTERFACE`'s descriptor.
+
+Declare interfaces and register their implementations inside the image that links
+coredcc. In Unreal, that's the one coredcc module. A second DLL that registers an
+implementation builds its own copy of the interface descriptor. It is then rejected
+("registered twice"), or its struct parameters fail as "different C++ types with the
+same name". Stable, name-based keys are tracked for the Unreal spike (P4).

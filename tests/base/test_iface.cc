@@ -302,7 +302,7 @@ struct TrackedMesh : MeshImpl {
 /* Records calls and answers through the slot descriptors, as a real backend would. */
 struct FakeDispatcher : ForeignDispatcher {
   std::string log;
-  void call(const IfaceTable &table, void *self, int slot, void **args, void *ret) override
+  Status call(const IfaceTable &table, void *self, int slot, void **args, void *ret) override
   {
     const lbt::Method *m = table.ifaceDesc->methods[slot];
     log += std::string(m->name.c_str()) + "(";
@@ -320,6 +320,7 @@ struct FakeDispatcher : ForeignDispatcher {
       static_cast<Hit *>(args[1])->t = ray.origin * 10.0f;
       new (ret) bool(true);
     }
+    return Status();
   }
 };
 
@@ -347,6 +348,7 @@ static void test_bound_class()
 
   test_assert(!query<Spatial>(rt, TypeId::of("test.Nothing"), &mesh));
   test_assert(!query<Node>(rt, TypeId::of("test.MeshImpl"), &mesh));
+  test_assert(rt.validateAll().ok());
 }
 
 static void test_optional_present()
@@ -356,6 +358,7 @@ static void test_optional_present()
   CostlyMesh mesh;
   Spatial sp = query<Spatial>(rt, TypeId::of("test.CostlyMesh"), &mesh);
   test_assert(sp.cost() == 99.0);
+  test_assert(rt.validateAll().ok());
 }
 
 static void test_adaptor()
@@ -375,6 +378,7 @@ static void test_adaptor()
   test_assert(sp.rayCast(ray, hit));
   test_assert(hit.t == 6.0f);
   test_assert(sp.as<ThirdPartyCloud>() == &cloud);
+  test_assert(rt.validateAll().ok());
 }
 
 static void test_foreign()
@@ -382,7 +386,7 @@ static void test_foreign()
   Runtime rt;
   FakeDispatcher host;
   const char *present[] = {"rayCast", "count"};
-  Status s = implementForeign<Spatial>(rt, "test.JsMesh", &host, nullptr, present);
+  Status s = registerForeign<Spatial>(rt, "test.JsMesh", &host, nullptr, present);
   test_assert(s.ok());
   int jsObject = 41;
   Spatial sp = query<Spatial>(rt, TypeId::of("test.JsMesh"), &jsObject);
@@ -398,13 +402,14 @@ static void test_foreign()
   test_assert(sp.as<MeshImpl>() == nullptr);
 
   const char *missingRequired[] = {"rayCast"};
-  Status bad = implementForeign<Spatial>(rt, "test.JsHalf", &host, nullptr, missingRequired);
+  Status bad = registerForeign<Spatial>(rt, "test.JsHalf", &host, nullptr, missingRequired);
   test_assert(bad.code() == StatusCode::TypeMismatch);
   test_assert(strstr(bad.message(), "slot count [int32 count() const]: missing") != nullptr);
 
   const char *unknown[] = {"rayCast", "count", "fly"};
-  Status bad2 = implementForeign<Spatial>(rt, "test.JsOdd", &host, nullptr, unknown);
+  Status bad2 = registerForeign<Spatial>(rt, "test.JsOdd", &host, nullptr, unknown);
   test_assert(strstr(bad2.message(), "'fly' is not a slot") != nullptr);
+  test_assert(rt.validateAll().ok());
 }
 
 static void test_mismatch_messages()
@@ -426,6 +431,7 @@ static void test_mismatch_messages()
               nullptr);
   test_assert(!query<Spatial>(rt, TypeId::of("test.BadMesh"), nullptr));
   test_assert(rt.ifaces().tableCount() == 0);
+  test_assert(rt.validateAll().ok());
 }
 
 static void test_impostor_type()
@@ -436,6 +442,7 @@ static void test_impostor_type()
   test_assert(strstr(s.message(), "argument 1 ('ray') is const test::Ray&, slot wants const "
                                    "test::Ray& (different C++ types with the same name)") !=
               nullptr);
+  test_assert(rt.validateAll().ok());
 }
 
 static void test_self_reference()
@@ -449,6 +456,7 @@ static void test_self_reference()
   test_assert(childRef.id() == 2);
   test_assert(childRef.depth(rootRef) == 1);
   test_assert(childRef.depth(Node()) == 0);
+  test_assert(rt.validateAll().ok());
 }
 
 static void test_inheritance_and_upcast()
@@ -470,6 +478,11 @@ static void test_inheritance_and_upcast()
   test_assert(named.nameLength() == 3);
   test_assert(query<Named>(rt, TypeId::of("test.Box"), &box).nameLength() == 3);
   test_assert(!upcast<Node>(vol));
+  /* The concatenated base is queryable and reachable by upcast too. */
+  test_assert(query<Spatial>(rt, TypeId::of("test.Box"), &box).count() == 6);
+  test_assert(upcast<Spatial>(vol).count() == 6);
+  test_assert(upcast<Spatial>(named).count() == 6);
+  test_assert(rt.validateAll().ok());
 }
 
 static void test_registration_rules()
@@ -504,6 +517,7 @@ static void test_owned()
       own<Spatial>(rt, "test.Unregistered", litestl::alloc::New<TrackedMesh>("tracked"));
   test_assert(!missing.ok());
   test_assert(g_liveTracked == 0);
+  test_assert(rt.validateAll().ok());
 }
 
 int main()

@@ -47,9 +47,19 @@ template <class I> class Owned {
   {
     return bool(ref_);
   }
+  /** Non-const as well: a slot's const-ness comes from its forwarder, so mutating slots
+   * (Command::exec) need a non-const interface value. */
+  I &get()
+  {
+    return ref_;
+  }
   const I &get() const
   {
     return ref_;
+  }
+  I *operator->()
+  {
+    return &ref_;
   }
   const I *operator->() const
   {
@@ -79,11 +89,17 @@ template <class I> class Owned {
 template <class I, class Impl>
 Result<Owned<I>> own(const Runtime &rt, std::string_view implName, Impl *obj)
 {
-  I ref = query<I>(rt, TypeId::of(implName), obj);
+  I ref = query<I>(rt, TypeId::of(implName), static_cast<void *>(obj));
   if (!ref) {
     litestl::alloc::Delete(obj);
     return Status::error(StatusCode::NotFound,
                          (std::string(implName) + " does not implement " + I::ifaceName).c_str());
+  }
+  if (ref.template as<Impl>() != obj) {
+    litestl::alloc::Delete(obj);
+    return Status::error(
+        StatusCode::TypeMismatch,
+        (std::string(implName) + " is not registered for this C++ type").c_str());
   }
   return Owned<I>(ref, [](void *self, void *) { litestl::alloc::Delete(static_cast<Impl *>(self)); });
 }

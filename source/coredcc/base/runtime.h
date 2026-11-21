@@ -10,16 +10,15 @@
 
 namespace coredcc {
 
+class IfaceRegistry;
+
 /**
  * The root of one coredcc instance. Every registry belongs to a Runtime; there is no
  * process-global one. Several Runtimes may coexist in a process (e.g. two hosts).
  *
- * In P0 it holds only the name registry, which turns hashed ids back into names and
- * rejects collisions. Later phases add the interface, struct, command and tool
- * registries.
+ * It holds the name registry (hashed ids back to names, rejecting collisions) and the
+ * interface registry. Later phases add the struct, command and tool registries.
  */
-class IfaceRegistry;
-
 class Runtime {
  public:
   Runtime();
@@ -40,6 +39,19 @@ class Runtime {
   /** Re-checks every registry's invariants. Run at startup in debug builds and in
    * every test binary. */
   Status validateAll() const;
+
+  /**
+   * The sticky error: set by calls that can't return a Status (a failed foreign
+   * interface call), checked by the caller afterwards (the command executor checks it
+   * after each command). The first error wins until it is taken.
+   */
+  void setStickyError(Status status);
+  bool hasStickyError() const
+  {
+    return !stickyError_.ok();
+  }
+  /** Returns the sticky error and clears it. */
+  Status takeStickyError();
 
   /**
    * Register `name` in `domain`, returning its id. Registering the same name twice is
@@ -70,6 +82,7 @@ class Runtime {
  private:
   litestl::util::Map<uint64_t, litestl::util::string> names_[3];
   IfaceRegistry *ifaces_;
+  Status stickyError_;
 };
 
 } // namespace coredcc

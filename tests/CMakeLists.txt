@@ -4,6 +4,7 @@ coredcc_test(test_base_handle_pool SOURCES base/test_handle_pool.cc DEPS coredcc
 coredcc_test(test_base_signal SOURCES base/test_signal.cc DEPS coredcc_base)
 coredcc_test(test_base_runtime SOURCES base/test_runtime.cc DEPS coredcc_base)
 coredcc_test(test_base_iface SOURCES base/test_iface.cc DEPS coredcc_base)
+coredcc_test(test_base_iface_rules SOURCES base/test_iface_rules.cc DEPS coredcc_base)
 if(WIN32)
   coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_base)
 endif()
@@ -33,4 +34,8 @@ coredcc_compile_fail(iface_misspelled_slot
 coredcc_compile_fail(iface_wrong_args
   SOURCE compile_fail/iface_wrong_args.cc
   REGEX "C2660|C2664|too few arguments|no matching function"
+  DEPS coredcc_base)
+coredcc_compile_fail(iface_wrong_arg_type
+  SOURCE compile_fail/iface_wrong_arg_type.cc
+  REGEX "C2664|could not bind|cannot initialize|no matching function|no viable conversion"
   DEPS coredcc_base)

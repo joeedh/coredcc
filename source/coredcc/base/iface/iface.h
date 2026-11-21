@@ -17,12 +17,22 @@
  *     }
  *   };
  *
- * Declaration rules: no overloads, no template methods, no reference returns, no
- * function-pointer, `function_ref` or `Span` parameters, no primitive out-parameters.
+ * Declaration rules: no overloads, no static or template methods, no reference returns,
+ * no function-pointer, `function_ref` or `Span` parameters, no primitive out-parameters,
+ * and no slots named `table`, `self` or `as`. A derived interface must use
+ * CDCC_INTERFACE_EXTENDS; debug builds catch a forgotten one on the first call.
+ *
+ * Every forwarder must have a bound slot: an unbound one aborts on its first call, so
+ * tests should call every forwarder.
+ *
+ * Identity is per binary image: declare interfaces and register implementations inside
+ * the image that links coredcc (docs/embedding.md).
  */
 
 #include "coredcc/base/assert.h"
 #include "coredcc/base/id.h"
+#include "coredcc/base/runtime.h"
+#include "coredcc/base/status.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
@@ -48,16 +58,22 @@ struct IfaceTable;
  * Calls a slot of a foreign (JS) implementation. One per host: EM_JS under WASM,
  * napi_call_function under N-API, a fake in tests. It marshals `args` and `ret` with
  * the slot's descriptor, `table.ifaceDesc->methods[slot]`, using the thunk ABI.
+ *
+ * On success it must have constructed the return value in `ret` (for non-void slots).
+ * On failure (a JS exception, a wrong return type) it returns an error and leaves `ret`
+ * unconstructed; the forwarder then returns a value-initialized result and records the
+ * error as the Runtime's sticky error.
  */
 class ForeignDispatcher {
  public:
   virtual ~ForeignDispatcher() = default;
-  virtual void call(const IfaceTable &table, void *self, int slot, void **args, void *ret) = 0;
+  virtual Status call(const IfaceTable &table, void *self, int slot, void **args, void *ret) = 0;
 };
 
 enum class IfaceFlags : uint32_t {
   None = 0,
-  /** Must be called on the main thread (always set for foreign tables). */
+  /** Must be called on the main thread. Always set for foreign tables; set it for native
+   * implementations that touch host UI or engine state. */
   ThreadAffine = 1 << 0,
   Foreign = 1 << 1,
 };
@@ -89,26 +105,31 @@ struct IfaceTable {
   ForeignDispatcher *dispatcher = nullptr;
   /** The dispatcher's per-class context (e.g. the JS class). */
   void *foreignClass = nullptr;
-  /** Tables for the interface's extra (non-concatenated) bases, for upcast<>(). */
-  litestl::util::Vector<const IfaceTable *> upcasts;
+  /** Receives foreign-call errors as its sticky error. */
+  Runtime *runtime = nullptr;
+  /** The same implementation's tables for every related interface: the concatenated
+   * bases and the CDCC_UPCASTS bases, transitively. Used by upcast<>(). */
+  litestl::util::Vector<const IfaceTable *> related;
 
   bool hasSlot(int slot) const
   {
     return thunks[slot] != nullptr;
   }
-  void call(void *self, int slot, void **args, void *ret) const
+  Status call(void *self, int slot, void **args, void *ret) const
   {
     if (dispatcher) {
-      dispatcher->call(*this, self, slot, args, ret);
-    } else {
-      thunks[slot](self, args, ret);
+      return dispatcher->call(*this, self, slot, args, ret);
     }
+    thunks[slot](self, args, ret);
+    return Status();
   }
 };
 
 /**
  * A transient interface value: a table and an object. Interfaces derive from it and add
  * forwarders. Never store one; store the object's id and the InterfaceId instead.
+ *
+ * Const-ness is shallow: a copy of a `const Spatial &` is a mutable `Spatial`.
  */
 struct IfaceRef {
   IfaceRef() = default;
@@ -148,39 +169,75 @@ template <class I> const lbt::_StructBase *ifaceDesc()
   return static_cast<const lbt::_StructBase *>(I::defineBindings());
 }
 
-/** Slot index of `name` in interface I; aborts if there is none. */
-template <class I> int slotIndexOf(const char *name)
+/** A resolved slot: its index, and its descriptor for the debug check in FwdCall. */
+struct SlotRef {
+  int index;
+  const lbt::Method *method;
+};
+
+/** Slot `name` of interface I; aborts if there is none. */
+template <class I> SlotRef slotOf(const char *name)
 {
   const lbt::_StructBase *d = ifaceDesc<I>();
   for (int i = 0; i < int(d->methods.size()); i++) {
     if (strcmp(d->methods[i]->name.c_str(), name) == 0) {
-      return i;
+      return {i, d->methods[i]};
     }
   }
   CDCC_CHECK(false, "CDCC_CALL: interface has no slot with this name");
-  return -1;
+  return {-1, nullptr};
 }
 
+/* By-value parameters are passed through by const reference: args[i] only needs an
+ * address, so a second copy would be wasted. */
+template <class P> using FwdParam = std::conditional_t<std::is_reference_v<P>, P, const P &>;
+
+/** Checks, in debug builds, that `slot` belongs to the table's interface. */
+inline void checkSlot(const IfaceRef &ref, SlotRef slot)
+{
+  CDCC_ASSERT(ref.table() != nullptr, "calling a null interface");
+  CDCC_ASSERT(slot.index >= 0 && slot.index < int(ref.table()->thunks.size()),
+              "slot index out of range: a derived interface without CDCC_INTERFACE_EXTENDS?");
+  CDCC_ASSERT(ref.table()->ifaceDesc->methods[slot.index] == slot.method,
+              "slot belongs to another interface: a derived interface without "
+              "CDCC_INTERFACE_EXTENDS?");
+  CDCC_ASSERT(ref.table()->hasSlot(slot.index), "optional slot called without CDCC_HAS");
+  (void)ref;
+  (void)slot;
+}
+
+/** Records a failed foreign call on the table's Runtime. */
+void reportCallFailure(const IfaceTable &table, Status status);
+
 /**
- * Calls slot `slot` with the forwarder's own parameter and return types, taken from its
- * member pointer M: the same signature the descriptor was built from, so they can't
+ * Calls a slot with the forwarder's own parameter and return types, taken from its
+ * member pointer: the same signature the descriptor was built from, so they can't
  * diverge.
  */
-template <auto M> struct Fwd;
-
 template <class R, class... P> struct FwdCall {
   static_assert(!std::is_reference_v<R>, "interface slots can't return references");
 
-  static R call(const IfaceRef &ref, int slot, P... p)
+  static R call(const IfaceRef &ref, SlotRef slot, FwdParam<P>... p)
   {
-    CDCC_ASSERT(ref.table() != nullptr, "calling a null interface");
+    checkSlot(ref, slot);
     /* args[i] points at the value (or at the pointer, for pointer parameters). */
     void *args[sizeof...(P) + 1] = {const_cast<void *>(static_cast<const void *>(&p))...};
     if constexpr (std::is_void_v<R>) {
-      ref.table()->call(ref.self(), slot, args, nullptr);
+      Status s = ref.table()->call(ref.self(), slot.index, args, nullptr);
+      if (!s.ok()) {
+        reportCallFailure(*ref.table(), std::move(s));
+      }
     } else {
       alignas(R) unsigned char buf[sizeof(R)];
-      ref.table()->call(ref.self(), slot, args, buf);
+      Status s = ref.table()->call(ref.self(), slot.index, args, buf);
+      if (!s.ok()) {
+        reportCallFailure(*ref.table(), std::move(s));
+        if constexpr (std::is_default_constructible_v<R>) {
+          return R();
+        } else {
+          CDCC_CHECK(false, "a foreign slot whose return type has no default failed");
+        }
+      }
       R *out = std::launder(reinterpret_cast<R *>(buf));
       R result(std::move(*out));
       out->~R();
@@ -212,6 +269,8 @@ template <class I> lbt::Struct<I> *newInterfaceStruct(const char *name)
   static_assert(sizeof(I) == sizeof(IfaceRef), "an interface has no data members");
   auto *st = new lbt::Struct<I>(name, sizeof(I));
   st->isInterface = true;
+  /* The TS runtime passes structs by value through their "copy" constructor. */
+  ::litestl::binding::BIND_STRUCT_COPY_CONSTRUCTOR(st);
   return st;
 }
 
@@ -228,17 +287,26 @@ template <class I, class Base> lbt::Struct<I> *newDerivedInterfaceStruct(const c
 
 } // namespace detail
 
-/** Upcast to one of the interface's extra bases (see CDCC_UPCASTS), or a null I. */
+/**
+ * I's view of the same object, if I is related to `from`'s interface: the same
+ * interface, a concatenated base, or a CDCC_UPCASTS base (transitively). Else null.
+ */
 template <class To> To upcast(const IfaceRef &from)
 {
   To out;
-  if (from.table()) {
-    const InterfaceId want = InterfaceId::of(To::ifaceName);
-    for (const IfaceTable *t : from.table()->upcasts) {
-      if (t->iface == want) {
-        static_cast<IfaceRef &>(out) = IfaceRef(t, from.self());
-        break;
-      }
+  const IfaceTable *t = from.table();
+  if (!t) {
+    return out;
+  }
+  const InterfaceId want = InterfaceId::of(To::ifaceName);
+  if (t->iface == want) {
+    static_cast<IfaceRef &>(out) = from;
+    return out;
+  }
+  for (const IfaceTable *r : t->related) {
+    if (r->iface == want) {
+      static_cast<IfaceRef &>(out) = IfaceRef(r, from.self());
+      break;
     }
   }
   return out;
@@ -249,10 +317,11 @@ template <class... I> struct IfaceList {};
 
 } // namespace coredcc
 
-/* Slot index of `mname` in the enclosing interface, resolved on first use and cached. */
+/* Slot `mname` of the enclosing interface, resolved on first use and cached. */
 #define CDCC_SLOT(mname)                                                                 \
-  ([]() -> int {                                                                         \
-    static const int cdccSlot_ = ::coredcc::detail::slotIndexOf<Self>(#mname);           \
+  ([]() -> ::coredcc::detail::SlotRef {                                                  \
+    static const ::coredcc::detail::SlotRef cdccSlot_ =                                  \
+        ::coredcc::detail::slotOf<Self>(#mname);                                         \
     return cdccSlot_;                                                                    \
   }())
 
@@ -262,10 +331,13 @@ template <class... I> struct IfaceList {};
       *this, CDCC_SLOT(mname) __VA_OPT__(, ) __VA_ARGS__)
 
 /** Whether the implementation provides optional slot `mname`. */
-#define CDCC_HAS(mname) (this->table()->hasSlot(CDCC_SLOT(mname)))
+#define CDCC_HAS(mname)                                                                  \
+  (static_cast<const ::coredcc::IfaceRef *>(this)->table()->hasSlot(CDCC_SLOT(mname).index))
 
-#define CDCC_INTERFACE_IMPL_(T, NAME, NEW_STRUCT)                                       \
+#define CDCC_INTERFACE_IMPL_(T, NAME, BASE, NEW_STRUCT)                                  \
   using Self = T;                                                                        \
+  /** The concatenated base interface, or void. */                                      \
+  using CdccBase = BASE;                                                                 \
   static constexpr const char *ifaceName = NAME;                                         \
   static ::litestl::binding::types::Struct<T> *defineBindings()                          \
   {                                                                                      \
@@ -282,11 +354,12 @@ template <class... I> struct IfaceList {};
 
 /** Declares interface T named NAME; the following block binds its slots into `st`. */
 #define CDCC_INTERFACE(T, NAME)                                                          \
-  CDCC_INTERFACE_IMPL_(T, NAME, ::coredcc::detail::newInterfaceStruct<T>(NAME))
+  CDCC_INTERFACE_IMPL_(T, NAME, void, ::coredcc::detail::newInterfaceStruct<T>(NAME))
 
 /** Like CDCC_INTERFACE, for T deriving from interface BASE (whose slots come first). */
 #define CDCC_INTERFACE_EXTENDS(T, NAME, BASE)                                            \
-  CDCC_INTERFACE_IMPL_(T, NAME, (::coredcc::detail::newDerivedInterfaceStruct<T, BASE>(NAME)))
+  CDCC_INTERFACE_IMPL_(                                                                  \
+      T, NAME, BASE, (::coredcc::detail::newDerivedInterfaceStruct<T, BASE>(NAME)))
 
 /** Extra bases reached by upcast<>() rather than by slot concatenation. */
 #define CDCC_UPCASTS(...) using CdccUpcasts = ::coredcc::IfaceList<__VA_ARGS__>
