@@ -49,7 +49,7 @@ struct NumericMeta {
 
 /** Enum and Flags properties. Flags items are single bits. */
 struct EnumMeta {
-  litestl::util::Vector<EnumItem> items;
+  litestl::util::Vector<EnumItem, 1> items;
 
   const EnumItem *findKey(std::string_view key) const;
   const EnumItem *findValue(int64_t value) const;
@@ -68,7 +68,8 @@ struct TargetMeta {
 class PropertyDef;
 
 /** Patches a copy of a def at read time, for owner-dependent ranges, items or flags.
- * `owner` is the struct instance the property belongs to. */
+ * `owner` is the struct instance the property belongs to (a PropertyBag for bag
+ * entries); never null: validate() checks the static def without calling the hook. */
 using PropDynamicFn = litestl::util::function<void(PropertyDef &def, const void *owner)>;
 
 /**
@@ -127,7 +128,7 @@ class PropertyDef {
   PropertyDef &description(std::string_view s);
   PropertyDef &icon(std::string_view s);
   PropertyDef &subtype(PropSubtype s);
-  /** Adds access flags. */
+  /** Adds access flags (the other builder calls set). */
   PropertyDef &access(PropAccess a);
   PropertyDef &ui(PropUi u);
   PropertyDef &defaultValue(PropValue v);
@@ -235,6 +236,7 @@ class PropertyDef {
   PropValue default_;
   std::variant<std::monostate, NumericMeta, EnumMeta, StringMeta, TargetMeta> meta_;
   PropDynamicFn dynamic_;
+  bool defaultSet_ = false;
 
   NumericMeta &numericMut();
   EnumMeta &enumMut();
@@ -246,15 +248,18 @@ std::string uiNameFromApiName(std::string_view apiName);
 /**
  * Converts `value` to `def`'s kind: the one conversion point for every set.
  * - Int <- Int, or a Float that is integral and inside int64.
- * - Float <- Float or Int.
- * - Bool <- Bool, or an Int that is 0 or 1.
- * - Enum <- Enum or Int (a known value), or String (a key; suggestions on a miss).
- * - Flags <- Flags or a non-negative Int (known bits only), or String keys joined by
- *   '|' ("" is no flags).
+ * - Float <- Float or Int. NaN is an error for every numeric kind.
+ * - Bool <- Bool, or an integral 0 or 1.
+ * - Enum <- Enum or an integral known value, or String (a key; suggestions on a miss).
+ * - Flags <- Flags or a non-negative integral (known bits only), or String keys joined
+ *   by '|' ("" is no flags).
+ * "Integral" includes a Float holding an integer: JS numbers arrive as Float.
  * - Vec <- the same Vec, or a scalar broadcast; Quat <- Quat or Vec4.
- * - Pointer <- Pointer, or None as the null pointer.
+ * - Pointer <- Pointer (of the target struct type, when both are known), or None as
+ *   the null pointer.
  * - String <- String, within maxLength.
  * Numeric components are then clamped to the hard range. A Collection takes no value.
+ * A dynamic def is FailedPrecondition: resolve it for its owner first (resolved()).
  */
 Result<PropValue> coerce(const PropertyDef &def, const PropValue &value);
 

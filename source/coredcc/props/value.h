@@ -104,30 +104,44 @@ class PropValue {
   {
     return !operator==(b);
   }
-  uint64_t hash() const;
-  uint64_t computeHash() const
-  {
-    return hash();
-  }
+  uint64_t computeHash() const;
 
-  /** Same type, and numeric components within `eps` (absolute). Non-numeric parts
-   * compare with ==. */
+  /** Same type, and numeric components within `eps` (absolute), or both NaN.
+   * Non-numeric parts compare with ==. */
   bool approxEqual(const PropValue &b, double eps) const;
 
   /** A readable form: `true`, `3`, `0.5`, `"text"`, `(1, 2, 3)`, `#4` for an enum,
-   * `0x5` for flags, or a StableRef's debug form. */
+   * `0x5` for flags, or a StableRef's debug form. Not an invocation literal: that needs
+   * the PropertyDef (enum keys), and lives in command/. */
   std::string toString() const;
 
+  PropValue(const PropValue &b);
+  PropValue(PropValue &&b) noexcept;
+  PropValue &operator=(const PropValue &b);
+  PropValue &operator=(PropValue &&b) noexcept;
+  ~PropValue();
+
  private:
+  /* String, Pointer and Mat4 payloads, out of line so a scalar or vector value stays
+   * small (48 bytes) and allocation-free. */
+  struct Heap {
+    litestl::util::string str;
+    StableRef ref;
+    double m[16] = {};
+  };
+  const double *comps() const
+  {
+    return type_ == Type::Mat4 ? heap_->m : d_;
+  }
+
   Type type_ = Type::None;
   union {
     bool b_;
     int64_t i_;
     uint64_t u_;
-    double d_[16] = {};
+    double d_[4] = {};
   };
-  litestl::util::string str_;
-  StableRef ref_;
+  Heap *heap_ = nullptr;
 };
 
 const char *propValueTypeName(PropValue::Type type);
@@ -135,7 +149,8 @@ const char *propValueTypeName(PropValue::Type type);
 /** The value type a property of `kind` stores (None for Collection). */
 PropValue::Type valueTypeFor(PropKind kind);
 
-/** Component count of a value type (see PropValue::componentCount). */
-int componentCount(PropValue::Type type);
+/** Component count of a value type (see PropValue::componentCount). Differs from
+ * componentCount(PropKind) for Int, Bool, Enum and Flags, which aren't components. */
+int valueComponentCount(PropValue::Type type);
 
 } // namespace coredcc

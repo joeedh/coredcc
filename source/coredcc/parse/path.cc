@@ -47,6 +47,9 @@ uint64_t Path::computeHash() const
           std::string_view(reinterpret_cast<const char *>(&s.index), sizeof(s.index)), h);
     }
     else {
+      /* Length first, so a key holding a kind byte can't mimic two segments. */
+      const uint64_t n = strlen(s.text.c_str());
+      h = detail::fnv1a64(std::string_view(reinterpret_cast<const char *>(&n), sizeof(n)), h);
       h = detail::fnv1a64(s.text.c_str(), h);
     }
   }
@@ -88,23 +91,26 @@ std::string Path::toString() const
 
 namespace {
 
-PathSegment named(SegmentKind kind, std::string_view text)
+PathSegment named(SegmentKind kind, std::string_view text, size_t offset)
 {
   PathSegment s;
   s.kind = kind;
-  s.text = string(std::string(text).c_str());
+  s.text = lsString(text);
+  s.offset = uint32_t(offset);
   return s;
 }
 
-PathSegment indexed(SegmentKind kind, int64_t index)
+PathSegment indexed(SegmentKind kind, int64_t index, size_t offset)
 {
   PathSegment s;
   s.kind = kind;
   s.index = index;
+  s.offset = uint32_t(offset);
   return s;
 }
 
-bool parseSubscript(Lexer &lx, Path &out, Failure &fail)
+/* `start` is the offset of the '['. */
+bool parseSubscript(Lexer &lx, Path &out, Failure &fail, size_t start)
 {
   const char c = lx.peek();
   std::string_view ident;
@@ -113,7 +119,7 @@ bool parseSubscript(Lexer &lx, Path &out, Failure &fail)
     if (!lx.int64(v, fail)) {
       return false;
     }
-    out.segments.append(indexed(SegmentKind::Index, v));
+    out.segments.append(indexed(SegmentKind::Index, v, start));
   }
   else if (c == '#') {
     lx.eat('#');
@@ -121,17 +127,17 @@ bool parseSubscript(Lexer &lx, Path &out, Failure &fail)
     if (!lx.int64(v, fail)) {
       return false;
     }
-    out.segments.append(indexed(SegmentKind::HandleKey, v));
+    out.segments.append(indexed(SegmentKind::HandleKey, v, start));
   }
   else if (c == '"' || c == '\'') {
     std::string key;
     if (!lx.quoted(key, fail)) {
       return false;
     }
-    out.segments.append(named(SegmentKind::StringKey, key));
+    out.segments.append(named(SegmentKind::StringKey, key, start));
   }
   else if (lx.identifier(ident)) {
-    out.segments.append(named(SegmentKind::EnumKey, ident));
+    out.segments.append(named(SegmentKind::EnumKey, ident, start));
   }
   else {
     fail = lx.failHere("expected an index, a quoted key, '#handle' or a key, got " +
@@ -156,17 +162,18 @@ bool parseInto(Lexer &lx, Path &out, Failure &fail)
     fail = lx.failHere("expected a member name, got " + lx.describeHere());
     return false;
   }
-  out.segments.append(named(SegmentKind::Member, name));
+  out.segments.append(named(SegmentKind::Member, name, 0));
   while (!lx.atEnd()) {
+    const size_t start = lx.pos();
     if (lx.eat('.')) {
       if (!lx.identifier(name)) {
         fail = lx.failHere("expected a member name after '.', got " + lx.describeHere());
         return false;
       }
-      out.segments.append(named(SegmentKind::Member, name));
+      out.segments.append(named(SegmentKind::Member, name, start));
     }
     else if (lx.eat('[')) {
-      if (!parseSubscript(lx, out, fail)) {
+      if (!parseSubscript(lx, out, fail, start)) {
         return false;
       }
     }
@@ -185,7 +192,10 @@ Result<Path> parsePath(std::string_view text, size_t *errorOffset)
   Lexer lx(text);
   Path path;
   Failure fail;
-  if (!parseInto(lx, path, fail)) {
+  if (text.size() > kMaxPathLength) {
+    fail = Failure{0, "path longer than " + std::to_string(kMaxPathLength) + " bytes"};
+  }
+  if (!fail.what.empty() || !parseInto(lx, path, fail)) {
     if (errorOffset) {
       *errorOffset = fail.offset;
     }

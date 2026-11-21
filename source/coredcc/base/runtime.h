@@ -60,11 +60,17 @@ class Runtime {
     if (T *found = findExt<T>()) {
       return *found;
     }
+    for (const char *pending : constructing_) {
+      CDCC_CHECK(pending != T::kExtName, "an extension's constructor asked for itself");
+    }
+    constructing_.append(T::kExtName);
     T *obj = litestl::alloc::New<T>(T::kExtName, this);
+    constructing_.pop_back();
     ExtSlot slot;
     slot.key = hashId(IdDomain::Type, T::kExtName);
+    slot.tag = extTag<T>();
     slot.obj = obj;
-    slot.destroy = [](void *p) { litestl::alloc::Delete(static_cast<T *>(p)); };
+    slot.destroy = &destroyExt<T>;
     if constexpr (requires(const T &t) { t.validate(); }) {
       slot.validate = [](const void *p) { return static_cast<const T *>(p)->validate(); };
     }
@@ -78,6 +84,8 @@ class Runtime {
     const uint64_t key = hashId(IdDomain::Type, T::kExtName);
     for (const ExtSlot &slot : exts_) {
       if (slot.key == key) {
+        /* Two extension types with one name would alias each other's memory. */
+        CDCC_CHECK(slot.tag == extTag<T>(), "two extension types share a kExtName");
         return static_cast<T *>(slot.obj);
       }
     }
@@ -135,8 +143,20 @@ class Runtime {
   }
 
  private:
+  template <class T> static void destroyExt(void *p)
+  {
+    litestl::alloc::Delete(static_cast<T *>(p));
+  }
+  /* One address per extension type. Writable, so the linker never folds two of them
+   * (as it may fold identical functions). */
+  template <class T> static const void *extTag()
+  {
+    static char tag;
+    return &tag;
+  }
   struct ExtSlot {
     uint64_t key = 0;
+    const void *tag = nullptr;
     void *obj = nullptr;
     void (*destroy)(void *) = nullptr;
     Status (*validate)(const void *) = nullptr;
@@ -144,6 +164,7 @@ class Runtime {
 
   litestl::util::Map<uint64_t, litestl::util::string> names_[kIdDomainCount];
   litestl::util::Vector<ExtSlot> exts_;
+  litestl::util::Vector<const char *> constructing_;
   IfaceRegistry *ifaces_;
   Status stickyError_;
   GuidSource guidSource_;

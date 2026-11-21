@@ -57,7 +57,7 @@ struct InvocationArg {
   litestl::util::string name;
   RawValue value;
   /** Where the argument's name starts in the input, for error messages. */
-  size_t offset = 0;
+  uint32_t offset = 0;
 };
 
 struct Invocation {

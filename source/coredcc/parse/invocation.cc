@@ -2,6 +2,7 @@
 
 #include "coredcc/base/text.h"
 #include "coredcc/parse/lex.h"
+#include "coredcc/parse/path.h"
 
 #include <cstring>
 
@@ -197,7 +198,7 @@ bool parseArgs(Lexer &lx, Invocation &out, Failure &fail)
   }
   while (true) {
     InvocationArg arg;
-    arg.offset = lx.pos();
+    arg.offset = uint32_t(lx.pos());
     std::string_view name;
     if (!lx.identifier(name)) {
       fail = lx.failHere("expected an argument name, got " + lx.describeHere());
@@ -268,7 +269,10 @@ Result<Invocation> parseInvocation(std::string_view text, size_t *errorOffset)
   Lexer lx(text);
   Invocation inv;
   Failure fail;
-  if (!parseInto(lx, inv, fail)) {
+  if (text.size() > kMaxPathLength) {
+    fail = Failure{0, "invocation longer than " + std::to_string(kMaxPathLength) + " bytes"};
+  }
+  if (!fail.what.empty() || !parseInto(lx, inv, fail)) {
     if (errorOffset) {
       *errorOffset = fail.offset;
     }

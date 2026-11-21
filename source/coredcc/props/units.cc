@@ -31,7 +31,9 @@ namespace units {
 namespace {
 
 const char *const kNoAliases[] = {nullptr};
-const char *const kMicronAliases[] = {"um", "micrometer", "micrometers", nullptr};
+/* U+00B5 MICRO SIGN is the symbol; U+03BC GREEK SMALL LETTER MU is what many keyboards
+ * type. */
+const char *const kMicronAliases[] = {"um", "\xCE\xBCm", "micrometer", "micrometers", nullptr};
 const char *const kInchAliases[] = {"inch", "inches", nullptr};
 const char *const kFootAliases[] = {"foot", "feet", nullptr};
 const char *const kDegAliases[] = {"deg", "degree", "degrees", nullptr};

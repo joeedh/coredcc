@@ -12,7 +12,10 @@ namespace coredcc {
  * An ordered set of properties with values: a command's inputs or outputs, a tool's
  * settings. Each entry remembers whether it was set explicitly.
  *
- * An unset entry holds its default value, except an Optional one, which holds None.
+ * An unset entry holds its default value, except an Optional one, which holds None
+ * (setting None also unsets it). A dynamic def is resolved with the bag as its owner,
+ * so one input's range can depend on another's value. Pointers from get() and value()
+ * are invalidated by add().
  */
 class PropertyBag {
  public:
@@ -45,8 +48,9 @@ class PropertyBag {
   /** Coerces `value` to the property's kind and stores it. An unknown name is NotFound,
    * with suggestions. */
   Status set(std::string_view name, const PropValue &value);
+  Status setAt(int index, const PropValue &value);
   /** Back to the unset value. */
-  void reset(std::string_view name);
+  Status reset(std::string_view name);
   void resetAll();
 
  private:

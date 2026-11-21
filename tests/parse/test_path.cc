@@ -52,6 +52,11 @@ static void test_forms()
   test_assert(p[1].kind == SegmentKind::HandleKey && p[1].index == 12);
   test_assert(p[3].kind == SegmentKind::Index && p[3].index == 2);
 
+  /* Segment offsets point at the '.' or '['. */
+  p = ok("objects['k'].modifiers[0].width");
+  test_assert(p[0].offset == 0 && p[1].offset == 7 && p[2].offset == 12);
+  test_assert(p[3].offset == 22 && p[4].offset == 25);
+
   p = ok("tool.mode[SMOOTH]");
   test_assert(p[2].kind == SegmentKind::EnumKey && strcmp(p[2].text.c_str(), "SMOOTH") == 0);
 }
@@ -108,6 +113,8 @@ static void test_hash_and_equality()
   test_assert(ok("a[\"k\"]") == ok("a['k']"));
   test_assert(ok("a.b").computeHash() == ok("a.b").computeHash());
   test_assert(ok("a[1]").computeHash() != ok("a[#1]").computeHash());
+  /* A kind byte inside a key can't mimic a second segment. */
+  test_assert(ok("a[\"b\x04c\"]").computeHash() != ok("a[\"b\"][c]").computeHash());
 }
 
 static void test_cache()
@@ -148,6 +155,22 @@ static void test_cache()
   test_assert(held == &*x && x->toString() == "x");
   test_assert(cache.size() == PathCache::kDefaultCapacity);
   test_assert(rt.validateAll().ok());
+
+  /* LRU order beyond the trivial case: with capacity 3, a, b, c, touch a, add d -> b
+   * goes; touch c, add e -> a goes. */
+  cache.clear();
+  cache.setCapacity(3);
+  for (const char *t : {"a", "b", "c"}) {
+    test_assert(cache.get(t).ok());
+  }
+  test_assert(cache.get("a").ok() && cache.get("d").ok());
+  const uint64_t missesBefore = cache.misses();
+  test_assert(cache.get("a").ok() && cache.get("c").ok() && cache.get("d").ok());
+  test_assert(cache.misses() == missesBefore); /* all still cached */
+  test_assert(cache.get("b").ok() && cache.misses() == missesBefore + 1); /* b was evicted */
+  test_assert(rt.validateAll().ok());
+  cache.setCapacity(0); /* clamps to 1 */
+  test_assert(cache.size() == 1 && cache.capacity() == 1 && rt.validateAll().ok());
   cache.clear();
   test_assert(cache.size() == 0 && x.useCount() == 1);
 }

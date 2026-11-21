@@ -65,7 +65,19 @@ Status PropertyBag::set(std::string_view name, const PropValue &value)
   if (i < 0) {
     return notFound(name);
   }
-  Result<PropValue> v = coerce(entries_[i].def, value);
+  return setAt(i, value);
+}
+
+Status PropertyBag::setAt(int i, const PropValue &value)
+{
+  CDCC_CHECK(i >= 0 && i < size(), "PropertyBag::setAt index out of range");
+  const PropertyDef &def = entries_[i].def;
+  if (value.isNone() && def.hasAccess(PropAccess::Optional)) {
+    entries_[i].value = PropValue();
+    entries_[i].wasSet = false;
+    return Status();
+  }
+  Result<PropValue> v = coerce(def.isDynamic() ? def.resolved(this) : def, value);
   if (!v.ok()) {
     return v.status();
   }
@@ -74,13 +86,15 @@ Status PropertyBag::set(std::string_view name, const PropValue &value)
   return Status();
 }
 
-void PropertyBag::reset(std::string_view name)
+Status PropertyBag::reset(std::string_view name)
 {
   const int i = indexOf(name);
-  if (i >= 0) {
-    entries_[i].value = unsetValue(entries_[i].def);
-    entries_[i].wasSet = false;
+  if (i < 0) {
+    return notFound(name);
   }
+  entries_[i].value = unsetValue(entries_[i].def);
+  entries_[i].wasSet = false;
+  return Status();
 }
 
 void PropertyBag::resetAll()

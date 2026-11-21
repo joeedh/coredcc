@@ -55,8 +55,8 @@ static void test_parse()
   test_assert(near(parsed("2 min", UnitFamily::Time, "s"), 120.0));
   test_assert(near(parsed("4", UnitFamily::None, ""), 4.0));
 
-  Result<double> bad = units::parse("3 cn", UnitFamily::Length, "m");
-  test_assert(!bad.ok() && strstr(bad.status().message(), "unknown Length unit 'cn'"));
+  Result<double> bad = units::parse("3 kmm", UnitFamily::Length, "m");
+  test_assert(!bad.ok() && strstr(bad.status().message(), "unknown Length unit 'kmm'"));
   test_assert(bad.status().suggestions().size() > 0);
   test_assert(!units::parse("", UnitFamily::Length, "m").ok());
   test_assert(!units::parse("m", UnitFamily::Length, "m").ok());

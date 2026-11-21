@@ -18,7 +18,9 @@ struct PathNode {
   std::atomic<int> refs{1};
   std::string text;
   Path path;
-  uint64_t lastUse = 0;
+  /* The cache's LRU list, most recent first; null when not cached. */
+  PathNode *newer = nullptr;
+  PathNode *older = nullptr;
 };
 } // namespace detail
 
@@ -104,7 +106,7 @@ class PathCache {
 
   int size() const
   {
-    return int(nodes_.size());
+    return size_;
   }
   int capacity() const
   {
@@ -126,14 +128,17 @@ class PathCache {
 
  private:
   void evictOne();
+  void unlink(detail::PathNode *n);
+  void pushNewest(detail::PathNode *n);
 
   int capacity_ = kDefaultCapacity;
-  uint64_t tick_ = 0;
+  int size_ = 0;
   uint64_t hits_ = 0;
   uint64_t misses_ = 0;
   /* By text hash. A hash collision between two texts just leaves the second uncached. */
   litestl::util::Map<uint64_t, detail::PathNode *> byHash_;
-  litestl::util::Vector<detail::PathNode *> nodes_;
+  detail::PathNode *newest_ = nullptr;
+  detail::PathNode *oldest_ = nullptr;
 };
 
 } // namespace coredcc

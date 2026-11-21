@@ -36,6 +36,7 @@ constexpr uint64_t fnv1a64(std::string_view s, uint64_t h = kFnvOffset)
 /** The domains ids are hashed in. The tag string is hashed before the name. */
 enum class IdDomain : uint8_t { Type, Interface, Client, Struct, Command };
 inline constexpr int kIdDomainCount = 5;
+static_assert(int(IdDomain::Command) + 1 == kIdDomainCount, "update kIdDomainCount");
 
 constexpr std::string_view idDomainTag(IdDomain d)
 {

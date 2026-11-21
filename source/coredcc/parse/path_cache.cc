@@ -26,6 +26,21 @@ PathCache::~PathCache()
   clear();
 }
 
+void PathCache::unlink(detail::PathNode *n)
+{
+  (n->newer ? n->newer->older : newest_) = n->older;
+  (n->older ? n->older->newer : oldest_) = n->newer;
+  n->newer = n->older = nullptr;
+}
+
+void PathCache::pushNewest(detail::PathNode *n)
+{
+  n->older = newest_;
+  n->newer = nullptr;
+  (newest_ ? newest_->newer : oldest_) = n;
+  newest_ = n;
+}
+
 Result<PathPtr> PathCache::get(std::string_view text, size_t *errorOffset)
 {
   const uint64_t h = detail::fnv1a64(text);
@@ -33,7 +48,8 @@ Result<PathPtr> PathCache::get(std::string_view text, size_t *errorOffset)
     detail::PathNode *n = *found;
     if (n->text == text) {
       hits_++;
-      n->lastUse = ++tick_;
+      unlink(n);
+      pushNewest(n);
       PathPtr p(n);
       p.retain();
       return p;
@@ -47,60 +63,57 @@ Result<PathPtr> PathCache::get(std::string_view text, size_t *errorOffset)
   detail::PathNode *n = litestl::alloc::New<detail::PathNode>("coredcc::PathNode");
   n->text = std::string(text);
   n->path = std::move(parsed).value();
-  n->lastUse = ++tick_;
   PathPtr result(n);
   if (!byHash_.lookup_ptr(h)) {
-    while (size() >= capacity_) {
+    while (size_ >= capacity_) {
       evictOne();
     }
     result.retain(); /* the cache's reference */
     byHash_.add(h, n);
-    nodes_.append(n);
+    pushNewest(n);
+    size_++;
   }
   return result;
 }
 
 void PathCache::evictOne()
 {
-  int oldest = 0;
-  for (int i = 1; i < size(); i++) {
-    if (nodes_[i]->lastUse < nodes_[oldest]->lastUse) {
-      oldest = i;
-    }
-  }
-  detail::PathNode *n = nodes_[oldest];
+  detail::PathNode *n = oldest_;
+  unlink(n);
   byHash_.remove(detail::fnv1a64(n->text));
-  nodes_.remove_at(oldest, true);
+  size_--;
   PathPtr drop(n); /* releases the cache's reference */
 }
 
 void PathCache::setCapacity(int capacity)
 {
   capacity_ = capacity < 1 ? 1 : capacity;
-  while (size() > capacity_) {
+  while (size_ > capacity_) {
     evictOne();
   }
 }
 
 void PathCache::clear()
 {
-  for (detail::PathNode *n : nodes_) {
-    PathPtr drop(n); /* releases the cache's reference */
+  while (size_ > 0) {
+    evictOne();
   }
-  nodes_.clear();
-  byHash_.clear();
 }
 
 Status PathCache::validate() const
 {
-  if (size() > capacity_ || int(byHash_.size()) != size()) {
-    return Status::error(StatusCode::Internal, "PathCache: size and index disagree");
-  }
-  for (const detail::PathNode *n : nodes_) {
+  int count = 0;
+  const detail::PathNode *prev = nullptr;
+  for (const detail::PathNode *n = newest_; n; n = n->older) {
     detail::PathNode *const *found = byHash_.lookup_ptr(detail::fnv1a64(n->text));
-    if (!found || *found != n || n->refs.load() < 1) {
-      return Status::error(StatusCode::Internal, "PathCache: a node is not indexed");
+    if (n->newer != prev || !found || *found != n || n->refs.load() < 1) {
+      return Status::error(StatusCode::Internal, "PathCache: the LRU list is broken");
     }
+    prev = n;
+    count++;
+  }
+  if (prev != oldest_ || count != size_ || int(byHash_.size()) != size_ || size_ > capacity_) {
+    return Status::error(StatusCode::Internal, "PathCache: size, list and index disagree");
   }
   return Status();
 }

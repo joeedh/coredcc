@@ -49,6 +49,9 @@ struct PathSegment {
   litestl::util::string text;
   /** Index or handle. */
   int64_t index = 0;
+  /** Where the segment starts in the parsed text (its '.' or '['), for errors that
+   * point at it. Not compared. */
+  uint32_t offset = 0;
 
   bool operator==(const PathSegment &b) const;
 };
@@ -78,5 +81,8 @@ struct Path {
  * ended too early ("a.", "a[").
  */
 Result<Path> parsePath(std::string_view text, size_t *errorOffset = nullptr);
+
+/** The longest path text parsePath accepts (offsets are 32-bit). */
+inline constexpr size_t kMaxPathLength = 1u << 20;
 
 } // namespace coredcc

@@ -88,7 +88,7 @@ static void test_validate()
       "out of range"));
   test_assert(hasMsg(
       PropertyDef::intProp("n").defaultValue(PropValue::ofString("x")).validate(),
-      "bad default"));
+      "is a String, not a Int"));
 }
 
 static void test_coerce_numbers()
@@ -232,15 +232,112 @@ static void test_bag()
   test_assert(miss.code() == StatusCode::NotFound);
   test_assert(strcmp(miss.suggestions()[0].c_str(), "dist") == 0);
 
-  bag.reset("dist");
+  test_assert(bag.reset("dist").ok());
   test_assert(!bag.isSet("dist") && *bag.get("dist") == PropValue::ofFloat(1));
   bag.resetAll();
   test_assert(*bag.get("mode") == PropValue::ofEnum(0));
   test_assert(bag.indexOf("target") == 2 && bag.indexOf("nope") == -1);
 }
 
+static void test_review_fixes()
+{
+  const double nan = std::nan("");
+  /* NaN never gets past a numeric coerce. */
+  test_assert(coerce(PropertyDef::floatProp("r").range(0, 1), PropValue::ofFloat(nan))
+                  .status()
+                  .code() == StatusCode::OutOfRange);
+  test_assert(!coerce(PropertyDef::vecProp("v", 3).range(0, 1), PropValue::ofVec3(nan, .5, 2))
+                   .ok());
+  test_assert(!coerce(PropertyDef::intProp("n"), PropValue::ofFloat(nan)).ok());
+  test_assert(!PropertyDef::floatProp("r").defaultValue(PropValue::ofFloat(nan)).validate().ok());
+  /* Infinity clamps to a finite bound. */
+  test_assert(*coerce(PropertyDef::floatProp("r").range(0, 1), PropValue::ofFloat(INFINITY)) ==
+              PropValue::ofFloat(1));
+
+  /* An explicit default survives later item() calls. */
+  PropertyDef e =
+      PropertyDef::enumProp("m").defaultValue(PropValue::ofEnum(5)).item("A", 0).item("B", 5);
+  test_assert(e.defaultValue() == PropValue::ofEnum(5) && e.validate().ok());
+
+  /* Wrong-type defaults say so. */
+  test_assert(hasMsg(PropertyDef::floatProp("f").defaultValue(PropValue::ofInt(1)).validate(),
+                     "is a Int, not a Float"));
+
+  /* Int clamping compares in int64, above 2^53 too. */
+  const PropertyDef big = PropertyDef::intProp("n").range(0, 9007199254740992.0);
+  test_assert(*coerce(big, PropValue::ofInt(9007199254740993)) ==
+              PropValue::ofInt(9007199254740992));
+  test_assert(hasMsg(PropertyDef::intProp("n").range(0.2, 0.8).validate(), "no integer"));
+  test_assert(hasMsg(PropertyDef::floatProp("s").step(-1).validate(), "step"));
+  test_assert(hasMsg(PropertyDef::stringProp("s").maxLength(-1).validate(), "maxLength"));
+
+  /* JS numbers arrive as Float: integral ones work for Enum, Flags and Bool. */
+  test_assert(*coerce(modeDef(), PropValue::ofFloat(5.0)) == PropValue::ofEnum(5));
+  test_assert(!coerce(modeDef(), PropValue::ofFloat(0.5)).ok());
+  test_assert(*coerce(flagsDef(), PropValue::ofFloat(3.0)) == PropValue::ofFlags(3));
+  test_assert(*coerce(PropertyDef::boolProp("b"), PropValue::ofFloat(1.0)) ==
+              PropValue::ofBool(true));
+
+  /* Flag bit 63. */
+  const PropertyDef top = PropertyDef::flagsProp("f").item("TOP", INT64_MIN).item("LOW", 1);
+  test_assert(top.validate().ok());
+  test_assert(*coerce(top, PropValue::ofString("TOP|LOW")) ==
+              PropValue::ofFlags(0x8000000000000001ull));
+
+  /* Pointer targets are checked when both types are known. */
+  const PropertyDef p = PropertyDef::pointerProp("obj", StructId::of("Object"));
+  StableRef mesh;
+  mesh.owner = OwnerKey::ofRuntime(1);
+  mesh.type = StructId::of("Mesh");
+  test_assert(coerce(p, PropValue::ofPointer(mesh)).status().code() == StatusCode::TypeMismatch);
+  mesh.type = StructId::of("Object");
+  test_assert(coerce(p, PropValue::ofPointer(mesh)).ok());
+  mesh.type = StructId();
+  test_assert(coerce(p, PropValue::ofPointer(mesh)).ok()); /* unknown type: accepted */
+
+  /* A dynamic def must be resolved before coerce. */
+  const PropertyDef dyn =
+      PropertyDef::floatProp("d").dynamic([](PropertyDef &def, const void *) { def.range(0, 1); });
+  test_assert(coerce(dyn, PropValue::ofFloat(5)).status().code() ==
+              StatusCode::FailedPrecondition);
+  test_assert(*coerce(dyn.resolved(nullptr), PropValue::ofFloat(5)) == PropValue::ofFloat(1));
+
+  /* uiName("") re-derives. */
+  test_assert(strcmp(PropertyDef::floatProp("edgeLoop").uiName("X").uiName("").uiName().c_str(),
+                     "Edge Loop") == 0);
+}
+
+/* A bag resolves dynamic defs with itself as the owner. */
+static void test_bag_review_fixes()
+{
+  PropertyBag bag;
+  test_assert(bag.add(PropertyDef::intProp("count").defaultValue(PropValue::ofInt(4))).ok());
+  test_assert(bag.add(PropertyDef::intProp("pick").dynamic([](PropertyDef &def, const void *o) {
+                   const PropertyBag *b = static_cast<const PropertyBag *>(o);
+                   def.range(0, double(b->get("count")->asInt() - 1));
+                 }))
+                  .ok());
+  test_assert(bag.set("pick", PropValue::ofInt(10)).ok());
+  test_assert(*bag.get("pick") == PropValue::ofInt(3));
+  test_assert(bag.setAt(0, PropValue::ofInt(2)).ok());
+  test_assert(bag.set("pick", PropValue::ofInt(10)).ok());
+  test_assert(*bag.get("pick") == PropValue::ofInt(1));
+
+  test_assert(bag.add(PropertyDef::pointerProp("t", StructId::of("Object"))
+                          .access(PropAccess::Optional))
+                  .ok());
+  StableRef r;
+  r.owner = OwnerKey::ofRuntime(1);
+  test_assert(bag.set("t", PropValue::ofPointer(r)).ok() && bag.isSet("t"));
+  test_assert(bag.set("t", PropValue()).ok()); /* None unsets an Optional */
+  test_assert(!bag.isSet("t") && bag.get("t")->isNone());
+  test_assert(bag.reset("nope").code() == StatusCode::NotFound);
+}
+
 int main()
 {
+  test_review_fixes();
+  test_bag_review_fixes();
   test_ui_names();
   test_defaults_and_meta();
   test_validate();

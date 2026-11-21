@@ -14,7 +14,7 @@ coredcc_test(test_parse_invocation SOURCES parse/test_invocation.cc DEPS coredcc
 coredcc_test(test_parse_fuzz SOURCES parse/test_fuzz.cc DEPS coredcc_parse)
 coredcc_test(test_lib_library SOURCES lib/test_library.cc DEPS coredcc_lib)
 if(WIN32)
-  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_base)
+  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_lib coredcc_props coredcc_parse)
 endif()
 
 # Compile-fail tests. Each also builds the same file without the define, which must succeed.

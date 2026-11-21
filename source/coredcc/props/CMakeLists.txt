@@ -2,6 +2,7 @@ coredcc_library(coredcc_props
   SOURCES
     bag.cc
     def.cc
+    kind.cc
     ref.cc
     units.cc
     value.cc

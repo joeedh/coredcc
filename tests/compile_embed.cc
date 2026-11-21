@@ -10,6 +10,8 @@
 #define TEXT(x) L##x
 
 #include "coredcc/base/assert.h"
+#include "coredcc/base/block_id.h"
+#include "coredcc/base/flags.h"
 #include "coredcc/base/handle_pool.h"
 #include "coredcc/base/id.h"
 #include "coredcc/base/iface/iface.h"
@@ -18,6 +20,20 @@
 #include "coredcc/base/runtime.h"
 #include "coredcc/base/signal.h"
 #include "coredcc/base/status.h"
+#include "coredcc/base/text.h"
+#include "coredcc/lib/block.h"
+#include "coredcc/lib/library.h"
+#include "coredcc/lib/provider.h"
+#include "coredcc/lib/registry.h"
+#include "coredcc/parse/invocation.h"
+#include "coredcc/parse/path.h"
+#include "coredcc/parse/path_cache.h"
+#include "coredcc/props/bag.h"
+#include "coredcc/props/def.h"
+#include "coredcc/props/kind.h"
+#include "coredcc/props/ref.h"
+#include "coredcc/props/units.h"
+#include "coredcc/props/value.h"
 
 #include "test_util.h"
 
@@ -71,6 +87,11 @@ int main()
     test_assert(s.size() == 4 && s.weight() == 1.0);
     coredcc::HandlePool<int> pool;
     coredcc::Signal<int> signal;
+    coredcc::Library lib(&rt);
+    test_assert(rt.ext<coredcc::PathCache>().get("a.b[\"c\"]").ok());
+    test_assert(coredcc::coerce(coredcc::PropertyDef::floatProp("f").range(0, 1),
+                                coredcc::PropValue::ofFloat(2))
+                    .ok());
     test_assert(rt.validateAll().ok());
   }
   return test_end();

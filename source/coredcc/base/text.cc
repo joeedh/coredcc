@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 
 namespace coredcc {
 
@@ -44,13 +45,18 @@ int editDistance(std::string_view a, std::string_view b, int limit)
   return (std::min)(prev[m], limit + 1);
 }
 
+/* Names under three characters get no suggestions: every short candidate is within
+ * one edit of them. */
 Suggester::Suggester(std::string_view name)
-    : name_(name), limit_((std::max)(1, int(name.size()) / 3))
+    : name_(name), limit_(name.size() < 3 ? 0 : (std::max)(1, int(name.size()) / 3))
 {
 }
 
 void Suggester::consider(std::string_view candidate)
 {
+  if (candidate.empty() || limit_ == 0) {
+    return;
+  }
   const int d = editDistance(name_, candidate, limit_);
   if (d > limit_ || candidate == name_) {
     return;
@@ -126,9 +132,23 @@ void appendQuoted(std::string &out, std::string_view s)
 
 void appendDouble(std::string &out, double v)
 {
+  if (std::isnan(v)) {
+    out += "nan";
+    return;
+  }
+  if (std::isinf(v)) {
+    out += v < 0 ? "-inf" : "inf";
+    return;
+  }
   char buf[64];
   std::to_chars_result r = std::to_chars(buf, buf + sizeof(buf), v);
   out.append(buf, r.ptr);
+}
+
+litestl::util::string lsString(std::string_view s)
+{
+  CDCC_CHECK(s.find(char(0)) == std::string_view::npos, "a NUL in a name, key or string");
+  return litestl::util::string(std::string(s).c_str());
 }
 
 } // namespace coredcc

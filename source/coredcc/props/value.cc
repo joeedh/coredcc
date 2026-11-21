@@ -4,6 +4,8 @@
 #include "coredcc/base/id.h"
 #include "coredcc/base/text.h"
 
+#include "litestl/util/alloc.h"
+
 #include <cinttypes>
 #include <cmath>
 #include <cstdio>
@@ -79,7 +81,7 @@ PropValue::Type valueTypeFor(PropKind kind)
   return PropValue::Type::None;
 }
 
-int componentCount(PropValue::Type type)
+int valueComponentCount(PropValue::Type type)
 {
   switch (type) {
     case PropValue::Type::Float:
@@ -95,6 +97,52 @@ int componentCount(PropValue::Type type)
       return 16;
     default:
       return 0;
+  }
+}
+
+PropValue::PropValue(const PropValue &b) : type_(b.type_), heap_(nullptr)
+{
+  memcpy(d_, b.d_, sizeof(d_));
+  if (b.heap_) {
+    heap_ = litestl::alloc::New<Heap>("coredcc::PropValue::Heap", *b.heap_);
+  }
+}
+
+PropValue::PropValue(PropValue &&b) noexcept : type_(b.type_), heap_(b.heap_)
+{
+  memcpy(d_, b.d_, sizeof(d_));
+  b.type_ = Type::None;
+  b.heap_ = nullptr;
+}
+
+PropValue &PropValue::operator=(const PropValue &b)
+{
+  if (this != &b) {
+    PropValue copy(b);
+    *this = std::move(copy);
+  }
+  return *this;
+}
+
+PropValue &PropValue::operator=(PropValue &&b) noexcept
+{
+  if (this != &b) {
+    if (heap_) {
+      litestl::alloc::Delete(heap_);
+    }
+    type_ = b.type_;
+    memcpy(d_, b.d_, sizeof(d_));
+    heap_ = b.heap_;
+    b.type_ = Type::None;
+    b.heap_ = nullptr;
+  }
+  return *this;
+}
+
+PropValue::~PropValue()
+{
+  if (heap_) {
+    litestl::alloc::Delete(heap_);
   }
 }
 
@@ -124,10 +172,10 @@ PropValue PropValue::ofFloat(double v)
 
 PropValue PropValue::ofString(std::string_view v)
 {
-  CDCC_CHECK(v.find('\0') == std::string_view::npos, "PropValue strings can't hold NUL");
   PropValue p;
   p.type_ = Type::String;
-  p.str_ = string(std::string(v).c_str());
+  p.heap_ = litestl::alloc::New<Heap>("coredcc::PropValue::Heap");
+  p.heap_->str = lsString(v);
   return p;
 }
 
@@ -157,12 +205,17 @@ PropValue PropValue::ofQuat(double x, double y, double z, double w)
 
 PropValue PropValue::ofComponents(Type type, const double *components)
 {
-  const int n = coredcc::componentCount(type);
+  const int n = valueComponentCount(type);
   CDCC_CHECK(n > 1, "ofComponents takes a vector, Mat4 or Quat type");
   PropValue p;
   p.type_ = type;
+  double *dst = p.d_;
+  if (type == Type::Mat4) {
+    p.heap_ = litestl::alloc::New<Heap>("coredcc::PropValue::Heap");
+    dst = p.heap_->m;
+  }
   for (int i = 0; i < n; i++) {
-    p.d_[i] = components[i];
+    dst[i] = components[i];
   }
   return p;
 }
@@ -194,7 +247,11 @@ PropValue PropValue::ofPointer(StableRef ref)
 {
   PropValue p;
   p.type_ = Type::Pointer;
-  p.ref_ = std::move(ref);
+  p.heap_ = litestl::alloc::New<Heap>("coredcc::PropValue::Heap");
+  /* One spelling of null, so every null Pointer compares equal. */
+  if (!ref.isNull()) {
+    p.heap_->ref = std::move(ref);
+  }
   return p;
 }
 
@@ -222,7 +279,7 @@ double PropValue::asFloat() const
 const string &PropValue::asString() const
 {
   CDCC_PROPVALUE_EXPECT(Type::String);
-  return str_;
+  return heap_->str;
 }
 
 int64_t PropValue::asEnum() const
@@ -240,18 +297,18 @@ uint64_t PropValue::asFlags() const
 const StableRef &PropValue::asPointer() const
 {
   CDCC_PROPVALUE_EXPECT(Type::Pointer);
-  return ref_;
+  return heap_->ref;
 }
 
 int PropValue::componentCount() const
 {
-  return coredcc::componentCount(type_);
+  return valueComponentCount(type_);
 }
 
 double PropValue::component(int i) const
 {
   CDCC_CHECK(i >= 0 && i < componentCount(), "PropValue component out of range");
-  return d_[i];
+  return comps()[i];
 }
 
 std::optional<bool> PropValue::tryBool() const
@@ -271,7 +328,7 @@ std::optional<double> PropValue::tryFloat() const
 
 const string *PropValue::tryString() const
 {
-  return type_ == Type::String ? &str_ : nullptr;
+  return type_ == Type::String ? &heap_->str : nullptr;
 }
 
 std::optional<int64_t> PropValue::tryEnum() const
@@ -286,7 +343,7 @@ std::optional<uint64_t> PropValue::tryFlags() const
 
 const StableRef *PropValue::tryPointer() const
 {
-  return type_ == Type::Pointer ? &ref_ : nullptr;
+  return type_ == Type::Pointer ? &heap_->ref : nullptr;
 }
 
 bool PropValue::operator==(const PropValue &b) const
@@ -305,15 +362,15 @@ bool PropValue::operator==(const PropValue &b) const
     case Type::Flags:
       return u_ == b.u_;
     case Type::String:
-      return strcmp(str_.c_str(), b.str_.c_str()) == 0;
+      return strcmp(heap_->str.c_str(), b.heap_->str.c_str()) == 0;
     case Type::Pointer:
-      return ref_ == b.ref_;
+      return heap_->ref == b.heap_->ref;
     default:
-      return memcmp(d_, b.d_, sizeof(double) * componentCount()) == 0;
+      return memcmp(comps(), b.comps(), sizeof(double) * componentCount()) == 0;
   }
 }
 
-uint64_t PropValue::hash() const
+uint64_t PropValue::computeHash() const
 {
   const uint8_t t = uint8_t(type_);
   uint64_t h = detail::fnv1a64(std::string_view(reinterpret_cast<const char *>(&t), 1));
@@ -334,15 +391,15 @@ uint64_t PropValue::hash() const
       bytes(&u_, sizeof(u_));
       break;
     case Type::String:
-      bytes(str_.c_str(), strlen(str_.c_str()));
+      bytes(heap_->str.c_str(), strlen(heap_->str.c_str()));
       break;
     case Type::Pointer: {
-      const uint64_t r = ref_.computeHash();
+      const uint64_t r = heap_->ref.computeHash();
       bytes(&r, sizeof(r));
       break;
     }
     default:
-      bytes(d_, sizeof(double) * componentCount());
+      bytes(comps(), sizeof(double) * componentCount());
   }
   return h;
 }
@@ -357,7 +414,9 @@ bool PropValue::approxEqual(const PropValue &b, double eps) const
     return operator==(b);
   }
   for (int i = 0; i < n; i++) {
-    if (!(std::fabs(d_[i] - b.d_[i]) <= eps) && !(d_[i] == b.d_[i])) {
+    const double x = comps()[i];
+    const double y = b.comps()[i];
+    if (!(std::fabs(x - y) <= eps) && !(x == y) && !(std::isnan(x) && std::isnan(y))) {
       return false;
     }
   }
@@ -382,10 +441,10 @@ std::string PropValue::toString() const
       return buf;
     }
     case Type::String:
-      appendQuoted(out, str_.c_str());
+      appendQuoted(out, heap_->str.c_str());
       return out;
     case Type::Pointer:
-      return ref_.toString();
+      return heap_->ref.toString();
     case Type::Float:
       appendDouble(out, d_[0]);
       return out;
@@ -395,7 +454,7 @@ std::string PropValue::toString() const
         if (i) {
           out += ", ";
         }
-        appendDouble(out, d_[i]);
+        appendDouble(out, comps()[i]);
       }
       out += ')';
       return out;

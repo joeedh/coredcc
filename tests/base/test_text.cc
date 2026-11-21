@@ -39,6 +39,17 @@ int main()
     test_assert(s.count() == 0);
   }
   {
+    /* Short names get no suggestions; empty candidates never appear. */
+    Suggester z("Z");
+    z.consider("A");
+    z.consider("B");
+    test_assert(z.count() == 0);
+    Suggester x("cmx");
+    x.consider("");
+    x.consider("cm");
+    test_assert(x.count() == 1);
+  }
+  {
     /* At most three, closest first. */
     Suggester s("aaaaaaaaa");
     s.consider("aaaaaaaab");

@@ -6,6 +6,7 @@
  */
 
 #include "coredcc/base/block_id.h"
+#include "coredcc/base/id.h"
 
 #include "litestl/util/string.h"
 #include "litestl/util/vector.h"
@@ -42,16 +43,18 @@ struct OwnerKey {
     return k;
   }
 
+  /** No owner, or a block owner with a null id. */
   bool isNull() const
   {
-    return kind == Kind::None;
+    return kind == Kind::None || (kind == Kind::Block && block.isNull());
   }
   bool operator==(const OwnerKey &b) const;
   uint64_t computeHash() const;
 };
 
-/** One step of a stable key: a member name, a string key, or an int64 handle. Never a
- * positional index: those are turned into keys by canonicalize(). */
+/** One step of a stable key: a member name, a string key, or a non-negative int64
+ * handle. Never a positional index: those are turned into keys by canonicalize().
+ * Names and keys must not contain NUL. */
 struct KeySegment {
   enum class Kind : uint8_t { Member, StringKey, Handle };
 
@@ -67,13 +70,17 @@ struct KeySegment {
 };
 
 /**
- * A property address that survives reordering: an owner, and key segments from the
- * owner down to one member. Component (`location[2]`) and flag-key accesses refer to
- * the whole member. A null StableRef (no owner) is the null Pointer value.
+ * An address that survives reordering: an owner, and key segments from the owner down.
+ * Undo records address a property this way; component (`location[2]`) and flag-key
+ * accesses refer to the whole member. A Pointer value addresses a struct instance, and
+ * `type` names its struct, so a Pointer property can check its target. A null
+ * StableRef (no owner) is the null Pointer value.
  */
 struct StableRef {
   OwnerKey owner;
-  litestl::util::Vector<KeySegment> key;
+  litestl::util::Vector<KeySegment, 2> key;
+  /** The addressed struct's type (Pointer values); null when unknown. */
+  StructId type;
 
   bool isNull() const
   {
