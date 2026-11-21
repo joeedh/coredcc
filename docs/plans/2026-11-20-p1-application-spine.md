@@ -25,13 +25,8 @@ Status: pressure-tested (2026-11-20) and revised; the record is at the end.
   tracked in the task list.
 
 ## Where the work happens
-- **All of P1 is on `spine`**, the local branch that already carries the interface
-  system.
-  - The branch only exists until litestl #4, #5 and #6 merge. Then it fast-forwards into
-    master.
-  - Splitting the interface-free parts (props, the parsers) onto master would cost a
-    rebase of `spine` after every step, and buy nothing: the work is still serial, in
-    one checkout.
+- **P1 is on master.** litestl #4, #5 and #6 merged on 2026-11-21, and the interface
+  system's `spine` branch fast-forwarded into master.
 - **C2** is a litestl PR: TS generator support for implementable interfaces, plus the
   foreign-dispatch hook. Only the spike needs it, and it comes after the WASM
   toolchain.
@@ -409,9 +404,7 @@ Status: pressure-tested (2026-11-20) and revised; the record is at the end.
 2. P1c lib, then P1d api, then P1e command.
 3. P1f: the toolchain, C2, `bind/`, the spike, TA1.
 4. Feature reviews: props and parsers after step 1; lib, api and command after step 2.
-5. When litestl #4/#5/#6 merge: bump the gitlink on `spine`, verify it in a clean
-   worktree, and fast-forward master.
-6. End of P1: sccache, faberforge's `tools/sccache-wrapper`, and the parallel phase.
+5. End of P1: sccache, faberforge's `tools/sccache-wrapper`, and the parallel phase.
 
 ## Risks
 - **Foreign dispatch cost** (2.3 µs per call in the prototype, unmeasured since): watch

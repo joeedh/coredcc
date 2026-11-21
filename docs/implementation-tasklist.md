@@ -13,8 +13,8 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 |---|---|---|---|---|---|
 | 1 | [Architecture](plans/2026-11-19-architecture.md) | all | — | pressure-tested | — |
 | 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | in progress (TA0 done) | — |
-| 3 | [P0 scaffold and interface system](plans/2026-11-19-p0-scaffold-interfaces.md) | P0 | 1, 4 | reviewed (interfaces on `spine` until litestl #4–#6 merge) | [interfaces](reports/feature-report-interfaces-2026-11-20.md) |
-| 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | in review (litestl #4 B, #5 A, #6 C1) | — |
+| 3 | [P0 scaffold and interface system](plans/2026-11-19-p0-scaffold-interfaces.md) | P0 | 1, 4 | reviewed | [interfaces](reports/feature-report-interfaces-2026-11-20.md) |
+| 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | done (litestl #4 B, #5 A, #6 C1 merged; C2 moves to P1f) | — |
 | 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | pressure-tested | datablocks; props and datapath; commands and undo |
 | 6 | P2 layout and library IO | P2 | 5 | todo | layout |
 | 7 | P3 objects, transforms and BVH | P3 | 5 | todo | objects and transforms; BVH |
@@ -72,13 +72,9 @@ Set up before the first worktree, following sculptcore and faberforge:
 - sccache is not installed on this machine yet (checked 2026-11-19); install it first.
 
 ## Current focus
-- litestl PR #3 merged; coredcc pins litestl master `2360bc9` (2026-11-20).
-- P0b: litestl #4 (B), #5 (A) and #6 (C1) are open, awaiting review. Locally they are
-  combined as the submodule branch `coredcc/integration`.
-- On the local `spine` branch, the interface system is done and reviewed. The review's
-  findings are fixed, and its tests pass on all four presets.
-  `spine` fast-forwards into master once the litestl PRs merge.
-- Next: P1, on `spine`, starting with P1a props and P1b parsers
+- litestl #4, #5 and #6 merged; coredcc pins litestl master `7bab16b` (2026-11-21), and
+  the interface system is on master.
+- Next: P1 on master, starting with P1a props and P1b parsers
   (`docs/plans/2026-11-20-p1-application-spine.md`). C2 (TS generator and foreign
   dispatch) comes in P1f, after the WASM toolchain.
 - Test app TA0 is done (6 tests pass): `cd apps/testapp && pnpm install && pnpm test`.
