@@ -16,31 +16,77 @@
       "name": "native-clang",
       "inherits": "native-base",
       "displayName": "clang-cl (Ninja Multi-Config)",
-      "cacheVariables": {"CMAKE_C_COMPILER": "clang-cl", "CMAKE_CXX_COMPILER": "clang-cl"}
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl"
+      }
     },
     {
       "name": "native-msvc",
       "inherits": "native-base",
       "displayName": "MSVC cl (Ninja Multi-Config)",
-      "cacheVariables": {"CMAKE_C_COMPILER": "cl", "CMAKE_CXX_COMPILER": "cl"}
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      }
+    },
+    {
+      "name": "wasm-base",
+      "hidden": true,
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/build/deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_CONFIGURATION_TYPES": "Debug;RelWithDebInfo",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_NINJA_FORCE_RESPONSE_FILE": "ON"
+      }
+    },
+    {
+      "name": "wasm-st",
+      "inherits": "wasm-base",
+      "displayName": "Emscripten, single-threaded",
+      "cacheVariables": {
+        "COREDCC_WASM_THREADS": "OFF"
+      }
+    },
+    {
+      "name": "wasm-mt",
+      "inherits": "wasm-base",
+      "displayName": "Emscripten, pthreads",
+      "cacheVariables": {
+        "COREDCC_WASM_THREADS": "ON"
+      }
     }
   ],
   "buildPresets": [
     {"name": "native-clang-debug", "configurePreset": "native-clang", "configuration": "Debug"},
     {"name": "native-clang-release", "configurePreset": "native-clang", "configuration": "RelWithDebInfo"},
     {"name": "native-msvc-debug", "configurePreset": "native-msvc", "configuration": "Debug"},
-    {"name": "native-msvc-release", "configurePreset": "native-msvc", "configuration": "RelWithDebInfo"}
+    {"name": "native-msvc-release", "configurePreset": "native-msvc", "configuration": "RelWithDebInfo"},
+    {"name": "wasm-st-debug", "configurePreset": "wasm-st", "configuration": "Debug"},
+    {"name": "wasm-st-release", "configurePreset": "wasm-st", "configuration": "RelWithDebInfo"},
+    {"name": "wasm-mt-debug", "configurePreset": "wasm-mt", "configuration": "Debug"},
+    {"name": "wasm-mt-release", "configurePreset": "wasm-mt", "configuration": "RelWithDebInfo"}
   ],
   "testPresets": [
     {
       "name": "test-base",
       "hidden": true,
-      "output": {"outputOnFailure": true},
-      "execution": {"noTestsAction": "error"}
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
     },
     {"name": "native-clang-debug", "inherits": "test-base", "configurePreset": "native-clang", "configuration": "Debug"},
     {"name": "native-clang-release", "inherits": "test-base", "configurePreset": "native-clang", "configuration": "RelWithDebInfo"},
     {"name": "native-msvc-debug", "inherits": "test-base", "configurePreset": "native-msvc", "configuration": "Debug"},
-    {"name": "native-msvc-release", "inherits": "test-base", "configurePreset": "native-msvc", "configuration": "RelWithDebInfo"}
+    {"name": "native-msvc-release", "inherits": "test-base", "configurePreset": "native-msvc", "configuration": "RelWithDebInfo"},
+    {"name": "wasm-st-debug", "inherits": "test-base", "configurePreset": "wasm-st", "configuration": "Debug"},
+    {"name": "wasm-st-release", "inherits": "test-base", "configurePreset": "wasm-st", "configuration": "RelWithDebInfo"},
+    {"name": "wasm-mt-debug", "inherits": "test-base", "configurePreset": "wasm-mt", "configuration": "Debug"},
+    {"name": "wasm-mt-release", "inherits": "test-base", "configurePreset": "wasm-mt", "configuration": "RelWithDebInfo"}
   ]
 }

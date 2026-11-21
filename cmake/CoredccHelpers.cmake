@@ -55,8 +55,21 @@ function(coredcc_test name)
   target_link_libraries(${name} PRIVATE ${ARG_DEPS})
   coredcc_target_flags(${name})
   _coredcc_test_support(${name})
+  _coredcc_wasm_test_options(${name})
   add_test(NAME ${name} COMMAND ${name})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "LITESTL_TEST_NO_BREAK=1")
+endfunction()
+
+# Under Emscripten a test runs in node (the toolchain's CROSSCOMPILING_EMULATOR):
+# EXIT_RUNTIME so main's return value is the exit code, and a pre-js that copies
+# process.env into the C environment (COREDCC_TEST_SCALE, LITESTL_TEST_NO_BREAK).
+function(_coredcc_wasm_test_options target)
+  if(EMSCRIPTEN)
+    target_link_options(${target} PRIVATE -sENVIRONMENT=node -sEXIT_RUNTIME=1
+      "--pre-js=${PROJECT_SOURCE_DIR}/tests/support/node_env.js")
+    set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS
+      "${PROJECT_SOURCE_DIR}/tests/support/node_env.js")
+  endif()
 endfunction()
 
 # coredcc_compile_fail(name SOURCE src REGEX regex [DEPS targets...] [DEFINE macro])

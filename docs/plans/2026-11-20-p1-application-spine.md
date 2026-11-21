@@ -566,6 +566,27 @@ Where the code differs from the plan above:
   - `commandDefaults["id"].input` is registered on demand, as one ApiStruct per command
     (`CommandDefaults:<id>`), with the NoUndo flag.
 
+### P1f, steps 1-2: toolchain and the native suite under node (2026-11-21)
+- **`tools/install-emsdk.mjs`** installs the pin from `tools/emsdk.json` into
+  `build/deps/emsdk`. `--adopt DIR` moves in an existing checkout (after checking its
+  commit and version), and `--check` reports the state.
+  - From a sandboxed shell the move can be refused with EPERM although nothing holds
+    the files. Moving the directory with PowerShell works.
+- **Presets:** `wasm-st` and `wasm-mt` (`COREDCC_WASM_THREADS`), each with `-debug` and
+  `-release` build and test presets.
+  - Under Emscripten the root CMakeLists sets `BUILD_WASM`, `-DWASM` and the link flags.
+  - Tests also get `-sENVIRONMENT=node`, `-sEXIT_RUNTIME=1` and the
+    `tests/support/node_env.js` pre-js.
+  - `EXIT_RUNTIME` is needed: without it, main's return value never reaches node's exit
+    code, and failing tests pass.
+- **Gate re-run:** emcc 5.0.6 builds every coredcc and litestl TU with `-Werror`. All 30
+  tests pass on both `wasm-st` and `wasm-mt`. `compile_embed` is Windows-only.
+  `wasm-mt` warns `-Wpthreads-mem-growth`, as expected.
+- **The gate found one portability bug:** a moved-from `std::function` (which is
+  `litestl::util::function`) keeps a small target under libc++, so `DelegatedUndo`'s
+  defaulted move released its step twice. Moves now clear the source explicitly.
+  - Don't rely on a moved-from `std::function` being empty.
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.

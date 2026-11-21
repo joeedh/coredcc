@@ -18,6 +18,22 @@ if(PROJECT_IS_TOP_LEVEL)
   coredcc_disable_exceptions_and_rtti()
 endif()
 
+# WASM (Emscripten): litestl needs BUILD_WASM and -DWASM in every TU, or its Vector
+# layout and MemHead disagree between TUs and platform/wasm.cc isn't built.
+if(EMSCRIPTEN)
+  set(BUILD_WASM ON CACHE BOOL "" FORCE)
+  add_compile_definitions(WASM)
+  option(COREDCC_WASM_THREADS "Build with pthreads and shared memory (wasm-mt)" OFF)
+  if(COREDCC_WASM_THREADS)
+    add_compile_options(-pthread)
+    add_link_options(-pthread -sSHARED_MEMORY=1)
+  endif()
+  # emcc's default stack is 64 KB; litestl's TS runtime patches memory.grow through
+  # wasmMemory and HEAPU8.
+  add_link_options(-sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=8388608
+                   "-sEXPORTED_RUNTIME_METHODS=wasmMemory,HEAPU8")
+endif()
+
 # litestl lives in extern/, not source/: it adds its parent directory as an include root,
 # and under source/ adding it SYSTEM would silence warnings in coredcc's own headers.
 if(NOT TARGET util)

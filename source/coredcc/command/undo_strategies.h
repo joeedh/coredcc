@@ -13,6 +13,7 @@
 #include "litestl/util/vector.h"
 
 #include <cstdint>
+#include <utility>
 
 namespace coredcc {
 
@@ -35,14 +36,20 @@ class DelegatedUndo {
   }
   DelegatedUndo(const DelegatedUndo &) = delete;
   DelegatedUndo &operator=(const DelegatedUndo &) = delete;
-  DelegatedUndo(DelegatedUndo &&) = default;
+  /* Moves clear the source explicitly: a moved-from litestl function may still hold its
+   * target, and the source's destructor would release the step a second time. */
+  DelegatedUndo(DelegatedUndo &&b)
+      : undo_(std::exchange(b.undo_, UndoFn())), redo_(std::exchange(b.redo_, RedoFn())),
+        release_(std::exchange(b.release_, ReleaseFn())), memSize_(b.memSize_)
+  {
+  }
   DelegatedUndo &operator=(DelegatedUndo &&b)
   {
     if (this != &b) {
       discard();
-      undo_ = std::move(b.undo_);
-      redo_ = std::move(b.redo_);
-      release_ = std::move(b.release_);
+      undo_ = std::exchange(b.undo_, UndoFn());
+      redo_ = std::exchange(b.redo_, RedoFn());
+      release_ = std::exchange(b.release_, ReleaseFn());
       memSize_ = b.memSize_;
     }
     return *this;
