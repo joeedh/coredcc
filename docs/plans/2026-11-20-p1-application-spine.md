@@ -794,6 +794,157 @@ experiments with emcc 5.0.6, node 24, tsc, clang-cl and a small N-API addon.
   by pointer, so two wasm instances in one realm share descriptors. This matters for
   TA1 and for tests that re-instantiate.
 
+### C2 implementation (litestl #9, merged 2026-11-21 as `9e5ca5d`)
+- **Implemented as designed:**
+  - `binding/foreign.{h,cc}`;
+  - `typescriptRuntime/foreign.ts`;
+  - `binding/napi/napi_foreign.cc`;
+  - the generator's `<Name>Impl`.
+- **The conformance suite** has seven foreign-dispatch tests.
+  - WASI passes 23/23.
+  - N-API passes 22/22 on vs-clang and msvc. Its one skip is the WASM-only trap test.
+  - The trap test calls a bound function that traps from inside a foreign call, then
+    checks that later calls and constructors throw "poisoned". It runs last, because it
+    poisons the module.
+- **Details settled while implementing:**
+  - `<Name>Impl` writes nullable pointers as `| null`.
+    - `argIsNullable` is what marks a pointer parameter nullable. Pointer parameters
+      are non-null by default.
+  - Vector arguments are `Uint8Array` for `uint8`, and `T[]` otherwise. Vector returns
+    accept `ArrayLike`.
+  - A pointer to a non-struct is refused as a parameter type on both backends.
+  - N-API keeps object identity in a JS `WeakMap`, so JS objects aren't mutated.
+  - The N-API host returns errors and uses no C++ exceptions, like the rest of litestl.
+- **Gap, still to fix (a follow-up litestl PR):**
+  - N-API was meant to fail *without clearing* an exception that was already pending
+    when a call starts. `napi_foreign.cc` instead takes that exception as the call's
+    error.
+- **Not covered:** the Emscripten EM_JS host. coredcc's wasm-st gate compiles it. The
+  spike (step 5) is its first run.
+
+## P1f step 4: `bind/` design (2026-11-21)
+`source/coredcc/bind/` (target `coredcc_bind`) is what scripts see: one BindingManager,
+facades over the C++ API in shapes the binding system can carry, and foreign `Command`
+implementations. It links every other module; nothing links it except hosts and tests.
+
+### What the binding system can't carry, and the facade rule
+- `std::string_view` parameters, `Result<T>`, `std::optional`, `std::span` and
+  `Owned<I>` aren't bindable.
+- Facades are free functions in `coredcc::script`, with JS names `coredcc::<name>`.
+  They take `const litestl::util::string &` and return:
+  - a `Status`;
+  - a value struct;
+  - a result struct `{Status status; T value;}`.
+
+  They never set the sticky error.
+- **Result structs:** `ValueResult` (a PropValue), `StringResult` and `BagResult` (a
+  PropertyBag). Each is bound with its two members and a copy constructor. The TS layer
+  (step 5) turns a failed status into an exception.
+
+### Bound types (additions)
+- **`StatusCode`:** an enum.
+- **`Status`:**
+  - a default constructor (ok);
+  - a named constructor `"error"(StatusCode, const string &)`;
+  - `code()`, added to the existing `ok` and `message`.
+- **`PropValue`:**
+  - a copy constructor;
+  - `type()`, as the bound enum `PropValue::Type`;
+  - `asBool`, `asInt`, `asFloat`, `asString`, `asEnum`, `asFlags`, `componentCount`
+    and `component(i)`.
+  - Facades make values: `valueBool`, `valueInt`, `valueFloat`, `valueString`,
+    `valueVec2`, `valueVec3` and `valueVec4`.
+  - Pointer and Mat4 values can be read as a type and a component count, but are not
+    yet made from TS.
+- **`PropertyBag`:** no methods of its own (they take string_view). Facades instead:
+  - `bagGet(bag, name)` returns a ValueResult. A missing name is NotFound.
+  - `bagSet(bag, name, value)` returns a Status.
+  - `bagSize`, and `bagName(bag, i)`.
+- **`Context`:** `inputs()` and `outputs()`, bound as borrowed pointers. Its other
+  accessors aren't needed by scripts yet.
+
+### Facades over Context (the spike's steps 1-3)
+- `canonicalPath(ctx, path)`: a StringResult with the canonical form, through
+  `canonicalize`. This is step 1, "resolves a path".
+- `getValue(ctx, path)`: a ValueResult.
+- `setValue(ctx, path, value)`: `setValueUndo`, so the set is undoable. It needs an
+  executor on the context.
+- `writeValue(ctx, path, value)`: the raw `api::setValue`, which isn't recorded. It is
+  for use inside a command's own exec and undo.
+- `invoke(ctx, invocation)`: a BagResult with the outputs, through the invocation
+  parser (`"mesh.extrude(distance=2)"`). This keeps PropertyBag construction out of
+  TS.
+- `undo(ctx)` and `redo(ctx)`: through `ctx.executor()`. Without an executor they
+  return FailedPrecondition.
+- **Deviation:** `getValues` (several paths at once) is left out. Nothing in P1 needs
+  it.
+
+### Foreign commands
+- **`ForeignBindings`** is a Runtime extension. It owns the one `ScriptDispatcher`
+  (a `ForeignDispatcher`) and the factory handles it has been given. It releases the
+  handles when it is destroyed.
+- **`ScriptDispatcher::call(table, self, slot, args, ret)`:**
+  - `self` holds the instance's foreign handle, as `void *` (handles start at 1).
+  - It calls `litestl::binding::foreign::call(handle, table.ifaceDesc->methods[slot],
+    args, ret, &err)`.
+  - On failure it returns Internal with `err`. `FwdCall` then sets the sticky error, and
+    the executor folds that into the command's result (`collect`).
+- **`ForeignFactory`** is an interface struct (`isInterface`) with one slot,
+  `uint32_t make()`. It returns a new instance's handle, from `foreignHandle(new Cls())`.
+  - The generator gives TS a `ForeignFactoryImpl`.
+  - It is only ever called through `foreign::call`, so it never gets a table of its
+    own.
+- **`newCommandDef(id)`** returns an owned CommandDef builder (bound, opaque). Facades
+  build it:
+  - `defUiName(def, s)`;
+  - `defFlags(def, uint32)`;
+  - `defInput(def, name, PropValue default)` adds a PropertyDef of the default's type:
+    Bool, Int, Float, String or Vec2-4. Other types are InvalidArgument.
+- **`registerForeignCommand(rt, def, factoryHandle, slots)`**, where `slots` is a
+  `Vector<string>` of the method names the JS class has. In order:
+  1. `checkDef`.
+  2. Refuse an interface with slots that can't be implemented from TS: `void *` or
+     `QueryAnswer` in a parameter or return. Command has none, but the check is general
+     (`foreignImplementable(desc)`).
+  3. `registerForeign<Command>(rt, implName, dispatcher, nullptr, slots)`. This rejects
+     a missing required slot.
+  4. `def.impl(implName, factory)`, then `CommandRegistry::add`.
+  5. On success, take one count of `factoryHandle`. On failure, leave the count with the
+     caller.
+- **The factory**, per run:
+  - It calls `make` on the factory handle.
+  - If that fails, the run fails with the error.
+  - Otherwise it returns `Owned<Command>`, holding the table found under the impl name
+    and the new handle. Its deleter calls `foreign::release(handle)`, so each instance
+    handle is released exactly once.
+- **Threads:** `foreign::call` refuses off the main thread (Emscripten) and off the
+  host's thread (N-API), so `ThreadAffine` needs no separate check here.
+
+### Hosts and the manager
+- `coredcc::script::bindings()` returns the BindingManager with every bound coredcc type
+  and facade. It is built once and kept by its caller. It is created on first use
+  inside a `PermanentGuard`, which matches litestl's fixture.
+- A WASM module exports `CDCC_GetManager` (`bind/wasm_entry.cc`, compiled only under
+  Emscripten). The host-side setup (Runtime, Library, root struct) belongs to the
+  spike, in step 5.
+
+### Tests (native, step 4)
+- **`tests/bind/test_bind_foreign.cc`** installs a fake `litestl::binding::foreign::Host`
+  with `setHost`. Its "JS objects" are C++ structs looked up by handle, with methods
+  selected by name. It checks:
+  - registration: a missing required slot is refused, and nothing is left registered;
+  - `exec` and `undo` through the executor, with `redo` absent, so redo re-runs exec;
+  - a failing slot shows up as the run's error status, with the host's message;
+  - a failing `make` fails the run;
+  - instance handles are released exactly once each: after discard, after a failed
+    exec, and at runtime teardown;
+  - a second registration of the same id is refused, and the factory count is left
+    with the caller.
+- **`tests/bind/test_bind_facades.cc`:** `getValue`, `setValue` plus `undo`,
+  `writeValue`, `canonicalPath`, `invoke`, and the bag facades, run on the native
+  fixture struct the api tests use.
+- **The generated TS** (`coredcc_gen_ts`) is type-checked against the runtime in step 5.
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.
