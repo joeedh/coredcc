@@ -607,6 +607,193 @@ Where the code differs from the plan above:
   defaulted move released its step twice. Moves now clear the source explicitly.
   - Don't rely on a moved-from `std::function` being empty.
 
+## C2 design: foreign dispatch in litestl (2026-11-21, revised after its pressure test)
+The litestl half of "implementing in TS" (architecture §2a, "Bindings and foreign
+implementations"). litestl knows nothing of coredcc: it calls a method descriptor on a
+host object named by a handle. coredcc's `ForeignDispatcher` (in `bind/`) is a thin
+adaptor over it.
+
+### C++: `binding/foreign.h`
+- **Handles:** `foreign::Handle` is a `uint32_t` naming a JS object in the host's
+  table. 0 is none.
+  - Handles are issued in increasing order and never reused, so a stale handle fails
+    as unknown rather than reaching another object.
+- **`bool foreign::call(Handle h, const types::Method *m, void **args, void *ret,
+  util::string *error)`:**
+  - `args` and `ret` use the thunk ABI;
+  - on success a non-void `ret` has been constructed;
+  - on failure `ret` is unconstructed and `*error` holds the message.
+  - It refuses, before calling the host:
+    - reference returns and `ReturnPolicy::Owned` returns;
+    - a call off the main thread (`emscripten_is_main_runtime_thread()`; the N-API
+      host records its thread). It doesn't proxy: the main thread may be blocked
+      waiting for the caller.
+- **`void foreign::release(Handle h)`** drops one count. Contract: a handle given to C++
+  carries one count, and C++ releases it exactly once, failure paths included.
+- **`foreign::setHost(const Host *)`** is per thread (`thread_local`). The N-API runtime
+  installs its host for its env's thread, and removes it in an env cleanup hook.
+- **The default host** (none set):
+  - Emscripten: `EM_JS` calling `Module['__lstlHooks'].foreignCall` and
+    `.foreignRelease`;
+  - litestl's WASI build: imports `lstl.foreignCall` and `lstl.foreignRelease`;
+  - native: `call` fails with "no foreign host", and `release` does nothing.
+  - A missing hooks object makes `call` fail and `release` a no-op, which also covers
+    teardown.
+
+### TS runtime: `typescriptRuntime/foreign.ts`
+- **Per module, not per manager:**
+  - `createWasmHelpers` creates `__lstlHooks` on the module object before copying it,
+    and never replaces it.
+  - `instantiateWasi` creates it and binds trampolines,
+    `(...a) => hooks.foreignCall(...a)`.
+  - The hooks object holds the one `ForeignObjects` table and the dispatch, shared by
+    every manager of that module.
+- **The table:** `register(obj)` returns the object's handle and adds a count. A new
+  handle is issued after the count reaches 0. `release(h)` drops a count.
+- **Poisoning:**
+  - A `WebAssembly.RuntimeError`, a `WasiExit`, or anything named `ExitStatus` during a
+    dispatch is rethrown, and the module is marked poisoned.
+  - The C++ frames the rethrow unwinds never pop their stack or restore their state, so
+    nothing is safe afterwards. Foreign calls then fail fast, and calls into C++
+    (`MethodType.invoke`, `constructTo`) throw.
+  - No `stackSave`/`stackRestore`.
+- **The dispatch,** `foreignCall(handle, method, args, ret, error) -> 0 | 1`:
+  - It refreshes the heap views on entry, and again after the JS method returns,
+    because memory can grow without the patched `grow` seeing it (shared memory, other
+    threads).
+  - **Finding the method:** the descriptor comes from a cache keyed by pointer. The method
+    is `obj[jsName]`, a function that isn't `Object.prototype`'s. Anything else is
+    missing.
+  - **Arguments,** by parameter type:
+    - scalars, enums and bools;
+    - `String` and `CString`;
+    - vectors copied (`Uint8Array` for `uint8`);
+    - pointers as a wrapper of the pointee, or `null`;
+    - other structs, by value or reference, as non-owning wrappers.
+    - Every non-owning wrapper created while the dispatch runs is tracked, including
+      members reached through an argument, and invalidated afterwards (`ptr = 0`).
+      Generated accessors throw on `ptr === 0`.
+    - Wrappers of const-reference arguments are read-only: their setters throw.
+  - **Converters,** per struct type name: `setForeignConverter(typeName, {arg?, ret?})`.
+    - `arg` maps an argument wrapper to what JS sees (coredcc: an `IfaceRef` back to
+      its JS object, for `foldFrom`).
+    - `ret` maps the JS return to what is written (coredcc: `undefined` to an ok
+      `Status`).
+  - **The return,** after its converter:
+    - scalars, enums and bools;
+    - `String`, built in place;
+    - vectors of scalars from arrays or typed arrays;
+    - a struct from a bound object of exactly that type, through its copy constructor;
+    - a pointer from a bound object, or `null`.
+    - A thenable is an error: slots are synchronous.
+    - Storage already constructed when a later step fails is destroyed before returning
+      the error.
+    - There are no plain-object struct returns: the setters can't check types on WASM,
+      and embedded structs can't be set.
+  - **Exceptions** become the error message (`<jsName>: <message>`, or `String(e)` for a
+    non-Error).
+- **`IBindingBackend`** gains:
+  - `foreignHandle(obj): number`;
+  - `foreignCount(): number`;
+  - `setForeignConverter(typeName, converters)`.
+
+### N-API
+- The same rules, per env: a handle table of `napi_ref`s, and one handle scope per
+  call.
+- Vector arguments are copied, not live views.
+- Struct wrappers are tracked and invalidated, and const ones are read-only.
+- Converters are JS functions held by reference.
+- **Exceptions:**
+  - If an exception is already pending, `call` fails without clearing it.
+  - Otherwise a pending exception after `napi_call_function` is taken and becomes the
+    message.
+
+### Generator
+- **For an `isInterface` struct**, the bound `Probe` interface is emitted as before, and
+  `ProbeImpl` alongside it for implementers:
+  - no `[Symbol.dispose]` and no `new(...)`;
+  - `name?(...)` for optional methods;
+  - `bigint` for int64.
+- A JS implementation is a `ProbeImpl`, not a `Probe`, so the compiler rejects passing
+  one where C++ expects a bound interface value.
+- **Deviation from §2a:** no `Readonly<>` for const references. A mapped type drops the
+  construct signatures every bound struct carries, so a `Readonly<Vec2>` can't be
+  passed on. The read-only wrapper enforces it at run time instead.
+
+### Tests
+- **The fixture** gets the interface `fixture::Probe`. Its methods cover a float, an
+  int64, an enum, a string in and out, a struct by const reference and by value, a
+  struct return, a nullable pointer, a `uint8` vector in and out, and an optional
+  method.
+- **Fixture functions** call a handle's methods through `foreign::call`, record the last
+  error, and release handles.
+- **The conformance suite**, the same on both backends:
+  - `class JsProbe implements ProbeImpl`;
+  - round trips of every type;
+  - a thrown Error and a thrown string;
+  - a missing optional method;
+  - a wrong return type, with no leak;
+  - a thenable return;
+  - wrappers invalidated, including members;
+  - a const wrapper's setter throwing;
+  - handle counts and non-reuse;
+  - converters.
+- **Not covered by litestl:** the EM_JS path. coredcc's spike covers it.
+
+### Left to coredcc's `bind/`
+- `Status` needs bound constructors, plus the `ret` converter.
+- `QueryAnswer` and `void *` returns (`queryInterface`, `BlockProvider::data`) aren't
+  implementable from TS. `bind/` decides between a JS-side adaptor and refusing such
+  interfaces for foreign tables.
+- **The spike module's link flags:** `--no-entry` (or no `EXIT_RUNTIME`), and
+  `-sENVIRONMENT=node` or `web`.
+- `IfaceFlags::ThreadAffine` is never checked. `foreign::call`'s main-thread check
+  covers foreign tables.
+
+### Pressure test (2026-11-21)
+A fresh agent got the design and the code, but not the author's reasoning. It ran
+experiments with emcc 5.0.6, node 24, tsc, clang-cl and a small N-API addon.
+- **Survived:**
+  - EM_JS reaches a property set on the module after instantiation, with and without
+    MODULARIZE (write it as `Module['__lstlHooks']` for closure builds);
+  - the hooks object is shared through `createWasmHelpers`' shallow copies;
+  - WASI imports can be late-bound through trampolines;
+  - copy-constructing into `ret` works (write `ret` before invalidating wrappers);
+  - N-API catch-and-clear works, nested too;
+  - reentrancy from a hook into exports works;
+  - one count per `Owned<I>` fits coredcc;
+  - `class X implements` works with optional methods and bigint.
+- **Broke, and what changed:**
+  - `stackSave`/`stackRestore`: not exported, and probing them aborts -O0 modules.
+    Restoring at the hook doesn't restore the unwound frames' stack either → poison
+    the module instead.
+  - The rethrow list missed `WasiExit` → added.
+  - Zeroing `ptr` didn't stop member accessors, and missed wrappers made during the
+    call and N-API's live vector views → track every wrapper, accessors throw, copy
+    vectors.
+  - Generated types: bound optional slots became type errors, `using` failed,
+    `Readonly<>` blocked passing values on, and JS implementations type-checked as
+    bound values → a separate `ProbeImpl`, and no `Readonly<>`.
+  - Plain-object returns couldn't be type-checked on WASM, and leaked on failure →
+    dropped. Failed returns destroy what they constructed.
+  - Two managers in one module → one table per module.
+  - Threads: EM_JS on a pthread has no hooks, and N-API off-thread is undefined
+    behaviour → `call` refuses off the main thread.
+  - `setHost` was process-global across N-API envs → per thread, with env cleanup.
+  - N-API with an exception already pending swallowed it → checked first.
+- **Added:**
+  - refreshing heap views;
+  - N-API handle scopes;
+  - rejecting thenables;
+  - refusing reference and Owned returns;
+  - teardown no-ops;
+  - excluding `Object.prototype`;
+  - converters for coredcc's `Status` and `foldFrom`;
+  - `Uint8Array` vectors.
+- **Recorded, not fixed here:** `binding.ts`'s `bindingCache` is module-global and keyed
+  by pointer, so two wasm instances in one realm share descriptors. This matters for
+  TA1 and for tests that re-instantiate.
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.
