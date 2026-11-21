@@ -10,7 +10,9 @@ namespace coredcc {
  *
  * - `data` resolves the block's data on every use; it may return null (a Detached
  *   block, a host object that went away).
- * - `foreachRef` is the single source of truth for the block's references: report
+ * - `foreachRef` is the single source of truth for the block's references. It is called
+ *   for Live, InHistory and Detached blocks (a Detached block's targets must survive
+ *   GC until the host restores it); report nothing if the data is gone. Report
  *   every RefCell in the block's data, strong and weak.
  * - `destroy` frees the data (for a host-owned block, only the wrapper). It runs during
  *   a sweep: library reads are allowed, void mutations are deferred, creates fail.

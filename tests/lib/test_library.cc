@@ -35,6 +35,7 @@ struct Thing {
 static std::string g_log;
 static Library *g_lib = nullptr; /* for the re-entrant destroy test */
 static bool g_reenter = false;
+static bool g_createInMark = false;
 
 struct ThingProvider {
   void *data(const Datablock &b) const
@@ -43,6 +44,12 @@ struct ThingProvider {
   }
   void foreachRef(const Datablock &b, RefVisitor &v) const
   {
+    if (g_createInMark && g_lib) {
+      g_createInMark = false;
+      Result<BlockHandle> c = g_lib->create(TypeId::of("test.Thing"), "mark", nullptr);
+      g_log += c.ok() ? "mark-create ok;" :
+                        std::string("mark-create ") + statusCodeName(c.status().code()) + ";";
+    }
     if (Thing *t = static_cast<Thing *>(b.clientData())) {
       v.visit(t->owner);
       v.visit(t->material);
@@ -202,7 +209,7 @@ static void test_ref_kinds_and_states()
   test_assert(lib.writeRef(u->owner, tid).ok());
   test_assert(lib.writeRef(u->owner, BlockId()).code() == StatusCode::InvalidArgument);
   test_assert(lib.writeRef(u->material, BlockId()).ok()); /* nullable */
-  test_assert(lib.resolve(u->parent) == target);
+  test_assert(lib.resolveRef(u->parent) == target);
 
   Ref<Thing> typed;
   test_assert(lib.writeRef(typed.cell(), tid).ok());
@@ -210,17 +217,17 @@ static void test_ref_kinds_and_states()
 
   /* Every non-Live state resolves to null, and Live again resolves again. */
   test_assert(lib.markDeleted(target).ok());
-  test_assert(lib.resolve(u->parent).isNull() && lib.resolve(u->owner).isNull());
+  test_assert(lib.resolveRef(u->parent).isNull() && lib.resolveRef(u->owner).isNull());
   test_assert(typed.get(lib) == nullptr);
   test_assert(lib.get(target)->state() == BlockState::InHistory);
   test_assert(lib.markDeleted(target).code() == StatusCode::FailedPrecondition);
   test_assert(lib.restoreFromHistory(target).ok());
-  test_assert(lib.resolve(u->parent) == target);
+  test_assert(lib.resolveRef(u->parent) == target);
 
   test_assert(lib.onHostDestroyed(tid).ok());
-  test_assert(lib.resolve(u->owner).isNull() && lib.data(target) == nullptr);
+  test_assert(lib.resolveRef(u->owner).isNull() && lib.data(target) == nullptr);
   test_assert(lib.onHostRestored(tid).ok());
-  test_assert(lib.resolve(u->owner) == target);
+  test_assert(lib.resolveRef(u->owner) == target);
   test_assert(lib.onHostRestored(tid).code() == StatusCode::FailedPrecondition);
   test_assert(lib.validate().ok());
 }
@@ -236,10 +243,10 @@ static void test_cross_library_aliasing()
   test_assert(ha == hb); /* the same first handle in both */
   RefCell cell(RefKind::Weak);
   test_assert(a.writeRef(cell, a.get(ha)->id()).ok());
-  test_assert(a.resolve(cell) == ha);
+  test_assert(a.resolveRef(cell) == ha);
   /* The cached handle names b's first block, but b's record has another id. */
-  test_assert(b.resolve(cell).isNull());
-  test_assert(a.resolve(cell) == ha);
+  test_assert(b.resolveRef(cell).isNull());
+  test_assert(a.resolveRef(cell) == ha);
 }
 
 static void test_revive()
@@ -317,7 +324,7 @@ static void test_gc()
   test_assert(lib.get(hist) && lib.get(bySlot));
   test_assert(strstr(g_log.c_str(), "lost root->weakOnly;") != nullptr);
   /* The weak ref keeps its id and resolves to null. */
-  test_assert(lib.resolve(thing(lib, root)->parent).isNull());
+  test_assert(lib.resolveRef(thing(lib, root)->parent).isNull());
 
   lib.unpin(pinned);
   lib.setFlag(fake, BlockFlags::FakeUser, false);
@@ -430,7 +437,7 @@ static void test_client_aliases()
   test_assert(lib.find(oldId) == *h);
   RefCell cell(RefKind::Weak);
   cell.target = oldId;
-  test_assert(lib.resolve(cell) == *h);
+  test_assert(lib.resolveRef(cell) == *h);
   test_assert(rt.validateAll().ok());
 }
 
@@ -550,8 +557,84 @@ static void test_foreign_provider()
   test_assert(host.destroyed == 2); /* the Library's destructor destroys everything */
 }
 
+/* Review findings for lib/api (2026-11-21). */
+static void test_review_fixes()
+{
+  {
+    /* B3: a Detached block's strong targets survive GC until the host restores it. */
+    Runtime rt;
+    setup(rt);
+    Library lib(&rt);
+    BlockHandle actor = make(lib, "actor");
+    BlockHandle mesh = make(lib, "mesh");
+    lib.setFlag(actor, BlockFlags::Root, true);
+    test_assert(lib.writeRef(thing(lib, actor)->owner, lib.get(mesh)->id()).ok());
+    const BlockId actorId = lib.get(actor)->id();
+    test_assert(lib.onHostDestroyed(actorId).ok());
+    test_assert(lib.usersOf(mesh).size() == 1);
+    test_assert(lib.collect().ok() && lib.get(mesh));
+    test_assert(lib.onHostRestored(actorId).ok());
+    test_assert(lib.resolveRef(thing(lib, actor)->owner) == mesh);
+  }
+  {
+    /* B4: a placeholder saved under a name that later becomes an alias. */
+    Runtime rt;
+    setup(rt);
+    Library lib(&rt);
+    const BlockId oldId{ClientId::of("acme.old"), LocalId{3, 4}};
+    Result<BlockHandle> ph = lib.addPlaceholder(oldId, "acme.Gadget", "gadget", {});
+    test_assert(ph.ok() && lib.find(oldId) == *ph);
+    const char *aliases[] = {"acme.old"};
+    test_assert(rt.ext<ClientRegistry>().registerClient("acme.new", aliases).ok());
+    test_assert(lib.find(oldId) == *ph);
+    test_assert(lib.find(BlockId{ClientId::of("acme.new"), oldId.local}) == *ph);
+    test_assert(lib.get(*ph)->id().client == ClientId::of("acme.new"));
+    test_assert(lib.validate().ok());
+  }
+  {
+    /* B8: a GUID source that repeats itself can't corrupt the index. */
+    Runtime rt;
+    setup(rt);
+    Library lib(&rt);
+    rt.setGuidSource([]() { return LocalId{0, 77}; });
+    BlockHandle a = make(lib, "a");
+    Result<BlockHandle> b = lib.create(kThing, "b", nullptr);
+    test_assert(b.status().code() == StatusCode::Internal);
+    test_assert(lib.find(lib.get(a)->id()) == a && lib.validate().ok());
+  }
+  {
+    /* B9: destroyFromHistory refuses while a Live block holds a Strong ref. */
+    Runtime rt;
+    setup(rt);
+    Library lib(&rt);
+    BlockHandle user = make(lib, "user");
+    BlockHandle t = make(lib, "t");
+    test_assert(lib.writeRef(thing(lib, user)->owner, lib.get(t)->id()).ok());
+    test_assert(lib.markDeleted(t).ok());
+    Status s = lib.destroyFromHistory(t);
+    test_assert(s.code() == StatusCode::FailedPrecondition && hasMsg(s, "'user' still holds"));
+    test_assert(lib.get(t) && lib.markDeleted(user).ok() && lib.destroyFromHistory(t).ok());
+    test_assert(!lib.get(t) && lib.validate().ok());
+  }
+  {
+    /* B11: library calls from a provider during GC's mark phase are Busy. */
+    Runtime rt;
+    setup(rt);
+    Library lib(&rt);
+    BlockHandle root = make(lib, "root");
+    lib.setFlag(root, BlockFlags::Root, true);
+    g_lib = &lib;
+    g_log.clear();
+    g_createInMark = true;
+    test_assert(lib.collect().ok());
+    test_assert(g_log == "mark-create Busy;");
+    g_lib = nullptr;
+  }
+}
+
 int main()
 {
+  test_review_fixes();
   test_create_and_find();
   test_ref_kinds_and_states();
   test_cross_library_aliasing();

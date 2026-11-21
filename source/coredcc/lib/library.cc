@@ -64,7 +64,7 @@ Library::~Library()
 
 Status Library::busyIfSweeping(const char *what) const
 {
-  if (!sweeping_) {
+  if (!sweeping_ && !collecting_) {
     return Status();
   }
   return Status::error(StatusCode::Busy,
@@ -108,7 +108,15 @@ Result<BlockHandle> Library::create(TypeId type, std::string_view name, void *cl
   if (!entry) {
     return Status::error(StatusCode::NotFound, "create: the block type is not registered");
   }
-  return addRecord(type, BlockId{entry->info.client, rt_.newLocalId()}, name, clientData);
+  /* A repeated id from the GUID source would corrupt the index; retry, then fail. */
+  for (int attempt = 0; attempt < 4; attempt++) {
+    const BlockId id{entry->info.client, rt_.newLocalId()};
+    if (!id.local.isNull() && !find(id)) {
+      return addRecord(type, id, name, clientData);
+    }
+  }
+  return Status::error(StatusCode::Internal,
+                       "create: the GUID source keeps returning ids that are in use");
 }
 
 Result<BlockHandle> Library::createWithId(TypeId type,
@@ -182,8 +190,44 @@ Result<BlockHandle> Library::addPlaceholder(BlockId id,
 
 /* ---- finding ---- */
 
+void Library::renormalizeIds() const
+{
+  if (clientGeneration_ == clients_.generation()) {
+    return;
+  }
+  clientGeneration_ = clients_.generation();
+  Library *self = const_cast<Library *>(this);
+  Vector<BlockHandle> stale;
+  forEach([&](BlockHandle h, const Datablock &b) {
+    if (!(clients_.canonical(b.id_) == b.id_)) {
+      stale.append(h);
+    }
+  });
+  for (BlockHandle h : stale) {
+    Datablock *b = self->rec(h);
+    const BlockId c = clients_.canonical(b->id_);
+    if (byId_.lookup_ptr(c)) {
+      /* Two records for one block: keep both findable by their old ids and say so. */
+      rt_.setStickyError(Status::error(
+          StatusCode::AlreadyExists,
+          ("Library: block '" + std::string(b->name_.c_str()) +
+           "' was saved under a client that is now an alias, and its canonical id has "
+           "another record")
+              .c_str()));
+      continue;
+    }
+    self->byId_.remove(b->id_);
+    b->id_ = c;
+    self->byId_.add(c, h);
+  }
+  if (stale.size() > 0) {
+    self->epoch_++;
+  }
+}
+
 BlockHandle Library::find(BlockId id) const
 {
+  renormalizeIds();
   const BlockHandle *h = byId_.lookup_ptr(clients_.canonical(id));
   return h ? *h : BlockHandle();
 }
@@ -235,9 +279,31 @@ Status Library::destroyFromHistory(BlockHandle h)
   if (b->state_ != BlockState::InHistory) {
     return wrongState(*b, "destroyFromHistory", BlockState::InHistory);
   }
+  /* A Live or Detached block's Strong ref would dangle: the delete should have taken
+   * that user too. Refuse; the block stays InHistory, which GC treats as a root. */
+  const BlockId id = b->id_;
+  for (BlockHandle user : usersOf(h)) {
+    const Datablock *u = rec(user);
+    if (u->state_ != BlockState::Live && u->state_ != BlockState::Detached) {
+      continue;
+    }
+    bool strong = false;
+    foreachRef(user, [&](RefCell &cell) {
+      strong |= cell.kind == RefKind::Strong && clients_.canonical(cell.target) == id;
+    }).ignore();
+    if (strong) {
+      return Status::error(StatusCode::FailedPrecondition,
+                           ("destroyFromHistory: '" + std::string(u->name_.c_str()) +
+                            "' still holds a Strong ref to '" + b->name_.c_str() + "'")
+                               .c_str());
+    }
+  }
   Vector<BlockHandle> one;
   one.append(h);
   destroyBlocks(one);
+  if (rt_.hasStickyError()) {
+    return rt_.takeStickyError(); /* the provider's destroy failed; the block is gone */
+  }
   return Status();
 }
 
@@ -314,7 +380,7 @@ void *Library::data(BlockHandle h) const
   return p ? p.data(*b) : nullptr;
 }
 
-BlockHandle Library::resolve(const RefCell &cell) const
+BlockHandle Library::resolveRef(const RefCell &cell) const
 {
   if (cell.target.isNull()) {
     return BlockHandle();
@@ -411,8 +477,11 @@ Status Library::foreachRef(BlockHandle h, litestl::util::function<void(RefCell &
   if (!b) {
     return noBlock("foreachRef");
   }
-  /* The provider can enumerate while its data exists: Live, or held by the history. */
-  if (b->state_ == BlockState::Live || b->state_ == BlockState::InHistory) {
+  /* The provider can enumerate while its data or wrapper exists: Live, held by the
+   * history, or Detached (whose targets must survive until the host restores it). */
+  if (b->state_ == BlockState::Live || b->state_ == BlockState::InHistory ||
+      b->state_ == BlockState::Detached)
+  {
     if (BlockProvider p = types_.provider(b->type_)) {
       const bool stickyBefore = rt_.hasStickyError();
       RefVisitor visitor([](void *ctx, RefCell &cell) {
@@ -561,6 +630,7 @@ Status Library::validate() const
     return Status::error(StatusCode::Internal,
                          "Library: the id index and the records differ in size");
   }
+  renormalizeIds();
   Status status;
   forEach([&](BlockHandle h, const Datablock &b) {
     const BlockHandle *indexed = byId_.lookup_ptr(b.id_);

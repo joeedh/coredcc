@@ -24,11 +24,21 @@ struct Mesh {
   double radius = 1;
 };
 
+/* A struct nested inside an Object block (not its root). */
+struct Mod {
+  double strength = 0.25;
+};
+
 struct Object {
   RefCell mesh{RefKind::OptStrong};
   float location[3] = {0, 0, 0};
   int mode = 0;
   uint32_t flags = 0;
+  Mod mod;
+};
+
+struct Brush {
+  double size = 1;
 };
 
 struct Tool {
@@ -37,6 +47,11 @@ struct Tool {
   int version = 3;
   int count = 4;
   int pick = 0;
+  /* Brushes live inside the Tool owner; `activeBrush` is a settable pointer into them. */
+  Brush brushes[2];
+  int activeBrush = 0;
+  bool locked = false;
+  int guarded = 0;
 };
 
 struct Scene {
@@ -79,6 +94,9 @@ inline const StructId kObject = StructId::of("Object");
 inline const StructId kMesh = StructId::of("Mesh");
 inline const StructId kTool = StructId::of("Tool");
 inline const StructId kScene = StructId::of("Scene");
+inline const StructId kMod = StructId::of("Mod");
+inline const StructId kBrush = StructId::of("Brush");
+inline const StructId kIdBase = StructId::of("IdBase");
 
 template <class T> void addBlockType(Runtime &rt, const char *name, StructId st)
 {
@@ -107,7 +125,17 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
 {
   ApiRegistry &reg = rt.ext<ApiRegistry>();
 
+  /* Mesh's parent: pointers declared as IdBase reach a Mesh's members (subtyping). */
+  test_assert(reg.add(ApiStruct("IdBase")).ok());
+  ApiStruct mod("Mod");
+  mod.addField(PropertyDef::floatProp("strength"), &Mod::strength);
+  test_assert(reg.add(std::move(mod)).ok());
+  ApiStruct brush("Brush");
+  brush.addField(PropertyDef::floatProp("size"), &Brush::size);
+  test_assert(reg.add(std::move(brush)).ok());
+
   ApiStruct mesh("Mesh");
+  mesh.parent(kIdBase);
   mesh.addField(PropertyDef::floatProp("radius").range(0, 10), &Mesh::radius)
       .update([](const PointerRef &, Context &) { g_radiusUpdates++; });
   test_assert(reg.add(std::move(mesh)).ok());
@@ -127,12 +155,25 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
   PointerAccessor data;
   data.get = [](const PointerRef &self, Context &ctx) {
     Library &lib = *ctx.library();
-    return blockRef(lib, lib.resolve(static_cast<Object *>(self.data)->mesh), StructId());
+    return blockRef(lib, lib.resolveRef(static_cast<Object *>(self.data)->mesh), StructId());
   };
   data.set = [](const PointerRef &self, Context &ctx, const PointerRef &target) {
     return ctx.library()->writeRef(static_cast<Object *>(self.data)->mesh, target.owner.block);
   };
   object.addPointer(PropertyDef::pointerProp("data", kMesh), std::move(data));
+  /* The same target, declared as the base struct and left untyped. */
+  PointerAccessor anyData;
+  anyData.get = [](const PointerRef &self, Context &ctx) {
+    Library &lib = *ctx.library();
+    return blockRef(lib, lib.resolveRef(static_cast<Object *>(self.data)->mesh), StructId());
+  };
+  object.addPointer(PropertyDef::pointerProp("anyData", kIdBase), std::move(anyData));
+  /* A fixed nested struct: no owner, no setter, so the hop is stable. */
+  PointerAccessor modPtr;
+  modPtr.get = [](const PointerRef &self, Context &) {
+    return PointerRef{&static_cast<Object *>(self.data)->mod, kMod, OwnerKey()};
+  };
+  object.addPointer(PropertyDef::pointerProp("mod", kMod), std::move(modPtr));
   test_assert(reg.add(std::move(object)).ok());
 
   ApiStruct t("Tool");
@@ -144,6 +185,61 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
       .dynamic([](PropertyDef &def, const PointerRef &self, Context &) {
         def.range(0, static_cast<Tool *>(self.data)->count - 1);
       });
+  t.addField(PropertyDef::boolProp("locked"), &Tool::locked);
+  t.addField(PropertyDef::intProp("guarded"), &Tool::guarded)
+      .dynamic([](PropertyDef &def, const PointerRef &self, Context &) {
+        if (static_cast<Tool *>(self.data)->locked) {
+          def.access(PropAccess::ReadOnly);
+        }
+      });
+  /* A getter that returns the wrong type, as a failed foreign getter would. */
+  t.add(PropertyDef::vecProp("broken", 3),
+        ValueAccessor{[](const PointerRef &, Context &) { return PropValue(); },
+                      [](const PointerRef &, Context &, const PropValue &) { return Status(); }});
+  CollectionAccessor brushes;
+  brushes.length = [](const PointerRef &, Context &) { return int64_t(2); };
+  brushes.at = [](const PointerRef &self, Context &, int64_t i) {
+    return PointerRef{&static_cast<Tool *>(self.data)->brushes[i], kBrush, OwnerKey()};
+  };
+  brushes.lookup = [](const PointerRef &self, Context &, const KeySegment &key) {
+    Tool *tl = static_cast<Tool *>(self.data);
+    const char *k = key.text.c_str();
+    if (key.kind == KeySegment::Kind::StringKey && (strcmp(k, "A") == 0 || strcmp(k, "B") == 0)) {
+      return PointerRef{&tl->brushes[k[0] == 'A' ? 0 : 1], kBrush, OwnerKey()};
+    }
+    return PointerRef();
+  };
+  brushes.keyOf = [](const PointerRef &self, Context &, const PointerRef &item) {
+    Tool *tl = static_cast<Tool *>(self.data);
+    return KeySegment::stringKey(item.data == &tl->brushes[0] ? "A" : "B");
+  };
+  t.addCollection(PropertyDef::collectionProp("brushes", kBrush), std::move(brushes));
+  auto activeGet = [](const PointerRef &self, Context &) {
+    Tool *tl = static_cast<Tool *>(self.data);
+    return PointerRef{&tl->brushes[tl->activeBrush], kBrush, OwnerKey()};
+  };
+  auto activeSet = [](const PointerRef &self, Context &, const PointerRef &target) {
+    Tool *tl = static_cast<Tool *>(self.data);
+    tl->activeBrush = target.data == &tl->brushes[1] ? 1 : 0;
+    return Status();
+  };
+  PointerAccessor active;
+  active.get = activeGet;
+  active.set = activeSet;
+  active.address = [](const PointerRef &self, Context &, const PointerRef &target) {
+    Tool *tl = static_cast<Tool *>(self.data);
+    StableRef r;
+    r.owner = self.owner;
+    r.key.append(KeySegment::member("brushes"));
+    r.key.append(KeySegment::stringKey(target.data == &tl->brushes[0] ? "A" : "B"));
+    return r;
+  };
+  t.addPointer(PropertyDef::pointerProp("activeBrush", kBrush), std::move(active));
+  /* The same pointer without an address: reading or walking it is Unsupported. */
+  PointerAccessor unaddressed;
+  unaddressed.get = activeGet;
+  unaddressed.set = activeSet;
+  t.addPointer(PropertyDef::pointerProp("activeBrushNoAddress", kBrush), std::move(unaddressed));
   test_assert(reg.add(std::move(t)).ok());
   Result<OwnerKey> toolOwner = reg.addRuntimeOwner("tool", kTool, [&tool]() { return (void *)&tool; });
   test_assert(toolOwner.ok());
@@ -186,6 +282,14 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
     return PointerRef{&tool, kTool, tk};
   };
   s.addPointer(PropertyDef::pointerProp("tool", kTool), std::move(toolPtr));
+  /* Crosses into an Object block but returns a struct nested in it, not its root. */
+  PointerAccessor firstMod;
+  firstMod.get = [](const PointerRef &self, Context &ctx) {
+    Library &lib = *ctx.library();
+    PointerRef ob = blockRef(lib, static_cast<Scene *>(self.data)->objects[0], kObject);
+    return PointerRef{&static_cast<Object *>(ob.data)->mod, kMod, ob.owner};
+  };
+  s.addPointer(PropertyDef::pointerProp("firstMod", kMod), std::move(firstMod));
   test_assert(reg.add(std::move(s)).ok());
   test_assert(reg.addRuntimeOwner("scene", kScene, [&scene]() { return (void *)&scene; }).ok());
 }

@@ -47,7 +47,12 @@ struct PointerRef {
  */
 class Context {
  public:
-  Context(Runtime *rt, Library *lib, PointerRef root) : rt_(*rt), lib_(lib), root_(root) {}
+  /** A non-null root needs an owner (a runtime owner, usually): changes are posted by
+   * owner, and canonical paths start at one. */
+  Context(Runtime *rt, Library *lib, PointerRef root) : rt_(*rt), lib_(lib), root_(root)
+  {
+    CDCC_CHECK(root.isNull() || !root.owner.isNull(), "Context: the root has no owner");
+  }
 
   Runtime &runtime() const
   {

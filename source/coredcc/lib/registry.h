@@ -44,10 +44,18 @@ class ClientRegistry {
     return BlockId{canonical(id.client), id.local};
   }
 
+  /** Bumped whenever an alias is added, so Libraries re-key records saved under a name
+   * that has since become an alias (a placeholder loaded before its plugin). */
+  uint64_t generation() const
+  {
+    return generation_;
+  }
+
   Status validate() const;
 
  private:
   Runtime &rt_;
+  uint64_t generation_ = 0;
   litestl::util::Vector<ClientId> clients_;
   /** Alias id -> canonical id. */
   litestl::util::Map<uint64_t, uint64_t> aliases_;

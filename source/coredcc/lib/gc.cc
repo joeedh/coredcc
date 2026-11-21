@@ -90,6 +90,16 @@ Result<int> Library::collect()
     return Status::error(StatusCode::FailedPrecondition,
                          "collect: a sticky error is pending; take it first");
   }
+  renormalizeIds();
+  /* Providers' foreachRef runs during mark: library calls from it are Busy too. */
+  collecting_ = true;
+  struct ClearOnExit {
+    bool &flag;
+    ~ClearOnExit()
+    {
+      flag = false;
+    }
+  } clearOnExit{collecting_};
   auto providerFailure = [this](Status s) {
     Status sticky = rt_.takeStickyError();
     return sticky.ok() ? s : sticky;
@@ -144,6 +154,7 @@ Result<int> Library::collect()
       garbage.append(h);
     }
   });
+  collecting_ = false; /* the sweep has its own guard */
   destroyBlocks(garbage);
   if (rt_.hasStickyError()) {
     /* A provider failed during the sweep; the blocks are gone regardless. */

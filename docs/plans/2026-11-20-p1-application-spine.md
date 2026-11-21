@@ -514,6 +514,20 @@ Where the code differs from the plan above:
   - Display units and the subtype/unit agreement check (D12) move to P3, where
     scene settings exist.
 
+### P1c/P1d review corrections (2026-11-21)
+`docs/reports/feature-report-lib-api-2026-11-21.md` has the details.
+- **The walk's rules for canonical paths:**
+  - A struct crossed into in another owner must be that owner's root, or the walk is
+    Unsupported.
+  - A settable pointer inside its owner needs `PointerAccessor::address`.
+  - Fixed pointers and collection items append to the key.
+- **Pointer type checks accept subtypes** (`ApiRegistry::isA`).
+- **Detached blocks contribute their provider's refs**, so their targets survive GC.
+- **`CollectionAccessor::setActive` (§5) moves to P3**, with the Scene. Until then,
+  code that changes `active` bumps the ChangeBus epoch. Library changes refire watchers
+  through the Library epoch.
+- **`Library::resolve(RefCell)` is now `resolveRef`.**
+
 ### P1e (2026-11-21)
 - **`canRun` returns a Status**: ok, or the refusal with its reason. Status is bound
   (`base/bindings.cc`) and already carries a message, so it does the job a separate

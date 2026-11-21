@@ -108,10 +108,10 @@ class Library {
    * still names a record with the same BlockId (handles alone can alias across
    * Libraries), and refreshes it otherwise.
    */
-  BlockHandle resolve(const RefCell &cell) const;
+  BlockHandle resolveRef(const RefCell &cell) const;
   void *resolveData(const RefCell &cell) const
   {
-    return data(resolve(cell));
+    return data(resolveRef(cell));
   }
   /** Sets `cell`'s target and bumps the epoch. A Strong cell can't be set to null. */
   Status writeRef(RefCell &cell, BlockId target);
@@ -128,6 +128,7 @@ class Library {
   /** Sets slot (ns, key) on `owner`. `ns` is the owning provider's or attachment's type,
    * so two clients' slots can't collide. */
   Status setSlot(BlockHandle owner, TypeId ns, int64_t key, BlockId target, RefKind kind);
+  /** The slot, or null. Valid until the next setSlot or forceUnlink on `owner`. */
   const RefCell *slot(BlockHandle owner, TypeId ns, int64_t key) const;
   /** Removes a slot. Also how a placeholder's refs are cut (forceUnlink). */
   Status forceUnlink(BlockHandle owner, TypeId ns, int64_t key);
@@ -232,6 +233,11 @@ class Library {
   uint64_t epoch_ = 1;
   int noCollect_ = 0;
   bool sweeping_ = false;
+  /** Set for the whole of collect(), mark phase included. */
+  bool collecting_ = false;
+  /** The ClientRegistry generation the id index was built against. */
+  mutable uint64_t clientGeneration_ = 0;
+  void renormalizeIds() const;
   bool audit_;
   litestl::util::Vector<litestl::util::function<void()>> deferred_;
 

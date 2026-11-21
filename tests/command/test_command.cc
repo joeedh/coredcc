@@ -736,7 +736,7 @@ static void test_block_commands()
   test_assert(del.ok() && *del->get("count") == PropValue::ofInt(3));
   test_assert(lib.get(*rig2H)->state() == BlockState::InHistory);
   test_assert(s.ex.undo(s.ctx).ok());
-  test_assert(lib.get(*rig2H)->state() == BlockState::Live && lib.resolve(rig2->target) == *rigH);
+  test_assert(lib.get(*rig2H)->state() == BlockState::Live && lib.resolveRef(rig2->target) == *rigH);
   test_assert(s.ex.redo(s.ctx).ok() && lib.get(*rigH)->state() == BlockState::InHistory);
 
   /* Purge: history-held blocks are roots, so nothing goes until the history drops them.

@@ -153,8 +153,73 @@ static void test_failures_and_reentrancy()
   outlives.disconnect();
 }
 
+/* Library changes refire watchers without a notify (D2). */
+static void test_library_changes()
+{
+  World w;
+  Context ctx = w.context();
+  ChangeBus &bus = w.rt.ext<ChangeBus>();
+  Recorder r;
+  ScopedConnection a = watchOk(bus, ctx, "objects[\"Cube\"].data.radius", r);
+  test_assert(w.lib.markDeleted(w.meshes[0]).ok());
+  test_assert(bus.flush() == 1 && r.lastStatus.code() == StatusCode::NotFound);
+  test_assert(w.lib.restoreFromHistory(w.meshes[0]).ok());
+  test_assert(bus.flush() == 1 && r.last == PropValue::ofFloat(1));
+  test_assert(bus.flush() == 0);
+}
+
+/* A getter that adds watchers while flush re-reads (B6). */
+static ChangeBus *g_bus = nullptr;
+static Context *g_ctx = nullptr;
+static bool g_spawn = false;
+static litestl::util::Vector<ScopedConnection> *g_spawned = nullptr;
+
+static void test_reentrant_getter()
+{
+  Runtime rt;
+  ApiRegistry &reg = rt.ext<ApiRegistry>();
+  struct Box {
+    int v = 1;
+  } box;
+  ApiStruct st("Box");
+  st.add(PropertyDef::intProp("v"),
+         ValueAccessor{[](const PointerRef &s, Context &) {
+                         if (g_spawn) {
+                           g_spawn = false;
+                           for (int i = 0; i < 64; i++) {
+                             Result<ScopedConnection> c = g_bus->watch(
+                                 *g_ctx, "v", [](const PropValue &, const Status &) {});
+                             g_spawned->append(std::move(c).value());
+                           }
+                         }
+                         return PropValue::ofInt(static_cast<Box *>(s.data)->v);
+                       },
+                       {}});
+  test_assert(reg.add(std::move(st)).ok());
+  Result<OwnerKey> owner =
+      reg.addRuntimeOwner("box", StructId::of("Box"), [&box]() { return (void *)&box; });
+  test_assert(owner.ok());
+  Context ctx(&rt, nullptr, reg.runtimeOwner("box"));
+  ChangeBus &bus = rt.ext<ChangeBus>();
+  litestl::util::Vector<ScopedConnection> spawned;
+  g_bus = &bus;
+  g_ctx = &ctx;
+  g_spawned = &spawned;
+  Recorder r;
+  ScopedConnection a = watchOk(bus, ctx, "v", r);
+  box.v = 2;
+  g_spawn = true;
+  bus.notify(*owner, "v");
+  test_assert(bus.flush() == 1 && r.calls == 1 && r.last == PropValue::ofInt(2));
+  test_assert(bus.watcherCount() == 65);
+  spawned.clear();
+  test_assert(bus.watcherCount() == 1 && bus.validate().ok());
+}
+
 int main()
 {
+  test_library_changes();
+  test_reentrant_getter();
   test_aliases();
   test_hops_and_nan();
   test_failures_and_reentrancy();

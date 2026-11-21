@@ -31,6 +31,14 @@ Status err(StatusCode code, const std::string &msg)
   return Status::error(code, msg.c_str());
 }
 
+PointerRef blockPointer(Context &ctx, const OwnerKey &owner);
+
+/* The struct an owner's keys start from: a block's data, or a runtime owner. */
+PointerRef ownerRoot(Context &ctx, const ApiRegistry &reg, const OwnerKey &owner)
+{
+  return owner.kind == OwnerKey::Kind::Block ? blockPointer(ctx, owner) : reg.runtimeOwner(owner);
+}
+
 /* The walk shared by paths and StableRefs: the current struct, its owner and the key
  * from that owner, and what the resolution touched. */
 struct Walk {
@@ -41,22 +49,55 @@ struct Walk {
   Vector<KeySegment, 2> key;
   ResolvedPath out;
 
-  /* Moves into `next`, reached through member `name` (and an item key). Crossing into
-   * another owner restarts the key there: canonical paths keep no hops. */
-  void enter(PointerRef next, const char *name, const KeySegment *itemKey)
+  /* Moves into `next`, reached through member `m` (and an item key). Canonical paths
+   * keep no hops that can be reassigned:
+   * - crossing into another owner restarts the key there, so `next` must be that
+   *   owner's root struct (its type comes from the owner when unset);
+   * - a settable pointer inside one owner restarts from its `address`;
+   * - collection items and fixed pointers append to the key. */
+  Status enter(PointerRef next, const ApiMember &m, const KeySegment *itemKey)
   {
     if (!next.owner.isNull() && !(next.owner == owner)) {
+      const PointerRef root = ownerRoot(ctx, reg, next.owner);
+      if (root.isNull() || root.data != next.data) {
+        return err(StatusCode::Unsupported,
+                   std::string("'") + m.name() +
+                       "' returned a struct of another owner that isn't the owner's root; "
+                       "return the root, or leave the owner unset");
+      }
+      if (!next.type) {
+        next.type = root.type;
+      }
       owner = next.owner;
       key.clear();
     }
+    else if (m.kind() == MemberKind::Pointer && m.pointer().address) {
+      StableRef a = m.pointer().address(cur, ctx, next);
+      if (a.owner.isNull()) {
+        return err(StatusCode::Internal,
+                   std::string("pointer '") + m.name() + "': its address callback gave no owner");
+      }
+      owner = a.owner;
+      key.clear();
+      for (const KeySegment &k : a.key) {
+        key.append(k);
+      }
+    }
+    else if (m.kind() == MemberKind::Pointer && m.pointer().set) {
+      return err(StatusCode::Unsupported,
+                 std::string("pointer '") + m.name() +
+                     "' is settable and points inside its own owner: give it an address "
+                     "callback, so paths through it don't depend on where it points later");
+    }
     else {
-      key.append(KeySegment::member(name));
+      key.append(KeySegment::member(m.name()));
       if (itemKey) {
         key.append(*itemKey);
       }
     }
     next.owner = owner;
     cur = next;
+    return Status();
   }
 
   void touch(const char *member)
@@ -160,8 +201,12 @@ Result<ResolvedPath> walkPath(Walk &w, const Path &path)
           return at(path[i + 1], err(StatusCode::NotFound,
                                      std::string("pointer '") + m->name() + "' is null"));
         }
-        target.type = pointerTargetType(*m, target);
-        w.enter(target, m->name(), nullptr);
+        if (Status s = w.enter(target, *m, nullptr); !s.ok()) {
+          return at(seg, s);
+        }
+        if (!w.cur.type) {
+          w.cur.type = pointerTargetType(*m, w.cur);
+        }
         i++;
         break;
       }
@@ -220,11 +265,18 @@ Result<ResolvedPath> walkPath(Walk &w, const Path &path)
           return at(sub, err(StatusCode::NotFound,
                              std::string("no such item in '") + m->name() + "'"));
         }
-        if (!item.type) {
-          item.type = c.itemStruct;
-        }
         const KeySegment k = c.keyOf(w.cur, w.ctx, item);
-        w.enter(item, m->name(), &k);
+        if (k.kind == KeySegment::Kind::Member) {
+          return at(sub, err(StatusCode::Internal,
+                             std::string("collection '") + m->name() +
+                                 "': keyOf must return a string key or a handle"));
+        }
+        if (Status s = w.enter(item, *m, &k); !s.ok()) {
+          return at(sub, s);
+        }
+        if (!w.cur.type) {
+          w.cur.type = c.itemStruct;
+        }
         i += 2;
         break;
       }
@@ -335,8 +387,10 @@ Result<ResolvedPath> resolve(Context &ctx, const StableRef &ref)
       if (target.isNull()) {
         return err(StatusCode::NotFound, std::string("resolve: pointer '") + m->name() + "' is null");
       }
-      target.type = pointerTargetType(*m, target);
-      w.enter(target, m->name(), nullptr);
+      CDCC_TRY(w.enter(target, *m, nullptr));
+      if (!w.cur.type) {
+        w.cur.type = pointerTargetType(*m, w.cur);
+      }
       continue;
     }
     if (j + 1 >= n || ref.key[j + 1].kind == KeySegment::Kind::Member) {
@@ -349,13 +403,13 @@ Result<ResolvedPath> resolve(Context &ctx, const StableRef &ref)
       return err(StatusCode::NotFound,
                  std::string("resolve: no item with that key in '") + m->name() + "'");
     }
-    if (!item.type) {
-      item.type = m->collection().itemStruct;
+    CDCC_TRY(w.enter(item, *m, &k));
+    if (!w.cur.type) {
+      w.cur.type = m->collection().itemStruct;
     }
-    w.enter(item, m->name(), &k);
     j++;
   }
-  if (ref.type && w.cur.type != ref.type) {
+  if (ref.type && !reg.isA(w.cur.type, ref.type)) {
     return err(StatusCode::TypeMismatch, "resolve: the target is of another struct type");
   }
   return w.finish(ResolvedPath::Kind::Struct, nullptr);
@@ -389,17 +443,58 @@ PropertyDef effectiveDef(Context &ctx, const ResolvedPath &rp)
   return def;
 }
 
-StableRef addressOf(const ResolvedPath &rp, const PointerRef &target)
+/* The address a Pointer value stores for `target`: never a hop that can be reassigned
+ * (see Walk::enter). */
+Result<StableRef> addressOf(Context &ctx, const ResolvedPath &rp, const PointerRef &target)
 {
+  const ApiMember &m = *rp.member;
+  const ApiRegistry &reg = ctx.runtime().ext<ApiRegistry>();
   StableRef r;
-  r.type = target.type;
   if (!target.owner.isNull() && !(target.owner == rp.canonical.owner)) {
+    const PointerRef root = ownerRoot(ctx, reg, target.owner);
+    if (root.isNull() || root.data != target.data) {
+      return err(StatusCode::Unsupported,
+                 std::string("pointer '") + m.name() +
+                     "' targets a struct of another owner that isn't the owner's root");
+    }
     r.owner = target.owner;
+    r.type = target.type ? target.type : root.type;
     return r;
   }
-  r.owner = rp.canonical.owner;
-  r.key = rp.canonical.key;
+  if (m.pointer().address) {
+    r = m.pointer().address(rp.ptr, ctx, target);
+    if (r.owner.isNull()) {
+      return err(StatusCode::Internal,
+                 std::string("pointer '") + m.name() + "': its address callback gave no owner");
+    }
+  }
+  else if (m.pointer().set) {
+    return err(StatusCode::Unsupported,
+               std::string("pointer '") + m.name() +
+                   "' is settable and points inside its own owner: it needs an address "
+                   "callback to give its target a stable address");
+  }
+  else {
+    r.owner = rp.canonical.owner; /* a fixed sub-struct: the hop is stable */
+    r.key = rp.canonical.key;
+  }
+  r.type = pointerTargetType(m, target);
   return r;
+}
+
+/* A value member's whole value, checked against its def: a getter returning another
+ * type (or a failed foreign call's default) is an error, not an abort later. */
+Result<PropValue> readMember(Context &ctx, const ResolvedPath &rp)
+{
+  const ApiMember &m = *rp.member;
+  PropValue v = m.value().get(rp.ptr, ctx);
+  const PropValue::Type want = valueTypeFor(m.def().kind());
+  if (v.type() != want) {
+    return err(StatusCode::Internal, std::string("the getter of '") + m.name() + "' returned a " +
+                                         propValueTypeName(v.type()) + ", not a " +
+                                         propValueTypeName(want));
+  }
+  return v;
 }
 
 } // namespace
@@ -424,10 +519,17 @@ Result<PropValue> getValue(Context &ctx, const ResolvedPath &rp)
     if (target.isNull()) {
       return PropValue::nullPointer();
     }
-    target.type = pointerTargetType(m, target);
-    return PropValue::ofPointer(addressOf(rp, target));
+    Result<StableRef> addr = addressOf(ctx, rp, target);
+    if (!addr.ok()) {
+      return addr.status();
+    }
+    return PropValue::ofPointer(*addr);
   }
-  PropValue v = m.value().get(rp.ptr, ctx);
+  Result<PropValue> read = readMember(ctx, rp);
+  if (!read.ok()) {
+    return read.status();
+  }
+  const PropValue &v = *read;
   if (rp.kind == ResolvedPath::Kind::Component) {
     return PropValue::ofFloat(v.component(rp.component));
   }
@@ -459,7 +561,7 @@ Result<PropertyDef> getMeta(Context &ctx, const ResolvedPath &rp)
       return PropertyDef::intProp("length").access(PropAccess::ReadOnly);
     case ResolvedPath::Kind::EnumKey: {
       PropertyDef d = PropertyDef::boolProp(rp.enumKey.c_str());
-      if (rp.member->readOnly()) {
+      if (rp.member->readOnly() || effectiveDef(ctx, rp).hasAccess(PropAccess::ReadOnly)) {
         d.access(PropAccess::ReadOnly);
       }
       return d;
@@ -511,7 +613,11 @@ Status setPointer(Context &ctx, const ResolvedPath &rp, const PropValue &value)
   }
   if (!target.isNull()) {
     const PointerAccessor &pa = m.pointer();
-    const bool ok = pa.target ? target.type == pa.target : pa.candidates.contains(target.type);
+    const ApiRegistry &reg = ctx.runtime().ext<ApiRegistry>();
+    bool ok = pa.target && reg.isA(target.type, pa.target);
+    for (StructId c : pa.candidates) {
+      ok = ok || reg.isA(target.type, c);
+    }
     if (!ok) {
       return err(StatusCode::TypeMismatch,
                  std::string(m.name()) + ": the target is of the wrong struct type");
@@ -528,7 +634,11 @@ Status setPointer(Context &ctx, const ResolvedPath &rp, const PropValue &value)
 Result<PropValue> widen(Context &ctx, const ResolvedPath &rp, const PropValue &value)
 {
   const ApiMember &m = *rp.member;
-  PropValue whole = m.value().get(rp.ptr, ctx);
+  Result<PropValue> read = readMember(ctx, rp);
+  if (!read.ok()) {
+    return read.status();
+  }
+  const PropValue &whole = *read;
   if (rp.kind == ResolvedPath::Kind::Component) {
     std::optional<double> x = value.tryFloat();
     if (!x) {
@@ -573,7 +683,9 @@ Status setValue(Context &ctx, const ResolvedPath &rp, const PropValue &value)
     return err(StatusCode::FailedPrecondition, "setValue: the path is read-only");
   }
   const ApiMember &m = *rp.member;
-  if (m.readOnly()) {
+  /* Read-only by flag, for lack of a setter, or per instance by a dynamic hook. */
+  const PropertyDef def = effectiveDef(ctx, rp);
+  if (m.readOnly() || def.hasAccess(PropAccess::ReadOnly)) {
     return err(StatusCode::FailedPrecondition,
                std::string("setValue: '") + m.name() + "' is read-only");
   }
@@ -589,7 +701,7 @@ Status setValue(Context &ctx, const ResolvedPath &rp, const PropValue &value)
       }
       input = std::move(whole).value();
     }
-    Result<PropValue> v = coerce(effectiveDef(ctx, rp), input);
+    Result<PropValue> v = coerce(def, input);
     if (!v.ok()) {
       return v.status();
     }

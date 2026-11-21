@@ -24,10 +24,12 @@ namespace coredcc {
  *   `setValue` posts its own; C++ that mutates data directly calls `notify`.
  * - The **structural epoch** is bumped by anything that can re-route a path without
  *   writing a member on it: a collection's active item, insert, remove or reorder.
- * - A **watcher** holds a Path and its Context. At flush, a watcher whose last
- *   resolution touched a changed (owner, member), or any watcher when the epoch moved,
- *   is resolved again. Its callback runs only if the value differs (`PropValue ==`, so
- *   NaN doesn't refire). That re-resolution is what makes aliases work:
+ * - A **watcher** holds a Path and its Context. At flush, a watcher is resolved again
+ *   when its last resolution touched a changed (owner, member), when the epoch moved,
+ *   or when its Context's Library changed (a block created, deleted, restored or
+ *   detached, or a reference written). Its callback runs only if the value differs
+ *   (`PropValue ==`, so NaN doesn't refire). That re-resolution is what makes aliases
+ *   work:
  *   `objects["A"].x` and `objects.active.x` both see a change to A's x.
  * - A path that fails to resolve reads as None with the error; it fires once on the
  *   transition, and again when it resolves.

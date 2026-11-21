@@ -214,7 +214,7 @@ static void test_pointer_writes()
   Result<PropValue> cubeMesh = getValue(ctx, "objects[0].data");
   test_assert(cubeMesh.ok());
   test_assert(setValue(ctx, "objects[1].data", *cubeMesh).ok());
-  test_assert(w.lib.resolve(w.object(1).mesh) == w.meshes[0]);
+  test_assert(w.lib.resolveRef(w.object(1).mesh) == w.meshes[0]);
   test_assert(w.lib.epoch() != epoch);
   /* The wrong struct type, and a non-Pointer value. */
   Result<PropValue> anObject = getValue(ctx, "objects[0]");
@@ -223,7 +223,7 @@ static void test_pointer_writes()
               StatusCode::TypeMismatch);
   /* Null clears it. */
   test_assert(setValue(ctx, "objects[1].data", PropValue::nullPointer()).ok());
-  test_assert(!w.lib.resolve(w.object(1).mesh));
+  test_assert(!w.lib.resolveRef(w.object(1).mesh));
   /* A pointer with no setter. */
   test_assert(setValue(ctx, "tool", PropValue::nullPointer()).code() ==
               StatusCode::FailedPrecondition);
@@ -340,8 +340,116 @@ static void test_parents()
   test_assert(miss.status().suggestions().size() == 1);
 }
 
+/* Review findings for lib/api (2026-11-21). */
+static void test_owner_crossings()
+{
+  World w;
+  Context ctx = w.context();
+  /* A fixed nested struct keeps its hop; crossing into a block's non-root struct is
+   * refused rather than given a canonical path naming the wrong struct (B1). */
+  Result<StableRef> mod = canonicalize(ctx, P("objects[0].mod.strength"));
+  test_assert(mod.ok() && mod->owner == OwnerKey::ofBlock(w.objectId(0)) && mod->key.size() == 2);
+  test_assert(setValue(ctx, *resolve(ctx, *mod), PropValue::ofFloat(0.75)).ok());
+  test_assert(w.object(0).mod.strength == 0.75);
+  Result<ResolvedPath> bad = resolve(ctx, P("firstMod.strength"));
+  test_assert(bad.status().code() == StatusCode::Unsupported);
+  test_assert(hasMsg(bad.status(), "isn't the owner's root"));
+  test_assert(getValue(ctx, "firstMod").status().code() == StatusCode::Unsupported);
+
+  /* A settable pointer inside one owner reads as its target's own address (B2). */
+  Result<PropValue> old = getValue(ctx, "tool.activeBrush");
+  test_assert(old.ok());
+  const StableRef *a = old->tryPointer();
+  test_assert(a->key.size() == 2 && strcmp(a->key[1].text.c_str(), "A") == 0 && a->type == kBrush);
+  Result<PropValue> b = getValue(ctx, "tool.brushes[1]");
+  test_assert(setValue(ctx, "tool.activeBrush", *b).ok() && w.tool.activeBrush == 1);
+  test_assert(setValue(ctx, "tool.activeBrush", *old).ok() && w.tool.activeBrush == 0);
+  /* Paths through it canonicalize to the target, not the hop. */
+  Result<StableRef> size = canonicalize(ctx, P("tool.activeBrush.size"));
+  test_assert(size.ok() && size->key.size() == 3 && strcmp(size->key[1].text.c_str(), "A") == 0);
+  w.tool.activeBrush = 1;
+  test_assert(setValue(ctx, *resolve(ctx, *size), PropValue::ofFloat(4)).ok());
+  test_assert(w.tool.brushes[0].size == 4 && w.tool.brushes[1].size == 1);
+  /* Without an address, reading or walking the settable pointer is Unsupported. */
+  test_assert(getValue(ctx, "tool.activeBrushNoAddress").status().code() == StatusCode::Unsupported);
+  test_assert(getValue(ctx, "tool.activeBrushNoAddress.size").status().code() ==
+              StatusCode::Unsupported);
+}
+
+static void test_review_fixes()
+{
+  World w;
+  Context ctx = w.context();
+  /* A dynamic hook's ReadOnly blocks writes (B5). */
+  test_assert(setValue(ctx, "tool.guarded", PropValue::ofInt(1)).ok());
+  w.tool.locked = true;
+  test_assert(getMeta(ctx, "tool.guarded")->hasAccess(PropAccess::ReadOnly));
+  test_assert(setValue(ctx, "tool.guarded", PropValue::ofInt(5)).code() ==
+              StatusCode::FailedPrecondition);
+  test_assert(w.tool.guarded == 1);
+
+  /* A getter of the wrong type is an error, never an abort (B7). */
+  test_assert(getValue(ctx, "tool.broken").status().code() == StatusCode::Internal);
+  test_assert(getValue(ctx, "tool.broken[0]").status().code() == StatusCode::Internal);
+  test_assert(setValue(ctx, "tool.broken[0]", PropValue::ofFloat(1)).code() == StatusCode::Internal);
+
+  /* A base-typed pointer walks into the subtype, and its values write back (D1). */
+  test_assert(*getValue(ctx, "objects[0].anyData.radius") == PropValue::ofFloat(1));
+  Result<PropValue> anyData = getValue(ctx, "objects[0].anyData");
+  test_assert(anyData.ok() && anyData->tryPointer()->type == kMesh);
+  StableRef asBase = *anyData->tryPointer();
+  asBase.type = kIdBase;
+  test_assert(resolve(ctx, asBase).ok()); /* a Mesh is an IdBase */
+  test_assert(w.rt.ext<ApiRegistry>().isA(kMesh, kIdBase) &&
+              !w.rt.ext<ApiRegistry>().isA(kIdBase, kMesh));
+  test_assert(setValue(ctx, "objects[1].data", *anyData).ok());
+
+  /* Registry listing and the description getter (D8). */
+  ApiRegistry &reg = w.rt.ext<ApiRegistry>();
+  bool sawMesh = false;
+  for (int i = 0; i < reg.structCount(); i++) {
+    sawMesh |= reg.structAt(i).id() == kMesh;
+  }
+  test_assert(sawMesh);
+}
+
+/* keyOf must return a key (B10). */
+static void test_bad_key_of()
+{
+  Runtime rt;
+  ApiRegistry &reg = rt.ext<ApiRegistry>();
+  struct Item {
+    int v = 3;
+  } item;
+  ApiStruct it("Item");
+  it.add(PropertyDef::intProp("v"),
+         ValueAccessor{[](const PointerRef &s, Context &) {
+                         return PropValue::ofInt(static_cast<Item *>(s.data)->v);
+                       },
+                       {}});
+  test_assert(reg.add(std::move(it)).ok());
+  ApiStruct root("Root");
+  CollectionAccessor c;
+  c.length = [](const PointerRef &, Context &) { return int64_t(1); };
+  c.at = [&item](const PointerRef &, Context &, int64_t) {
+    return PointerRef{&item, StructId::of("Item"), OwnerKey()};
+  };
+  c.lookup = [](const PointerRef &, Context &, const KeySegment &) { return PointerRef(); };
+  c.keyOf = [](const PointerRef &, Context &, const PointerRef &) { return KeySegment(); };
+  root.addCollection(PropertyDef::collectionProp("bad", StructId::of("Item")), std::move(c));
+  test_assert(reg.add(std::move(root)).ok());
+  int r = 0;
+  test_assert(reg.addRuntimeOwner("root", StructId::of("Root"), [&r]() { return (void *)&r; }).ok());
+  Context ctx(&rt, nullptr, reg.runtimeOwner("root"));
+  Result<PropValue> v = getValue(ctx, "bad[0].v");
+  test_assert(v.status().code() == StatusCode::Internal && hasMsg(v.status(), "keyOf"));
+}
+
 int main()
 {
+  test_owner_crossings();
+  test_review_fixes();
+  test_bad_key_of();
   test_grammar_forms();
   test_errors();
   test_write_path();

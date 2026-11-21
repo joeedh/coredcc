@@ -181,6 +181,18 @@ const ApiMember *ApiRegistry::findMember(StructId type, std::string_view name) c
   return nullptr;
 }
 
+bool ApiRegistry::isA(StructId type, StructId base) const
+{
+  for (int depth = 0; depth < 64 && type; depth++) {
+    if (type == base) {
+      return true;
+    }
+    const ApiStruct *s = find(type);
+    type = s ? s->parentId() : StructId();
+  }
+  return false;
+}
+
 Status ApiRegistry::unknownMember(StructId type, std::string_view name) const
 {
   const ApiStruct *s = find(type);

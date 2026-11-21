@@ -50,7 +50,9 @@ CDCC_FLAG_OPERATORS(BlockFlags)
 
 /** Strength and nullability of a reference. */
 enum class RefKind : uint8_t {
-  /** Strong, with a non-null target record. */
+  /** Strong and meant to be non-null: UIs and the delete cascade treat a user whose
+   * Strong ref would break as going with its target. Not enforced at write time (a
+   * loader writes refs to blocks it hasn't read yet), so it is null while unset. */
   Strong,
   /** Strong and nullable. */
   OptStrong,

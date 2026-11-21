@@ -2,6 +2,7 @@
 
 #include "coredcc/api/resolve.h"
 #include "coredcc/base/text.h"
+#include "coredcc/lib/library.h"
 #include "coredcc/parse/path_cache.h"
 
 #include <cstring>
@@ -26,6 +27,18 @@ struct Watcher {
   PropValue last;
   Status lastStatus;
   Vector<PathTouch, 4> touched;
+  /** The Library epoch at the last read: blocks created, deleted, restored or
+   * detached, and pointer writes, re-route paths without a member change. */
+  uint64_t libEpoch = 0;
+};
+
+/* One read of a watcher's path, into locals: getters run user code that may add
+ * watchers and reallocate the list. */
+struct Reading {
+  PropValue value;
+  Status status;
+  Vector<PathTouch, 4> touched;
+  uint64_t libEpoch = 0;
 };
 
 bool hits(const Vector<PathTouch, 4> &touched, const Vector<Change> &changes)
@@ -42,21 +55,39 @@ bool hits(const Vector<PathTouch, 4> &touched, const Vector<Change> &changes)
   return false;
 }
 
-/* Reads the watcher's value now, recording what the resolution touched. A failure
- * keeps the touches up to the failing segment, so a fix along them refires. */
-void read(Watcher &w)
+uint64_t libraryEpoch(const Context &ctx)
 {
-  Result<ResolvedPath> rp = resolve(*w.ctx, w.path);
+  return ctx.library() ? ctx.library()->epoch() : 0;
+}
+
+/* Reads a path now. A failure records no touches: a failing watcher is re-read at
+ * every flush that has changes. */
+Reading read(Context &ctx, const Path &path)
+{
+  Reading r;
+  r.libEpoch = libraryEpoch(ctx);
+  Result<ResolvedPath> rp = resolve(ctx, path);
   if (!rp.ok()) {
-    w.last = PropValue();
-    w.lastStatus = rp.status();
-    w.touched.clear();
-    return;
+    r.status = rp.status();
+    return r;
   }
-  Result<PropValue> v = getValue(*w.ctx, *rp);
-  w.touched = std::move(rp->touched);
-  w.last = v.ok() ? *v : PropValue();
-  w.lastStatus = v.ok() ? Status() : v.status();
+  Result<PropValue> v = getValue(ctx, *rp);
+  r.touched = std::move(rp->touched);
+  if (v.ok()) {
+    r.value = *v;
+  }
+  else {
+    r.status = v.status();
+  }
+  return r;
+}
+
+void store(Watcher &w, Reading r)
+{
+  w.last = std::move(r.value);
+  w.lastStatus = std::move(r.status);
+  w.touched = std::move(r.touched);
+  w.libEpoch = r.libEpoch;
 }
 
 } // namespace
@@ -142,7 +173,7 @@ Result<ScopedConnection> ChangeBus::watch(Context &ctx, const Path &path, WatchF
   w.ctx = &ctx;
   w.path = path;
   w.fn = std::make_shared<WatchFn>(std::move(fn));
-  read(w);
+  store(w, read(ctx, path));
   const uint64_t id = w.id;
   state_->watchers.append(std::move(w));
   return ScopedConnection(Connection(state_, id));
@@ -174,9 +205,6 @@ int ChangeBus::flush()
   st->pending.clear();
   const bool epochMoved = st->epoch != st->flushedEpoch;
   st->flushedEpoch = st->epoch;
-  if (changes.size() == 0 && !epochMoved) {
-    return 0;
-  }
   st->flushDepth++;
   int fired = 0;
   /* Watchers added by callbacks are past `n` and wait for the next flush. Index, don't
@@ -186,14 +214,20 @@ int ChangeBus::flush()
     if (!st->watchers[i].live) {
       continue;
     }
-    if (!epochMoved && !hits(st->watchers[i].touched, changes) &&
-        st->watchers[i].lastStatus.ok())
     {
-      continue;
+      const Watcher &w = st->watchers[i];
+      const bool libMoved = libraryEpoch(*w.ctx) != w.libEpoch;
+      const bool failing = !w.lastStatus.ok() && changes.size() > 0;
+      if (!epochMoved && !libMoved && !failing && !hits(w.touched, changes)) {
+        continue;
+      }
     }
     const PropValue before = st->watchers[i].last;
     const bool wasOk = st->watchers[i].lastStatus.ok();
-    read(st->watchers[i]);
+    Context *ctx = st->watchers[i].ctx;
+    const Path path = st->watchers[i].path;
+    Reading now = read(*ctx, path);
+    store(st->watchers[i], std::move(now));
     const Watcher &w = st->watchers[i];
     if (w.last == before && w.lastStatus.ok() == wasOk) {
       continue;

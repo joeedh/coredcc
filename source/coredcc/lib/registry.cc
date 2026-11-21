@@ -39,6 +39,7 @@ Result<ClientId> ClientRegistry::registerClient(std::string_view name,
       return a.status();
     }
     aliases_.add_overwrite(a->value, id->value);
+    generation_++;
   }
   if (!clients_.contains(*id)) {
     clients_.append(*id);

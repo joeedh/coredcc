@@ -37,9 +37,18 @@ struct PointerAccessor {
   /** The target struct when it is static. */
   StructId target;
   /** Otherwise the struct of a given target, from `candidates` (declared so paths
-   * through it can be checked statically). */
+   * through it can be checked statically). Subtypes of either are accepted. */
   litestl::util::function<StructId(const PointerRef &target)> refine;
   litestl::util::Vector<StructId, 1> candidates;
+  /**
+   * The target's own address, for a settable pointer whose targets live inside the same
+   * owner (`activeBrush` into `brushes`). Without it, a Pointer value or a canonical
+   * path through the pointer could only say "whatever this points at now", which undo
+   * can't use, so reading or walking such a pointer is Unsupported. Pointers into
+   * another owner don't need it: they must return that owner's root struct.
+   */
+  litestl::util::function<StableRef(const PointerRef &self, Context &ctx, const PointerRef &target)>
+      address;
 };
 
 /** A Collection member. `keyOf` is mandatory: undo stores items by key. */
@@ -174,6 +183,10 @@ class ApiStruct {
   {
     return uiName_;
   }
+  const litestl::util::string &descriptionText() const
+  {
+    return description_;
+  }
   StructId parentId() const
   {
     return parent_;
@@ -221,6 +234,17 @@ class ApiRegistry {
    */
   Result<const ApiStruct *> add(ApiStruct st);
   const ApiStruct *find(StructId id) const;
+  /** Registered structs, in registration order (for listings and static checks). */
+  int structCount() const
+  {
+    return int(structs_.size());
+  }
+  const ApiStruct &structAt(int i) const
+  {
+    return *structs_[i];
+  }
+  /** `type` is `base` or has it among its parents. */
+  bool isA(StructId type, StructId base) const;
   /** A member of `type` or of its parents. */
   const ApiMember *findMember(StructId type, std::string_view name) const;
   /** A NotFound Status for `name` in `type`, with suggestions from every member. */
