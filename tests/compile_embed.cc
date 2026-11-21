@@ -9,6 +9,10 @@
 #undef TEXT
 #define TEXT(x) L##x
 
+#include "coredcc/api/change_bus.h"
+#include "coredcc/api/context.h"
+#include "coredcc/api/resolve.h"
+#include "coredcc/api/struct.h"
 #include "coredcc/base/assert.h"
 #include "coredcc/base/block_id.h"
 #include "coredcc/base/flags.h"
@@ -88,6 +92,9 @@ int main()
     coredcc::HandlePool<int> pool;
     coredcc::Signal<int> signal;
     coredcc::Library lib(&rt);
+    coredcc::Context ctx(&rt, &lib, coredcc::PointerRef());
+    test_assert(!coredcc::getValue(ctx, "x").ok());
+    test_assert(rt.ext<coredcc::ChangeBus>().flush() == 0);
     test_assert(rt.ext<coredcc::PathCache>().get("a.b[\"c\"]").ok());
     test_assert(coredcc::coerce(coredcc::PropertyDef::floatProp("f").range(0, 1),
                                 coredcc::PropValue::ofFloat(2))

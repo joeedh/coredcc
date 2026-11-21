@@ -13,8 +13,10 @@ coredcc_test(test_parse_path SOURCES parse/test_path.cc DEPS coredcc_parse)
 coredcc_test(test_parse_invocation SOURCES parse/test_invocation.cc DEPS coredcc_parse)
 coredcc_test(test_parse_fuzz SOURCES parse/test_fuzz.cc DEPS coredcc_parse)
 coredcc_test(test_lib_library SOURCES lib/test_library.cc DEPS coredcc_lib)
+coredcc_test(test_api_resolve SOURCES api/test_resolve.cc DEPS coredcc_api)
+coredcc_test(test_api_change_bus SOURCES api/test_change_bus.cc DEPS coredcc_api)
 if(WIN32)
-  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_lib coredcc_props coredcc_parse)
+  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_api)
 endif()
 
 # Compile-fail tests. Each also builds the same file without the define, which must succeed.

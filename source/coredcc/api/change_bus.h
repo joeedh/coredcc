@@ -1,0 +1,70 @@
+#pragma once
+
+/** \file
+ * ChangeBus: change notifications for datapath watchers (architecture §5, "ChangeBus").
+ */
+
+#include "coredcc/api/context.h"
+#include "coredcc/base/signal.h"
+#include "coredcc/parse/path.h"
+#include "coredcc/props/value.h"
+
+#include "litestl/util/function.h"
+#include "litestl/util/vector.h"
+
+#include <memory>
+#include <string_view>
+
+namespace coredcc {
+
+/**
+ * Collects changes and tells watchers about them at `flush()`.
+ *
+ * - A **change** is `(owner, member)`; an empty member means "anything in owner".
+ *   `setValue` posts its own; C++ that mutates data directly calls `notify`.
+ * - The **structural epoch** is bumped by anything that can re-route a path without
+ *   writing a member on it: a collection's active item, insert, remove or reorder.
+ * - A **watcher** holds a Path and its Context. At flush, a watcher whose last
+ *   resolution touched a changed (owner, member), or any watcher when the epoch moved,
+ *   is resolved again. Its callback runs only if the value differs (`PropValue ==`, so
+ *   NaN doesn't refire). That re-resolution is what makes aliases work:
+ *   `objects["A"].x` and `objects.active.x` both see a change to A's x.
+ * - A path that fails to resolve reads as None with the error; it fires once on the
+ *   transition, and again when it resolves.
+ *
+ * Callbacks may watch, unwatch and notify. Changes posted during a flush are delivered
+ * by the next one.
+ */
+class ChangeBus {
+ public:
+  static constexpr const char *kExtName = "coredcc.ChangeBus";
+  using WatchFn = litestl::util::function<void(const PropValue &value, const Status &status)>;
+
+  explicit ChangeBus(Runtime *rt);
+  ~ChangeBus();
+  ChangeBus(const ChangeBus &) = delete;
+  ChangeBus &operator=(const ChangeBus &) = delete;
+
+  void notify(const OwnerKey &owner, std::string_view member = {});
+  void bumpEpoch();
+  uint64_t epoch() const;
+  /** Changes waiting for the next flush. */
+  int pendingCount() const;
+
+  /** Watches `path` from `ctx`, which must outlive the watcher. The current value is
+   * read now and does not fire. */
+  Result<ScopedConnection> watch(Context &ctx, const Path &path, WatchFn fn);
+  Result<ScopedConnection> watch(Context &ctx, std::string_view path, WatchFn fn);
+  int watcherCount() const;
+
+  /** Delivers pending changes; returns how many callbacks ran. */
+  int flush();
+
+  Status validate() const;
+
+ private:
+  struct State;
+  std::shared_ptr<State> state_;
+};
+
+} // namespace coredcc

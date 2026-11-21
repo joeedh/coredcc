@@ -472,6 +472,48 @@ Where the code differs from the plan above:
   `RefCell` (its target), `RefVisitor` and `QueryAnswer`. `Datablock` is bound without
   members for now.
 
+### P1d (2026-11-21)
+- **`PointerRef::owner` is an `OwnerKey`**, set by whichever accessor crosses into
+  another block or runtime owner. A nested struct inside the same owner leaves it
+  null, and its members keep the key path from that owner.
+- **`Context`** holds the Runtime, an optional Library, the root `PointerRef`, a path
+  prefix and a slot for the P1e executor.
+  - The UndoHistory comes with P1e.
+  - The ToolManager and scene come with P3.
+- **Runtime owners** register by name in `ApiRegistry` (`addRuntimeOwner`). The id is
+  `TypeId::of("owner:<name>")`, so a hash collision with another name is caught by the
+  Runtime's id registry. This resolves review item D9.
+- **The Context-aware dynamic hook** is `ApiMember::dynamic(def, self, ctx)`. It runs
+  after any props-level hook, and `getMeta`, `setValue` and `coerce` all see the
+  result. This resolves review item D3.
+- **Collection pseudo-members:**
+  - `length` and `active` are reserved member names, checked at registration.
+  - `.length` reads as a read-only Int.
+  - Any other name after a collection is NotFound, with those two offered as
+    suggestions.
+- **Component and enum-key paths:**
+  - They read as a Float or a Bool.
+  - A write reads the whole member, changes one part, and goes through `coerce` and
+    the full write path.
+  - An enum key can be set but not cleared; a flag key can be both.
+- **Pointer writes** take a Pointer value and resolve it to its target. The target's
+  struct must match the member's target or one of its candidates. The write calls
+  `Library::noteRefsChanged`, which bumps the library's reference epoch.
+- **ChangeBus:**
+  - Changes are `(owner, member name)`. An empty name means the whole owner. The
+    `index` part of the spec isn't used yet, because the value diff makes it
+    unnecessary.
+  - A watcher stores its `Context *`, and the Context must outlive it.
+  - Only watchers whose last resolution touched a changed member are re-read, unless
+    the structural epoch moved.
+  - A watcher whose path currently fails is re-read at every flush that has changes.
+  - Changes posted during a flush wait for the next one.
+- **Deferred:**
+  - `fromBinding<T>()` moves to P1f, where `bind/` reads litestl descriptors.
+  - `getMeta` still returns a copy of the def (review item D1).
+  - Display units and the subtype/unit agreement check (D12) move to P3, where
+    scene settings exist.
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.

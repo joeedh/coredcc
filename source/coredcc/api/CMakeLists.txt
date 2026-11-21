@@ -1,0 +1,10 @@
+coredcc_library(coredcc_api
+  SOURCES
+    change_bus.cc
+    resolve.cc
+    struct.cc
+  DEPS
+    coredcc_lib
+    coredcc_props
+    coredcc_parse
+)
