@@ -125,6 +125,15 @@ bool parseScalar(Lexer &lx, RawScalar &out, Failure &fail)
     out.text = toLs(ident);
     return true;
   }
+  /* A signed identifier, for -inf: the sign stays part of the text. */
+  const char next = lx.peek(1);
+  if ((c == '-' || c == '+') && parse_detail::isIdentStart(next)) {
+    lx.eat(c);
+    lx.identifier(ident);
+    out.kind = RawScalar::Kind::Identifier;
+    out.text = toLs(std::string(1, c) + std::string(ident));
+    return true;
+  }
   if (parse_detail::isDigit(c) || c == '-' || c == '+' || c == '.') {
     std::string num;
     if (!lx.number(num, out.isInteger, fail)) {

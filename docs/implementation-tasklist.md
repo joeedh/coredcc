@@ -15,7 +15,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | in progress (TA0 done) | — |
 | 3 | [P0 scaffold and interface system](plans/2026-11-19-p0-scaffold-interfaces.md) | P0 | 1, 4 | reviewed | [interfaces](reports/feature-report-interfaces-2026-11-20.md) |
 | 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | done (litestl #4 B, #5 A, #6 C1 merged; C2 moves to P1f) | — |
-| 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | in progress (P1a-P1d reviewed; P1e done) | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); commands and undo |
+| 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | in progress (P1a-P1e reviewed; P1f steps 1-2 done) | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md) |
 | 6 | P2 layout and library IO | P2 | 5 | todo | layout |
 | 7 | P3 objects, transforms and BVH | P3 | 5 | todo | objects and transforms; BVH |
 | 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | todo | tools and overlay |
@@ -79,7 +79,10 @@ Set up before the first worktree, following sculptcore and faberforge:
   - P1c (lib) and P1d (api: resolver, canonical paths, ChangeBus) are done and
     reviewed together: `docs/reports/feature-report-lib-api-2026-11-21.md`.
   - P1e (command: executor, LinearHistory, undoable sets, LastUsed, block commands) is
-    done; its review comes with P1f.
-  - Next: P1f (WASM toolchain, bind/ facades, the TS spike, TA1). It picks up the
-    binding-surface items from both reviews.
+    done and reviewed: `docs/reports/feature-report-command-2026-11-21.md`.
+  - P1f steps 1-2 (Emscripten toolchain, wasm-st/wasm-mt presets, the suite under
+    node) are done.
+  - Next: P1f step 3, C2 (the litestl foreign-dispatch PR), then `bind/`, the spike
+    and TA1. They pick up the binding-surface items from all three reviews.
+  - Open litestl PR: #8 (tests exit instead of opening a crash dialog on Windows).
 - Test app TA0 is done (6 tests pass): `cd apps/testapp && pnpm install && pnpm test`.

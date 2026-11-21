@@ -204,9 +204,13 @@ class CommandRegistry {
   /**
    * Registers `def` after checking it: a unique id, valid and uniquely named inputs and
    * outputs, a factory, and an implementation registered for Command. An Interactive
-   * def whose implementation has no `redo` slot is rejected.
+   * def whose implementation has no `redo` slot is rejected, and so is one with only
+   * one of `foldKey` and `foldFrom`.
    */
   Result<const CommandDef *> add(CommandDef def);
+  /** add's checks on the def alone (id, bags), without its implementation: for callers
+   * that register the implementation first and must not leave it behind on failure. */
+  Status checkDef(const CommandDef &def) const;
   const CommandDef *find(CommandId id) const;
   const CommandDef *find(std::string_view id) const;
   /** NotFound for `id`, with suggestions. */
@@ -243,6 +247,10 @@ namespace coredcc {
 template <class Impl> Result<const CommandDef *> addNativeCommand(Runtime &rt, CommandDef def)
 {
   const std::string impl = std::string(def.name().c_str()) + "#impl";
+  /* Check first: a failed add after registerImpl would leave the impl name taken. */
+  if (Status s = rt.ext<CommandRegistry>().checkDef(def); !s.ok()) {
+    return s;
+  }
   if (Status s = registerImpl<Command, Impl>(rt, impl); !s.ok()) {
     return s;
   }

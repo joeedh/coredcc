@@ -154,6 +154,7 @@ std::string LastUsedStore::serialize() const
 
 Status LastUsedStore::load(std::string_view text)
 {
+  Status first; /* the first bad line; the rest still load */
   int line = 0;
   size_t pos = 0;
   while (pos < text.size()) {
@@ -172,10 +173,13 @@ Status LastUsedStore::load(std::string_view text)
     }
     Result<Invocation> inv = parseInvocation(ln);
     if (!inv.ok()) {
-      return Status::error(StatusCode::InvalidArgument,
-                           ("LastUsed line " + std::to_string(line) + ": " +
-                            inv.status().message())
-                               .c_str());
+      if (first.ok()) {
+        first = Status::error(StatusCode::InvalidArgument,
+                              ("LastUsed line " + std::to_string(line) + ": " +
+                               inv.status().message())
+                                  .c_str());
+      }
+      continue;
     }
     const CommandDef *def = rt_.ext<CommandRegistry>().find(inv->command.c_str());
     if (!def) {
@@ -192,7 +196,7 @@ Status LastUsedStore::load(std::string_view text)
       }
     }
   }
-  return Status();
+  return first;
 }
 
 /* ---- datapath ---- */

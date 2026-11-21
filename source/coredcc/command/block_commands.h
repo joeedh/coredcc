@@ -12,23 +12,22 @@
 namespace coredcc {
 
 /**
- * The blocks deleting `target` takes with it: users whose non-null `Ref` (RefKind::Strong)
- * to a deleted block would break, transitively. `target` comes first. Nullable refs
- * aren't followed: they resolve to null while their target is deleted.
+ * The blocks deleting `target` takes with it: Live users whose non-null `Ref`
+ * (RefKind::Strong) to a deleted block would break, transitively, comparing canonical
+ * ids. `target` comes first. Nullable refs aren't followed: they resolve to null while
+ * their target is deleted.
  */
 litestl::util::Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target);
 
 /**
  * Blocks a command created, for its undo: undo moves them to the history, redo brings
  * them back with their ids, and a discard while undone destroys them. Call `add` from
- * exec after each create.
+ * exec after each create. Each block is pinned until the discard (a history pin, §8a),
+ * so a purge can't free a block that redo would bring back.
  */
 class CreatedBlocks {
  public:
-  void add(BlockHandle h)
-  {
-    blocks_.append(h);
-  }
+  void add(Library &lib, BlockHandle h);
   int size() const
   {
     return int(blocks_.size());

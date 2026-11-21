@@ -566,6 +566,26 @@ Where the code differs from the plan above:
   - `commandDefaults["id"].input` is registered on demand, as one ApiStruct per command
     (`CommandDefaults:<id>`), with the NoUndo flag.
 
+### P1e review corrections (2026-11-21)
+`docs/reports/feature-report-command-2026-11-21.md` has the details.
+- **Reentrancy:** only `exec` may call back into the executor, and only through
+  `runSub`. Every other slot call is counted, and nested executor calls are refused.
+- **Input bags** are conformed to the def (`def.newInputs()` plus the caller's set
+  values); a mismatch is InvalidArgument.
+- **Sticky errors** are collected after every slot call. A stray one fails the next
+  top-level call, naming it.
+- **History pins (§8a)** now exist: SetProperty pins Pointer targets, and
+  `CreatedBlocks::add(lib, h)` pins created blocks, until the discard.
+- **Deviation:** `core.setProperty` keeps its path and value in the impl, not in def
+  inputs. rerunHead refuses runInstance records and Interactive ones.
+- **Deviation:** rerunHead is on the executor (it works with any UndoHistory), and
+  `tryFold` is part of `push`. A failed re-run redoes the old record and puts it back.
+- **Deviation:** CreatedBlocks holds handles until P2 makes them `BlockId`s.
+- **Executor binding:** a Context is bound to the executor only for the length of
+  each call. `invoke` and `setValueUndo` need `ctx.setExecutor`.
+- **Deferred:** scripting interactive commands (P3); host-adapter hooks (P6);
+  snapshot undo (P2); registry removal and the binding surface (P1f).
+
 ### P1f, steps 1-2: toolchain and the native suite under node (2026-11-21)
 - **`tools/install-emsdk.mjs`** installs the pin from `tools/emsdk.json` into
   `build/deps/emsdk`. `--adopt DIR` moves in an existing checkout (after checking its

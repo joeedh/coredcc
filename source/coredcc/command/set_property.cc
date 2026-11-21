@@ -2,6 +2,7 @@
 
 #include "coredcc/api/resolve.h"
 #include "coredcc/command/executor.h"
+#include "coredcc/lib/library.h"
 #include "coredcc/parse/path.h"
 #include "coredcc/parse/path_cache.h"
 
@@ -14,7 +15,8 @@ namespace lbt = litestl::binding::types;
 namespace {
 
 /* The command behind setValueUndo. exec writes through the path as given (so component
- * and enum-key writes work); undo and redo write the whole member by canonical ref. */
+ * and enum-key writes work); undo and redo write the whole member by canonical ref.
+ * Pointer values pin their target blocks (history pins, §8a) until the discard. */
 struct SetProperty {
   Path path;
   PropValue input;
@@ -22,6 +24,23 @@ struct SetProperty {
   StableRef ref;
   PropValue oldValue;
   PropValue newValue;
+  Library *lib = nullptr;
+  litestl::util::Vector<BlockHandle> pins;
+
+  void pinTarget(Context &ctx, const PropValue &v)
+  {
+    const StableRef *r = v.tryPointer();
+    Library *l = ctx.library();
+    if (!r || !l || r->owner.kind != OwnerKey::Kind::Block) {
+      return;
+    }
+    const BlockHandle h = l->find(r->owner.block);
+    if (l->get(h)) {
+      l->pin(h);
+      lib = l;
+      pins.append(h);
+    }
+  }
 
   Status canRun(Context &) const
   {
@@ -45,6 +64,8 @@ struct SetProperty {
       return now.status();
     }
     newValue = *now;
+    pinTarget(ctx, oldValue);
+    pinTarget(ctx, newValue);
     return Status();
   }
   void undo(Context &ctx)
@@ -57,9 +78,21 @@ struct SetProperty {
   }
   uint64_t memSize() const
   {
-    return sizeof(*this) + uint64_t(ref.key.size()) * 32;
+    uint64_t n = sizeof(*this) + uint64_t(ref.key.size()) * 32 + uint64_t(pins.size()) * 8;
+    for (const PropValue *v : {&oldValue, &newValue}) {
+      if (v->type() == PropValue::Type::String) {
+        n += uint64_t(v->asString().size());
+      }
+    }
+    return n;
   }
-  void discard() {}
+  void discard()
+  {
+    for (BlockHandle h : pins) {
+      lib->unpin(h);
+    }
+    pins.clear();
+  }
   uint64_t foldKey() const
   {
     if (gesture == 0) {
@@ -75,6 +108,13 @@ struct SetProperty {
       return false;
     }
     newValue = n->newValue;
+    for (BlockHandle h : n->pins) {
+      pins.append(h); /* n's discard then unpins nothing */
+    }
+    n->pins.clear();
+    if (!lib) {
+      lib = n->lib;
+    }
     return true;
   }
 
@@ -157,8 +197,11 @@ Status setValueUndo(Context &ctx, const Path &path, const PropValue &value, uint
   if (!cmd.ok()) {
     return cmd.status();
   }
-  Result<PropertyBag> out =
-      ex->runInstance(ctx, **def, std::move(cmd).value(), (*def)->newInputs());
+  /* Inside a command's exec it is one of that command's sub-commands. */
+  Result<PropertyBag> out = ex->running()
+                                ? ex->runSub(ctx, std::move(cmd).value(), **def)
+                                : ex->runInstance(ctx, **def, std::move(cmd).value(),
+                                                  (*def)->newInputs());
   return out.ok() ? Status() : out.status();
 }
 

@@ -45,8 +45,8 @@ class LastUsedStore {
   void clear();
 
   std::string serialize() const;
-  /** Merges `text` in. A malformed line is InvalidArgument naming the line; the lines
-   * before it stay loaded. */
+  /** Merges `text` in. A malformed line is skipped and the rest still load; the first
+   * one is returned as InvalidArgument naming its line. */
   Status load(std::string_view text);
 
   /** Adds the `commandDefaults` collection (keyed by command id) to `root`. */

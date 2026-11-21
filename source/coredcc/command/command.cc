@@ -112,24 +112,31 @@ Status checkBag(const std::string &cmd,
 
 } // namespace
 
+Status CommandRegistry::checkDef(const CommandDef &def) const
+{
+  const std::string name = def.name().c_str();
+  if (name.empty()) {
+    return Status::error(StatusCode::InvalidArgument, "command '': an empty id");
+  }
+  if (find(name)) {
+    return Status::error(StatusCode::AlreadyExists,
+                         ("command '" + name + "': already registered").c_str());
+  }
+  CDCC_TRY(checkBag(name, "input", def, true));
+  return checkBag(name, "output", def, false);
+}
+
 Result<const CommandDef *> CommandRegistry::add(CommandDef def)
 {
   const std::string name = def.name().c_str();
   auto fail = [&name](StatusCode code, const std::string &why) {
     return Status::error(code, ("command '" + name + "': " + why).c_str());
   };
-  if (name.empty()) {
-    return fail(StatusCode::InvalidArgument, "an empty id");
-  }
+  CDCC_TRY(checkDef(def));
   Result<CommandId> id = rt_.registerId<IdDomain::Command>(name);
   if (!id.ok()) {
     return id.status();
   }
-  if (byId_.lookup_ptr(id->value)) {
-    return fail(StatusCode::AlreadyExists, "already registered");
-  }
-  CDCC_TRY(checkBag(name, "input", def, true));
-  CDCC_TRY(checkBag(name, "output", def, false));
   if (!def.hasImpl()) {
     return fail(StatusCode::InvalidArgument, "no implementation (CommandDef::impl)");
   }
@@ -144,6 +151,11 @@ Result<const CommandDef *> CommandRegistry::add(CommandDef def)
       return fail(StatusCode::InvalidArgument,
                   "an Interactive command needs a redo slot (exec can't replay a drag)");
     }
+  }
+  const bool hasKey = table->hasSlot(detail::slotOf<Command>("foldKey").index);
+  if (hasKey != table->hasSlot(detail::slotOf<Command>("foldFrom").index)) {
+    return fail(StatusCode::InvalidArgument,
+                "foldKey and foldFrom come together: implement both or neither");
   }
   CommandDef *stored = litestl::alloc::New<CommandDef>("coredcc::CommandDef", std::move(def));
   defs_.append(stored);

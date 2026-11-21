@@ -18,15 +18,18 @@ Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target)
     return out;
   }
   out.append(target);
+  const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
   for (int i = 0; i < int(out.size()); i++) {
     const BlockId gone = lib.get(out[i])->id();
     for (BlockHandle user : lib.usersOf(out[i])) {
-      if (out.contains(user)) {
+      /* Only Live users can be deleted with it; InHistory ones are already gone, and
+       * Detached ones belong to the host (destroyFromHistory guards their refs). */
+      if (out.contains(user) || lib.get(user)->state() != BlockState::Live) {
         continue;
       }
       bool breaks = false;
       lib.foreachRef(user, [&](RefCell &cell) {
-           breaks |= cell.kind == RefKind::Strong && cell.target == gone;
+           breaks |= cell.kind == RefKind::Strong && clients.canonical(cell.target) == gone;
          })
           .ignore(); /* a provider failure is sticky; the preview stays partial */
       if (breaks) {
@@ -38,6 +41,24 @@ Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target)
 }
 
 /* ---- CreatedBlocks ---- */
+
+namespace {
+
+/* A failure while leaving the history has no caller to return to. */
+void reportDestroy(Library &lib, Status s)
+{
+  if (!s.ok() && s.code() != StatusCode::NotFound) {
+    lib.runtime().setStickyError(std::move(s));
+  }
+}
+
+} // namespace
+
+void CreatedBlocks::add(Library &lib, BlockHandle h)
+{
+  lib.pin(h);
+  blocks_.append(h);
+}
 
 void CreatedBlocks::undo(Library &lib)
 {
@@ -52,8 +73,13 @@ void CreatedBlocks::undo(Library &lib)
 
 Status CreatedBlocks::redo(Library &lib)
 {
-  for (BlockHandle h : blocks_) {
-    CDCC_TRY(lib.restoreFromHistory(h));
+  for (int i = 0; i < int(blocks_.size()); i++) {
+    if (Status s = lib.restoreFromHistory(blocks_[i]); !s.ok()) {
+      for (int j = i - 1; j >= 0; j--) {
+        lib.markDeleted(blocks_[j]).ignore(); /* back to undone */
+      }
+      return s;
+    }
   }
   undone_ = false;
   return Status();
@@ -61,9 +87,12 @@ Status CreatedBlocks::redo(Library &lib)
 
 void CreatedBlocks::discard(Library &lib)
 {
+  for (BlockHandle h : blocks_) {
+    lib.unpin(h);
+  }
   if (undone_) {
     for (BlockHandle h : blocks_) {
-      lib.destroyFromHistory(h).ignore(); /* already gone is fine */
+      reportDestroy(lib, lib.destroyFromHistory(h)); /* already gone is fine */
     }
   }
   blocks_.clear();
@@ -132,10 +161,41 @@ struct DeleteBlock {
     }
     applied = false;
   }
-  Status redo(Context &)
+  /* The graph may have changed since exec: a new Strong user must go too (cascade) or
+   * the redo fails, rather than leaving its ref dangling. */
+  Status redo(Context &ctx)
   {
-    for (BlockHandle h : deleted) {
-      CDCC_TRY(lib->markDeleted(h));
+    Vector<BlockHandle> preview = deletePreview(*lib, deleted[0]);
+    Vector<BlockHandle> extra;
+    for (BlockHandle h : preview) {
+      if (!deleted.contains(h)) {
+        extra.append(h);
+      }
+    }
+    if (extra.size() > 0 && !ctx.inputs()->get("cascade")->asBool()) {
+      return Status::error(StatusCode::FailedPrecondition,
+                           ("redo: deleting it would now also delete '" +
+                            std::string(lib->get(extra[0])->name().c_str()) + "'")
+                               .c_str());
+    }
+    Vector<BlockHandle> did;
+    Status s;
+    for (const Vector<BlockHandle> *list : {&deleted, &extra}) {
+      for (int i = 0; i < int(list->size()) && s.ok(); i++) {
+        s = lib->markDeleted((*list)[i]);
+        if (s.ok()) {
+          did.append((*list)[i]);
+        }
+      }
+    }
+    if (!s.ok()) {
+      for (int i = int(did.size()) - 1; i >= 0; i--) {
+        lib->restoreFromHistory(did[i]).ignore();
+      }
+      return s;
+    }
+    for (BlockHandle h : extra) {
+      deleted.append(h);
     }
     applied = true;
     return Status();
@@ -148,7 +208,7 @@ struct DeleteBlock {
   {
     if (applied) {
       for (BlockHandle h : deleted) {
-        lib->destroyFromHistory(h).ignore();
+        reportDestroy(*lib, lib->destroyFromHistory(h));
       }
     }
     deleted.clear();

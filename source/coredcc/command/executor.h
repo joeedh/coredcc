@@ -19,6 +19,10 @@ class LastUsedStore;
  * One run of a command: the instance, its bags, and the sub-commands its exec ran
  * (undone in reverse before its own undo). Owned by the executor while running, then by
  * the history.
+ *
+ * Because the sub-commands are undone first, a command whose own work depends on a
+ * sub-command's result (it sets a property on a block a sub-command created) should do
+ * that work in a sub-command too.
  */
 class CommandRecord {
  public:
@@ -58,20 +62,33 @@ class CommandRecord {
   /** Sub-commands in reverse, then the command. */
   void undo(Context &ctx);
   /** The `redo` slot after redoing the sub-commands in order; without one, the
-   * sub-commands are dropped and `exec` runs again (it makes new ones). */
+   * sub-commands are dropped and `exec` runs again (it makes new ones). A failure undoes
+   * what this redo applied before returning. */
   Status redo(Context &ctx);
   /** Undoes and drops the sub-commands only (a failed exec). */
   void rollBackSubs(Context &ctx);
   /** Tells the command and its sub-commands they leave the history. */
   void discard();
+  /** Whether the def's factory made the command (so the inputs alone can re-run it),
+   * rather than runInstance. */
+  bool fromFactory() const
+  {
+    return fromFactory_;
+  }
+  /** After a fold: the head shows the folded run's inputs and outputs. */
+  void adoptBags(CommandRecord &from);
 
  private:
   friend class CommandExecutor;
+  friend class LinearHistory;
   const CommandDef *def_;
   Owned<Command> cmd_;
   PropertyBag inputs_;
   PropertyBag outputs_;
   litestl::util::Vector<CommandRecord *> subs_;
+  bool fromFactory_ = false;
+  /** memSize() when the history took it, for the budget's running total. */
+  uint64_t cachedSize_ = 0;
 };
 
 struct RecordDeleter {
@@ -82,6 +99,9 @@ using RecordPtr = std::unique_ptr<CommandRecord, RecordDeleter>;
 /**
  * Where finished top-level commands go. Native hosts with their own undo (Unreal,
  * Maya) implement this as an adaptor; LinearHistory is the built-in one.
+ *
+ * Records call `discard` without a Context, so commands that need the Library keep a
+ * pointer to it: destroy (or clear) the history before the Library.
  */
 class UndoHistory {
  public:
@@ -105,11 +125,14 @@ class UndoHistory {
 /**
  * A cursor over a list of commands.
  * - Pushing truncates the redo side, discarding it.
- * - A push folds into the head only when the head is at the cursor and nothing has been
- *   undone or redone since it was pushed.
+ * - A push folds into the head only when the head is at the cursor, nothing has been
+ *   undone or redone since it was pushed, and neither record has sub-commands.
  * - Past the memory budget the oldest commands are discarded; the newest always stays.
+ *   Each record's memSize is read once, when it is pushed (or folded into).
  * - Barriers stop undo.
- * - A failed redo drops that command and everything after it.
+ * - A failed redo has undone its own partial work; that command and everything after it
+ *   are dropped.
+ * - Not reentrant: a slot that calls back into the history is refused (Busy) or aborts.
  */
 class LinearHistory final : public UndoHistory {
  public:
@@ -145,9 +168,12 @@ class LinearHistory final : public UndoHistory {
  private:
   void truncateRedo();
   void enforceBudget();
+  void drop(CommandRecord *r);
 
   litestl::util::Vector<CommandRecord *> entries_;
   int cursor_ = 0;
+  uint64_t used_ = 0;
+  bool inCall_ = false;
   /** Undo stops here (a barrier). */
   int floor_ = 0;
   bool headFoldable_ = false;
@@ -158,11 +184,23 @@ class LinearHistory final : public UndoHistory {
  * Runs commands: canRun, exec with sub-command grouping, LastUsed values, and the hand
  * off to an UndoHistory (none: nothing is undoable).
  *
+ * - Input bags are checked against the def: a run gets `def.newInputs()` with the
+ *   caller's set values copied in. Unknown names and values that don't coerce are
+ *   InvalidArgument.
  * - A failed exec, or a sticky error left by it, undoes its sub-commands in reverse and
  *   returns the error. Nothing reaches the history.
+ * - Every instance the executor makes or takes is discarded exactly once, including
+ *   one whose canRun refused.
+ * - Sticky errors are collected after every slot call the executor makes and returned
+ *   from that call. One pending before a top-level call came from outside the executor:
+ *   the call takes it and fails with FailedPrecondition, naming it.
  * - While an interactive command is open, run is Busy, undo and redo only cancel it,
  *   and library collection is Busy.
- * - Calls from inside a command's slots: runSub only.
+ * - From inside a command's slots, only `runSub` is allowed, and only from `exec`. Every
+ *   other call (run, undo, redo, rerunHead, the interactive calls) is refused.
+ * - A Context with no executor is bound to this one for the length of each call, then
+ *   unbound. One bound to another executor is FailedPrecondition. `invoke` and
+ *   `setValueUndo` need `ctx.setExecutor` first.
  */
 class CommandExecutor {
  public:
@@ -189,12 +227,17 @@ class CommandExecutor {
 
   /**
    * Re-runs the last command with new inputs (the last-command panel): undo it, run it
-   * again. If the new run fails, the old inputs run again and the error is returned; if
-   * that fails too, the command is dropped and both errors are reported.
+   * again. If the new run fails, the old run is redone and put back, and the error is
+   * returned; if that fails too, the command is dropped and both errors are reported.
+   *
+   * Refused before anything is undone for Interactive commands (their values come from
+   * the drag) and for commands made by runInstance (setValueUndo: their state isn't in
+   * the inputs).
    */
   Status rerunHead(Context &ctx, PropertyBag newInputs);
 
-  /** Starts an Interactive command: exec captures state, then the tool edits live. */
+  /** Starts an Interactive command: exec captures state, then the tool edits live.
+   * `ctx` must outlive the open command: destroying the executor cancels through it. */
   Status beginInteractive(Context &ctx, const CommandDef &def, PropertyBag inputs);
   bool interactiveOpen() const
   {
@@ -202,6 +245,8 @@ class CommandExecutor {
   }
   /** The open command, for the tool driving it; null when none is open. */
   Command *interactiveCommand();
+  /** Records the open command. A sticky error left by the live phase cancels it
+   * instead, and is returned. */
   Status commit(Context &ctx);
   Status cancel(Context &ctx);
 
@@ -218,8 +263,15 @@ class CommandExecutor {
   Result<RecordPtr> start(Context &ctx, const CommandDef &def, Owned<Command> cmd,
                           PropertyBag inputs);
   Status execRecord(Context &ctx, CommandRecord &rec);
+  /** exec with `rec` on the sub-command stack, where runSub is allowed. */
+  Status execFrame(Context &ctx, CommandRecord &rec);
   Result<PropertyBag> finish(Context &ctx, RecordPtr rec);
   Status busy(const char *what) const;
+  /** Refuses a top-level call from inside a slot, or with a stray sticky error. */
+  Status refuseNested(const char *what);
+  /** `s`, with a pending sticky error taken and folded in. */
+  Status collect(Status s);
+  void discardRecord(CommandRecord &rec);
   Result<PropertyBag> subRun(Context &ctx, const CommandDef &def, Owned<Command> cmd,
                              PropertyBag inputs);
 
@@ -229,7 +281,11 @@ class CommandExecutor {
   Runtime &rt_;
   UndoHistory *history_;
   litestl::util::Vector<CommandRecord *> stack_;
+  /** Slot calls other than exec in progress (exec frames reset it to 0). */
+  int slotDepth_ = 0;
   RecordPtr open_;
+  Context *openCtx_ = nullptr;
+  class Library *openLib_ = nullptr;
 };
 
 /**
