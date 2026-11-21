@@ -1,6 +1,7 @@
 coredcc_library(coredcc_base
   SOURCES
     assert.cc
+    bindings.cc
     runtime.cc
     status.cc
     text.cc

@@ -24,6 +24,7 @@ struct LocalId {
   {
     return hi * 0x9E3779B97F4A7C15ull ^ lo;
   }
+  static const litestl::binding::types::Struct<LocalId> *defineBindings();
 };
 
 /** A datablock's persistent identity: the client that made it, plus a LocalId. */
@@ -40,6 +41,7 @@ struct BlockId {
   {
     return client.value * 0xC2B2AE3D27D4EB4Full ^ local.computeHash();
   }
+  static const litestl::binding::types::Struct<BlockId> *defineBindings();
 };
 
 } // namespace coredcc

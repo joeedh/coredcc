@@ -443,6 +443,35 @@ Where the code differs from the plan above:
   - At `COREDCC_TEST_SCALE=20`, 800,000 inputs pass in 6 s.
   - A planted bug in `Path::toString` (index + 1) failed on the first valid input.
 
+### P1c (2026-11-21)
+- **Provider slots take `const Datablock &`, not `BlockHandle`.** Handles are per
+  Library, and providers are per Runtime, so a handle alone can't name a block to a
+  provider. The record gives the provider the block's id, type and `clientData`.
+- **`queryInterface` returns `QueryAnswer {TypeId implType; void *self}`**, which the
+  library looks up in the interface registry. That serves native and foreign answers
+  alike. It doesn't return a `BlockHandle`.
+- **`RefVisitor` is a concrete bound class** with a `visit(RefCell&)` method, not an
+  interface. A TS provider calls it like any bound method.
+- **`serialize`, `deserialize`, `duplicate` and `rekey` move to P2** entirely, signatures
+  included. They are optional slots, so adding them later breaks no provider.
+- **No per-BlockType query cache.** The registry lookup is already one hash lookup.
+- **Every non-Live record is a GC root** (InHistory, Detached and Placeholder blocks are
+  held by the history, the host or a file).
+- **Sticky errors:**
+  - `Library::foreachRef` reports a provider failure without consuming the error.
+  - `collect()` takes the error and returns it, and refuses to start while one is
+    pending.
+- **Attachments are minimal:** attach, detach and lookup, with a destroy callback. The
+  attachment type registry (copy callback, duplicate policy, serializer) comes with
+  library IO in P2.
+- **`Library` is not a Runtime extension.** Hosts create Libraries and destroy them
+  before their Runtime.
+- **GUID source:** `Runtime::setGuidSource`. The default is `rand_s` (RtlGenRandom) on
+  Windows and `getentropy` elsewhere.
+- **Bindings:** ids, `LocalId` and `BlockId` are bound (`base/bindings.cc`), and so are
+  `RefCell` (its target), `RefVisitor` and `QueryAnswer`. `Datablock` is bound without
+  members for now.
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.

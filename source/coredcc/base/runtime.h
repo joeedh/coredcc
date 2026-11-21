@@ -1,9 +1,11 @@
 #pragma once
 
+#include "coredcc/base/block_id.h"
 #include "coredcc/base/id.h"
 #include "coredcc/base/status.h"
 
 #include "litestl/util/alloc.h"
+#include "litestl/util/function.h"
 #include "litestl/util/map.h"
 #include "litestl/util/string.h"
 #include "litestl/util/vector.h"
@@ -83,6 +85,17 @@ class Runtime {
   }
 
   /**
+   * The source of new LocalIds for the built-in coredcc client: a host GUID function,
+   * or by default the OS's randomness (getentropy, or RtlGenRandom on Windows). Never a
+   * seeded PRNG: ids must not repeat across sessions. An empty function restores the
+   * default.
+   */
+  using GuidSource = litestl::util::function<LocalId()>;
+  void setGuidSource(GuidSource source);
+  /** A new random LocalId; never null. */
+  LocalId newLocalId();
+
+  /**
    * The sticky error: set by calls that can't return a Status (a failed foreign
    * interface call), checked by the caller afterwards (the command executor checks it
    * after each command). The first error wins until it is taken.
@@ -133,6 +146,7 @@ class Runtime {
   litestl::util::Vector<ExtSlot> exts_;
   IfaceRegistry *ifaces_;
   Status stickyError_;
+  GuidSource guidSource_;
 };
 
 } // namespace coredcc

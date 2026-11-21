@@ -13,6 +13,10 @@
 #include <cstdint>
 #include <string_view>
 
+namespace litestl::binding::types {
+template <typename T> struct Struct;
+}
+
 namespace coredcc {
 
 namespace detail {
@@ -77,6 +81,8 @@ template <IdDomain D> struct Id {
   {
     return value;
   }
+  /** Bound as a struct with one uint64 member, `value` (base/bindings.cc). */
+  static const litestl::binding::types::Struct<Id> *defineBindings();
 };
 
 using TypeId = Id<IdDomain::Type>;

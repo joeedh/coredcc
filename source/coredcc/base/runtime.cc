@@ -1,3 +1,6 @@
+#ifdef _WIN32
+#define _CRT_RAND_S /* rand_s, backed by RtlGenRandom */
+#endif
 #include "coredcc/base/runtime.h"
 
 #include "coredcc/base/iface/registry.h"
@@ -5,6 +8,10 @@
 #include "litestl/util/alloc.h"
 
 #include <cstdio>
+#include <cstdlib>
+#ifndef _WIN32
+#include <unistd.h> /* getentropy */
+#endif
 #include <string>
 #include <utility>
 
@@ -47,6 +54,41 @@ void Runtime::setStickyError(Status status)
 Status Runtime::takeStickyError()
 {
   return std::exchange(stickyError_, Status());
+}
+
+namespace {
+LocalId osRandomLocalId()
+{
+  uint64_t words[2] = {0, 0};
+#ifdef _WIN32
+  unsigned int parts[4];
+  for (unsigned int &p : parts) {
+    CDCC_CHECK(rand_s(&p) == 0, "rand_s failed");
+  }
+  words[0] = (uint64_t(parts[0]) << 32) | parts[1];
+  words[1] = (uint64_t(parts[2]) << 32) | parts[3];
+#else
+  CDCC_CHECK(getentropy(words, sizeof(words)) == 0, "getentropy failed");
+#endif
+  return LocalId{words[0], words[1]};
+}
+} // namespace
+
+void Runtime::setGuidSource(GuidSource source)
+{
+  guidSource_ = std::move(source);
+}
+
+LocalId Runtime::newLocalId()
+{
+  for (int attempt = 0; attempt < 4; attempt++) {
+    const LocalId id = guidSource_ ? guidSource_() : osRandomLocalId();
+    if (!id.isNull()) {
+      return id;
+    }
+  }
+  CDCC_CHECK(false, "the GUID source keeps returning the null id");
+  return LocalId{};
 }
 
 Result<uint64_t> Runtime::registerName(IdDomain domain, std::string_view name)

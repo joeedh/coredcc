@@ -1,0 +1,9 @@
+coredcc_library(coredcc_lib
+  SOURCES
+    bindings.cc
+    gc.cc
+    library.cc
+    registry.cc
+  DEPS
+    coredcc_base
+)
