@@ -1,7 +1,7 @@
 #pragma once
 
 /** \file
- * Hashed ids for named things: types, interfaces, clients.
+ * Hashed ids for named things: types, interfaces, clients, structs, commands.
  *
  * An id is FNV-1a 64 over a domain tag followed by the stable name, e.g.
  * `"type:" "coredcc.Object"`. The algorithm and the tags are part of the file format
@@ -30,7 +30,8 @@ constexpr uint64_t fnv1a64(std::string_view s, uint64_t h = kFnvOffset)
 } // namespace detail
 
 /** The domains ids are hashed in. The tag string is hashed before the name. */
-enum class IdDomain : uint8_t { Type, Interface, Client };
+enum class IdDomain : uint8_t { Type, Interface, Client, Struct, Command };
+inline constexpr int kIdDomainCount = 5;
 
 constexpr std::string_view idDomainTag(IdDomain d)
 {
@@ -41,6 +42,10 @@ constexpr std::string_view idDomainTag(IdDomain d)
       return "iface:";
     case IdDomain::Client:
       return "client:";
+    case IdDomain::Struct:
+      return "struct:";
+    case IdDomain::Command:
+      return "command:";
   }
   return "?:";
 }
@@ -77,5 +82,7 @@ template <IdDomain D> struct Id {
 using TypeId = Id<IdDomain::Type>;
 using InterfaceId = Id<IdDomain::Interface>;
 using ClientId = Id<IdDomain::Client>;
+using StructId = Id<IdDomain::Struct>;
+using CommandId = Id<IdDomain::Command>;
 
 } // namespace coredcc

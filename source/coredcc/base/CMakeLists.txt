@@ -3,6 +3,7 @@ coredcc_library(coredcc_base
     assert.cc
     runtime.cc
     status.cc
+    text.cc
     iface/registry.cc
   DEPS
     util

@@ -18,12 +18,23 @@ Runtime::Runtime() : ifaces_(litestl::alloc::New<IfaceRegistry>("coredcc::IfaceR
 
 Runtime::~Runtime()
 {
+  /* Pop one at a time: a destructor may still look up an older extension. */
+  while (exts_.size() > 0) {
+    ExtSlot slot = exts_.pop_back();
+    slot.destroy(slot.obj);
+  }
   litestl::alloc::Delete(ifaces_);
 }
 
 Status Runtime::validateAll() const
 {
-  return ifaces_->validateAll();
+  CDCC_TRY(ifaces_->validateAll());
+  for (const ExtSlot &slot : exts_) {
+    if (slot.validate) {
+      CDCC_TRY(slot.validate(slot.obj));
+    }
+  }
+  return Status();
 }
 
 void Runtime::setStickyError(Status status)

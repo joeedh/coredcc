@@ -1,0 +1,10 @@
+coredcc_library(coredcc_props
+  SOURCES
+    bag.cc
+    def.cc
+    ref.cc
+    units.cc
+    value.cc
+  DEPS
+    coredcc_base
+)

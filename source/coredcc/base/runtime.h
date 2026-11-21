@@ -3,8 +3,10 @@
 #include "coredcc/base/id.h"
 #include "coredcc/base/status.h"
 
+#include "litestl/util/alloc.h"
 #include "litestl/util/map.h"
 #include "litestl/util/string.h"
+#include "litestl/util/vector.h"
 
 #include <string_view>
 
@@ -17,7 +19,8 @@ class IfaceRegistry;
  * process-global one. Several Runtimes may coexist in a process (e.g. two hosts).
  *
  * It holds the name registry (hashed ids back to names, rejecting collisions) and the
- * interface registry. Later phases add the struct, command and tool registries.
+ * interface registry. Later modules' registries (block types, the API, commands) are
+ * extensions: see ext().
  */
 class Runtime {
  public:
@@ -39,6 +42,45 @@ class Runtime {
   /** Re-checks every registry's invariants. Run at startup in debug builds and in
    * every test binary. */
   Status validateAll() const;
+
+  /**
+   * The extension of type T, created on first use. base can't name the registries of
+   * the modules above it, so they live here, type-erased. T provides:
+   * - `static constexpr const char *kExtName`, a stable unique name;
+   * - `explicit T(Runtime *rt)`;
+   * - optionally `Status validate() const`, which validateAll() calls.
+   *
+   * Extensions are destroyed in reverse order of creation, before the interface
+   * registry, so an extension may use any extension it created in its constructor.
+   */
+  template <class T> T &ext()
+  {
+    if (T *found = findExt<T>()) {
+      return *found;
+    }
+    T *obj = litestl::alloc::New<T>(T::kExtName, this);
+    ExtSlot slot;
+    slot.key = hashId(IdDomain::Type, T::kExtName);
+    slot.obj = obj;
+    slot.destroy = [](void *p) { litestl::alloc::Delete(static_cast<T *>(p)); };
+    if constexpr (requires(const T &t) { t.validate(); }) {
+      slot.validate = [](const void *p) { return static_cast<const T *>(p)->validate(); };
+    }
+    exts_.append(slot);
+    return *obj;
+  }
+
+  /** The extension of type T if it has been created, else null. */
+  template <class T> T *findExt() const
+  {
+    const uint64_t key = hashId(IdDomain::Type, T::kExtName);
+    for (const ExtSlot &slot : exts_) {
+      if (slot.key == key) {
+        return static_cast<T *>(slot.obj);
+      }
+    }
+    return nullptr;
+  }
 
   /**
    * The sticky error: set by calls that can't return a Status (a failed foreign
@@ -80,7 +122,15 @@ class Runtime {
   }
 
  private:
-  litestl::util::Map<uint64_t, litestl::util::string> names_[3];
+  struct ExtSlot {
+    uint64_t key = 0;
+    void *obj = nullptr;
+    void (*destroy)(void *) = nullptr;
+    Status (*validate)(const void *) = nullptr;
+  };
+
+  litestl::util::Map<uint64_t, litestl::util::string> names_[kIdDomainCount];
+  litestl::util::Vector<ExtSlot> exts_;
   IfaceRegistry *ifaces_;
   Status stickyError_;
 };
