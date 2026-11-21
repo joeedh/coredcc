@@ -2,6 +2,7 @@
  * compile slowly (architecture §2a, build time). */
 #include "coredcc/base/block_id.h"
 #include "coredcc/base/id.h"
+#include "coredcc/base/status.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
@@ -46,6 +47,19 @@ template struct Id<IdDomain::Interface>;
 template struct Id<IdDomain::Client>;
 template struct Id<IdDomain::Struct>;
 template struct Id<IdDomain::Command>;
+
+const lbt::Struct<Status> *Status::defineBindings()
+{
+  static lbt::Struct<Status> *st = nullptr;
+  if (!st) {
+    PermanentGuard guard;
+    st = new lbt::Struct<Status>("coredcc::Status", sizeof(Status));
+    BIND_STRUCT_COPY_CONSTRUCTOR(st);
+    BIND_STRUCT_METHOD(st, ok, MARGS());
+    BIND_STRUCT_METHOD(st, message, MARGS());
+  }
+  return st;
+}
 
 const lbt::Struct<LocalId> *LocalId::defineBindings()
 {

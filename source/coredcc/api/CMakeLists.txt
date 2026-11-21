@@ -1,5 +1,6 @@
 coredcc_library(coredcc_api
   SOURCES
+    bindings.cc
     change_bus.cc
     resolve.cc
     struct.cc

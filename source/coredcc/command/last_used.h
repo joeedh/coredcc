@@ -1,0 +1,77 @@
+#pragma once
+
+/** \file
+ * LastUsedStore: each command's last-used input values (architecture §6, "Registry,
+ * defaults and invocation").
+ */
+
+#include "coredcc/api/struct.h"
+#include "coredcc/command/command.h"
+
+#include <string>
+#include <string_view>
+
+namespace coredcc {
+
+/**
+ * The input values a command last ran with, per command. A Runtime extension.
+ *
+ * - The executor remembers a top-level command's inputs after it succeeds: the ones
+ *   that were set, Pointer and Collection inputs excepted.
+ * - `apply` puts them in a fresh input bag (`invoke` does this), skipping any the def
+ *   no longer accepts.
+ * - The datapath sees them as `commandDefaults["mesh.extrude"].dist` once
+ *   `addCollectionTo` has added that collection to the host's root struct. Reading an
+ *   input that was never used gives its default.
+ * - `serialize` writes one invocation per line; `load` reads it back, skipping
+ *   commands and inputs that no longer exist, so old files keep loading.
+ */
+class LastUsedStore {
+ public:
+  static constexpr const char *kExtName = "coredcc.LastUsedStore";
+
+  explicit LastUsedStore(Runtime *rt) : rt_(*rt) {}
+  ~LastUsedStore();
+  LastUsedStore(const LastUsedStore &) = delete;
+  LastUsedStore &operator=(const LastUsedStore &) = delete;
+
+  void remember(const CommandDef &def, const PropertyBag &inputs);
+  void apply(const CommandDef &def, PropertyBag &bag) const;
+  /** The remembered value, or null. */
+  const PropValue *get(const CommandDef &def, std::string_view input) const;
+  /** Coerces `value` to the input's def and remembers it. */
+  Status set(const CommandDef &def, std::string_view input, const PropValue &value);
+  void forget(const CommandDef &def);
+  void clear();
+
+  std::string serialize() const;
+  /** Merges `text` in. A malformed line is InvalidArgument naming the line; the lines
+   * before it stay loaded. */
+  Status load(std::string_view text);
+
+  /** Adds the `commandDefaults` collection (keyed by command id) to `root`. */
+  void addCollectionTo(ApiStruct &root, std::string_view memberName = "commandDefaults");
+
+  Status validate() const;
+
+ private:
+  struct Value {
+    litestl::util::string name;
+    PropValue value;
+  };
+  struct Entry {
+    const CommandDef *def = nullptr;
+    litestl::util::Vector<Value> values;
+    const PropValue *find(std::string_view name) const;
+  };
+  Entry &entry(const CommandDef &def);
+  const Entry *findEntry(const CommandDef &def) const;
+  /** The per-command struct of commandDefaults items, registered on first use. */
+  StructId itemStruct(const CommandDef &def);
+
+  Runtime &rt_;
+  litestl::util::Vector<Entry *> entries_;
+  litestl::util::Map<uint64_t, Entry *> byId_;
+};
+
+} // namespace coredcc

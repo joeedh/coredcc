@@ -14,6 +14,13 @@
 #include "coredcc/api/resolve.h"
 #include "coredcc/api/struct.h"
 #include "coredcc/base/assert.h"
+#include "coredcc/command/block_commands.h"
+#include "coredcc/command/command.h"
+#include "coredcc/command/executor.h"
+#include "coredcc/command/last_used.h"
+#include "coredcc/command/literal.h"
+#include "coredcc/command/set_property.h"
+#include "coredcc/command/undo_strategies.h"
 #include "coredcc/base/block_id.h"
 #include "coredcc/base/flags.h"
 #include "coredcc/base/handle_pool.h"
@@ -95,6 +102,11 @@ int main()
     coredcc::Context ctx(&rt, &lib, coredcc::PointerRef());
     test_assert(!coredcc::getValue(ctx, "x").ok());
     test_assert(rt.ext<coredcc::ChangeBus>().flush() == 0);
+    coredcc::LinearHistory history;
+    coredcc::CommandExecutor ex(&rt, &history);
+    test_assert(coredcc::registerBlockCommands(rt).ok());
+    ctx.setExecutor(&ex);
+    test_assert(coredcc::invoke(ctx, "core.block.purge").ok());
     test_assert(rt.ext<coredcc::PathCache>().get("a.b[\"c\"]").ok());
     test_assert(coredcc::coerce(coredcc::PropertyDef::floatProp("f").range(0, 1),
                                 coredcc::PropValue::ofFloat(2))

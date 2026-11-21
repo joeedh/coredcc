@@ -1,0 +1,11 @@
+coredcc_library(coredcc_command
+  SOURCES
+    block_commands.cc
+    command.cc
+    executor.cc
+    last_used.cc
+    literal.cc
+    set_property.cc
+  DEPS
+    coredcc_api
+)

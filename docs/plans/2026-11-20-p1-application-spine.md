@@ -514,6 +514,44 @@ Where the code differs from the plan above:
   - Display units and the subtype/unit agreement check (D12) move to P3, where
     scene settings exist.
 
+### P1e (2026-11-21)
+- **`canRun` returns a Status**: ok, or the refusal with its reason. Status is bound
+  (`base/bindings.cc`) and already carries a message, so it does the job a separate
+  `Refusal` type would.
+- **Slots read their bags through the Context.** The executor sets `ctx.inputs()` and
+  `ctx.outputs()` around every slot call and restores the outer ones after, so
+  sub-commands nest. Context is bound without members so slots can take it.
+- **`foldKey` is a `uint64_t`**, and 0 means "never fold". SetPropertyCommand hashes
+  the canonical ref with the gesture id.
+- **The interactive protocol lives in the executor.** The plan put
+  `beginInteractive`/`commit`/`cancel` on `UndoHistory`.
+  - The executor holds the open command and pushes it on commit.
+  - Host adapters that need a transaction held open for the whole drag (Unreal) get
+    begin/end hooks on `UndoHistory` with them in P6.
+  - While a command is open, `Library::beginNoCollect` makes `collect()` Busy.
+- **`run` from inside a slot is refused**, with "use runSub" in the message.
+- **Redo without a `redo` slot** drops the old sub-commands, then runs `exec` again,
+  which records new ones.
+- **A failed redo** drops that command and everything after it from the history.
+- **Undo reports errors through the sticky error.** Its slot returns void, so the
+  executor's `undo` and `redo` return the sticky error when one is set.
+- **The redo of a create uses `restoreFromHistory`, not `reviveAs`.** Undo keeps the
+  record and its data InHistory. `reviveAs` is for redo after the data was dropped:
+  snapshot undo and library IO, in P2.
+- **The block commands are** `core.block.delete` (with `deletePreview`, the transitive
+  set of users whose non-null `Ref` would break) and `core.block.purge`. CreatedBlocks
+  is the helper for client commands that create blocks.
+- **Attach and detach commands move to P2.** A generic attach needs the attachment
+  type registry (copy, destroy, serializer), which comes with library IO.
+- **The undo strategies are** `DelegatedUndo` (callbacks) and the `SnapshotProvider`
+  interface, for blobs of bytes. lz4 comes in P2.
+- **Value literals** are `formatLiteral` and `parseLiteral` (`command/literal.h`). They
+  cover review item D5, except for Pointer values, which have no literal form yet.
+  - LastUsed files are one invocation per line, and `load` skips commands and inputs
+    that no longer exist.
+  - `commandDefaults["id"].input` is registered on demand, as one ApiStruct per command
+    (`CommandDefaults:<id>`), with the NoUndo flag.
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.

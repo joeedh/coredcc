@@ -10,6 +10,10 @@
 #include <type_traits>
 #include <utility>
 
+namespace litestl::binding::types {
+template <typename T> struct Struct;
+}
+
 namespace coredcc {
 
 enum class StatusCode : uint8_t {
@@ -65,6 +69,9 @@ class [[nodiscard]] Status {
 
   /** Explicitly discard a Status whose failure doesn't matter here. */
   void ignore() const {}
+
+  /** Bound so interface slots can return a Status (Command::exec). */
+  static const litestl::binding::types::Struct<Status> *defineBindings();
 
  private:
   struct Rep;

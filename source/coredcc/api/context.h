@@ -9,9 +9,14 @@
 #include "coredcc/parse/path.h"
 #include "coredcc/props/ref.h"
 
+namespace litestl::binding::types {
+template <typename T> struct Struct;
+}
+
 namespace coredcc {
 
 class Library;
+class PropertyBag;
 class CommandExecutor;
 
 /**
@@ -80,6 +85,25 @@ class Context {
     return hasPrefix_ ? &prefix_ : nullptr;
   }
 
+  /** The running command's input and output bags, set by the executor around each
+   * Command slot call; null outside one. */
+  const PropertyBag *inputs() const
+  {
+    return inputs_;
+  }
+  PropertyBag *outputs() const
+  {
+    return outputs_;
+  }
+  void setCommandBags(const PropertyBag *inputs, PropertyBag *outputs)
+  {
+    inputs_ = inputs;
+    outputs_ = outputs;
+  }
+
+  /** Bound without members, so interface slots can take a Context&. */
+  static const litestl::binding::types::Struct<Context> *defineBindings();
+
  private:
   Runtime &rt_;
   Library *lib_;
@@ -87,6 +111,8 @@ class Context {
   CommandExecutor *executor_ = nullptr;
   Path prefix_;
   bool hasPrefix_ = false;
+  const PropertyBag *inputs_ = nullptr;
+  PropertyBag *outputs_ = nullptr;
 };
 
 } // namespace coredcc
