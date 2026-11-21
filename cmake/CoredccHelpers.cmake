@@ -44,6 +44,10 @@ function(_coredcc_test_support target)
   target_include_directories(${target} SYSTEM PRIVATE
     "${PROJECT_SOURCE_DIR}/tests/support"
     "${PROJECT_SOURCE_DIR}/extern/litestl/tests")
+  # A failed assert or abort() exits instead of opening a dialog (tests/support/no_dialogs.cc).
+  if(WIN32)
+    target_sources(${target} PRIVATE "${PROJECT_SOURCE_DIR}/tests/support/no_dialogs.cc")
+  endif()
 endfunction()
 
 # coredcc_test(name SOURCES... [DEPS targets...])
