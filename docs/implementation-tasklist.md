@@ -15,7 +15,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | in progress (TA0 done) | — |
 | 3 | [P0 scaffold and interface system](plans/2026-11-19-p0-scaffold-interfaces.md) | P0 | 1, 4 | reviewed | [interfaces](reports/feature-report-interfaces-2026-11-20.md) |
 | 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | done (litestl #4 B, #5 A, #6 C1 merged; C2 moves to P1f) | — |
-| 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | in progress (P1a-P1e reviewed; P1f steps 1-5 done) | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md); [script bindings](reports/feature-report-bind-2026-11-22.md) |
+| 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | in progress (P1a-P1e reviewed; P1f steps 1-5 done) | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md); [script bindings](reports/feature-report-bind-2026-11-22.md); [TS spike](reports/feature-report-ts-spike-2026-11-22.md) |
 | 6 | P2 layout and library IO | P2 | 5 | todo | layout |
 | 7 | P3 objects, transforms and BVH | P3 | 5 | todo | objects and transforms; BVH |
 | 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | todo | tools and overlay |
@@ -86,8 +86,9 @@ Set up before the first worktree, following sculptcore and faberforge:
     keeps an already-pending exception).
   - P1f step 4, `bind/` (facades, script commands, the manager), is done and
     reviewed: `docs/reports/feature-report-bind-2026-11-22.md`.
-  - P1f step 5, the TS spike, is done: the wasm-st ctest `spike_ts` (`npm ci` in
-    `tests/wasm` first). Its API review is next.
+  - P1f step 5, the TS spike, is done and reviewed:
+    `docs/reports/feature-report-ts-spike-2026-11-22.md`. It is the wasm-st ctest
+    `spike_ts` (`npm ci` in `tests/wasm` first, or it skips).
   - Then TA1 (step 6): the test app loads the module and drives the same steps over
     CDP.
 - Test app TA0 is done (6 tests pass): `cd apps/testapp && pnpm install && pnpm test`.

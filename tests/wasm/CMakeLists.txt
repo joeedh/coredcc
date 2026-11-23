@@ -22,12 +22,15 @@ target_link_options(coredcc_spike PRIVATE
   --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=node
   "-sEXPORTED_FUNCTIONS=${_spike_exports}")
 
+# Registered whenever node is found: without `npm ci`, run.mjs exits 77 and ctest
+# reports a skip rather than a silent pass.
 find_program(COREDCC_NODE node)
-if(COREDCC_NODE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/node_modules")
+if(COREDCC_NODE)
   add_test(NAME spike_ts
     COMMAND "${COREDCC_NODE}" "${CMAKE_CURRENT_SOURCE_DIR}/run.mjs"
       --module $<TARGET_FILE:coredcc_spike>
       --out "${CMAKE_CURRENT_BINARY_DIR}/spike")
+  set_tests_properties(spike_ts PROPERTIES SKIP_RETURN_CODE 77)
 else()
-  message(STATUS "coredcc: spike_ts needs node and `npm ci` in tests/wasm")
+  message(STATUS "coredcc: spike_ts needs node")
 endif()

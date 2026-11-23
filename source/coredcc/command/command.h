@@ -286,3 +286,10 @@ template <class Impl> Result<const CommandDef *> addNativeCommand(Runtime &rt, C
 }
 
 } // namespace coredcc
+
+namespace litestl::binding {
+/** CommandFlags, bound as an enum (command/bindings.cc). */
+template <> struct Binder<coredcc::CommandFlags> {
+  static const BindingBase *bind();
+};
+} // namespace litestl::binding

@@ -1213,6 +1213,39 @@ are `tests/bind/test_bind_review.cc`.
 - **First real runs:** litestl's EM_JS foreign host and its TS dispatch, which C2 had
   tested only through WASI and N-API.
 
+### P1f step 5 review corrections (2026-11-22)
+The review is `docs/reports/feature-report-ts-spike-2026-11-22.md`. Its regressions are
+in `tests/wasm/spike.test.ts`, named by finding.
+- **Documents:** `Session(host, ctx)` ties a context to the host object that owns its
+  document.
+  - The ctx keeps the host alive, so GC can't free a document that is still reachable.
+    Before this, a collected host's ctx addressed the next host's document.
+  - Disposing of the session invalidates the ctx.
+  - A session can't close while one of its script slots runs.
+  - **TA1 and P2 hosts hand scripts Sessions, never raw contexts.**
+- **Script command slots:**
+  - A slot that returns a Promise fails ("command slots are synchronous").
+  - A throwing `discard` is ignored with a warning, as `memSize` already was.
+  - An arrow-function `redo` field is refused.
+  - Undo and constructor errors report Internal; this is documented.
+- **Values:**
+  - `float()` declares a Float with a whole default.
+  - Numbers past 2^53 and int64 no longer wrap.
+  - `Value` (reads) and `Writable` (writes) are separate types.
+- **Loading:** one coredcc module per JS realm (`load` refuses a second unless told to
+  replace it), and its arguments are checked first.
+- **C++:**
+  - `CommandFlags` is a bound enum.
+  - `spike::Data` has Bool, String, Vec3, Enum and Flags members.
+- **Harness:**
+  - `spike_ts` is always registered, and skips (exit 77) without `npm ci`.
+  - No shell runs tsc or esbuild.
+  - `--out` defaults to the temp directory.
+- **Deferred:**
+  - Mat4 writes (a `makeMat4` facade);
+  - error codes from undo and constructors (a code in foreign error strings);
+  - tagging wrappers by module in litestl.
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.

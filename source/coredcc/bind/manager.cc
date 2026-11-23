@@ -27,6 +27,7 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<ValueResult>());
   mgr->add(Bind<BagResult>());
   mgr->add(Bind<Context>());
+  mgr->add(Bind<CommandFlags>());
   mgr->add(Bind<CommandDef>());
   mgr->add(Bind<Command>());
   mgr->add(Bind<ForeignFactory>());

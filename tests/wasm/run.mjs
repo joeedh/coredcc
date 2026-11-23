@@ -2,11 +2,14 @@
 //
 //   node run.mjs --module <coredcc_spike.mjs> [--out <scratch dir>]
 //
+// Exits 77 (a ctest skip) when the dev dependencies aren't installed (`npm ci` here).
+//
 // 1. generates the bindings' TS with the generator inside the module;
 // 2. type-checks it with coredcc's TS layer (source/coredcc/bind/ts) and the suite;
 // 3. bundles the suite with esbuild, and runs it under node:test.
 import {spawnSync} from 'node:child_process'
 import {existsSync, mkdirSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
 import {dirname, join, resolve} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {parseArgs} from 'node:util'
@@ -22,23 +25,22 @@ if (!opts.module) {
   process.exit(2)
 }
 const modulePath = resolve(opts.module)
-const out = resolve(opts.out ?? 'spike-ts')
+const out = resolve(opts.out ?? join(tmpdir(), 'coredcc-spike'))
 const gen = join(out, 'gen')
 rmSync(gen, {recursive: true, force: true})
 mkdirSync(gen, {recursive: true})
 
-const bin = (name) => join(here, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name)
-const run = (cmd, args, env = {}) => {
-  const options = {stdio: 'inherit', env: {...process.env, ...env}}
-  // Windows runs .cmd shims only through a shell, which needs the quoting.
-  const r = cmd.endsWith('.cmd')
-    ? spawnSync([cmd, ...args].map((a) => `"${a}"`).join(' '), {...options, shell: true})
-    : spawnSync(cmd, args, options)
-  return r.status ?? 1
+// The tools' JS entry points, run by node itself: no shell, so no quoting or %VAR%
+// expansion of paths.
+const tools = {
+  tsc: join(here, 'node_modules', 'typescript', 'bin', 'tsc'),
+  esbuild: join(here, 'node_modules', 'esbuild-wasm', 'bin', 'esbuild'),
 }
-if (!existsSync(bin('tsc'))) {
-  console.error(`missing dev dependencies: run "npm ci" in ${here}`)
-  process.exit(2)
+const run = (args, env = {}) =>
+  spawnSync(process.execPath, args, {stdio: 'inherit', env: {...process.env, ...env}}).status ?? 1
+if (!existsSync(tools.tsc) || !existsSync(tools.esbuild)) {
+  console.error(`skipped: missing dev dependencies; run "npm ci" in ${here}`)
+  process.exit(77)
 }
 const aliases = [
   `--alias:@litestl/typescript-runtime=${runtime}`,
@@ -46,14 +48,15 @@ const aliases = [
   `--alias:coredcc-gen=${gen}`,
 ]
 const bundle = (entry, outfile) =>
-  run(bin('esbuild'), [
+  run([
+    tools.esbuild,
     entry, '--bundle', '--platform=node', '--format=esm', '--target=node20',
     ...aliases, `--outfile=${outfile}`, '--log-level=warning',
   ])
 
 console.log('== generating the bindings TS')
 const genBundle = join(out, 'gen.mjs')
-if (bundle(join(here, 'gen.ts'), genBundle) !== 0 || run(process.execPath, [genBundle, modulePath, gen]) !== 0) {
+if (bundle(join(here, 'gen.ts'), genBundle) !== 0 || run([genBundle, modulePath, gen]) !== 0) {
   process.exit(1)
 }
 
@@ -87,7 +90,7 @@ writeFileSync(
     2
   )
 )
-if (run(bin('tsc'), ['-p', tsconfig]) !== 0) {
+if (run([tools.tsc, '-p', tsconfig]) !== 0) {
   process.exit(1)
 }
 
@@ -96,4 +99,4 @@ const suite = join(out, 'spike.test.mjs')
 if (bundle(join(here, 'spike.test.ts'), suite) !== 0) {
   process.exit(1)
 }
-process.exit(run(process.execPath, ['--test', '--test-reporter=spec', suite], {SPIKE_MODULE: modulePath}))
+process.exit(run(['--test', '--test-reporter=spec', suite], {SPIKE_MODULE: modulePath}))

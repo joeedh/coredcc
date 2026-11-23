@@ -18,10 +18,15 @@ namespace spike {
 using namespace coredcc;
 namespace lbt = litestl::binding::types;
 
-/* The context root: paths are `count` and `strength`. */
+/* The context root: `count`, `strength`, and one member of each other value kind. */
 struct Data {
   int count = 0;
   double strength = 0.5;
+  bool enabled = true;
+  litestl::util::string label;
+  double offset[3] = {0, 0, 0};
+  int mode = 0;
+  uint32_t flags = 0;
 };
 
 inline const StructId kData = StructId::of("Spike");
@@ -75,6 +80,11 @@ class Host {
     ApiStruct s("Spike");
     s.addField(PropertyDef::intProp("count"), &Data::count);
     s.addField(PropertyDef::floatProp("strength").range(0, 1), &Data::strength);
+    s.addField(PropertyDef::boolProp("enabled"), &Data::enabled);
+    s.addField(PropertyDef::stringProp("label"), &Data::label);
+    s.addField(PropertyDef::vecProp("offset", 3), &Data::offset);
+    s.addField(PropertyDef::enumProp("mode").item("OBJECT", 0).item("EDIT", 1), &Data::mode);
+    s.addField(PropertyDef::flagsProp("flags").item("SELECT", 1).item("HIDE", 2), &Data::flags);
     CDCC_CHECK(reg.add(std::move(s)).ok(), "spike: registering the root struct");
     Data *data = &data_;
     CDCC_CHECK(reg.addRuntimeOwner("spike", kData, [data]() { return (void *)data; }).ok(),
