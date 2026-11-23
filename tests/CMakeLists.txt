@@ -56,3 +56,8 @@ coredcc_compile_fail(iface_wrong_arg_type
   SOURCE compile_fail/iface_wrong_arg_type.cc
   REGEX "C2664|could not bind|cannot initialize|no matching function|no viable conversion"
   DEPS coredcc_base)
+
+# The P1f TS spike, against the wasm-st module (tests/wasm/).
+if(EMSCRIPTEN)
+  add_subdirectory(wasm)
+endif()

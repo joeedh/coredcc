@@ -1,0 +1,11 @@
+{
+  "name": "coredcc-wasm-spike",
+  "private": true,
+  "type": "module",
+  "description": "The P1f TS spike against the wasm-st module; see run.mjs.",
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "esbuild-wasm": "0.25.9",
+    "typescript": "5.9.3"
+  }
+}

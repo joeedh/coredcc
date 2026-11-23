@@ -35,6 +35,7 @@ void addTypes(litestl::binding::BindingManager *mgr)
 void addFacades(litestl::binding::BindingManager *mgr)
 {
   BIND_FUNCTION(mgr, "coredcc::statusError", script::statusError, MARGS("code", "message"));
+  BIND_FUNCTION(mgr, "coredcc::statusText", script::statusText, MARGS("s"));
 
   BIND_FUNCTION(mgr, "coredcc::makeBool", script::makeBool, MARGS("v"));
   BIND_FUNCTION(mgr, "coredcc::makeInt", script::makeInt, MARGS("v"));
@@ -85,14 +86,20 @@ void addFacades(litestl::binding::BindingManager *mgr)
 
 } // namespace
 
+void addBindings(litestl::binding::BindingManager *mgr)
+{
+  litestl::alloc::PermanentGuard guard;
+  addTypes(mgr);
+  addFacades(mgr);
+}
+
 litestl::binding::BindingManager *bindings()
 {
   static litestl::binding::BindingManager *mgr = nullptr;
   if (!mgr) {
     litestl::alloc::PermanentGuard guard;
     mgr = litestl::alloc::New<litestl::binding::BindingManager>("coredcc BindingManager");
-    addTypes(mgr);
-    addFacades(mgr);
+    addBindings(mgr);
     mgr->validate();
   }
   return mgr;

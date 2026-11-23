@@ -16,4 +16,11 @@ namespace coredcc::script {
  */
 litestl::binding::BindingManager *bindings();
 
+/**
+ * Adds every bound coredcc type and facade to `mgr`, for a host that binds its own
+ * types beside them in one manager (the TS runtime loads one). The host calls
+ * `mgr->validate()` when it has added its own.
+ */
+void addBindings(litestl::binding::BindingManager *mgr);
+
 } // namespace coredcc::script

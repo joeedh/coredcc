@@ -1174,6 +1174,45 @@ are `tests/bind/test_bind_review.cc`.
   - the `runSub` argument order;
   - Enum and Flags inputs and numeric ranges in the def builders.
 
+### P1f step 5: the spike (2026-11-22)
+- **Running it:** `npm ci` in `tests/wasm` once. The wasm-st ctest `spike_ts` then runs
+  `tests/wasm/run.mjs`, which:
+  1. generates the bindings' TS with the generator linked into the module (no native
+     build needed);
+  2. type-checks the generated TS, coredcc's TS layer and the suite with `tsc --strict`;
+  3. bundles the suite with esbuild and runs it under `node --test`.
+- **The module:** `coredcc_spike.mjs` (`tests/wasm/spike_host.cc`): `-sMODULARIZE=1
+  -sEXPORT_ES6=1 -sENVIRONMENT=node --no-entry`, exporting litestl's `LT_WASM_SYMBOLS`
+  and `SPIKE_GetManager`.
+  - It binds one `spike::Host`, which owns the Runtime, Library, root struct, history,
+    executor and Context in destruction order, plus a few accessors (`context`,
+    `historySize`, `liveInstances`, `validate`).
+  - Its manager is `script::addBindings` plus the host's types: hosts compose one
+    manager, because the TS runtime loads one. `addBindings` is new in `bind/`.
+- **coredcc's TS layer:** `source/coredcc/bind/ts/index.ts`, imported as
+  `coredcc-script`. It imports the generated TS as `coredcc-gen/*`.
+  - `load(module, getManager)` makes the module the active backend, and installs the
+    Status `ret` converter.
+  - JS values in and out (`get`, `set`, `write`, `input`, `output`, `invoke`), and
+    errors as `ScriptError` (code, and the message with suggestions).
+  - `registerCommand(ctx, spec, Cls)` with the hand-written `ScriptCommand` interface.
+    An adapter supplies `canRun`, `memSize` (catching to 0) and `discard`, and lists
+    `redo` only when the class has one. A thrown or string canRun refusal becomes
+    FailedPrecondition.
+  - It meets the review's step-5 obligations: results are unwrapped and disposed of
+    at once, and int64 is converted to numbers.
+- **Also new in `bind/`:** `statusText` (Status::toString), so a ScriptError carries
+  the suggestions.
+- **The suite** (`tests/wasm/spike.test.ts`) covers the four exit-criteria steps. It
+  also covers:
+  - a composing command (set and invoke in exec as sub-commands);
+  - a throwing exec, a refusing canRun, and a Busy set from undo (the command is
+    dropped);
+  - registration errors;
+  - after each test, the host's invariants, and every foreign handle released.
+- **First real runs:** litestl's EM_JS foreign host and its TS dispatch, which C2 had
+  tested only through WASI and N-API.
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.

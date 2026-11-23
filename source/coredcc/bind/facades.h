@@ -71,6 +71,8 @@ struct BagResult {
 
 /** An error Status. `Ok`, and a number that is no StatusCode, become InvalidArgument. */
 Status statusError(StatusCode code, const string &message);
+/** "Code: message (did you mean: a, b?)", or "Ok": the message with the suggestions. */
+string statusText(const Status &s);
 
 /* ---- PropValue: makers and checked readers ---- */
 

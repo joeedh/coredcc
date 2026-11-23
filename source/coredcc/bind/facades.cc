@@ -100,6 +100,11 @@ Status statusError(StatusCode code, const string &message)
   return Status::error(valid ? code : StatusCode::InvalidArgument, message.c_str());
 }
 
+string statusText(const Status &s)
+{
+  return s.toString();
+}
+
 /* ---- PropValue ---- */
 
 PropValue makeBool(bool v)
