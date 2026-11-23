@@ -1,6 +1,7 @@
-/* The P1f spike's WASM module: one host object owning a Runtime, a Library, a small
- * root struct, an executor and a LinearHistory, bound with coredcc's bindings.
- * spike.test.ts drives it through the TS runtime and coredcc's TS layer. */
+/* The test app's WASM module (docs/plans/2026-11-20-p1-application-spine.md, "P1f
+ * step 6"): one host object owning a Runtime, a Library, a small root struct, an
+ * executor and a LinearHistory, bound with coredcc's bindings. The NW.js test app
+ * (apps/testapp) and the TS spike (tests/wasm/spike.test.ts) both drive it. */
 #include "coredcc/api/struct.h"
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/bind/manager.h"
@@ -13,7 +14,7 @@
 
 #include <emscripten/emscripten.h>
 
-namespace spike {
+namespace testapp {
 
 using namespace coredcc;
 namespace lbt = litestl::binding::types;
@@ -29,7 +30,7 @@ struct Data {
   uint32_t flags = 0;
 };
 
-inline const StructId kData = StructId::of("Spike");
+inline const StructId kData = StructId::of("TestApp");
 
 /**
  * Everything one document needs, owned in destruction order: the context, executor and
@@ -68,7 +69,7 @@ class Host {
     static lbt::Struct<Host> *st = nullptr;
     if (!st) {
       litestl::alloc::PermanentGuard guard;
-      st = new lbt::Struct<Host>("spike::Host", sizeof(Host));
+      st = new lbt::Struct<Host>("testapp::Host", sizeof(Host));
     }
     return st;
   }
@@ -77,7 +78,7 @@ class Host {
   Context makeContext()
   {
     ApiRegistry &reg = rt_.ext<ApiRegistry>();
-    ApiStruct s("Spike");
+    ApiStruct s("TestApp");
     s.addField(PropertyDef::intProp("count"), &Data::count);
     s.addField(PropertyDef::floatProp("strength").range(0, 1), &Data::strength);
     s.addField(PropertyDef::boolProp("enabled"), &Data::enabled);
@@ -85,11 +86,11 @@ class Host {
     s.addField(PropertyDef::vecProp("offset", 3), &Data::offset);
     s.addField(PropertyDef::enumProp("mode").item("OBJECT", 0).item("EDIT", 1), &Data::mode);
     s.addField(PropertyDef::flagsProp("flags").item("SELECT", 1).item("HIDE", 2), &Data::flags);
-    CDCC_CHECK(reg.add(std::move(s)).ok(), "spike: registering the root struct");
+    CDCC_CHECK(reg.add(std::move(s)).ok(), "testapp: registering the root struct");
     Data *data = &data_;
-    CDCC_CHECK(reg.addRuntimeOwner("spike", kData, [data]() { return (void *)data; }).ok(),
-               "spike: registering the root owner");
-    return Context(&rt_, &lib_, reg.runtimeOwner("spike"));
+    CDCC_CHECK(reg.addRuntimeOwner("testapp", kData, [data]() { return (void *)data; }).ok(),
+               "testapp: registering the root owner");
+    return Context(&rt_, &lib_, reg.runtimeOwner("testapp"));
   }
 
   Runtime rt_;
@@ -102,7 +103,7 @@ class Host {
 
 Host *create()
 {
-  return litestl::alloc::New<Host>("spike::Host");
+  return litestl::alloc::New<Host>("testapp::Host");
 }
 Context *context(Host &h)
 {
@@ -129,22 +130,22 @@ litestl::binding::BindingManager *manager()
   static litestl::binding::BindingManager *mgr = nullptr;
   if (!mgr) {
     litestl::alloc::PermanentGuard guard;
-    mgr = litestl::alloc::New<litestl::binding::BindingManager>("spike BindingManager");
+    mgr = litestl::alloc::New<litestl::binding::BindingManager>("testapp BindingManager");
     script::addBindings(mgr);
     mgr->add(litestl::binding::Bind<Host>());
-    BIND_FUNCTION(mgr, "spike::create", spike::create, MARGS()).returnsOwned();
-    BIND_FUNCTION(mgr, "spike::context", spike::context, MARGS("h"));
-    BIND_FUNCTION(mgr, "spike::historySize", spike::historySize, MARGS("h"));
-    BIND_FUNCTION(mgr, "spike::liveInstances", spike::liveInstances, MARGS("h"));
-    BIND_FUNCTION(mgr, "spike::validate", spike::validate, MARGS("h"));
+    BIND_FUNCTION(mgr, "testapp::create", testapp::create, MARGS()).returnsOwned();
+    BIND_FUNCTION(mgr, "testapp::context", testapp::context, MARGS("h"));
+    BIND_FUNCTION(mgr, "testapp::historySize", testapp::historySize, MARGS("h"));
+    BIND_FUNCTION(mgr, "testapp::liveInstances", testapp::liveInstances, MARGS("h"));
+    BIND_FUNCTION(mgr, "testapp::validate", testapp::validate, MARGS("h"));
     mgr->validate();
   }
   return mgr;
 }
 
-} // namespace spike
+} // namespace testapp
 
-extern "C" EMSCRIPTEN_KEEPALIVE litestl::binding::BindingManager *SPIKE_GetManager()
+extern "C" EMSCRIPTEN_KEEPALIVE litestl::binding::BindingManager *TESTAPP_GetManager()
 {
-  return spike::manager();
+  return testapp::manager();
 }

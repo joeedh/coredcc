@@ -13,6 +13,18 @@ type Method = (...args: any[]) => unknown
 
 const methods = new Map<string, Method>()
 
+/** What `info()` reports about the coredcc backend (src/main.ts sets it). */
+export interface BackendReport {
+  backend: string
+  backendError?: string
+  module?: string
+}
+let backendReport: BackendReport = {backend: 'none'}
+
+export function setBackendInfo(report: BackendReport): void {
+  backendReport = report
+}
+
 export function registerMethod(name: string, fn: Method): void {
   methods.set(name, fn)
 }
@@ -55,8 +67,8 @@ function registerCoreMethods(): void {
       pid: proc?.pid,
       browserPid: proc?.ppid,
       profile: argValue('user-data-dir'),
-      backend: 'none',
-      build: 'ta0',
+      ...backendReport,
+      build: 'ta1',
       devicePixelRatio: window.devicePixelRatio,
       viewport: {width: window.innerWidth, height: window.innerHeight},
       adapter: adapterReport(),

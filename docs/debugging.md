@@ -94,6 +94,23 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 - **Fix:** cast the index (`v[int(i)]`). This is why every C++ change builds all four
   presets.
 
+### The test app has no backend, or TA1's tests all skip
+- **Symptom:** `info().backend` is `'none'`, and TA1's tests are skipped (outside ctest)
+  or fail with "the page has no backend" (under ctest). `info().backendError` and the
+  CDP log say why.
+- **Causes, by message:**
+  - "no --apptest-module given": the page was launched without the launcher.
+  - A failed import of `backend-wasm.js`: `build.mjs` found no wasm-st module and built
+    the page without the backend. Build the wasm-st preset, then `pnpm run build`.
+  - "not compiled for this environment (did you build to HTML...)": a Debug web module
+    (emscripten ASSERTIONS) saw `process.versions.node`, which NW.js has. The page hides
+    `globalThis.process` around the module factory (`src/backend/wasm.ts`,
+    `instantiate`); this error means that was bypassed.
+  - "Failed to fetch dynamically imported module: node:module": the page loaded a module
+    built for node too (`-sENVIRONMENT=web,node`). NW.js takes the node path; use the
+    web-only `coredcc_testapp.mjs`.
+- **How to spot it next time:** `node apps/testapp/cdp.mjs --port <port> call info`.
+
 ## Techniques
 
 ### Checking that a regression test can fail

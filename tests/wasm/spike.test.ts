@@ -17,12 +17,12 @@ import {runInNewContext} from 'node:vm'
 
 import * as cdcc from 'coredcc-script'
 import {CommandFlags, ScriptError, Session, StatusCode, type Context, type ScriptCommand} from 'coredcc-script'
-import type {Host} from 'coredcc-gen/spike/Host'
-import * as spike from 'coredcc-gen/spike/functions'
+import type {Host} from 'coredcc-gen/testapp/Host'
+import * as spike from 'coredcc-gen/testapp/functions'
 
 const create = (await import(pathToFileURL(process.env.SPIKE_MODULE as string).href)).default
 const module = await create()
-const backend = cdcc.load(module, 'SPIKE_GetManager')
+const backend = cdcc.load(module, 'TESTAPP_GetManager')
 
 setFlagsFromString('--expose-gc')
 const gc = runInNewContext('gc') as () => void
@@ -383,10 +383,10 @@ describe('coredcc wasm-st spike', () => {
   })
 
   test('T4, T14: one module per realm', async () => {
-    assert.equal(cdcc.load(module, 'SPIKE_GetManager'), backend)
+    assert.equal(cdcc.load(module, 'TESTAPP_GetManager'), backend)
     const second = await create()
-    assert.throws(() => cdcc.load(second, 'SPIKE_GetManager'), /another coredcc module/)
-    assert.throws(() => cdcc.load({}, 'SPIKE_GetManager', {replace: true}), /Emscripten module/)
+    assert.throws(() => cdcc.load(second, 'TESTAPP_GetManager'), /another coredcc module/)
+    assert.throws(() => cdcc.load({}, 'TESTAPP_GetManager', {replace: true}), /Emscripten module/)
     assert.throws(() => cdcc.load(second, 'NoSuchExport', {replace: true}), /exports no NoSuchExport/)
   })
 })

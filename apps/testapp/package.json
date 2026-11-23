@@ -10,8 +10,8 @@
     "show": false
   },
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --format=esm --target=chrome140 --sourcemap --outfile=dist/app.js",
-    "typecheck": "tsc -p . && tsc -p tests",
+    "build": "node build.mjs",
+    "typecheck": "node build.mjs && tsc -p . && tsc -p tests",
     "test": "pnpm run build && node --test --test-concurrency=4 \"tests/**/*.test.ts\"",
     "launch": "pnpm run build && node nwjs/launch.mjs"
   },

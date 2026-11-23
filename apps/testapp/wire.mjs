@@ -27,6 +27,11 @@ const TYPED_ARRAYS = [
   'BigUint64Array',
 ]
 
+/** `out[k] = v` that also works for `__proto__` (a plain assignment sets the prototype). */
+function put(out, k, v) {
+  Object.defineProperty(out, k, {value: v, enumerable: true, writable: true, configurable: true})
+}
+
 function tagNumber(n) {
   if (Number.isNaN(n)) return {$t: 'num', v: 'NaN'}
   if (n === Infinity) return {$t: 'num', v: 'Infinity'}
@@ -68,7 +73,7 @@ function toWire(value, seen) {
       return {$t: 'error', v: {name: value.name, message: value.message, stack: value.stack}}
     }
     const out = {}
-    for (const k of Object.keys(value)) out[k] = toWire(value[k], seen)
+    for (const k of Object.keys(value)) put(out, k, toWire(value[k], seen))
     return Object.prototype.hasOwnProperty.call(out, '$t') ? {$t: 'obj', v: out} : out
   } finally {
     seen.delete(value)
@@ -80,7 +85,7 @@ function fromWire(node) {
   if (Array.isArray(node)) return node.map(fromWire)
   if (!Object.prototype.hasOwnProperty.call(node, '$t')) {
     const out = {}
-    for (const k of Object.keys(node)) out[k] = fromWire(node[k])
+    for (const k of Object.keys(node)) put(out, k, fromWire(node[k]))
     return out
   }
   switch (node.$t) {
@@ -106,7 +111,7 @@ function fromWire(node) {
     }
     case 'obj': {
       const out = {}
-      for (const k of Object.keys(node.v)) out[k] = fromWire(node.v[k])
+      for (const k of Object.keys(node.v)) put(out, k, fromWire(node.v[k]))
       return out
     }
     default:
@@ -116,8 +121,12 @@ function fromWire(node) {
 
 /** Serialize an error into a plain reply error. */
 export function errorInfo(err) {
-  if (err instanceof Error) return {name: err.name, message: err.message, stack: err.stack}
-  return {name: 'Error', message: String(err)}
+  if (!(err instanceof Error)) return {name: 'Error', message: String(err)}
+  const info = {name: err.name, message: err.message, stack: err.stack}
+  /* A string code only: the backend names coredcc's StatusCodes ('NotFound'), and
+   * DOMException's numeric codes stay out. */
+  if (typeof err.code === 'string') info.code = err.code
+  return info
 }
 
 /** Encode a reply object (`{ok, value}` / `{ok, error}`) to a string, enforcing the cap. */

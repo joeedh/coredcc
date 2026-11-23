@@ -60,6 +60,7 @@ export function profileInUse(profileDir) {
  * @property {'swiftshader'} [webgpu] force the software WebGPU adapter
  * @property {string[]} [appArgs]    extra app arguments (reach the page as nw.App.argv)
  * @property {string} [artifactsDir] where the log file and NW.js stdio go; default: profile
+ * @property {string} [module]       the wasm-st web module; default: defaultModulePath()
  * @property {number} [timeoutMs]    how long to wait for the CDP port (default 20 s)
  */
 
@@ -73,6 +74,17 @@ export function profileInUse(profileDir) {
  * @property {import('node:child_process').ChildProcess} child
  * @property {Promise<{code: number|null, signal: string|null}>} exited
  */
+
+/**
+ * The test app's web module (source/coredcc/testapp) the page loads:
+ * `$COREDCC_TESTAPP_MODULE` (the ctest sets it), else the wasm-st Debug build.
+ */
+export function defaultModulePath() {
+  return (
+    process.env.COREDCC_TESTAPP_MODULE ??
+    path.resolve(APP_DIR, '../../build/wasm-st/source/coredcc/testapp/Debug/coredcc_testapp.mjs')
+  )
+}
 
 /** Launch the app. Rejects (and cleans up a throwaway profile) if it can't start. */
 export async function launch(opts = {}) {
@@ -99,7 +111,12 @@ export async function launch(opts = {}) {
     args.push('--use-webgpu-adapter=swiftshader', '--enable-unsafe-webgpu')
   }
   if (opts.headless) args.push('--apptest-headless')
-  args.push(`--apptest-log=${logFile}`, ...(opts.appArgs ?? []))
+  args.push(`--apptest-log=${logFile}`)
+  const appArgs = opts.appArgs ?? []
+  if (!appArgs.some((a) => a.startsWith('--apptest-module='))) {
+    args.push(`--apptest-module=${path.resolve(opts.module ?? defaultModulePath())}`)
+  }
+  args.push(...appArgs)
 
   const child = spawn(await nwBin(), args, {stdio: ['ignore', 'pipe', 'pipe']})
   const stdio = fs.createWriteStream(path.join(artifactsDir, 'nw-stdio.txt'))

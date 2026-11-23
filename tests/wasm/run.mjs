@@ -1,6 +1,7 @@
-// Runs the P1f TS spike (spike.test.ts) against the wasm-st module:
+// Runs the P1f TS spike (spike.test.ts) against the test app's wasm-st module, node
+// variant (source/coredcc/testapp):
 //
-//   node run.mjs --module <coredcc_spike.mjs> [--out <scratch dir>]
+//   node run.mjs --module <coredcc_testapp_node.mjs> [--out <scratch dir>]
 //
 // Exits 77 (a ctest skip) when the dev dependencies aren't installed (`npm ci` here).
 //
@@ -18,10 +19,11 @@ const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '../..')
 const runtime = join(root, 'extern/litestl/binding/typescriptRuntime/index.ts')
 const script = join(root, 'source/coredcc/bind/ts/index.ts')
+const genScript = join(root, 'source/coredcc/bind/ts/gen.ts')
 
 const {values: opts} = parseArgs({options: {module: {type: 'string'}, out: {type: 'string'}}})
 if (!opts.module) {
-  console.error('usage: node run.mjs --module <coredcc_spike.mjs> [--out <dir>]')
+  console.error('usage: node run.mjs --module <coredcc_testapp_node.mjs> [--out <dir>]')
   process.exit(2)
 }
 const modulePath = resolve(opts.module)
@@ -56,7 +58,7 @@ const bundle = (entry, outfile) =>
 
 console.log('== generating the bindings TS')
 const genBundle = join(out, 'gen.mjs')
-if (bundle(join(here, 'gen.ts'), genBundle) !== 0 || run([genBundle, modulePath, gen]) !== 0) {
+if (bundle(genScript, genBundle) !== 0 || run([genBundle, modulePath, gen, 'TESTAPP_GetManager']) !== 0) {
   process.exit(1)
 }
 
@@ -83,7 +85,7 @@ writeFileSync(
           'coredcc-gen/*': [join(gen, '*')],
         },
       },
-      files: [join(here, 'spike.test.ts'), join(here, 'gen.ts')],
+      files: [join(here, 'spike.test.ts'), genScript],
       include: [join(gen, '**', '*.ts')],
     },
     null,

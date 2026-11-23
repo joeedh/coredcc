@@ -10,9 +10,13 @@
     "allowJs": true,
     "checkJs": false,
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
     "isolatedModules": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@litestl/typescript-runtime": ["../../extern/litestl/binding/typescriptRuntime/index.ts"],
+      "coredcc-script": ["../../source/coredcc/bind/ts/index.ts"],
+      "coredcc-gen/*": ["./gen/*"]
+    }
   },
   "include": ["src/**/*.ts", "wire.mjs"]
 }
