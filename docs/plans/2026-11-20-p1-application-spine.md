@@ -1135,6 +1135,45 @@ native prototype of the dispatcher, factory and registration with a fake host
     `LinearHistory` ("called from inside one of its records' slots"), as the pressure
     test predicted.
 
+### P1f step 4 review corrections (2026-11-22)
+The review is `docs/reports/feature-report-bind-2026-11-22.md`, and its regression tests
+are `tests/bind/test_bind_review.cc`.
+- **Changed in `bind/`:**
+  - ForeignBindings counts live script instances, and aborts when it is destroyed with
+    any alive (a history or executor outliving the Runtime).
+  - The reentrancy guard is per slot: ForeignBindings keeps a stack of the foreign
+    calls' method names.
+    - `setValue` and `invoke` are allowed only in exec, where they run as
+      sub-commands.
+    - `writeValue` is allowed in exec, undo and redo.
+    - `undo` and `redo` are never allowed.
+  - Registration copies the def, refuses the `core.` namespace, and takes one factory
+    count per call.
+  - New facades: `readEnum`, `readFlags`, `valueToString`, `canUndo`, `canRedo`,
+    `defDescription` and `defIcon`. `defInput` and `defOutput` check names.
+- **Changed in `command/` (native commands too):**
+  - A failed undo (one that leaves a sticky error) drops that record and the redo
+    side.
+  - `checkDef` requires a dotted-identifier id.
+  - `setPropertyDef` refuses a `core.setProperty` def with another implementation.
+- **Step 5 obligations from the review:**
+  - Bind one host object that owns the Runtime, Library, executor and history, in
+    destruction order. Don't bind them separately.
+  - Unwrap every result struct at once: its members are views that don't keep it
+    alive.
+  - The adapter supplies `canRun`, `memSize` (catching to 0: a failing memSize
+    reports an applied run as failed) and `discard`, and lists `redo` only when the
+    user's class has its own.
+  - A thrown canRun refusal becomes `statusError(FailedPrecondition, ...)`, not
+    Internal.
+  - Number helpers over the int64 (`bigint`) facades.
+  - Import `functions.ts` and the enums from their own files: `index.ts` doesn't
+    export them.
+- **Deferred past step 5:**
+  - registry removal (TS hot reload);
+  - the `runSub` argument order;
+  - Enum and Flags inputs and numeric ranges in the def builders.
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.

@@ -48,6 +48,9 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FUNCTION(mgr, "coredcc::readFloat", script::readFloat, MARGS("v"));
   BIND_FUNCTION(mgr, "coredcc::readString", script::readString, MARGS("v"));
   BIND_FUNCTION(mgr, "coredcc::readComponent", script::readComponent, MARGS("v", "i"));
+  BIND_FUNCTION(mgr, "coredcc::readEnum", script::readEnum, MARGS("v"));
+  BIND_FUNCTION(mgr, "coredcc::readFlags", script::readFlags, MARGS("v"));
+  BIND_FUNCTION(mgr, "coredcc::valueToString", script::valueToString, MARGS("v"));
 
   BIND_FUNCTION(mgr, "coredcc::bagGet", script::bagGet, MARGS("bag", "name"));
   BIND_FUNCTION(mgr, "coredcc::bagSize", script::bagSize, MARGS("bag"));
@@ -63,10 +66,14 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FUNCTION(mgr, "coredcc::invoke", script::invoke, MARGS("ctx", "invocation"));
   BIND_FUNCTION(mgr, "coredcc::undo", script::undo, MARGS("ctx"));
   BIND_FUNCTION(mgr, "coredcc::redo", script::redo, MARGS("ctx"));
+  BIND_FUNCTION(mgr, "coredcc::canUndo", script::canUndo, MARGS("ctx"));
+  BIND_FUNCTION(mgr, "coredcc::canRedo", script::canRedo, MARGS("ctx"));
 
   BIND_FUNCTION(mgr, "coredcc::newCommandDef", script::newCommandDef, MARGS("id"))
       .returnsOwned();
   BIND_FUNCTION(mgr, "coredcc::defUiName", script::defUiName, MARGS("def", "s"));
+  BIND_FUNCTION(mgr, "coredcc::defDescription", script::defDescription, MARGS("def", "s"));
+  BIND_FUNCTION(mgr, "coredcc::defIcon", script::defIcon, MARGS("def", "s"));
   BIND_FUNCTION(mgr, "coredcc::defFlags", script::defFlags, MARGS("def", "flags"));
   BIND_FUNCTION(mgr, "coredcc::defInput", script::defInput, MARGS("def", "name", "defaultValue"));
   BIND_FUNCTION(mgr, "coredcc::defOutput", script::defOutput, MARGS("def", "name", "defaultValue"));

@@ -21,6 +21,7 @@ coredcc_test(test_command_blocks SOURCES command/test_command_blocks.cc DEPS cor
 coredcc_test(test_command_review SOURCES command/test_command_review.cc DEPS coredcc_command)
 coredcc_test(test_bind_facades SOURCES bind/test_bind_facades.cc DEPS coredcc_bind)
 coredcc_test(test_bind_foreign SOURCES bind/test_bind_foreign.cc DEPS coredcc_bind)
+coredcc_test(test_bind_review SOURCES bind/test_bind_review.cc DEPS coredcc_bind)
 if(WIN32)
   coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_command)
 endif()

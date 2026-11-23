@@ -118,6 +118,21 @@ Status CommandRegistry::checkDef(const CommandDef &def) const
   if (name.empty()) {
     return Status::error(StatusCode::InvalidArgument, "command '': an empty id");
   }
+  /* Ids the invocation parser can't read could never be invoked. */
+  for (size_t start = 0;;) {
+    const size_t dot = name.find('.', start);
+    const std::string_view part = std::string_view(name).substr(start, dot - start);
+    if (!isIdentifier(part)) {
+      return Status::error(StatusCode::InvalidArgument,
+                           ("command '" + name +
+                            "': not a dotted identifier (like 'mesh.extrude')")
+                               .c_str());
+    }
+    if (dot == std::string::npos) {
+      break;
+    }
+    start = dot + 1;
+  }
   if (find(name)) {
     return Status::error(StatusCode::AlreadyExists,
                          ("command '" + name + "': already registered").c_str());

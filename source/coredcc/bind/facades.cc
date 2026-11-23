@@ -5,6 +5,7 @@
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/command/executor.h"
 #include "coredcc/command/set_property.h"
+#include "coredcc/parse/invocation.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
@@ -41,11 +42,23 @@ Status notInSlot(const char *what)
                std::string(what) + ": only inside a command's slots");
 }
 
-/* A script's discard, run while the host clears the history, must not push into it. */
-Status busyInForeignCall(const char *what)
+/* Busy unless no script slot is running or the innermost one is in `allowed`: a
+ * script's discard, run while the host clears the history, must not push into it. */
+Status slotGate(Context &ctx, const char *what, std::initializer_list<const char *> allowed)
 {
+  const ForeignBindings *fb = ctx.runtime().findExt<ForeignBindings>();
+  const char *slot = fb ? fb->currentSlot() : nullptr;
+  if (!slot || inForeignSlot(ctx.runtime(), allowed)) {
+    return Status();
+  }
+  std::string where;
+  for (const char *a : allowed) {
+    where += std::string(where.empty() ? "" : ", ") + a;
+  }
   return error(StatusCode::Busy,
-               std::string(what) + ": not from inside a script command's slot");
+               std::string(what) + ": not from a script command's " + slot +
+                   (where.empty() ? std::string(" (only outside script slots)")
+                                  : " (only from " + where + ")"));
 }
 
 template <class R, class T> R ok(T value)
@@ -83,8 +96,8 @@ ValueResult lookup(const PropertyBag &bag, const string &name)
 
 Status statusError(StatusCode code, const string &message)
 {
-  return Status::error(code == StatusCode::Ok ? StatusCode::InvalidArgument : code,
-                       message.c_str());
+  const bool valid = code != StatusCode::Ok && uint32_t(code) <= uint32_t(StatusCode::Internal);
+  return Status::error(valid ? code : StatusCode::InvalidArgument, message.c_str());
 }
 
 /* ---- PropValue ---- */
@@ -148,6 +161,20 @@ FloatResult readComponent(const PropValue &v, int32_t i)
                                          std::to_string(n)));
   }
   return ok<FloatResult>(v.component(i));
+}
+IntResult readEnum(const PropValue &v)
+{
+  std::optional<int64_t> e = v.tryEnum();
+  return e ? ok<IntResult>(*e) : failed<IntResult>(wrongType(v, "Enum"));
+}
+IntResult readFlags(const PropValue &v)
+{
+  std::optional<uint64_t> f = v.tryFlags();
+  return f ? ok<IntResult>(int64_t(*f)) : failed<IntResult>(wrongType(v, "Flags"));
+}
+string valueToString(const PropValue &v)
+{
+  return string(v.toString().c_str());
 }
 
 /* ---- PropertyBag ---- */
@@ -214,29 +241,45 @@ Status setValue(Context &ctx, const string &path, const PropValue &value)
                  "setValue: the context has no executor (writeValue writes unrecorded)");
   }
   /* From exec it becomes a sub-command; from any other slot it would push. */
-  if (inForeignCall(ctx.runtime()) && !ex->running()) {
-    return error(StatusCode::Busy,
-                 "setValue: only from a script command's exec (use writeValue in undo)");
-  }
+  CDCC_TRY(slotGate(ctx, "setValue", {"exec"}));
   return setValueUndo(ctx, view(path), value);
 }
 Status writeValue(Context &ctx, const string &path, const PropValue &value)
 {
+  /* Elsewhere (canRun, discard, make) no record would own the change. */
+  CDCC_TRY(slotGate(ctx, "writeValue", {"exec", "undo", "redo"}));
   return coredcc::setValue(ctx, view(path), value);
 }
 BagResult invoke(Context &ctx, const string &invocation)
 {
-  if (inForeignCall(ctx.runtime())) {
-    return failed<BagResult>(busyInForeignCall("invoke"));
+  if (Status s = slotGate(ctx, "invoke", {"exec"}); !s.ok()) {
+    return failed<BagResult>(std::move(s));
   }
-  Result<PropertyBag> r = coredcc::invoke(ctx, view(invocation));
+  CommandExecutor *ex = ctx.executor();
+  if (!inForeignCall(ctx.runtime()) || !ex) {
+    Result<PropertyBag> r = coredcc::invoke(ctx, view(invocation));
+    return r.ok() ? ok<BagResult>(std::move(r).value()) : failed<BagResult>(r.status());
+  }
+  /* From a script command's exec: a sub-command, as setValue is. */
+  Result<Invocation> inv = parseInvocation(view(invocation));
+  if (!inv.ok()) {
+    return failed<BagResult>(inv.status());
+  }
+  Runtime &rt = ctx.runtime();
+  const CommandDef *def = rt.ext<CommandRegistry>().find(inv->command.c_str());
+  if (!def) {
+    return failed<BagResult>(rt.ext<CommandRegistry>().unknown(inv->command.c_str()));
+  }
+  Result<PropertyBag> inputs = inputsFromInvocation(rt, *def, *inv);
+  if (!inputs.ok()) {
+    return failed<BagResult>(inputs.status());
+  }
+  Result<PropertyBag> r = ex->runSub(ctx, *def, std::move(inputs).value());
   return r.ok() ? ok<BagResult>(std::move(r).value()) : failed<BagResult>(r.status());
 }
 Status undo(Context &ctx)
 {
-  if (inForeignCall(ctx.runtime())) {
-    return busyInForeignCall("undo");
-  }
+  CDCC_TRY(slotGate(ctx, "undo", {}));
   if (!ctx.executor()) {
     return error(StatusCode::FailedPrecondition, "undo: the context has no executor");
   }
@@ -244,13 +287,29 @@ Status undo(Context &ctx)
 }
 Status redo(Context &ctx)
 {
-  if (inForeignCall(ctx.runtime())) {
-    return busyInForeignCall("redo");
-  }
+  CDCC_TRY(slotGate(ctx, "redo", {}));
   if (!ctx.executor()) {
     return error(StatusCode::FailedPrecondition, "redo: the context has no executor");
   }
   return ctx.executor()->redo(ctx);
+}
+static BoolResult historyCan(Context &ctx, const char *what, bool undo)
+{
+  CommandExecutor *ex = ctx.executor();
+  if (!ex) {
+    return failed<BoolResult>(
+        error(StatusCode::FailedPrecondition, std::string(what) + ": the context has no executor"));
+  }
+  UndoHistory *h = ex->history();
+  return ok<BoolResult>(h && (undo ? h->canUndo() : h->canRedo()));
+}
+BoolResult canUndo(Context &ctx)
+{
+  return historyCan(ctx, "canUndo", true);
+}
+BoolResult canRedo(Context &ctx)
+{
+  return historyCan(ctx, "canRedo", false);
 }
 
 /* ---- result struct descriptors ---- */

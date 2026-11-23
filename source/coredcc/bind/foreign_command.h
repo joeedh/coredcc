@@ -23,6 +23,7 @@
 #include "litestl/util/vector.h"
 
 #include <cstdint>
+#include <initializer_list>
 
 namespace coredcc::script {
 
@@ -43,29 +44,52 @@ struct ForeignFactory {
 
 /**
  * The Runtime extension behind script commands: the dispatcher every foreign table
- * shares, the depth of foreign calls in progress, and the factory handles it owns.
+ * shares, the foreign calls in progress, and the factory handles it owns.
+ *
+ * It counts the live script command instances. Destroying it (with the Runtime) while
+ * any is alive aborts, naming the cause: a history or executor outlived the Runtime.
  */
 class ForeignBindings {
  public:
   static constexpr const char *kExtName = "coredcc.script.ForeignBindings";
 
   explicit ForeignBindings(Runtime *rt);
-  /** Releases the factory handles. */
+  /** Releases the factory handles. Aborts if script command instances are alive. */
   ~ForeignBindings();
   ForeignBindings(const ForeignBindings &) = delete;
   ForeignBindings &operator=(const ForeignBindings &) = delete;
 
   ForeignDispatcher *dispatcher();
-  /** foreign::call with the depth raised; Internal with the host's message on failure. */
+  /** foreign::call with `m` on the slot stack; Internal with the host's message on
+   * failure. */
   Status call(litestl::binding::foreign::Handle h,
               const litestl::binding::types::Method *m,
               void **args,
               void *ret);
   /** Foreign calls in progress. While it is above 0, facades that would reenter the
-   * executor or the history are Busy. */
+   * executor or the history are Busy, per slot (see facades.h). */
   int depth() const
   {
-    return depth_;
+    return int(slots_.size());
+  }
+  /** The innermost foreign call's method name (a Command slot, or `make`); null when
+   * none is in progress. */
+  const char *currentSlot() const
+  {
+    return slots_.size() > 0 ? slots_[int(slots_.size()) - 1] : nullptr;
+  }
+  /** Live script command instances, made by a factory and not yet destroyed. */
+  int liveInstances() const
+  {
+    return live_;
+  }
+  void instanceMade()
+  {
+    live_++;
+  }
+  void instanceGone()
+  {
+    live_--;
   }
   /** Takes the count of a factory handle, released when the Runtime goes. */
   void keepFactory(litestl::binding::foreign::Handle h);
@@ -73,12 +97,16 @@ class ForeignBindings {
  private:
   class Dispatcher;
   Dispatcher *dispatcher_;
-  int depth_ = 0;
+  litestl::util::Vector<const char *> slots_;
+  int live_ = 0;
   litestl::util::Vector<litestl::binding::foreign::Handle> factories_;
 };
 
 /** Whether a foreign call is in progress on `rt`. */
 bool inForeignCall(const Runtime &rt);
+/** Whether the innermost foreign call on `rt` is one of `slots`. False when none is in
+ * progress. */
+bool inForeignSlot(const Runtime &rt, std::initializer_list<const char *> slots);
 
 /**
  * Ok if every slot of `iface` can be implemented by a script: none takes or returns a
@@ -88,27 +116,33 @@ Status foreignImplementable(const lbt::_StructBase *iface);
 
 /* ---- CommandDef builder facades ---- */
 
-/** A new def for command `id` (dotted). Owned by the caller until registered. */
+/** A new def for command `id` (dotted). Owned by the caller, who disposes of it:
+ * registration copies it. */
 CommandDef *newCommandDef(const string &id);
 Status defUiName(CommandDef &def, const string &s);
+Status defDescription(CommandDef &def, const string &s);
+Status defIcon(CommandDef &def, const string &s);
 Status defFlags(CommandDef &def, uint32_t flags);
 /** An input whose kind and default come from `defaultValue`: Bool, Int, Float, String
- * or Vec2-4. Other types are InvalidArgument. */
+ * or Vec2-4. Other types are InvalidArgument, and so is a name that isn't an
+ * identifier. A name the def's inputs already have is AlreadyExists. */
 Status defInput(CommandDef &def, const string &name, const PropValue &defaultValue);
-/** An output, typed by `defaultValue` as for defInput. */
+/** An output, typed and checked as for defInput. */
 Status defOutput(CommandDef &def, const string &name, const PropValue &defaultValue);
 
 /**
- * Registers a script command: `def` (moved from, so register it once), made by the
- * factory `factory`, whose instances implement the space-separated Command slots in
- * `slots`.
+ * Registers a copy of `def` as a script command, made by the factory `factory`, whose
+ * instances implement the space-separated Command slots in `slots`.
  *
- * C++ takes the factory's count whatever the outcome, and releases it on failure.
- * Folding (`foldKey`, `foldFrom`) isn't supported from scripts yet, and is refused.
- * A refused registration leaves no table and no def behind.
+ * - Each call takes one count of `factory`, whatever the outcome, and releases it on
+ *   failure. Registering two commands with one factory needs two counts (two
+ *   `foreignHandle` calls in TS).
+ * - Folding (`foldKey`, `foldFrom`) isn't supported from scripts yet, and is refused.
+ * - The `core.` namespace is reserved for coredcc's own commands.
+ * - A refused registration leaves no table and no def behind.
  */
 Status registerForeignCommand(Context &ctx,
-                              CommandDef &def,
+                              const CommandDef &def,
                               uint32_t factory,
                               const string &slots);
 

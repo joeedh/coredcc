@@ -132,6 +132,8 @@ class UndoHistory {
  * - Barriers stop undo.
  * - A failed redo has undone its own partial work; that command and everything after it
  *   are dropped.
+ * - A failed undo (one that leaves a sticky error) drops that command and everything
+ *   after it too: what it left behind is unknown, so redoing over it isn't safe.
  * - Not reentrant: a slot that calls back into the history is refused (Busy) or aborts.
  */
 class LinearHistory final : public UndoHistory {

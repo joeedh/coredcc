@@ -10,6 +10,15 @@
  * - Misuse from a script (the wrong value type, an index out of range, a call that
  *   would reenter the history) is an error result. It never aborts.
  * - Facades never set the Runtime's sticky error: a failure is in what they return.
+ *
+ * **Inside a script command's slots** the facades that change the document are
+ * limited by slot, and are Busy elsewhere:
+ * - `setValue` and `invoke` only in `exec`, where they run as sub-commands;
+ * - `writeValue` only in `exec`, `undo` and `redo`;
+ * - `undo` and `redo` never;
+ * - reads anywhere.
+ *
+ * Outside any script slot (a script's top level) every facade is allowed.
  */
 
 #include "coredcc/api/context.h"
@@ -60,7 +69,7 @@ struct BagResult {
 
 /* ---- Status ---- */
 
-/** An error Status. `Ok` is not an error code, and becomes InvalidArgument. */
+/** An error Status. `Ok`, and a number that is no StatusCode, become InvalidArgument. */
 Status statusError(StatusCode code, const string &message);
 
 /* ---- PropValue: makers and checked readers ---- */
@@ -80,6 +89,13 @@ FloatResult readFloat(const PropValue &v);
 StringResult readString(const PropValue &v);
 /** Component `i` of a Float, vector, Mat4 or Quat; OutOfRange past componentCount(). */
 FloatResult readComponent(const PropValue &v, int32_t i);
+/** An Enum value's number. Write enums with makeString and the item's key. */
+IntResult readEnum(const PropValue &v);
+/** A Flags value's bits, as an int64 with the same bits. */
+IntResult readFlags(const PropValue &v);
+/** A readable form for display and debugging (PropValue::toString): not an invocation
+ * literal. */
+string valueToString(const PropValue &v);
 
 /* ---- PropertyBag: read-only ---- */
 
@@ -109,9 +125,13 @@ Status setValue(Context &ctx, const string &path, const PropValue &value);
 /** The raw write, not recorded: for a command's exec and undo, on state they capture
  * themselves. Don't set one member through both setValue and writeValue in a command. */
 Status writeValue(Context &ctx, const string &path, const PropValue &value);
-/** Runs an invocation, `mesh.extrude(distance=2)`, returning its outputs. */
+/** Runs an invocation, `mesh.extrude(distance=2)`, returning its outputs. From a script
+ * command's exec it runs as a sub-command. */
 BagResult invoke(Context &ctx, const string &invocation);
 Status undo(Context &ctx);
 Status redo(Context &ctx);
+/** Whether undo or redo would do something. FailedPrecondition without an executor. */
+BoolResult canUndo(Context &ctx);
+BoolResult canRedo(Context &ctx);
 
 } // namespace coredcc::script

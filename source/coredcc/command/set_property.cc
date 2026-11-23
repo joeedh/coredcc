@@ -162,6 +162,10 @@ constexpr const char *kImpl = "core.setProperty#impl";
 Result<const CommandDef *> setPropertyDef(Runtime &rt)
 {
   if (const CommandDef *d = rt.ext<CommandRegistry>().find(kSetPropertyCommand)) {
+    if (d->implType() != TypeId::of(kImpl)) {
+      return Status::error(StatusCode::AlreadyExists,
+                           "core.setProperty is registered with another implementation");
+    }
     return d;
   }
   CommandDef def(kSetPropertyCommand);

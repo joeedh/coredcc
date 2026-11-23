@@ -341,7 +341,18 @@ Status LinearHistory::undo(Context &ctx)
   }
   HistoryCall call(inCall_);
   headFoldable_ = false;
-  entries_[--cursor_]->undo(ctx);
+  Runtime &rt = ctx.runtime();
+  const bool stray = rt.hasStickyError();
+  CommandRecord *rec = entries_[--cursor_];
+  rec->undo(ctx);
+  if (!stray && rt.hasStickyError()) {
+    /* Undo can't be rolled back, and what it left is unknown: redoing over it isn't safe. */
+    const std::string note = "undo of '" + std::string(rec->def().name().c_str()) +
+                             "' failed, so it and the commands after it were dropped";
+    truncateRedo();
+    Status s = rt.takeStickyError();
+    return combine(s, "; ", Status::error(s.code(), note.c_str()));
+  }
   return Status();
 }
 

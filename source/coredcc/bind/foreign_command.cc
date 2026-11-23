@@ -6,6 +6,8 @@
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
+#include "coredcc/base/text.h"
+
 #include <cstring>
 #include <span>
 #include <string>
@@ -77,6 +79,10 @@ ForeignBindings::ForeignBindings(Runtime *)
 
 ForeignBindings::~ForeignBindings()
 {
+  /* Records would call through freed tables and this dispatcher: a silent UAF. */
+  CDCC_CHECK(live_ == 0,
+             "script command instances outlive the Runtime: destroy the executor and the "
+             "history before it");
   for (lf::Handle h : factories_) {
     lf::release(h);
   }
@@ -91,9 +97,9 @@ ForeignDispatcher *ForeignBindings::dispatcher()
 Status ForeignBindings::call(lf::Handle h, const lbt::Method *m, void **args, void *ret)
 {
   string err;
-  depth_++;
+  slots_.append(m->name.c_str());
   const bool ok = lf::call(h, m, args, ret, &err);
-  depth_--;
+  slots_.pop_back();
   if (ok) {
     return Status();
   }
@@ -110,6 +116,21 @@ bool inForeignCall(const Runtime &rt)
 {
   const ForeignBindings *fb = rt.findExt<ForeignBindings>();
   return fb && fb->depth() > 0;
+}
+
+bool inForeignSlot(const Runtime &rt, std::initializer_list<const char *> slots)
+{
+  const ForeignBindings *fb = rt.findExt<ForeignBindings>();
+  const char *cur = fb ? fb->currentSlot() : nullptr;
+  if (!cur) {
+    return false;
+  }
+  for (const char *s : slots) {
+    if (strcmp(cur, s) == 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /* ---- foreignImplementable ---- */
@@ -178,6 +199,18 @@ Status defUiName(CommandDef &def, const string &s)
   return Status();
 }
 
+Status defDescription(CommandDef &def, const string &s)
+{
+  def.description(view(s));
+  return Status();
+}
+
+Status defIcon(CommandDef &def, const string &s)
+{
+  def.icon(view(s));
+  return Status();
+}
+
 Status defFlags(CommandDef &def, uint32_t flags)
 {
   const uint32_t known = uint32_t(CommandFlags::Private | CommandFlags::NoUndo |
@@ -193,9 +226,20 @@ Status defFlags(CommandDef &def, uint32_t flags)
 namespace {
 
 /* A def of `defaultValue`'s kind, for defInput and defOutput. */
-Result<PropertyDef> scriptProp(const char *what, const string &name, const PropValue &defaultValue)
+Result<PropertyDef> scriptProp(const char *what,
+                               const string &name,
+                               const PropValue &defaultValue,
+                               bool taken)
 {
   const std::string_view n = view(name);
+  if (!isIdentifier(n)) {
+    return error(StatusCode::InvalidArgument,
+                 std::string(what) + " '" + name.c_str() + "': not an identifier");
+  }
+  if (taken) {
+    return error(StatusCode::AlreadyExists,
+                 std::string(what) + " '" + name.c_str() + "': the def already has one");
+  }
   PropertyDef pd = PropertyDef::boolProp(n);
   switch (defaultValue.type()) {
     case PropValue::Type::Bool:
@@ -228,7 +272,8 @@ Result<PropertyDef> scriptProp(const char *what, const string &name, const PropV
 
 Status defInput(CommandDef &def, const string &name, const PropValue &defaultValue)
 {
-  Result<PropertyDef> pd = scriptProp("defInput", name, defaultValue);
+  const bool taken = def.findInput(view(name)) != nullptr;
+  Result<PropertyDef> pd = scriptProp("defInput", name, defaultValue, taken);
   if (!pd.ok()) {
     return pd.status();
   }
@@ -238,7 +283,11 @@ Status defInput(CommandDef &def, const string &name, const PropValue &defaultVal
 
 Status defOutput(CommandDef &def, const string &name, const PropValue &defaultValue)
 {
-  Result<PropertyDef> pd = scriptProp("defOutput", name, defaultValue);
+  bool taken = false;
+  for (int i = 0; i < def.outputCount(); i++) {
+    taken = taken || def.outputDef(i).apiName() == name;
+  }
+  Result<PropertyDef> pd = scriptProp("defOutput", name, defaultValue, taken);
   if (!pd.ok()) {
     return pd.status();
   }
@@ -266,7 +315,15 @@ Result<Owned<Command>> makeInstance(Runtime &rt, TypeId type, lf::Handle factory
     lf::release(h);
     return error(StatusCode::NotFound, "the script command's table is gone");
   }
-  return Owned<Command>(c, [](void *self, void *) { lf::release(handleOf(self)); });
+  ForeignBindings &fb = rt.ext<ForeignBindings>();
+  fb.instanceMade();
+  return Owned<Command>(
+      c,
+      [](void *self, void *ctx) {
+        static_cast<ForeignBindings *>(ctx)->instanceGone();
+        lf::release(handleOf(self));
+      },
+      &fb);
 }
 
 std::vector<std::string> splitSlots(const string &slots)
@@ -290,7 +347,7 @@ std::vector<std::string> splitSlots(const string &slots)
   return out;
 }
 
-Status registerWith(Runtime &rt, CommandDef &def, lf::Handle factory, const string &slots)
+Status registerWith(Runtime &rt, const CommandDef &def, lf::Handle factory, const string &slots)
 {
   const std::vector<std::string> names = splitSlots(slots);
   auto has = [&names](const char *slot) {
@@ -305,6 +362,11 @@ Status registerWith(Runtime &rt, CommandDef &def, lf::Handle factory, const stri
   CDCC_TRY(reg.checkDef(def));
   CDCC_TRY(CommandRegistry::checkSlots(def, has("redo"), has("foldKey"), has("foldFrom")));
   const std::string cmd = def.name().c_str();
+  /* A script taking core.setProperty would break setValue for the whole Runtime. */
+  if (cmd.rfind("core.", 0) == 0) {
+    return error(StatusCode::InvalidArgument,
+                 "command '" + cmd + "': the 'core.' namespace is reserved for coredcc");
+  }
   /* The native fold protocol downcasts `next`, which a script command can't do. */
   if (has("foldKey") || has("foldFrom")) {
     return error(StatusCode::Unsupported,
@@ -323,15 +385,18 @@ Status registerWith(Runtime &rt, CommandDef &def, lf::Handle factory, const stri
                                     nullptr,
                                     std::span<const char *const>(present.data(), present.size())));
   const TypeId type = TypeId::of(impl);
-  def.impl(impl, [type, factory](Runtime &r) { return makeInstance(r, type, factory); });
-  Result<const CommandDef *> added = reg.add(std::move(def));
+  /* A copy: the script's builder stays usable, and registering it twice is a clear
+   * AlreadyExists. */
+  CommandDef copy = def;
+  copy.impl(impl, [type, factory](Runtime &r) { return makeInstance(r, type, factory); });
+  Result<const CommandDef *> added = reg.add(std::move(copy));
   return added.ok() ? Status() : added.status();
 }
 
 } // namespace
 
 Status registerForeignCommand(Context &ctx,
-                              CommandDef &def,
+                              const CommandDef &def,
                               uint32_t factory,
                               const string &slots)
 {
