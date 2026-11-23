@@ -7,6 +7,20 @@
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
+const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::StatusCode>::bind()
+{
+  using coredcc::StatusCode;
+  static types::Enum *e = nullptr;
+  if (!e) {
+    alloc::PermanentGuard guard;
+    e = new types::Enum("coredcc::StatusCode", sizeof(StatusCode));
+    for (int i = 0; i <= int(StatusCode::Internal); i++) {
+      e->addItem(coredcc::statusCodeName(StatusCode(i)), i);
+    }
+  }
+  return e;
+}
+
 namespace coredcc {
 
 namespace lbt = litestl::binding::types;
@@ -54,8 +68,10 @@ const lbt::Struct<Status> *Status::defineBindings()
   if (!st) {
     PermanentGuard guard;
     st = new lbt::Struct<Status>("coredcc::Status", sizeof(Status));
+    BIND_STRUCT_DEFAULT_CONSTRUCTOR(st);
     BIND_STRUCT_COPY_CONSTRUCTOR(st);
     BIND_STRUCT_METHOD(st, ok, MARGS());
+    BIND_STRUCT_METHOD(st, code, MARGS());
     BIND_STRUCT_METHOD(st, message, MARGS());
   }
   return st;

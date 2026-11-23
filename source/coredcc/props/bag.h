@@ -53,6 +53,10 @@ class PropertyBag {
   Status reset(std::string_view name);
   void resetAll();
 
+  /** Bound opaque, with a copy constructor: scripts read bags through bind/'s
+   * facades, and never write them (a recorded command's inputs are read again later). */
+  static const litestl::binding::types::Struct<PropertyBag> *defineBindings();
+
  private:
   struct Entry {
     PropertyDef def;

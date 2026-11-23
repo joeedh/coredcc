@@ -15,7 +15,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | in progress (TA0 done) | — |
 | 3 | [P0 scaffold and interface system](plans/2026-11-19-p0-scaffold-interfaces.md) | P0 | 1, 4 | reviewed | [interfaces](reports/feature-report-interfaces-2026-11-20.md) |
 | 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | done (litestl #4 B, #5 A, #6 C1 merged; C2 moves to P1f) | — |
-| 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | in progress (P1a-P1e reviewed; P1f steps 1-2 done) | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md) |
+| 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | in progress (P1a-P1e reviewed; P1f steps 1-4 done) | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md) |
 | 6 | P2 layout and library IO | P2 | 5 | todo | layout |
 | 7 | P3 objects, transforms and BVH | P3 | 5 | todo | objects and transforms; BVH |
 | 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | todo | tools and overlay |
@@ -72,7 +72,7 @@ Set up before the first worktree, following sculptcore and faberforge:
 - sccache is not installed on this machine yet (checked 2026-11-19); install it first.
 
 ## Current focus
-- litestl #4, #5 and #6 merged; coredcc pins litestl master `7bab16b` (2026-11-21).
+- litestl #4-#6 and #8-#10 merged; coredcc pins litestl master `913feaf` (2026-11-22).
 - P1 on master:
   - P1a (props) and P1b (parsers) are done and reviewed. The review's findings are
     fixed or tracked in `docs/reports/feature-report-props-parse-2026-11-21.md`.
@@ -82,7 +82,10 @@ Set up before the first worktree, following sculptcore and faberforge:
     done and reviewed: `docs/reports/feature-report-command-2026-11-21.md`.
   - P1f steps 1-2 (Emscripten toolchain, wasm-st/wasm-mt presets, the suite under
     node) are done.
-  - Next: P1f step 3, C2 (the litestl foreign-dispatch PR), then `bind/`, the spike
-    and TA1. They pick up the binding-surface items from all three reviews.
-  - Open litestl PR: #8 (tests exit instead of opening a crash dialog on Windows).
+  - P1f step 3, C2 (litestl foreign dispatch), is done: litestl #9, plus #10 (N-API
+    keeps an already-pending exception).
+  - P1f step 4, `bind/` (facades, script commands, the manager), is done. Its API
+    review is next.
+  - Then the spike (step 5) and TA1 (step 6). They pick up the binding-surface items
+    from all three reviews.
 - Test app TA0 is done (6 tests pass): `cd apps/testapp && pnpm install && pnpm test`.

@@ -82,7 +82,7 @@ struct Command : IfaceRef {
     return CDCC_CALL(foldFrom, next);
   }
 
-  CDCC_INTERFACE(Command, "coredcc.Command")
+  CDCC_INTERFACE(Command, "coredcc::Command")
   {
     BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
@@ -178,6 +178,9 @@ class CommandDef {
   {
     return factory_(rt);
   }
+
+  /** Bound opaque, for bind/'s builder facades (newCommandDef and the def* calls). */
+  static const litestl::binding::types::Struct<CommandDef> *defineBindings();
 
  private:
   CommandId id_;

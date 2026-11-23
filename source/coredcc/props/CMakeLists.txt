@@ -1,6 +1,7 @@
 coredcc_library(coredcc_props
   SOURCES
     bag.cc
+    bindings.cc
     def.cc
     kind.cc
     ref.cc

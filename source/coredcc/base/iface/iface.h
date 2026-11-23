@@ -11,7 +11,7 @@
  *     int count() const { return CDCC_CALL(count); }
  *     double cost() const { return CDCC_HAS(cost) ? CDCC_CALL(cost) : count() * 2.0; }
  *
- *     CDCC_INTERFACE(Spatial, "coredcc.Spatial") {
+ *     CDCC_INTERFACE(Spatial, "coredcc::Spatial") {
  *       BIND_STRUCT_METHOD(st, count, MARGS());
  *       BIND_OPTIONAL_METHOD(st, cost, MARGS());
  *     }

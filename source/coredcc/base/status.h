@@ -10,9 +10,13 @@
 #include <type_traits>
 #include <utility>
 
-namespace litestl::binding::types {
+namespace litestl::binding {
+struct BindingBase;
+template <typename T> struct Binder;
+namespace types {
 template <typename T> struct Struct;
 }
+} // namespace litestl::binding
 
 namespace coredcc {
 
@@ -151,3 +155,10 @@ template <typename T> class [[nodiscard]] Result {
   } while (0)
 
 } // namespace coredcc
+
+namespace litestl::binding {
+/** StatusCode, bound as an enum (base/bindings.cc). */
+template <> struct Binder<coredcc::StatusCode> {
+  static const BindingBase *bind();
+};
+} // namespace litestl::binding

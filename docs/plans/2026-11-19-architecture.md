@@ -126,7 +126,7 @@ struct Spatial : IfaceRef {   // IfaceRef = {const IfaceTable *table; void *self
   int count() const { return CDCC_CALL(count); }
   double cost() const { return CDCC_HAS(cost) ? CDCC_CALL(cost) : count() * 2.0; }
 
-  CDCC_INTERFACE(Spatial, "coredcc.Spatial") {   // body of a cached defineBindings()
+  CDCC_INTERFACE(Spatial, "coredcc::Spatial") {   // body of a cached defineBindings()
     BIND_STRUCT_METHOD(st, rayCast, MARGS("ray", "hit"));
     BIND_STRUCT_METHOD(st, count, MARGS());
     BIND_OPTIONAL_METHOD(st, cost, MARGS());
@@ -229,7 +229,7 @@ struct Spatial : IfaceRef {   // IfaceRef = {const IfaceTable *table; void *self
   - `bigint` for int64.
 
   The TypeScript compiler then checks `class JsMesh implements Spatial`.
-- **Foreign tables.** `rt.implement(block or typeName, "coredcc.Spatial", jsObject)`
+- **Foreign tables.** `rt.implement(block or typeName, "coredcc::Spatial", jsObject)`
   builds a foreign `IfaceTable` per JS class. Slots for missing optional methods are null.
 - **The dispatcher.** There is one per host: `EM_JS` under WASM, and `napi_call_function`
   under N-API.

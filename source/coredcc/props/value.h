@@ -15,6 +15,14 @@
 #include <string>
 #include <string_view>
 
+namespace litestl::binding {
+struct BindingBase;
+template <typename T> struct Binder;
+namespace types {
+template <typename T> struct Struct;
+}
+} // namespace litestl::binding
+
 namespace coredcc {
 
 /**
@@ -115,6 +123,10 @@ class PropValue {
    * the PropertyDef (enum keys), and lives in command/. */
   std::string toString() const;
 
+  /** Bound with its copy constructor, type() and componentCount(): the `as*` accessors
+   * abort on the wrong type, so scripts read values through bind/'s checked facades. */
+  static const litestl::binding::types::Struct<PropValue> *defineBindings();
+
   PropValue(const PropValue &b);
   PropValue(PropValue &&b) noexcept;
   PropValue &operator=(const PropValue &b);
@@ -154,3 +166,11 @@ PropValue::Type valueTypeFor(PropKind kind);
 int valueComponentCount(PropValue::Type type);
 
 } // namespace coredcc
+
+namespace litestl::binding {
+/** PropValue::Type, bound as the enum `coredcc::PropValueType` (props/bindings.cc): a
+ * top-level name, so generated TS doesn't nest an enum inside the class. */
+template <> struct Binder<coredcc::PropValue::Type> {
+  static const BindingBase *bind();
+};
+} // namespace litestl::binding

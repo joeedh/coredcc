@@ -54,7 +54,7 @@ struct BlockProvider : IfaceRef {
     CDCC_CALL(onWeakTargetLost, user, lost);
   }
 
-  CDCC_INTERFACE(BlockProvider, "coredcc.BlockProvider")
+  CDCC_INTERFACE(BlockProvider, "coredcc::BlockProvider")
   {
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));

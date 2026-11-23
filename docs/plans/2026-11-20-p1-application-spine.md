@@ -1099,6 +1099,42 @@ native prototype of the dispatcher, factory and registration with a fake host
   - WASM runtime behaviour (read from the code);
   - threads.
 
+### P1f step 4 implementation (2026-11-22)
+- **Files:**
+  - `source/coredcc/bind/`: `facades.{h,cc}` (result structs and facades),
+    `foreign_command.{h,cc}` (ForeignFactory, ForeignBindings and its dispatcher,
+    the def builders, `registerForeignCommand`, `foreignImplementable`),
+    `manager.{h,cc}`, `wasm_entry.cc` (an OBJECT library under Emscripten) and
+    `gen_ts.cc` (`coredcc_gen_ts`, native only).
+  - Bindings in the owning modules: `PropValue` and `PropertyBag` in
+    `props/bindings.cc`, `CommandDef` in `command/bindings.cc`, and the `StatusCode`
+    enum plus Status's default constructor and `code()` in `base/bindings.cc`. The enum
+    `Binder` specializations are declared in `status.h` and `value.h`.
+  - Tests: `tests/bind/test_bind_foreign.cc` and `test_bind_facades.cc`, with the fake
+    host in `tests/bind/fake_host.h`.
+- **Deviations:**
+  - **Interface names use `::`** (`coredcc::Command`, `coredcc::BlockProvider`,
+    `coredcc::SnapshotProvider`, and the docs' `coredcc::Spatial`). The generator emitted
+    `coredcc.Command` as a TS identifier, which doesn't parse. The descriptor name is
+    the InterfaceId's name, so the two change together. Nothing persists InterfaceIds
+    yet.
+  - **`defOutput`** was added next to `defInput`. Without it a script command can't
+    declare outputs, and `outputSet` has nothing to set.
+  - `PropValue::Type` is bound as the top-level enum `coredcc::PropValueType`. This
+    avoids the nested-name collision the pressure test left unverified.
+  - `ForeignFactory` is a plain bound struct marked `isInterface`, not a
+    `CDCC_INTERFACE`: it is never called through a table.
+  - The factory's `make` call raises the foreign-call depth too, through
+    `ForeignBindings::call`, so a script's `make` can't reenter either.
+  - `coredcc_gen_ts` is built now (its output was inspected), not in step 5. Step 5
+    still type-checks the output.
+- **Verified:**
+  - The gate: native 36/36 on all four presets, wasm-st 35/35.
+  - Disabling the failure-path factory release fails `test_registration_refusals`.
+  - Disabling the `invoke` guard aborts `test_reentrancy_guard` inside
+    `LinearHistory` ("called from inside one of its records' slots"), as the pressure
+    test predicted.
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.

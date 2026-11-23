@@ -104,7 +104,7 @@ struct SnapshotProvider : IfaceRef {
     return CDCC_CALL(restore, blob);
   }
 
-  CDCC_INTERFACE(SnapshotProvider, "coredcc.SnapshotProvider")
+  CDCC_INTERFACE(SnapshotProvider, "coredcc::SnapshotProvider")
   {
     BIND_STRUCT_METHOD(st, capture, MARGS());
     BIND_STRUCT_METHOD(st, restore, MARGS("blob"));

@@ -1,0 +1,281 @@
+#include "coredcc/bind/facades.h"
+
+#include "coredcc/api/resolve.h"
+#include "coredcc/base/text.h"
+#include "coredcc/bind/foreign_command.h"
+#include "coredcc/command/executor.h"
+#include "coredcc/command/set_property.h"
+
+#include "litestl/binding/binding.h"
+#include "litestl/util/alloc.h"
+
+#include <string>
+#include <string_view>
+
+namespace coredcc::script {
+
+namespace lbt = litestl::binding::types;
+
+namespace {
+
+std::string_view view(const string &s)
+{
+  return std::string_view(s.c_str(), size_t(s.size()));
+}
+
+Status error(StatusCode code, const std::string &message)
+{
+  return Status::error(code, message.c_str());
+}
+
+Status wrongType(const PropValue &v, const char *want)
+{
+  return error(StatusCode::InvalidArgument,
+               std::string("expected a ") + want + " value, not " +
+                   propValueTypeName(v.type()));
+}
+
+Status notInSlot(const char *what)
+{
+  return error(StatusCode::FailedPrecondition,
+               std::string(what) + ": only inside a command's slots");
+}
+
+/* A script's discard, run while the host clears the history, must not push into it. */
+Status busyInForeignCall(const char *what)
+{
+  return error(StatusCode::Busy,
+               std::string(what) + ": not from inside a script command's slot");
+}
+
+template <class R, class T> R ok(T value)
+{
+  R r;
+  r.value = std::move(value);
+  return r;
+}
+
+template <class R> R failed(Status s)
+{
+  R r;
+  r.status = std::move(s);
+  return r;
+}
+
+ValueResult lookup(const PropertyBag &bag, const string &name)
+{
+  const PropValue *v = bag.get(view(name));
+  if (v) {
+    return ok<ValueResult>(*v);
+  }
+  Status err = error(StatusCode::NotFound, std::string("no property '") + name.c_str() + "'");
+  Suggester sg(view(name));
+  for (int i = 0; i < bag.size(); i++) {
+    sg.consider(bag.def(i).apiName().c_str());
+  }
+  sg.addTo(err);
+  return failed<ValueResult>(std::move(err));
+}
+
+} // namespace
+
+/* ---- Status ---- */
+
+Status statusError(StatusCode code, const string &message)
+{
+  return Status::error(code == StatusCode::Ok ? StatusCode::InvalidArgument : code,
+                       message.c_str());
+}
+
+/* ---- PropValue ---- */
+
+PropValue makeBool(bool v)
+{
+  return PropValue::ofBool(v);
+}
+PropValue makeInt(int64_t v)
+{
+  return PropValue::ofInt(v);
+}
+PropValue makeFloat(double v)
+{
+  return PropValue::ofFloat(v);
+}
+PropValue makeString(const string &v)
+{
+  return PropValue::ofString(view(v));
+}
+PropValue makeVec2(double x, double y)
+{
+  return PropValue::ofVec2(x, y);
+}
+PropValue makeVec3(double x, double y, double z)
+{
+  return PropValue::ofVec3(x, y, z);
+}
+PropValue makeVec4(double x, double y, double z, double w)
+{
+  return PropValue::ofVec4(x, y, z, w);
+}
+
+BoolResult readBool(const PropValue &v)
+{
+  std::optional<bool> b = v.tryBool();
+  return b ? ok<BoolResult>(*b) : failed<BoolResult>(wrongType(v, "Bool"));
+}
+IntResult readInt(const PropValue &v)
+{
+  std::optional<int64_t> i = v.tryInt();
+  return i ? ok<IntResult>(*i) : failed<IntResult>(wrongType(v, "Int"));
+}
+FloatResult readFloat(const PropValue &v)
+{
+  std::optional<double> d = v.tryFloat();
+  return d ? ok<FloatResult>(*d) : failed<FloatResult>(wrongType(v, "Float"));
+}
+StringResult readString(const PropValue &v)
+{
+  const string *s = v.tryString();
+  return s ? ok<StringResult>(*s) : failed<StringResult>(wrongType(v, "String"));
+}
+FloatResult readComponent(const PropValue &v, int32_t i)
+{
+  const int n = v.componentCount();
+  if (i < 0 || i >= n) {
+    return failed<FloatResult>(error(StatusCode::OutOfRange,
+                                     "component " + std::to_string(i) + " of a " +
+                                         propValueTypeName(v.type()) + " value, which has " +
+                                         std::to_string(n)));
+  }
+  return ok<FloatResult>(v.component(i));
+}
+
+/* ---- PropertyBag ---- */
+
+ValueResult bagGet(const PropertyBag &bag, const string &name)
+{
+  return lookup(bag, name);
+}
+int32_t bagSize(const PropertyBag &bag)
+{
+  return bag.size();
+}
+StringResult bagName(const PropertyBag &bag, int32_t i)
+{
+  if (i < 0 || i >= bag.size()) {
+    return failed<StringResult>(error(StatusCode::OutOfRange,
+                                      "entry " + std::to_string(i) + " of a bag of " +
+                                          std::to_string(bag.size())));
+  }
+  return ok<StringResult>(bag.def(i).apiName());
+}
+
+/* ---- the running command's bags ---- */
+
+ValueResult inputGet(Context &ctx, const string &name)
+{
+  if (!ctx.inputs()) {
+    return failed<ValueResult>(notInSlot("inputGet"));
+  }
+  return lookup(*ctx.inputs(), name);
+}
+Status outputSet(Context &ctx, const string &name, const PropValue &value)
+{
+  if (!ctx.outputs()) {
+    return notInSlot("outputSet");
+  }
+  return ctx.outputs()->set(view(name), value);
+}
+ValueResult outputGet(Context &ctx, const string &name)
+{
+  if (!ctx.outputs()) {
+    return failed<ValueResult>(notInSlot("outputGet"));
+  }
+  return lookup(*ctx.outputs(), name);
+}
+
+/* ---- datapaths and commands ---- */
+
+Status resolvePath(Context &ctx, const string &path)
+{
+  Result<ResolvedPath> r = resolve(ctx, view(path));
+  return r.ok() ? Status() : r.status();
+}
+ValueResult getValue(Context &ctx, const string &path)
+{
+  Result<PropValue> r = coredcc::getValue(ctx, view(path));
+  return r.ok() ? ok<ValueResult>(std::move(r).value()) : failed<ValueResult>(r.status());
+}
+Status setValue(Context &ctx, const string &path, const PropValue &value)
+{
+  CommandExecutor *ex = ctx.executor();
+  if (!ex) {
+    return error(StatusCode::FailedPrecondition,
+                 "setValue: the context has no executor (writeValue writes unrecorded)");
+  }
+  /* From exec it becomes a sub-command; from any other slot it would push. */
+  if (inForeignCall(ctx.runtime()) && !ex->running()) {
+    return error(StatusCode::Busy,
+                 "setValue: only from a script command's exec (use writeValue in undo)");
+  }
+  return setValueUndo(ctx, view(path), value);
+}
+Status writeValue(Context &ctx, const string &path, const PropValue &value)
+{
+  return coredcc::setValue(ctx, view(path), value);
+}
+BagResult invoke(Context &ctx, const string &invocation)
+{
+  if (inForeignCall(ctx.runtime())) {
+    return failed<BagResult>(busyInForeignCall("invoke"));
+  }
+  Result<PropertyBag> r = coredcc::invoke(ctx, view(invocation));
+  return r.ok() ? ok<BagResult>(std::move(r).value()) : failed<BagResult>(r.status());
+}
+Status undo(Context &ctx)
+{
+  if (inForeignCall(ctx.runtime())) {
+    return busyInForeignCall("undo");
+  }
+  if (!ctx.executor()) {
+    return error(StatusCode::FailedPrecondition, "undo: the context has no executor");
+  }
+  return ctx.executor()->undo(ctx);
+}
+Status redo(Context &ctx)
+{
+  if (inForeignCall(ctx.runtime())) {
+    return busyInForeignCall("redo");
+  }
+  if (!ctx.executor()) {
+    return error(StatusCode::FailedPrecondition, "redo: the context has no executor");
+  }
+  return ctx.executor()->redo(ctx);
+}
+
+/* ---- result struct descriptors ---- */
+
+#define CDCC_RESULT_BINDINGS(T)                                                          \
+  const lbt::Struct<T> *T::defineBindings()                                              \
+  {                                                                                      \
+    static lbt::Struct<T> *st = nullptr;                                                 \
+    if (!st) {                                                                           \
+      litestl::alloc::PermanentGuard guard;                                              \
+      st = new lbt::Struct<T>("coredcc::" #T, sizeof(T));                                \
+      BIND_STRUCT_COPY_CONSTRUCTOR(st);                                                  \
+      BIND_STRUCT_MEMBER(st, status);                                                    \
+      BIND_STRUCT_MEMBER(st, value);                                                     \
+    }                                                                                    \
+    return st;                                                                           \
+  }
+
+CDCC_RESULT_BINDINGS(BoolResult)
+CDCC_RESULT_BINDINGS(IntResult)
+CDCC_RESULT_BINDINGS(FloatResult)
+CDCC_RESULT_BINDINGS(StringResult)
+CDCC_RESULT_BINDINGS(ValueResult)
+CDCC_RESULT_BINDINGS(BagResult)
+
+#undef CDCC_RESULT_BINDINGS
+
+} // namespace coredcc::script
