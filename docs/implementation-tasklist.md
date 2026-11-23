@@ -54,7 +54,10 @@ then.
   - Each branch is rebased onto master and merged with `git merge --ff-only`.
 
 ### Build cache for the parallel phase
-Set up before the first worktree, following sculptcore and faberforge:
+**Superseded (2026-11-23)** by `docs/plans/2026-11-23-build-cache-worktrees.md`, whose
+cache design failed its pressure test; the choice of what to do instead is the user's.
+sccache is now installed (the user's named-pipe fork, `C:\dev\sccache`). Never run it
+without `SCCACHE_SERVER_PIPE`. The original sketch:
 - **sccache** as the compiler launcher, with faberforge's cross-worktree launcher
   (`webgl-app-framework/tools/sccache-wrapper`). It keeps the union of every live
   worktree's root in `SCCACHE_BASEDIRS`, so one sccache server shares hits across all
