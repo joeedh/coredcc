@@ -657,6 +657,12 @@ Result<PropertyBag> CommandExecutor::subRun(Context &ctx,
                           ") outside a command's exec")
                              .c_str());
   }
+  if (int(stack_.size()) >= kMaxNesting) {
+    return Status::error(StatusCode::OutOfRange,
+                         ("runSub(" + std::string(def.name().c_str()) +
+                          "): commands nested deeper than " + std::to_string(kMaxNesting))
+                             .c_str());
+  }
   Result<RecordPtr> rec = start(ctx, def, std::move(cmd), std::move(inputs));
   if (!rec.ok()) {
     return rec.status();

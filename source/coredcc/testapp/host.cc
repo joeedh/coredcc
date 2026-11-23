@@ -63,6 +63,10 @@ class Host {
   {
     return history_;
   }
+  CommandExecutor &executor()
+  {
+    return ex_;
+  }
 
   static const lbt::Struct<Host> *defineBindings()
   {
@@ -118,11 +122,21 @@ int32_t liveInstances(Host &h)
   const script::ForeignBindings *fb = h.runtime().findExt<script::ForeignBindings>();
   return fb ? fb->liveInstances() : 0;
 }
-/** The Runtime's and the history's invariants. */
+/** The Runtime's and the history's invariants, and that no command is still running:
+ * called between commands, a running executor means one was abandoned mid-run. */
 Status validate(Host &h)
 {
+  if (h.executor().running()) {
+    return Status::error(StatusCode::Internal, "the executor is still running a command");
+  }
   CDCC_TRY(h.runtime().validateAll());
   return h.history().validate();
+}
+
+/** Aborts the module, for tests of how the page reports a dead backend. */
+void abortForTest()
+{
+  CDCC_CHECK(false, "testapp::abortForTest");
 }
 
 litestl::binding::BindingManager *manager()
@@ -138,6 +152,7 @@ litestl::binding::BindingManager *manager()
     BIND_FUNCTION(mgr, "testapp::historySize", testapp::historySize, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::liveInstances", testapp::liveInstances, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::validate", testapp::validate, MARGS("h"));
+    BIND_FUNCTION(mgr, "testapp::abortForTest", testapp::abortForTest, MARGS());
     mgr->validate();
   }
   return mgr;

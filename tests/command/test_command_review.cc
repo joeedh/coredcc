@@ -234,6 +234,28 @@ struct SetsInside {
   BIND_ALL(SetsInside, "review::SetsInside", )
 };
 
+/* TA1 review A1: a command that runs itself forever. */
+static int g_depth = 0;
+struct Recurse {
+  Status canRun(Context &) const
+  {
+    return Status();
+  }
+  Status exec(Context &ctx)
+  {
+    g_depth++;
+    const CommandDef *self = ctx.runtime().ext<CommandRegistry>().find("review.recurse");
+    return ctx.executor()->runSub(ctx, *self, self->newInputs()).status();
+  }
+  void undo(Context &) {}
+  uint64_t memSize() const
+  {
+    return 0;
+  }
+  void discard() {}
+  BIND_ALL(Recurse, "review::Recurse", )
+};
+
 static void addInc(Setup &s)
 {
   test_assert(addNativeCommand<Inc>(s.w.rt, CommandDef("review.inc")).ok());
@@ -807,6 +829,19 @@ static void test_failed_add_registers_nothing()
   test_assert(c.code() == StatusCode::AlreadyExists && rt.ifaces().tableCount() == tables3);
 }
 
+/* A runaway command fails at the nesting cap and leaves the executor idle. */
+static void test_nesting_cap()
+{
+  Setup s;
+  test_assert(addNativeCommand<Recurse>(s.w.rt, CommandDef("review.recurse")).ok());
+  g_depth = 0;
+  Status r = s.ex.run(s.ctx, "review.recurse", PropertyBag()).status();
+  test_assert(r.code() == StatusCode::OutOfRange && hasMsg(r, "nested deeper than 32"));
+  test_assert(g_depth == CommandExecutor::kMaxNesting);
+  test_assert(!s.ex.running() && s.history.size() == 0 && s.history.validate().ok());
+  test_assert(s.ex.run(s.ctx, *s.add, s.add->newInputs()).ok() && s.history.size() == 1);
+}
+
 int main()
 {
   test_nested_sub_commands();
@@ -828,5 +863,6 @@ int main()
   test_set_value_undo_inside_exec();
   test_redo_sees_the_sticky_error();
   test_failed_add_registers_nothing();
+  test_nesting_cap();
   return test_end();
 }

@@ -60,7 +60,8 @@ export function profileInUse(profileDir) {
  * @property {'swiftshader'} [webgpu] force the software WebGPU adapter
  * @property {string[]} [appArgs]    extra app arguments (reach the page as nw.App.argv)
  * @property {string} [artifactsDir] where the log file and NW.js stdio go; default: profile
- * @property {string} [module]       the wasm-st web module; default: defaultModulePath()
+ * @property {string} [module]       the wasm-st web module; default: $COREDCC_TESTAPP_MODULE,
+ *                                   else DEBUG_MODULE
  * @property {number} [timeoutMs]    how long to wait for the CDP port (default 20 s)
  */
 
@@ -75,15 +76,26 @@ export function profileInUse(profileDir) {
  * @property {Promise<{code: number|null, signal: string|null}>} exited
  */
 
+/** The wasm-st Debug build of the test app's web module (source/coredcc/testapp). */
+export const DEBUG_MODULE = path.resolve(APP_DIR, '../../build/wasm-st/source/coredcc/testapp/Debug/coredcc_testapp.mjs')
+
 /**
- * The test app's web module (source/coredcc/testapp) the page loads:
- * `$COREDCC_TESTAPP_MODULE` (the ctest sets it), else the wasm-st Debug build.
+ * The page's backend arguments. `--apptest-no-backend=<why>` only when the build has no
+ * backend: no `dist/backend-wasm.js`, or (with no module named) none at the default
+ * Debug path. A module named explicitly (an option, the environment, or an app argument)
+ * is resolved against this process's directory and passed even if it is missing, so a
+ * wrong one fails instead of skipping.
  */
-export function defaultModulePath() {
-  return (
-    process.env.COREDCC_TESTAPP_MODULE ??
-    path.resolve(APP_DIR, '../../build/wasm-st/source/coredcc/testapp/Debug/coredcc_testapp.mjs')
-  )
+function backendArgs(opts) {
+  const given = (opts.appArgs ?? []).find((a) => a.startsWith('--apptest-module='))
+  const explicit = given?.slice('--apptest-module='.length) ?? opts.module ?? process.env.COREDCC_TESTAPP_MODULE
+  if (!fs.existsSync(path.join(APP_DIR, 'dist', 'backend-wasm.js'))) {
+    return ['--apptest-no-backend=the page was built without the coredcc backend (no wasm-st build)']
+  }
+  if (explicit === undefined && !fs.existsSync(DEBUG_MODULE)) {
+    return [`--apptest-no-backend=no wasm-st build at ${DEBUG_MODULE}`]
+  }
+  return [`--apptest-module=${path.resolve(explicit ?? DEBUG_MODULE)}`]
 }
 
 /** Launch the app. Rejects (and cleans up a throwaway profile) if it can't start. */
@@ -111,12 +123,8 @@ export async function launch(opts = {}) {
     args.push('--use-webgpu-adapter=swiftshader', '--enable-unsafe-webgpu')
   }
   if (opts.headless) args.push('--apptest-headless')
-  args.push(`--apptest-log=${logFile}`)
-  const appArgs = opts.appArgs ?? []
-  if (!appArgs.some((a) => a.startsWith('--apptest-module='))) {
-    args.push(`--apptest-module=${path.resolve(opts.module ?? defaultModulePath())}`)
-  }
-  args.push(...appArgs)
+  args.push(`--apptest-log=${logFile}`, ...backendArgs(opts))
+  args.push(...(opts.appArgs ?? []).filter((a) => !a.startsWith('--apptest-module=')))
 
   const child = spawn(await nwBin(), args, {stdio: ['ignore', 'pipe', 'pipe']})
   const stdio = fs.createWriteStream(path.join(artifactsDir, 'nw-stdio.txt'))

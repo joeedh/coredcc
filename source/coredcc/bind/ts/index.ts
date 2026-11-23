@@ -458,6 +458,9 @@ class Adapter {
 /** Registers `Cls` as command `spec.id`. Each run makes a new instance. */
 export function registerCommand(ctx: Context, spec: CommandSpec, Cls: new () => ScriptCommand) {
   checkCtx(ctx)
+  if (typeof Cls !== 'function' || typeof Cls.prototype !== 'object') {
+    throw new TypeError(`registerCommand: ${spec.id}: expected a class, not ${typeof Cls}`)
+  }
   const flags = spec.flags ?? 0
   if (!Number.isInteger(flags) || flags < 0 || flags > 0xffffffff) {
     throw new TypeError(`registerCommand: flags must be CommandFlags bits, not ${flags}`)

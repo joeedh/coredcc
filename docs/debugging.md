@@ -111,6 +111,24 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
     web-only `coredcc_testapp.mjs`.
 - **How to spot it next time:** `node apps/testapp/cdp.mjs --port <port> call info`.
 
+### A native test dies with exit code 0xC00000FD (-1073741571)
+- **Symptom:** a test exits with no output, and ctest reports it as a SegFault.
+- **Cause:** a stack overflow (STATUS_STACK_OVERFLOW). Windows gives the main thread
+  1 MB, and Debug frames are large: nested commands overflowed at 52 levels, about 20
+  KB each, on both compilers.
+- **Fix:** bound the recursion. Commands nest at most `CommandExecutor::kMaxNesting`
+  (32) deep.
+- **How to spot it next time:** run the test's exe directly and check `$LASTEXITCODE`.
+  Print a depth counter to stderr to find where it stops.
+
+### The test app says "the wasm-st module aborted"
+- **Symptom:** every testbus call fails with "the wasm-st module aborted: ...", and
+  `info().backendError` says the same.
+- **Cause:** a trap, an abort (a failed `CDCC_CHECK`) or a poisoned module. The message
+  ends with the module's last stderr lines, which hold the C++ check's text.
+- **How to spot it next time:** read the message's tail, or the run's `cdp-log.json`
+  under `apps/testapp/test-artifacts/`, which a failed run keeps.
+
 ## Techniques
 
 ### Checking that a regression test can fail

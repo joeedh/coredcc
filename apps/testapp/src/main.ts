@@ -11,17 +11,25 @@ if (isNw && !hasArg('apptest-headless')) {
   if (hasArg('devtools')) win.showDevTools()
 }
 
-/* The wasm backend is its own bundle (src/backend/wasm.ts), built only when the wasm-st
- * module is; without it, or without --apptest-module, the app runs with no backend. */
+/*
+ * The wasm backend is its own bundle (src/backend/wasm.ts). The launcher passes either
+ * --apptest-module, or --apptest-no-backend when the build has none (then TA1's tests
+ * skip); any other failure to load is reported, and TA1's tests fail.
+ */
 async function loadBackend(): Promise<void> {
-  const modulePath = argValue('apptest-module')
+  const missing = argValue('apptest-no-backend')
+  if (missing !== undefined) {
+    setBackendInfo({backend: 'none', backendMissing: true, backendError: missing})
+    return
+  }
   try {
-    if (!modulePath) throw new Error('no --apptest-module given')
+    const modulePath = argValue('apptest-module')
+    if (!modulePath) throw new Error('no --apptest-module given (launch through nwjs/launcher.mjs)')
     const url = new URL('./backend-wasm.js', import.meta.url).href
     const backend = await import(url)
-    setBackendInfo(await backend.install(registerMethod, modulePath))
+    setBackendInfo(await backend.install(registerMethod, modulePath, setBackendInfo))
   } catch (err) {
-    console.error('[testapp] no coredcc backend:', err)
+    console.error('[testapp] the coredcc backend failed to load:', err)
     setBackendInfo({backend: 'none', backendError: String(err)})
   }
 }

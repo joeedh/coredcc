@@ -261,6 +261,11 @@ class CommandExecutor {
     return int(stack_.size()) > 0;
   }
 
+  /** How deep commands may nest through runSub: a command that runs itself (directly or
+   * through others) fails with OutOfRange here instead of overflowing the stack. Debug
+   * builds on Windows' 1 MB main-thread stack overflowed at 52 levels (2026-11-23). */
+  static constexpr int kMaxNesting = 32;
+
  private:
   Result<RecordPtr> start(Context &ctx, const CommandDef &def, Owned<Command> cmd,
                           PropertyBag inputs);

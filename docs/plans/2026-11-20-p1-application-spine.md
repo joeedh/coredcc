@@ -1350,7 +1350,8 @@ over CDP.
   named `__proto__` survives (T12 over the wire).
 
 ### Tests
-- `apps/testapp/tests/ta1.test.ts`, over one launch per test:
+- `apps/testapp/tests/ta1.test.ts`, over one launch for the main suite, with `reset()`
+  before each test:
   - the four exit-criteria steps, with the TS command's undo and redo;
   - error codes and suggestions across the wire (`get('cuont')` is NotFound with "did
     you mean"), read from the raw reply: the harness's `ok()` drops `code`;
@@ -1396,6 +1397,35 @@ variants of the spike host by hand and ran them in NW.js through the app's launc
   `get`.
 - **Unverified:** the move itself (an OBJECT library with two executables), and a
   `-pthread` web build in NW.js (not needed until wasm-mt).
+
+### P1f step 6 review corrections (2026-11-23)
+The review is `docs/reports/feature-report-ta1-2026-11-23.md`. Its regressions are in
+`apps/testapp/tests/ta1.test.ts`, named by finding.
+- **Runaway recursion:** a script command that ran itself wedged the executor and
+  aborted the module at the next teardown.
+  - `CommandExecutor::kMaxNesting` (32) caps runSub nesting with OutOfRange. Native
+    Debug builds overflowed Windows' 1 MB stack at 52 levels on both compilers, so 64
+    was already too many with no JS involved.
+  - In litestl, `dispatch` poisons the module on anything that escapes into wasm
+    (joeedh/litestl#11, open; the gitlink bump follows its merge).
+  - `testapp::validate` fails while the executor is still running.
+- **A dead module is reported:** methods treat a trap, exit or poisoning as fatal, keep
+  the module's last stderr lines, report them in `info().backendError`, and refuse every
+  later call with "the module aborted". `testapp::abortForTest` tests it.
+- **Skips mean "no backend in this build", nothing else:** the launcher passes
+  `--apptest-no-backend` only when there is no backend bundle, or no module at the
+  default path with none named. A wrong or broken module fails the tests.
+- **The build is atomic:** outputs go through temporary names; `gen/` is generated
+  privately and swapped in. Concurrent rebuilds no longer turn tests into skips.
+- **Backend shape for TA4:** a loader (`src/backend/wasm.ts`) hands a `LoadedBackend` to
+  shared methods (`src/backend/methods.ts`); tests read the expected backend from
+  `COREDCC_TESTAPP_BACKEND`.
+- **Smaller:** relative `--apptest-module` paths resolve against the caller; errors carry
+  `detail` and the original stack; `reset` is exception-safe; `{$float: n}` in
+  `defineCommand`; duplicate testbus methods and non-class commands are refused; node
+  23.0-23.5 skips; a mistyped `--node-module` fails.
+- **Deferred to TA2:** a writable wire form for pointers, enum and flags item names, and
+  `meta(path)`. To TA4: choosing the backend at launch. Also deferred: a real build id.
 
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk

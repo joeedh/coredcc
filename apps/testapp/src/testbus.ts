@@ -13,9 +13,15 @@ type Method = (...args: any[]) => unknown
 
 const methods = new Map<string, Method>()
 
-/** What `info()` reports about the coredcc backend (src/main.ts sets it). */
+/**
+ * What `info()` reports about the coredcc backend (src/main.ts sets it):
+ * - `backend`: 'wasm-st', or 'none';
+ * - `backendMissing`: the build has no backend (TA1's tests skip);
+ * - `backendError`: why there is none, or what killed it.
+ */
 export interface BackendReport {
   backend: string
+  backendMissing?: boolean
   backendError?: string
   module?: string
 }
@@ -26,6 +32,7 @@ export function setBackendInfo(report: BackendReport): void {
 }
 
 export function registerMethod(name: string, fn: Method): void {
+  if (methods.has(name)) throw new Error(`testbus method '${name}' is already registered`)
   methods.set(name, fn)
 }
 

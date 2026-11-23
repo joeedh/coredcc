@@ -15,7 +15,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | in progress (TA0, TA1 done) | — |
 | 3 | [P0 scaffold and interface system](plans/2026-11-19-p0-scaffold-interfaces.md) | P0 | 1, 4 | reviewed | [interfaces](reports/feature-report-interfaces-2026-11-20.md) |
 | 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | done (litestl #4 B, #5 A, #6 C1 merged; C2 moves to P1f) | — |
-| 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | in progress (P1a-P1e reviewed; P1f steps 1-6 done; TA1's review next) | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md); [script bindings](reports/feature-report-bind-2026-11-22.md); [TS spike](reports/feature-report-ts-spike-2026-11-22.md) |
+| 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | in progress (P1a-P1f reviewed; litestl #11 pending) | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md); [script bindings](reports/feature-report-bind-2026-11-22.md); [TS spike](reports/feature-report-ts-spike-2026-11-22.md); [TA1](reports/feature-report-ta1-2026-11-23.md) |
 | 6 | P2 layout and library IO | P2 | 5 | todo | layout |
 | 7 | P3 objects, transforms and BVH | P3 | 5 | todo | objects and transforms; BVH |
 | 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | todo | tools and overlay |
@@ -91,7 +91,10 @@ Set up before the first worktree, following sculptcore and faberforge:
     `spike_ts` (`npm ci` in `tests/wasm` first, or it skips).
   - P1f step 6, TA1, is done: the test app loads the wasm-st module
     (`source/coredcc/testapp`) and drives the spike's steps over CDP. It is the wasm-st
-    ctest `testapp` (`pnpm install` in `apps/testapp` first, or it skips). Its API
-    review is next, then the end of P1 (sccache, worktrees).
-- Test app TA0 and TA1 are done (13 tests pass): build the wasm-st preset, then
+    ctest `testapp` (`pnpm install` in `apps/testapp` first, or it skips). Reviewed:
+    `docs/reports/feature-report-ta1-2026-11-23.md`.
+  - litestl #11 (dispatch poisons on any escape) is open; bump the gitlink when it
+    merges.
+  - Next: the end of P1 (sccache, worktrees).
+- Test app TA0 and TA1 are done (19 tests pass): build the wasm-st preset, then
   `cd apps/testapp && pnpm install && pnpm test`.

@@ -34,9 +34,11 @@ for (const m of [opts['node-module'], opts.module]) {
   }
 }
 
-/* Type stripping, which runs the .ts tests, is on by default from 22.18. */
+/* Type stripping, which runs the .ts tests, is on by default from 22.18 and 23.6. */
 const [major, minor] = process.versions.node.split('.').map(Number)
-if (major < 22 || (major === 22 && minor < 18)) skip(`node ${process.versions.node} can't run .ts tests (22.18+)`)
+if (major < 22 || (major === 22 && minor < 18) || (major === 23 && minor < 6)) {
+  skip(`node ${process.versions.node} can't run .ts tests (22.18+, or 23.6+)`)
+}
 if (!existsSync(join(here, 'node_modules', 'esbuild'))) skip(`run "pnpm install" in ${here}`)
 try {
   const nw = await createRequire(import.meta.url)('nw').findpath()

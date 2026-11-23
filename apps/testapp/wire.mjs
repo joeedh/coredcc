@@ -123,9 +123,11 @@ function fromWire(node) {
 export function errorInfo(err) {
   if (!(err instanceof Error)) return {name: 'Error', message: String(err)}
   const info = {name: err.name, message: err.message, stack: err.stack}
-  /* A string code only: the backend names coredcc's StatusCodes ('NotFound'), and
-   * DOMException's numeric codes stay out. */
+  /* `code`: a StatusCode name ('NotFound') from the backend, or a Node error code
+   * ('ENOENT'); numeric codes (DOMException's) stay out. `detail`: a ScriptError's own
+   * message, without the code prefix and suggestions. */
   if (typeof err.code === 'string') info.code = err.code
+  if (typeof err.detail === 'string') info.detail = err.detail
   return info
 }
 
