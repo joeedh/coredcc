@@ -1246,6 +1246,157 @@ in `tests/wasm/spike.test.ts`, named by finding.
   - error codes from undo and constructors (a code in foreign error strings);
   - tagging wrappers by module in litestl.
 
+## P1f step 6: TA1 design (2026-11-23, revised after its pressure test)
+TA1 is the test app's first coredcc stage (`docs/plans/2026-11-19-test-app.md`,
+"Stages"): the page loads the wasm-st module and a test drives the spike's four steps
+over CDP.
+
+### The C++ host moves to `source/coredcc/testapp/`
+- The test-app plan puts the C++ the page needs in `source/coredcc/testapp/`. The spike's
+  host is exactly that, so it moves there instead of being copied:
+  `tests/wasm/spike_host.cc` becomes `source/coredcc/testapp/host.cc`.
+  - Namespace and binding names `spike::*` become `testapp::*` (`testapp::Host`,
+    `testapp::create`, ...). The export becomes `TESTAPP_GetManager`.
+  - The root struct keeps its members, renamed from "Spike" to "TestApp".
+  - `spike.test.ts` and `run.mjs` follow the renames.
+- **Built only for coredcc's own wasm-st build:** `EMSCRIPTEN AND COREDCC_BUILD_TESTS
+  AND NOT COREDCC_WASM_THREADS`. A host project's wasm build doesn't get it, and
+  wasm-mt waits for a threaded variant.
+- **One host, two link variants:**
+  - `coredcc_testapp_node` (`-sENVIRONMENT=node`): the spike suite and the TS generator
+    load it.
+  - `coredcc_testapp` (`-sENVIRONMENT=web`): the page loads it. NW.js has
+    `process.versions.node`, so a module that allows node takes emscripten's node path
+    there and fails to import `node:module` (re-verified).
+  - The host compiles once into an OBJECT library; both executables link it with the
+    same exports. TS generated from the node variant is byte-identical to TS generated
+    from the web one (verified).
+- **Tests are registered under `tests/`.** `source/coredcc` is added before
+  `enable_testing()`, and an `add_test` there is silently dropped. `tests/wasm/` adds
+  both `spike_ts` and `testapp`.
+
+### Loading the web module in a Debug build
+- With ASSERTIONS on (Debug), emscripten 5.0.6's `minimum_runtime_check.js` throws "not
+  compiled for this environment" whenever `process.versions.node` exists, which it does
+  in NW.js. Release (`-O2`) has no such check.
+- **Fix:** the page hides `globalThis.process` while it calls the module factory, and
+  restores it in `finally`. The check runs synchronously before the factory's first
+  `await`, so nothing else sees the gap. This keeps emscripten's assertions in Debug,
+  which `-sASSERTIONS=0` would lose.
+
+### Generating and bundling for the page
+- `tests/wasm/gen.ts` moves to `source/coredcc/bind/ts/gen.ts`, and takes the manager
+  export as an argument: `node gen.mjs <module.mjs> <outdir> <getManager>`.
+- **The page build doesn't embed the module.** `--apptest-module=<path>` names the web
+  module at launch; without it the page uses
+  `build/wasm-st/source/coredcc/testapp/Debug/coredcc_testapp.mjs`. It imports it
+  through a computed URL from `pathToFileURL`. A literal would make esbuild try to bundle
+  it.
+- **Two bundles:**
+  - `dist/app.js` (`src/main.ts`) as today, with no coredcc imports;
+  - `dist/backend-wasm.js` (`src/backend/wasm.ts`), with the aliases `coredcc-script`,
+    `@litestl/typescript-runtime` and `coredcc-gen`.
+
+  `main.ts` imports the backend bundle at run time and passes it `registerMethod`; a
+  second import of `testbus.ts` would get its own method table.
+- `apps/testapp/build.mjs` replaces the `esbuild` one-liner in `pnpm run build`:
+  1. finds the node variant: `--module <coredcc_testapp_node.mjs>`, else the Debug path;
+  2. generates the TS into `apps/testapp/gen/` (git-ignored), then bundles both entries;
+  3. **without the module**, it builds `app.js` only and says so. The page then reports
+     `backend: 'none'` with the import error, TA0 still runs, and TA1's tests skip with
+     "no wasm-st build". The ctest always passes the module, so it never skips that way.
+- **Type-checking:** the page `tsconfig.json` maps the three paths, and drops
+  `verbatimModuleSyntax`. litestl's runtime has 21 value imports of types
+  (TS1484) under it; without it the whole program, `isolatedModules` included,
+  type-checks clean (verified). `pnpm run typecheck` needs the generated TS, so the
+  wasm-st build.
+- **Concurrent builds:** `dist/` and `gen/` are per checkout. Two builds at once (two
+  presets' ctests, or `pnpm test` during one) can interleave writes, so don't. With the
+  module chosen at launch, a finished build no longer depends on which module it was
+  built from.
+
+### The page
+- `src/backend/wasm.ts`:
+  - imports the web module, hiding `process` around the factory, then
+    `load(module, 'TESTAPP_GetManager')`. The module is loaded once: `reset()` never
+    reloads it, because `load` refuses a second module;
+  - holds one `Session` over `testapp.create()`. The testbus sees only `session.ctx`,
+    never a raw context (step 5 review, T1);
+  - registers the page's TS command, `testapp.addCount` (the spike's `AddCount`), on
+    each new session.
+- **Startup order:** the testbus installs after both WebGPU init and the backend load
+  have settled, success or failure, so `waitReady()` never sees a half-loaded backend.
+- `info()` reports `backend: 'wasm-st'` and `build: 'ta1'`, or `backend: 'none'` and
+  the load error in `backendError`.
+- **Testbus methods** (test-app plan, "Methods"):
+  - `resolve(path)`, `get(path)`, `set(path, value)`;
+  - `exec(invocation)`, returning the outputs;
+  - `undo()`, `redo()`;
+  - `history()`: `{size, canUndo, canRedo}`;
+  - `reset()`: disposes of the session and opens a new one. Only the default scene
+    exists, so `sceneName` is ignored;
+  - `check()`: the host's `validate()`, `liveInstances` and the backend's
+    `foreignCount`.
+  - A value without a JS form (a pointer) is returned as `valueToString`'s text, and
+    the PropValue copy is disposed of.
+  - `meta(path)` waits for TA2's property panel: no facade reads a def yet.
+  - Writes can't say `float()` over the wire (it would arrive as a plain object). The
+    member's def coerces a whole number, and `exec` takes strings, so TA1 doesn't need
+    it.
+- **Errors:** the backend turns a `ScriptError` into an error named `ScriptError` with
+  `code` set to the `StatusCode` name (`'NotFound'`). `wire.mjs`'s `errorInfo` copies a
+  string `code` only; DOMException's numeric codes stay out.
+- **Wire fix:** `toWire` and `fromWire` define keys with `defineProperty`, so a key
+  named `__proto__` survives (T12 over the wire).
+
+### Tests
+- `apps/testapp/tests/ta1.test.ts`, over one launch per test:
+  - the four exit-criteria steps, with the TS command's undo and redo;
+  - error codes and suggestions across the wire (`get('cuont')` is NotFound with "did
+    you mean"), read from the raw reply: the harness's `ok()` drops `code`;
+  - an output named `__proto__` crosses the wire;
+  - `reset()` gives a fresh document, and `check()` stays clean after each test.
+- Tests take types only from `wire.mjs` and the harness, and compare codes as strings.
+  `tests/tsconfig.json` has `erasableSyntaxOnly` and no paths, so a type import that
+  reaches the generated enums fails (TS1294). The test-app plan's "tests only
+  `import type` from `src/` or the generated bindings" is corrected to match.
+- **ctest:** the wasm-st ctest `testapp` (in `tests/wasm/CMakeLists.txt`) runs
+  `apps/testapp/ctest.mjs` with the node and web modules' paths. It sets its working
+  directory to the app, builds, and runs `node --test` over every test file with the
+  web module in `COREDCC_TESTAPP_MODULE`; the harness passes it as `--apptest-module`.
+  It exits 77 (a skip) when:
+  - `apps/testapp/node_modules` or the NW.js binary is missing;
+  - node is older than 22.18, which can't run `.ts` tests.
+
+### Pressure test (2026-11-23)
+A fresh agent was given this plan and the code, not the author's reasoning. It linked web
+variants of the spike host by hand and ran them in NW.js through the app's launcher.
+- **Survived:**
+  - A `web,node` module fails in NW.js on `node:module`, so the web variant is needed.
+  - The web module and its `.wasm` load from `file://` in the page, with no streaming
+    fallback; the 15 MB Debug `.wasm` instantiated in 29 ms.
+  - `load()` and all four spike steps work in the page, through the page's esbuild with
+    the three aliases. `StatusCode[code]` gives the name. litestl's runtime is fine with
+    NW.js's mixed globals.
+  - TS generated from the node variant is byte-identical to the web variant's.
+  - NW.js runs from ctest, three at once under `ctest -j 4`, and exit 77 is a skip.
+- **Broke, and what changed:**
+  - The Debug web module throws "not compiled for this environment" in NW.js: the
+    page hides `process` around the factory.
+  - A `--define`d module URL makes esbuild try to bundle it: the module is chosen at
+    launch and imported through a computed URL.
+  - The page tsconfig's `verbatimModuleSyntax` rejects litestl's runtime (TS1484 x21):
+    dropped.
+  - An `add_test` under `source/` is silently dropped (added before
+    `enable_testing()`): the ctest is registered under `tests/`.
+  - `wire.mjs` drops `__proto__` keys: it uses `defineProperty`.
+- **Added:** the startup order; mapping codes in the backend rather than copying any
+  `code`; building without the module; skips for old node and a missing NW.js; the
+  gating on `COREDCC_BUILD_TESTS` and not wasm-mt; disposing of pointer values in
+  `get`.
+- **Unverified:** the move itself (an OBJECT library with two executables), and a
+  `-pthread` web build in NW.js (not needed until wasm-mt).
+
 ## Pressure test record (2026-11-20)
 A fresh agent got the plan and the code, but not the author's reasoning. It built emsdk
 5.0.6 and ran experiments in its scratch directory.
