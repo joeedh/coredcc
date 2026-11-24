@@ -1,7 +1,8 @@
 # Build cache and worktrees (end of P1)
 
 Status: the first cache design failed its pressure test (2026-11-23). The user had the
-sccache fork fixed (2026-11-24), and this second design replaces it. To be pressure-tested.
+sccache fork fixed (2026-11-24). The second design was pressure-tested and changed
+(2026-11-24); being implemented.
 Replaces the
 sketch in `docs/implementation-tasklist.md`, "Build cache for the parallel phase".
 
@@ -55,93 +56,122 @@ server with both roots in `SCCACHE_BASEDIRS`, a private pipe and a private cache
   numbers and missing dependencies (see "Pressure test"). The two trees were also
   identical copies, which real worktrees aren't.
 
-## Design (second version, 2026-11-24)
+## Design (second version, 2026-11-24, as changed by its pressure test)
 The first version (a launcher binary, a registry and server restarts) is in git at
-`e68c314`. With the fork fixed, the launcher can be `cmake -E env`.
+`e68c314`, and the second before its pressure test at `313ddcc`. The pressure test's record
+is the last section.
 
-### The cache folder: `<parent of the main checkout>/coredcc-cache/`
-- Holds `sccache.toml` and the cache itself (`objects/`). Not shared with faberforge.
-- `sccache.toml` is written only by `tools/cache.mjs`: `basedirs` (every checkout that
-  `git worktree list` names, the main one included), `[cache.disk] dir` and `size` (5 GB).
-- The pipe is `sccache-coredcc-<user>`.
+### The cache folder
+- `<parent>/.<main checkout's name>-cache/`, so `C:/dev/.coredcc-cache`. `COREDCC_CACHE_DIR`
+  (environment, read by CMake and the tools) overrides it. Not shared with faberforge.
+- The main checkout is the parent of `git rev-parse --path-format=absolute
+  --git-common-dir`, run in the script's directory. There is no cache when that folder isn't
+  named `.git` (coredcc as a submodule).
+- Contents, written only by `tools/cache.mjs`:
+  - `sccache.toml`: `basedirs` only, one per checkout in `git worktree list`.
+  - `launcher.txt`: the launcher after `cmake -E env`, one argument per line. CMake and the
+    tool share it, so the settings exist once.
+  - `objects/`: the cache, 5 GB.
+- Pipe: `sccache-coredcc-<hash of the folder's path>`, so two clones never share a server.
+
+### The launcher
+- `cmake -E env`, then:
+  - sets `SCCACHE_SERVER_PIPE`, `SCCACHE_SERVER_PORT` (private, in case the sccache on disk
+    is ever replaced by one without pipes), `SCCACHE_CONF`, `SCCACHE_DIR`,
+    `SCCACHE_CACHE_SIZE`, `SCCACHE_LOCAL_RW_MODE` and `SCCACHE_IGNORE_SERVER_IO_ERROR=1`;
+  - unsets `SCCACHE_BASEDIRS`, `SCCACHE_DIRECT`, `SCCACHE_CLIENT_SIDE`, `SCCACHE_RECACHE`
+    and `SCCACHE_MULTILEVEL_CHAIN`;
+  - then `--` and the sccache path.
+- The disk settings are variables, not file entries, because any one of them in the
+  environment replaces the file's whole `[cache.disk]`.
 
 ### CMake: `cmake/CoredccCache.cmake`
-Included by the top-level `CMakeLists.txt` before `project()`, only when coredcc is the
-top-level project, on Windows, and not for Emscripten.
-- `CMAKE_MSVC_DEBUG_INFORMATION_FORMAT` defaults to `Embedded` (`/Z7`), with or without the
-  cache. Policy CMP0141 is NEW (implied by `cmake_minimum_required` 3.25).
-- Option `COREDCC_SCCACHE` (default ON). When it is ON, the folder's `sccache.toml` exists
-  and `sccache` is on PATH, the compiler launchers become:
-  `cmake -E env --unset=SCCACHE_BASEDIRS --unset=SCCACHE_DIR --unset=SCCACHE_DIRECT
-  SCCACHE_SERVER_PIPE=... SCCACHE_CONF=... SCCACHE_IGNORE_SERVER_IO_ERROR=1 <sccache>`.
-  So a build can never start a TCP server, whatever shell runs it.
-- They are normal variables, not cache entries: turning the option off takes effect on the
-  next configure. A launcher the user passed with `-D` wins.
-- Otherwise the build doesn't use sccache; there is no bare-`sccache` fallback. Configure
-  prints which case applies.
+Included right after `project()`, before any target, when coredcc is the top-level project,
+on Windows, and not for Emscripten (none of which is known before `project()`).
+- `CMAKE_MSVC_DEBUG_INFORMATION_FORMAT` defaults to `Embedded` (`/Z7`), cache or not.
+- Option `COREDCC_SCCACHE` (default ON). The launchers are set when it is ON,
+  `launcher.txt` exists, and the sccache it names contains `SCCACHE_SERVER_PIPE`.
+- They are normal variables, so the option takes effect on the next configure (and
+  recompiles everything). A launcher in CMake's cache, which is where `-D` and the
+  environment's `CMAKE_<LANG>_COMPILER_LAUNCHER` end up, wins. Configure warns when that
+  launcher is an sccache without a pipe.
+- No bare-`sccache` fallback. Configure prints which case applies. `launcher.txt` is a
+  configure dependency once it exists; after the first `setup`, reconfigure by hand.
 
 ### `tools/cache.mjs`
-- `setup`: writes `sccache.toml` (to a temporary file, then rename) when its contents
-  change. If a running server reports other basedirs, it stops it (`--stop-server`): the
-  next compile starts one with the new file. Safe during builds, as the fork now outwaits
-  a stopping server.
-- `stats`, `zero`, `stop`: the sccache command with the pipe and config set. This is the
-  only supported way to run sccache by hand here: `--zero-stats` and `--start-server`
-  start a server, and without the config it would have no basedirs.
-- Prints a notice and exits 0 when sccache isn't on PATH.
+- `setup`: finds the fork on PATH, writes the two files, then compares the basedirs that
+  `--show-stats` reports with the wanted ones (that reports the server's if one runs, and
+  the file's otherwise) and stops the server when they differ. The next compile starts one.
+  - Files are replaced by rename, retried for some seconds: builds hold the toml open.
+  - Repeats if `git worktree list` changed meanwhile (two worktrees created at once).
+- `stats`, `zero`, `stop`: sccache with the launcher's environment. The only supported way
+  to run it by hand here. `stop` accepts that no server runs.
+- Without the fork on PATH: a notice and exit 0. A PATH entry that isn't the fork counts as
+  absent.
 
 ### `tools/new-worktree.mjs <branch> [--base <ref>] [--deps]`
-- Runs from any checkout. Creates `../coredcc-<branch>` beside the main checkout, with `/`
-  in the branch replaced by `-`.
-- `git worktree prune`, then refuses if 3 worktrees exist besides the main checkout, or
-  the folder exists. An existing branch is checked out; otherwise `-b <branch> <base>`
-  (base: `master`).
-- `git submodule update --init` in it, with the main checkout's `extern/litestl` as
-  `--reference` when it is there.
+- Runs from any checkout. Creates `<parent>/<main checkout's name>-<branch>`, `/` replaced
+  by `-`. Branch names are limited to `[A-Za-z0-9._/-]`, not starting with `-`.
+- `git worktree prune`; refuses a fourth worktree. An existing branch is checked out;
+  otherwise `-b <branch> <base>` (base: `master`). A folder that already is this branch's
+  worktree is resumed (the submodule step needs the network and can fail).
+- `git submodule update --init`, with `--reference <main>/extern/litestl --dissociate` when
+  that has a `.git`. Without `--dissociate`, pruning the main one could break the worktree.
 - Runs `cache.mjs setup`. With `--deps`, `npm ci` in `tests/wasm` and `pnpm install` in
-  `apps/testapp`; without them those two ctests skip.
-- Prints the configure and build commands. It builds nothing, and doesn't remove
-  worktrees; removal follows the user's procedure, then `cache.mjs setup`.
+  `apps/testapp`.
+- Prints the next commands and a suggested `-j`: three cold MSVC builds at once ran out of
+  memory. It doesn't remove worktrees: that follows the user's procedure, then
+  `cache.mjs setup`. `git worktree remove --force` also deletes the worktree's own litestl
+  repository, so unpushed litestl branches in it are lost.
+
+### The pre-commit hook
+- Git sets `GIT_DIR` for hooks in linked worktrees, so the hook's `git -C extern/litestl`
+  used coredcc's repository and rejected every gitlink. It unsets `GIT_DIR`,
+  `GIT_INDEX_FILE`, `GIT_WORK_TREE` and `GIT_PREFIX` for those calls.
 
 ### emsdk in a worktree
-- `cmake/Emscripten.cmake` becomes the presets' toolchain file. It picks the first of
-  these that exists, remembers it in the cache as `COREDCC_EMSDK_DIR`, and includes the
-  real toolchain file:
+- `cmake/Emscripten.cmake` becomes the presets' toolchain file. It picks the first that
+  exists, and includes the real toolchain file:
   1. `COREDCC_EMSDK_DIR` (cache, then environment);
-  2. `<root>/build/deps/emsdk`;
-  3. `<main checkout>/build/deps/emsdk`, from `git rev-parse --git-common-dir`.
+  2. `<root>/build/deps/emsdk`, from `CMAKE_CURRENT_LIST_DIR`;
+  3. `<main checkout>/build/deps/emsdk`.
+- `COREDCC_EMSDK_DIR` is in `CMAKE_TRY_COMPILE_PLATFORM_VARIABLES`, or try_compile would
+  pick another SDK.
 - `install-emsdk.mjs` uses the main checkout's folder when run in a linked worktree.
 - No junctions: deleting a worktree could follow one into the 1.9 GB install. Existing
   wasm build folders keep the old toolchain file until recreated.
 
 ### Paths
-- `detail::assertFailed` prints the path from the last `source/coredcc/` or `tests/` on, so
-  an assertion can't name another checkout's file. `__FILE__` is used nowhere else.
+- `detail::assertFailed` prints the path from the last `source/coredcc/` or `tests/` on,
+  with either separator (clang-cl gives `...\source\coredcc/base/status.h`).
 - Debug info names the checkout that compiled the object. To debug, configure with
-  `-DCOREDCC_SCCACHE=OFF`. This goes in `docs/debugging.md`.
+  `-DCOREDCC_SCCACHE=OFF`.
 - No string define may hold a path: the compiler sees the value, the key doesn't.
 
 ### Line endings
-- `.gitattributes`: `* text=auto eol=lf`, keeping `*.cmd` CRLF. The main checkout is
-  renormalized once. litestl gets the same by PR.
-
-### Memory
-- Three cold MSVC builds at once ran out of memory. `new-worktree.mjs` prints a suggested
-  `-j`; the launcher doesn't limit anything.
+- `.gitattributes`: `* text=auto eol=lf` first, then `*.cmd` CRLF (the last match wins).
+- The main checkout's 12 CRLF files, when unmodified, are deleted and checked out again.
+  **Never `git add --renormalize` or a reset:** they don't rewrite such files, and they
+  would take the user's uncommitted edits along.
+- litestl: no PR. Its blobs are LF, and with the machine's `autocrlf` every fresh checkout
+  is CRLF. The main checkout's 18 LF files are rewritten the same way, to match. Drift
+  costs misses, not correctness.
 
 ## Tests
-- `tools/cache.test.mjs` (`node --test`), with a private pipe and folder: `setup` writes the
-  file, is idempotent, includes a new worktree, and stops a server whose basedirs differ.
-  A compile through the CMake launcher, from a shell with `SCCACHE_BASEDIRS`,
-  `SCCACHE_DIR` and no pipe, opens no listener on 4226 and uses the private cache.
+- `tools/cache.test.mjs` (`node --test`), in a clone with `COREDCC_CACHE_DIR` set: `setup`
+  writes the files, is idempotent, includes a new worktree, and stops a server whose
+  basedirs differ. A CMake build from a shell that sets `SCCACHE_BASEDIRS`, `SCCACHE_DIR`,
+  `SCCACHE_CACHE_SIZE` and a private `SCCACHE_SERVER_PORT` but no pipe uses the private
+  cache and adds no listener on 4226. The hook accepts a valid gitlink in a worktree.
 - By hand, once: two real worktrees, both native presets; the second's first build is all
-  hits, `ninja -t deps` names only its own headers, a header edit rebuilds, 37/37 pass.
+  hits, `ninja -t deps` names only its own headers, a header edit rebuilds, tests pass.
 - The full gate afterwards.
 
 ## Risks
 - A server idle for 10 minutes exits; the next compile starts one with the current file.
-- A server started by hand with the pipe but without the config gives misses, not wrong
-  objects.
+- Checkouts under a non-ASCII path hit less (6 of 30 in a test); the objects are right.
+- A hand-edited, malformed `sccache.toml` fails every compile.
+- Concurrent wasm builds share one emsdk cache, which emcc locks itself. Not tested.
 - The savings are about 9 s (clang-cl) and 11-13 s (MSVC) per fresh checkout today.
 
 ## Pressure test (2026-11-23)
@@ -214,7 +244,7 @@ reproduced the items marked "reproduced" with separate scripts.
 
 ## The fork, fixed (2026-11-24)
 Four commits on `C:\dev\sccache`, branch `windows-named-pipe-support`, `b7429e73` to
-`d64d0f07`. Not pushed. A fresh agent tried to break them; what it found that the changes
+`d64d0f07`, pushed to `joeedh/sccache`. A fresh agent tried to break them; what it found that the changes
 caused or made reachable is fixed in them.
 
 - **Keys:** cl and clang-cl preprocess with `-E`, so line markers are hashed. Objects still
@@ -249,3 +279,37 @@ Two trees, 98 compiles, default mode and mode off, clang-cl and MSVC: the second
   problem. Upstream does this on purpose, and a test asserts it.
 - `clang++ -MD -MF` without basedirs replays the depfile of an earlier compile of the same
   source to another output, and `-MMD` and `-MD` share an entry.
+
+## Pressure test of the second design (2026-11-24)
+A fresh agent built the launcher in a clone with real linked worktrees. No scenario gave a
+wrong object.
+
+Broke, and changed above:
+- **Renormalizing** the main checkout rewrote nothing (185 CRLF files before and after, in a
+  fresh clone) and committed an uncommitted `CLAUDE.md` edit.
+- **Before `project()`**, `EMSCRIPTEN` and `PROJECT_IS_TOP_LEVEL` are empty and `WIN32` is 1
+  even when cross-compiling. sccache fails (exit 2) on emcc instead of passing it through.
+- **The pre-commit hook** rejected every gitlink committed from a linked worktree.
+- **`--reference`** without `--dissociate` left `fatal: bad object HEAD` after a gc in the
+  main submodule, and fails when the main `extern/litestl` is an empty folder.
+- **Three unsets** didn't isolate the launcher: with `SCCACHE_CACHE_SIZE` or
+  `SCCACHE_LOCAL_RW_MODE` set, sccache used the user's default cache folder.
+- **One pipe per user** would be shared by two clones with different cache folders.
+- **A branch called `cache`** put a worktree in the cache folder.
+- **Renaming `sccache.toml`** failed 124 times of 202 while 16 clients ran.
+- **An sccache without pipe support** would have used TCP 4226. An environment
+  `CMAKE_CXX_COMPILER_LAUNCHER` is copied into CMake's cache and stays.
+- Smaller: try_compile lost `COREDCC_EMSDK_DIR`; `--git-common-dir` is relative in the main
+  checkout and points into `.git/modules` in a submodule; `;` in branch names; a rerun after
+  a failed submodule step; both separators in `__FILE__`; `--stop-server` without a server
+  exits 2; `=` in a launcher path needs `--`.
+
+Held:
+- A real linked worktree with MSVC: 98/98 hits, 37/37 tests, only its own headers, the same
+  dependency counts as an uncached build.
+- Four concurrent builds with a `--stop-server` every 2 s (13 stops): all succeeded.
+- try_compile and Ninja's `/showIncludes` detection don't use the launcher; litestl gets
+  `/Z7`; an empty `-D` launcher is respected; `basedirs` of `coredcc` and `coredcc-w1` don't
+  match each other.
+
+Not tested: emcc builds in a worktree, a host that embeds coredcc, memory use.
