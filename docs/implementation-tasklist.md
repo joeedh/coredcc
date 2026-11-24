@@ -83,7 +83,7 @@ then.
     `docs/reports/feature-report-ta1-2026-11-23.md`.
   - litestl #11 (dispatch poisons on any escape) is open; bump the gitlink when it
     merges.
-  - The end of P1 (build cache, worktrees) is done (2026-11-24). Next: its review, then
-    the parallel phase.
+  - The end of P1 (build cache, worktrees) is done (2026-11-24). Next: the
+    parallel phase.
 - Test app TA0 and TA1 are done (19 tests pass): build the wasm-st preset, then
   `cd apps/testapp && pnpm install && pnpm test`.
