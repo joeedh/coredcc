@@ -1,9 +1,8 @@
 # Build cache and worktrees (end of P1)
 
-Status: **the cache design below failed its pressure test (2026-11-23) and must not be
-implemented as written.** The user chose option 3; the fork is fixed (2026-11-24, last
-section). The design still has to be revised before it is implemented.
-The worktree and emsdk parts survive with the corrections listed there. Replaces the
+Status: the first cache design failed its pressure test (2026-11-23). The user had the
+sccache fork fixed (2026-11-24), and this second design replaces it. To be pressure-tested.
+Replaces the
 sketch in `docs/implementation-tasklist.md`, "Build cache for the parallel phase".
 
 ## Goals
@@ -23,7 +22,19 @@ sketch in `docs/implementation-tasklist.md`, "Build cache for the parallel phase
 - **Rule: coredcc never runs sccache without `SCCACHE_SERVER_PIPE` set, and never
   force-kills a server.**
 
-## Measured (2026-11-23)
+## Measured (2026-11-24, the fixed fork)
+Two copies of the tree, 98 Debug compiles, the launcher described below.
+
+| | first tree, all misses | second tree, 98/98 hits |
+|---|---|---|
+| clang-cl | 14.5-18.1 s | 4.7-5.9 s |
+| MSVC, `/Z7` | 16.2-23.5 s | 5.9-9.6 s |
+
+Both second trees pass 37/37. A string define with spaces, quotes and `&` survives
+`cmake -E env`, nothing about it is in `compile_commands.json`, and nothing listens on
+4226.
+
+## Measured before the fix (2026-11-23)
 The whole tree, Debug, 98 compiles. Two copies of the source at different paths, one
 server with both roots in `SCCACHE_BASEDIRS`, a private pipe and a private cache.
 
@@ -44,87 +55,94 @@ server with both roots in `SCCACHE_BASEDIRS`, a private pipe and a private cache
   numbers and missing dependencies (see "Pressure test"). The two trees were also
   identical copies, which real worktrees aren't.
 
-## Design
+## Design (second version, 2026-11-24)
+The first version (a launcher binary, a registry and server restarts) is in git at
+`e68c314`. With the fork fixed, the launcher can be `cmake -E env`.
 
-### The launcher: `tools/sccache-wrapper/`
-- `sccache_launcher.cc` and `setup.mjs`, copied from faberforge
-  (`webgl-app-framework/tools/sccache-wrapper`) with the changes below. The launcher
-  keeps the union of every registered worktree root in `SCCACHE_BASEDIRS`, and restarts
-  the server only when the union gains a root.
-- **Environment it sets, when unset:**
-  - `SCCACHE_SERVER_PIPE=sccache-<USERNAME>`, before any sccache call. This is
-    faberforge's documented name.
-  - `SCCACHE_DIRECT=false`. With basedirs, sccache's docs say preprocessor cache mode
-    can silently return a stale object when one checkout has a header that another
-    lacks. Feature branches do that.
-  - `SCCACHE_IGNORE_SERVER_IO_ERROR=1`, so a server restart during someone else's build
-    falls back to the compiler.
-- **Arguments:** faberforge's launcher passes them through `_spawnv`, which joins them
-  without quoting, and so breaks `-D"..."` string defines. Ours passes the raw tail of
-  `GetCommandLineW()` to `CreateProcessW`.
-- **Shared folder, separate binary:** the registry is `C:\dev\sccache-worktrees`, beside
-  the worktrees, as faberforge's is. Two projects on one pipe share one server, so it
-  must know both projects' roots.
-  - The binary is `coredcc-sccache-launcher.exe`. Both `setup.mjs` scripts rebuild on
-    mtime, so sharing one name would make the two projects overwrite each other's.
-  - The "applied" state is per pipe, `.applied-<pipe>`: faberforge's launcher runs a TCP
-    server unless the variable is set, and its `.applied` says nothing about ours.
-- **Without sccache on PATH** it runs the bare compiler.
+### The cache folder: `<parent of the main checkout>/coredcc-cache/`
+- Holds `sccache.toml` and the cache itself (`objects/`). Not shared with faberforge.
+- `sccache.toml` is written only by `tools/cache.mjs`: `basedirs` (every checkout that
+  `git worktree list` names, the main one included), `[cache.disk] dir` and `size` (5 GB).
+- The pipe is `sccache-coredcc-<user>`.
 
-### CMake
-- `cmake/CoredccCache.cmake`, included by the top-level `CMakeLists.txt` after
-  `project()`, only when `PROJECT_IS_TOP_LEVEL`, on Windows, and not under Emscripten:
-  - `CMAKE_MSVC_DEBUG_INFORMATION_FORMAT` defaults to `Embedded` (`/Z7`), with or
-    without the cache, so builds don't differ by machine.
-  - `COREDCC_SCCACHE` (default ON): if `../sccache-worktrees/coredcc-sccache-launcher.exe`
-    exists, it becomes `CMAKE_C_COMPILER_LAUNCHER` and `CMAKE_CXX_COMPILER_LAUNCHER`,
-    unless the user set those.
-  - **No fallback to a bare `sccache` on PATH**, unlike faberforge: that would start a
-    TCP server.
-- litestl is a subdirectory, so it gets both settings.
+### CMake: `cmake/CoredccCache.cmake`
+Included by the top-level `CMakeLists.txt` before `project()`, only when coredcc is the
+top-level project, on Windows, and not for Emscripten.
+- `CMAKE_MSVC_DEBUG_INFORMATION_FORMAT` defaults to `Embedded` (`/Z7`), with or without the
+  cache. Policy CMP0141 is NEW (implied by `cmake_minimum_required` 3.25).
+- Option `COREDCC_SCCACHE` (default ON). When it is ON, the folder's `sccache.toml` exists
+  and `sccache` is on PATH, the compiler launchers become:
+  `cmake -E env --unset=SCCACHE_BASEDIRS --unset=SCCACHE_DIR --unset=SCCACHE_DIRECT
+  SCCACHE_SERVER_PIPE=... SCCACHE_CONF=... SCCACHE_IGNORE_SERVER_IO_ERROR=1 <sccache>`.
+  So a build can never start a TCP server, whatever shell runs it.
+- They are normal variables, not cache entries: turning the option off takes effect on the
+  next configure. A launcher the user passed with `-D` wins.
+- Otherwise the build doesn't use sccache; there is no bare-`sccache` fallback. Configure
+  prints which case applies.
 
-### Paths in cached objects
-- `detail::assertFailed` prints the path from `source/` or `tests/` on, so an assertion
-  can't name another worktree's file. `__FILE__` is used nowhere else.
-- Debug info still names the tree that compiled the object. To debug in a worktree,
-  configure it with `-DCOREDCC_SCCACHE=OFF`. This goes in `docs/debugging.md`.
-
-### emsdk in a worktree
-- `cmake/Emscripten.cmake` becomes the presets' toolchain file, and includes the real
-  one from the first of these that exists:
-  1. `$ENV{COREDCC_EMSDK_DIR}`;
-  2. `<root>/build/deps/emsdk`;
-  3. in a linked worktree, `<main checkout>/build/deps/emsdk`, found from the worktree's
-     `.git` file.
-- No junctions: deleting a worktree could follow one into the 1.9 GB install.
+### `tools/cache.mjs`
+- `setup`: writes `sccache.toml` (to a temporary file, then rename) when its contents
+  change. If a running server reports other basedirs, it stops it (`--stop-server`): the
+  next compile starts one with the new file. Safe during builds, as the fork now outwaits
+  a stopping server.
+- `stats`, `zero`, `stop`: the sccache command with the pipe and config set. This is the
+  only supported way to run sccache by hand here: `--zero-stats` and `--start-server`
+  start a server, and without the config it would have no basedirs.
+- Prints a notice and exits 0 when sccache isn't on PATH.
 
 ### `tools/new-worktree.mjs <branch> [--base <ref>] [--deps]`
-- Refuses when 3 worktrees already exist besides the main checkout, or when the target
-  folder exists.
-- Runs `git worktree add -b <branch> ../coredcc-<branch> <base>` (base: `master`), then
-  `git submodule update --init` in it, and registers the root with `setup.mjs --root`.
-- `--deps` also runs `npm ci` in `tests/wasm` and `pnpm install` in `apps/testapp`.
-  Without them those two ctests skip.
-- Prints the build commands. It builds nothing.
-- Removal follows the user's procedure for Windows worktrees; the tool doesn't remove.
+- Runs from any checkout. Creates `../coredcc-<branch>` beside the main checkout, with `/`
+  in the branch replaced by `-`.
+- `git worktree prune`, then refuses if 3 worktrees exist besides the main checkout, or
+  the folder exists. An existing branch is checked out; otherwise `-b <branch> <base>`
+  (base: `master`).
+- `git submodule update --init` in it, with the main checkout's `extern/litestl` as
+  `--reference` when it is there.
+- Runs `cache.mjs setup`. With `--deps`, `npm ci` in `tests/wasm` and `pnpm install` in
+  `apps/testapp`; without them those two ctests skip.
+- Prints the configure and build commands. It builds nothing, and doesn't remove
+  worktrees; removal follows the user's procedure, then `cache.mjs setup`.
+
+### emsdk in a worktree
+- `cmake/Emscripten.cmake` becomes the presets' toolchain file. It picks the first of
+  these that exists, remembers it in the cache as `COREDCC_EMSDK_DIR`, and includes the
+  real toolchain file:
+  1. `COREDCC_EMSDK_DIR` (cache, then environment);
+  2. `<root>/build/deps/emsdk`;
+  3. `<main checkout>/build/deps/emsdk`, from `git rev-parse --git-common-dir`.
+- `install-emsdk.mjs` uses the main checkout's folder when run in a linked worktree.
+- No junctions: deleting a worktree could follow one into the 1.9 GB install. Existing
+  wasm build folders keep the old toolchain file until recreated.
+
+### Paths
+- `detail::assertFailed` prints the path from the last `source/coredcc/` or `tests/` on, so
+  an assertion can't name another checkout's file. `__FILE__` is used nowhere else.
+- Debug info names the checkout that compiled the object. To debug, configure with
+  `-DCOREDCC_SCCACHE=OFF`. This goes in `docs/debugging.md`.
+- No string define may hold a path: the compiler sees the value, the key doesn't.
+
+### Line endings
+- `.gitattributes`: `* text=auto eol=lf`, keeping `*.cmd` CRLF. The main checkout is
+  renormalized once. litestl gets the same by PR.
+
+### Memory
+- Three cold MSVC builds at once ran out of memory. `new-worktree.mjs` prints a suggested
+  `-j`; the launcher doesn't limit anything.
 
 ## Tests
-- `tools/sccache-wrapper/test.mjs` (`node --test`), with a private pipe, cache and
-  registry:
-  - a string define reaches the compiler intact;
-  - a missing sccache runs the bare compiler;
-  - the launcher sets the pipe when unset, and keeps one that is set;
-  - no TCP listener appears on 4226.
-- By hand, once: two real worktrees, both presets; the second's first build is all hits
-  and its tests pass.
+- `tools/cache.test.mjs` (`node --test`), with a private pipe and folder: `setup` writes the
+  file, is idempotent, includes a new worktree, and stops a server whose basedirs differ.
+  A compile through the CMake launcher, from a shell with `SCCACHE_BASEDIRS`,
+  `SCCACHE_DIR` and no pipe, opens no listener on 4226 and uses the private cache.
+- By hand, once: two real worktrees, both native presets; the second's first build is all
+  hits, `ninja -t deps` names only its own headers, a header edit rebuilds, 37/37 pass.
+- The full gate afterwards.
 
 ## Risks
-- An idle server exits after 10 minutes; the next compile starts one with the full
-  union, because every start goes through the launcher. A server started by hand without
-  `SCCACHE_BASEDIRS` would only cause misses.
-- Restarting the server when a worktree joins can disturb a build in another worktree.
-  It falls back to compiling locally.
-- Savings are modest today (about 9–11 s per full Debug build), and grow with the tree.
+- A server idle for 10 minutes exits; the next compile starts one with the current file.
+- A server started by hand with the pipe but without the config gives misses, not wrong
+  objects.
+- The savings are about 9 s (clang-cl) and 11-13 s (MSVC) per fresh checkout today.
 
 ## Pressure test (2026-11-23)
 A fresh agent was given this plan and the code, not the author's reasoning. The author
