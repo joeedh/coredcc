@@ -137,3 +137,27 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   fix.
 - For TS, copy the file to the scratchpad first and copy it back afterwards, then grep
   for the disabled marker to confirm it's gone.
+
+## Build cache and worktrees
+Design: `docs/plans/2026-11-23-build-cache-worktrees.md`. Windows only, native builds only.
+
+- **New worktree:** `node tools/new-worktree.mjs <branch> [--deps]`.
+- **Removed a worktree:** run `node tools/cache.mjs setup` afterwards. Its own litestl
+  repository goes with it, so push litestl branches first.
+- **Is it working?** Configure prints `coredcc: using the build cache`, or why not.
+  `node tools/cache.mjs stats` has the hits. An all-hit build still preprocesses every
+  source and links everything.
+- **Suspect the cache:** configure with `-DCOREDCC_SCCACHE=OFF` (recompiles everything).
+- **Debugging:** an object's debug info names the checkout that compiled it. If the debugger
+  opens another checkout's file, rebuild with the cache off.
+- **Never run `sccache` by hand.** `--show-stats` and the like start nothing, but
+  `--zero-stats`, `--start-server` and compiles start a server with the wrong settings. Use
+  `tools/cache.mjs`.
+- **No string define may hold a path.** The key has its checkout's folder removed, so
+  another checkout would get the wrong string.
+- **wasm in a worktree** uses the main checkout's emsdk (`cmake/Emscripten.cmake`). Build
+  folders from before 2026-11-24 need `cmake --fresh --preset wasm-st`.
+- **Line endings:** `git ls-files --eol` shows files that differ from a fresh checkout
+  (`w/crlf` in coredcc, `w/lf` in litestl). They only cost misses. To fix an *unmodified*
+  one, delete it and `git checkout -- <file>`; `git add --renormalize` doesn't rewrite it.
+- **Tests of the tools:** `node --test tools/cache.test.mjs`.

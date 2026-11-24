@@ -54,26 +54,10 @@ then.
   - Each branch is rebased onto master and merged with `git merge --ff-only`.
 
 ### Build cache for the parallel phase
-**Superseded (2026-11-23)** by `docs/plans/2026-11-23-build-cache-worktrees.md`, whose
-cache design failed its pressure test. The user had the sccache fork fixed instead
-(2026-11-24, done); next is revising the design, then implementing it.
-sccache is now installed (the user's named-pipe fork, `C:\dev\sccache`). Never run it
-without `SCCACHE_SERVER_PIPE`. The original sketch:
-- **sccache** as the compiler launcher, with faberforge's cross-worktree launcher
-  (`webgl-app-framework/tools/sccache-wrapper`). It keeps the union of every live
-  worktree's root in `SCCACHE_BASEDIRS`, so one sccache server shares hits across all
-  worktrees.
-- coredcc gets its own copy of `setup.mjs` and `sccache_launcher.cc` in
-  `tools/sccache-wrapper/`. It writes into the same shared directory,
-  `C:\dev\sccache-worktrees`, so coredcc and faberforge worktrees share one server.
-- **Caveats carried over from sculptcore:**
-  - Cache only clang-cl builds. MSVC objects are cacheable only with `/Z7`, which `/Zi`
-    defeats.
-  - The launcher mangles command-line `-D"..."` string defines on Windows. Pass strings
-    through generated config headers instead.
-  - After each build, grep the log for `FAILED`, because of an occasional sccache
-    pipe-busy flake. Retry after `sccache --stop-server`.
-- sccache is not installed on this machine yet (checked 2026-11-19); install it first.
+- Done 2026-11-24: `docs/plans/2026-11-23-build-cache-worktrees.md`. How to use it:
+  `docs/debugging.md`, "Build cache and worktrees".
+- The user's sccache fork (`C:\dev\sccache`) does the caching. Never run it without
+  `SCCACHE_SERVER_PIPE`.
 
 ## Current focus
 - litestl #4-#6 and #8-#10 merged; coredcc pins litestl master `913feaf` (2026-11-22).
@@ -99,6 +83,7 @@ without `SCCACHE_SERVER_PIPE`. The original sketch:
     `docs/reports/feature-report-ta1-2026-11-23.md`.
   - litestl #11 (dispatch poisons on any escape) is open; bump the gitlink when it
     merges.
-  - Next: the end of P1 (sccache, worktrees).
+  - The end of P1 (build cache, worktrees) is done (2026-11-24). Next: its review, then
+    the parallel phase.
 - Test app TA0 and TA1 are done (19 tests pass): build the wasm-st preset, then
   `cd apps/testapp && pnpm install && pnpm test`.

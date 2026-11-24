@@ -2,7 +2,7 @@
 
 Status: the first cache design failed its pressure test (2026-11-23). The user had the
 sccache fork fixed (2026-11-24). The second design was pressure-tested and changed
-(2026-11-24); being implemented.
+(2026-11-24), then implemented (2026-11-24; "Result", at the end).
 Replaces the
 sketch in `docs/implementation-tasklist.md`, "Build cache for the parallel phase".
 
@@ -313,3 +313,19 @@ Held:
   match each other.
 
 Not tested: emcc builds in a worktree, a host that embeds coredcc, memory use.
+
+## Result (2026-11-24)
+- `tools/cache.test.mjs`: 6 of 6. The gate: 38/38 in the four native presets, 39/39 in
+  wasm-st-debug.
+- Two real worktrees, Debug, clang-cl and MSVC: 236 of 236 cached compiles hit in each,
+  against objects the main checkout compiled; no dependency on another checkout; 38/38.
+  wasm-st-debug builds in a worktree with the main checkout's emsdk (its two node ctests
+  skip without `--deps`).
+
+| Debug build of everything | no hits | all hits, fresh worktree | all hits, again |
+|---|---|---|---|
+| clang-cl | 14.9 s | 5.2-5.7 s | 4.7-4.8 s |
+| MSVC | 18.0 s | 8.6-16.2 s | 5.7-7.5 s |
+
+- In MSVC's fresh worktrees the extra time is mostly linking (27 executables), which isn't
+  cached and varies a lot; the compiles are done after 4 to 6 s.
