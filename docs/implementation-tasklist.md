@@ -55,7 +55,8 @@ then.
 
 ### Build cache for the parallel phase
 **Superseded (2026-11-23)** by `docs/plans/2026-11-23-build-cache-worktrees.md`, whose
-cache design failed its pressure test; the choice of what to do instead is the user's.
+cache design failed its pressure test. The user had the sccache fork fixed instead
+(2026-11-24, done); next is revising the design, then implementing it.
 sccache is now installed (the user's named-pipe fork, `C:\dev\sccache`). Never run it
 without `SCCACHE_SERVER_PIPE`. The original sketch:
 - **sccache** as the compiler launcher, with faberforge's cross-worktree launcher

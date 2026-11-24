@@ -1,7 +1,8 @@
 # Build cache and worktrees (end of P1)
 
 Status: **the cache design below failed its pressure test (2026-11-23) and must not be
-implemented as written.** The record and the options are in "Pressure test" at the end.
+implemented as written.** The user chose option 3; the fork is fixed (2026-11-24, last
+section). The design still has to be revised before it is implemented.
 The worktree and emsdk parts survive with the corrections listed there. Replaces the
 sketch in `docs/implementation-tasklist.md`, "Build cache for the parallel phase".
 
@@ -146,7 +147,8 @@ reproduced the items marked "reproduced" with separate scripts.
   | MSVC: rebuilt after touching `status.h` | 54 | 0 (deps name tree A's headers) |
 
 - **So with this sccache, only MSVC with the mode off is sound.** clang-cl is sound in
-  neither mode.
+  neither mode. (Corrected 2026-11-24: MSVC with the mode off isn't sound either. `/EP`
+  misses blank lines moved between a header and its includer, and a renamed header.)
 - **Restarting the server fails other worktrees' builds**, 4 times out of 4: "All pipe
   instances are busy (os error 231)". `SCCACHE_IGNORE_SERVER_IO_ERROR` doesn't cover
   connecting. The launcher restarts the server whenever a worktree joins.
@@ -191,3 +193,41 @@ reproduced the items marked "reproduced" with separate scripts.
 3. **Fix the fork first**, then cache both: preprocess clang-cl with line markers (`-E`);
    in preprocessor mode, refuse to cache when it can't restore the dependency file and
    rewrite MSVC's recorded paths; on a busy pipe, retry longer, then compile locally.
+
+## The fork, fixed (2026-11-24)
+Four commits on `C:\dev\sccache`, branch `windows-named-pipe-support`, `b7429e73` to
+`d64d0f07`. Not pushed. A fresh agent tried to break them; what it found that the changes
+caused or made reachable is fixed in them.
+
+- **Keys:** cl and clang-cl preprocess with `-E`, so line markers are hashed. Objects still
+  hit across trees listed in `SCCACHE_BASEDIRS`.
+- **Dependencies:** the preprocessor cache is skipped when a hit couldn't report this
+  tree's headers. This also affected `clang++ -MD -MF` with basedirs and default settings,
+  which is how faberforge builds.
+- **Pipe:** a restart under load no longer fails compiles (12 clients, a stop every 7 s:
+  204 of 1005 failed before, 0 of 527 after; 24 clients, a stop every 0.6 s: 0 of 1024).
+- **`SCCACHE_IGNORE_SERVER_IO_ERROR=1`** covers connecting. It doesn't cover an invalid
+  client setting, such as a relative `SCCACHE_BASEDIRS`.
+- **`strip_basedirs`** (upstream bug): some non-ASCII text in a source could give a wrong
+  object or a failed compile.
+
+Two trees, 98 compiles, default mode and mode off, clang-cl and MSVC: the second tree gets
+98/98 hits, records only its own headers, rebuilds 54 objects after touching `status.h`
+(0 before, in default mode), and passes 37/37.
+
+### What this changes in the design
+- Both compilers can be cached. `SCCACHE_DIRECT` can stay at its default.
+- Restarting the server when a worktree joins is safe, so fixed worktree names aren't
+  needed.
+- Still needed: `/Z7`, LF line endings, a pipe and cache folder apart from faberforge's, no
+  string defines that hold paths, and the corrections listed above.
+
+### Known limits that remain
+- Columns: `source_location::column()` and clang-cl's debug columns can be stale.
+- With `/Z7`, the source checksum can be stale after edits that only change line endings,
+  encoding or trailing blank lines.
+- Debug info names the tree that compiled the object.
+- `clang++` with `SCCACHE_DIRECT=false` preprocesses with `-P`, and so has the stale-line
+  problem. Upstream does this on purpose, and a test asserts it.
+- `clang++ -MD -MF` without basedirs replays the depfile of an earlier compile of the same
+  source to another output, and `-MMD` and `-MD` share an entry.
