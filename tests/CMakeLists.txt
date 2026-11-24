@@ -1,3 +1,4 @@
+coredcc_test(test_base_assert SOURCES base/test_assert.cc DEPS coredcc_base)
 coredcc_test(test_base_status SOURCES base/test_status.cc DEPS coredcc_base)
 coredcc_test(test_base_id SOURCES base/test_id.cc DEPS coredcc_base)
 coredcc_test(test_base_handle_pool SOURCES base/test_handle_pool.cc DEPS coredcc_base)

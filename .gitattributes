@@ -1,4 +1,4 @@
-# Shell scripts must keep LF endings or sh fails on them.
-tools/hooks/* text eol=lf
-*.sh text eol=lf
+# LF in every checkout: with other line endings, the same source compiles to another
+# preprocessed text, which the build cache (tools/cache.mjs) doesn't find. sh needs it too.
+* text=auto eol=lf
 *.cmd text eol=crlf

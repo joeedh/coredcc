@@ -8,6 +8,12 @@
  */
 
 namespace coredcc::detail {
+/**
+ * `file` from `source/coredcc/` or `tests/` on. An object from the build cache may have been
+ * compiled in another checkout, whose path must not be shown.
+ */
+const char *pathInCheckout(const char *file);
+
 [[noreturn]] void assertFailed(const char *expr, const char *msg, const char *file, int line);
 } // namespace coredcc::detail
 

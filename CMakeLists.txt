@@ -10,6 +10,9 @@ option(COREDCC_BUILD_TESTS "Build coredcc's tests" ${PROJECT_IS_TOP_LEVEL})
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CoredccHelpers)
+if(PROJECT_IS_TOP_LEVEL AND WIN32 AND NOT EMSCRIPTEN)
+  include(CoredccCache)
+endif()
 
 # No exceptions and no RTTI, for litestl too, so _HAS_EXCEPTIONS agrees across every
 # translation unit (Unreal builds this way). Only when we own the build: a host project

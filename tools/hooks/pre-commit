@@ -7,6 +7,9 @@ staged=$(git diff --cached --raw --no-abbrev -- "$sub" | awk '{print $4}')
 [ -z "$staged" ] && exit 0
 case "$staged" in 0000000*) exit 0 ;; esac  # submodule removed
 
+# In a linked worktree, git points these at coredcc's repository, also for `git -C`.
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX
+
 git -C "$sub" fetch --quiet origin master 2>/dev/null
 if ! git -C "$sub" cat-file -e "$staged^{commit}" 2>/dev/null; then
   echo "pre-commit: staged $sub gitlink $staged is not a known commit" >&2

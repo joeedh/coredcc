@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Installs the pinned Emscripten SDK into build/deps/emsdk (gitignored).
+// Installs the pinned Emscripten SDK into build/deps/emsdk (gitignored), the main
+// checkout's if this is a worktree.
 //
 //   node tools/install-emsdk.mjs              clone, install and activate
 //   node tools/install-emsdk.mjs --adopt DIR  move an existing emsdk checkout there,
@@ -12,11 +13,10 @@
 import {execFileSync} from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import {fileURLToPath} from 'node:url'
+import {mainCheckout, root} from './checkout.mjs'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const pin = JSON.parse(fs.readFileSync(path.join(root, 'tools', 'emsdk.json'), 'utf8'))
-const target = path.join(root, 'build', 'deps', 'emsdk')
+const target = path.join(mainCheckout() ?? root, 'build', 'deps', 'emsdk')
 
 function emscriptenVersion(dir) {
   const f = path.join(dir, 'upstream', 'emscripten', 'emscripten-version.txt')
