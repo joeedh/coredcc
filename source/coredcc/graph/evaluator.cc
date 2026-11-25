@@ -3,6 +3,7 @@
 
 #include "coredcc/base/assert.h"
 #include "coredcc/graph/socket_type.h"
+#include "coredcc/graph/system.h"
 #include "coredcc/lib/library.h"
 
 #include <algorithm>
@@ -30,13 +31,19 @@ bool sameError(const ErrorPtr &a, const ErrorPtr &b)
 } // namespace
 
 Evaluator::Evaluator(Runtime *rt, Library *lib, GraphSource source)
-    : rt_(*rt), lib_(libraryRef(lib)), source_(source), blocks_(*rt, lib_)
+    : rt_(*rt), lib_(libraryRef(!lib && source.def ? source.def->library() : lib)),
+      source_(source), blocks_(*rt, lib_)
 {
 }
 
 Evaluator::~Evaluator()
 {
   CDCC_CHECK(!running_, "a GraphInstance was destroyed while it evaluates");
+  /* The last pin of a block may go. It is destroyed after everything here is. */
+  NoCollectScope noCollect(lib_.get());
+  root_ = nullptr;
+  results_.clear();
+  inputs_ = {};
 }
 
 Evaluator::Key Evaluator::currentKey() const
@@ -56,6 +63,7 @@ Status Evaluator::evaluate(std::span<const SocketPath> sockets, Vector<Status> &
   if (lib && lib->busy()) {
     return Status::error(StatusCode::Busy, "GraphInstance::evaluate: the library is collecting");
   }
+  NoCollectScope noCollect(lib); /* ends last: what it lets go may own this, or free defs */
   CDCC_TRY(prepareRoot());
   const Key key = currentKey();
   if (!(key == passKey_)) {
@@ -66,10 +74,10 @@ Status Evaluator::evaluate(std::span<const SocketPath> sockets, Vector<Status> &
   call_++;
   overBudget_ = false;
 
-  NoCollectScope noCollect(lib); /* ends last: what it lets go may free defs */
   EvaluationScope scope(rt_);
   running_ = true;
   pinDef(*root_);
+  pruneResults();
   for (const SocketPath &path : sockets) {
     Request r = find(path);
     if (!r.done && !overBudget_) {
@@ -190,7 +198,8 @@ void Evaluator::store(const SocketPath &path, const Request &r, Status &status)
 {
   if (!r.status.ok()) {
     status = r.status;
-    return; /* no socket, no result */
+    results_.remove(path); /* no socket, no result */
+    return;
   }
   ErrorPtr error = r.error;
   TraceInput origin = r.origin;
@@ -233,6 +242,55 @@ void Evaluator::store(const SocketPath &path, const Request &r, Status &status)
   }
   if (changed) {
     out.changedAt = rt_.nextVersion();
+  }
+}
+
+bool Evaluator::exists(const SocketPath &path) const
+{
+  const GraphDef *def = root_->def;
+  Vector<const GraphDef *> above;
+  for (NodeId id : path.node.groups) {
+    const GraphNode *n = def->node(id);
+    if (!n || !n->type() || n->type()->role != NodeRole::Group) {
+      return false;
+    }
+    above.append(def);
+    def = def->groupTarget(*n);
+    if (!def || above.contains(def) || above.size() > kMaxDepth) {
+      return true;
+    }
+  }
+  if (path.node.node.isNull()) {
+    const std::string_view key = path.key.c_str();
+    for (const InterfaceSocket &s : def->interfaceSockets(SocketSide::Output)) {
+      if (key == s.name.c_str() || key == s.key().c_str()) {
+        return true;
+      }
+    }
+    return false;
+  }
+  const GraphNode *n = def->node(path.node.node);
+  return n && def->findSocket(*n, path.side, path.key.c_str());
+}
+
+void Evaluator::pruneResults()
+{
+  const uint64_t structure = rt_.ext<GraphSystem>().structureVersion();
+  const Library *lib = lib_.get();
+  const uint64_t epoch = lib ? lib->epoch() : 0;
+  if (prunedStructure_ == structure && prunedEpoch_ == epoch) {
+    return;
+  }
+  prunedStructure_ = structure;
+  prunedEpoch_ = epoch;
+  Vector<SocketPath> gone;
+  for (auto &pair : results_) {
+    if (!exists(pair.key)) {
+      gone.append(pair.key);
+    }
+  }
+  for (const SocketPath &path : gone) {
+    results_.remove(path);
   }
 }
 

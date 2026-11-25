@@ -151,6 +151,13 @@ class Evaluation {
     bool found = false;
     Outcome outcome;
   };
+  /** Whether `run` would find the socket. */
+  bool finds(const SocketPath &path)
+  {
+    Request r{path, false, {}};
+    locate(r);
+    return r.found;
+  }
   void run(std::vector<Request> &requests)
   {
     std::vector<Target> targets;

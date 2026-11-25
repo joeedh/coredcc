@@ -78,6 +78,7 @@ class Evaluator {
   NodeReport report(const NodePath &node) const;
   Status retry();
   Status clear();
+  Status forget(const SocketPath &socket);
 
   void *userData = nullptr;
   int maxFrames = 262144;
@@ -104,6 +105,7 @@ class Evaluator {
     GraphValue value;
   };
 
+  /** The def, if it is this Runtime's and Library's. */
   GraphDef *findDef(Status &status) const;
   Status prepareRoot();
   /** Drops the frames made in this call, which went over the budget. */
@@ -166,6 +168,10 @@ class Evaluator {
   void failCycle(const litestl::util::Vector<Vertex> &members);
 
   void store(const SocketPath &socket, const Request &r, Status &status);
+  /** Whether the defs have the socket. True where a group fails, so that it can't be known. */
+  bool exists(const SocketPath &socket) const;
+  /** Drops results of sockets that are gone. */
+  void pruneResults();
 
   Runtime &rt_;
   LibraryRef lib_;
@@ -184,6 +190,10 @@ class Evaluator {
   /** Moves with setInput and retry. */
   uint64_t own_ = 1;
   litestl::util::Map<SocketPath, Pulled> results_;
+  /** GraphSystem::structureVersion, and the Library's epoch (a write of a group's cell moves
+   * only that), when results_ was last pruned. */
+  uint64_t prunedStructure_ = 0;
+  uint64_t prunedEpoch_ = 0;
 
   /** The current pass, and the last one's number. Each run of an element is a pass of its
    * own, over its frames only. */

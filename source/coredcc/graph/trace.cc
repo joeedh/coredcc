@@ -50,6 +50,7 @@ BlockDep BlockReader::read(BlockId id) const
   if (const Datablock *b = lib ? lib->get(d.handle) : nullptr) {
     d.state = b->state();
     d.stateChanges = b->stateChanges();
+    d.renames = b->renames();
   }
   return d;
 }

@@ -259,6 +259,11 @@ class Datablock {
   {
     return pins_[int(kind)];
   }
+  /** Bumped by Library::rename. */
+  uint64_t renames() const
+  {
+    return renames_;
+  }
   /** Bumped by every state transition. Two equal readings mean the block was never
    * deleted, detached or restored in between. */
   uint64_t stateChanges() const
@@ -379,6 +384,7 @@ class Datablock {
   BlockState deletedFrom_ = BlockState::Live;
   BlockFlags flags_ = BlockFlags::None;
   uint64_t stateChanges_ = 0;
+  uint64_t renames_ = 0;
   int pins_[2] = {0, 0};
   void *clientData_ = nullptr;
   litestl::util::Vector<Slot> slots_;

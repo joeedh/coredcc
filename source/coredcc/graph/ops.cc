@@ -47,6 +47,8 @@ Status GraphOp::apply(GraphDef &def, bool forward) const
     case Kind::Literal:
       return def.restoreValues(n, kind == Kind::Param, key.c_str(),
                                forward ? valuesAfter : valuesBefore);
+    case Kind::Extra:
+      return def.restoreExtra(n, key.c_str(), forward ? extraAfter : extraBefore);
     case Kind::Ref:
       return def.restoreRef(n, key.c_str(), forward ? blockAfter : blockBefore);
     case Kind::Interface:
@@ -65,6 +67,16 @@ Status GraphOp::apply(GraphDef &def, bool forward) const
   return Status();
 }
 
+static uint64_t extraSize(const NodeExtras &extras)
+{
+  uint64_t n = 0;
+  for (const BlockEntry &e : extras) {
+    n += sizeof(e) + uint64_t(e.name.size() + e.raw.size());
+    n += e.value.type() == PropValue::Type::String ? uint64_t(e.value.asString().size()) : 0;
+  }
+  return n;
+}
+
 uint64_t GraphOp::memSize() const
 {
   uint64_t n = sizeof(*this) + uint64_t(key.size());
@@ -72,8 +84,9 @@ uint64_t GraphOp::memSize() const
     n += v->type() == PropValue::Type::String ? uint64_t(v->asString().size()) : 0;
   }
   n += uint64_t(valuesBefore.size() + valuesAfter.size() + links.size()) * 128;
+  n += extraSize(extraBefore) + extraSize(extraAfter);
   if (node) {
-    n += sizeof(NodeState) +
+    n += sizeof(NodeState) + extraSize(node->extras) +
          uint64_t(node->params.size() + node->literals.size() + node->refs.size()) * 128;
   }
   return n + (socket ? sizeof(InterfaceSocket) : 0);
@@ -81,10 +94,13 @@ uint64_t GraphOp::memSize() const
 
 /* ---- GraphEditRecord ---- */
 
-Result<GraphDef *> GraphEditRecord::def() const
+Result<GraphDef *> GraphEditRecord::def(Context &ctx) const
 {
-  const Library *lib = block_.library();
-  GraphDef *def = lib ? graphDefOf(*lib, block_.get()) : nullptr;
+  Result<Library *> lib = detail::libraryOf(ctx, block_.library());
+  if (!lib.ok()) {
+    return lib.status();
+  }
+  GraphDef *def = graphDefOf(**lib, block_.get());
   if (!def) {
     return Status::error(StatusCode::FailedPrecondition, "the edited graph isn't there");
   }
@@ -114,7 +130,7 @@ Status GraphEditRecord::revert(GraphDef &def, int from)
 
 void GraphEditRecord::undo(Context &ctx)
 {
-  Result<GraphDef *> d = def();
+  Result<GraphDef *> d = def(ctx);
   Status s = d.ok() ? revert(**d, int(ops_.size())) : d.status();
   if (!s.ok()) {
     ctx.runtime().setStickyError(std::move(s));
@@ -123,8 +139,7 @@ void GraphEditRecord::undo(Context &ctx)
 
 Status GraphEditRecord::redo(Context &ctx)
 {
-  (void)ctx;
-  Result<GraphDef *> d = def();
+  Result<GraphDef *> d = def(ctx);
   if (!d.ok()) {
     return d.status();
   }
@@ -186,6 +201,16 @@ void GraphEdit::push(GraphOp op)
     for (const NodeState::Ref &r : op.node->refs) {
       record_->pin(*lib_, r.target);
     }
+    for (const BlockEntry &e : op.node->extras) {
+      for (const RefCell &cell : e.refs) {
+        record_->pin(*lib_, cell.target);
+      }
+    }
+  }
+  for (const BlockEntry &e : op.extraBefore) {
+    for (const RefCell &cell : e.refs) {
+      record_->pin(*lib_, cell.target);
+    }
   }
   record_->ops_.append(std::move(op));
 }
@@ -216,6 +241,7 @@ Status GraphEdit::removeNode(NodeId id)
   op.inverse = true;
   if (const GraphNode *n = def_->node(id)) {
     op.node = std::make_unique<NodeState>(def_->stateOf(*n));
+    op.node->after = n->previous() ? n->previous()->id() : NodeId();
     for (const GraphLink *l : n->linksIn()) {
       op.links.append(GraphDef::stateOf(*l));
     }
@@ -274,6 +300,31 @@ static NodeValues named(const NodeValues &list, std::string_view name)
     }
   }
   return out;
+}
+
+Status GraphEdit::setExtra(NodeId id, std::string_view name, const PropValue &value)
+{
+  GraphOp op;
+  op.kind = GraphOp::Kind::Extra;
+  op.id = id.value;
+  op.key = lsString(name);
+  const GraphNode *n = def_->node(id);
+  auto stored = [&]() {
+    NodeExtras out;
+    for (const BlockEntry &e : n->extras()) {
+      if (name == e.name.c_str()) {
+        out.append(e);
+      }
+    }
+    return out;
+  };
+  if (n) {
+    op.extraBefore = stored();
+  }
+  CDCC_TRY(def_->setExtra(id, name, value));
+  op.extraAfter = stored();
+  push(std::move(op));
+  return Status();
 }
 
 Status GraphEdit::setParam(NodeId id, std::string_view name, const PropValue &value)

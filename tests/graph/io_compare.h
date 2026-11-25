@@ -45,6 +45,40 @@ inline bool sameSockets(const SocketInfos &a, const SocketInfos &b)
          });
 }
 
+/* Their order means nothing. */
+inline NodeValues byName(NodeValues list)
+{
+  std::sort(list.begin(), list.end(), [](const NodeValue &a, const NodeValue &b) {
+    const int c = strcmp(a.name.c_str(), b.name.c_str());
+    return c != 0 ? c < 0 : a.value.type() < b.value.type();
+  });
+  return list;
+}
+
+inline bool sameExtras(const NodeExtras &a, const NodeExtras &b, const IdMap *ids)
+{
+  int found = 0;
+  for (const BlockEntry &x : a) {
+    for (const BlockEntry &y : b) {
+      if (strcmp(x.name.c_str(), y.name.c_str()) != 0 || x.refs.size() != y.refs.size()) {
+        continue;
+      }
+      /* The block of a pointer is its reference's. */
+      const bool remapped = ids && x.refs.size() > 0;
+      bool same = x.unknownTag == y.unknownTag &&
+                  (remapped ? x.value.type() == y.value.type() : x.value == y.value) &&
+                  std::equal(x.raw.begin(), x.raw.end(), y.raw.begin(), y.raw.end());
+      for (int i = 0; i < int(x.refs.size()); i++) {
+        const BlockId to = ids ? ids->find(x.refs[i].target) : BlockId();
+        same &= x.refs[i].kind == y.refs[i].kind &&
+                y.refs[i].target == (to.isNull() ? x.refs[i].target : to);
+      }
+      found += same;
+    }
+  }
+  return a.size() == b.size() && found == int(a.size());
+}
+
 /* Whether b is what a is, except for versions. With `ids`, b's references are to what those of
  * a became. */
 inline bool sameGraph(const GraphDef &a, const GraphDef &b, const IdMap *ids = nullptr)
@@ -82,14 +116,19 @@ inline bool sameGraph(const GraphDef &a, const GraphDef &b, const IdMap *ids = n
     {
       return differs("sizes", id);
     }
-    for (int k = 0; k < int(x.params().size()); k++) {
-      const NodeValue &v = x.params()[k], &w = y.params()[k];
+    if (x.typeVersion() != y.typeVersion() || !sameExtras(x.extras(), y.extras(), ids)) {
+      return differs("version or extras", id);
+    }
+    const NodeValues px = byName(x.params()), py = byName(y.params());
+    for (int k = 0; k < int(px.size()); k++) {
+      const NodeValue &v = px[k], &w = py[k];
       if (v.name != w.name || !(shown(a, x, v) == shown(b, y, w)) || w.version == 0) {
         return differs("param", id);
       }
     }
-    for (int k = 0; k < int(x.literals().size()); k++) {
-      const NodeValue &v = x.literals()[k], &w = y.literals()[k];
+    const NodeValues lx = byName(x.literals()), ly = byName(y.literals());
+    for (int k = 0; k < int(lx.size()); k++) {
+      const NodeValue &v = lx[k], &w = ly[k];
       if (v.name != w.name || !(v.value == w.value) || v.off != w.off || w.version == 0) {
         return differs("literal", id);
       }
@@ -111,11 +150,14 @@ inline bool sameGraph(const GraphDef &a, const GraphDef &b, const IdMap *ids = n
     if (x.linksIn().size() != y.linksIn().size() || x.linksOut().size() != y.linksOut().size()) {
       return differs("links", id);
     }
-    for (int k = 0; k < int(x.linksIn().size()); k++) {
-      const LinkState v = GraphDef::stateOf(*x.linksIn()[k]), w = GraphDef::stateOf(*y.linksIn()[k]);
-      if (v.id != w.id || v.from != w.from || v.fromKey != w.fromKey || v.toKey != w.toKey ||
-          b.link(v.id) != y.linksIn()[k] || y.linksIn()[k]->to != &y)
-      {
+    for (const GraphLink *l : x.linksIn()) {
+      const LinkState v = GraphDef::stateOf(*l);
+      const GraphLink *other = b.link(v.id);
+      if (!other || other->to != &y || !y.linksIn().contains(const_cast<GraphLink *>(other))) {
+        return differs("link", v.id.value);
+      }
+      const LinkState w = GraphDef::stateOf(*other);
+      if (v.from != w.from || v.fromKey != w.fromKey || v.toKey != w.toKey) {
         return differs("link", v.id.value);
       }
     }

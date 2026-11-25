@@ -28,6 +28,9 @@ struct SetProperty {
   StableRef ref;
   PropValue oldValue;
   PropValue newValue;
+  /* With a ValueAccessor::save, instead of the values. */
+  ValueAccessor::RestoreFn oldStored;
+  ValueAccessor::RestoreFn newStored;
   /* With a PointerAccessor::cell: the linked ids, also of blocks that aren't Live (those
    * read as null). */
   bool hasCell = false;
@@ -85,7 +88,9 @@ struct SetProperty {
       hasCell = true;
       oldTarget = cell->target;
     }
+    oldStored = stored(ctx, *rp);
     CDCC_TRY(setValue(ctx, *rp, input));
+    newStored = stored(ctx, *rp);
     Result<PropValue> now = readWhole(ctx);
     if (!now.ok()) {
       return now.status();
@@ -102,11 +107,14 @@ struct SetProperty {
   }
   void undo(Context &ctx)
   {
-    write(ctx, oldValue, oldTarget);
+    Status s = writeStatus(ctx, oldValue, oldTarget, oldStored);
+    if (!s.ok()) {
+      ctx.runtime().setStickyError(std::move(s)); /* undo can't return a Status */
+    }
   }
   Status redo(Context &ctx)
   {
-    return writeStatus(ctx, newValue, newTarget);
+    return writeStatus(ctx, newValue, newTarget, newStored);
   }
   uint64_t memSize() const
   {
@@ -139,6 +147,7 @@ struct SetProperty {
     }
     newValue = n->newValue;
     newTarget = n->newTarget;
+    newStored = std::move(n->newStored);
     for (HistoryBlock &p : n->pins) {
       pins.append(std::move(p));
     }
@@ -161,12 +170,26 @@ struct SetProperty {
                      ctx.library();
     return has ? rp.member->pointer().cell(rp.ptr, ctx) : nullptr;
   }
-  Status writeStatus(Context &ctx, const PropValue &v, const BlockId &target) const
+  static ValueAccessor::RestoreFn stored(Context &ctx, const ResolvedPath &rp)
+  {
+    const bool has =
+        rp.member && rp.member->kind() == MemberKind::Value && rp.member->value().save;
+    return has ? rp.member->value().save(rp.ptr, ctx) : ValueAccessor::RestoreFn();
+  }
+  Status writeStatus(Context &ctx,
+                     const PropValue &v,
+                     const BlockId &target,
+                     const ValueAccessor::RestoreFn &restore) const
   {
     CDCC_TRY(sameLibrary(ctx));
     Result<ResolvedPath> rp = resolve(ctx, ref);
     if (!rp.ok()) {
       return rp.status();
+    }
+    if (restore) {
+      CDCC_TRY(restore(rp->ptr, ctx));
+      written(ctx, *rp);
+      return Status();
     }
     RefCell *cell = hasCell && !target.isNull() ? cellOf(ctx, *rp) : nullptr;
     if (!cell || isLiveTarget(*ctx.library(), v, target)) {
@@ -174,24 +197,22 @@ struct SetProperty {
     }
     /* A link to a block that isn't Live, or wasn't when it was read: the cell itself. */
     CDCC_TRY(ctx.library()->writeRef(*cell, target));
-    ctx.runtime().ext<ChangeBus>().notify(rp->canonical.owner, rp->member->name());
-    if (rp->member->updateFn()) {
-      rp->member->updateFn()(rp->ptr, ctx);
-    }
+    written(ctx, *rp);
     return Status();
+  }
+  /* What setValue does after a write. */
+  static void written(Context &ctx, const ResolvedPath &rp)
+  {
+    ctx.runtime().ext<ChangeBus>().notify(rp.canonical.owner, rp.member->name());
+    if (rp.member->updateFn()) {
+      rp.member->updateFn()(rp.ptr, ctx);
+    }
   }
   static bool isLiveTarget(const Library &l, const PropValue &v, const BlockId &target)
   {
     const StableRef *r = v.tryPointer();
     const Datablock *b = l.get(l.find(target));
     return r && r->owner.kind == OwnerKey::Kind::Block && b && b->state() == BlockState::Live;
-  }
-  void write(Context &ctx, const PropValue &v, const BlockId &target) const
-  {
-    Status s = writeStatus(ctx, v, target);
-    if (!s.ok()) {
-      ctx.runtime().setStickyError(std::move(s)); /* undo can't return a Status */
-    }
   }
 
   static lbt::Struct<SetProperty> *defineBindings()

@@ -108,10 +108,24 @@ struct Content {
     test_assert(r.setLiteral(each, key(a), PropValue::ofInt(4)).ok());
     test_assert(d.setInterfaceType(a, "float").ok());
     test_assert(r.node(each)->literals().size() == 2);
+    test_assert(r.setExtra(mode, "ui.width", PropValue::ofFloat(80)).ok());
+    test_assert(r.setExtra(mode, "ui.color", PropValue::ofVec3(1, 0, 0)).ok());
     /* A node whose type isn't there, with links, and a broken link. */
     NodeState s2;
     s2.id = NodeId{41};
     s2.typeName = "late.sum";
+    s2.typeVersion = 7;
+    /* Extras of another build: of a type this one doesn't know, and with a reference. */
+    BlockEntry unknown, pointer;
+    unknown.name = "new.kind";
+    unknown.unknownTag = 200;
+    unknown.raw.append(3);
+    pointer.name = "new.graph";
+    pointer.value = graphPointer(inner);
+    pointer.refs.append(RefCell(RefKind::Weak));
+    pointer.refs[0].target = inner.id;
+    s2.extras.append(unknown);
+    s2.extras.append(pointer);
     s2.params.append(NodeValue{"p", PropValue::ofVec3(1, 2, 3)});
     s2.literals.append(NodeValue{"a", PropValue::ofFloat(6)});
     s2.refs.append(NodeState::Ref{"gone", inner.id, true});
@@ -271,6 +285,164 @@ void testMissingTypes()
   addMode(b.rt, 0);
   test_assert(inst.evaluate(p).ok() && inst.value(p)->asFloat() == kResult);
   test_assert(same(save(b.lib), bytes));
+}
+
+/* Whether a reference is strong is the type's to say, not the file's or a state's. */
+Status noneKernel(NodeExecContext &ctx)
+{
+  return ctx.setOutput(0, GraphValue::ofFloat(0));
+}
+void addKeeper(Runtime &rt, bool weak)
+{
+  NodeTypeDef t("io.keeper");
+  t.param(PropertyDef::pointerProp("keeps", StructId::of(kGraphDefType)), weak);
+  t.param(PropertyDef::pointerProp("other", StructId::of(kGraphDefType)), !weak);
+  t.output("value", "float");
+  addType<noneKernel>(rt, t, "io.keeper");
+}
+
+void testStrength()
+{
+  for (const bool weak : {false, true}) {
+    /* A state says the opposite of the type: known at once, or later. */
+    for (int late = 0; late < 3; late++) {
+      IoDoc a;
+      const Graph root = newGraph(a.lib, "root"), target = newGraph(a.lib, "target");
+      a.lib.setFlag(root.h, BlockFlags::Root, true);
+      if (late == 0) {
+        addKeeper(a.rt, weak);
+      }
+      NodeState s;
+      s.id = NodeId{5};
+      s.typeName = "io.keeper";
+      s.refs.append(NodeState::Ref{"keeps", target.id, !weak});
+      test_assert(root.def->insertNode(s).ok());
+      Graph at = root;
+      IoDoc b;
+      Doc *d = &a;
+      if (late == 2) { /* from a file, whose block is made before the type is */
+        a.lib.setFlag(target.h, BlockFlags::Root, true); /* so that it is saved */
+        load(b.ctx, save(a.lib));
+        at = byName(b.lib, "root");
+        b.lib.setFlag(byName(b.lib, "target").h, BlockFlags::Root, false);
+        d = &b;
+      }
+      if (late != 0) {
+        /* The state's word counts while there is none of the type's. */
+        test_assert(at.def->node(s.id)->blockRefs()[0].cell.kind ==
+                    (weak ? RefKind::OptStrong : RefKind::Weak));
+        test_assert(d->lib.usersOf(byName(d->lib, "target").h).size() == 1);
+        addKeeper(d->rt, weak);
+      }
+      const auto &refs = at.def->node(s.id)->blockRefs();
+      test_assert(refs.size() == 2 && at.def->validate().ok());
+      test_assert(refs[0].cell.kind == (weak ? RefKind::Weak : RefKind::OptStrong));
+      test_assert(refs[1].cell.kind == (weak ? RefKind::OptStrong : RefKind::Weak));
+      test_assert(d->lib.collect().ok()); /* which checks the users it knows, too */
+      test_assert(!byName(d->lib, "target").h.isNull() == !weak);
+    }
+    /* A file says the opposite. */
+    IoDoc a, b;
+    const Graph root = newGraph(a.lib, "root"), target = newGraph(a.lib, "target");
+    a.lib.setFlag(root.h, BlockFlags::Root, true);
+    addKeeper(a.rt, !weak);
+    addKeeper(b.rt, weak);
+    const NodeId n = add(*root.def, "io.keeper");
+    test_assert(root.def->setParam(n, "keeps", graphPointer(target)).ok());
+    a.lib.setFlag(target.h, BlockFlags::Root, true);
+    load(b.ctx, save(a.lib));
+    b.lib.setFlag(byName(b.lib, "target").h, BlockFlags::Root, false);
+    const Graph read = byName(b.lib, "root");
+    test_assert(read.def->node(n)->blockTarget("keeps") == target.id);
+    test_assert(read.def->node(n)->blockRefs()[0].cell.kind ==
+                (weak ? RefKind::Weak : RefKind::OptStrong));
+    test_assert(b.lib.collect().ok() && !byName(b.lib, "target").h.isNull() == !weak);
+    /* Undo of removing a node. */
+    test_assert(runGraphEdit(b.ctx, read.id, "remove", [&](GraphEdit &e) {
+                  return e.removeNode(n);
+                }).ok() && b.undo().ok());
+    test_assert(read.def->node(n)->blockRefs()[0].cell.kind ==
+                (weak ? RefKind::Weak : RefKind::OptStrong));
+  }
+}
+
+/* Node types have versions, which nodes keep. */
+void testVersions()
+{
+  auto addVersion = [](Runtime &rt, uint32_t version) {
+    NodeTypeDef t("io.versioned");
+    t.output("value", "float").version(version);
+    NodeTypeDef bad = t.copy();
+    test_assert(hasCode(rt.ext<NodeTypeRegistry>().check(bad.version(0)),
+                        StatusCode::InvalidArgument));
+    addType<noneKernel>(rt, t, "io.versioned");
+    test_assert(rt.ext<NodeTypeRegistry>().find("io.versioned")->version == version);
+  };
+  IoDoc a, b, c;
+  addVersion(a.rt, 2);
+  addVersion(b.rt, 3);
+  const Graph g = newGraph(a.lib, "root");
+  a.lib.setFlag(g.h, BlockFlags::Root, true);
+  const NodeId n = add(*g.def, "io.versioned"), sum = add(*g.def, "t.sum");
+  test_assert(g.def->node(n)->typeVersion() == 2 && g.def->node(sum)->typeVersion() == 1);
+  test_assert(g.def->stateOf(*g.def->node(n)).typeVersion == 2);
+  const Bytes bytes = save(a.lib);
+  load(b.ctx, bytes);
+  load(c.ctx, bytes); /* without the type */
+  const Graph newer = byName(b.lib, "root"), none = byName(c.lib, "root");
+  test_assert(newer.def->node(n)->typeVersion() == 2 && none.def->node(n)->typeVersion() == 2);
+  addVersion(c.rt, 1);
+  test_assert(none.def->node(n)->typeVersion() == 2 && same(save(b.lib), bytes) &&
+              same(save(c.lib), bytes));
+  /* A new node has the type's; a state may say another, or nothing. */
+  test_assert(newer.def->node(add(*newer.def, "io.versioned"))->typeVersion() == 3);
+  NodeState s;
+  s.id = NodeId{1};
+  s.typeName = "io.versioned";
+  test_assert(newer.def->insertNode(s).ok() && newer.def->node(s.id)->typeVersion() == 3);
+  s.id = NodeId{2};
+  s.typeVersion = 9;
+  test_assert(newer.def->insertNode(s).ok() && newer.def->node(s.id)->typeVersion() == 9);
+  s.id = NodeId{3};
+  s.typeVersion = 0;
+  s.typeName = "io.unknown";
+  test_assert(newer.def->insertNode(s).ok() && newer.def->node(s.id)->typeVersion() == 1);
+}
+
+/* An extra with a reference, which only a newer build makes. */
+void testExtraRefs()
+{
+  IoDoc d;
+  Content c(d.lib);
+  const Graph kept = newGraph(d.lib, "kept"), alone = newGraph(d.lib, "alone");
+  NodeState s;
+  s.id = NodeId{77};
+  s.typeName = "t.sum";
+  BlockEntry e;
+  e.name = "new.graph";
+  e.value = graphPointer(kept);
+  e.refs.append(RefCell(RefKind::OptStrong));
+  e.refs[0].target = kept.id;
+  s.extras.append(e);
+  GraphDef standalone(&d.rt);
+  test_assert(hasCode(standalone.insertNode(s), StatusCode::FailedPrecondition));
+  test_assert(d.lib.usersOf(kept.h).size() == 0);
+  test_assert(c.root.def->insertNode(s).ok() && d.lib.usersOf(kept.h).size() == 1);
+  test_assert(d.lib.collect().ok() && d.lib.get(kept.h) && !d.lib.get(alone.h));
+  /* Undo brings it back, and holds the block until then. */
+  auto edit = [&](auto fn) { return runGraphEdit(d.ctx, c.root.id, "edit", fn).ok(); };
+  test_assert(edit([&](GraphEdit &g) { return g.removeNode(s.id); }));
+  test_assert(d.lib.usersOf(kept.h).size() == 0 && d.lib.collect().ok() && d.lib.get(kept.h));
+  test_assert(d.undo().ok() && d.lib.usersOf(kept.h).size() == 1);
+  test_assert(edit([&](GraphEdit &g) { return g.setExtra(s.id, "new.graph", PropValue::ofInt(1)); }));
+  test_assert(d.lib.usersOf(kept.h).size() == 0 && d.lib.collect().ok() && d.lib.get(kept.h));
+  test_assert(d.undo().ok() && d.lib.usersOf(kept.h).size() == 1);
+  IoDoc b;
+  load(b.ctx, save(d.lib));
+  test_assert(sameGraph(*c.root.def, *byName(b.lib, "root").def) && byName(b.lib, "kept").def);
+  test_assert(c.root.def->removeNode(s.id).ok() && d.lib.usersOf(kept.h).size() == 0);
+  d.history.clear();
+  test_assert(d.lib.collect().ok() && !d.lib.get(kept.h));
 }
 
 /* Enums are keys in a file. */
@@ -465,6 +637,9 @@ int main()
   testRoundTrip();
   testEdits();
   testMissingTypes();
+  testStrength();
+  testVersions();
+  testExtraRefs();
   testEnums();
   testTargets();
   testCycles();

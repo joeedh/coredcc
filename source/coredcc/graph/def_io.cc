@@ -4,6 +4,7 @@
 #include "coredcc/lib/library.h"
 #include "coredcc/props/value_io.h"
 
+#include <algorithm>
 #include <cstring>
 #include <set>
 #include <string>
@@ -18,7 +19,7 @@ namespace {
 
 /* Bytes that one of each takes at least. */
 constexpr size_t kMinInterface = 8 + 4 + 4;
-constexpr size_t kMinNode = 8 + 4 + 4 + 16 + 5 * 4;
+constexpr size_t kMinNode = 8 + 4 + 4 + 4 + 16 + 6 * 4;
 constexpr size_t kMinRef = 4 + 1 + 4;
 constexpr size_t kMinSocket = 3 * 4;
 constexpr size_t kMinLink = 8 + 8 + 4 + 8 + 4;
@@ -57,25 +58,46 @@ PropValue storedParam(const GraphNode &n, const NodeValue &v)
   return i >= 0 ? storedValue(n.type()->params[i].def, v.value) : v.value;
 }
 
+/* Equal graphs give equal bytes, so what a node has in no order is written in one. */
+template <class T> bool byName(const T &a, const T &b)
+{
+  return strcmp(a.name.c_str(), b.name.c_str()) < 0;
+}
+
+Vector<const NodeValue *> sorted(const NodeValues &list)
+{
+  Vector<const NodeValue *> out;
+  for (const NodeValue &v : list) {
+    out.append(&v);
+  }
+  std::sort(out.begin(), out.end(), [](const NodeValue *a, const NodeValue *b) {
+    const int c = strcmp(a->name.c_str(), b->name.c_str());
+    return c != 0 ? c < 0 : a->value.type() < b->value.type();
+  });
+  return out;
+}
+
 void writeNode(const GraphDef &def, const GraphNode &n, BlockWriter &out)
 {
   BytesWriter &b = out.bytes();
   b.i64(n.id().value);
   b.str(n.typeName().c_str());
+  b.u32(n.typeVersion());
   b.str(n.label().c_str());
   b.f64(n.x());
   b.f64(n.y());
   Vector<BlockEntry> params, literals;
-  for (const NodeValue &v : n.params()) {
-    params.append(entryOf(v.name, storedParam(n, v)));
+  const Vector<const NodeValue *> setParams = sorted(n.params()), setLiterals = sorted(n.literals());
+  for (const NodeValue *v : setParams) {
+    params.append(entryOf(v->name, storedParam(n, *v)));
   }
-  for (const NodeValue &v : n.literals()) {
-    literals.append(entryOf(v.name, v.value));
+  for (const NodeValue *v : setLiterals) {
+    literals.append(entryOf(v->name, v->value));
   }
   out.entries(std::span<const BlockEntry>(params.data(), size_t(params.size())));
   out.entries(std::span<const BlockEntry>(literals.data(), size_t(literals.size())));
-  for (const NodeValue &v : n.literals()) {
-    b.boolean(v.off);
+  for (const NodeValue *v : setLiterals) {
+    b.boolean(v->off);
   }
   b.u32(uint32_t(n.blockRefs().size()));
   for (const NodeBlockRef &r : n.blockRefs()) {
@@ -83,6 +105,12 @@ void writeNode(const GraphDef &def, const GraphNode &n, BlockWriter &out)
     b.boolean(r.cell.kind == RefKind::Weak);
     out.ref(r.cell);
   }
+  Vector<BlockEntry> extras;
+  for (const BlockEntry &e : n.extras()) {
+    extras.append(e);
+  }
+  std::stable_sort(extras.begin(), extras.end(), byName<BlockEntry>);
+  out.entries(std::span<const BlockEntry>(extras.data(), size_t(extras.size())));
   if (hasGroupRef(n.typeName())) {
     out.ref(n.group());
   }
@@ -109,10 +137,16 @@ void writeGraphDef(const GraphDef &def, BlockWriter &out)
   }
   b.u32(uint32_t(def.nodeCount()));
   def.forEachNode([&](const GraphNode &n) { writeNode(def, n, out); });
-  /* By node, so that equal graphs give equal bytes: the def has no order of links. */
+  /* By node and id: the def has no order of links. */
   b.u32(uint32_t(def.linkCount()));
   def.forEachNode([&](const GraphNode &n) {
+    Vector<const GraphLink *> links;
     for (const GraphLink *l : n.linksIn()) {
+      links.append(l);
+    }
+    std::sort(links.begin(), links.end(),
+              [](const GraphLink *a, const GraphLink *c) { return a->id < c->id; });
+    for (const GraphLink *l : links) {
       b.i64(l->id.value);
       b.i64(l->from->id().value);
       b.str(l->fromKey.c_str());
@@ -208,6 +242,18 @@ class GraphDefReader {
       out.append(std::move(v));
     }
   }
+  /* Kept as they are. */
+  void readExtras(NodeExtras &out)
+  {
+    Vector<BlockEntry> entries;
+    in_.entries(entries);
+    std::set<std::string> seen;
+    for (BlockEntry &e : entries) {
+      check(e.name.size() > 0, "a graph: an extra without a name");
+      check(seen.insert(e.name.c_str()).second, "a graph: an extra that is there twice");
+      out.append(std::move(e));
+    }
+  }
   void readSockets(SocketInfos &out, bool keep)
   {
     const uint32_t n = b_.count(kMinSocket);
@@ -215,6 +261,7 @@ class GraphDefReader {
     for (uint32_t i = 0; i < n && b_.ok(); i++) {
       SocketInfo s;
       s.key = text();
+      check(s.key.size() > 0, "a graph: a socket without a key");
       s.name = text();
       s.typeName = typeName("socket");
       if (keep) {
@@ -237,7 +284,7 @@ class GraphDefReader {
       s.typeName = typeName("socket");
       s.defaultVersion = version_;
       check(names.insert(s.name.c_str()).second, "a graph: an interface name that is there twice");
-      check(s.name.size() > 0, "a graph: an interface socket without a name");
+      check(isInterfaceName(s.name.c_str()), "a graph: a name interface sockets can't have");
       if (side == SocketSide::Input) {
         Vector<BlockEntry> entry;
         in_.entries(entry);
@@ -255,7 +302,9 @@ class GraphDefReader {
     GraphNode *n = litestl::alloc::New<GraphNode>("coredcc::GraphNode");
     n->id_ = NodeId{id()};
     n->typeName_ = typeName("node");
-    def_.attachNode(n); /* which owns it now */
+    def_.attachNode(n, def_.last_); /* which owns it now */
+    n->typeVersion_ = b_.u32();
+    check(n->typeVersion_ > 0, "a graph: a node type of version 0");
     if (strcmp(n->typeName_.c_str(), kGraphOutputType) == 0) {
       check(!hasOutput_, "a graph: a second graph.output");
       hasOutput_ = true;
@@ -280,6 +329,7 @@ class GraphDefReader {
       check(names.insert(r.name.c_str()).second, "a graph: a reference that is there twice");
       n->refs_.append(r);
     }
+    readExtras(n->extras_);
     if (hasGroupRef(n->typeName_)) {
       in_.ref(n->group_);
     }
@@ -287,7 +337,7 @@ class GraphDefReader {
     const bool keep = !n->type_ || n->type_->role != NodeRole::Kernel;
     readSockets(n->inputs_, keep);
     readSockets(n->outputs_, keep);
-    def_.addParamRefs(n);
+    def_.matchParamRefs(n);
   }
 
   void readLink()

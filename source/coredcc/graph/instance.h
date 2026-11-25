@@ -101,8 +101,10 @@ struct GraphSource {
  */
 class GraphInstance {
  public:
-  /** The def is found on every call, so it may be deleted and come back. `lib` may be null
-   * for a def without a Library. */
+  /** A block's def is found on every call, so it may be deleted and come back; `lib` is its
+   * Library. Of a def that the client keeps, `lib` is the def's, or null to take the def's. A
+   * def or Library of another Runtime, or a def of another Library, makes `evaluate` and
+   * `setInput` InvalidArgument. */
   GraphInstance(Runtime *rt, Library *lib, GraphSource source);
   ~GraphInstance();
   GraphInstance(const GraphInstance &) = delete;
@@ -121,7 +123,8 @@ class GraphInstance {
   Status evaluate(const SocketPath &socket);
 
   /* What the last evaluation of a socket gave. These are about sockets passed to
-   * `evaluate`; the pointers are valid until the next call of it or of `clear`. */
+   * `evaluate`; the pointers are valid until the next call of it, or of `clear` or `forget`.
+   * `evaluate` drops what it has of sockets that are gone, whichever ones it was asked for. */
 
   /** Null if it has an error, or was never evaluated. */
   const GraphValue *value(const SocketPath &socket) const;
@@ -136,14 +139,18 @@ class GraphInstance {
    * the socket was evaluated. Cheap. */
   bool isCurrent(const SocketPath &socket) const;
 
-  /** Sets an interface input. None unsets it: the interface's default then applies.
-   * NotFound for an unknown input (or def), TypeMismatch for a value of another type. */
-  Status setInput(std::string_view name, GraphValue v);
+  /** Sets an interface input, by name or by key (`#<id>`). None unsets it: the interface's
+   * default then applies. NotFound for an unknown input (or def), TypeMismatch for a value of
+   * another type. The value of an input that is removed stays, for when undo brings it back;
+   * None by its key, or `clear`, drops it. */
+  Status setInput(std::string_view nameOrKey, GraphValue v);
   NodeReport report(const NodePath &node) const;
   /** Makes the next evaluation run failed kernels again, though nothing changed. */
   Status retry();
-  /** Drops everything evaluated. Inputs stay. */
+  /** Drops everything evaluated. Inputs stay, but for those the interface doesn't have. */
   Status clear();
+  /** Drops what is kept of a socket for `value` and the calls with it. Caches stay. */
+  Status forget(const SocketPath &socket);
   /** For kernels (NodeExecContext::userData). Not a dependency. */
   void setUserData(void *data);
   /** Groups an instance may hold (default 262,144), so a graph that doubles at each level

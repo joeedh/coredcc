@@ -121,6 +121,20 @@ RefCell *paramCell(GraphNode &n, const std::string &name)
   return nullptr;
 }
 
+/* The save of a param, or of a literal: what is stored under its name. */
+ValueAccessor::RestoreFn saveValues(const GraphNode &n, bool param, const std::string &name)
+{
+  NodeValues stored;
+  for (const NodeValue &v : param ? n.params() : n.literals()) {
+    if (name == v.name.c_str()) {
+      stored.append(v);
+    }
+  }
+  return [node = n.id(), param, name, stored](const PointerRef &self, Context &) {
+    return nodeOf(self).def().restoreValues(node, param, name, stored);
+  };
+}
+
 /* ---- members every struct of a kind has ---- */
 
 CollectionAccessor nodesAccessor()
@@ -262,15 +276,25 @@ CollectionAccessor socketsAccessor()
     GraphNode &n = nodeOf(self);
     const bool handle = key.kind == KeySegment::Kind::Handle;
     const std::string want = handle ? interfaceKey(key.handle).c_str() : key.text.c_str();
-    for (const SocketInfo &s : n.def().sockets(n, SocketSide::Input)) {
-      if (want == (handle ? s.key : s.name).c_str()) {
+    const SocketInfos &list = n.def().sockets(n, SocketSide::Input);
+    for (const SocketInfo &s : list) {
+      if (want == s.key.c_str()) {
         return socketRef(n, s);
+      }
+    }
+    for (int i = 0; !handle && i < int(list.size()); i++) {
+      if (want == list[i].name.c_str()) {
+        return socketRef(n, list[i]);
       }
     }
     return PointerRef();
   };
+  /* A foreach's table has a key of its own, not an interface's. */
   c.keyOf = [](const PointerRef &, Context &, const PointerRef &item) {
-    return KeySegment::ofHandle(std::strtoll(addressOf(item).key.c_str() + 1, nullptr, 10));
+    const std::string key = addressOf(item).key.c_str();
+    const int64_t id = key[0] == '#' ? std::strtoll(key.c_str() + 1, nullptr, 10) : 0;
+    return id > 0 && key == interfaceKey(id).c_str() ? KeySegment::ofHandle(id) :
+                                                       KeySegment::stringKey(key);
   };
   c.itemStruct = StructId::of(kSocketStruct);
   return c;
@@ -289,6 +313,15 @@ PropValue socketValue(const GraphSocketAddress &a, const SocketType &type)
   return a.node->def().literalValue(*a.node, a.key.c_str(), type).toProp();
 }
 
+ValueAccessor::RestoreFn saveSocket(const PointerRef &self, Context &)
+{
+  const GraphSocketAddress &a = addressOf(self);
+  ValueAccessor::RestoreFn restore = saveValues(*a.node, false, a.key.c_str());
+  return [restore](const PointerRef &to, Context &ctx) {
+    return restore(inside(addressOf(to).node, StructId()), ctx);
+  };
+}
+
 void addSocketStructs(ApiRegistry &reg, const SocketType &type)
 {
   ApiStruct socket(std::string(kSocketStruct) + ":" + type.name.c_str());
@@ -304,6 +337,7 @@ void addSocketStructs(ApiRegistry &reg, const SocketType &type)
     const GraphSocketAddress &a = addressOf(self);
     return a.node->def().setLiteral(a.node->id(), a.key.c_str(), v);
   };
+  value.save = saveSocket;
   socket.add(type.literalDef("value"), std::move(value))
       .dynamic([](PropertyDef &def, const PointerRef &self, Context &) {
         const GraphSocketAddress &a = addressOf(self);
@@ -320,6 +354,7 @@ void addSocketStructs(ApiRegistry &reg, const SocketType &type)
     const GraphSocketAddress &a = addressOf(self);
     return a.node->def().useLiteral(a.node->id(), a.key.c_str(), v.asBool());
   };
+  isSet.save = saveSocket;
   socket.add(PropertyDef::boolProp("isSet"), std::move(isSet))
       .dynamic([](PropertyDef &def, const PointerRef &self, Context &) {
         if (lost(addressOf(self))) {
@@ -340,6 +375,13 @@ void addSocketStructs(ApiRegistry &reg, const SocketType &type)
   def.set = [](const PointerRef &self, Context &, const PropValue &v) {
     const InterfaceSocket &s = *static_cast<const InterfaceSocket *>(self.data);
     return s.def->setInterfaceDefault(s.id, v);
+  };
+  def.save = [](const PointerRef &self, Context &) -> ValueAccessor::RestoreFn {
+    const PropValue stored = static_cast<const InterfaceSocket *>(self.data)->defaultValue;
+    return [stored](const PointerRef &to, Context &) {
+      const InterfaceSocket &s = *static_cast<const InterfaceSocket *>(to.data);
+      return s.def->restoreInterfaceDefault(s.id, stored);
+    };
   };
   iface.add(type.literalDef("default"), std::move(def))
       .dynamic([](PropertyDef &d, const PointerRef &self, Context &) {
@@ -517,6 +559,9 @@ ApiStruct paramsStruct(const NodeType &type)
     a.set = [name](const PointerRef &self, Context &, const PropValue &v) {
       return nodeOf(self).def().setParam(nodeOf(self).id(), name, v);
     };
+    a.save = [name](const PointerRef &self, Context &) {
+      return saveValues(nodeOf(self), true, name);
+    };
     st.add(p.def, std::move(a));
   }
   return st;
@@ -539,6 +584,9 @@ ApiStruct inputsStruct(const NodeType &type)
     };
     a.set = [name](const PointerRef &self, Context &, const PropValue &v) {
       return nodeOf(self).def().setLiteral(nodeOf(self).id(), name, v);
+    };
+    a.save = [name](const PointerRef &self, Context &) {
+      return saveValues(nodeOf(self), false, name);
     };
     st.add(*def, std::move(a));
   }

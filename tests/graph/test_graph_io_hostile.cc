@@ -55,19 +55,20 @@ struct Fields {
     count(0);
     count(0);
   }
-  void head(int64_t id, const char *type)
+  void head(int64_t id, const char *type, uint32_t version = 1)
   {
     b().i64(id);
     b().str(type);
+    b().u32(version);
     b().str("label");
     b().f64(1);
     b().f64(2);
   }
   /* A node with nothing. */
-  void node(int64_t id, const char *type)
+  void node(int64_t id, const char *type, uint32_t version = 1)
   {
-    head(id, type);
-    for (int i = 0; i < 5; i++) {
+    head(id, type, version);
+    for (int i = 0; i < 6; i++) {
       count(0);
     }
   }
@@ -198,7 +199,10 @@ void testRules()
     test_assert(interface2(1, "a", 2, "b", out).ok());
     test_assert(refused(interface2(1, "a", 1, "b", out), "an id that is there twice"));
     test_assert(refused(interface2(1, "a", 90, "b", out), "an id that is there twice"));
-    test_assert(refused(interface2(1, "a", 2, "", out), "without a name"));
+    for (const char *name : {"", "#1", "@1.a", "#"}) {
+      test_assert(refused(interface2(1, "a", 2, name, out), "a name interface sockets can't have"));
+    }
+    test_assert(interface2(1, "a", 2, "a#1@", out).ok());
   }
   test_assert(refused(interface2(1, "a", 2, "a", false), "an interface name that is there twice"));
   test_assert(interface2(1, "a", 2, "a", true).ok());
@@ -230,7 +234,7 @@ void testRules()
           f.b().boolean(i == 0);
         }
       }
-      for (int i = 0; i < (literals ? 3 : 4); i++) {
+      for (int i = 0; i < (literals ? 4 : 5); i++) {
         f.count(0);
       }
     });
@@ -279,13 +283,59 @@ void testRules()
           f.b().u32(row);
         }
       }
-      f.count(0);
-      f.count(0);
+      for (int i = 0; i < 3; i++) {
+        f.count(0);
+      }
     });
   };
   test_assert(references({"a", "b"}, 0, true).ok());
   test_assert(refused(references({"a", "a"}, 0, true), "a reference that is there twice"));
   test_assert(refused(references({"a"}, 0, false), "outside the block's ref table"));
+
+  /* extras: anything, once */
+  auto extras = [&](std::vector<BlockEntry> list) {
+    return nodes(1, 0, [&](Fields &f) {
+      f.head(1, "t.unknown");
+      for (int i = 0; i < 3; i++) {
+        f.count(0);
+      }
+      f.out.entries(list);
+      f.count(0);
+      f.count(0);
+    });
+  };
+  BlockEntry unknown = e("new", PropValue()), cell = e("cell", PropValue::ofInt(1));
+  unknown.unknownTag = 200;
+  unknown.raw.append(1);
+  cell.refs.append(RefCell(RefKind::OptStrong));
+  test_assert(extras({e("a", PropValue::ofInt(1)), unknown, cell, e("none", PropValue())}).ok());
+  test_assert(refused(extras({unknown, cell, unknown}), "an extra that is there twice"));
+  test_assert(refused(extras({e("", PropValue::ofInt(1))}), "an extra without a name"));
+
+  /* versions */
+  for (const char *type : {"t.unknown", "t.sum"}) {
+    test_assert(nodes(1, 0, [&](Fields &f) { f.node(1, type, 0xffffffff); }).ok());
+    test_assert(refused(nodes(1, 0, [&](Fields &f) { f.node(1, type, 0); }), "version 0"));
+  }
+
+  /* sockets last seen */
+  auto seen = [&](const char *key, bool input) {
+    return nodes(1, 0, [&](Fields &f) {
+      f.head(1, "t.unknown");
+      for (int i = 0; i < (input ? 4 : 5); i++) {
+        f.count(0);
+      }
+      f.count(1);
+      f.socket(key, "float");
+      if (input) {
+        f.count(0);
+      }
+    });
+  };
+  for (const bool input : {false, true}) {
+    test_assert(seen("a", input).ok() && seen("#", input).ok());
+    test_assert(refused(seen("", input), "a socket without a key"));
+  }
 
   /* many that share one row of the ref table */
   for (const bool enough : {false, true}) {
@@ -306,7 +356,7 @@ void testRules()
         f.b().u32(0);
       }
     }
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
       f.count(0);
     }
     Result<BlockPayload> p = detail::PayloadAccess::take(f.out, kGraphDefPayload);
@@ -382,6 +432,7 @@ void testNames()
       f.noInterface();
       f.count(1);
       f.head(1, "t.unknown");
+      f.count(0);
       f.count(0);
       f.count(0);
       f.count(0);

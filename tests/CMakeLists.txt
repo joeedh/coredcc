@@ -54,6 +54,8 @@ coredcc_test(test_graph_values SOURCES graph/test_graph_values.cc DEPS coredcc_g
 coredcc_test(test_graph_node_types SOURCES graph/test_graph_node_types.cc DEPS coredcc_graph)
 coredcc_test(test_graph_def SOURCES graph/test_graph_def.cc DEPS coredcc_graph)
 coredcc_test(test_graph_refs SOURCES graph/test_graph_refs.cc DEPS coredcc_graph)
+coredcc_test(test_graph_undo SOURCES graph/test_graph_undo.cc DEPS coredcc_graph)
+coredcc_test(test_graph_results SOURCES graph/test_graph_results.cc DEPS coredcc_graph)
 coredcc_test(test_graph_eval SOURCES graph/test_graph_eval.cc DEPS coredcc_graph)
 coredcc_test(test_graph_foreach SOURCES graph/test_graph_foreach.cc DEPS coredcc_graph)
 coredcc_test(test_graph_foreach_errors SOURCES graph/test_graph_foreach_errors.cc DEPS coredcc_graph)

@@ -36,6 +36,12 @@ namespace {
 
 std::function<void()> g_inKernel;
 
+PayloadRef g_view;
+Status sharedViewKernel(NodeExecContext &ctx)
+{
+  return ctx.setOutput(0, GraphValue::ofPayload(g_view));
+}
+
 /* A view of its param's block. */
 Status viewKernel(NodeExecContext &ctx)
 {
@@ -61,6 +67,7 @@ struct Owner {
   std::unique_ptr<GraphInstance> inst;
 };
 std::function<void()> g_onForeach;
+std::function<void()> g_onDestroy;
 int g_ownersDestroyed = 0;
 
 struct OwnerProvider {
@@ -77,6 +84,9 @@ struct OwnerProvider {
   void destroy(const Datablock &b)
   {
     g_ownersDestroyed++;
+    if (g_onDestroy) {
+      g_onDestroy();
+    }
     litestl::alloc::Delete(static_cast<Owner *>(b.clientData()));
   }
   static lbt::Struct<OwnerProvider> *defineBindings()
@@ -116,6 +126,9 @@ struct World {
     NodeTypeDef v("t.view");
     v.param(PropertyDef::pointerProp("thing", kThingStruct)).output("view", "test.View");
     addType<viewKernel>(rt, v, "t.view");
+    NodeTypeDef s("t.shared");
+    s.output("view", "test.View");
+    addType<sharedViewKernel>(rt, s, "t.shared");
     NodeTypeDef r("t.read");
     r.payloadInput("view", "test.View").output("value", "float");
     addType<readKernel>(rt, r, "t.read");
@@ -127,6 +140,7 @@ struct World {
     test_assert(!lib || lib->validate().ok());
     g_inKernel = nullptr;
     g_onForeach = nullptr;
+    g_onDestroy = nullptr;
   }
   Thing *thing(BlockHandle h)
   {
@@ -443,6 +457,89 @@ void testCollect()
   test_assert(inst.clear().ok() && *lib.collect() == 1 && !lib.get(h));
 }
 
+/* The same, where the pin goes because the graph was replaced: in `evaluate` itself. */
+void testOwnPinReplaced()
+{
+  for (const bool gone : {false, true}) {
+    World w;
+    Library &lib = *w.lib;
+    const BlockHandle h = newThing(lib, "a", 3), o = w.newOwner();
+    const Graph g = newGraph(lib, "g");
+    const NodeId s = add(*g.def, "t.shared"), r = add(*g.def, "t.read");
+    connect(*g.def, s, "view", r, "view");
+    GraphInstance *inst = new GraphInstance(&w.rt, &lib, g.id);
+    static_cast<Owner *>(lib.get(o)->clientData())->inst.reset(inst);
+    g_view = *makeAlias(View{w.thing(h)}, lib, o);
+    test_assert(inst->evaluate(out(r)).ok());
+    g_view = PayloadRef();
+    test_assert(w.pins(o) == 1 && lib.markDeleted(o).ok() && lib.destroyFromHistory(o).ok());
+    test_assert(lib.markDeleted(g.h).ok() && lib.destroyFromHistory(g.h).ok());
+    GraphDef *fresh = litestl::alloc::New<GraphDef>("coredcc::GraphDef", &w.rt, &lib, g.id);
+    const NodeId other = add(*fresh, "t.read");
+    test_assert(lib.reviveAs(TypeId::of(kGraphDefType), g.id, "g", fresh).ok());
+    bool inside = false;
+    int calls = 0;
+    g_inKernel = [&]() {
+      calls++;
+      test_assert(lib.get(o)); /* not yet */
+    };
+    g_ownersDestroyed = 0;
+    g_onDestroy = [&]() { inside = !w.rt.busyIfEvaluating("test").ok(); };
+    const Status st = inst->evaluate(gone ? out(r) : out(other)); /* frees the instance */
+    test_assert(gone ? hasCode(st, StatusCode::NotFound) : st.ok() && calls == 1);
+    test_assert(!lib.get(o) && g_ownersDestroyed == 1 && !inside);
+  }
+}
+
+/* Destroying an instance lets go of the last pins of blocks: they are destroyed when all of
+ * the instance is. */
+void testInstancePins()
+{
+  for (int which = 0; which < 3; which++) {
+    World w;
+    Library &lib = *w.lib;
+    const BlockHandle h = newThing(lib, "a", 3);
+    const BlockHandle owners[2] = {w.newOwner(), w.newOwner()};
+    GraphDef def(&w.rt, &lib);
+    const int64_t in = addSocket(def, SocketSide::Input, "in", "test.View");
+    const NodeId s = add(def, "t.shared"), r = add(def, "t.read"), io = add(def, "graph.input");
+    connect(def, s, "view", r, "view");
+    auto inst = std::make_unique<GraphInstance>(&w.rt, &lib, &def);
+    /* In two of: a kernel's outputs, the results, an input. */
+    g_view = *makeAlias(View{w.thing(h)}, lib, owners[0]);
+    if (which != 2) {
+      test_assert(inst->evaluate(out(r)).ok());
+    }
+    if (which != 1) {
+      g_view = *makeAlias(View{w.thing(h)}, lib, owners[which == 0 ? 1 : 0]);
+      test_assert(inst->setInput("in", GraphValue::ofPayload(g_view)).ok());
+    }
+    if (which != 0) {
+      test_assert(inst->setInput("in", GraphValue()).ok());
+      g_view = *makeAlias(View{w.thing(h)}, lib, owners[1]);
+      test_assert(inst->setInput("in", GraphValue::ofPayload(g_view)).ok());
+      test_assert(inst->evaluate(out(io, key(in).c_str())).ok());
+      if (which == 2) {
+        g_view = *makeAlias(View{w.thing(h)}, lib, owners[0]);
+        test_assert(inst->evaluate(out(s, "view")).ok());
+      }
+    }
+    g_view = PayloadRef();
+    for (BlockHandle o : owners) {
+      test_assert(w.pins(o) >= 1 && lib.markDeleted(o).ok() && lib.destroyFromHistory(o).ok());
+      test_assert(lib.get(o));
+    }
+    g_ownersDestroyed = 0;
+    g_onDestroy = [&]() {
+      for (BlockHandle o : owners) {
+        test_assert(!lib.get(o) || w.pins(o) == 0);
+      }
+    };
+    inst = nullptr;
+    test_assert(g_ownersDestroyed == 2);
+  }
+}
+
 } // namespace
 
 int main()
@@ -452,6 +549,8 @@ int main()
   testInstances();
   testDestroyedMidWalk();
   testOwnPin();
+  testOwnPinReplaced();
+  testInstancePins();
   testCollect();
   return test_end();
 }

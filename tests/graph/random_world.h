@@ -388,6 +388,7 @@ struct Client {
     Run run;
   };
   struct Last {
+    SocketPath path;
     bool failed = false;
     naive::Error error;
     /* The engine's: the oracle has no messages, so only its changes count. */

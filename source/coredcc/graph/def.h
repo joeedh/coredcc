@@ -10,6 +10,7 @@
 #include "coredcc/graph/node_type.h"
 #include "coredcc/graph/socket_type.h"
 #include "coredcc/lib/block.h"
+#include "coredcc/lib/block_io.h"
 #include "coredcc/props/value.h"
 
 #include "litestl/util/map.h"
@@ -93,6 +94,9 @@ struct InterfaceSocket {
 
 /** `#<id>`. */
 litestl::util::string interfaceKey(int64_t id);
+/** Whether an interface socket may have that name: it isn't empty, and doesn't look like a
+ * socket key (`#<id>`, or an interior one). */
+bool isInterfaceName(std::string_view name);
 
 /** A value set on a node: a param or a literal. */
 struct NodeValue {
@@ -111,6 +115,9 @@ struct NodeBlockRef {
   litestl::util::string name;
   RefCell cell;
 };
+
+/** What else a node carries. See GraphDef::setExtra. */
+using NodeExtras = litestl::util::Vector<BlockEntry, 1>;
 
 class GraphNode;
 
@@ -147,7 +154,15 @@ class GraphNode {
     return typeName_;
   }
   /** The registered type; null while there is none of that name. */
-  const NodeType *type() const;
+  const NodeType *type() const
+  {
+    return type_;
+  }
+  /** The NodeType::version its values and links were made with. */
+  uint32_t typeVersion() const
+  {
+    return typeVersion_;
+  }
   const litestl::util::string &label() const
   {
     return label_;
@@ -178,6 +193,11 @@ class GraphNode {
   }
   /** What a Pointer param refers to; null if it isn't set. */
   BlockId blockTarget(std::string_view param) const;
+  /** By name. Those of a type this build doesn't know are kept. */
+  const NodeExtras &extras() const
+  {
+    return extras_;
+  }
   /** Group nodes: the def's block. */
   const RefCell &group() const
   {
@@ -208,6 +228,11 @@ class GraphNode {
     return socketsVersion_;
   }
   const GraphSocketAddress *addressOf(std::string_view key);
+  /** The node before it in node order, or null. */
+  const GraphNode *previous() const
+  {
+    return prev_;
+  }
 
  private:
   friend class GraphDef;
@@ -216,12 +241,14 @@ class GraphNode {
   GraphDef *def_ = nullptr;
   NodeId id_;
   litestl::util::string typeName_;
-  mutable const NodeType *type_ = nullptr;
+  const NodeType *type_ = nullptr;
+  uint32_t typeVersion_ = 1;
   litestl::util::string label_;
   double pos_[2] = {0, 0};
   NodeValues params_;
   NodeValues literals_;
   litestl::util::Vector<NodeBlockRef, 1> refs_;
+  NodeExtras extras_;
   RefCell group_{RefKind::OptStrong};
   uint64_t paramVersion_ = 0;
   litestl::util::Vector<GraphLink *, 2> in_;
@@ -231,8 +258,9 @@ class GraphNode {
   mutable SocketInfos outputs_;
   /** The interface version the sockets are from. */
   mutable uint64_t socketsVersion_ = 0;
-  /** Its place in GraphDef::nodes_. */
-  int slot_ = 0;
+  /** Node order. */
+  GraphNode *prev_ = nullptr;
+  GraphNode *next_ = nullptr;
   /** Made when asked for. Owned. */
   litestl::util::Vector<GraphSocketAddress *, 1> addresses_;
 };
@@ -246,12 +274,18 @@ struct NodeState {
   };
   NodeId id;
   litestl::util::string typeName;
+  /** 0: the registered type's, or 1. */
+  uint32_t typeVersion = 0;
+  /** The node it comes after in node order; null to be the first. Last when not given, or
+   * when there is no such node. */
+  std::optional<NodeId> after;
   litestl::util::string label;
   double pos[2] = {0, 0};
   /** Versions are ignored: an inserted node is stamped anew. */
   NodeValues params;
   NodeValues literals;
   litestl::util::Vector<Ref> refs;
+  NodeExtras extras;
   BlockId group;
   /** Its sockets when last known, for a type or a group that isn't there. */
   SocketInfos inputs;
@@ -358,15 +392,14 @@ class GraphDef {
   }
   const GraphNode *node(NodeId id) const;
   const GraphLink *link(LinkId id) const;
-  /** The node at `index`, 0 to nodeCount() - 1, in the order nodes were added. */
+  /** The node at `index`, 0 to nodeCount() - 1, in node order: the order nodes were added in,
+   * with those that undo brought back where they were. */
   const GraphNode *nodeAt(int index) const;
-  /** Calls fn(const GraphNode &), in the order nodes were added. */
+  /** Calls fn(const GraphNode &), in node order. */
   template <class Fn> void forEachNode(Fn &&fn) const
   {
-    for (GraphNode *n : nodes_) {
-      if (n) {
-        fn(static_cast<const GraphNode &>(*n));
-      }
+    for (GraphNode *n = first_; n; n = n->next_) {
+      fn(static_cast<const GraphNode &>(*n));
     }
   }
   /** The same, for the nodes whose type has all of `flags`. */
@@ -415,7 +448,7 @@ class GraphDef {
   /** Links that don't work. */
   litestl::util::Vector<LinkDiagnostic> diagnostics() const;
 
-  /** A node's state, for insertNode. */
+  /** A node's state, for insertNode. It doesn't say where the node is in node order. */
   NodeState stateOf(const GraphNode &node) const;
   static LinkState stateOf(const GraphLink &link);
 
@@ -432,6 +465,13 @@ class GraphDef {
   /** Labels and positions don't affect evaluation. */
   Status setLabel(NodeId id, std::string_view label);
   Status setPosition(NodeId id, double x, double y);
+  /**
+   * Sets an extra: a named value that a client keeps on a node, such as its color or size in
+   * an editor. It is saved and copied with the node, and doesn't affect evaluation. Use dotted
+   * names (`editor.color`), so that clients don't collide. None removes it. Unsupported for a
+   * pointer, and InvalidArgument for an empty name.
+   */
+  Status setExtra(NodeId id, std::string_view name, const PropValue &value);
   /** Sets a param, coerced to its def. None resets it to its default. A Pointer param takes
    * a pointer to a block, other than this def's own. */
   Status setParam(NodeId id, std::string_view name, const PropValue &value);
@@ -481,6 +521,8 @@ class GraphDef {
   Status restoreNode(const NodeState &state);
   /** Replaces what is stored for a param or (not `param`) a literal. Versions are ignored. */
   Status restoreValues(NodeId id, bool param, std::string_view name, const NodeValues &values);
+  /** Replaces the extra of a name, by at most one. */
+  Status restoreExtra(NodeId id, std::string_view name, const NodeExtras &values);
   /** Sets the target of a Pointer param, or of the group (an empty name). */
   Status restoreRef(NodeId id, std::string_view param, BlockId target);
   Status restoreInterface(SocketSide side, const InterfaceSocket &socket, int index);
@@ -502,6 +544,7 @@ class GraphDef {
   friend class GraphNode;
   friend class GraphDefReader;
   friend class GraphReachBuilder;
+  friend class NodeTypeRegistry;
 
   Status busy(const char *what) const;
   Result<GraphNode *> find(NodeId id, const char *what) const;
@@ -511,13 +554,17 @@ class GraphDef {
   void announce(bool structural);
   int64_t newId();
   bool idTaken(int64_t id) const;
-  void attachNode(GraphNode *n);
-  /** Adds the null references of the type's Pointer params that the node doesn't have. */
-  void addParamRefs(GraphNode *n);
+  /** Puts the node after `after`, or first. */
+  void attachNode(GraphNode *n, GraphNode *after);
+  void detachNode(GraphNode *n);
+  /** Makes the node's references those of its type's Pointer params: of the strength the type
+   * says, with null ones for those it hasn't. Unchanged while there is no type. */
+  void matchParamRefs(GraphNode *n);
+  /** After a type was registered. */
+  void typeAdded(const NodeType &type);
   void attachLink(const LinkState &state, GraphNode *from, GraphNode *to);
   void detachLink(GraphLink *link);
   void refreshSockets(const GraphNode &node) const;
-  const NodeType *typeOf(const GraphNode &node) const;
   bool topologyCurrent() const;
   Status setParamRef(GraphNode *n, const NodeParamDef &param, const PropValue &value);
   void insertInterface(litestl::util::Vector<InterfaceSocket> &list,
@@ -543,9 +590,17 @@ class GraphDef {
   uint64_t structureVersion_;
   uint64_t contentVersion_;
   uint64_t interfaceVersion_;
-  /** In order, with nulls where nodes were removed. */
-  litestl::util::Vector<GraphNode *> nodes_;
+  /** Node order. */
+  GraphNode *first_ = nullptr;
+  GraphNode *last_ = nullptr;
+  /** The nodes in order, for nodeAt; empty when out of date. */
+  mutable litestl::util::Vector<const GraphNode *> index_;
   litestl::util::Map<int64_t, GraphNode *> byId_;
+  /** Nodes whose type isn't registered. */
+  int untyped_ = 0;
+  /** The registry's list of defs. */
+  GraphDef *prevDef_ = nullptr;
+  GraphDef *nextDef_ = nullptr;
   litestl::util::Map<int64_t, GraphLink *> links_;
   litestl::util::Vector<InterfaceSocket> ifaceIn_;
   litestl::util::Vector<InterfaceSocket> ifaceOut_;

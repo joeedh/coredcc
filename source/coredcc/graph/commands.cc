@@ -89,7 +89,7 @@ template <EditFn Fn> struct GraphCommand {
 };
 
 struct CreateGraph {
-  Library *lib = nullptr;
+  LibraryRef lib;
   CreatedBlocks created;
 
   Status canRun(Context &ctx) const
@@ -100,33 +100,40 @@ struct CreateGraph {
   }
   Status exec(Context &ctx)
   {
-    lib = ctx.library();
-    Result<BlockHandle> h = createGraph(*lib, stringInput(ctx, "name"));
+    Library &l = *ctx.library();
+    lib = l.ref();
+    Result<BlockHandle> h = createGraph(l, stringInput(ctx, "name"));
     if (!h.ok()) {
       return h.status();
     }
-    created.add(*lib, *h);
+    created.add(l, *h);
     StableRef ref;
-    ref.owner = OwnerKey::ofBlock(lib->get(*h)->id());
+    ref.owner = OwnerKey::ofBlock(l.get(*h)->id());
     ref.type = StructId::of(kGraphDefType);
     return ctx.outputs()->set("graph", PropValue::ofPointer(ref));
   }
-  void undo(Context &)
+  void undo(Context &ctx)
   {
-    created.undo(*lib);
+    Result<Library *> l = detail::libraryOf(ctx, lib);
+    if (!l.ok()) {
+      ctx.runtime().setStickyError(l.status());
+      return;
+    }
+    created.undo(**l);
   }
-  Status redo(Context &)
+  Status redo(Context &ctx)
   {
-    return created.redo(*lib);
+    Result<Library *> l = detail::libraryOf(ctx, lib);
+    return l.ok() ? created.redo(**l) : l.status();
   }
   uint64_t memSize() const
   {
-    return sizeof(*this);
+    return sizeof(*this) + created.memSize();
   }
   void discard()
   {
-    if (lib) {
-      created.discard(*lib);
+    if (Library *l = lib.get()) {
+      created.discard(*l);
     }
   }
   static lbt::Struct<CreateGraph> *defineBindings()

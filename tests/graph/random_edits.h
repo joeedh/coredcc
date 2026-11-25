@@ -68,7 +68,7 @@ class Editor {
       at = (at + 1) % kDefs;
     }
     Graph &g = w_.defs[at];
-    switch (rng_.below(34)) {
+    switch (rng_.below(35)) {
       case 0:
       case 1:
       case 2:
@@ -126,6 +126,8 @@ class Editor {
         return;
       case 32:
         return rare(g);
+      case 33:
+        return setExtra(*g.def);
       default:
         return removeAndRevive(*g.def);
     }
@@ -341,6 +343,15 @@ class Editor {
       return;
     }
     test_assert(act(def, [&](auto &e) { return e.setParam(id, name, v); }).ok());
+  }
+  void setExtra(GraphDef &def)
+  {
+    if (const GraphNode *n = randomNode(def)) {
+      const NodeId id = n->id();
+      const std::string name = rng_.below(2) ? "ui.a" : "ui.b";
+      const PropValue v = rng_.below(4) ? randomProp("string") : PropValue();
+      test_assert(act(def, [&](auto &e) { return e.setExtra(id, name, v); }).ok());
+    }
   }
   void setLiteral(GraphDef &def)
   {

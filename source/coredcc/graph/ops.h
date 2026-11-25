@@ -28,6 +28,8 @@ struct GraphOp {
     Position,
     Param,
     Literal,
+    /** An extra (`key`). */
+    Extra,
     /** A Pointer param (`key`), or the group (an empty key). */
     Ref,
     /** `socket` on `side` at `indexAfter`; `inverse`: its removal. */
@@ -45,6 +47,7 @@ struct GraphOp {
   PropValue before, after;
   /** The stored values of a param or literal; empty when it isn't set. */
   NodeValues valuesBefore, valuesAfter;
+  NodeExtras extraBefore, extraAfter;
   BlockId blockBefore, blockAfter;
   std::unique_ptr<NodeState> node;
   litestl::util::Vector<LinkState, 1> links;
@@ -66,9 +69,10 @@ class GraphEditRecord {
  public:
   GraphEditRecord() = default;
 
-  /** Takes the edits back; a failure becomes the Runtime's sticky error. */
+  /** Takes the edits back; a failure becomes the Runtime's sticky error. FailedPrecondition
+   * when the Library is gone, or `ctx` is of another. */
   void undo(Context &ctx);
-  /** Makes them again; a failure takes back what it did first. */
+  /** Makes them again; a failure takes back what it did first. The same precondition. */
   Status redo(Context &ctx);
   void discard();
   uint64_t memSize() const;
@@ -80,7 +84,7 @@ class GraphEditRecord {
  private:
   friend class GraphEdit;
 
-  Result<GraphDef *> def() const;
+  Result<GraphDef *> def(Context &ctx) const;
   void pin(Library &lib, BlockId id);
   Status revert(GraphDef &def, int from);
 
@@ -110,6 +114,7 @@ class GraphEdit {
   Status removeNode(NodeId id);
   Status setLabel(NodeId id, std::string_view label);
   Status setPosition(NodeId id, double x, double y);
+  Status setExtra(NodeId id, std::string_view name, const PropValue &value);
   Status setParam(NodeId id, std::string_view name, const PropValue &value);
   Status setLiteral(NodeId id, std::string_view input, const PropValue &value);
   Status useLiteral(NodeId id, std::string_view input, bool on);

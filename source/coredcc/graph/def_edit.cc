@@ -29,6 +29,16 @@ bool isGroupType(const string &name)
   return is(name, kGraphGroupType) || is(name, kGraphForeachType);
 }
 
+bool hasRefs(const NodeExtras &extras)
+{
+  for (const BlockEntry &e : extras) {
+    if (e.refs.size() > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 int indexOfSocket(const SocketInfos &list, std::string_view key)
 {
   for (int i = 0; i < int(list.size()); i++) {
@@ -139,6 +149,7 @@ Status GraphDef::restoreNode(const NodeState &state)
   for (const NodeState::Ref &r : state.refs) {
     refs |= !r.target.isNull();
   }
+  refs |= hasRefs(state.extras);
   if (refs && !lib) {
     return makeError(StatusCode::FailedPrecondition,
                      "insertNode: a def without a Library can't refer to blocks");
@@ -153,6 +164,7 @@ Status GraphDef::restoreNode(const NodeState &state)
   n->label_ = state.label;
   n->pos_[0] = state.pos[0];
   n->pos_[1] = state.pos[1];
+  n->extras_ = state.extras;
   n->params_ = state.params;
   n->literals_ = state.literals;
   n->inputs_ = state.inputs;
@@ -163,8 +175,14 @@ Status GraphDef::restoreNode(const NodeState &state)
     ref.cell.kind = r.weak ? RefKind::Weak : RefKind::OptStrong;
     n->refs_.append(ref);
   }
-  attachNode(n);
-  addParamRefs(n);
+  GraphNode *after = last_;
+  if (state.after) {
+    GraphNode *const *found = byId_.lookup_ptr(state.after->value);
+    after = found ? *found : state.after->isNull() ? nullptr : last_;
+  }
+  attachNode(n, after);
+  matchParamRefs(n);
+  n->typeVersion_ = state.typeVersion ? state.typeVersion : n->type_ ? n->type_->version : 1;
   if (refs) {
     for (int i = 0; i < int(state.refs.size()); i++) {
       lib->writeRef(n->refs_[i].cell, state.refs[i].target).ignore(); /* can't fail: checked */
@@ -172,6 +190,7 @@ Status GraphDef::restoreNode(const NodeState &state)
     if (isGroup) {
       lib->writeRef(n->group_, state.group).ignore();
     }
+    lib->noteRefsChanged(); /* the extras' */
   }
   const uint64_t version = stamp(true);
   n->paramVersion_ = version;
@@ -199,24 +218,12 @@ Status GraphDef::removeNode(NodeId id)
   while (n->out_.size() > 0) {
     detachLink(n->out_.last());
   }
-  bool refs = !n->group_.isNull();
+  bool refs = !n->group_.isNull() || hasRefs(n->extras_);
   for (const NodeBlockRef &r : n->refs_) {
     refs |= !r.cell.isNull();
   }
-  nodes_[n->slot_] = nullptr;
-  byId_.remove(id.value);
+  detachNode(n);
   litestl::alloc::Delete(n);
-  /* Nulls are compacted once they are half of the list, which keeps removal O(degree). */
-  if (nodes_.size() > 16 && nodes_.size() > 2 * byId_.size()) {
-    Vector<GraphNode *> kept;
-    for (GraphNode *k : nodes_) {
-      if (k) {
-        k->slot_ = int(kept.size());
-        kept.append(k);
-      }
-    }
-    nodes_ = std::move(kept);
-  }
   if (refs && lib_.get()) {
     lib_.get()->noteRefsChanged();
   }
@@ -250,6 +257,24 @@ Status GraphDef::setPosition(NodeId id, double x, double y)
   return Status();
 }
 
+Status GraphDef::setExtra(NodeId id, std::string_view name, const PropValue &value)
+{
+  if (name.empty()) {
+    return makeError(StatusCode::InvalidArgument, "setExtra: an extra needs a name");
+  }
+  if (value.type() == PropValue::Type::Pointer) {
+    return makeError(StatusCode::Unsupported, "setExtra: an extra can't be a pointer");
+  }
+  NodeExtras values;
+  if (!value.isNone()) {
+    BlockEntry e;
+    e.name = lsString(name);
+    e.value = value;
+    values.append(std::move(e));
+  }
+  return restoreExtra(id, name, values);
+}
+
 Status GraphDef::setParam(NodeId id, std::string_view name, const PropValue &value)
 {
   CDCC_TRY(busy("setParam"));
@@ -258,7 +283,7 @@ Status GraphDef::setParam(NodeId id, std::string_view name, const PropValue &val
     return found.status();
   }
   GraphNode *n = *found;
-  const NodeType *type = typeOf(*n);
+  const NodeType *type = n->type();
   if (!type) {
     return rt_.ext<NodeTypeRegistry>().unknown(n->typeName_.c_str());
   }
@@ -553,8 +578,9 @@ Status GraphDef::unlink(LinkId id)
 
 Status GraphDef::checkInterfaceName(SocketSide side, std::string_view name, int64_t except) const
 {
-  if (name.empty()) {
-    return makeError(StatusCode::InvalidArgument, "an interface socket needs a name");
+  if (!isInterfaceName(name)) {
+    return makeError(StatusCode::InvalidArgument,
+                     "an interface socket needs a name, which can't start with '#' or '@'");
   }
   const InterfaceSocket *twin = interfaceSocket(side, name);
   if (twin && twin->id != except) {
@@ -750,6 +776,32 @@ Status GraphDef::restoreValues(NodeId id,
   return Status();
 }
 
+Status GraphDef::restoreExtra(NodeId id, std::string_view name, const NodeExtras &values)
+{
+  CDCC_TRY(busy("setExtra"));
+  Result<GraphNode *> found = find(id, "setExtra");
+  if (!found.ok()) {
+    return found.status();
+  }
+  NodeExtras &list = (*found)->extras_;
+  int at = 0;
+  while (at < int(list.size()) && name != list[at].name.c_str()) {
+    at++;
+  }
+  const bool refs = hasRefs(values) || (at < int(list.size()) && list[at].refs.size() > 0);
+  if (at < int(list.size())) {
+    list.remove_at(at);
+  }
+  for (const BlockEntry &e : values) {
+    list.append(e);
+  }
+  if (refs && lib_.get()) {
+    lib_.get()->noteRefsChanged();
+  }
+  announce(false);
+  return Status();
+}
+
 Status GraphDef::restoreRef(NodeId id, std::string_view param, BlockId target)
 {
   CDCC_TRY(busy("restoreRef"));
@@ -765,7 +817,7 @@ Status GraphDef::restoreRef(NodeId id, std::string_view param, BlockId target)
   }
   const bool group = param.empty();
   if (!group) {
-    const NodeType *type = typeOf(*n);
+    const NodeType *type = n->type();
     const int i = type ? type->paramIndex(param) : -1;
     CDCC_TRY(writeParamRef(n, param, i >= 0 && type->params[i].weak, target));
   }

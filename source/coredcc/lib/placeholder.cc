@@ -108,6 +108,7 @@ Status Library::rename(BlockHandle h, std::string_view name)
     return noBlock("rename");
   }
   b->name_ = std::string(name).c_str();
+  b->renames_++;
   epoch_++;
   return Status();
 }

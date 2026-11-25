@@ -25,6 +25,15 @@ class GraphSystem {
 
   /** The version of a block. From the first call on, it follows the block's changes. */
   uint64_t versionOf(BlockId id);
+  /** Moves when the nodes, links, groups or interface of any GraphDef do, or one is made. */
+  uint64_t structureVersion() const
+  {
+    return structure_;
+  }
+  void noteStructure(uint64_t version)
+  {
+    structure_ = version;
+  }
   /** Blocks followed. */
   int blockCount() const
   {
@@ -39,6 +48,7 @@ class GraphSystem {
   /** By canonical id. An id that became an alias leaves its entry behind, never found again;
    * its block has another version from then on, so its users run. */
   litestl::util::Map<BlockId, uint64_t> versions_;
+  uint64_t structure_ = 0;
   ScopedConnection connection_;
 };
 

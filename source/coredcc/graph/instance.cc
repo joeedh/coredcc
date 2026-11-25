@@ -146,9 +146,9 @@ bool GraphInstance::isCurrent(const SocketPath &socket) const
   return r && r->key == e_->currentKey();
 }
 
-Status GraphInstance::setInput(std::string_view name, GraphValue v)
+Status GraphInstance::setInput(std::string_view nameOrKey, GraphValue v)
 {
-  return e_->setInput(name, std::move(v));
+  return e_->setInput(nameOrKey, std::move(v));
 }
 
 NodeReport GraphInstance::report(const NodePath &node) const
@@ -164,6 +164,11 @@ Status GraphInstance::retry()
 Status GraphInstance::clear()
 {
   return e_->clear();
+}
+
+Status GraphInstance::forget(const SocketPath &socket)
+{
+  return e_->forget(socket);
 }
 
 void GraphInstance::setUserData(void *data)
@@ -203,6 +208,19 @@ Status Evaluator::setInput(std::string_view name, GraphValue v)
   const GraphDef *def = findDef(status);
   CDCC_TRY(status);
   const InterfaceSocket *s = def->interfaceSocket(SocketSide::Input, name);
+  for (const InterfaceSocket &i : def->interfaceSockets(SocketSide::Input)) {
+    if (name == i.key().c_str()) {
+      s = &i;
+    }
+  }
+  if (!s && v.isNone()) {
+    for (auto &pair : inputs_) {
+      if (name == interfaceKey(pair.key).c_str()) {
+        inputs_.remove(pair.key); /* of a removed input: nothing reads it */
+        return Status();
+      }
+    }
+  }
   if (!s) {
     status = Status::error(StatusCode::NotFound,
                            ("the graph has no input '" + std::string(name) + "'").c_str());
@@ -309,6 +327,27 @@ Status Evaluator::clear()
   root_ = nullptr;
   results_.clear();
   passKey_ = Key();
+  Status status;
+  if (const GraphDef *def = findDef(status)) {
+    Vector<int64_t> gone;
+    for (auto &pair : inputs_) {
+      const InterfaceSocket *s = def->interfaceSocket(pair.key);
+      if (!s) {
+        gone.append(pair.key);
+      }
+    }
+    for (int64_t id : gone) {
+      inputs_.remove(id);
+    }
+  }
+  return Status();
+}
+
+Status Evaluator::forget(const SocketPath &socket)
+{
+  CDCC_TRY(rt_.busyIfEvaluating("GraphInstance::forget"));
+  NoCollectScope noCollect(lib_.get()); /* as in clear */
+  results_.remove(socket);
   return Status();
 }
 

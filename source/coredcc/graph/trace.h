@@ -84,6 +84,8 @@ struct BlockDep {
   BlockState state = BlockState::Live;
   /** So a destroy and a restore between two looks are seen. */
   uint64_t stateChanges = 0;
+  /** A kernel may use its name. */
+  uint64_t renames = 0;
   uint64_t version = 0;
   bool operator==(const BlockDep &) const = default;
 };

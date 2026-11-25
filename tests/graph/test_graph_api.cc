@@ -1,6 +1,7 @@
 /* Graphs in datapaths: reading, writing, and undoing writes. */
 #include "edit_fixture.h"
 
+#include "coredcc/graph/foreach.h"
 #include "coredcc/graph/instance.h"
 
 using namespace fixture;
@@ -219,6 +220,57 @@ void testInterface()
   test_assert(hasCode(d.get(path("in", input, ".sockets.length")), StatusCode::NotFound));
 }
 
+/* The canonical path of every socket leads back to it, also when its key isn't an interface's. */
+void testSocketKeys()
+{
+  Doc d;
+  const Graph inner = newGraph(d.lib, "in"), outer = newGraph(d.lib, "out");
+  const int64_t e = addSocket(*inner.def, SocketSide::Input, "elements", "float");
+  auto checkAll = [&](NodeId node, std::initializer_list<std::string> keys) {
+    const std::string list = path("out", node, ".sockets");
+    test_assert(d.is(list + ".length", PropValue::ofInt(int64_t(keys.size()))));
+    int i = 0;
+    for (const std::string &want : keys) {
+      const std::string at = list + "[" + std::to_string(i++) + "]";
+      Result<ResolvedPath> rp = resolve(d.ctx, at);
+      test_assert(rp.ok());
+      if (!rp.ok()) {
+        continue;
+      }
+      const auto *address = static_cast<const GraphSocketAddress *>(rp->ptr.data);
+      test_assert(want == address->key.c_str());
+      Result<ResolvedPath> again = resolve(d.ctx, rp->canonical);
+      if (!again.ok()) {
+        printf("'%s': %s\n", want.c_str(), again.status().toString().c_str());
+      }
+      test_assert(again.ok() && again->ptr.data == rp->ptr.data);
+    }
+  };
+  /* A foreach's table, and an input of its name. */
+  const NodeId each = add(*outer.def, kGraphForeachType);
+  test_assert(outer.def->setGroup(each, inner.id).ok());
+  checkAll(each, {"elements", key(e)});
+  test_assert(d.is(path("out", each, ".sockets[\"elements\"].type"),
+                   str(PayloadTraits<Elements>::name)));
+  test_assert(d.is(path("out", each, ".sockets[#") + std::to_string(e) + "].type", str("float")));
+  /* What a file may say a lost group's sockets were. */
+  NodeState s;
+  s.id = NodeId{7};
+  s.typeName = kGraphGroupType;
+  const std::string keys[] = {"a", "b", "#0", "#007", "#", "#-3", "#12x", "#99999999999999999999", "#5", "@1.a"};
+  const char *names[] = {"b", "a", "x", "x", "x", "x", "x", "x", "x", "x"};
+  for (int i = 0; i < 10; i++) {
+    s.inputs.append(SocketInfo{keys[i].c_str(), names[i], "float"});
+  }
+  test_assert(outer.def->insertNode(s).ok());
+  checkAll(s.id, {keys[0], keys[1], keys[2], keys[3], keys[4], keys[5], keys[6], keys[7], keys[8], keys[9]});
+  s.id = NodeId{8};
+  s.inputs.clear();
+  s.inputs.append(SocketInfo{"", "none", "float"});
+  test_assert(outer.def->insertNode(s).ok());
+  checkAll(s.id, {""});
+}
+
 void testPointers()
 {
   Doc d;
@@ -352,6 +404,7 @@ int main()
 {
   testNodes();
   testInterface();
+  testSocketKeys();
   testPointers();
   testEmbedded();
   return test_end();

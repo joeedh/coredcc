@@ -84,10 +84,20 @@ void Evaluator::dropNewFrames()
 
 GraphDef *Evaluator::findDef(Status &status) const
 {
-  if (source_.def) {
-    return source_.def;
-  }
   const Library *lib = lib_.get();
+  if (GraphDef *def = source_.def) {
+    if (&def->runtime() != &rt_ || (def->library() && def->library() != lib)) {
+      status = Status::error(StatusCode::InvalidArgument,
+                             "the instance's graph is of another Runtime or Library");
+      return nullptr;
+    }
+    return def;
+  }
+  if (lib && &lib->runtime() != &rt_) {
+    status = Status::error(StatusCode::InvalidArgument,
+                           "the instance's Library is of another Runtime");
+    return nullptr;
+  }
   GraphDef *def = lib ? graphDefOf(*lib, lib->find(source_.block)) : nullptr;
   if (!def) {
     status = Status::error(StatusCode::NotFound, "the instance's graph isn't there");

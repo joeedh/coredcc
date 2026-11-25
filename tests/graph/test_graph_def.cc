@@ -370,6 +370,21 @@ void testHome()
 }
 
 /* Nodes of a type that isn't registered yet. */
+/* Names that look like keys. */
+void testInterfaceNames()
+{
+  World w;
+  GraphDef def(&w.rt, &w.lib);
+  const int64_t a = addSocket(def, SocketSide::Output, "a#1", "float");
+  for (const char *name : {"", "#", "#12", "@", "@12.a"}) {
+    for (SocketSide side : {SocketSide::Input, SocketSide::Output}) {
+      test_assert(hasCode(def.addInterface(side, name, "float"), StatusCode::InvalidArgument));
+    }
+    test_assert(hasCode(def.setInterfaceName(a, name), StatusCode::InvalidArgument));
+  }
+  test_assert(def.setInterfaceName(a, "b@").ok());
+}
+
 void testLateTypes()
 {
   World w;
@@ -410,7 +425,7 @@ void testLateTypes()
   const auto after = def.topology();
   test_assert(after != topo && after->nodes[after->find(s.id)].type);
   const BlockHandle t = newThing(w.lib, "t", 0);
-  test_assert(n->blockRefs().size() == 0);
+  test_assert(n->blockRefs().size() == 1 && n->blockRefs()[0].cell.isNull());
   test_assert(def.setParam(s.id, "thing", pointerTo(idOf(w.lib, t), kThingStruct)).ok());
   test_assert(n->blockRefs().size() == 1 && n->blockRefs()[0].cell.target == idOf(w.lib, t));
   test_assert(def.validate().ok());
@@ -424,6 +439,7 @@ int main()
   testLinks();
   testInterface();
   testHome();
+  testInterfaceNames();
   testLateTypes();
   return test_end();
 }

@@ -4,6 +4,7 @@
 #include "coredcc/base/assert.h"
 #include "coredcc/base/text.h"
 #include "coredcc/graph/api.h"
+#include "coredcc/graph/def.h"
 #include "coredcc/graph/foreach.h"
 
 #include "litestl/util/alloc.h"
@@ -95,6 +96,12 @@ NodeTypeDef &NodeTypeDef::flags(NodeTypeFlags f)
   return *this;
 }
 
+NodeTypeDef &NodeTypeDef::version(uint32_t v)
+{
+  version_ = v;
+  return *this;
+}
+
 NodeTypeDef &NodeTypeDef::input(PropertyDef def)
 {
   Input in;
@@ -183,6 +190,7 @@ NodeTypeDef NodeTypeDef::copy() const
   NodeTypeDef d(name_.c_str());
   d.uiName_ = uiName_;
   d.flags_ = flags_;
+  d.version_ = version_;
   d.inputs_ = inputs_;
   d.outputs_ = outputs_;
   d.literalDefs_ = literalDefs_;
@@ -206,6 +214,9 @@ Result<const NodeType *> NodeTypeRegistry::store(NodeType *type)
   type->stamp = stamp_;
   types_.append(type);
   byId_.add(id->value, type);
+  for (GraphDef *d = defs_; d; d = d->nextDef_) {
+    d->typeAdded(*type);
+  }
   return static_cast<const NodeType *>(type);
 }
 
@@ -248,6 +259,9 @@ Result<NodeType *> NodeTypeRegistry::build(const NodeTypeDef &def) const
   if (def.outputs_.size() == 0) {
     return invalid(where + " has no outputs");
   }
+  if (def.version_ == 0) {
+    return invalid(where + ": versions start at 1");
+  }
 
   NodeType *t = litestl::alloc::New<NodeType>("coredcc::NodeType");
   struct Guard {
@@ -260,6 +274,7 @@ Result<NodeType *> NodeTypeRegistry::build(const NodeTypeDef &def) const
   t->name = def.name_;
   t->uiName = def.uiName_;
   t->flags = def.flags_;
+  t->version = def.version_;
 
   for (const NodeTypeDef::Input &in : def.inputs_) {
     CDCC_TRY(checkMemberName(where, in.name.c_str()));

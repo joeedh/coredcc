@@ -199,6 +199,14 @@ void pull(World &w, Client &c, const std::vector<SocketPath> &paths)
   naive::Evaluation e(w.env, g.def, c.external);
   e.run(requests);
   enterFrames(c, e);
+  /* What is gone is forgotten, whatever was asked for. */
+  for (auto it = c.last.begin(); it != c.last.end();) {
+    const bool there = naive::Evaluation(w.env, g.def, c.external).finds(it->second.path);
+    const bool known = c.inst->value(it->second.path) || c.inst->error(it->second.path);
+    test_assert(check(there || !known, it->first + " is gone, but has a result"));
+    test_assert(check(!there || known, it->first + " is there, but has no result"));
+    it = there ? std::next(it) : c.last.erase(it);
+  }
   checkRuns(c, e, before);
   g_counts.groups += e.frames().size() - 1;
 
@@ -230,6 +238,7 @@ void pull(World &w, Client &c, const std::vector<SocketPath> &paths)
     }
     /* changedAt and lastGood. */
     Client::Last &l = c.last[where];
+    l.path = p;
     const uint64_t at = c.inst->changedAt(p);
     const std::string message = error ? error->status.message() : "";
     const bool payload = !r.outcome.failed && r.outcome.value.type.substr(0, 2) == "r.";
@@ -262,16 +271,38 @@ void pull(World &w, Client &c, const std::vector<SocketPath> &paths)
   test_assert(check(c.inst->totalRuns() == runs, "an unchanged pull ran kernels"));
 }
 
-/* What undo must bring back: ids, links, and the values in effect. */
+std::string storedText(const NodeValues &values)
+{
+  std::set<std::string> out;
+  for (const NodeValue &v : values) {
+    out.insert(std::string(v.name.c_str()) + "=" + v.value.toString().c_str() +
+               (v.off ? " off" : ""));
+  }
+  std::string text;
+  for (const std::string &s : out) {
+    text += " " + s;
+  }
+  return text;
+}
+
+/* What undo must bring back: ids, node order, links, what is stored, and the values in
+ * effect. */
 std::string describe(World &w)
 {
   std::string out;
   for (const Graph &g : w.defs) {
     std::map<int64_t, std::string> parts;
     const GraphDef &def = *g.def;
+    for (int i = 0; i < def.nodeCount(); i++) {
+      out += std::to_string(def.nodeAt(i)->id().value) + " ";
+    }
     def.forEachNode([&](const GraphNode &n) {
       const NodeState s = def.stateOf(n);
       std::string t = s.typeName.c_str() + (" g" + std::to_string(s.group.local.lo));
+      t += storedText(n.params()) + ";" + storedText(n.literals());
+      for (const BlockEntry &e : n.extras()) {
+        t += std::string(" ") + e.name.c_str() + ":" + e.value.toString().c_str();
+      }
       const NodeType *type = n.type();
       for (int i = 0; type && i < int(type->params.size()); i++) {
         const char *name = type->params[i].def.apiName().c_str();
@@ -305,12 +336,8 @@ std::string describe(World &w)
     }
     for (SocketSide side : {SocketSide::Input, SocketSide::Output}) {
       for (const InterfaceSocket &s : def.interfaceSockets(side)) {
-        const SocketType *st = w.rt.ext<SocketTypeRegistry>().find(s.typeName.c_str());
-        const PropValue v = s.defaultValue.isNone() && st && st->hasLiteral() ?
-                                st->defaultValue.toProp() :
-                                s.defaultValue;
         out += std::string(s.name.c_str()) + " " + s.typeName.c_str() + " " +
-               v.toString().c_str() + ";";
+               s.defaultValue.toString().c_str() + ";";
       }
       out += "|\n";
     }

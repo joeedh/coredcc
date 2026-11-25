@@ -65,6 +65,8 @@ template <Status (*Fn)(NodeExecContext &)> struct FnKernel {
   }
 };
 
+class GraphDef;
+
 /** What a node of a type does. */
 enum class NodeRole : uint8_t {
   /** Runs the type's kernel. */
@@ -145,6 +147,7 @@ struct NodeType {
   litestl::util::string uiName;
   NodeRole role = NodeRole::Kernel;
   NodeTypeFlags flags = NodeTypeFlags::None;
+  uint32_t version = 1;
   /** Empty for roles other than Kernel, whose sockets come from interfaces. */
   litestl::util::Vector<NodeInputDef> inputs;
   litestl::util::Vector<NodeOutputDef> outputs;
@@ -188,6 +191,10 @@ class NodeTypeDef {
   explicit NodeTypeDef(std::string_view name);
   NodeTypeDef &uiName(std::string_view s);
   NodeTypeDef &flags(NodeTypeFlags f);
+  /** 1, unless set. Raise it when nodes of the type in files need a migration: a socket or
+   * param that has another name or meaning now. Nodes keep the version they were made with
+   * (GraphNode::typeVersion), in files too. */
+  NodeTypeDef &version(uint32_t v);
   NodeTypeDef &input(PropertyDef def);
   NodeTypeDef &payloadInput(std::string_view name, std::string_view socketType);
   NodeTypeDef &output(std::string_view name, std::string_view socketType);
@@ -220,6 +227,7 @@ class NodeTypeDef {
   litestl::util::string name_;
   litestl::util::string uiName_;
   NodeTypeFlags flags_ = NodeTypeFlags::None;
+  uint32_t version_ = 1;
   litestl::util::Vector<Input> inputs_;
   litestl::util::Vector<Output> outputs_;
   litestl::util::Vector<PropertyDef> literalDefs_;
@@ -253,7 +261,7 @@ class NodeTypeRegistry {
    * Registers a type. Everything is checked before anything changes: names are unique
    * identifiers other than `length` and `active`, defs are valid, socket types exist, a
    * Pointer param names its target struct, there are no Collection params, no dynamic
-   * defs and no Optional inputs, and there is a kernel and an output.
+   * defs and no Optional inputs, the version isn't 0, and there is a kernel and an output.
    */
   Result<const NodeType *> add(NodeTypeDef def);
   /** What `add` would say of `def`, but for its kernel. */
@@ -282,8 +290,12 @@ class NodeTypeRegistry {
   Result<NodeType *> build(const NodeTypeDef &def) const;
   Result<const NodeType *> store(NodeType *type);
 
+  friend class GraphDef;
+
   Runtime &rt_;
   uint64_t stamp_ = 0;
+  /** The Runtime's defs, which are told of new types. */
+  GraphDef *defs_ = nullptr;
   litestl::util::Vector<NodeType *> types_;
   litestl::util::Map<uint64_t, NodeType *> byId_;
 };

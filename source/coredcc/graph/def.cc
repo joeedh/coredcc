@@ -6,6 +6,7 @@
 #include "coredcc/base/text.h"
 #include "coredcc/graph/foreach.h"
 #include "coredcc/graph/provider.h"
+#include "coredcc/graph/system.h"
 #include "coredcc/graph/topology.h"
 #include "coredcc/lib/library.h"
 
@@ -52,11 +53,6 @@ GraphNode::~GraphNode()
   for (GraphSocketAddress *a : addresses_) {
     litestl::alloc::Delete(a);
   }
-}
-
-const NodeType *GraphNode::type() const
-{
-  return def_->typeOf(*this);
 }
 
 const NodeValue *GraphNode::literal(std::string_view key, const SocketType &type) const
@@ -117,15 +113,26 @@ static bool isType(const GraphNode &n, const char *type)
   return strcmp(n.typeName().c_str(), type) == 0;
 }
 
+bool isInterfaceName(std::string_view name)
+{
+  return !name.empty() && name[0] != '#' && name[0] != '@';
+}
+
 /* ---- GraphDef ---- */
 
 GraphDef::GraphDef(Runtime *rt, Library *lib, BlockId self)
     : rt_(*rt), lib_(libraryRef(lib)), self_(self), serial_(rt->nextVersion())
 {
   CDCC_CHECK(self.isNull() || lib, "a block's GraphDef needs its Library");
-  rt_.ext<NodeTypeRegistry>();
   rt_.ext<ChangeBus>();
+  NodeTypeRegistry &types = rt_.ext<NodeTypeRegistry>();
+  nextDef_ = types.defs_;
+  if (nextDef_) {
+    nextDef_->prevDef_ = this;
+  }
+  types.defs_ = this;
   structureVersion_ = contentVersion_ = interfaceVersion_ = rt_.nextVersion();
+  rt_.ext<GraphSystem>().noteStructure(structureVersion_);
 }
 
 GraphDef::~GraphDef()
@@ -133,8 +140,14 @@ GraphDef::~GraphDef()
   for (auto &pair : links_) {
     litestl::alloc::Delete(pair.value);
   }
-  for (GraphNode *n : nodes_) {
+  for (GraphNode *n = first_; n;) {
+    GraphNode *next = n->next_;
     litestl::alloc::Delete(n);
+    n = next;
+  }
+  (prevDef_ ? prevDef_->nextDef_ : rt_.ext<NodeTypeRegistry>().defs_) = nextDef_;
+  if (nextDef_) {
+    nextDef_->prevDef_ = prevDef_;
   }
 }
 
@@ -182,14 +195,6 @@ InterfaceSocket *GraphDef::findInterface(int64_t id, SocketSide *side)
 
 /* ---- sockets ---- */
 
-const NodeType *GraphDef::typeOf(const GraphNode &node) const
-{
-  if (!node.type_) {
-    node.type_ = rt_.ext<NodeTypeRegistry>().find(node.typeName_.c_str());
-  }
-  return node.type_;
-}
-
 static void fromInterface(const Vector<InterfaceSocket> &iface, SocketInfos &out)
 {
   for (const InterfaceSocket &s : iface) {
@@ -199,7 +204,7 @@ static void fromInterface(const Vector<InterfaceSocket> &iface, SocketInfos &out
 
 void GraphDef::refreshSockets(const GraphNode &node) const
 {
-  const NodeType *type = typeOf(node);
+  const NodeType *type = node.type();
   if (!type || type->role == NodeRole::Kernel) {
     return;
   }
@@ -231,7 +236,7 @@ void GraphDef::refreshSockets(const GraphNode &node) const
 
 const SocketInfos &GraphDef::sockets(const GraphNode &node, SocketSide side) const
 {
-  if (const NodeType *type = typeOf(node); type && type->role == NodeRole::Kernel) {
+  if (const NodeType *type = node.type(); type && type->role == NodeRole::Kernel) {
     return side == SocketSide::Input ? type->inputInfos : type->outputInfos;
   }
   refreshSockets(node);
@@ -262,15 +267,10 @@ GraphDef *GraphDef::groupTarget(const GraphNode &node) const
 
 const GraphNode *GraphDef::nodeAt(int index) const
 {
-  if (nodes_.size() == byId_.size()) {
-    return nodes_[index];
+  if (index_.size() == 0) {
+    forEachNode([this](const GraphNode &n) { index_.append(&n); });
   }
-  for (const GraphNode *n : nodes_) {
-    if (n && index-- == 0) {
-      return n;
-    }
-  }
-  return nullptr;
+  return index >= 0 && index < int(index_.size()) ? index_[index] : nullptr;
 }
 
 GraphValue GraphDef::literalValue(const GraphNode &node,
@@ -280,7 +280,7 @@ GraphValue GraphDef::literalValue(const GraphNode &node,
   if (const NodeValue *set = node.literal(key, type)) {
     return GraphValue::fromProp(set->value).value();
   }
-  const NodeType *t = typeOf(node);
+  const NodeType *t = node.type();
   if (t && t->role == NodeRole::Kernel) {
     const int i = t->inputIndex(key);
     return i >= 0 ? t->inputs[i].defaultValue : type.defaultValue;
@@ -306,7 +306,7 @@ bool GraphDef::usesLiteral(const GraphNode &node, std::string_view key) const
 
 PropValue GraphDef::paramValue(const GraphNode &node, std::string_view name) const
 {
-  const NodeType *type = typeOf(node);
+  const NodeType *type = node.type();
   const int i = type ? type->paramIndex(name) : -1;
   if (i < 0 || type->params[i].def.kind() == PropKind::Pointer) {
     return PropValue();
@@ -365,6 +365,7 @@ NodeState GraphDef::stateOf(const GraphNode &node) const
   NodeState s;
   s.id = node.id_;
   s.typeName = node.typeName_;
+  s.typeVersion = node.typeVersion_;
   s.label = node.label_;
   s.pos[0] = node.pos_[0];
   s.pos[1] = node.pos_[1];
@@ -373,6 +374,7 @@ NodeState GraphDef::stateOf(const GraphNode &node) const
   for (const NodeBlockRef &r : node.refs_) {
     s.refs.append(NodeState::Ref{r.name, r.cell.target, r.cell.kind == RefKind::Weak});
   }
+  s.extras = node.extras_;
   s.group = node.group_.target;
   s.inputs = sockets(node, SocketSide::Input);
   s.outputs = sockets(node, SocketSide::Output);
@@ -405,6 +407,7 @@ uint64_t GraphDef::stamp(bool structural)
   contentVersion_ = rt_.touch();
   if (structural) {
     structureVersion_ = contentVersion_;
+    rt_.ext<GraphSystem>().noteStructure(structureVersion_);
   }
   return contentVersion_;
 }
@@ -436,16 +439,46 @@ int64_t GraphDef::newId()
   }
 }
 
-void GraphDef::attachNode(GraphNode *n)
+void GraphDef::attachNode(GraphNode *n, GraphNode *after)
 {
   n->def_ = this;
-  n->slot_ = int(nodes_.size());
-  nodes_.append(n);
+  n->prev_ = after;
+  n->next_ = after ? after->next_ : first_;
+  (n->prev_ ? n->prev_->next_ : first_) = n;
+  (n->next_ ? n->next_->prev_ : last_) = n;
+  index_.clear();
   byId_.add(n->id_.value, n);
-  typeOf(*n);
+  n->type_ = rt_.ext<NodeTypeRegistry>().find(n->typeName_.c_str());
+  untyped_ += n->type_ ? 0 : 1;
 }
 
-void GraphDef::addParamRefs(GraphNode *n)
+void GraphDef::detachNode(GraphNode *n)
+{
+  (n->prev_ ? n->prev_->next_ : first_) = n->next_;
+  (n->next_ ? n->next_->prev_ : last_) = n->prev_;
+  index_.clear();
+  byId_.remove(n->id_.value);
+  untyped_ -= n->type_ ? 0 : 1;
+}
+
+void GraphDef::typeAdded(const NodeType &type)
+{
+  if (untyped_ == 0) {
+    return;
+  }
+  for (GraphNode *n = first_; n; n = n->next_) {
+    if (!n->type_ && strcmp(n->typeName_.c_str(), type.name.c_str()) == 0) {
+      n->type_ = &type;
+      untyped_--;
+      matchParamRefs(n);
+      if (Library *lib = lib_.get()) {
+        lib->noteRefsChanged();
+      }
+    }
+  }
+}
+
+void GraphDef::matchParamRefs(GraphNode *n)
 {
   if (!n->type_) {
     return;
@@ -453,7 +486,8 @@ void GraphDef::addParamRefs(GraphNode *n)
   for (const NodeParamDef &p : n->type_->params) {
     bool have = p.def.kind() != PropKind::Pointer;
     for (NodeBlockRef &r : n->refs_) {
-      if (strcmp(r.name.c_str(), p.def.apiName().c_str()) == 0) {
+      if (!have && strcmp(r.name.c_str(), p.def.apiName().c_str()) == 0) {
+        r.cell.kind = p.weak ? RefKind::Weak : RefKind::OptStrong;
         have = true;
       }
     }
@@ -489,15 +523,17 @@ void GraphDef::detachLink(GraphLink *link)
 
 void GraphDef::foreachRef(RefVisitor &visitor)
 {
-  for (GraphNode *n : nodes_) {
-    if (!n) {
-      continue;
-    }
+  for (GraphNode *n = first_; n; n = n->next_) {
     if (isType(*n, kGraphGroupType) || isType(*n, kGraphForeachType)) {
       visitor.visit(n->group_);
     }
     for (NodeBlockRef &r : n->refs_) {
       visitor.visit(r.cell);
+    }
+    for (BlockEntry &e : n->extras_) {
+      for (RefCell &cell : e.refs) {
+        visitor.visit(cell);
+      }
     }
   }
 }
@@ -548,17 +584,20 @@ Status GraphDef::validate() const
   auto bad = [](const char *what) {
     return Status::error(StatusCode::Internal, (std::string("GraphDef: ") + what).c_str());
   };
-  int live = 0, outputs = 0;
-  for (int i = 0; i < int(nodes_.size()); i++) {
-    const GraphNode *n = nodes_[i];
-    if (!n) {
-      continue;
+  int live = 0, outputs = 0, untyped = 0;
+  for (const GraphNode *n = first_, *prev = nullptr; n; prev = n, n = n->next_) {
+    outputs += isType(*n, kGraphOutputType);
+    untyped += n->type_ ? 0 : 1;
+    if (n->prev_ != prev || (!n->next_ && last_ != n) || node(n->id_) != n) {
+      return bad("a node isn't where its id or the order says");
+    }
+    if (n->type_ != rt_.ext<NodeTypeRegistry>().find(n->typeName_.c_str())) {
+      return bad("a node's type isn't the registered one");
+    }
+    if (index_.size() > 0 && (live >= int(index_.size()) || index_[live] != n)) {
+      return bad("the index of nodes is out of date");
     }
     live++;
-    outputs += isType(*n, kGraphOutputType);
-    if (n->slot_ != i || node(n->id_) != n) {
-      return bad("a node isn't where its id or slot says");
-    }
     for (const GraphLink *l : n->in_) {
       if (l->to != n || link(l->id) != l || n->linkInto(l->toKey.c_str()) != l) {
         return bad("an incoming link is wrong, or shares its input");
@@ -570,7 +609,7 @@ Status GraphDef::validate() const
       }
     }
   }
-  if (live != int(byId_.size()) || outputs > 1) {
+  if (live != int(byId_.size()) || untyped != untyped_ || (live == 0 && last_) || outputs > 1) {
     return bad("node counts differ, or there are two graph.output nodes");
   }
   Status status;
