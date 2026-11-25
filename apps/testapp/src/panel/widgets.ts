@@ -16,7 +16,7 @@ export interface WidgetHost {
   beginGesture(): number
   /** Takes back what a drag did. */
   cancelGesture(gesture: number): void
-  /** A drag ended, or an edit. */
+  /** A drag ended, or an edit: show the document's value. */
   done(): void
 }
 
@@ -69,12 +69,11 @@ export function caption(el: HTMLElement, icon: string | undefined, text: string,
 }
 
 /* A text or number field: written when the edit ends, and not overwritten during it. An edit may
- * end without a change, so the field then shows what it would have shown. */
+ * end without a change: the host then shows what it would have shown. */
 function field(parent: HTMLElement, type: string, host: WidgetHost, make: (text: string) => Writable) {
   const input = element('input', 'field', parent)
   input.type = type
   let editing = false
-  let latest = ''
   input.addEventListener('input', () => (editing = true))
   input.addEventListener('change', () => {
     editing = false
@@ -82,14 +81,12 @@ function field(parent: HTMLElement, type: string, host: WidgetHost, make: (text:
   })
   input.addEventListener('blur', () => {
     editing = false
-    input.value = latest
     host.done()
   })
   return {
     input,
     active: () => editing,
     show(text: string) {
-      latest = text
       if (!editing) input.value = text
     },
   }

@@ -193,7 +193,7 @@ static void test_prefixes()
     return -1;
   };
   const auto text = [](const Path &p) { return p.toString(); };
-  test_assert(l.prefixOf(0).size() == 0 && text(l.effectivePath(0)) == "/objects.active");
+  test_assert(text(l.prefixOf(0)) == "/" && text(l.effectivePath(0)) == "/objects.active");
   const int loc = find("location"), frame = find("/scene.frame");
   test_assert(text(l.prefixOf(loc)) == "/objects.active.transform");
   test_assert(text(l.effectivePath(loc)) == "/objects.active.transform.location");

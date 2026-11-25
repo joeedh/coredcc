@@ -153,6 +153,15 @@ static void test_defaults()
   test_assert(*getValue(pc, at + "mode") == PropValue::ofEnum(2));
   test_assert(w.run("x.dyn") == "100;#2;\"\";true;");
   test_assert(g_hooks > 4);
+  /* And by its index. */
+  const CommandRegistry &all = rt.ext<CommandRegistry>();
+  for (int i = 0; i < all.size(); i++) {
+    if (&all.at(i) == w.def) {
+      const std::string item = "commandDefaults[" + std::to_string(i) + "].";
+      test_assert(getMeta(pc, item + "mode")->enumMeta()->items.size() == 3);
+      test_assert(*getValue(pc, item + "amount") == PropValue::ofFloat(100));
+    }
+  }
   Result<StableRef> c = canonicalize(pc, *parsePath(at + "mode"));
   test_assert(c.ok() && resolve(pc, *c).ok()); /* keyOf */
 }

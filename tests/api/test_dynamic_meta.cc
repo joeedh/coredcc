@@ -120,6 +120,11 @@ static void test_same()
       def().ui(PropUi{false, false, SliderStyle::Default, true}),
       PropertyDef::floatProp("g").range(0, 1).description("d").icon("i").step(1),
       PropertyDef::vecProp("f", 2).range(0, 1).description("d").icon("i").step(1)};
+  const PropertyDef soft = def().softRange(0.25, 0.5);
+  test_assert(!soft.sameAs(def().softRange(0.25, 1)) && !soft.sameAs(def().softRange(0, 0.5)));
+  test_assert(!def().uiName("x").sameAs(PropertyDef::floatProp("g").range(0, 1).description("d").icon("i").step(1).uiName("x")));
+  test_assert(!PropertyDef::pointerProp("p", StructId::of("A"))
+                   .sameAs(PropertyDef::collectionProp("p", StructId::of("A"))));
   for (const PropertyDef &other : others) {
     test_assert(!def().sameAs(other) && other.sameAs(other));
   }
@@ -197,6 +202,20 @@ static void test_watch()
   test_assert(held.use_count() == 2);
   all[0].disconnect();
   test_assert(held.use_count() == 1);
+  /* At once, also in a flush. */
+  all[0] = w.bus().watch(ctx, "level", ignore, [held] { (void)held; }).value();
+  int left = 0;
+  ScopedConnection last = w.bus()
+                              .watch(ctx, "camera", ignore,
+                                     [&] {
+                                       all[0].disconnect();
+                                       left = int(held.use_count());
+                                     })
+                              .value();
+  w.data.cameras = 1;
+  w.bus().bumpEpoch();
+  test_assert(w.bus().flush() > 0 && left == 1);
+  last.disconnect();
   /* And those without one. */
   w.data.cameras = 3;
   w.bus().bumpEpoch();

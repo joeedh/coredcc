@@ -1037,6 +1037,33 @@ Numbers are the report's (`docs/reports/feature-report-library-io-2026-11-24.md`
     answer);
   - a linear scan in `deletePreview`, which is too cheap for the time test's bound.
 
+### Review of layouts, round 1 (2026-11-25)
+The findings and what was done are in the
+[report](../reports/feature-report-layout-2026-11-25.md). What isn't there:
+
+- **1:** `CommandRecord::prefix()` is a `const StableRef *`, and a Context's prefix is a Path or an
+  address. A struct that its owner's accessors reach by key has its key in its address, as
+  `SetProperty`'s has.
+- **2:** the order in which a bag's values are set is `PropertyBag::setOrder`: those that aren't
+  dynamic first. Dynamic inputs may not depend on each other.
+- **4:** a watcher compares the effective def whole (`PropertyDef::sameAs`), so a getter isn't called
+  again for it. `flush` counts a watcher once, also if both of its functions ran.
+- **12:** the validator's options path goes through the root's static structs, so a root struct that
+  isn't registered gives no issue.
+- **16:** `LinearHistory::head()` is now also there after `popHead`, but nothing folds into it. That is
+  what lets a gesture of several members be cancelled.
+- **18:** what a widget writes is made inside the panel's `act`, by a function. A tool's label needs the
+  catalog, which the panel reads once, and only if a tool has no label.
+- **24:** `Path::fromRoot`. `resolve`, `get`, `set` and watchers accept `/`, and `/` alone is the root.
+  Canonical refs don't have it.
+- **Edits in others' areas:** `api/context.h` (a prefix that is an address, `anyPrefix`),
+  `api/change_bus` (the second function, the watcher's prefix, watchers of dynamic members),
+  `command/executor` (`start`, `updateInteractive`, `revertHead`, `head()`).
+- **Mutations:** 207 (119 native, 88 of the panel), of which 197 fail a test. Of the others, 7 were redundant
+  code, now removed (three fields of a watcher's meta, a gate of `cancelGesture`, a default of
+  `commandDefaults`, and two uses of a field's copy of its text), and 3 cannot be seen: the kind and the kind of meta in
+  `sameAs` each imply the other, and `.` and `/` are as long as each other in the limit of a joined path.
+
 ### Deferred by the review of library IO
 Not scheduled; whoever needs one adds it to a plan.
 - **19:** choosing which blocks of a file to append, and listing its contents without loading it. The

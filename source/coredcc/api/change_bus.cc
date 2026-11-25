@@ -19,19 +19,16 @@ struct Change {
   litestl::util::string member; /* empty: the whole owner */
 };
 
-/* What a UI made a widget for. */
+/* What a UI made a widget for. With the path, the struct says which member, if any. */
 struct Meta {
-  bool resolves = false;
-  ResolvedPath::Kind kind = ResolvedPath::Kind::Struct;
   StructId type;
-  const ApiMember *member = nullptr;
   /** Of a dynamic member. Others' don't change. */
   std::optional<PropertyDef> def;
 
   bool operator==(const Meta &b) const
   {
-    return resolves == b.resolves && kind == b.kind && type == b.type && member == b.member &&
-           def.has_value() == b.def.has_value() && (!def || def->sameAs(*b.def));
+    return type == b.type && def.has_value() == b.def.has_value() &&
+           (!def || def->sameAs(*b.def));
   }
 };
 
@@ -93,10 +90,7 @@ Reading read(Context &ctx, const Path &path)
     r.status = rp.status();
     return r;
   }
-  r.meta.resolves = true;
-  r.meta.kind = rp->kind;
   r.meta.type = rp->ptr.type;
-  r.meta.member = rp->member;
   if (rp->member && rp->member->isDynamic()) {
     Result<PropertyDef> def = getMemberMeta(ctx, *rp);
     r.meta.def = def.ok() ? std::move(def).value() : rp->member->def();

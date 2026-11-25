@@ -53,6 +53,7 @@ static void test_run_undo_redo()
     test_assert(invoke(s.ctx, "test.add()").status().code() == StatusCode::Busy);
     test_assert(s.ex.undo(s.ctx).code() == StatusCode::Busy);
     test_assert(s.ex.redo(s.ctx).code() == StatusCode::Busy);
+    test_assert(s.ex.revertHead(s.ctx, [](CommandRecord &) { return true; }).code() == StatusCode::Busy);
     test_assert(s.history.undo(s.ctx).code() == StatusCode::Busy);
     test_assert(s.history.redo(s.ctx).code() == StatusCode::Busy);
     test_assert(s.ex.beginInteractive(s.ctx, *s.drag, s.drag->newInputs()).code() ==
@@ -89,6 +90,8 @@ static void test_interactive_stays_open()
     test_assert(s.ex.redo(s.ctx).code() == StatusCode::Busy);
     test_assert(s.ex.cancel(s.ctx).code() == StatusCode::Busy);
     test_assert(s.ex.commit(s.ctx).code() == StatusCode::Busy);
+    auto update = [](Context &, Command &) { return Status(); };
+    test_assert(s.ex.updateInteractive(s.ctx, update).code() == StatusCode::Busy);
     test_assert(s.ex.interactiveOpen() && s.ex.interactiveCommand());
   }
   test_assert(s.w.tool.strength == 0.875 && !s.w.rt.hasStickyError());

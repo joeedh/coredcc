@@ -350,7 +350,6 @@ IntResult beginGesture(Context &ctx)
 }
 Status cancelGesture(Context &ctx, int64_t gesture)
 {
-  CDCC_TRY(slotGate(ctx, "cancelGesture", {}));
   return coredcc::cancelGesture(ctx, uint64_t(gesture));
 }
 Status setValueGesture(Context &ctx, const string &path, const PropValue &value, int64_t gesture)

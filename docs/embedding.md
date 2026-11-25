@@ -78,18 +78,30 @@ Unreal, coredcc is exactly one module, so they exist once.
   is well formed, but may name what doesn't exist.
 - **Call `validateLayout` once everything is registered,** with the struct of the Context's root. A
   struct that is registered later only gives warnings.
-- **It knows static defs only.** An enum key that only a dynamic hook adds is an error to it, and a path
-  that it accepts can still fail in a given document.
+- **It knows static defs only.** An enum key that only a dynamic hook adds is a warning, and a path that
+  it accepts can still fail in a given document.
+- **`toolOptions` needs the last-used inputs at the root:** `LastUsedStore::addCollectionTo`, with its
+  default name. Its members are at the JSON's `optionsPath`.
+- **A tool of an Interactive command** is a warning: the frontend begins it with `beginInteractive` under
+  the tool's prefix, and changes it with `updateInteractive`.
 - **`CollectionAccessor::staticItem`** lets it see the struct of one item by its key, for collections
   whose items have structs of their own.
 - **A node's own paths are relative to its parent's prefix;** a leading `/` is the Context's root.
-- **`invokeAt` runs a tool under its prefix,** and its undo and redo run under it too.
+  The paths that a Layout and its JSON give start with `/`, so a Context's own prefix doesn't change them.
+- **`invokeAt` runs a tool under its prefix,** which is resolved when it starts: undo and redo run where
+  it ran, also if the prefix's path leads elsewhere by then. The command's own paths are under the prefix
+  too, unless they start with `/`.
+- **One `beginGesture` for each drag,** and `cancelGesture` for Escape. It takes back the gesture's sets
+  as far as they are the last commands.
 
 ## Watching paths from scripts
 - **A `PathReader` that watches holds the Context.** Dispose of it, or `unwatch`, before the Context
   goes; a `Session` does that for its readers.
 - **Nothing is called back.** `flushChanges` runs the ChangeBus, and `takeChanged` says which paths of
   a reader changed since it was last asked. Call them as often as the UI should follow.
+- **Widgets may need to be made again.** `takeChangedMeta` says which paths lead to another struct or
+  member, or to a dynamic def that is another now (its range, its items). `meta` marks such defs with
+  `dynamic`. Their watchers are read at every flush that has changes, so a hook should be cheap.
 - **`libraryResolve` needs an empty history;** `clearHistory` first.
 
 ## Threading

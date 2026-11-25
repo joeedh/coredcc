@@ -358,10 +358,12 @@ static void test_repointed()
   test_assert(none.code() == StatusCode::NotFound && strstr(none.message(), "the path prefix: "));
   test_assert(w.s.history.size() == size && !ctx.hasPrefix());
   /* setValueUndo's own command too, once. */
-  Result<Owned<Command>> cmd = w.s.w.rt.ext<CommandRegistry>().find("test.grow")->instantiate(w.s.w.rt);
+  const CommandDef &add = *w.s.add;
+  Result<Owned<Command>> cmd = add.instantiate(w.s.w.rt);
   PrefixScope scope(ctx, &active);
-  const CommandDef *grow = w.s.w.rt.ext<CommandRegistry>().find("test.grow");
-  test_assert(!w.s.ex.runInstance(ctx, *grow, std::move(cmd).value(), grow->newInputs()).ok());
+  g_log.clear();
+  test_assert(!w.s.ex.runInstance(ctx, add, std::move(cmd).value(), add.newInputs()).ok());
+  test_assert(g_log == "discard;");
 }
 
 static void test_fold_repointed()

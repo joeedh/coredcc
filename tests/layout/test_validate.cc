@@ -235,6 +235,9 @@ static void test_tools()
   test_assert(w.one(tool("base='/objcts[0]'"), std::string("<tool> invocation: ") +
                     "no member 'objcts' in LayoutRoot (at offset 1)", "invocation=",
                     LayoutSeverity::Error, "tool"));
+  /* Also where what is around it names nothing, which is another issue. */
+  test_assert(w.issues("<layout><row path='nope'>" + tool("any='/objcts[0]'") + "</row></layout>").size() == 2);
+  test_assert(w.issues("<layout><row path='nope'>" + tool("any='objcts[0]'") + "</row></layout>").size() == 1);
   /* What isn't for a button that invokes it, or not for users. */
   test_assert(w.one("<tool invocation='test.drag'/>",
                     "<tool> invocation: 'test.drag' is interactive: it is begun with "

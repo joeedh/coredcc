@@ -238,13 +238,18 @@ class Checker {
     return true;
   }
 
+  std::string around(int i) const
+  {
+    const int parent = nodes_[i].parent;
+    return parent < 0 ? "/" : prefix_[parent];
+  }
+
   /* The path in the value from `skip` on, joined with the prefix around node i, as text. */
   bool join(int i, const DraftAttr &a, size_t skip, std::string &out)
   {
-    const int parent = nodes_[i].parent;
     size_t at = 0;
     Result<std::string> p =
-        layout_detail::joinPathText(parent < 0 ? "/" : prefix_[parent],
+        layout_detail::joinPathText(around(i),
                                     std::string_view(a.value).substr(skip), &at);
     if (!p.ok()) {
       return failIn(i, a, skip + at, p.status());
@@ -260,9 +265,7 @@ class Checker {
 
   bool paths(int i)
   {
-    if (nodes_[i].parent >= 0) {
-      prefix_[i] = prefix_[nodes_[i].parent];
-    }
+    prefix_[i] = around(i);
     for (const DraftAttr &a : nodes_[i].attrs) {
       const Form form = kAttrs[int(a.id)].form;
       std::string condition;

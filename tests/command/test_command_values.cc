@@ -115,7 +115,7 @@ static void test_cancel_gesture()
   test_assert(!isGesture(rt, 0) && !isGesture(rt, 1));
   test_assert(cancelGesture(ctx, 1).code() == StatusCode::InvalidArgument);
   const uint64_t a = beginGesture(rt), b = beginGesture(rt);
-  test_assert(a != 0 && a != b && isGesture(rt, a) && isGesture(rt, b) && !isGesture(rt, b + 1));
+  test_assert(a != 0 && a != b && !isGesture(rt, 0) && isGesture(rt, a) && isGesture(rt, b) && !isGesture(rt, b + 1));
   const double free = getValue(ctx, "tool.free")->asFloat();
   const auto set = [&](const char *path, double v, uint64_t g) {
     test_assert(setValueUndo(ctx, path, PropValue::ofFloat(v), g).ok());
@@ -158,6 +158,17 @@ static void test_cancel_gesture()
   const BlockHandle h = s.w.scene.objects[0];
   test_assert(lib.markDeleted(h).ok());
   test_assert(!cancelGesture(ctx, a).ok() && s.history.size() == size && !rt.hasStickyError());
+
+  /* Any records, of this executor's Contexts. */
+  LinearHistory other;
+  CommandExecutor ex2(&rt, &other);
+  Context theirs(&rt, &lib, ctx.root());
+  theirs.setExecutor(&ex2);
+  test_assert(s.runAdd(1).ok());
+  auto which = [](CommandRecord &) { return true; };
+  test_assert(s.ex.revertHead(theirs, which).code() == StatusCode::FailedPrecondition);
+  g_log.clear();
+  test_assert(s.ex.revertHead(ctx, which).ok() && g_log.substr(0, 13) == "undo;discard;");
 
   Context bare(&rt, &lib, ctx.root());
   test_assert(cancelGesture(bare, a).code() == StatusCode::FailedPrecondition);

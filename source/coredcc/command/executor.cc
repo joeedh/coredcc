@@ -829,8 +829,8 @@ Status CommandExecutor::revertHead(Context &ctx,
     {
       SlotScope slot(slotDepth_);
       rec->undo(ctx);
-      rec->discard();
     }
+    discardRecord(*rec);
     CDCC_TRY(collect(Status()));
   }
   return Status();

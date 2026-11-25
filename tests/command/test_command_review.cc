@@ -305,6 +305,12 @@ static void test_reentrancy()
   Status r = s.ex.redo(s.ctx);
   test_assert(hasMsg(r, "inside a command") && s.history.validate().ok());
   test_assert(s.history.size() == 0 && s.w.tool.count == 4);
+  /* revertHead's undo is a slot, too. */
+  test_assert(s.ex.run(s.ctx, "review.undoRuns", PropertyBag()).ok());
+  g_inner.clear();
+  test_assert(s.ex.revertHead(s.ctx, [](CommandRecord &) { return true; }).ok());
+  test_assert(g_inner.find("inside a command") != std::string::npos);
+  test_assert(s.history.size() == 0 && s.w.tool.count == 4);
 }
 
 static void test_failed_redo_rolls_back()

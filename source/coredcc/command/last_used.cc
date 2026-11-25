@@ -219,8 +219,7 @@ StructId LastUsedStore::itemStruct(const CommandDef &def)
     ValueAccessor a;
     a.get = [input](const PointerRef &self, Context &) {
       const PropertyBag &bag = *static_cast<const PropertyBag *>(self.data);
-      const int i = bag.indexOf(input);
-      return bag.wasSet(i) ? bag.value(i) : bag.def(i).defaultValue();
+      return bag.value(bag.indexOf(input));
     };
     const CommandDef *command = &def; /* registered, so it stays */
     a.set = [this, command, input](const PointerRef &, Context &, const PropValue &v) {

@@ -319,7 +319,17 @@ describe('TA2: the panel of a layout', () => {
     await value('panelScrub', 'count', [])
     await value('panelScrub', 'label', [5])
     await value('panelScrub', 'itemCount', [5])
+    assert.equal((await node('itemCount')).error, undefined)
     assert.equal((await value('history')).size, size + 2)
+    await value('panel', {xml: `<layout><column enabledIf="enabled"><prop id="c" path="count"/></column></layout>`})
+    await value('set', 'enabled', false)
+    await nodes()
+    await value('panelScrub', 'c', [5])
+    assert.equal(await value('get', 'count'), 6)
+    await value('set', 'enabled', true)
+    await nodes()
+    await value('panelScrub', 'c', [5])
+    assert.equal(await value('get', 'count'), 11)
   })
 
   step('an edit that changes nothing shows what was written meanwhile', async () => {
@@ -345,8 +355,11 @@ describe('TA2: the panel of a layout', () => {
     await value('set', 'count', 8)
     await nodes()
     assert.match(await html(), /min="0" max="8"/)
+    /* Once: not with each value after it. */
+    await dom(`document.querySelector('#panel [data-id="slide"] input').mine = true`)
     await value('panelSet', 'level', 5)
     await shows('slide', 5)
+    assert.equal(await dom(`document.querySelector('#panel [data-id="slide"] input').mine`), true)
     assert.equal(await keysShown(), 'NONE,Cube,Ball')
     await value('panelSet', 'focus', true, 'Cube')
     await shows('focus', 'Cube')
@@ -417,7 +430,7 @@ describe('TA2: the panel of a layout', () => {
         <prop id="flags" path="flags"/><prop id="focus" path="focus"/>
         <tool id="t" invocation="testapp.addCount" icon="plus" iconsOnly="true"/>
         <label id="l" icon="info">Hello</label>
-        <prop id="prop" path="count"/><prop path="count"/></layout>`,
+        <prop id="prop" path="count"/><prop path="count"/><prop path="big"/></layout>`,
     })
     assert.deepEqual(issues, [])
     const dom = async (id: string, expr: string) =>
@@ -441,7 +454,7 @@ describe('TA2: the panel of a layout', () => {
     assert.equal(await dom('l', `el.textContent + el.querySelector('.icon').dataset.icon`), 'Helloinfo')
     /* A node without an id doesn't take an author's. */
     await value('panelSet', 'prop', 3)
-    assert.deepEqual([(await node('prop')).value, (await node('prop-1')).value], [3, 3])
+    assert.deepEqual([(await node('prop')).value, (await node('prop-1')).value, (await node('prop-2')).value], [3, 3, 0])
   })
 
   step('a broken layout is refused, and the panel stays', async () => {
