@@ -126,9 +126,9 @@ PropValue makeFloat(double v)
 {
   return PropValue::ofFloat(v);
 }
-PropValue makeString(const string &v)
+ValueResult makeString(const string &v)
 {
-  return PropValue::ofString(view(v));
+  return ok<ValueResult>(PropValue::ofString(view(v)));
 }
 PropValue makeVec2(double x, double y)
 {

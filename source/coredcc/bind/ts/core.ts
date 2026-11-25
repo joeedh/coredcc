@@ -287,13 +287,13 @@ export function fromJs(ctx: Context | undefined, x: Writable): PropValue {
   if (typeof x === 'number') {
     return Number.isSafeInteger(x) ? cd.makeInt(BigInt(x)) : cd.makeFloat(x)
   }
-  if (typeof x === 'string') return cd.makeString(x)
+  if (typeof x === 'string') return take(cd.makeString(x), copyValue)
   if (x instanceof FloatValue) return cd.makeFloat(x.value)
   if (Array.isArray(x) && x.every((k) => typeof k === 'string')) {
     if (x.length === 0) return cd.makeFlags(0n)
     const odd = x.find((k) => k === '' || k.includes('|'))
     if (odd !== undefined) throw new TypeError(`fromJs: '${odd}' is no flag's key`)
-    return cd.makeString(x.join('|'))
+    return take(cd.makeString(x.join('|')), copyValue)
   }
   if (isArrayLike(x)) {
     const c = Array.from(x as ArrayLike<number>, Number)

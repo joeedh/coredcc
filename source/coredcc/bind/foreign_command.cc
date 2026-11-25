@@ -240,7 +240,7 @@ Status foreignImplementable(const lbt::_StructBase *iface)
 
 CommandDef *newCommandDef(const string &id)
 {
-  return litestl::alloc::New<CommandDef>("coredcc::CommandDef", view(id));
+  return litestl::alloc::New<CommandDef>("coredcc::CommandDef", detail::withoutNul(id));
 }
 
 Status defUiName(CommandDef &def, const string &s)

@@ -181,7 +181,7 @@ static void test_enum_flags_and_pointer_values()
   Setup s;
   Context &ctx = s.ctx;
   test_assert(sc::readEnum(sc::getValue(ctx, "objects[0].mode").value).value == 0);
-  test_assert(sc::writeValue(ctx, "objects[0].mode", sc::makeString("EDIT")).ok());
+  test_assert(sc::writeValue(ctx, "objects[0].mode", sc::makeString("EDIT").value).ok());
   test_assert(sc::readEnum(sc::getValue(ctx, "objects[0].mode").value).value == 1);
   test_assert(sc::readInt(sc::getValue(ctx, "objects[0].mode").value).status.code() ==
               StatusCode::InvalidArgument);

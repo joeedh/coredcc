@@ -183,7 +183,7 @@ void testKernel()
     Status in, out, param, wrong, passIn, passOut, payload, make, pass;
     NodeTypeDef *def = sc::newNodeType("js.odd");
     test_assert(sc::nodeTypePayloadInput(*def, "mesh", "t.Mesh").ok());
-    test_assert(sc::nodeTypeInput(*def, "text", sc::makeString("x")).ok());
+    test_assert(sc::nodeTypeInput(*def, "text", sc::makeString("x").value).ok());
     test_assert(sc::nodeTypeInput(*def, "i", sc::makeInt(7)).ok());
     test_assert(sc::nodeTypeOutput(*def, "value", "float").ok());
     test_assert(sc::nodeTypeOutput(*def, "mesh", "t.Mesh").ok());
@@ -196,7 +196,7 @@ void testKernel()
       passOut = sc::nodePass(c, "mesh", "no");
       payload = sc::nodeInput(c, "mesh").status;
       make = sc::nodeOutput(c, "mesh", sc::makeInt(1));
-      wrong = sc::nodeOutput(c, "value", sc::makeString("x"));
+      wrong = sc::nodeOutput(c, "value", sc::makeString("x").value);
       pass = sc::nodePass(c, "text", "copy");
       CDCC_TRY(sc::nodePass(c, "mesh", "mesh"));
       /* An Int, converted. */
@@ -318,8 +318,8 @@ void testGates()
              sc::inputGet(d.ctx, "x").status,
              sc::outputSet(d.ctx, "x", sc::makeInt(1)),
              sc::outputGet(d.ctx, "x").status,
-             sc::setValue(d.ctx, name, sc::makeString("x")),
-             sc::writeValue(d.ctx, name, sc::makeString("x")),
+             sc::setValue(d.ctx, name, sc::makeString("x").value),
+             sc::writeValue(d.ctx, name, sc::makeString("x").value),
              sc::invoke(d.ctx, "core.block.purge").status,
              sc::undo(d.ctx),
              sc::redo(d.ctx),
@@ -367,8 +367,8 @@ void testGates()
     probe.methods["exec"] = [&](void **args, void *ret, string *) {
       Context &ctx = *static_cast<Context *>(args[0]);
       get = sc::getValue(ctx, name).status;
-      set = sc::setValue(ctx, name, sc::makeString("x"));
-      write = sc::writeValue(ctx, name, sc::makeString("x"));
+      set = sc::setValue(ctx, name, sc::makeString("x").value);
+      write = sc::writeValue(ctx, name, sc::makeString("x").value);
       create = sc::graphCreate(ctx, "x").status;
       new (ret) Status();
       return true;
@@ -549,7 +549,7 @@ void testInstances()
     };
     test_assert(sc::graphInstanceCount(d.ctx) == 1 && is(0));
     test_assert(sc::graphSetInput(*g, "in", sc::makeInt(4)).ok() && is(12)); /* converted */
-    test_assert(hasCode(sc::graphSetInput(*g, "in", sc::makeString("x")), StatusCode::TypeMismatch));
+    test_assert(hasCode(sc::graphSetInput(*g, "in", sc::makeString("x").value), StatusCode::TypeMismatch));
     Status no = sc::graphSetInput(*g, "inn", sc::makeInt(4));
     test_assert(hasCode(no, StatusCode::NotFound) && no.suggestions().size() == 1);
     test_assert(is(12) && sc::graphClearInput(*g, "in").ok() && is(0));

@@ -70,7 +70,7 @@ static void test_def_facades()
               StatusCode::InvalidArgument);
   test_assert(sc::defInput(*def, "b", sc::makeBool(true)).ok());
   test_assert(sc::defInput(*def, "f", sc::makeFloat(0.5)).ok());
-  test_assert(sc::defInput(*def, "s", sc::makeString("x")).ok());
+  test_assert(sc::defInput(*def, "s", sc::makeString("x").value).ok());
   test_assert(sc::defInput(*def, "v", sc::makeVec3(1, 2, 3)).ok());
   test_assert(def->inputCount() == 4 && def->inputDef(3).kind() == PropKind::Vec3);
   test_assert(def->inputDef(3).defaultValue() == sc::makeVec3(1, 2, 3));

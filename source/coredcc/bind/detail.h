@@ -25,6 +25,16 @@ inline std::string_view view(const string &s)
   return std::string_view(s.c_str(), size_t(s.size()));
 }
 
+/** For an id that is checked later: with a NUL, one that is refused. */
+inline std::string withoutNul(const string &s)
+{
+  std::string out(view(s));
+  for (char &c : out) {
+    c = c == '\0' ? '?' : c;
+  }
+  return out;
+}
+
 inline Status error(StatusCode code, const std::string &message)
 {
   return Status::error(code, message.c_str());

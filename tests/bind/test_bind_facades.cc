@@ -1,7 +1,10 @@
 /* The script facades on the api fixture: values, bags, paths and commands (P1f step 4). */
 #include "../command/command_fixture.h"
 
+#include "coredcc/bind/checked.h"
 #include "coredcc/bind/facades.h"
+#include "coredcc/bind/foreign_command.h"
+#include "coredcc/bind/layout_facades.h"
 #include "coredcc/bind/manager.h"
 
 #include "litestl/binding/manager.h"
@@ -25,12 +28,12 @@ static void test_values()
   test_assert(sc::readBool(sc::makeBool(true)).value);
   test_assert(sc::readInt(sc::makeInt(-3)).value == -3);
   test_assert(sc::readFloat(sc::makeFloat(0.25)).value == 0.25);
-  test_assert(strcmp(sc::readString(sc::makeString("hi")).value.c_str(), "hi") == 0);
+  test_assert(strcmp(sc::readString(sc::makeString("hi").value).value.c_str(), "hi") == 0);
   test_assert(sc::makeVec2(1, 2) == PropValue::ofVec2(1, 2));
   test_assert(sc::makeVec4(1, 2, 3, 4) == PropValue::ofVec4(1, 2, 3, 4));
 
   /* The wrong type is an error result. */
-  sc::IntResult wrong = sc::readInt(sc::makeString("3"));
+  sc::IntResult wrong = sc::readInt(sc::makeString("3").value);
   test_assert(wrong.status.code() == StatusCode::InvalidArgument && wrong.value == 0);
   test_assert(strstr(wrong.status.message(), "String") != nullptr);
   test_assert(sc::readBool(sc::makeInt(1)).status.code() == StatusCode::InvalidArgument);
@@ -162,6 +165,31 @@ static void test_manager()
   test_assert(found == 4);
 }
 
+/* What is bound refuses a NUL in any string. */
+static void test_nul()
+{
+  using sc::detail::Checked;
+  Setup s;
+  sc::string nul("a");
+  nul += char(0);
+  nul += "b";
+  test_assert(nul.size() == 3);
+  const sc::string fine("label");
+  test_assert(Checked<&sc::makeString>::call(nul).status.code() == StatusCode::InvalidArgument);
+  test_assert(Checked<&sc::makeString>::call(fine).value.asString() == fine);
+  const Status second = Checked<&sc::setValue>::call(s.ctx, nul, sc::makeInt(1));
+  test_assert(second.code() == StatusCode::InvalidArgument &&
+              strstr(second.message(), "argument 2: a string can't hold a NUL"));
+  test_assert(strstr(Checked<&sc::invokeAt>::call(s.ctx, fine, nul).status.message(), "argument 3"));
+  test_assert(Checked<&sc::setValue>::call(s.ctx, "tool.count", sc::makeInt(1)).ok());
+  test_assert(Checked<&sc::canUndo>::call(s.ctx).value);
+  test_assert(sc::detail::nulArgument(1, fine, nul) == 3);
+  /* The ids of defs: refused later. */
+  CommandDef *def = sc::newCommandDef(nul);
+  test_assert(!s.w.rt.ext<CommandRegistry>().checkDef(*def).ok());
+  litestl::alloc::Delete(def);
+}
+
 int main()
 {
   test_status();
@@ -171,5 +199,6 @@ int main()
   test_paths();
   test_no_executor();
   test_manager();
+  test_nul();
   return test_end();
 }

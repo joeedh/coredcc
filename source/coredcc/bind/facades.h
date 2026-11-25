@@ -9,6 +9,8 @@
  *   in place of a `Result<T>`.
  * - Misuse from a script (the wrong value type, an index out of range, a call that
  *   would reenter the history) is an error result. It never aborts.
+ * - What is bound refuses strings with a NUL (bind/checked.h): strings, names and keys can't
+ *   hold one.
  * - Facades never set the Runtime's sticky error: a failure is in what they return.
  *
  * **Inside a script command's slots** the facades that change the document are
@@ -79,7 +81,7 @@ string statusText(const Status &s);
 PropValue makeBool(bool v);
 PropValue makeInt(int64_t v);
 PropValue makeFloat(double v);
-PropValue makeString(const string &v);
+ValueResult makeString(const string &v);
 PropValue makeVec2(double x, double y);
 PropValue makeVec3(double x, double y, double z);
 PropValue makeVec4(double x, double y, double z, double w);

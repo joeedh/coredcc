@@ -25,7 +25,7 @@ namespace lf = litestl::binding::foreign;
 
 NodeTypeDef *newNodeType(const string &id)
 {
-  return litestl::alloc::New<NodeTypeDef>("coredcc::NodeTypeDef", view(id));
+  return litestl::alloc::New<NodeTypeDef>("coredcc::NodeTypeDef", detail::withoutNul(id));
 }
 
 Status nodeTypeUiName(NodeTypeDef &def, const string &s)
@@ -283,7 +283,7 @@ static IntResult intOutput(const Result<PropertyBag> &out, const char *name)
 ValueResult graphCreate(Context &ctx, const string &name)
 {
   Result<PropertyBag> out = runGraph(
-      ctx, "graphCreate", kGraphCreateCommand, nullptr, {{"name", makeString(name)}});
+      ctx, "graphCreate", kGraphCreateCommand, nullptr, {{"name", PropValue::ofString(view(name))}});
   return out.ok() ? ok<ValueResult>(*out->get("graph")) : failed<ValueResult>(out.status());
 }
 
@@ -294,7 +294,7 @@ IntResult graphAddNode(Context &ctx,
                        double y)
 {
   return intOutput(runGraph(ctx, "graphAddNode", kGraphNodeAddCommand, &graphPath,
-                            {{"type", makeString(type)}, {"position", makeVec2(x, y)}}),
+                            {{"type", PropValue::ofString(view(type))}, {"position", makeVec2(x, y)}}),
                    "node");
 }
 
@@ -314,9 +314,9 @@ IntResult graphLink(Context &ctx,
 {
   return intOutput(runGraph(ctx, "graphLink", kGraphLinkCommand, &graphPath,
                             {{"from", makeInt(from)},
-                             {"fromSocket", makeString(fromSocket)},
+                             {"fromSocket", PropValue::ofString(view(fromSocket))},
                              {"to", makeInt(to)},
-                             {"toSocket", makeString(toSocket)}}),
+                             {"toSocket", PropValue::ofString(view(toSocket))}}),
                    "link");
 }
 
@@ -334,8 +334,8 @@ IntResult graphAddInterface(Context &ctx,
 {
   return intOutput(runGraph(ctx, "graphAddInterface", kGraphInterfaceAddCommand, &graphPath,
                             {{"side", PropValue::ofEnum(output ? 1 : 0)},
-                             {"name", makeString(name)},
-                             {"type", makeString(type)}}),
+                             {"name", PropValue::ofString(view(name))},
+                             {"type", PropValue::ofString(view(type))}}),
                    "socket");
 }
 

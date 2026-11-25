@@ -268,6 +268,46 @@ describe('coredcc wasm-st spike', () => {
     assert.throws(() => cdcc.invokeAt(ctx, '', tool.invocation!), fails(StatusCode.NotFound, /weight/))
   })
 
+  test('a string with a NUL is refused wherever it comes in', () => {
+    const nul = 'a\0b'
+    const refused = fails(StatusCode.InvalidArgument, /NUL/)
+    class Nothing {
+      exec() {}
+      undo() {}
+    }
+    const calls: [string, () => unknown][] = [
+      ['set', () => cdcc.set(ctx, 'label', nul)],
+      ['an enum', () => cdcc.set(ctx, 'mode', nul)],
+      ['flags', () => cdcc.set(ctx, 'flags', [nul])],
+      ['write', () => cdcc.write(ctx, 'label', nul)],
+      ['rename', () => cdcc.set(ctx, 'items["Cube"].name', nul)],
+      ['a path', () => cdcc.get(ctx, nul)],
+      ['a path to write', () => cdcc.set(ctx, nul, 1)],
+      ['resolve', () => cdcc.resolve(ctx, nul)],
+      ['meta', () => cdcc.meta(ctx, nul)],
+      ['a reference', () => cdcc.set(ctx, 'activeItem', new cdcc.Ref(nul))],
+      ['invoke', () => cdcc.invoke(ctx, nul)],
+      ['invokeAt', () => cdcc.invokeAt(ctx, nul, 'ts.weigh()')],
+      ['a layout', () => cdcc.parseLayout(nul)],
+      ['a layout to check', () => cdcc.validateLayout(ctx, nul)],
+      ['a reader', () => new cdcc.PathReader(ctx, [nul])],
+      ['uiName', () => cdcc.registerCommand(ctx, {id: 'ts.nul', uiName: nul}, Nothing)],
+      ['description', () => cdcc.registerCommand(ctx, {id: 'ts.nul', description: nul}, Nothing)],
+      ['icon', () => cdcc.registerCommand(ctx, {id: 'ts.nul', icon: nul}, Nothing)],
+      ['an input', () => cdcc.registerCommand(ctx, {id: 'ts.nul', inputs: {[nul]: 1}}, Nothing)],
+      ['a default', () => cdcc.registerCommand(ctx, {id: 'ts.nul', inputs: {a: nul}}, Nothing)],
+      ['an output', () => cdcc.registerCommand(ctx, {id: 'ts.nul', outputs: {[nul]: 1}}, Nothing)],
+      ['a graph', () => cdcc.graphCreate(ctx, nul)],
+    ]
+    for (const [what, call] of calls) assert.throws(call, refused, what)
+    /* An id is refused as one that isn't an identifier. */
+    assert.throws(() => cdcc.registerCommand(ctx, {id: 'ts.' + nul}, Nothing), ScriptError)
+    assert.equal(cdcc.get(ctx, 'label'), '')
+    assert.equal(cdcc.get(ctx, 'items["Cube"].name'), 'Cube')
+    /* The id wasn't taken by those. */
+    cdcc.registerCommand(ctx, {id: 'ts.nul'}, Nothing)
+  })
+
   test('PathReader reads, watches, and goes with its session', () => {
     const reader = new cdcc.PathReader(ctx, ['strength', 'mode', 'flags', 'items["Cone"].weight'])
     assert.equal(reader.count, 4)
