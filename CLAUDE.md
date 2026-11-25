@@ -6,10 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 coredcc is a C++20 DCC foundation library on litestl. The design is
 `docs/plans/2026-11-19-architecture.md`; progress and plan list is
-`docs/implementation-tasklist.md`.
+`docs/implementation-tasklist.md`. `docs/index.md` lists all documentation; add new documents to it.
 
 ### Layout
-- `source/coredcc/<module>/`: the library (include root is `source/`). Only `base/` exists so far.
+- `source/coredcc/<module>/`: the library (include root is `source/`). `docs/modules.md` says what the
+  modules are, what they depend on and where to start.
 - `extern/litestl/`: litestl submodule. Its gitlink only ever points at litestl master; a
   pre-commit hook enforces this (`git config core.hooksPath tools/hooks` once per clone).
   litestl changes go up as PRs from this submodule checkout, never from `C:\dev\litestl`.
@@ -18,6 +19,11 @@ coredcc is a C++20 DCC foundation library on litestl. The design is
 - `apps/testapp/`: NW.js integration test app, driven over CDP
   (`docs/plans/2026-11-19-test-app.md`).
 - `cmake/CoredccHelpers.cmake`: `coredcc_library`, `coredcc_test`, `coredcc_compile_fail`.
+- `tools/`: gates, benchmarks, the build cache, worktrees, the emsdk (`docs/building.md`).
+  - Native builds share an sccache through `tools/cache.mjs`. Never run `sccache` by hand.
+  - Make worktrees with `node tools/new-worktree.mjs <branch>`, and run `node tools/cache.mjs setup`
+    after removing one.
+  - Run benchmarks only with `tools/bench.mjs` and `tools/bench-bvh.mjs`: they build first.
 
 ### Build and test (native)
 Run through `tools\devshell.cmd` (loads the VS 18 environment; from Git Bash prefer PowerShell,
@@ -27,7 +33,19 @@ Ninja Multi-Config with `-debug` and `-release` (RelWithDebInfo) build/test pres
 - Build: `tools\devshell.cmd cmake --build --preset native-clang-debug`
 - Test: `tools\devshell.cmd ctest --preset native-clang-debug`
 - One test: `tools\devshell.cmd ctest --preset native-clang-debug -R test_base_signal`
-- Before committing C++ changes, build and test all four presets (msvc/clang x debug/release).
+
+### Gates
+Run them by hand; they are not git hooks. Both exit 0 only if everything passed, and a skipped
+test is a failure. Logs are in `build/gate/`.
+- **Pre-commit:** `node tools/gate.mjs pre-commit`, before committing anything but documentation.
+  Builds and tests clang RelWithDebInfo (`native-clang-release`).
+- **Pre-push:** `node tools/gate.mjs pre-push`, before pushing master, on the commit that is pushed.
+  Not needed if only documentation changed since it last passed.
+  - Builds and tests the four native presets (msvc/clang x debug/release), `wasm-st-debug` and
+    `wasm-mt-debug`, and builds the benchmarks.
+  - Needs the emsdk (`node tools/install-emsdk.mjs`), `npm ci` in `tests/wasm` and `pnpm install` in
+    `apps/testapp`.
+- Compile jobs: 5, or `--jobs N`. `--only <preset>` runs a part, and is not the gate.
 
 ### Test app
 `cd apps/testapp && pnpm install && pnpm test` (builds the page, runs `node:test` files that

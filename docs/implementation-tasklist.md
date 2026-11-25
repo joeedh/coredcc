@@ -3,7 +3,7 @@
 The master list of plans and their state. The architecture plan
 (`docs/plans/2026-11-19-architecture.md`) defines the phases. Each phase gets its own
 implementation plan before work starts, and each plan is pressure-tested first (see
-CLAUDE.md).
+CLAUDE.md). `docs/index.md` lists all documentation.
 
 States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`.
 
@@ -19,7 +19,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 6 | [P2 library IO and layout](plans/2026-11-24-p2-layout-library-io.md) | P2 | 5 | reviewed | [library IO](reports/feature-report-library-io-2026-11-24.md); [layout](reports/feature-report-layout-2026-11-25.md) |
 | 7 | [P3 objects, transforms and BVH](plans/2026-11-24-p3-objects-bvh.md) | P3 | 5 | reviewed; timings to be confirmed on an idle machine | [objects and transforms](reports/feature-report-scene-2026-11-25.md); [BVH, View and picking](reports/feature-report-bvh-2026-11-25.md) |
 | 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | todo | tools and overlay |
-| 9 | [P5 graph and instancing](plans/2026-11-24-p5-graph.md) | P5 | 5 | reviewed; benchmarks to be recorded on an idle machine | [graph](reports/feature-report-graph-2026-11-25.md) |
+| 9 | [P5 graph and instancing](plans/2026-11-24-p5-graph.md) | P5 | 5 | reviewed | [graph](reports/feature-report-graph-2026-11-25.md) |
 | 10 | P5c scene evaluator | P5c | 7, 9 | todo | scene evaluator |
 | 11 | P6 integration: N-API addon, faberforge and ubertopo spikes | P6 | 8, 10, litestl N-API PR | todo | integration |
 
@@ -44,7 +44,7 @@ then.
 ### Where work happens
 - **Serial phase: directly on `master`.** P0, P0b and P1 are a chain, so there is nothing
   to parallelize until P1 is done.
-- **litestl changes** are made in coredcc's own submodule checkout (`source/litestl`) on a
+- **litestl changes** are made in coredcc's own submodule checkout (`extern/litestl`) on a
   branch, and go up as PRs against `joeedh/litestl`. Never in `C:\dev\litestl`.
   - The gitlink on master only points at litestl master commits. coredcc work that needs
     an unmerged PR waits on one local branch until the PR merges.
@@ -52,6 +52,9 @@ then.
   independent. Then P4 (after P3) and P5c (after P3 and P5).
   - Worktrees are siblings of the repo: `C:\dev\coredcc-<branch>`.
   - Each branch is rebased onto master and merged with `git merge --ff-only`.
+- **The remote** is https://github.com/joeedh/coredcc (public, since 2026-11-25). Master is pushed after each
+  merge, once the pre-push gate has passed. Worktree branches stay local.
+- **Gates:** `node tools/gate.mjs pre-commit` and `pre-push` (`docs/building.md`). They are not git hooks.
 
 ### Build cache for the parallel phase
 - Done 2026-11-24: `docs/plans/2026-11-23-build-cache-worktrees.md`. How to use it:
@@ -83,6 +86,8 @@ then.
     `docs/reports/feature-report-ta1-2026-11-23.md`.
   - The end of P1 (build cache, worktrees) is done (2026-11-24).
 - P2, P3 and P5 are on master and reviewed (2026-11-25). P4 and P5c are next, in worktrees.
+- P5's benchmarks are recorded in its plan (step 11). Edits that the journal follows are within the target;
+  verifying everything and structural edits are not.
 - Open after P3:
   - Its timings on an idle machine. Provisional ones, on a busy machine, are under the targets but for
     unlinking and linking again (63 to 90 ms, target 80).

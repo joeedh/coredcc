@@ -11,7 +11,7 @@ Unreal, coredcc is exactly one module, so they exist once.
 
 | Global | Where | Notes |
 |---|---|---|
-| Allocation tracker | `util/alloc.cc` (`getMemList()`, guarded by a mutex; a `thread_local` list for some paths) | Every `alloc::New`/`alloc` block is recorded, so leak reports cover the whole process, not one Runtime. `PermanentGuard` uses a process-wide counter and is not thread-safe (P0b PR B). |
+| Allocation tracker | `util/alloc.cc` (`getMemList()`, guarded by a mutex; a `thread_local` list for some paths) | Every `alloc::New`/`alloc` block is recorded, so leak reports cover the whole process, not one Runtime. `PermanentGuard` counts for each thread. |
 | Task pool | `util/task.cc` (`TaskPool pool`) | Shared by every `parallel_for` caller. coredcc never calls `task::run` and never raises `ScopedBandCount` above 1. Calling `parallel_for` from inside a worker can starve the pool. |
 | String keys | `util/string.cc` (`keymap`, `stringkey_idgen`) | `get_stringkey` interns into a global map with no lock. coredcc never calls it from worker threads. Interned strings are never freed. |
 | Binding descriptors | `binding/` | Allocated with `new` and never freed, by design. coredcc builds its cached interface descriptors under `alloc::PermanentGuard`, on the main thread only. |
@@ -58,8 +58,8 @@ Unreal, coredcc is exactly one module, so they exist once.
   data, which keeps them until then. A command that does it uses `CreatedBlocks`, whose undo
   makes the record a missing one again.
 - A type that was registered after a load reads its blocks with `resolvePlaceholders`.
-- **Saving and loading from TypeScript** is planned: the facades come with P2's step B4. Until then a
-  TS host needs its own C++ for it. Block and attachment providers can't be written in TS.
+- **From TypeScript:** `saveLibrary`, `loadLibrary` and `appendLibrary` (`bind/ts/library.ts`). Block and
+  attachment providers can't be written in TS.
 - **Several libraries** can share an executor and a history. A command is undone through a Context of
   the library it was done in; through another one, or when its library is gone, the undo fails.
 

@@ -15,3 +15,7 @@ coredcc_target_flags(bench_scene_commands)
 if(EMSCRIPTEN)
   target_link_options(bench_scene_commands PRIVATE -sENVIRONMENT=node -sEXIT_RUNTIME=1)
 endif()
+
+# All of them, for tools/gate.mjs.
+add_custom_target(benchmarks)
+add_dependencies(benchmarks bench_bvh bench_graph bench_scene bench_scene_commands)

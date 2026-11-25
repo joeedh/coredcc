@@ -59,8 +59,8 @@ in four settings:
   - with `<windows.h>` included without `NOMINMAX`;
   - with shadowing warnings treated as errors.
 
-  litestl currently fails all three, so the fixes are a P0b work item. A compile test
-  (`tests/compile_embed/`) enforces this from then on.
+  litestl failed all three, and P0b fixed that. A compile test (`tests/compile_embed.cc`)
+  enforces it.
 - **No coredcc-owned global mutable state.**
   - Every registry (ApiStructs, commands, socket types, tools) belongs to a `Runtime`
     instance.
@@ -311,8 +311,10 @@ source/
   coredcc/
     base/               Status, type ids, generational handles + HandlePool, Signal, Runtime,
                         iface/ (interface definitions, registry, Iface<I>, Owned<I>)
+    parse/              parsers of datapaths and invocations
+    lib/                Library, block records, references, GC, files
     props/              PropertyDef, PropValue, units, enum items, PropertyBag
-    api/                datapath: ApiStruct, ApiMember, Path parser, resolver, ChangeBus
+    api/                datapath: ApiStruct, ApiMember, resolver, ChangeBus
     command/            CommandDef, Command, executor, UndoHistory, LinearHistory,
                         registry, defaults, invoke parser
     graph/              socket types, NodeType, GraphDef, GraphInstance, evaluator, serialization
@@ -321,10 +323,16 @@ source/
     draw/               View (camera math), DrawList (overlay command buffer)
     tool/               InputEvent, Tool, Modal, ToolManager, gizmos, StrokeSampler
     layout/             LayoutNode, XML-subset parser, validator, JSON writer
-    bind/               litestl binding registration, foreign-implementation shims
+    bind/               litestl binding registration, foreign-implementation shims, the TS layer
+    testapp/            the test app's backend
   hosts/headless/       test host: fake View, DrawList recorder, scripted events
-tests/                  native tests (litestl harness), benchmarks, compile_embed/
+apps/testapp/           the NW.js integration test app
+tests/                  native tests (litestl harness), benchmarks, compile_embed.cc
+tools/                  gates, benchmarks, build cache, worktrees, emsdk
 ```
+
+- Not there yet (2026-11-25): `tool/`, `hosts/headless/`, and `DrawList` in `draw/`. They come with P4.
+  `docs/modules.md` describes the modules that are there.
 
 - The include root is `source/`. litestl lives in `extern/` so that adding it `SYSTEM`
   doesn't make `source/` a system include directory (P0 pressure test).
@@ -333,7 +341,7 @@ tests/                  native tests (litestl harness), benchmarks, compile_embe
   submodule, can supply litestl instead. The two pins must be compatible. The parent's
   pin wins, and this is documented.
 - Build: CMake plus presets for native builds. Emscripten presets for `wasm-st` and
-  `wasm-mt` come in P1. A `make.mjs` dispatcher is added only when the N-API build needs
+  `wasm-mt` came in P1. A `make.mjs` dispatcher is added only when the N-API build needs
   one (P6).
 
 ## 4. Properties (`props/`)

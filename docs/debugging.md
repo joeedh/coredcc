@@ -91,8 +91,8 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   builds cleanly.
 - **Cause:** litestl's `Vector::operator[]` takes `int`, and MSVC warns on the narrowing
   that clang-cl accepts. With `/WX` it is an error.
-- **Fix:** cast the index (`v[int(i)]`). This is why every C++ change builds all four
-  presets.
+- **Fix:** cast the index (`v[int(i)]`). The pre-commit gate builds with clang only, so
+  MSVC's errors show in the pre-push gate (`tools/gate.mjs`).
 
 ### The test app has no backend, or TA1's tests all skip
 - **Symptom:** `info().backend` is `'none'`, and TA1's tests are skipped (outside ctest)
@@ -146,6 +146,29 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 - **The same goes for picking:** `pickScene` answers for what was drawn. Objects that were added or
   moved since are where they were. An object without bounds (no Spatial, or an empty
   `localBounds`) can't be picked at all.
+
+### A benchmark's numbers don't fit the code
+- **Symptom:** `bench_scene` gave 15 ms, and the same commit gave 21 ms elsewhere. Targets seemed met for hours.
+- **Cause:** the program was old. The benchmarks aren't in `all`, so building and gating the rest doesn't
+  rebuild them.
+- **Fix:** `node tools/bench.mjs` builds before it runs, and prints the commit and the link time. The pre-push
+  gate builds the benchmarks, so that they compile.
+- **How to spot it next time:** compare the program's time with the commit's. To find where a slowdown came
+  from, build several commits from scratch, and run the programs in turns: that rules out the machine.
+
+### Evaluating many objects is slower, and no code in its path changed
+- **Symptom:** `evaluateScene` became slower by half, in two steps.
+- **Cause:** `Object` had grown to 2,152 bytes. Two inline `Vector<BlockEntry>`s that only loading uses had been
+  added to each object.
+- **Fix:** what few objects have is allocated when it is needed. A `static_assert` in `object.cc` limits the
+  size (`fd1aa75`).
+- **How to spot it next time:** `sizeof` of what is evaluated in bulk, before looking for slow code.
+
+### wasm-mt-release: "ReferenceError: ENV is not defined"
+- **Symptom:** `test_base_id` fails under `wasm-mt-release`, every time, before `main`.
+- **Cause:** `tests/support/node_env.js` copies the environment to `ENV`, which emscripten leaves out of a release
+  build when the program doesn't read the environment.
+- **Fix:** none yet. The debug build, which the gate uses, isn't affected.
 
 ## Techniques
 

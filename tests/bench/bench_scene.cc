@@ -236,15 +236,15 @@ int main(int argc, char **argv)
   must(view.set(v));
   for (double radius : {10.0, 200.0}) {
     Vector<PickHit> hits;
-    size_t found = 0;
+    size_t picked = 0;
     const std::string name = "pick, radius " + std::to_string(int(radius));
     measure(name.c_str(), nothing, [&] {
       PickOptions options;
       options.radius = radius;
       must(pickScene(ctx, *sceneBlock, view, 960.0, 540.0, options, {}, hits));
-      found = hits.size();
+      picked = hits.size();
     });
-    printf("  %d objects\n", int(found));
+    printf("  %d objects\n", int(picked));
   }
   return 0;
 }
