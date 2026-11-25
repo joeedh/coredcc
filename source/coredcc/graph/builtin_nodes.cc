@@ -1,6 +1,5 @@
 /* The built-in node types with kernels: constants and a little math. */
-#include "coredcc/base/assert.h"
-#include "coredcc/graph/node_type.h"
+#include "coredcc/graph/builtin_nodes.h"
 
 #include <cmath>
 #include <string>
@@ -88,19 +87,9 @@ Status mat4Multiply(NodeExecContext &ctx)
   return ctx.setOutput(0, GraphValue::ofComponents(GraphValue::Type::Mat4, r));
 }
 
-template <Status (*Fn)(NodeExecContext &)>
-void addType(Runtime &rt, NodeTypeRegistry &reg, NodeTypeDef &def, const std::string &name)
-{
-  Result<Owned<GraphKernel>> k = makeKernel<FnKernel<Fn>>(rt, name + "#kernel");
-  CDCC_CHECK(k.ok(), "making a built-in kernel");
-  def.kernel(std::move(k).value());
-  const bool ok = reg.add(std::move(def)).ok();
-  CDCC_CHECK(ok, "registering a built-in node type");
-}
-
 } // namespace
 
-void detail::addBuiltinNodes(Runtime &rt, NodeTypeRegistry &reg)
+void detail::addValueNodes(Runtime &rt, NodeTypeRegistry &reg)
 {
   const SocketTypeRegistry &sockets = rt.ext<SocketTypeRegistry>();
   for (const char *type :
@@ -108,7 +97,7 @@ void detail::addBuiltinNodes(Runtime &rt, NodeTypeRegistry &reg)
     const std::string name = std::string("value.") + type;
     NodeTypeDef def(name);
     def.uiName(type).param(sockets.find(type)->literalDef("value")).output("value", type);
-    addType<constant>(rt, reg, def, name);
+    addBuiltin<constant>(rt, reg, def, name);
   }
 
   NodeTypeDef math("math.float");
@@ -125,7 +114,7 @@ void detail::addBuiltinNodes(Runtime &rt, NodeTypeRegistry &reg)
                  .item("MAXIMUM", int(FloatOp::Maximum))
                  .item("MODULO", int(FloatOp::Modulo)))
       .output("value", "float");
-  addType<mathFloat>(rt, reg, math, "math.float");
+  addBuiltin<mathFloat>(rt, reg, math, "math.float");
 
   NodeTypeDef combine("vec.combine");
   combine.uiName("Combine")
@@ -133,7 +122,7 @@ void detail::addBuiltinNodes(Runtime &rt, NodeTypeRegistry &reg)
       .input(PropertyDef::floatProp("y"))
       .input(PropertyDef::floatProp("z"))
       .output("vector", "vec3");
-  addType<vecCombine>(rt, reg, combine, "vec.combine");
+  addBuiltin<vecCombine>(rt, reg, combine, "vec.combine");
 
   NodeTypeDef separate("vec.separate");
   separate.uiName("Separate")
@@ -141,14 +130,14 @@ void detail::addBuiltinNodes(Runtime &rt, NodeTypeRegistry &reg)
       .output("x", "float")
       .output("y", "float")
       .output("z", "float");
-  addType<vecSeparate>(rt, reg, separate, "vec.separate");
+  addBuiltin<vecSeparate>(rt, reg, separate, "vec.separate");
 
   NodeTypeDef mul("mat4.multiply");
   mul.uiName("Multiply Matrices")
       .input(PropertyDef::mat4Prop("a"))
       .input(PropertyDef::mat4Prop("b"))
       .output("matrix", "mat4");
-  addType<mat4Multiply>(rt, reg, mul, "mat4.multiply");
+  addBuiltin<mat4Multiply>(rt, reg, mul, "mat4.multiply");
 }
 
 } // namespace coredcc

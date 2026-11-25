@@ -82,6 +82,7 @@ coredcc_test(test_graph_links SOURCES graph/test_graph_links.cc DEPS coredcc_gra
 coredcc_test(test_graph_incremental SOURCES graph/test_graph_incremental.cc DEPS coredcc_graph)
 coredcc_test(test_graph_reports SOURCES graph/test_graph_reports.cc DEPS coredcc_graph)
 coredcc_test(test_graph_index SOURCES graph/test_graph_index.cc DEPS coredcc_graph)
+coredcc_test(test_graph_kernels SOURCES graph/test_graph_kernels.cc DEPS coredcc_graph)
 coredcc_test(test_graph_growth SOURCES graph/test_graph_growth.cc DEPS coredcc_graph)
 coredcc_test(test_graph_random SOURCES graph/test_graph_random.cc DEPS coredcc_graph)
 coredcc_test(test_bind_meta SOURCES bind/test_bind_meta.cc DEPS coredcc_bind)

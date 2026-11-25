@@ -4,6 +4,7 @@
 #include "coredcc/graph/evaluator.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cstring>
 #include <string>
 
@@ -46,6 +47,41 @@ std::string NodePath::toString() const
     s += (i ? ", " : "[") + std::to_string(elements[i]);
   }
   return elements.size() > 0 ? s + "]" : s;
+}
+
+Result<NodePath> NodePath::parse(std::string_view text)
+{
+  const char *at = text.data(), *end = at + text.size();
+  auto number = [&](int64_t &out) {
+    const std::from_chars_result r = std::from_chars(at, end, out);
+    const bool ok = r.ec == std::errc();
+    at = ok ? r.ptr : at;
+    return ok;
+  };
+  auto skip = [&](std::string_view s) {
+    const bool there = std::string_view(at, size_t(end - at)).substr(0, s.size()) == s;
+    at += there ? s.size() : 0;
+    return there;
+  };
+  NodePath p;
+  bool ok = number(p.node.value) && p.node.value > 0;
+  while (ok && skip("/")) {
+    p.groups.append(p.node);
+    ok = number(p.node.value) && p.node.value > 0;
+  }
+  if (ok && skip("[")) {
+    do {
+      p.elements.append(0);
+      ok = number(p.elements.last());
+    } while (ok && skip(", "));
+    ok = ok && skip("]");
+  }
+  if (!ok || at != end) {
+    return Status::error(
+        StatusCode::InvalidArgument,
+        ("'" + std::string(text) + "' isn't the path of a node, as 12/34 or 12/34[7]").c_str());
+  }
+  return p;
 }
 
 SocketPath SocketPath::output(std::string_view nameOrKey)
@@ -176,6 +212,11 @@ Status GraphInstance::clear()
 Status GraphInstance::forget(const SocketPath &socket)
 {
   return e_->forget(socket);
+}
+
+Status GraphInstance::setMonitor(GraphMonitor monitor)
+{
+  return e_->setMonitor(std::move(monitor));
 }
 
 void GraphInstance::setUserData(void *data)
@@ -404,6 +445,13 @@ Status Evaluator::clear()
       inputs_.remove(id);
     }
   }
+  return Status();
+}
+
+Status Evaluator::setMonitor(GraphMonitor monitor)
+{
+  CDCC_TRY(rt_.busyIfEvaluating("GraphInstance::setMonitor"));
+  monitor_ = std::move(monitor);
   return Status();
 }
 

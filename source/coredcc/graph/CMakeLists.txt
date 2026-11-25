@@ -9,6 +9,7 @@ coredcc_library(coredcc_graph
     def_edit.cc
     def_io.cc
     dependents.cc
+    element_nodes.cc
     evaluator.cc
     exec_context.cc
     foreach.cc

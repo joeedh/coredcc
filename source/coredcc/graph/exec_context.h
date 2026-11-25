@@ -37,12 +37,25 @@ class ExecBlocks {
   ~ExecBlocks() = default;
 };
 
+/** What a kernel may ask of, and tell, the evaluation it is in. The evaluator's, or a test's. */
+class ExecMonitor {
+ public:
+  virtual bool cancelled() = 0;
+  virtual void progress(double fraction, std::string_view text) = 0;
+
+ protected:
+  ~ExecMonitor() = default;
+};
+
 /**
  * A kernel's inputs, params and outputs. Valid only during its `evaluate`.
  *
  * A kernel must be a pure function of what it reads here: the evaluator runs it again only
  * when some of that changed. It reads blocks with `useBlock` and `paramBlock` (and
  * `queryBlock`), which record them as dependencies, and writes only its outputs.
+ *
+ * An error that a kernel returns is kept as a value is, until something it read changes. Only
+ * Cancelled isn't: the node runs again in the next evaluation that needs it.
  */
 class NodeExecContext {
  public:
@@ -60,6 +73,7 @@ class NodeExecContext {
     std::span<const BlockId> paramBlocks;
     Library *library = nullptr;
     ExecBlocks *blocks = nullptr;
+    ExecMonitor *monitor = nullptr;
     void *userData = nullptr;
   };
   explicit NodeExecContext(const Setup &setup);
@@ -79,7 +93,21 @@ class NodeExecContext {
   {
     return s_.library;
   }
-  /** What the client gave GraphInstance::setUserData. Changing it runs no kernel. */
+  /** Whether the client wants the evaluation to end (GraphInstance::setMonitor). A kernel that
+   * takes long asks now and then, and returns Cancelled. */
+  bool cancelled() const
+  {
+    return s_.monitor && s_.monitor->cancelled();
+  }
+  /** Tells the client how far the kernel is, 0 to 1, and what it is doing. */
+  void progress(double fraction, std::string_view text = {})
+  {
+    if (s_.monitor) {
+      s_.monitor->progress(fraction, text);
+    }
+  }
+  /** What the client gave GraphInstance::setUserData. Changing it runs no kernel. The client
+   * changes nothing there that kernels read while it evaluates. */
   void *userData() const
   {
     return s_.userData;

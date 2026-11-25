@@ -8,6 +8,7 @@
 #include "coredcc/graph/def.h"
 #include "coredcc/graph/value.h"
 
+#include "litestl/util/function.h"
 #include "litestl/util/string.h"
 #include "litestl/util/vector.h"
 
@@ -40,6 +41,9 @@ struct NodePath {
   bool operator<(const NodePath &b) const;
   /** `12/34/56`, and with elements `12/34/56[7, 8]`. */
   std::string toString() const;
+  /** What toString gives; InvalidArgument for other text. Whether there is such a node isn't
+   * looked at. */
+  static Result<NodePath> parse(std::string_view text);
 };
 
 /** A socket of an instance: an interface output, or any socket of any node. */
@@ -125,6 +129,25 @@ struct NodeReport {
   int cachedElements = 0;
 };
 
+/** What a kernel said about how far it is. */
+struct GraphProgress {
+  NodePath node;
+  /** 0 to 1. */
+  double fraction = 0;
+  /** Valid during the call. */
+  std::string_view text;
+};
+
+/** What an instance asks and tells its client while it evaluates. The functions may be empty.
+ * They can't evaluate or edit (that is Busy). */
+struct GraphMonitor {
+  /** Whether to stop. Asked before each kernel and by kernels that take long. Once it says so,
+   * what is left of the evaluate call doesn't run: it is Cancelled, and runs in the next call
+   * that needs it. What was computed until then stays. */
+  litestl::util::function<bool()> cancelled;
+  litestl::util::function<void(const GraphProgress &)> progress;
+};
+
 /** What an instance evaluates: a graph block, or a def the client keeps alive. */
 struct GraphSource {
   GraphSource(BlockId id) : block(id) {}
@@ -182,7 +205,7 @@ class GraphInstance {
   /** Its error, or null. */
   const GraphError *error(const SocketPath &socket) const;
   /** False if a pull might give something new: an edit, the Library or an input moved since
-   * the socket was evaluated. Cheap. */
+   * the socket was evaluated, or that was Cancelled. Cheap. */
   bool isCurrent(const SocketPath &socket) const;
 
   /* Prepared sockets: for a client that evaluates the same ones again and again. They are
@@ -224,11 +247,13 @@ class GraphInstance {
   /** Drops everything evaluated. Inputs stay, but for those the interface doesn't have. */
   Status clear();
   /** Drops what a node keeps: its outputs, or all in its group or elements. It is computed
-   * again when something needs it. NotFound if nothing is kept of it, Unsupported for a path
-   * into an element. */
+   * again when something needs it. NotFound for a node that isn't there, or is in a group that
+   * wasn't evaluated; Unsupported for a path into an element. */
   Status drop(const NodePath &node);
   /** Drops what is kept of a socket for `value` and the calls with it. Caches stay. */
   Status forget(const SocketPath &socket);
+  /** For showing progress, stopping, or a time limit. Busy while a graph evaluates. */
+  Status setMonitor(GraphMonitor monitor);
   /** For kernels (NodeExecContext::userData). Not a dependency. */
   void setUserData(void *data);
   /** Groups an instance may hold (default 262,144), so a graph that doubles at each level

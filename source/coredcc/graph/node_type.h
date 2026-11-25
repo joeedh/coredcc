@@ -106,6 +106,7 @@ using SocketInfos = litestl::util::Vector<SocketInfo, 1>;
 /** An input of a node type. */
 struct NodeInputDef {
   litestl::util::string name;
+  litestl::util::string uiName;
   const SocketType *type = nullptr;
   /** The literal's def; null for a payload, which has no literal. Index into
    * NodeType::literalDefs, so payload inputs need no PropertyDef. */
@@ -117,6 +118,7 @@ struct NodeInputDef {
 /** An output of a node type. */
 struct NodeOutputDef {
   litestl::util::string name;
+  litestl::util::string uiName;
   const SocketType *type = nullptr;
 };
 
@@ -147,6 +149,10 @@ constexpr NodeTypeFlags operator|(NodeTypeFlags a, NodeTypeFlags b)
 {
   return NodeTypeFlags(uint32_t(a) | uint32_t(b));
 }
+constexpr NodeTypeFlags operator~(NodeTypeFlags a)
+{
+  return NodeTypeFlags(~uint32_t(a));
+}
 constexpr NodeTypeFlags operator&(NodeTypeFlags a, NodeTypeFlags b)
 {
   return NodeTypeFlags(uint32_t(a) & uint32_t(b));
@@ -170,6 +176,8 @@ struct NodeType {
   Owned<GraphKernel> kernel;
   /** Identifies this registration. */
   uint64_t stamp = 0;
+  /** Moves when the kernel is replaced. */
+  uint64_t kernelStamp = 0;
 
   /** These return -1 when there is none. */
   int inputIndex(std::string_view inputName) const;
@@ -194,7 +202,8 @@ struct NodeType {
  *         .kernel(std::move(kernel));
  *
  * An input's PropertyDef gives its socket type and describes its literal. Enum and Flags
- * values aren't socket types: make them params.
+ * values aren't socket types: make them params. Without a `uiName`, sockets are shown
+ * by one that is derived from their name, as properties are.
  */
 class NodeTypeDef {
  public:
@@ -207,8 +216,12 @@ class NodeTypeDef {
    * (GraphNode::typeVersion), in files too. */
   NodeTypeDef &version(uint32_t v);
   NodeTypeDef &input(PropertyDef def);
-  NodeTypeDef &payloadInput(std::string_view name, std::string_view socketType);
-  NodeTypeDef &output(std::string_view name, std::string_view socketType);
+  NodeTypeDef &payloadInput(std::string_view name,
+                            std::string_view socketType,
+                            std::string_view uiName = {});
+  NodeTypeDef &output(std::string_view name,
+                      std::string_view socketType,
+                      std::string_view uiName = {});
   /** A Pointer param refers to a block. With `weak`, it doesn't keep the block alive. */
   NodeTypeDef &param(PropertyDef def, bool weak = false);
   NodeTypeDef &kernel(Owned<GraphKernel> kernel);
@@ -217,6 +230,11 @@ class NodeTypeDef {
   {
     return name_;
   }
+  /** What was given to `input` or `param` under that name, to change it; null if none was. */
+  PropertyDef *inputDef(std::string_view name);
+  PropertyDef *paramDef(std::string_view name);
+  /** Sets the uiName of a socket; false if there is none of that name. */
+  bool setSocketUiName(bool output, std::string_view name, std::string_view uiName);
   /** A copy without the kernel. */
   NodeTypeDef copy() const;
   /** Bound without members: scripts use bind/'s facades. */
@@ -226,6 +244,7 @@ class NodeTypeDef {
   friend class NodeTypeRegistry;
   struct Input {
     litestl::util::string name;
+    litestl::util::string uiName;
     /** A payload input's socket type; else `def` gives it. */
     litestl::util::string payloadType;
     /** Index in literalDefs_, or -1. */
@@ -233,6 +252,7 @@ class NodeTypeDef {
   };
   struct Output {
     litestl::util::string name;
+    litestl::util::string uiName;
     litestl::util::string socketType;
   };
   litestl::util::string name_;
@@ -254,9 +274,15 @@ inline constexpr const char *kGraphForeachType = "graph.foreach";
 /**
  * Node types by name. A Runtime extension, created with the built-in ones: `graph.input`,
  * `graph.output`, `graph.group` and `graph.foreach`, `value.<socket type>` (a constant, in
- * its `value` param), `math.float`, `vec.combine`, `vec.separate` and `mat4.multiply`.
+ * its `value` param), `math.float`, `vec.combine`, `vec.separate` and `mat4.multiply`, and
+ * those for tables (graph/foreach.h):
+ * - `elements.range`: `count` elements, with the columns `index` and `factor` (0 to 1);
+ * - `elements.count`;
+ * - `elements.value.<socket type>`: the value of a column at an index;
+ * - `elements.rename`: renames a column;
+ * - `elements.combine`: a's rows, with b's columns.
  *
- * Types can't be replaced or removed. Registering is Busy while a graph evaluates, and
+ * Types can't be removed, and only their kernels replaced. Registering is Busy while a graph evaluates, and
  * counts as an edit, so nodes waiting for the type evaluate again.
  */
 class NodeTypeRegistry {
@@ -275,6 +301,15 @@ class NodeTypeRegistry {
    * defs and no Optional inputs, the version isn't 0, and there is a kernel and an output.
    */
   Result<const NodeType *> add(NodeTypeDef def);
+  /**
+   * Replaces the kernel of a registered type by that of `def`, for code that is reloaded. All
+   * nodes of the type run again when they are needed. FailedPrecondition unless the rest
+   * says the same as the type: the names, types and order of sockets and params, the items of
+   * enums, and the version. Texts, ranges and defaults aren't compared, and stay the type's.
+   */
+  Status replaceKernel(NodeTypeDef def);
+  /** What replaceKernel would say of `def`, but for its kernel. */
+  Status checkReplace(const NodeTypeDef &def) const;
   /** What `add` would say of `def`, but for its kernel. */
   Status checkDef(const NodeTypeDef &def) const;
   /** The type, or null. */
@@ -298,7 +333,7 @@ class NodeTypeRegistry {
 
  private:
   /** A type made of `def`, without its kernel. Owned by the caller (alloc::Delete). */
-  Result<NodeType *> build(const NodeTypeDef &def) const;
+  Result<NodeType *> build(const NodeTypeDef &def, bool replaces = false) const;
   Result<const NodeType *> store(NodeType *type);
 
   friend class GraphDef;
@@ -310,10 +345,5 @@ class NodeTypeRegistry {
   litestl::util::Vector<NodeType *> types_;
   litestl::util::Map<uint64_t, NodeType *> byId_;
 };
-
-namespace detail {
-/** Registers the built-in kernel types (builtin_nodes.cc). */
-void addBuiltinNodes(Runtime &rt, NodeTypeRegistry &reg);
-} // namespace detail
 
 } // namespace coredcc

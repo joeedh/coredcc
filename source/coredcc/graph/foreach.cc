@@ -363,6 +363,7 @@ ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &de
     if (!e) {
       s.shared = s.shared ? s.shared : newElement(0, nullptr);
       e = s.shared;
+      e->key = key;
     }
     e->run = k.runs;
     bool same = true;

@@ -102,6 +102,7 @@ class Evaluator {
   Status retry();
   Status clear();
   Status forget(const SocketPath &socket);
+  Status setMonitor(GraphMonitor monitor);
 
   GraphMemory memory() const;
   void setMaxFrames(int n)
@@ -146,6 +147,9 @@ class Evaluator {
   Status prepareCall();
   /** Not ok if the call went over the budget. */
   Status endCall();
+  /** Whether the client wants this call to stop. */
+  bool cancelled();
+  class Monitor;
   /** Pulls a socket into `p`, unless it goes over the budget. */
   void pull(const SocketPath &socket, Pulled &p, Status &status);
 
@@ -315,6 +319,11 @@ class Evaluator {
   uint64_t call_ = 0;
   litestl::util::Vector<LibraryPin, 4> pins_;
   bool running_ = false;
+  GraphMonitor monitor_;
+  /** What the client said once in this call. */
+  bool cancelled_ = false;
+  /** Nodes that were Cancelled in this call, outside of elements. */
+  litestl::util::Vector<Vertex> cancelledAt_;
   bool overBudget_ = false;
   std::string overBudgetAt_;
   /** The last call that went over the budget: its key, and its sockets up to the one that

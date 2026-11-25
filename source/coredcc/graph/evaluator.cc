@@ -28,7 +28,52 @@ bool sameError(const ErrorPtr &a, const ErrorPtr &b)
   return a == b || (a && b && *a == *b);
 }
 
+/* Whether a kernel was stopped, or gave Cancelled itself. (A conversion's is an error like
+ * others.) */
+bool isCancelled(const GraphError &e)
+{
+  return e.status.code() == StatusCode::Cancelled && e.socket.size() == 0;
+}
+
 } // namespace
+
+/** For the kernel of one node. */
+class Evaluator::Monitor final : public ExecMonitor {
+ public:
+  Monitor(Evaluator &e, const Frame &f, NodeId node) : e_(e), f_(f), node_(node) {}
+  bool cancelled() override
+  {
+    return e_.cancelled();
+  }
+  void progress(double fraction, std::string_view text) override
+  {
+    if (!e_.monitor_.progress) {
+      return;
+    }
+    GraphProgress p;
+    p.node = f_.pathOf(node_);
+    for (const Frame *f = &f_; f; f = f->parent) {
+      if (f->element) {
+        p.node.elements.append(f->element->key);
+      }
+    }
+    std::reverse(p.node.elements.begin(), p.node.elements.end());
+    p.fraction = fraction;
+    p.text = text;
+    e_.monitor_.progress(p);
+  }
+
+ private:
+  Evaluator &e_;
+  const Frame &f_;
+  NodeId node_;
+};
+
+bool Evaluator::cancelled()
+{
+  cancelled_ = cancelled_ || (monitor_.cancelled && monitor_.cancelled());
+  return cancelled_;
+}
 
 Evaluator::Evaluator(Runtime *rt, Library *lib, GraphSource source)
     : rt_(*rt), lib_(libraryRef(!lib && source.def ? source.def->library() : lib)),
@@ -85,6 +130,7 @@ Status Evaluator::prepareCall()
   numbers_ = 0;
   call_++;
   overBudget_ = false;
+  cancelled_ = false;
   running_ = true;
   pinDef(*root_);
   return Status();
@@ -95,8 +141,14 @@ Status Evaluator::endCall()
   running_ = false;
   pins_.clear();
   if (!overBudget_) {
+    /* To be looked at again, with all that depends on them, though nothing moved. */
+    for (const Vertex &v : cancelledAt_) {
+      markStale(v);
+    }
+    cancelledAt_.clear();
     return Status();
   }
+  cancelledAt_.clear();
   failedKey_ = passKey_;
   failed_ = Status::error(StatusCode::OutOfRange,
                           ("the graph needs more than " + std::to_string(maxFrames) +
@@ -379,7 +431,8 @@ const Evaluator::Pulled *Evaluator::result(const SocketPath &socket) const
 
 bool Evaluator::isCurrent(const Pulled &p) const
 {
-  return p.at == keyMoves_ && p.at != 0 && untouched(currentKey());
+  return p.at == keyMoves_ && p.at != 0 && !(p.error && isCancelled(*p.error)) &&
+         untouched(currentKey());
 }
 
 /* ---- the walk ---- */
@@ -772,7 +825,9 @@ void Evaluator::computeInput(Frame &f, int input)
 
 void Evaluator::settle(KernelState &k, ErrorPtr error, bool inputFailed)
 {
-  if (!k.visited || !sameError(k.error, error)) {
+  /* A Cancelled that comes and goes moves nothing: what it fed runs if the value is another. */
+  const bool passing = (error && isCancelled(*error)) || (k.error && isCancelled(*k.error));
+  if (!k.visited || (!passing && !sameError(k.error, error))) {
     const uint64_t version = rt_.nextVersion();
     for (KernelState::Output &o : k.outputs) {
       o.changedAt = version;
@@ -781,6 +836,12 @@ void Evaluator::settle(KernelState &k, ErrorPtr error, bool inputFailed)
   k.visited = true;
   k.inputFailed = inputFailed;
   k.error = std::move(error);
+  if (k.error && !inputFailed && isCancelled(*k.error)) {
+    k.ran = false;
+    if (k.frame->deps) {
+      cancelledAt_.append(Vertex{k.frame, k.index, true});
+    }
+  }
 }
 
 void Evaluator::computeKernel(Frame &f, int node)
@@ -794,7 +855,8 @@ void Evaluator::computeKernel(Frame &f, int node)
     Status status = rt_.ext<NodeTypeRegistry>().unknown(n.node->typeName().c_str());
     return settle(k, makeError(f, n.node->id(), std::move(status)), false);
   }
-  bool same = k.ran && k.trace.paramVersion == n.node->paramVersion();
+  bool same = k.ran && k.trace.paramVersion == n.node->paramVersion() &&
+              k.trace.kernel == n.type->kernelStamp;
   for (int i = 0; i < n.inCount; i++) {
     const InputState &s = f.inputs[n.inBegin + i];
     if (s.error) {
@@ -812,6 +874,7 @@ void Evaluator::computeKernel(Frame &f, int node)
   if (!same || !blocks_.current(k.trace)) {
     Trace trace;
     trace.paramVersion = n.node->paramVersion();
+    trace.kernel = n.type->kernelStamp;
     for (int i = 0; i < n.inCount; i++) {
       trace.inputs.append(f.inputs[n.inBegin + i].origin);
     }
@@ -829,6 +892,11 @@ void Evaluator::computeKernel(Frame &f, int node)
 void Evaluator::run(Frame &f, int node, KernelState &k, Trace trace)
 {
   const GraphTopology::Node &n = f.topo->nodes[node];
+  if (cancelled()) {
+    k.runError = makeError(
+        f, n.node->id(), Status::error(StatusCode::Cancelled, "the evaluation was cancelled"));
+    return; /* what it has from before stays, to be compared with */
+  }
   Vector<NodeExecContext::Input> inputs;
   for (int i = 0; i < n.inCount; i++) {
     inputs.append(NodeExecContext::Input{f.inputs[n.inBegin + i].value,
@@ -850,6 +918,8 @@ void Evaluator::run(Frame &f, int node, KernelState &k, Trace trace)
   setup.paramBlocks = {blocks.data(), size_t(blocks.size())};
   setup.library = lib_.get();
   setup.blocks = &recorder;
+  Monitor monitor(*this, f, n.node->id());
+  setup.monitor = &monitor;
   setup.userData = userData;
   NodeExecContext ctx(setup);
 

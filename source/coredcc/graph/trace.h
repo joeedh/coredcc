@@ -120,6 +120,8 @@ struct QueryDep {
 /** A node's type isn't part of it: a node whose type changed has new state. */
 struct Trace {
   uint64_t paramVersion = 0;
+  /** NodeType::kernelStamp. */
+  uint64_t kernel = 0;
   litestl::util::Vector<TraceInput, 2> inputs;
 
   /** What most kernels have none of. */
