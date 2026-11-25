@@ -676,7 +676,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 ## Implementation notes
 
 ### Step 0
-- litestl PR #14 (`coredcc/math`). Deviations: `planeToLocal` instead of `transformPlane`; the
+- litestl PR #14 (`coredcc/math`; merged, e36c8fd). Deviations: `planeToLocal` instead of `transformPlane`; the
   bindings are in `matrix_bindings.h`, because `binding.h` includes the existing
   `math_bindings.h` everywhere and `matrix.h` brings in Eigen.
 
@@ -717,7 +717,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   pointers, which litestl's dispatch refuses on the call.
 
 ### Step 5
-- **Needs litestl PR #14.**
+- **Needed litestl PR #14 (merged, e36c8fd).**
 - `draw` depends on `bvh`, for `Ray` and `BvhPlane`.
 - **`validate()` checks handedness with one determinant:** normalized device coordinates (x right, y
   up, depth away from the eye) are left-handed, so the sign of det(proj · view), flipped for
@@ -737,7 +737,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 - Survivor: unproject's zero test at infinity. The inverse's entries cancel exactly in every test.
 
 ### Step 6
-- **Needs litestl PR #14.**
+- **Needed litestl PR #14 (merged, e36c8fd).**
 - **`solveWorld(type, current, target, parent, mode)` and `solveDelta`** are the model-level halves
   of `setWorldOf`. Step 7 adds the ones that take an object, and `computeState`.
 - **The Matrix type has 12 channels** (three columns and a translation), not 16. A state's world is
@@ -766,7 +766,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   - each model's own check of the parent, which `solveWorld` and `solveDelta` make first.
 
 ### Step 7
-- **Needs litestl PR #14.**
+- **Needed litestl PR #14 (merged, e36c8fd).**
 - **Files:** `capabilities.h object.{h,cc} scene.{h,cc} evaluator.{h,cc} evaluated.{h,cc}`. The API
   structs are with their types, so there is no `api.cc`.
 - **`Transformable` has one more optional slot,** `setTransformTypeId`, for
@@ -816,7 +816,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   and the Live checks of revalidation, which null data shows too.
 
 ### Step 8
-- **Needs litestl PR #14.**
+- **Needed litestl PR #14 (merged, e36c8fd).**
 - **Files:** `commands.h membership_commands.cc transform_commands.cc object_changes.cc`.
   `registerSceneCommands` registers the types, these commands and the block commands.
 - **Until step 10's `objects` input,** `core.scene.select` takes one `object`. `ALL` leaves out
@@ -844,7 +844,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
     everything again.
 
 ### Step 9
-- **Needs litestl PR #14.**
+- **Needed litestl PR #14 (merged, e36c8fd).**
 - **Files:** `scene_bvh.{h,cc} pick.{h,cc} outline.{h,cc}`; tests `test_scene_outline`,
   `test_scene_pick`, `test_scene_bvh`.
 - **`pickScene(ctx, scene, view, x, y, radius, filter, hits) -> Status`** instead of a Result: a
@@ -890,7 +890,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   - errors taken right after the first two interface calls: they are taken later as well.
 
 ### Step 10
-- **Needs litestl PR #14.** This part is transform types, the facades and the `objects` input. What
+- **Needed litestl PR #14 (merged, e36c8fd).** This part is transform types, the facades and the `objects` input. What
   scripts need for picking follows with the BVH review's fixes.
 - **Files:** `bind/foreign_transform.{h,cc} scene_facades.{h,cc} ts/scene.ts`; tests
   `test_bind_scene`, `test_scene_objects`, `tests/wasm/scene.test.ts`. `run.mjs` runs both TS suites.
@@ -926,7 +926,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   is gone (ApplyDelta kept a Library of its own).
 
 ### BVH, View and picking: the review's fixes
-- **Findings and resolutions:** `docs/reports/feature-report-bvh-2026-11-25.md`. Needs litestl PR #14.
+- **Findings and resolutions:** `docs/reports/feature-report-bvh-2026-11-25.md`. Needed litestl PR #14 (merged, e36c8fd).
 - **The ranking rule changed** (it was "ray hits before misses"):
   1. Thin shapes (points, segments, and solids up to `thinRadius` pixels wide) that aren't behind the
      occluder: by distance, then dimension, then depth.
@@ -975,7 +975,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
     solids, checks that the BVH's own validation repeats).
 
 ### Step 11
-- **Needs litestl PR #14.** Files: `scene/channel_io.{h,cc}`, `Object::write/readFrom`,
+- **Needed litestl PR #14 (merged, e36c8fd).** Files: `scene/channel_io.{h,cc}`, `Object::write/readFrom`,
   `Scene::write/readFrom/duplicate`; test `test_scene_io`. Both block types are `Payload` now.
 - **An Object's payload:** the transform type's name, flags, parent, data, the channels as entries by name,
   and plain numbers. Enums are their items' keys. Numbers are only for channels that have no
@@ -1002,7 +1002,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   The 2 were written again and are found.
 
 ### Step 12
-- **Needs litestl PR #14.** Files: `props/unit_settings.{h,cc}`, `props/unit_text.h` (shared with
+- **Needed litestl PR #14 (merged, e36c8fd).** Files: `props/unit_settings.{h,cc}`, `props/unit_text.h` (shared with
   `units.cc`), `api/format.{h,cc}`, `Context::units()`; tests `test_props_unit_settings` and
   `test_scene_units`.
 - **`FrameRate`** is a fraction in lowest terms, 1/1000 to 1,000,000. 29.97, 23.976, 23.98 and the like are
