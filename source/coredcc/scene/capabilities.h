@@ -39,6 +39,9 @@ struct ObjectInfo {
   BlockId data;
   /** ObjectFlags. */
   uint32_t flags = 0;
+  /** Bit i: channel i is locked. A lock keeps tools from changing it (applyDelta, setWorld); commands
+   * that keep an object where it is (keepWorld), the datapath and scripts still change it. */
+  uint64_t locks = 0;
 
   static litestl::binding::types::Struct<ObjectInfo> *defineBindings();
 };
@@ -49,7 +52,9 @@ struct ObjectInfo {
  * - `read` gives everything at once; `info` and `channels` hold other objects' values before.
  * - `writeChannels` stores channels. Callers use writeTransform, which also tells watchers.
  * - `setParentId` (optional) and `setTransformTypeId` (optional) store an id; the caller does
- *   the rest (writeParent, and writeTransform with the type's channels).
+ *   the rest (writeParent, and writeTransform with the type's channels). Another transform type has no
+ *   locks.
+ * - `setFlags` (optional) and `setLocks` (optional) store what ObjectInfo has (writeFlags, writeLocks).
  */
 struct Transformable : IfaceRef {
   void read(ObjectInfo &info, ChannelBlock &channels) const
@@ -77,12 +82,31 @@ struct Transformable : IfaceRef {
     return CDCC_CALL(setTransformTypeId, type);
   }
 
+  bool hasSetFlags() const
+  {
+    return CDCC_HAS(setFlags);
+  }
+  Status setFlags(uint32_t flags)
+  {
+    return CDCC_CALL(setFlags, flags);
+  }
+  bool hasSetLocks() const
+  {
+    return CDCC_HAS(setLocks);
+  }
+  Status setLocks(uint64_t locks)
+  {
+    return CDCC_CALL(setLocks, locks);
+  }
+
   CDCC_INTERFACE(Transformable, "coredcc::Transformable")
   {
     BIND_STRUCT_METHOD(st, read, MARGS("info", "channels"));
     BIND_STRUCT_METHOD(st, writeChannels, MARGS("channels"));
     BIND_OPTIONAL_METHOD(st, setParentId, MARGS("parent"));
     BIND_OPTIONAL_METHOD(st, setTransformTypeId, MARGS("type"));
+    BIND_OPTIONAL_METHOD(st, setFlags, MARGS("flags"));
+    BIND_OPTIONAL_METHOD(st, setLocks, MARGS("locks"));
   }
 };
 

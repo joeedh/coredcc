@@ -139,6 +139,22 @@ class TransformRegistry {
   litestl::util::Map<uint64_t, TransformType *> byId_;
 };
 
+/** The point that an object turns about, in world space (TransformModel's `pivot`). */
+Result<double3> transformPivot(const TransformType &type,
+                               const EvalCtx &ctx,
+                               const TransformState &parent);
+
+/** Whether a solution would have changed channels that are fixed. */
+struct FixedChannels {
+  bool locked = false;
+  bool driven = false;
+
+  bool any() const
+  {
+    return locked || driven;
+  }
+};
+
 /* The checked ways to call a model. All are FailedPrecondition while the Runtime has a sticky
  * error, and for a ChannelBlock of the wrong size; a foreign model's exception is returned, not
  * left as the sticky error. */
@@ -161,12 +177,15 @@ Result<TransformState> evaluateTransform(const TransformType &type,
  * - Closest: only the translation is compared; shear is lost.
  * - A parent without an inverse is FailedPrecondition in both modes, and so is a result that
  *   isn't finite. A target with a scale of 0 is fine.
+ * - Fixed channels (EvalCtx::isFixed) come back as they are stored, and the rest is what it would be
+ *   without them. When one was in the way, Exact fails, and Closest doesn't compare the translation.
  */
 Result<ChannelBlock> solveWorld(const TransformType &type,
                                 const EvalCtx &current,
                                 const mat4d &target,
                                 const TransformState &parent,
-                                SetWorldMode mode);
+                                SetWorldMode mode,
+                                FixedChannels *fixed = nullptr);
 
 /** Applies `delta`, the total since `base`. `nearTo` is the previous result of the interaction,
  * or base's channels: Euler angles stay continuous with it.
@@ -174,11 +193,16 @@ Result<ChannelBlock> solveWorld(const TransformType &type,
  * A scale that the channels can hold exactly (within 1e-9) is exact. So is a mirror (factors of 1 and
  * -1, or of one size), but under parents with shear. Other factors along other axes than the object's
  * would shear it: then its scales are multiplied by the sizes of the factors along its own axes,
- * after the mirror that their signs are. */
+ * after the mirror that their signs are.
+ *
+ * Fixed channels come back as they are stored in `base`, and the rest is what it would be without them:
+ * an object whose x is locked follows a translation along y. That isn't an error, also when nothing is
+ * left to change. */
 Result<ChannelBlock> solveDelta(const TransformType &type,
                                 const EvalCtx &base,
                                 const ChannelBlock &nearTo,
                                 const TransformDelta &delta,
-                                const TransformState &parent);
+                                const TransformState &parent,
+                                FixedChannels *fixed = nullptr);
 
 } // namespace coredcc

@@ -99,6 +99,15 @@ TransformState Fbx::evaluate(const EvalCtx &ctx, const TransformState &parent) c
                     n.scale);
 }
 
+/* The rotation pivot. With the inherit types that don't turn within the parent's scale, its own
+ * rotation channels turn the node about another point. */
+double3 Fbx::pivot(const EvalCtx &ctx, const TransformState &parent) const
+{
+  const double3 local = readVec3(ctx, fbx::kTranslation) + readVec3(ctx, fbx::kRotationOffset) +
+                        readVec3(ctx, fbx::kRotationPivot);
+  return litestl::math::transformPoint(parent.world, local);
+}
+
 Status Fbx::setWorld(const EvalCtx &current,
                      const mat4d &target,
                      const TransformState &parent,
@@ -215,6 +224,7 @@ litestl::binding::types::Struct<Fbx> *Fbx::defineBindings()
     BIND_STRUCT_METHOD(st, evaluate, MARGS("ctx", "parent"));
     BIND_STRUCT_METHOD(st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
     BIND_STRUCT_METHOD(st, applyDelta, MARGS("base", "nearTo", "delta", "parent", "out"));
+    BIND_STRUCT_METHOD(st, pivot, MARGS("ctx", "parent"));
   }
   return st;
 }

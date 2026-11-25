@@ -41,7 +41,9 @@ struct TransformState {
 enum class SetWorldMode : int32_t {
   /** The target exactly (within the tolerances of solveWorld), or an error. */
   Exact = 0,
-  /** Without what the model can't represent (shear, usually). */
+  /** Without what the model can't represent (shear, usually). It isn't the closest by a norm: the
+   * built-in models fit the rotation to the two most independent columns of the target, and choose the
+   * scales for that rotation. The translation is exact. */
   Closest = 1,
 };
 
@@ -88,11 +90,15 @@ struct TransformDelta {
  *   finite.
  * - `setWorld` finds channels that put the object at `target`. `out` starts as a copy of
  *   `current`; channels that don't matter are left as they are. The caller checks the result
- *   (solveWorld), so a model may return its nearest solution without measuring it.
+ *   (solveWorld), so a model may return its nearest solution without measuring it. It also puts back
+ *   the channels that are fixed (EvalCtx::isFixed), so a model needn't look at that; one that does can
+ *   find a better solution with the others.
  * - `applyDelta` (optional) applies `delta` to `base`. `nearTo` is the previous result of the
  *   same interaction (or `base`): where several channel values mean the same, such as Euler
  *   angles, the ones nearest to it are wanted. `out` starts as a copy of `nearTo`. Without the
  *   slot, setWorld in Closest mode is used.
+ * - `pivot` (optional) is the point, in world space, that the model turns about: a gizmo's place. It
+ *   is the translation of the object's matrix without the slot.
  * - `upgrade` (optional) changes what a file has of version `version` to what this build's
  *   channels are (TransformTypeInfo::version). After an error the object keeps the file's channels
  *   unread, and its status is Invalid.
@@ -123,6 +129,15 @@ struct TransformModel : IfaceRef {
     return CDCC_CALL(applyDelta, base, nearTo, delta, parent, out);
   }
 
+  bool hasPivot() const
+  {
+    return CDCC_HAS(pivot);
+  }
+  litestl::math::double3 pivot(const EvalCtx &ctx, const TransformState &parent) const
+  {
+    return CDCC_CALL(pivot, ctx, parent);
+  }
+
   bool hasUpgrade() const
   {
     return CDCC_HAS(upgrade);
@@ -138,6 +153,7 @@ struct TransformModel : IfaceRef {
     BIND_STRUCT_METHOD(st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
     BIND_OPTIONAL_METHOD(
         st, applyDelta, MARGS("base", "nearTo", "delta", "parent", "out"));
+    BIND_OPTIONAL_METHOD(st, pivot, MARGS("ctx", "parent"));
     BIND_OPTIONAL_METHOD(st, upgrade, MARGS("version", "channels"));
   }
 };

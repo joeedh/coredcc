@@ -133,7 +133,7 @@ PropValue corner(const Box3d &b, bool max)
                PropValue::ofVec3(b.min[0], b.min[1], b.min[2]);
 }
 
-ApiStruct objectStruct()
+ApiStruct resultStruct()
 {
   ApiStruct st(kEvaluatedObjectStruct);
   st.uiName("Evaluated Object");
@@ -173,7 +173,7 @@ OwnerKey evaluatedOwner(Runtime &rt)
 Status registerEvaluated(Runtime &rt)
 {
   ApiRegistry &api = rt.ext<ApiRegistry>();
-  CDCC_TRY(api.add(objectStruct()).status());
+  CDCC_TRY(api.add(resultStruct()).status());
   CDCC_TRY(api.add(sceneStruct()).status());
   EvaluatedKeys *keys = &rt.ext<EvaluatedKeys>();
   Result<OwnerKey> owner = api.addRuntimeOwner(

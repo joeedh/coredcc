@@ -37,6 +37,7 @@ struct Fbx {
                     const TransformDelta &delta,
                     const TransformState &parent,
                     ChannelBlock &out) const;
+  double3 pivot(const EvalCtx &ctx, const TransformState &parent) const;
   static litestl::binding::types::Struct<Fbx> *defineBindings();
 };
 

@@ -6,6 +6,7 @@
 #include "coredcc/command/executor.h"
 #include "coredcc/scene/kept_worlds.h"
 #include "coredcc/scene/models.h"
+#include "coredcc/scene/object_command.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/map.h"
@@ -38,6 +39,7 @@ Result<ChannelBlock> solveKeeping(const TransformType &type,
 
 namespace {
 
+using detail::ChangesCommand;
 using detail::SceneOf;
 using detail::HandleSet;
 
@@ -95,33 +97,6 @@ template <class Stop> Result<Walk> walkUp(const Library &lib, BlockHandle h, Sto
   return p.ok() ? Result<Walk>(w) : Result<Walk>(p.status());
 }
 
-#define BIND_OBJECT_COMMAND(st)                                                          \
-  BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));                                          \
-  BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));                                            \
-  BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));                                            \
-  BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));                                            \
-  BIND_STRUCT_METHOD(st, memSize, MARGS());                                              \
-  BIND_STRUCT_METHOD(st, discard, MARGS())
-
-/* The parts that all of them share. */
-struct ChangesCommand {
-  ObjectChanges changes;
-
-  void undo(Context &ctx)
-  {
-    changes.undo(ctx);
-  }
-  Status redo(Context &ctx)
-  {
-    return changes.redo(ctx);
-  }
-  uint64_t memSize() const
-  {
-    return sizeof(*this) + changes.memSize();
-  }
-  void discard() {}
-};
-
 void setApproximate(Context &ctx, int n)
 {
   ctx.outputs()->set("approximate", PropValue::ofInt(n)).ignore();
@@ -140,7 +115,7 @@ Result<ChannelBlock> solveKeeping(const TransformType &type,
       detail::solveKeeping(type, current, state.world, parent, approximate);
   otherwise = otherwise || approximate > before;
   if (c.ok()) {
-    Result<TransformState> now = evaluateTransform(type, EvalCtx(*c, current.time()), parent);
+    Result<TransformState> now = evaluateTransform(type, current.withChannels(*c), parent);
     otherwise = otherwise || !now.ok() || detail::inheritsOtherwise(state, *now);
   }
   return c;
@@ -231,7 +206,7 @@ struct SetParent : ChangesCommand {
                                    int &approximate,
                                    bool &otherwise)
   {
-    Result<ObjectRead> r = readObject(lib, h);
+    Result<ObjectRead> r = readObjectAt(lib, h, time);
     if (!r.ok()) {
       return r.status();
     }
@@ -250,7 +225,7 @@ struct SetParent : ChangesCommand {
       return failed("its transform type isn't registered");
     }
     return solveKeeping(
-        *r->type, EvalCtx(r->channels, time), *world, parent, approximate, otherwise);
+        *r->type, r->ctx(), *world, parent, approximate, otherwise);
   }
   static lbt::Struct<SetParent> *defineBindings()
   {
@@ -294,7 +269,7 @@ struct SetTransformType : ChangesCommand {
     int done = 0;
     detail::StateCache states(*s.lib, time);
     for (BlockHandle h : objects) {
-      Result<ObjectRead> r = readObject(*s.lib, h);
+      Result<ObjectRead> r = readObjectAt(*s.lib, h, time);
       if (r.ok() && r->info.transformType == id && r->channels.size() == type.channelCount()) {
         done++; /* it has the type */
         continue;
@@ -526,7 +501,7 @@ struct DeleteObjects : ChangesCommand {
                   int &approximate)
   {
     const Library &lib = *ctx.library();
-    Result<ObjectRead> r = readObject(lib, c.object);
+    Result<ObjectRead> r = readObjectAt(lib, c.object, time);
     Result<TransformState> parent =
         c.parent ? parents.parentState(c.parent) : Result<TransformState>(TransformState());
     const Status failure = r.ok() ? parent.status() : r.status();
@@ -540,7 +515,7 @@ struct DeleteObjects : ChangesCommand {
     ChannelBlock channels;
     if (r->type) {
       Result<ChannelBlock> solved = detail::solveKeeping(
-          *r->type, EvalCtx(r->channels, time), c.world.world, *parent, approximate);
+          *r->type, r->ctx(), c.world.world, *parent, approximate);
       if (solved.ok()) {
         channels = std::move(*solved);
         v.channels = &channels;
@@ -566,172 +541,7 @@ struct DeleteObjects : ChangesCommand {
   }
 };
 
-TransformDelta deltaInputs(Context &ctx)
-{
-  const PropertyBag &in = *ctx.inputs();
-  const auto vec = [&in](const char *name) {
-    const PropValue v = *in.get(name);
-    return double3(v.component(0), v.component(1), v.component(2));
-  };
-  TransformDelta d;
-  d.kind = DeltaKind(in.get("kind")->asEnum());
-  const PropValue basis = *in.get("basis");
-  for (int i = 0; i < 4; i++) {
-    d.basis[i] = basis.component(i);
-  }
-  d.pivot = vec("pivot");
-  d.vector = vec("vector");
-  d.axis = vec("axis");
-  d.angle = in.get("angle")->asFloat();
-  return d;
-}
-
-CommandDef deltaDef(const char *name, const char *uiName)
-{
-  CommandDef def(name);
-  const double z[] = {0, 0, 1};
-  def.uiName(uiName)
-      .input(PropertyDef::enumProp("kind")
-                 .item("TRANSLATE", int64_t(DeltaKind::Translate))
-                 .item("ROTATE", int64_t(DeltaKind::Rotate))
-                 .item("SCALE", int64_t(DeltaKind::Scale)))
-      .input(PropertyDef::quatProp("basis").defaultValue(PropValue::ofQuat(0, 0, 0, 1)))
-      .input(PropertyDef::vecProp("pivot", 3)
-                 .subtype(PropSubtype::Distance)
-                 .unit(UnitFamily::Length))
-      .input(PropertyDef::vecProp("vector", 3))
-      .input(PropertyDef::vecProp("axis", 3).defaultValue(
-          PropValue::ofComponents(PropValue::Type::Vec3, z)))
-      .input(PropertyDef::floatProp("angle").subtype(PropSubtype::Angle).unit(UnitFamily::Angle))
-      .input(detail::objectsInput())
-      .output(PropertyDef::intProp("skipped"));
-  return def;
-}
-
 } // namespace
-
-/* ---- applyDelta ---- */
-
-Status ApplyDelta::canRun(Context &ctx) const
-{
-  return detail::targetObjects(ctx).status();
-}
-
-Status ApplyDelta::exec(Context &ctx)
-{
-  const SceneOf s = *detail::sceneOf(ctx);
-  const Vector<BlockHandle> objects = *detail::targetObjects(ctx);
-  const TransformDelta delta = deltaInputs(ctx);
-  time_ = s.scene->time();
-  detail::Skips skips;
-  Vector<Base> usable;
-  HandleSet moved;
-  detail::StateCache states(*s.lib, time_);
-  for (BlockHandle h : objects) {
-    Result<Base> b = baseOf(*s.lib, states, h, delta);
-    if (!b.ok()) {
-      CDCC_TRY(skips.add(*s.lib, h, b.status()));
-      continue;
-    }
-    usable.append(std::move(*b));
-    moved.add(h, 0);
-  }
-  detail::Ancestry ancestry(*s.lib, moved);
-  for (Base &b : usable) {
-    Result<bool> below = ancestry.below(b.object);
-    if (!below.ok()) {
-      return detail::about(*s.lib, b.object, below.status());
-    }
-    if (!*below) {
-      bases_.append(std::move(b));
-    }
-  }
-  unusable_ = skips.count();
-  CDCC_TRY(skips.outcome(int(bases_.size())));
-  Status done = update(ctx, delta);
-  skips.output(ctx);
-  return done;
-}
-
-/* An object that the delta can be applied to. */
-Result<ApplyDelta::Base> ApplyDelta::baseOf(const Library &lib,
-                                            detail::StateCache &states,
-                                            BlockHandle h,
-                                            const TransformDelta &delta) const
-{
-  Result<ObjectRead> r = readObject(lib, h);
-  Result<TransformState> parent = r.ok() ? states.stateAbove(h, *r) : r.status();
-  if (!parent.ok()) {
-    return parent.status();
-  }
-  if (!r->type) {
-    return failed("its transform type isn't registered");
-  }
-  Result<ChannelBlock> c =
-      solveDelta(*r->type, EvalCtx(r->channels, time_), r->channels, delta, *parent);
-  if (!c.ok()) {
-    return c.status();
-  }
-  Base b;
-  b.object = h;
-  b.type = r->info.transformType;
-  b.parent = *parent;
-  b.solved = std::move(*c);
-  return b;
-}
-
-Status ApplyDelta::update(Context &ctx, const TransformDelta &delta)
-{
-  const bool first = changes_.size() == 0;
-  const Library &lib = *ctx.library();
-  detail::Skips skips;
-  Vector<ChannelBlock> channels;
-  for (int i = 0; i < int(bases_.size()); i++) {
-    Base &b = bases_[i];
-    if (first) { /* exec's delta */
-      channels.append(std::move(b.solved));
-      b.solved = ChannelBlock();
-      continue;
-    }
-    const TransformType *type = ctx.runtime().ext<TransformRegistry>().find(b.type);
-    const ChannelBlock &last = changes_.after(i);
-    Result<ChannelBlock> c =
-        solveDelta(*type, EvalCtx(changes_.before(i), time_), last, delta, b.parent);
-    if (!c.ok()) {
-      CDCC_TRY(skips.add(lib, b.object, c.status()));
-    }
-    channels.append(c.ok() ? std::move(*c) : last);
-  }
-  CDCC_TRY(skips.outcome(int(bases_.size()) - skips.count()));
-  Vector<ChannelBlock> previous;
-  for (int i = 0; i < int(bases_.size()); i++) {
-    if (first) {
-      ObjectChanges::Values v;
-      v.channels = &channels[i];
-      CDCC_TRY(changes_.write(ctx, bases_[i].object, v));
-      continue;
-    }
-    previous.append(changes_.after(i));
-    if (Status s = changes_.rewrite(ctx, i, channels[i]); !s.ok()) {
-      for (int k = 0; k <= i; k++) {
-        changes_.rewrite(ctx, k, previous[k]).ignore();
-      }
-      return detail::about(lib, bases_[i].object, s);
-    }
-  }
-  skipped_ = unusable_ + skips.count();
-  return Status();
-}
-
-lbt::Struct<ApplyDelta> *ApplyDelta::defineBindings()
-{
-  static lbt::Struct<ApplyDelta> *st = nullptr;
-  if (!st) {
-    st = new lbt::Struct<ApplyDelta>("coredcc::ApplyDeltaCommand", sizeof(ApplyDelta));
-    BIND_OBJECT_COMMAND(st);
-  }
-  return st;
-}
 
 Status detail::registerTransformCommands(Runtime &rt)
 {
@@ -766,10 +576,8 @@ Status detail::registerTransformCommands(Runtime &rt)
       .output(skipped());
   CDCC_TRY(addCommandOnce<SetRotationMode>(rt, std::move(mode)));
 
-  CDCC_TRY(addCommandOnce<ApplyDelta>(rt, deltaDef(kApplyDeltaCommand, "Transform")));
-  CommandDef drag = deltaDef(kDragDeltaCommand, "Transform (Drag)");
-  drag.flags(CommandFlags::Interactive | CommandFlags::Private);
-  CDCC_TRY(addCommandOnce<ApplyDelta>(rt, std::move(drag)));
+  CDCC_TRY(registerDeltaCommands(rt));
+  CDCC_TRY(registerObjectCommands(rt));
 
   CommandDef del(kDeleteObjectsCommand);
   del.uiName("Delete Objects")

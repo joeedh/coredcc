@@ -21,6 +21,8 @@
 #include "coredcc/scene/pending_writes.h"
 #include "coredcc/scene/scene.h"
 
+#include <span>
+
 namespace coredcc {
 
 namespace detail {
@@ -60,10 +62,21 @@ inline constexpr const char *kSetTransformTypeCommand = "core.object.setTransfor
  * are skipped. */
 inline constexpr const char *kSetRotationModeCommand = "core.object.setRotationMode";
 /** A TransformDelta (`kind`, `basis`, `pivot`, `vector`, `axis`, `angle`). Objects below another
- * of them move with it, and aren't changed themselves. */
+ * of them move with it, and aren't changed themselves. With a `gesture` (beginGesture), one that follows
+ * another of the same gesture, on the same objects, is one step with it: for the arrow keys. Outputs
+ * `locked` and `driven`: see ApplyDelta. */
 inline constexpr const char *kApplyDeltaCommand = "core.object.applyDelta";
 /** The same as an Interactive command: see ApplyDelta. */
 inline constexpr const char *kDragDeltaCommand = "core.object.dragDelta";
+/** `matrices`: 16 numbers, column by column, for each of `objects`, which must be given and name none
+ * twice: where they are to be, parents first. `mode`: EXACT, or CLOSEST, which the output `approximate`
+ * counts. Locked channels stay. */
+inline constexpr const char *kSetWorldCommand = "core.object.setWorld";
+/** `flags` (HIDDEN, UNSELECTABLE), and whether they are `on`. */
+inline constexpr const char *kSetFlagsCommand = "core.object.setFlags";
+/** `channels`: names with spaces between, of channels or of one component ("location.0"); all of them
+ * if it is empty. `on`: whether they are locked. See ObjectInfo::locks. */
+inline constexpr const char *kSetLocksCommand = "core.object.setLocks";
 /** `keepChildrenWorld`: first, Live children that stay are given to their nearest ancestor that
  * stays. Then one core.block.delete for all. Outputs `count` and `approximate`. */
 inline constexpr const char *kDeleteObjectsCommand = "core.object.delete";
@@ -86,6 +99,8 @@ class ObjectChanges {
     /** With channels of the type. */
     const TypeId *type = nullptr;
     const BlockId *parent = nullptr;
+    const ObjectFlags *flags = nullptr;
+    const uint64_t *locks = nullptr;
   };
   /** Writes what isn't null. A failure takes everything back, also of earlier calls. */
   Status write(Context &ctx, BlockHandle object, const Values &values);
@@ -95,6 +110,11 @@ class ObjectChanges {
   void undo(Context &ctx);
   /** All or nothing. */
   Status redo(Context &ctx);
+  /** Takes over what `next` wrote, if that is of the same objects and fields, and began where this ended.
+   * False, with nothing changed, if it isn't. */
+  bool foldFrom(const ObjectChanges &next);
+  /** Whether a channel that was written is different now. */
+  bool channelsChanged() const;
 
   int size() const
   {
@@ -133,6 +153,11 @@ class ObjectChanges {
  *     executor.updateInteractive(ctx, [&](Context &c, Command &cmd) {
  *       return cmd.as<ApplyDelta>()->update(c, delta);
  *     });
+ *
+ * A tool that began one for a click and has nothing `changed` cancels it, so that there is no empty step.
+ * One that gives each object a delta of its own asks `startState` and `startPivot` for what those depend
+ * on. Its record's inputs don't tell what it did then: redo writes the stored values, but running the
+ * command with the same inputs again does nothing.
  */
 class ApplyDelta {
  public:
@@ -140,10 +165,47 @@ class ApplyDelta {
    * as it is (`skipped`); it fails, and changes nothing, when that is all of them, or when one can't be
    * written. */
   Status update(Context &ctx, const TransformDelta &delta);
+  /** The same with a delta for each object, as `object` has them: snapping each to a grid, turning each
+   * about itself, or moving some less than others. InvalidArgument for another number of them. */
+  Status update(Context &ctx, std::span<const TransformDelta> deltas);
+
+  /** The objects that it changes: those that aren't below another, and were usable at the start. */
+  int count() const
+  {
+    return int(bases_.size());
+  }
+  BlockHandle object(int i) const
+  {
+    return bases_[i].object;
+  }
+  /** The state of the object's parent at the start. */
+  const TransformState &startParent(int i) const
+  {
+    return bases_[i].parent;
+  }
+  /** The state of the object at the start, and the point that it turned about. */
+  Result<TransformState> startState(const Context &ctx, int i) const;
+  Result<double3> startPivot(const Context &ctx, int i) const;
+  /** Whether an object's channels are others than at the start. */
+  bool changed() const
+  {
+    return changes_.channelsChanged();
+  }
+
   /** How many objects the last `update` left out, with those that were left out at the start. */
   int skipped() const
   {
     return skipped_;
+  }
+  /** How many objects the last `update` couldn't move all the way: locked channels were in the way, or
+   * driven ones. They are moved by the others. */
+  int locked() const
+  {
+    return locked_;
+  }
+  int driven() const
+  {
+    return driven_;
   }
 
   Status canRun(Context &ctx) const;
@@ -161,6 +223,8 @@ class ApplyDelta {
     return sizeof(*this) + changes_.memSize();
   }
   void discard() {}
+  uint64_t foldKey() const;
+  bool foldFrom(Command next);
   static litestl::binding::types::Struct<ApplyDelta> *defineBindings();
 
  private:
@@ -168,8 +232,22 @@ class ApplyDelta {
     BlockHandle object;
     TypeId type;
     TransformState parent;
+    /* At the start: what its solutions can't change. */
+    ChannelOverrides overrides;
+    uint64_t locks = 0;
     ChannelBlock solved; /* for exec's delta, until it is written */
+    FixedChannels fixed;
+
+    EvalCtx ctx(const ChannelBlock &channels, double time) const
+    {
+      const EvalCtx c = overrides.any() ?
+                            EvalCtx(channels, time, overrides.values, overrides.mask) :
+                            EvalCtx(channels, time);
+      return c.withLocks(locks);
+    }
   };
+  /* `deltas` has one for all, or one for each. */
+  Status updateWith(Context &ctx, std::span<const TransformDelta> deltas);
   Result<Base> baseOf(const Library &lib,
                       detail::StateCache &states,
                       BlockHandle h,
@@ -180,6 +258,9 @@ class ApplyDelta {
   /* Left out at the start, and by the last update. */
   int unusable_ = 0;
   int skipped_ = 0;
+  int locked_ = 0;
+  int driven_ = 0;
+  int64_t gesture_ = 0;
   ObjectChanges changes_;
 };
 
@@ -205,7 +286,7 @@ Result<BlockHandle> blockOf(Context &ctx, const char *input);
 ObjectFlags flagsOf(const Library &lib, BlockHandle h);
 /** A block as a Pointer value. */
 PropValue pointerTo(const Library &lib, BlockHandle h);
-/** The status, with a block's name in front. */
+/** The status, with a block's name in front if it doesn't begin with that. */
 Status about(const Library &lib, BlockHandle h, const Status &s);
 /** Objects that a command leaves out, and why the first one was. */
 class Skips {

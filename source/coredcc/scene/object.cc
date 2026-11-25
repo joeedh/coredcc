@@ -41,6 +41,9 @@ Status ready(const Library &lib, const char *what)
 
 void Object::setTransformType(std::string_view name)
 {
+  if (TypeId::of(name) != type_) {
+    locks_ = 0;
+  }
   typeName_ = litestl::util::string(std::string(name).c_str());
   type_ = TypeId::of(name);
   /* For setTransformTypeId. Two names with one hash: the first one wins. */
@@ -57,6 +60,7 @@ void Object::read(ObjectInfo &info, ChannelBlock &out) const
     const_cast<Object *>(this)->resolve(); /* the type came after the object */
   }
   out = channels;
+  info.locks = locks_;
 }
 
 Status Object::writeChannels(const ChannelBlock &in)
@@ -86,6 +90,18 @@ Status Object::setTransformTypeId(const TypeId &type)
   return Status();
 }
 
+Status Object::setFlags(uint32_t f)
+{
+  flags = ObjectFlags(f);
+  return Status();
+}
+
+Status Object::setLocks(uint64_t locks)
+{
+  locks_ = locks;
+  return Status();
+}
+
 lbt::Struct<Object> *Object::defineBindings()
 {
   static lbt::Struct<Object> *st = nullptr;
@@ -96,6 +112,8 @@ lbt::Struct<Object> *Object::defineBindings()
     BIND_STRUCT_METHOD(st, writeChannels, MARGS("channels"));
     BIND_STRUCT_METHOD(st, setParentId, MARGS("parent"));
     BIND_STRUCT_METHOD(st, setTransformTypeId, MARGS("type"));
+    BIND_STRUCT_METHOD(st, setFlags, MARGS("flags"));
+    BIND_STRUCT_METHOD(st, setLocks, MARGS("locks"));
   }
   return st;
 }
@@ -187,8 +205,7 @@ Result<BlockHandle> newObject(Library &lib, std::string_view name, std::string_v
 
 EvalStatus evaluateObject(Runtime &rt,
                           const TransformType *type,
-                          const ChannelBlock &channels,
-                          double time,
+                          const EvalCtx &ctx,
                           const TransformState &parent,
                           TransformState &out,
                           Status &error)
@@ -196,8 +213,8 @@ EvalStatus evaluateObject(Runtime &rt,
   EvalStatus status = EvalStatus::MissingModel;
   if (type) {
     status = EvalStatus::Invalid;
-    if (channels.size() == type->channelCount()) {
-      out = type->model().evaluate(EvalCtx(channels, time), parent);
+    if (ctx.channelCount() == type->channelCount()) {
+      out = type->model().evaluate(ctx, parent);
       if (rt.hasStickyError()) {
         Status s = rt.takeStickyError();
         if (error.ok()) {
@@ -214,6 +231,13 @@ EvalStatus evaluateObject(Runtime &rt,
   return status;
 }
 
+BlockHandle detail::liveBlock(const Library &lib, const BlockId &id)
+{
+  const BlockHandle h = id.isNull() ? BlockHandle() : lib.find(id);
+  const Datablock *b = lib.get(h);
+  return b && b->state() == BlockState::Live ? h : BlockHandle();
+}
+
 Result<ObjectRead> readObject(const Library &lib, BlockHandle object)
 {
   if (lib.runtime().hasStickyError()) {
@@ -226,7 +250,9 @@ Result<ObjectRead> readObject(const Library &lib, BlockHandle object)
   }
   if (!r.iface) {
     const Datablock *b = lib.get(object);
-    return failed("'" + std::string(b ? b->name().c_str() : "?") + "' isn't a Live object");
+    return failed(b ? "'" + std::string(b->name().c_str()) + "' isn't " +
+                          (b->state() == BlockState::Live ? "Transformable" : "Live") :
+                      "there is no such block");
   }
   r.iface.read(r.info, r.channels);
   if (Status s = thrown(lib.runtime()); !s.ok()) {
@@ -237,15 +263,20 @@ Result<ObjectRead> readObject(const Library &lib, BlockHandle object)
   return r;
 }
 
-namespace {
-
-/* The Live block an id names, or null. */
-BlockHandle liveBlock(const Library &lib, const BlockId &id)
+Result<ObjectRead> readObjectAt(const Library &lib, BlockHandle object, double time)
 {
-  const BlockHandle h = id.isNull() ? BlockHandle() : lib.find(id);
-  const Datablock *b = lib.get(h);
-  return b && b->state() == BlockState::Live ? h : BlockHandle();
+  Result<ObjectRead> r = readObject(lib, object);
+  if (!r.ok()) {
+    return r;
+  }
+  r->time = time;
+  if (Status s = detail::overridesOf(lib, object, r->type, time, r->overrides); !s.ok()) {
+    return s;
+  }
+  return r;
 }
+
+namespace {
 
 /* The Live parent of an object, or null. A foreign slot's error stays sticky. */
 BlockHandle parentOf(const Library &lib, BlockHandle h)
@@ -256,18 +287,12 @@ BlockHandle parentOf(const Library &lib, BlockHandle h)
     ChannelBlock channels;
     t.read(info, channels);
   }
-  return liveBlock(lib, info.parent);
+  return detail::liveBlock(lib, info.parent);
 }
 
-/* One object on the way up. */
-struct Step {
-  bool transformable = false;
-  const TransformType *type = nullptr;
-  ChannelBlock channels;
-};
-
-/* The objects from `h` up to the root, or to the first one that comes again. */
-Status walkUp(const Library &lib, BlockHandle h, Vector<Step> &steps)
+/* The objects from `h` up to the root, or to the first one that comes again. One that isn't
+ * Transformable is the last, and isn't there: the identity. */
+Status walkUp(const Library &lib, BlockHandle h, double time, Vector<ObjectRead> &steps)
 {
   litestl::util::Map<BlockHandle, int> seen;
   while (h) {
@@ -279,38 +304,32 @@ Status walkUp(const Library &lib, BlockHandle h, Vector<Step> &steps)
       return Status();
     }
     seen.add(h, int(steps.size()));
-    Step step;
-    BlockId parent;
-    const Transformable t = lib.query<Transformable>(h);
-    if (t) {
-      ObjectInfo info;
-      t.read(info, step.channels);
-      step.transformable = true;
-      step.type = lib.runtime().ext<TransformRegistry>().find(info.transformType);
-      parent = info.parent;
-    }
+    const bool transformable = bool(lib.query<Transformable>(h));
     CDCC_TRY(thrown(lib.runtime()));
-    steps.append(std::move(step));
-    h = liveBlock(lib, parent);
+    if (!transformable) {
+      return Status();
+    }
+    Result<ObjectRead> r = readObjectAt(lib, h, time);
+    if (!r.ok()) {
+      return r.status();
+    }
+    h = detail::liveBlock(lib, r->info.parent);
+    steps.append(std::move(*r));
   }
   return Status();
 }
 
 Result<TransformState> stateFrom(const Library &lib, BlockHandle h, double time)
 {
-  Vector<Step> steps;
-  if (Status s = walkUp(lib, h, steps); !s.ok()) {
+  Vector<ObjectRead> steps;
+  if (Status s = walkUp(lib, h, time, steps); !s.ok()) {
     return s;
   }
   TransformState state;
   for (int i = int(steps.size()) - 1; i >= 0; i--) {
-    if (!steps[i].transformable) {
-      continue; /* the last one: the identity */
-    }
     const TransformState parent = state;
     Status error;
-    evaluateObject(
-        lib.runtime(), steps[i].type, steps[i].channels, time, parent, state, error);
+    evaluateObject(lib.runtime(), steps[i].type, steps[i].ctx(), parent, state, error);
     if (!error.ok()) {
       return error;
     }
@@ -341,12 +360,31 @@ Result<TransformState> computeParentState(const Library &lib, BlockHandle object
   if (!r.ok()) {
     return r.status();
   }
-  const BlockHandle parent = liveBlock(lib, r->info.parent);
+  const BlockHandle parent = detail::liveBlock(lib, r->info.parent);
   /* On a cycle an object has no parent. */
   if (!parent || isSelfOrAncestor(lib, object, parent)) {
     return TransformState();
   }
   return stateFrom(lib, parent, time);
+}
+
+Result<double3> computePivot(const Library &lib, BlockHandle object, double time)
+{
+  if (Status s = ready(lib, "computePivot"); !s.ok()) {
+    return s;
+  }
+  Result<TransformState> parent = computeParentState(lib, object, time);
+  if (!parent.ok()) {
+    return parent.status();
+  }
+  Result<ObjectRead> r = readObjectAt(lib, object, time);
+  if (!r.ok()) {
+    return r.status();
+  }
+  if (!r->type) {
+    return failed("computePivot: the object's transform type isn't registered");
+  }
+  return transformPivot(*r->type, r->ctx(), *parent);
 }
 
 Result<ChannelBlock> setWorldOf(const Library &lib,
@@ -359,14 +397,14 @@ Result<ChannelBlock> setWorldOf(const Library &lib,
   if (!parent.ok()) {
     return parent.status();
   }
-  Result<ObjectRead> r = readObject(lib, object);
+  Result<ObjectRead> r = readObjectAt(lib, object, time);
   if (!r.ok()) {
     return r.status();
   }
   if (!r->type) {
     return failed("setWorldOf: the object's transform type isn't registered");
   }
-  return solveWorld(*r->type, EvalCtx(r->channels, time), target, *parent, mode);
+  return solveWorld(*r->type, r->solveCtx(), target, *parent, mode);
 }
 
 bool isSelfOrAncestor(const Library &lib, BlockHandle ancestor, BlockHandle object)
@@ -430,6 +468,40 @@ Status writeTransformType(Context &ctx,
   return writeTransform(ctx, object, channels);
 }
 
+Status writeFlags(Context &ctx, BlockHandle object, ObjectFlags flags)
+{
+  CDCC_TRY(writable(ctx));
+  Result<ObjectRead> r = readObject(*ctx.library(), object);
+  if (!r.ok()) {
+    return r.status();
+  }
+  if (!r->iface.hasSetFlags()) {
+    return Status::error(StatusCode::Unsupported, "this object's flags can't be changed");
+  }
+  const Status s = r->iface.setFlags(uint32_t(flags));
+  CDCC_TRY(thrown(ctx.runtime()));
+  CDCC_TRY(s);
+  ctx.runtime().ext<ChangeBus>().notify(r->owner, "flags");
+  return Status();
+}
+
+Status writeLocks(Context &ctx, BlockHandle object, uint64_t locks)
+{
+  CDCC_TRY(writable(ctx));
+  Result<ObjectRead> r = readObject(*ctx.library(), object);
+  if (!r.ok()) {
+    return r.status();
+  }
+  if (!r->iface.hasSetLocks()) {
+    return Status::error(StatusCode::Unsupported, "this object's channels can't be locked");
+  }
+  const Status s = r->iface.setLocks(locks);
+  CDCC_TRY(thrown(ctx.runtime()));
+  CDCC_TRY(s);
+  ctx.runtime().ext<ChangeBus>().notify(r->owner, "locks");
+  return Status();
+}
+
 Status writeParent(Context &ctx, BlockHandle object, const BlockId &parent)
 {
   CDCC_TRY(writable(ctx));
@@ -466,112 +538,9 @@ Status invalidateData(Context &ctx, BlockHandle block, InvalidateKinds kinds)
   return s;
 }
 
-/* ---- the datapath ---- */
-
 namespace detail {
 
-PointerRef blockRoot(Context &ctx, BlockHandle h)
-{
-  const Library *lib = ctx.library();
-  const Datablock *b = lib ? lib->get(h) : nullptr;
-  if (!b || b->state() != BlockState::Live) {
-    return PointerRef();
-  }
-  const BlockTypeRegistry::Entry *e = ctx.runtime().ext<BlockTypeRegistry>().find(b->type());
-  void *data = lib->data(h);
-  return e && data ? PointerRef{data, e->info.dataStruct, OwnerKey::ofBlock(b->id())} :
-                     PointerRef();
-}
-
 namespace {
-
-Object &self(const PointerRef &p)
-{
-  return *static_cast<Object *>(p.data);
-}
-
-Status setCell(Context &ctx, RefCell &cell, const PointerRef &target)
-{
-  if (!target.isNull() && target.owner.kind != OwnerKey::Kind::Block) {
-    return Status::error(StatusCode::TypeMismatch, "the target isn't a block");
-  }
-  return ctx.library()->writeRef(cell, target.isNull() ? BlockId() : target.owner.block);
-}
-
-ApiStruct objectStruct()
-{
-  ApiStruct st(kObjectType);
-  st.parent(StructId::of(kSceneObjectStruct)).uiName("Object").description("Something placed in a scene.");
-
-  ValueAccessor name;
-  name.get = [](const PointerRef &p, Context &ctx) {
-    const Library *lib = ctx.library();
-    const Datablock *b = lib ? lib->get(lib->find(p.owner.block)) : nullptr;
-    return PropValue::ofString(b ? b->name().c_str() : "");
-  };
-  st.add(PropertyDef::stringProp("name"), std::move(name));
-
-  ValueAccessor flags;
-  flags.get = [](const PointerRef &p, Context &) {
-    return PropValue::ofFlags(uint32_t(self(p).flags));
-  };
-  flags.set = [](const PointerRef &p, Context &, const PropValue &v) {
-    self(p).flags = ObjectFlags(uint32_t(v.asFlags()));
-    return Status();
-  };
-  st.add(PropertyDef::flagsProp("flags")
-             .item("HIDDEN", int64_t(ObjectFlags::Hidden))
-             .item("UNSELECTABLE", int64_t(ObjectFlags::Unselectable)),
-         std::move(flags));
-
-  PointerAccessor parent;
-  parent.target = StructId::of(kObjectType);
-  parent.candidates.append(StructId::of(kSceneObjectStruct));
-  parent.get = [](const PointerRef &p, Context &ctx) {
-    return ctx.library() ? blockRoot(ctx, ctx.library()->resolveRef(self(p).parent.cell())) :
-                           PointerRef();
-  };
-  parent.set = [](const PointerRef &p, Context &ctx, const PointerRef &target) {
-    Library *lib = ctx.library();
-    if (!target.isNull() && target.owner.kind == OwnerKey::Kind::Block &&
-        isSelfOrAncestor(*lib, lib->find(p.owner.block), lib->find(target.owner.block)))
-    {
-      return Status::error(StatusCode::FailedPrecondition, "an object can't be its own ancestor");
-    }
-    return setCell(ctx, self(p).parent.cell(), target);
-  };
-  parent.cell = [](const PointerRef &p, Context &) { return &self(p).parent.cell(); };
-  st.addPointer(PropertyDef::pointerProp("parent", parent.target), std::move(parent));
-
-  PointerAccessor data;
-  data.target = StructId::of(kObjectDataStruct);
-  data.get = [](const PointerRef &p, Context &ctx) {
-    return ctx.library() ? blockRoot(ctx, ctx.library()->resolveRef(self(p).data.cell())) :
-                           PointerRef();
-  };
-  data.set = [](const PointerRef &p, Context &ctx, const PointerRef &target) {
-    return setCell(ctx, self(p).data.cell(), target);
-  };
-  data.cell = [](const PointerRef &p, Context &) { return &self(p).data.cell(); };
-  st.addPointer(PropertyDef::pointerProp("data", data.target), std::move(data));
-
-  PointerAccessor transform;
-  transform.get = [](const PointerRef &p, Context &ctx) {
-    const TransformType *t =
-        ctx.runtime().ext<TransformRegistry>().find(self(p).transformTypeId());
-    self(p).resolve();
-    return t ? PointerRef{&self(p).channels, t->structId(), OwnerKey()} : PointerRef();
-  };
-  transform.target = StructId::of(TransformRegistry::kChannelsStruct);
-  st.addPointer(PropertyDef::pointerProp("transform", transform.target), std::move(transform));
-
-  ValueAccessor type;
-  type.get = [](const PointerRef &p, Context &) {
-    return PropValue::ofString(self(p).transformType().c_str());
-  };
-  st.add(PropertyDef::stringProp("transformType"), std::move(type));
-  return st;
-}
 
 Status addObjectBlock(Runtime &rt)
 {
@@ -603,9 +572,7 @@ Status registerObjectType(Runtime &rt)
   ApiStruct dataStruct(kObjectDataStruct);
   dataStruct.uiName("Object Data");
   CDCC_TRY(api.add(std::move(dataStruct)).status());
-  ApiStruct sceneObject(kSceneObjectStruct);
-  sceneObject.uiName("Scene Object");
-  CDCC_TRY(api.add(std::move(sceneObject)).status());
+  CDCC_TRY(api.add(sceneObjectStruct()).status());
   CDCC_TRY(api.add(objectStruct()).status());
   return addObjectBlock(rt);
 }

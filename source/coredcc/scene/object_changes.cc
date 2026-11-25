@@ -2,6 +2,8 @@
 
 #include "coredcc/command/history_block.h"
 
+#include <cstring>
+
 namespace coredcc {
 
 Status ObjectChanges::apply(Context &ctx, const Change &c, const StoredObject &values)
@@ -34,18 +36,29 @@ Status ObjectChanges::write(Context &ctx, BlockHandle object, const Values &valu
     c.before.channels = r->channels;
     c.before.type = r->info.transformType;
     c.before.parent = r->info.parent;
+    c.before.flags = ObjectFlags(r->info.flags);
+    c.before.locks = r->info.locks;
     c.after = c.before;
     c.fields.channels = values.channels != nullptr;
     c.fields.type = values.type != nullptr;
     c.fields.parent = values.parent != nullptr;
+    c.fields.flags = values.flags != nullptr;
+    c.fields.locks = values.locks != nullptr || values.type != nullptr;
     if (values.channels) {
       c.after.channels = *values.channels;
     }
     if (values.type) {
       c.after.type = *values.type;
+      c.after.locks = 0;
     }
     if (values.parent) {
       c.after.parent = *values.parent;
+    }
+    if (values.flags) {
+      c.after.flags = *values.flags;
+    }
+    if (values.locks) {
+      c.after.locks = *values.locks;
     }
     s = apply(ctx, c, c.after);
     if (s.ok()) {
@@ -112,6 +125,41 @@ Status ObjectChanges::redo(Context &ctx)
     }
   }
   return Status();
+}
+
+static bool sameChannels(const ChannelBlock &a, const ChannelBlock &b)
+{
+  bool same = a.size() == b.size();
+  for (int32_t i = 0; same && i < a.size(); i++) {
+    const double x = a.get(i), y = b.get(i);
+    same = memcmp(&x, &y, sizeof(x)) == 0;
+  }
+  return same;
+}
+
+bool ObjectChanges::foldFrom(const ObjectChanges &next)
+{
+  bool same = changes_.size() == next.changes_.size() && lib_.get() == next.lib_.get();
+  for (int i = 0; same && i < int(changes_.size()); i++) {
+    const Change &a = changes_[i], &b = next.changes_[i];
+    same = a.object == b.object && a.fields == b.fields && a.after.type == b.before.type &&
+           a.after.parent == b.before.parent && a.after.flags == b.before.flags &&
+           a.after.locks == b.before.locks && sameChannels(a.after.channels, b.before.channels);
+  }
+  for (int i = 0; same && i < int(changes_.size()); i++) {
+    changes_[i].after = next.changes_[i].after;
+  }
+  return same;
+}
+
+bool ObjectChanges::channelsChanged() const
+{
+  for (const Change &c : changes_) {
+    if (c.fields.channels && !sameChannels(c.before.channels, c.after.channels)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 uint64_t ObjectChanges::memSize() const

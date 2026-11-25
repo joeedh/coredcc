@@ -85,6 +85,14 @@ class SceneEvaluator {
   enum class Pass { Same, Changed, Stale };
   /** Writes the back store, if anything differs from the front one. */
   Pass evaluateAll(const Scene &scene, const Library &lib, Status &foreign);
+  EvalStatus evaluateOne(const Library &lib,
+                         BlockHandle h,
+                         OverrideProvider *provider,
+                         const TransformType *type,
+                         double time,
+                         const TransformState &parent,
+                         TransformState &out,
+                         Status &foreign);
   bool stillValid(const Scene &scene, const Library &lib) const;
   void lookUp(const Scene &scene, const Library &lib);
   /** `before` is what was found for it last time, if anything. */
@@ -108,6 +116,7 @@ class SceneEvaluator {
   LookupKey key_;
   bool valid_ = false;
   ChannelBlock scratch_;
+  ChannelOverrides overrides_;
   /** The places that differ, of the pass that runs. */
   litestl::util::Vector<int32_t> differing_;
   EvaluatedStore stores_[2];

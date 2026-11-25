@@ -87,10 +87,45 @@ class EvalCtx {
   /** The override if one is set, else the stored value. 0 out of range. */
   double channel(int32_t i) const
   {
-    const bool over = overridden_ && i >= 0 && i < int32_t(overridden_->size()) &&
-                      (*overridden_)[i] != 0;
-    return over ? overrides_->get(i) : channels_->get(i);
+    return isOverridden(i) ? overrides_->get(i) : channels_->get(i);
   }
+  /** The stored value. */
+  double stored(int32_t i) const
+  {
+    return channels_->get(i);
+  }
+  bool isOverridden(int32_t i) const
+  {
+    return overridden_ && i >= 0 && i < int32_t(overridden_->size()) && (*overridden_)[i] != 0;
+  }
+  bool isLocked(int32_t i) const
+  {
+    return i >= 0 && i < kMaxLocks && ((locks_ >> i) & 1) != 0;
+  }
+  /** Whether a solver has to leave it as it is: locked, or overridden. */
+  bool isFixed(int32_t i) const
+  {
+    return isLocked(i) || isOverridden(i);
+  }
+  bool hasFixed() const
+  {
+    return locks_ != 0 || overridden_ != nullptr;
+  }
+  /** The same with locks: bit i is channel i's. Those after the first 64 can't be locked. */
+  EvalCtx withLocks(uint64_t locks) const
+  {
+    EvalCtx c = *this;
+    c.locks_ = locks;
+    return c;
+  }
+  /** The same with other stored channels, which must outlive it. */
+  EvalCtx withChannels(const ChannelBlock &channels) const
+  {
+    EvalCtx c = *this;
+    c.channels_ = &channels;
+    return c;
+  }
+  static constexpr int32_t kMaxLocks = 64;
   /** At least 0.5. NaN is false. */
   bool boolChannel(int32_t i) const
   {
@@ -117,6 +152,7 @@ class EvalCtx {
   const ChannelBlock *channels_;
   const ChannelBlock *overrides_ = nullptr;
   const litestl::util::Vector<uint8_t> *overridden_ = nullptr;
+  uint64_t locks_ = 0;
   double time_ = 0.0;
 };
 

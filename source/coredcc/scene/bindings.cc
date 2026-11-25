@@ -66,6 +66,7 @@ lbt::Struct<EvalCtx> *EvalCtx::defineBindings()
     BIND_STRUCT_METHOD(st, boolChannel, MARGS("i"));
     BIND_STRUCT_METHOD(st, enumChannel, MARGS("i", "count"));
     BIND_STRUCT_METHOD(st, time, MARGS());
+    BIND_STRUCT_METHOD(st, isFixed, MARGS("i"));
   }
   return st;
 }
@@ -144,6 +145,7 @@ lbt::Struct<ObjectInfo> *ObjectInfo::defineBindings()
     BIND_STRUCT_MEMBER(st, parent);
     BIND_STRUCT_MEMBER(st, data);
     BIND_STRUCT_MEMBER(st, flags);
+    BIND_STRUCT_MEMBER(st, locks);
   }
   return st;
 }

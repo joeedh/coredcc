@@ -27,18 +27,11 @@ const Datablock *live(const Library &lib, BlockHandle h)
   return b && b->state() == BlockState::Live ? b : nullptr;
 }
 
-/* The Live block an id names, or null. */
-BlockHandle liveBlock(const Library &lib, const BlockId &id)
-{
-  const BlockHandle h = id.isNull() ? BlockHandle() : lib.find(id);
-  return live(lib, h) ? h : BlockHandle();
-}
-
 /* `hint`, if it still names that, saves looking for it. */
 BlockHandle liveBlock(const Library &lib, const BlockId &id, BlockHandle hint)
 {
   const Datablock *b = live(lib, hint);
-  return b && b->id() == id ? hint : liveBlock(lib, id);
+  return b && b->id() == id ? hint : detail::liveBlock(lib, id);
 }
 
 /* Any address, also one that is free by now. */
@@ -301,6 +294,31 @@ bool SceneEvaluator::stillValid(const Scene &scene, const Library &lib) const
 
 /* ---- evaluating ---- */
 
+/* One object's state, of the channels in scratch_. */
+EvalStatus SceneEvaluator::evaluateOne(const Library &lib,
+                                       BlockHandle h,
+                                       OverrideProvider *provider,
+                                       const TransformType *type,
+                                       double time,
+                                       const TransformState &parent,
+                                       TransformState &out,
+                                       Status &foreign)
+{
+  Runtime &rt = lib.runtime();
+  if (!provider) {
+    return evaluateObject(rt, type, EvalCtx(scratch_, time), parent, out, foreign);
+  }
+  if (Status s = overridesOf(provider, lib, h, type, time, overrides_); !s.ok()) {
+    if (foreign.ok()) {
+      foreign = std::move(s);
+    }
+    out = parent;
+    return EvalStatus::ModelFailed;
+  }
+  const EvalCtx ctx(scratch_, time, overrides_.values, overrides_.mask);
+  return evaluateObject(rt, type, ctx, parent, out, foreign);
+}
+
 SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
                                                  const Library &lib,
                                                  Status &foreign)
@@ -318,6 +336,7 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
   }
   differing_.clear();
 
+  OverrideProvider *provider = overrideProvider(lib);
   const TransformState root;
   const TransformType *lastType = nullptr;
   ObjectInfo info;
@@ -366,8 +385,10 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
       if (!lastType || lastType->id() != info.transformType) {
         lastType = types.find(info.transformType);
       }
-      const EvalStatus s = evaluateObject(rt, lastType, scratch_, time, parent, e.state, foreign);
-      e.status = s == EvalStatus::Ok && cyclic_[i] ? EvalStatus::Cycle : s;
+      e.status = evaluateOne(lib, m.handle, provider, lastType, time, parent, e.state, foreign);
+      if (e.status == EvalStatus::Ok && cyclic_[i]) {
+        e.status = EvalStatus::Cycle;
+      }
     }
 
     /* Bounds: the data block's, or its own. */

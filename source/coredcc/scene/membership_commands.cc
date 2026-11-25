@@ -152,8 +152,10 @@ PropValue pointerTo(const Library &lib, BlockHandle h)
 Status about(const Library &lib, BlockHandle h, const Status &s)
 {
   const Datablock *b = lib.get(h);
-  return Status::error(
-      s.code(), ("'" + std::string(b ? b->name().c_str() : "?") + "': " + s.message()).c_str());
+  const std::string name = "'" + std::string(b ? b->name().c_str() : "?") + "'";
+  const std::string message = s.message();
+  return message.rfind(name, 0) == 0 ? s : /* readObject's have it */
+                                       Status::error(s.code(), (name + ": " + message).c_str());
 }
 
 } // namespace detail
@@ -622,7 +624,7 @@ struct AddObject {
       parentState = *s;
       CDCC_TRY(writeParent(ctx, h, lib->get(parent)->id()));
     }
-    Result<ObjectRead> r = readObject(*lib, h);
+    Result<ObjectRead> r = readObjectAt(*lib, h, time);
     if (!r.ok()) {
       return r.status();
     }
@@ -634,7 +636,7 @@ struct AddObject {
       m[12 + i] = location.component(i);
     }
     Result<ChannelBlock> c = solveWorld(
-        *r->type, EvalCtx(r->channels, time), target, parentState, SetWorldMode::Closest);
+        *r->type, r->ctx(), target, parentState, SetWorldMode::Closest);
     return c.ok() ? writeTransform(ctx, h, *c) : c.status();
   }
   Status exec(Context &ctx)

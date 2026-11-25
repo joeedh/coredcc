@@ -1,7 +1,9 @@
 #include "coredcc/scene/transform_registry.h"
 
 #include "coredcc/api/change_bus.h"
+#include "coredcc/scene/capabilities.h"
 #include "coredcc/scene/channel_io.h"
+#include "coredcc/scene/host_channels.h"
 
 #include "litestl/util/alloc.h"
 
@@ -46,7 +48,7 @@ ValueAccessor accessorFor(const PropertyDef &def, int32_t first)
     return decodeChannels(def, first, *static_cast<const ChannelBlock *>(self.data));
   };
   const int32_t end = first + channelsOf(def.kind());
-  a.set = [first, end](const PointerRef &self, Context &, const PropValue &v) {
+  a.set = [first, end](const PointerRef &self, Context &ctx, const PropValue &v) {
     ChannelBlock &block = *static_cast<ChannelBlock *>(self.data);
     if (block.size() < end) {
       return Status::error(StatusCode::FailedPrecondition,
@@ -56,7 +58,15 @@ ValueAccessor accessorFor(const PropertyDef &def, int32_t first)
       return Status::error(StatusCode::OutOfRange, "an integer channel holds +-2^53");
     }
     encodeChannels(v, first, block);
-    return Status();
+    if (!ctx.runtime().ext<HostChannels>().isCopy(&block)) {
+      return Status();
+    }
+    Library *lib = ctx.library();
+    Transformable t = lib && self.owner.kind == OwnerKey::Kind::Block ?
+                          lib->query<Transformable>(lib->find(self.owner.block)) :
+                          Transformable();
+    return t ? t.writeChannels(block) :
+               Status::error(StatusCode::FailedPrecondition, "the block isn't Transformable");
   };
   return a;
 }

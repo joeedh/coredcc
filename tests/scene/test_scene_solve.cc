@@ -737,7 +737,7 @@ void testDrags(const Types &t)
       test_assert(moved->get(i) == k->defaults().get(i));
     }
   }
-  /* Overridden channels are what a delta starts from. */
+  /* Overridden channels come back as they are stored, and the others follow. */
   ChannelBlock over(trs::kCount);
   litestl::util::Vector<uint8_t> set;
   for (int i = 0; i < trs::kCount; i++) {
@@ -746,9 +746,28 @@ void testDrags(const Types &t)
   }
   d = deltaOf(DeltaKind::Translate);
   d.vector = double3(1, 2, 3);
-  const Result<ChannelBlock> out =
-      solveDelta(*t.trs, EvalCtx(base, 0.0, over, set), base, d, TransformState());
-  test_assert(out.ok() && lengthOf(get(*out, trs::kLocation) - double3(11, 2, 3)) == 0.0);
+  FixedChannels fixed;
+  Result<ChannelBlock> out =
+      solveDelta(*t.trs, EvalCtx(base, 0.0, over, set), base, d, TransformState(), &fixed);
+  test_assert(out.ok() && fixed.driven && !fixed.locked &&
+              lengthOf(get(*out, trs::kLocation) - double3(base.get(trs::kLocation), 2, 3)) == 0.0);
+  /* What is stored under them isn't looked at: it may be anything. */
+  ChannelBlock odd = t.trs->defaults();
+  odd.set(trs::kLocation, std::numeric_limits<double>::infinity());
+  out = solveDelta(*t.trs, EvalCtx(odd, 0.0, over, set), odd, d, TransformState(), &fixed);
+  test_assert(out.ok() && fixed.driven && out->get(trs::kLocation) > 1e300 &&
+              out->get(trs::kLocation + 1) == 2.0);
+  odd = t.trs->defaults();
+  put(odd, trs::kRotationEuler, double3(3.3, 0.2, 3.3));
+  for (int i = 0; i < trs::kCount; i++) {
+    set[i] = uint8_t(i == trs::kRotationEuler || i == trs::kRotationEuler + 2 ? 1 : 0);
+    over.set(i, 0.1);
+  }
+  d = deltaOf(DeltaKind::Rotate);
+  d.axis = double3(0, 1, 0);
+  d.angle = 0.01;
+  out = solveDelta(*t.trs, EvalCtx(odd, 0.0, over, set), odd, d, TransformState(), &fixed);
+  test_assert(out.ok() && std::fabs(out->get(trs::kRotationEuler + 1) - 0.21) < 0.01);
 }
 
 /* rotationScale itself, where the models don't reach. */

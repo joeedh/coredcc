@@ -38,7 +38,7 @@ Status StateCache::walk(BlockHandle object, bool &cycle, TransformState &out)
     if (!lib_.query<Transformable>(h)) {
       break; /* the origin */
     }
-    Result<ObjectRead> r = readObject(lib_, h);
+    Result<ObjectRead> r = readObjectAt(lib_, h, time_);
     if (!r.ok()) {
       return r.status();
     }
@@ -63,7 +63,7 @@ Result<TransformState> StateCache::stateUnder(const ObjectRead &read,
 {
   TransformState state;
   Status error;
-  evaluateObject(lib_.runtime(), read.type, read.channels, time_, parent, state, error);
+  evaluateObject(lib_.runtime(), read.type, read.ctx(), parent, state, error);
   return error.ok() ? Result<TransformState>(state) : Result<TransformState>(std::move(error));
 }
 

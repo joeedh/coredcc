@@ -22,6 +22,8 @@ class StateCache {
   Result<TransformState> state(BlockHandle object);
   /** Of a parent: the origin's, for one that isn't Transformable. */
   Result<TransformState> parentState(BlockHandle parent);
+  /* `read` is of readObjectAt, at this time. */
+
   /** Of the parent of an object, as computeParentState. */
   Result<TransformState> stateAbove(BlockHandle object, const ObjectRead &read);
   /** Of an object, under the state of its parent. */

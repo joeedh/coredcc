@@ -10,6 +10,8 @@
 #include "litestl/util/vector.h"
 
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 namespace coredcc {
 namespace detail {
@@ -36,6 +38,12 @@ bool takeChannel(const TransformType &type, const BlockEntry &e, ChannelBlock &o
 /** The type's defaults, with the entries over them. Those that no def takes stay in `entries`. Of two
  * with one name, the later counts. */
 ChannelBlock takeChannels(const TransformType &type, litestl::util::Vector<BlockEntry> &entries);
+
+/** Locks as text: the names of the defs whose channels are locked, or of one channel ("location.0"),
+ * with spaces between. */
+std::string lockNames(const TransformType &type, uint64_t locks);
+/** The other way. Names that no channel has, or that can't be locked, go to `unknown`, with spaces. */
+uint64_t lockMask(const TransformType &type, std::string_view names, std::string *unknown);
 
 } // namespace detail
 } // namespace coredcc

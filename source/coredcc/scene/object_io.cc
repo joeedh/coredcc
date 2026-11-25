@@ -4,6 +4,7 @@
 #include "coredcc/scene/object.h"
 #include "coredcc/scene/payload_fields.h"
 
+#include <algorithm>
 #include <string>
 
 namespace coredcc {
@@ -16,6 +17,7 @@ namespace {
 constexpr const char *kType = "transformType";
 constexpr const char *kVersion = "transformVersion";
 constexpr const char *kFlags = "flags";
+constexpr const char *kLocks = "locks";
 constexpr const char *kParent = "parent";
 constexpr const char *kData = "data";
 
@@ -51,6 +53,20 @@ void Object::write(BlockWriter &out) const
   if (flags != ObjectFlags::None) {
     fields.append(detail::valueField(kFlags, PropValue::ofFlags(uint32_t(flags))));
   }
+  /* Numbered as the channels are, when those have no names. */
+  std::string locks = unreadType_ == typeName_ ? unreadLocks_.c_str() : "";
+  const auto add = [&locks](const std::string &name) {
+    locks += locks.empty() || name.empty() ? name : " " + name;
+  };
+  if (named) {
+    add(detail::lockNames(*type, locks_));
+  }
+  for (int i = 0; i < EvalCtx::kMaxLocks && !named; i++) {
+    add((locks_ >> i) & 1 ? numberName(i) : "");
+  }
+  if (!locks.empty()) {
+    fields.append(detail::valueField(kLocks, PropValue::ofString(locks.c_str())));
+  }
   if (!parent.target().isNull()) {
     fields.append(detail::refField(kParent, std::span<const RefCell>(&parent.cell(), 1)));
   }
@@ -77,7 +93,7 @@ void Object::write(BlockWriter &out) const
 
 void Object::readFrom(BlockReader &in)
 {
-  std::string type;
+  std::string type, locks;
   uint32_t version = 0;
   detail::readFields(in, fields_, [&](const BlockEntry &e) {
     if (detail::isValueField(e, kType, PropValue::Type::String)) {
@@ -92,6 +108,10 @@ void Object::readFrom(BlockReader &in)
     }
     if (detail::isValueField(e, kFlags, PropValue::Type::Flags)) {
       flags = ObjectFlags(uint32_t(e.value.asFlags()));
+      return true;
+    }
+    if (detail::isValueField(e, kLocks, PropValue::Type::String)) {
+      locks = e.value.asString().c_str();
       return true;
     }
     return detail::takeRef(e, kParent, parent.cell()) ||
@@ -123,6 +143,10 @@ void Object::readFrom(BlockReader &in)
   unreadType_ = typeName_;
   unreadVersion_ = version;
   pending_ = numbers.size() == 0 && !known;
+  unreadLocks_ = litestl::util::string(locks.c_str());
+  if (!pending_) {
+    takeLocks(known);
+  }
   if (numbers.size() > 0) {
     channels.resize(int32_t(numbers.size()));
     for (int32_t i = 0; i < int32_t(numbers.size()); i++) {
@@ -170,7 +194,36 @@ void Object::resolve()
     channels = detail::takeChannels(*type, entries);
     unread_ = std::move(entries);
     pending_ = false;
+    takeLocks(type);
   }
+}
+
+/* Those that are in unreadLocks_ and that this build knows. */
+void Object::takeLocks(const TransformType *type)
+{
+  std::string names = unreadLocks_.c_str(), rest;
+  locks_ = 0;
+  if (type) {
+    locks_ = detail::lockMask(*type, names, &rest);
+    names = std::move(rest);
+    rest.clear();
+  }
+  for (size_t at = 0; at < names.size();) {
+    const size_t end = std::min(names.find(' ', at), names.size());
+    const std::string name = names.substr(at, end - at);
+    at = end + 1;
+    int bit = -1;
+    for (int i = 0; i < EvalCtx::kMaxLocks; i++) {
+      bit = name == numberName(i) ? i : bit;
+    }
+    if (bit >= 0) {
+      locks_ |= uint64_t(1) << bit;
+    }
+    else if (!name.empty()) {
+      rest += rest.empty() ? name : " " + name;
+    }
+  }
+  unreadLocks_ = litestl::util::string(rest.c_str());
 }
 
 uint64_t Object::memSize() const

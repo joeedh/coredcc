@@ -163,17 +163,33 @@ bool sameTranslation(const TransformType &type,
 
 /* The state of a model's answer. */
 Status checkResult(const TransformType &type,
-                   const ChannelBlock &out,
-                   double time,
+                   const EvalCtx &out,
                    const TransformState &parent,
                    TransformState &state)
 {
-  Result<TransformState> r = evaluateTransform(type, EvalCtx(out, time), parent);
+  Result<TransformState> r = evaluateTransform(type, out, parent);
   if (!r.ok()) {
     return r.status();
   }
   state = *r;
   return state.finite() ? Status() : failed("the transform isn't representable: it isn't finite");
+}
+
+/* Fixed channels as they are stored. Which of them were to change. */
+FixedChannels putBackFixed(const EvalCtx &ctx, ChannelBlock &out)
+{
+  FixedChannels f;
+  for (int32_t i = 0; ctx.hasFixed() && i < out.size(); i++) {
+    if (!ctx.isFixed(i)) {
+      continue;
+    }
+    const double was = ctx.channel(i), is = out.get(i);
+    if (!(std::fabs(is - was) <= 1e-9 * std::fmax(1.0, std::fmax(std::fabs(is), std::fabs(was))))) {
+      (ctx.isOverridden(i) ? f.driven : f.locked) = true;
+    }
+    out.set(i, ctx.stored(i));
+  }
+  return f;
 }
 
 } // namespace
@@ -192,12 +208,34 @@ Result<TransformState> evaluateTransform(const TransformType &type,
   return state;
 }
 
+Result<double3> transformPivot(const TransformType &type,
+                               const EvalCtx &ctx,
+                               const TransformState &parent)
+{
+  if (!type.model().hasPivot()) {
+    Result<TransformState> s = evaluateTransform(type, ctx, parent);
+    return s.ok() ? Result<double3>(solve::translationOf(s->world)) : Result<double3>(s.status());
+  }
+  if (Status s = ready(type, ctx); !s.ok()) {
+    return s;
+  }
+  const double3 p = type.model().pivot(ctx, parent);
+  if (Status s = thrown(type); !s.ok()) {
+    return s;
+  }
+  return p;
+}
+
 Result<ChannelBlock> solveWorld(const TransformType &type,
                                 const EvalCtx &current,
                                 const mat4d &target,
                                 const TransformState &parent,
-                                SetWorldMode mode)
+                                SetWorldMode mode,
+                                FixedChannels *fixed)
 {
+  if (fixed) {
+    *fixed = FixedChannels();
+  }
   if (Status s = checkTarget(target); !s.ok()) {
     return s;
   }
@@ -209,6 +247,7 @@ Result<ChannelBlock> solveWorld(const TransformType &type,
   if (now->finite() && solve::sameLinear(now->world, target) &&
       sameTranslation(type, current, *now, parent, target))
   {
+    putBackFixed(current, out);
     return out;
   }
   if (Status s = checkParent(parent); !s.ok()) {
@@ -221,11 +260,19 @@ Result<ChannelBlock> solveWorld(const TransformType &type,
   if (!s.ok()) {
     return s;
   }
+  const FixedChannels inTheWay = putBackFixed(current, out);
+  if (fixed) {
+    *fixed = inTheWay;
+  }
+  if (mode == SetWorldMode::Exact && inTheWay.any()) {
+    return failed("the target isn't representable: channels are locked or driven");
+  }
+  const EvalCtx result = current.withChannels(out);
   TransformState state;
-  if (s = checkResult(type, out, current.time(), parent, state); !s.ok()) {
+  if (s = checkResult(type, result, parent, state); !s.ok()) {
     return s;
   }
-  if (!sameTranslation(type, EvalCtx(out), state, parent, target)) {
+  if (!inTheWay.any() && !sameTranslation(type, result, state, parent, target)) {
     return failed("the target isn't representable: the translation differs");
   }
   if (mode == SetWorldMode::Exact && !solve::sameLinear(state.world, target)) {
@@ -238,8 +285,12 @@ Result<ChannelBlock> solveDelta(const TransformType &type,
                                 const EvalCtx &base,
                                 const ChannelBlock &nearTo,
                                 const TransformDelta &delta,
-                                const TransformState &parent)
+                                const TransformState &parent,
+                                FixedChannels *fixed)
 {
+  FixedChannels ignored;
+  FixedChannels &inTheWay = fixed ? *fixed : ignored;
+  inTheWay = FixedChannels();
   const int32_t kind = delta.kindValue();
   if (kind < 0 || kind > int32_t(DeltaKind::Scale) || !finiteQuat(delta.basis) ||
       !finite3(delta.pivot) || !finite3(delta.vector) || !finite3(delta.axis) ||
@@ -259,24 +310,28 @@ Result<ChannelBlock> solveDelta(const TransformType &type,
       return from.status();
     }
     return solveWorld(type,
-                      EvalCtx(nearTo, base.time()),
+                      base.withChannels(nearTo),
                       delta.matrix() * from->world,
                       parent,
-                      SetWorldMode::Closest);
+                      SetWorldMode::Closest,
+                      &inTheWay);
   }
   if (Status s = checkParent(parent); !s.ok()) {
     return s;
   }
-  ChannelBlock out = nearTo;
-  Status s = type.model().applyDelta(base, nearTo, delta, parent, out);
+  /* As the model sees the base's. */
+  const ChannelBlock hint = base.withChannels(nearTo).snapshot();
+  ChannelBlock out = hint;
+  Status s = type.model().applyDelta(base, hint, delta, parent, out);
   if (Status t = thrown(type); !t.ok()) {
     return t;
   }
   if (!s.ok()) {
     return s;
   }
+  inTheWay = putBackFixed(base, out);
   TransformState state;
-  if (s = checkResult(type, out, base.time(), parent, state); !s.ok()) {
+  if (s = checkResult(type, base.withChannels(out), parent, state); !s.ok()) {
     return s;
   }
   if (delta.kind != DeltaKind::Scale) {

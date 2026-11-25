@@ -1,7 +1,7 @@
 #pragma once
 
 #include "coredcc/lib/pin.h"
-#include "coredcc/scene/transform.h"
+#include "coredcc/scene/capabilities.h"
 
 #include "litestl/util/vector.h"
 
@@ -14,6 +14,8 @@ struct StoredObject {
   ChannelBlock channels;
   TypeId type;
   BlockId parent;
+  ObjectFlags flags = ObjectFlags::None;
+  uint64_t locks = 0;
 };
 
 /** Which of it. */
@@ -21,11 +23,17 @@ struct StoredFields {
   bool channels = false;
   bool type = false;
   bool parent = false;
+  bool flags = false;
+  /** With a type: another one has no locks. */
+  bool locks = false;
+
+  bool operator==(const StoredFields &b) const = default;
 };
 
 namespace detail {
 
-/** Stores the fields in a Live object: the parent before the rest, and a type with its channels. */
+/** Stores the fields in a Live object: the parent before the rest, a type with its channels, and the
+ * locks last. */
 Status writeStored(Context &ctx, BlockHandle h, const StoredFields &fields, const StoredObject &v);
 
 /**

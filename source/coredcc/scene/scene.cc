@@ -503,7 +503,7 @@ CollectionAccessor collectionOf(bool selectedOnly)
     return selectedOnly ? self(p).selected(*ctx.library()) : Handles();
   };
   CollectionAccessor c;
-  c.itemStruct = StructId::of(kObjectType);
+  c.itemStruct = StructId::of(kSceneObjectStruct);
   c.length = [selectedOnly, list](const PointerRef &p, Context &ctx) {
     return !ctx.library() ? int64_t(0) :
            selectedOnly   ? int64_t(list(p, ctx).size()) :
@@ -560,7 +560,7 @@ ApiStruct sceneStruct()
   };
   st.add(PropertyDef::stringProp("name"), std::move(name));
 
-  const StructId object = StructId::of(kObjectType);
+  const StructId object = StructId::of(kSceneObjectStruct);
   CollectionAccessor objects = collectionOf(false);
   objects.active = [](const PointerRef &p, Context &ctx) {
     return ctx.library() ? blockRoot(ctx, self(p).active(*ctx.library())) : PointerRef();
@@ -571,7 +571,6 @@ ApiStruct sceneStruct()
 
   PointerAccessor active;
   active.target = object;
-  active.candidates.append(StructId::of(kSceneObjectStruct));
   active.get = [](const PointerRef &p, Context &ctx) {
     return ctx.library() ? blockRoot(ctx, self(p).active(*ctx.library())) : PointerRef();
   };

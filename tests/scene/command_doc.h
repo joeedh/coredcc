@@ -104,7 +104,13 @@ struct CommandDoc : Doc {
         const ChannelBlock &c = own ? obj(h).channels : host(h).channels;
         const TypeId type = own ? obj(h).transformTypeId() : host(h).info.transformType;
         const BlockId parent = own ? obj(h).parent.target() : host(h).info.parent;
-        out += " type " + std::to_string(type.value) + " parent " + id(parent) + ":";
+        ObjectInfo info;
+        ChannelBlock ignored;
+        if (own) {
+          obj(h).read(info, ignored);
+        }
+        out += " type " + std::to_string(type.value) + " parent " + id(parent) + " flags " +
+               std::to_string(info.flags) + " locks " + std::to_string(info.locks) + ":";
         for (int i = 0; i < c.size(); i++) {
           uint64_t bits;
           const double v = c.get(i);

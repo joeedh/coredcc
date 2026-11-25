@@ -113,6 +113,7 @@
 #include "coredcc/scene/nearest.h"
 #include "coredcc/scene/object.h"
 #include "coredcc/scene/outline.h"
+#include "coredcc/scene/overrides.h"
 #include "coredcc/scene/payload_fields.h"
 #include "coredcc/scene/pending_writes.h"
 #include "coredcc/scene/pick.h"

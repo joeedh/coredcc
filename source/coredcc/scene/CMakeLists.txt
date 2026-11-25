@@ -1,19 +1,24 @@
 coredcc_library(coredcc_scene
   SOURCES
+    apply_delta.cc
     bindings.cc
     builtins.cc
     channel_io.cc
     evaluated.cc
     evaluator.cc
     fbx.cc
+    host_channels.cc
     kept_worlds.cc
     matrix.cc
     membership_commands.cc
     nearest.cc
     object.cc
     object_changes.cc
+    object_commands.cc
     object_io.cc
+    object_struct.cc
     outline.cc
+    overrides.cc
     payload_fields.cc
     pending_writes.cc
     pick.cc

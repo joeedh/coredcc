@@ -12,10 +12,21 @@ Status writeStored(Context &ctx, BlockHandle h, const StoredFields &fields, cons
   if (fields.parent) {
     CDCC_TRY(writeParent(ctx, h, v.parent));
   }
-  if (fields.type) {
-    return writeTransformType(ctx, h, v.type, v.channels);
+  if (fields.flags) {
+    CDCC_TRY(writeFlags(ctx, h, v.flags));
   }
-  return fields.channels ? writeTransform(ctx, h, v.channels) : Status();
+  if (fields.type) {
+    CDCC_TRY(writeTransformType(ctx, h, v.type, v.channels));
+  }
+  else if (fields.channels) {
+    CDCC_TRY(writeTransform(ctx, h, v.channels));
+  }
+  if (!fields.locks) {
+    return Status();
+  }
+  /* A type comes without locks, and an object may not be able to have any. */
+  Result<ObjectRead> r = readObject(*ctx.library(), h);
+  return r.ok() && r->info.locks == v.locks ? Status() : writeLocks(ctx, h, v.locks);
 }
 
 PendingWrites::PerLibrary *PendingWrites::find(const Library &lib)
@@ -63,6 +74,14 @@ void PendingWrites::add(Library &lib,
   if (fields.type) {
     e->fields.type = true;
     e->values.type = v.type;
+  }
+  if (fields.flags) {
+    e->fields.flags = true;
+    e->values.flags = v.flags;
+  }
+  if (fields.locks) {
+    e->fields.locks = true;
+    e->values.locks = v.locks;
   }
   if (fields.type || fields.channels) {
     e->fields.channels = true;
