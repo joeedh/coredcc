@@ -14,5 +14,8 @@ if not defined VSROOT (
   exit /b 1
 )
 call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat" >nul 2>&1
+rem Its clang-cl, which knows its STL, before any other LLVM on the PATH (GitHub's has 20).
+set "LLVMBIN=%VSROOT%\VC\Tools\Llvm\x64\bin"
+if exist "%LLVMBIN%\clang-cl.exe" set "PATH=%LLVMBIN%;%PATH%"
 %*
 exit /b %ERRORLEVEL%

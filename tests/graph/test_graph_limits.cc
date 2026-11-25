@@ -359,8 +359,10 @@ void testBudget()
   const std::vector<Graph> g = nest(w, 40, 2, outs);
   const SocketPath p = SocketPath::output("o");
   GraphInstance i(&w.rt, &w.lib, g[0].id);
+  /* 2^40 groups if the budget didn't stop it. Half a second here, more than a second on CI's
+   * machines: the limits are for hours, not for a slow machine. */
 #ifdef NDEBUG
-  const double limit = 1;
+  const double limit = 5;
 #else
   i.setMaxFrames(20000);
   const double limit = 10;

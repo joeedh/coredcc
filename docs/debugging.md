@@ -170,6 +170,23 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   build when the program doesn't read the environment.
 - **Fix:** none yet. The debug build, which the gate uses, isn't affected.
 
+### CI: clang-cl fails in MSVC's `<format>` ("implicitly-deleted default constructor of 'basic_format_arg'")
+- **Symptom:** both clang jobs fail in litestl's `binding.cc`, inside `__msvc_ranges_tuple_formatter.hpp`. MSVC
+  builds, and the same commit builds locally.
+- **Cause:** GitHub's Windows image has LLVM 20 in `C:\Program Files\LLVM\bin`, before Visual Studio's clang on the
+  PATH. MSVC 14.52's STL needs a newer clang. The "Compiler versions" step showed `clang version 20.1.8`.
+- **Fix:** `tools/devshell.cmd` puts Visual Studio's `VC\Tools\Llvm\x64\bin` first.
+- **How to spot it next time:** an error inside the STL's own headers, under clang only: check which clang ran.
+
+### CI: a test's time limit fails on GitHub's machines
+- **Symptom:** `test_graph_limits` failed in `native-msvc-release`: "the doubling graph took 1.16693 s". It passed
+  locally in 0.5 s.
+- **Cause:** GitHub's runners are about 2.3 times slower than the development machine, and run four tests at a time
+  on four cores.
+- **Fix:** limits on time are for catching runaway work (hours), so they get room: 5 s there.
+- **How to spot it next time:** a test with `steady_clock` that fails only in CI. `grep -rln steady_clock tests`
+  lists them.
+
 ## Techniques
 
 ### Checking that a regression test can fail
