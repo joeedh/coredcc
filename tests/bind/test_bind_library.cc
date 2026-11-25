@@ -264,7 +264,10 @@ static void test_slots()
     return true;
   };
   cmd.methods["undo"] = [](void **, void *, litestl::util::string *) { return true; };
-  cmd.methods["discard"] = cmd.methods["undo"];
+  cmd.methods["discard"] = [](void **, void *, litestl::util::string *err) {
+    *err = "discard: Error: not today";
+    return false;
+  };
   cmd.methods["memSize"] = [](void **, void *ret, litestl::util::string *) {
     *static_cast<uint64_t *>(ret) = 0;
     return true;
@@ -285,7 +288,10 @@ static void test_slots()
   }
   test_assert(log == "busy;busy;busy;busy;busy;appended;");
   test_assert(c.history.size() == 1 && c.w.lib.size() == 3);
-  c.history.clear();
+  /* A discard that throws: cleared, and reported. */
+  const Status cleared = sc::clearHistory(c.ctx);
+  test_assert(strstr(cleared.message(), "not today") && !c.w.rt.hasStickyError() &&
+              c.history.size() == 0);
 }
 
 int main()

@@ -67,7 +67,8 @@ int64_t bytesSize(const ScriptBytes &bytes)
 Status bytesRead(const ScriptBytes &bytes, int64_t offset, std::span<uint8_t> out)
 {
   const std::span<const uint8_t> all = bytes.bytes();
-  if (offset < 0 || uint64_t(offset) > all.size() || out.size() > all.size() - size_t(offset)) {
+  /* A negative offset is a large one. */
+  if (uint64_t(offset) > all.size() || out.size() > all.size() - size_t(offset)) {
     return error(StatusCode::OutOfRange,
                  std::to_string(out.size()) + " bytes at " + std::to_string(offset) + " of " +
                      std::to_string(all.size()));
@@ -299,9 +300,6 @@ Status clearHistory(Context &ctx)
   CommandExecutor *ex = ctx.executor();
   if (!ex || !ex->history()) {
     return error(StatusCode::FailedPrecondition, "clearHistory: there is no history");
-  }
-  if (ex->running()) {
-    return error(StatusCode::Busy, "clearHistory: a command is running");
   }
   ex->history()->clear();
   Runtime &rt = ctx.runtime(); /* a script's discard may have thrown */

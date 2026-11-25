@@ -3,6 +3,11 @@
 #include <cmath>
 #include <string>
 
+#include <chrono>
+#include <memory>
+#include <string>
+#include <vector>
+
 test_init;
 
 using namespace fixture;
@@ -342,6 +347,44 @@ static void test_busy_while_evaluating()
   test_assert(setValue(ctx, "objects[0].data.radius", PropValue::ofFloat(5)).ok());
 }
 
+/* Watchers that go, many of them, and during a flush. */
+static void test_unwatching()
+{
+  World w;
+  Context ctx = w.context();
+  ChangeBus &bus = w.rt.ext<ChangeBus>();
+  std::vector<ScopedConnection> all(4);
+  std::string log;
+  for (int i = 0; i < 4; i++) {
+    all[size_t(i)] = bus.watch(ctx, "tool.count", [&, i](const PropValue &, const Status &) {
+      log += std::to_string(i);
+      if (i == 0) {
+        all[0].disconnect();
+        all[1].disconnect();
+        all[2].disconnect();
+      }
+    }).value();
+  }
+  test_assert(setValue(ctx, "tool.count", PropValue::ofInt(77)).ok());
+  test_assert(bus.flush() == 2 && log == "03" && bus.watcherCount() == 1 && bus.validate().ok());
+  test_assert(setValue(ctx, "tool.count", PropValue::ofInt(78)).ok());
+  test_assert(bus.flush() == 1 && log == "033");
+  /* What a callback holds goes with it at once. */
+  auto held = std::make_shared<int>(1);
+  all[0] = bus.watch(ctx, "tool.count", [held](const PropValue &, const Status &) {}).value();
+  all[1] = bus.watch(ctx, "tool.count", [](const PropValue &, const Status &) {}).value();
+  test_assert(held.use_count() == 2);
+  all[0].disconnect();
+  test_assert(held.use_count() == 1);
+  /* Those that are gone take no time. */
+  const auto start = std::chrono::steady_clock::now();
+  for (int i = 0; i < 100000; i++) {
+    all[0] = bus.watch(ctx, "tool.count", [](const PropValue &, const Status &) {}).value();
+  }
+  test_assert(std::chrono::steady_clock::now() - start < std::chrono::seconds(10));
+  test_assert(bus.watcherCount() == 3);
+}
+
 int main()
 {
   test_listeners();
@@ -353,5 +396,6 @@ int main()
   test_aliases();
   test_hops_and_nan();
   test_failures_and_reentrancy();
+  test_unwatching();
   return test_end();
 }
