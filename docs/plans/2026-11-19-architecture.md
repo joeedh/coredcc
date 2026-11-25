@@ -803,7 +803,7 @@ So:
   - Users whose non-null `Ref` would break are listed in a preview, and deleted with it
     if the user confirms.
   - The delete is a command, so undo restores everything from the InHistory state.
-  - `forceUnlink` exists for refs held by placeholders, which have no UI to edit.
+  - `unlinkRef` exists for refs held by placeholders, which have no UI to edit.
 - **Cross-heap rule (Unreal).**
   - Blocks with strong incoming refs keep their UObject alive through `FGCObject`.
   - A UObject that holds a host pin on a block must not be kept alive by that same

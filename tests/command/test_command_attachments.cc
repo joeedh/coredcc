@@ -194,7 +194,8 @@ static void test_attach_undo()
   test_assert(t.host.alive == 1);
   Notes stray;
   test_assert(attachUndo(t.s.ctx, t.block(), TypeId::of("nope"), &stray).code() ==
-              StatusCode::NotFound); /* not destroyed: nobody knows how */
+              StatusCode::InvalidArgument); /* not destroyed: nobody knows how */
+  test_assert(attachUndo(t.s.ctx, t.block(), kNotes, nullptr).code() == StatusCode::InvalidArgument);
   test_assert(t.s.ex.undo(t.s.ctx).ok() && !t.notes());
   test_assert(t.s.ex.redo(t.s.ctx).ok() && t.notes() == n);
   t.s.history.clear();

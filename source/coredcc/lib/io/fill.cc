@@ -2,6 +2,7 @@
 
 #include "coredcc/lib/io/format.h"
 #include "coredcc/lib/payload_access.h"
+#include "coredcc/lib/type_names.h"
 
 #include <cstring>
 #include <string>
@@ -54,22 +55,42 @@ Status newer(const char *what)
 
 /* ---- the scope ---- */
 
-LibraryFiller::Scope::Scope(Library &lib) : lib_(lib)
+LibraryFiller::Scope::Scope(const Library &lib)
+    : lib_(const_cast<Library &>(lib)), before_(lib.loading_)
 {
-  lib.loading_ = true;
+  lib_.loading_ = true;
 }
 
 LibraryFiller::Scope::~Scope()
 {
-  lib_.loading_ = false;
-  lib_.runDeferred();
-  lib_.releaseDoomed();
+  lib_.loading_ = before_;
+  if (!before_) {
+    lib_.runDeferred();
+    lib_.releaseDoomed();
+  }
 }
 
 /* ---- records ---- */
 
-Result<BlockHandle> LibraryFiller::addRecord(BlockId id, PlaceholderInfo info, BlockFlags flags)
+Result<BlockHandle> LibraryFiller::addRecord(BlockId id,
+                                             PlaceholderInfo info,
+                                             BlockFlags flags,
+                                             bool refill)
 {
+  if (const BlockHandle h = refill ? lib_.find(id) : BlockHandle()) {
+    Datablock &b = *lib_.rec(h);
+    lib_.keepMissing(b);
+    b.type_ = typeNamed(info.typeName.c_str());
+    b.name_ = std::move(info.name);
+    b.placeholderReason_ = info.reason;
+    b.placeholderType_ = std::move(info.typeName);
+    b.sourceStored_ = info.sourceName.size() > 0;
+    b.sourceName_ = std::move(info.sourceName);
+    b.placeholderData_ = std::move(info.payload);
+    b.flags_ = b.flags_ | flags;
+    lib_.setState(b, BlockState::Placeholder);
+    return h;
+  }
   Result<BlockHandle> h = lib_.addPlaceholder(id, std::move(info));
   if (h.ok()) {
     lib_.rec(*h)->flags_ = flags;
@@ -79,16 +100,26 @@ Result<BlockHandle> LibraryFiller::addRecord(BlockId id, PlaceholderInfo info, B
 
 void LibraryFiller::addSlot(BlockHandle h, TypeId ns, int64_t key, const RefCell &cell)
 {
-  lib_.rec(h)->slots_.append(Datablock::Slot{ns, key, cell});
+  Datablock &b = *lib_.rec(h);
+  if (b.adoption_) { /* a refilled one may have the slot */
+    for (Datablock::Slot &s : b.slots_) {
+      if (s.ns == ns && s.key == key) {
+        s.cell = cell;
+        return;
+      }
+    }
+  }
+  b.slots_.append(Datablock::Slot{ns, key, cell});
 }
 
-void LibraryFiller::addOpaque(BlockHandle h, OpaqueAttachment attachment)
+bool LibraryFiller::addOpaque(BlockHandle h, OpaqueAttachment attachment)
 {
   Datablock &b = *lib_.rec(h);
-  if (!b.opaque_) {
-    b.opaque_ = std::make_unique<Vector<OpaqueAttachment, 1>>();
+  if (b.adoption_ && lib_.hasAttachment(h, typeNamed(attachment.typeName.c_str()))) {
+    return false;
   }
-  b.opaque_->append(std::move(attachment));
+  b.addOpaque(std::move(attachment));
+  return true;
 }
 
 void LibraryFiller::addAttachment(BlockHandle h, TypeId type, void *data)
@@ -121,7 +152,7 @@ BlockId LibraryFiller::rekey(Library &lib,
                              const PlaceholderInfo &info,
                              const RekeyContext &context)
 {
-  const TypeId type = info.typeName.size() > 0 ? TypeId::of(info.typeName.c_str()) : TypeId();
+  const TypeId type = typeNamed(info.typeName.c_str());
   const BlockProvider p = lib.types_.provider(type);
   if (!p || !p.hasRekey()) {
     return BlockId();
@@ -159,6 +190,25 @@ void LibraryFiller::setSource(BlockHandle h, const string &source)
 }
 
 /* ---- data ---- */
+
+Status LibraryFiller::setData(BlockHandle h, void *data, Status s)
+{
+  Datablock &b = *lib_.rec(h);
+  lib_.setState(b, BlockState::Live);
+  if (data) {
+    lib_.adoptData(h, data, s.ok());
+  }
+  if (s.ok()) {
+    b.placeholderType_ = string();
+    b.sourceName_ = string();
+    b.sourceStored_ = false;
+  }
+  else {
+    lib_.setState(b, BlockState::Placeholder);
+    lib_.rt_.takeStickyError().ignore(); /* `s` says what went wrong first */
+  }
+  return s;
+}
 
 Status LibraryFiller::read(Library &lib,
                            BlockHandle h,
@@ -220,6 +270,8 @@ bool LibraryFiller::fill(BlockHandle h)
     s = read(lib_, h, *lib_.types_.find(b.type_), payload, &budget_);
     if (s.ok()) {
       b.placeholderType_ = string();
+      b.sourceName_ = string();
+      b.sourceStored_ = false;
       return true;
     }
     b.placeholderData_ = std::move(payload);
@@ -231,7 +283,7 @@ bool LibraryFiller::fill(BlockHandle h)
 
 Status LibraryFiller::readAttachment(Datablock &b, const OpaqueAttachment &from)
 {
-  const TypeId type = TypeId::of(from.typeName.c_str());
+  const TypeId type = typeNamed(from.typeName.c_str());
   const AttachmentTypeRegistry::Entry *e = lib_.attachmentTypes_.find(type);
   const std::string what = "attachment '" + std::string(from.typeName.c_str()) + "'";
   if (!e) {
@@ -308,7 +360,7 @@ void LibraryFiller::noteMissing(BlockHandle h)
   }
 }
 
-void LibraryFiller::makeMissing()
+void LibraryFiller::makeMissing(const string &source)
 {
   for (const BlockId &id : missing_) {
     if (lib_.find(id)) {
@@ -324,6 +376,7 @@ void LibraryFiller::makeMissing()
     info.reason = PlaceholderReason::MissingBlock;
     Result<BlockHandle> h = lib_.addPlaceholder(id, std::move(info));
     if (h.ok()) {
+      setSource(*h, source);
       report_.blocks.append(*h);
       report_.missingBlock++;
     }

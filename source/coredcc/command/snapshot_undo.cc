@@ -1,7 +1,7 @@
 #include "coredcc/command/snapshot_undo.h"
 
 #include "coredcc/api/change_bus.h"
-#include "coredcc/lib/io/format.h"
+#include "coredcc/lib/io/pack.h"
 #include "coredcc/lib/library.h"
 
 #include <utility>
@@ -58,6 +58,21 @@ SnapshotProvider *SnapshotRegistry::find(std::string_view name)
     }
   }
   return nullptr;
+}
+
+Status SnapshotRegistry::validate() const
+{
+  for (int i = 0; i < int(entries_.size()); i++) {
+    for (int j = 0; j < i; j++) {
+      if (entries_[i]->name == entries_[j]->name) {
+        return Status::error(StatusCode::Internal, "SnapshotRegistry: two providers of one name");
+      }
+    }
+    if (entries_[i]->name.empty() || !entries_[i]->provider) {
+      return Status::error(StatusCode::Internal, "SnapshotRegistry: a bad entry");
+    }
+  }
+  return Status();
 }
 
 /* ---- SnapshotUndo ---- */
@@ -158,7 +173,8 @@ Status SnapshotUndo::begin(Context &ctx)
   before_ = Blob();
   restoreAtDiscard_ = false;
   rt_ = &ctx.runtime();
-  lib_ = ctx.library() ? ctx.library()->ref() : LibraryRef();
+  inLibrary_ = ctx.library() != nullptr;
+  lib_ = inLibrary_ ? ctx.library()->ref() : LibraryRef();
   root_ = ctx.root();
   return capture(ctx, before_);
 }
@@ -168,9 +184,17 @@ Status SnapshotUndo::end(Context &ctx)
   return before_.taken ? capture(ctx, after_) : notTaken("end");
 }
 
+Status SnapshotUndo::sameLibrary(Context &ctx) const
+{
+  return inLibrary_ ? detail::libraryOf(ctx, lib_).status() : Status();
+}
+
 void SnapshotUndo::undo(Context &ctx)
 {
-  Status s = before_.taken ? restore(ctx, before_) : notTaken("undo");
+  Status s = before_.taken ? sameLibrary(ctx) : notTaken("undo");
+  if (s.ok()) {
+    s = restore(ctx, before_);
+  }
   if (!s.ok()) {
     ctx.runtime().setStickyError(std::move(s));
   }
@@ -178,7 +202,11 @@ void SnapshotUndo::undo(Context &ctx)
 
 Status SnapshotUndo::redo(Context &ctx)
 {
-  return after_.taken ? restore(ctx, after_) : notTaken("redo");
+  if (!after_.taken) {
+    return notTaken("redo");
+  }
+  CDCC_TRY(sameLibrary(ctx));
+  return restore(ctx, after_);
 }
 
 Status SnapshotUndo::rollback(Context &ctx)

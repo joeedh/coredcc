@@ -8,6 +8,7 @@
 #include "coredcc/lib/attachment.h"
 #include "coredcc/lib/io/format.h"
 #include "coredcc/lib/io/library_io.h"
+#include "coredcc/lib/io/load.h"
 
 #include <string>
 #include <utility>
@@ -43,6 +44,8 @@ struct NoteHost {
   int severed = 0;
   DocFault fault = DocFault::None;
   bool failForeach = false;
+  /** serialize: the reference isn't written. */
+  bool skipRef = false;
   litestl::util::function<void()> onSerialize;
   litestl::util::function<void()> onCopy;
   ~NoteHost()
@@ -85,7 +88,7 @@ struct NoteProvider {
     }
     const Note *n = static_cast<const Note *>(data);
     out.bytes().u32(uint32_t(n->value));
-    out.ref(n->about);
+    out.ref(host->skipRef ? RefCell(RefKind::Strong) : n->about);
     return Status();
   }
   Status deserialize(const Datablock &, BlockReader &in)
@@ -164,13 +167,17 @@ inline void registerNote(Runtime &rt,
               rt.ext<AttachmentTypeRegistry>().add(info, std::move(owned).value()).ok());
 }
 
-inline void registerBare(Runtime &rt)
+inline void registerBare(Runtime &rt,
+                         const char *name = "test.Bare",
+                         BlockStorage storage = BlockStorage::Transient)
 {
-  test_assert((registerImpl<AttachmentProvider, BareProvider>(rt, "test.Bare#provider").ok()));
+  const std::string impl = std::string(name) + "#provider";
+  test_assert((registerImpl<AttachmentProvider, BareProvider>(rt, impl).ok()));
   AttachmentTypeInfo info;
-  info.name = "test.Bare";
-  Result<Owned<AttachmentProvider>> owned = own<AttachmentProvider>(
-      rt, "test.Bare#provider", litestl::alloc::New<BareProvider>("provider"));
+  info.name = name;
+  info.storage = storage;
+  Result<Owned<AttachmentProvider>> owned =
+      own<AttachmentProvider>(rt, impl, litestl::alloc::New<BareProvider>("provider"));
   test_assert(owned.ok() &&
               rt.ext<AttachmentTypeRegistry>().add(info, std::move(owned).value()).ok());
 }
@@ -302,7 +309,7 @@ struct IoWorld {
     }
     return r.status();
   }
-  Result<AppendResult> append(const Bytes &b, const LoadOptions &options = {})
+  Result<AppendResult> append(const Bytes &b, const AppendOptions &options = {})
   {
     return detail::appendLibrary(lib, view(b), options);
   }

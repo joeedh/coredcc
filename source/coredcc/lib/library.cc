@@ -2,9 +2,11 @@
 
 #include "coredcc/lib/attachment.h"
 #include "coredcc/lib/pin.h"
+#include "coredcc/lib/type_names.h"
 
 #include <cstring>
 #include <string>
+#include <utility>
 
 namespace coredcc {
 
@@ -78,7 +80,7 @@ Status Library::busyIfSweeping(const char *what) const
   }
   return Status::error(StatusCode::Busy,
                        (std::string(what) + ": the library is busy (called from a provider "
-                                            "during a sweep or a load)")
+                                            "during a sweep, a load or a save)")
                            .c_str());
 }
 
@@ -272,6 +274,13 @@ Status Library::restoreFromHistory(BlockHandle h)
 
 Status Library::hostChanged(Datablock &b, const char *op, BlockState from, BlockState to)
 {
+  if (b.state_ == BlockState::Placeholder && b.adoption_) {
+    /* Its data was taken out by unadopt, and may come back. */
+    if (Datablock *k = rec(b.adoption_->kept); k && k->deletedFrom_ == from) {
+      k->deletedFrom_ = to;
+      return Status();
+    }
+  }
   if (b.dataState() != from) {
     return wrongState(b, op, from);
   }
@@ -404,12 +413,12 @@ const RefCell *Library::slot(BlockHandle owner, TypeId ns, int64_t key) const
   return nullptr;
 }
 
-Status Library::forceUnlink(BlockHandle owner, TypeId ns, int64_t key)
+Status Library::removeSlot(BlockHandle owner, TypeId ns, int64_t key)
 {
-  CDCC_TRY(busyIfSweeping("forceUnlink"));
+  CDCC_TRY(busyIfSweeping("removeSlot"));
   Datablock *b = rec(owner);
   if (!b) {
-    return noBlock("forceUnlink");
+    return noBlock("removeSlot");
   }
   for (int i = 0; i < int(b->slots_.size()); i++) {
     if (b->slots_[i].ns == ns && b->slots_[i].key == key) {
@@ -418,7 +427,7 @@ Status Library::forceUnlink(BlockHandle owner, TypeId ns, int64_t key)
       return Status();
     }
   }
-  return Status::error(StatusCode::NotFound, "forceUnlink: no such slot");
+  return Status::error(StatusCode::NotFound, "removeSlot: no such slot");
 }
 
 Status Library::visitRefs(const Datablock &b,
@@ -576,10 +585,10 @@ Status Library::attach(BlockHandle h, TypeId type, void *data)
                           "' is not a registered attachment type")
                              .c_str());
   }
-  bool has = attachment(h, type) != nullptr;
-  forEachOpaqueAttachment(
-      h, [&](const OpaqueAttachment &o) { has |= TypeId::of(o.typeName.c_str()) == type; });
-  if (has) {
+  if (!data) {
+    return Status::error(StatusCode::InvalidArgument, "attach: the data is null");
+  }
+  if (hasAttachment(h, type)) {
     return Status::error(StatusCode::AlreadyExists, "attach: the block has this attachment");
   }
   b->attachments_.append(Datablock::Attachment{type, data});
@@ -603,6 +612,55 @@ Result<void *> Library::detach(BlockHandle h, TypeId type)
     }
   }
   return Status::error(StatusCode::NotFound, "detach: no such attachment");
+}
+
+bool Library::hasAttachment(BlockHandle h, TypeId type) const
+{
+  bool has = false;
+  forEachAttachment(h, [&](TypeId t, void *) { has |= t == type; });
+  forEachOpaqueAttachment(
+      h, [&](const OpaqueAttachment &o) { has |= detail::typeNamed(o.typeName.c_str()) == type; });
+  return has;
+}
+
+Result<OpaqueAttachment> Library::detachOpaque(BlockHandle h, TypeId type)
+{
+  CDCC_TRY(busyIfSweeping("detachOpaque"));
+  Datablock *b = rec(h);
+  if (!b) {
+    return noBlock("detachOpaque");
+  }
+  for (int i = 0; b->opaque_ && i < int(b->opaque_->size()); i++) {
+    if (detail::typeNamed((*b->opaque_)[i].typeName.c_str()) == type) {
+      OpaqueAttachment out = std::move((*b->opaque_)[i]);
+      b->opaque_->remove_at(i);
+      if (b->opaque_->size() == 0) {
+        b->opaque_.reset();
+      }
+      epoch_++;
+      return out;
+    }
+  }
+  return Status::error(StatusCode::NotFound, "detachOpaque: no such attachment");
+}
+
+Status Library::attachOpaque(BlockHandle h, OpaqueAttachment attachment)
+{
+  CDCC_TRY(busyIfSweeping("attachOpaque"));
+  Datablock *b = rec(h);
+  if (!b) {
+    return noBlock("attachOpaque");
+  }
+  const TypeId type = detail::typeNamed(attachment.typeName.c_str());
+  if (!type) {
+    return Status::error(StatusCode::InvalidArgument, "attachOpaque: no type name");
+  }
+  if (hasAttachment(h, type)) {
+    return Status::error(StatusCode::AlreadyExists, "attachOpaque: the block has this attachment");
+  }
+  b->addOpaque(std::move(attachment));
+  epoch_++;
+  return Status();
 }
 
 void *Library::attachment(BlockHandle h, TypeId type) const
@@ -644,6 +702,18 @@ void Library::adoptData(BlockHandle h, void *data, bool keep)
   if (!loading_) {
     runDeferred();
   }
+}
+
+uint64_t Library::memSize(BlockHandle h) const
+{
+  const Datablock *b = rec(h);
+  if (!b) {
+    return 0;
+  }
+  uint64_t n = sizeof(Datablock) + uint64_t(b->placeholderData_.bytes.size()) +
+               uint64_t(b->placeholderData_.refs.size()) * sizeof(RefCell);
+  const BlockProvider p = types_.provider(b->type_);
+  return p && p.hasMemSize() && b->dataState() == BlockState::Live ? n + p.memSize(*b) : n;
 }
 
 /* ---- validation ---- */

@@ -2,11 +2,14 @@
 
 /** \file
  * The library section of a file: every block that is kept, with its data, references, slots
- * and attachments. Saving is here; loading posts change notifications, so it is in
- * coredcc/api/library_io.h.
+ * and attachments. Saving is here and takes only a Library; loading posts change notifications,
+ * so it is in coredcc/api/library_io.h and takes a Context.
  *
- * Equal libraries give equal bytes, and a save that was loaded and saved again without
- * changes gives the same bytes.
+ * Equal libraries give equal bytes, with one version of lz4: another may compress the same data
+ * to other bytes. A save that is loaded and saved again gives the same bytes, except for:
+ * - the blocks in SaveReport::hostPinned and throughTransient, which nothing leads to then;
+ * - a BagRefs pointer, or another OptStrong entry, whose target was deleted: the first save
+ *   writes its reference null, and the next one leaves the pointer out.
  */
 
 #include "coredcc/base/status.h"
@@ -41,35 +44,45 @@ struct IoIssues {
   void add(BlockId block, std::string_view blockName, Status why);
 };
 
-/** What a save did. */
+/** What a save did. A host checks it: everything but the counts is about something that a load
+ * of the file won't give back. */
 struct SaveReport {
   IoIssues issues;
   /** Records written. */
   int64_t blocks = 0;
-  /** Reachable Transient blocks: not written. */
+  /** Reachable Transient blocks: their data isn't written. One that has slots, attachments or
+   * fields of a newer build has a record without data, which the host fills (createWithId). */
   litestl::util::Vector<BlockHandle> transient;
-  /** Written blocks that only Transient blocks lead to: orphans after a load, until the host
-   * links them again. */
+  /** Written blocks that only Transient blocks without a record lead to: orphans after a load,
+   * until the host links them again. */
   litestl::util::Vector<BlockHandle> throughTransient;
+  /** Written blocks that only Host pins keep: pins aren't saved, so a load makes them orphans,
+   * and the next save leaves them out. */
+  litestl::util::Vector<BlockHandle> hostPinned;
   /** Detached blocks: written without their data. */
   litestl::util::Vector<BlockHandle> detached;
-  /** Attachments whose type has no serialize: not written. */
-  int64_t skippedAttachments = 0;
+  /** What LoadLimits::maxBytes must be for a load here not to be refused. Entries that providers
+   * read through BlockReader come on top. A build of another pointer size needs about as much. */
+  uint64_t loadBytes = 0;
+  /** What LoadLimits::maxBlocks must be: the records, and the MissingBlock ones a load makes. */
+  int64_t loadBlocks = 0;
 };
 
 /**
  * Writes the blocks that are reachable from the save roots: Root and FakeUser blocks, blocks
  * with Host pins, Detached blocks, and placeholders that were records in a file. Frees
- * nothing. Deleted (InHistory) blocks aren't written, and OptStrong references to them, or to
- * ids without a record, are written null.
+ * nothing; the library is busy while it runs. Deleted (InHistory) blocks aren't written, and
+ * OptStrong references to them, or to ids without a record, are written null.
  *
- * - Fails with FailedPrecondition, naming the types, when a reachable block's type neither
- *   serializes nor says it is Transient. Fails with the provider's error when a `serialize`
- *   or `foreachRef` fails, naming the block. `report`, if given, is meaningful only for a
- *   save that worked.
+ * - Fails with FailedPrecondition, naming the types, when the type of a written block, or of one
+ *   of its attachments, neither serializes nor says it is Transient. Fails with the provider's
+ *   error when a `serialize` or `foreachRef` fails, naming the block. `report`, if given, is
+ *   meaningful only for a save that worked.
+ * - A payload whose references aren't those that `foreachRef` reports is an issue, or a failure
+ *   (Internal) when the library audits its relations.
  * - A MissingBlock placeholder that was never a record is written only if it has a name,
  *   flags, slots or attachments; a load makes it again from the references to it.
- * - Very large libraries need larger LoadLimits to load.
+ * - Very large libraries need larger LoadLimits to load: see SaveReport::loadBytes.
  */
 Result<litestl::util::Vector<uint8_t>> saveLibrary(const Library &lib,
                                                    SaveReport *report = nullptr);
@@ -86,8 +99,14 @@ struct LoadLimits {
 
 struct LoadOptions {
   LoadLimits limits;
-  /** What the new placeholders are said to come from, such as the file's name. A name the
-   * file itself stored is kept instead. */
+  /** What the new placeholders are said to come from, such as the file's name. Kept in memory
+   * only. A name the file itself stored is kept instead. */
+  litestl::util::string sourceName;
+};
+
+struct AppendOptions {
+  LoadLimits limits;
+  /** As LoadOptions::sourceName. */
   litestl::util::string sourceName;
 };
 
@@ -111,16 +130,5 @@ struct AppendResult {
   IdMap ids;
   LoadReport report;
 };
-
-namespace detail {
-/* Without the notifications; see coredcc/api/library_io.h. */
-Result<LoadReport> loadLibrary(Library &lib,
-                               std::span<const uint8_t> bytes,
-                               const LoadOptions &options);
-Result<AppendResult> appendLibrary(Library &lib,
-                                   std::span<const uint8_t> bytes,
-                                   const LoadOptions &options);
-Result<LoadReport> resolvePlaceholders(Library &lib);
-} // namespace detail
 
 } // namespace coredcc

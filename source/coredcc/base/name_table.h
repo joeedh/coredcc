@@ -2,11 +2,11 @@
 
 #include "coredcc/base/id.h"
 
-#include "litestl/util/map.h"
 #include "litestl/util/string.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <string_view>
 
 namespace coredcc {
@@ -33,7 +33,8 @@ class NameTable {
   bool debugAddAs(IdDomain domain, uint64_t id, std::string_view name);
 
  private:
-  litestl::util::Map<uint64_t, litestl::util::string> names_[kIdDomainCount];
+  /* Ordered: a file chooses the ids, and litestl's hash of a number is easy to invert. */
+  std::map<uint64_t, litestl::util::string> names_[kIdDomainCount];
   size_t bytes_ = 0;
 };
 

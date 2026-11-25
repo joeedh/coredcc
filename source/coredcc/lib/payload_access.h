@@ -1,5 +1,6 @@
 #pragma once
 
+#include "coredcc/lib/attachment.h"
 #include "coredcc/lib/block_io.h"
 
 namespace coredcc::detail {
@@ -25,6 +26,20 @@ struct PayloadAccess {
   {
     return copy.data_;
   }
+  /** writePayload while the library is busy with a save: inside a LibraryFiller::Scope. */
+  static Result<BlockPayload> write(const Library &lib, BlockHandle h);
+  /** An attachment's payload, its references checked if the library audits. `type` serializes. */
+  static Result<BlockPayload> writeAttachment(const Library &lib,
+                                              BlockHandle h,
+                                              const AttachmentTypeRegistry::Entry &type,
+                                              const void *data);
+  /** checkPayloadRefs in a Scope, and its form for an attachment. */
+  static Status checkRefs(const Library &lib, BlockHandle h, const BlockPayload &payload);
+  static Status checkRefs(const Library &lib,
+                          BlockHandle h,
+                          const AttachmentTypeRegistry::Entry &type,
+                          const void *data,
+                          const BlockPayload &payload);
 };
 
 } // namespace coredcc::detail

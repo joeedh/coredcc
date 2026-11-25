@@ -47,7 +47,7 @@ std::string snapshotOf(const IoWorld &w)
 
 /* Refused, with nothing changed. */
 bool refused(IoWorld &w, const Bytes &file, StatusCode code, const char *what,
-             const LoadOptions &options = {})
+             const AppendOptions &options = {})
 {
   const std::string before = snapshotOf(w);
   Result<AppendResult> r = w.append(file, options);
@@ -136,7 +136,7 @@ static void test_outside_refs()
   test_assert(r.ok() && r->report.blocks.size() == 1 && w.at(50) == here);
 
   /* The limit counts what the append adds, and not what is there. */
-  LoadOptions options;
+  AppendOptions options;
   options.limits.maxBlocks = 2;
   IoWorld w2;
   w2.doc(50, "here");
@@ -157,7 +157,7 @@ static void test_placeholders()
   Knows k;
   k.doc = k.note = false;
   IoWorld w(k);
-  LoadOptions options;
+  AppendOptions options;
   options.sourceName = "lib.cdcc";
   Result<AppendResult> r = w.append(bytes, options);
   test_assert(r.ok() && r->report.missingType == 2);
@@ -326,7 +326,7 @@ static void test_aliases()
 static void test_fuzz()
 {
   const Bytes good = sample();
-  LoadOptions options;
+  AppendOptions options;
   options.limits.maxBytes = uint64_t(4) << 20;
   const auto t0 = std::chrono::steady_clock::now();
   SplitMix64 rng(5);

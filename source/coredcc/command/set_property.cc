@@ -3,11 +3,14 @@
 #include "coredcc/api/change_bus.h"
 #include "coredcc/api/resolve.h"
 #include "coredcc/command/executor.h"
+#include "coredcc/command/history_block.h"
 #include "coredcc/lib/library.h"
 #include "coredcc/parse/path.h"
 #include "coredcc/parse/path_cache.h"
 
 #include "litestl/binding/binding.h"
+
+#include <utility>
 
 namespace coredcc {
 
@@ -30,8 +33,10 @@ struct SetProperty {
   bool hasCell = false;
   BlockId oldTarget;
   BlockId newTarget;
-  Library *lib = nullptr;
-  litestl::util::Vector<BlockHandle> pins;
+  /* Null when the Context had no Library. */
+  LibraryRef lib;
+  bool inLibrary = false;
+  litestl::util::Vector<HistoryBlock> pins;
 
   void pinTarget(Context &ctx, const PropValue &v)
   {
@@ -44,11 +49,18 @@ struct SetProperty {
   {
     Library *l = ctx.library();
     const BlockHandle h = l ? l->find(id) : BlockHandle();
-    if (h && !pins.contains(h)) {
-      l->pin(h, PinKind::History);
-      lib = l;
-      pins.append(h);
+    bool has = !h;
+    for (const HistoryBlock &p : pins) {
+      has |= p.get() == h;
     }
+    if (!has) {
+      pins.append(HistoryBlock(*l, h));
+    }
+  }
+  /* Whether `ctx` is of the Library the value was set in. */
+  Status sameLibrary(Context &ctx) const
+  {
+    return inLibrary ? detail::libraryOf(ctx, lib).status() : Status();
   }
 
   Status canRun(Context &) const
@@ -62,6 +74,8 @@ struct SetProperty {
       return rp.status();
     }
     ref = rp->canonical;
+    inLibrary = ctx.library() != nullptr;
+    lib = inLibrary ? ctx.library()->ref() : LibraryRef();
     Result<PropValue> old = readWhole(ctx);
     if (!old.ok()) {
       return old.status();
@@ -96,7 +110,8 @@ struct SetProperty {
   }
   uint64_t memSize() const
   {
-    uint64_t n = sizeof(*this) + uint64_t(ref.key.size()) * 32 + uint64_t(pins.size()) * 8;
+    uint64_t n = sizeof(*this) + uint64_t(ref.key.size()) * 32 +
+                 uint64_t(pins.size()) * sizeof(HistoryBlock);
     for (const PropValue *v : {&oldValue, &newValue}) {
       if (v->type() == PropValue::Type::String) {
         n += uint64_t(v->asString().size());
@@ -106,9 +121,6 @@ struct SetProperty {
   }
   void discard()
   {
-    for (BlockHandle h : pins) {
-      lib->unpin(h, PinKind::History);
-    }
     pins.clear();
   }
   uint64_t foldKey() const
@@ -127,13 +139,10 @@ struct SetProperty {
     }
     newValue = n->newValue;
     newTarget = n->newTarget;
-    for (BlockHandle h : n->pins) {
-      pins.append(h); /* n's discard then unpins nothing */
+    for (HistoryBlock &p : n->pins) {
+      pins.append(std::move(p));
     }
     n->pins.clear();
-    if (!lib) {
-      lib = n->lib;
-    }
     return true;
   }
 
@@ -154,6 +163,7 @@ struct SetProperty {
   }
   Status writeStatus(Context &ctx, const PropValue &v, const BlockId &target) const
   {
+    CDCC_TRY(sameLibrary(ctx));
     Result<ResolvedPath> rp = resolve(ctx, ref);
     if (!rp.ok()) {
       return rp.status();

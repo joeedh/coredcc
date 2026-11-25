@@ -32,6 +32,7 @@ enum class DocFault {
   WrongStrength,  /* serialize: a strong ref written as weak */
   LeaveBytes,     /* deserialize: stops early */
   NoData,         /* deserialize: forgets setData */
+  LateSticky,     /* duplicate: a sticky error after setData */
 };
 
 struct DocHost {
@@ -45,6 +46,9 @@ struct DocHost {
   /** What rekey answers; by default, another id of the same client. */
   litestl::util::function<BlockId(const Datablock &, const RekeyContext &)> onRekey;
   int duplicated = 0;
+  /** What memSize answers. */
+  uint64_t dataSize = 0;
+  litestl::util::function<void()> onSerialize;
   litestl::util::function<void()> onDuplicate;
 };
 
@@ -123,6 +127,9 @@ template <bool Extras> struct DocProviderT {
   Status serialize(const Datablock &b, BlockWriter &out) const
   {
     const Doc *d = static_cast<const Doc *>(b.clientData());
+    if (host->onSerialize) {
+      host->onSerialize();
+    }
     if (host->fault == DocFault::Error) {
       return Status::error(StatusCode::Unsupported, "not today");
     }
@@ -205,6 +212,9 @@ template <bool Extras> struct DocProviderT {
     Doc *copy = litestl::alloc::New<Doc>("Doc");
     *copy = *d;
     out.setData(copy);
+    if (host->fault == DocFault::LateSticky) {
+      host->rt->setStickyError(Status::error(StatusCode::Internal, "duplicate threw late"));
+    }
     return Status();
   }
   BlockId rekey(const Datablock &imported, const RekeyContext &context) const
@@ -215,6 +225,10 @@ template <bool Extras> struct DocProviderT {
     BlockId id = imported.id();
     id.local.hi ^= 1;
     return id;
+  }
+  uint64_t memSize(const Datablock &) const
+  {
+    return host->dataSize;
   }
   static lbt::Struct<DocProviderT> *defineBindings()
   {
@@ -228,6 +242,7 @@ template <bool Extras> struct DocProviderT {
     if constexpr (Extras) {
       BIND_STRUCT_METHOD(st, duplicate, MARGS("src", "out"));
       BIND_STRUCT_METHOD(st, rekey, MARGS("imported", "context"));
+      BIND_STRUCT_METHOD(st, memSize, MARGS("block"));
     }
     return st;
   }

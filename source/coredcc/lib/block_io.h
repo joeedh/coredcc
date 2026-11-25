@@ -115,8 +115,9 @@ class BlockReader {
   /** Appends the entries one BlockWriter::entries() call wrote. */
   void entries(litestl::util::Vector<BlockEntry> &out);
   /** Sets the entries into the bag, and the cells of its pointers into blocks. Those no def
-   * takes, or that don't coerce, land in `unread`: keep them, report their refs from
-   * foreachRef, and write them again, so a file survives a build that doesn't know them. */
+   * takes, or whose value it would change (a number out of its range), land in `unread`: keep
+   * them, report their refs from foreachRef, and write them again, so a file survives a build
+   * that doesn't know them. */
   void bag(PropertyBag &bag, BagRefs &refs, litestl::util::Vector<BlockEntry> &unread);
   /** Counts memory that is about to be allocated, so that the load's LoadLimits bound it.
    * False, and a failure, when there isn't that much left. */

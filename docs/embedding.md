@@ -33,16 +33,35 @@ Unreal, coredcc is exactly one module, so they exist once.
   that has its own lz4 gets two copies of its symbols when both are linked statically.
 
 ## Files
-- `loadLibrary` is safe on any input. It is bounded by `LoadLimits`: 2 GiB and 1,048,576 blocks
-  by default, 128 MiB in a 32-bit process. Memory that providers allocate in `deserialize` is
-  theirs to bound.
+- **What is saved:** the blocks that strong references lead to from the save roots. Those are Root
+  and FakeUser blocks, blocks with Host pins, Detached blocks, and placeholders that were records in
+  a file. A block that nothing leads to isn't saved, and neither are deleted ones.
+- **A host checks `SaveReport` after each save.** It lists what a load won't give back:
+  - issues: references that a provider's `serialize` and `foreachRef` disagree about;
+  - blocks that only Host pins keep. Pins aren't saved, so set FakeUser on what must last;
+  - Transient and Detached blocks, and what only Transient blocks lead to;
+  - what loading it takes, to compare with `LoadLimits`: the limits of a 32-bit process are lower.
+- A save fails, naming the types, when a block's or an attachment's type neither serializes nor says
+  that it is Transient.
+- `loadLibrary` takes damaged and hostile input. It is bounded by `LoadLimits`: 2 GiB and 1,048,576
+  blocks by default, 128 MiB in a 32-bit process. The limits cover the library's own structures, the
+  decompressed payloads, and the entries that providers read through `BlockReader`. Other memory
+  that providers allocate in `deserialize` is theirs to bound.
 - A load isn't undoable and needs a library without records: clear the history first.
+  `resolvePlaceholders` isn't undoable either: clear the history before it too.
 - `appendLibrary` adds a file's blocks to a library that has some, with new ids. `appendUndo` is the
-  same as an undo step. Blocks of a client other than coredcc need its provider's `rekey`.
+  same as an undo step. Blocks of a client other than coredcc need its provider's `rekey`, which may
+  answer the id of a missing block to fill it.
 - **Transient blocks** (the host's data, such as actors) aren't in the file. References to them
   load as MissingBlock records. Create them again with `createWithId` under the same ids, so ids
-  must be stable across sessions. `SaveReport` lists them, and the blocks only they lead to.
+  must be stable across sessions. One that has slots or attachments of its own is a record without
+  data, which keeps them until then. A command that does it uses `CreatedBlocks`, whose undo
+  makes the record a missing one again.
 - A type that was registered after a load reads its blocks with `resolvePlaceholders`.
+- **Saving and loading from TypeScript** is planned: the facades come with P2's step B4. Until then a
+  TS host needs its own C++ for it. Block and attachment providers can't be written in TS.
+- **Several libraries** can share an executor and a history. A command is undone through a Context of
+  the library it was done in; through another one, or when its library is gone, the undo fails.
 
 ## Graphs
 - **Destroy order:** GraphInstances, then standalone GraphDefs, then the Library, then the Runtime. An

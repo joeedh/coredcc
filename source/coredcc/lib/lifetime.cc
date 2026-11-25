@@ -7,6 +7,7 @@
 
 namespace coredcc {
 
+using litestl::util::Map;
 using litestl::util::Vector;
 
 namespace {
@@ -38,7 +39,12 @@ void Library::unpin(BlockHandle h, PinKind kind)
     }
     CDCC_CHECK(b->pins_[int(kind)] > 0, "unpin without a pin");
     b->pins_[int(kind)]--;
-    if (b->state_ == BlockState::Doomed && kind == PinKind::Host && b->pins(kind) == 0) {
+    if (kind != PinKind::Host || b->pins(kind) > 0) {
+      return;
+    }
+    releaseLent(*b);
+    b = rec(h);
+    if (b && b->state_ == BlockState::Doomed) {
       released_.append(h);
       releaseDoomed();
     }
@@ -106,53 +112,97 @@ const Datablock *Library::strongUserOf(BlockId id) const
   return found;
 }
 
-Status Library::destroyFromHistory(BlockHandle h)
+Map<BlockIdKey, const Datablock *> Library::strongUsersOf(std::span<const BlockHandle> blocks) const
 {
-  CDCC_TRY(busyIfSweeping("destroyFromHistory"));
-  Datablock *b = rec(h);
-  if (!b) {
-    return Status::error(StatusCode::NotFound, "destroyFromHistory: no such block");
+  Map<BlockIdKey, const Datablock *> users;
+  for (BlockHandle h : blocks) {
+    if (const Datablock *b = rec(h)) {
+      users.add_overwrite(keyOf(b->id_), nullptr);
+    }
   }
-  if (b->state_ != BlockState::InHistory) {
-    return Status::error(StatusCode::FailedPrecondition,
-                         (std::string("destroyFromHistory: block '") + b->name_.c_str() + "' is " +
-                          blockStateName(b->state_) + ", not InHistory")
-                             .c_str());
-  }
-  /* Its Strong ref would dangle: the delete should have taken that user too. Refuse; the
-   * block stays InHistory, which GC treats as a root. */
-  if (const Datablock *u = strongUserOf(b->id_)) {
-    return Status::error(StatusCode::FailedPrecondition,
-                         ("destroyFromHistory: '" + std::string(u->name_.c_str()) +
-                          "' still holds a Strong ref to '" + b->name_.c_str() + "'")
-                             .c_str());
-  }
-  if (b->pins(PinKind::Host) > 0) {
-    return doom(h);
-  }
-  Vector<BlockHandle> one;
-  one.append(h);
-  destroyBlocks(one);
-  if (rt_.hasStickyError()) {
-    return rt_.takeStickyError(); /* the provider's destroy failed; the block is gone */
-  }
-  return Status();
+  forEach([&](BlockHandle h, const Datablock &u) {
+    if (u.state_ == BlockState::InHistory) {
+      return;
+    }
+    foreachRef(h, [&](RefCell &cell) {
+      if (cell.kind == RefKind::Strong && !cell.target.isNull()) {
+        const Datablock **user = users.lookup_ptr(keyOf(clients_.canonical(cell.target)));
+        if (user && !*user) {
+          *user = &u;
+        }
+      }
+    }).ignore();
+  });
+  return users;
 }
 
-Status Library::doom(BlockHandle h)
+Status Library::destroyFromHistory(BlockHandle h)
 {
-  Vector<BlockHandle> one;
-  one.append(h);
+  return destroyFromHistory(std::span<const BlockHandle>(&h, 1));
+}
+
+Status Library::destroyFromHistory(std::span<const BlockHandle> blocks)
+{
+  CDCC_TRY(busyIfSweeping("destroyFromHistory"));
+  Status first;
+  const auto refuse = [&first](StatusCode code, const std::string &what) {
+    if (first.ok()) {
+      first = Status::error(code, ("destroyFromHistory: " + what).c_str());
+    }
+  };
+  const auto users = strongUsersOf(blocks);
+  Vector<BlockHandle> pinned, unpinned;
+  Map<BlockHandle, bool> seen;
+  for (BlockHandle h : blocks) {
+    const Datablock *b = rec(h);
+    if (!b) {
+      refuse(StatusCode::NotFound, "no such block");
+      continue;
+    }
+    if (b->state_ != BlockState::InHistory) {
+      refuse(StatusCode::FailedPrecondition,
+             std::string("block '") + b->name_.c_str() + "' is " + blockStateName(b->state_) +
+                 ", not InHistory");
+      continue;
+    }
+    /* Its Strong ref would dangle: the delete should have taken that user too. Refuse; the
+     * block stays InHistory, which GC treats as a root. */
+    if (const Datablock *u = *users.lookup_ptr(keyOf(b->id_))) {
+      refuse(StatusCode::FailedPrecondition, "'" + std::string(u->name_.c_str()) +
+                                                 "' still holds a Strong ref to '" +
+                                                 b->name_.c_str() + "'");
+      continue;
+    }
+    if (!seen.lookup_ptr(h)) {
+      seen.add(h, true);
+      (b->pins(PinKind::Host) > 0 ? pinned : unpinned).append(h);
+    }
+  }
+  doom(pinned);
+  destroyBlocks(unpinned);
+  if (rt_.hasStickyError()) {
+    Status s = rt_.takeStickyError(); /* a provider's destroy failed; the block is gone */
+    return first.ok() ? s : first;
+  }
+  return first;
+}
+
+void Library::doom(const Vector<BlockHandle> &blocks)
+{
+  if (blocks.size() == 0) {
+    return;
+  }
   sweeping_ = true; /* the providers' Busy rules, as in a sweep */
-  noticeWeakLost(one);
+  noticeWeakLost(blocks);
   sweeping_ = false;
-  Datablock *b = rec(h);
-  byId_.remove(keyOf(b->id_));
-  setState(*b, BlockState::Doomed);
-  doomedCount_++;
+  for (BlockHandle h : blocks) {
+    Datablock *b = rec(h);
+    byId_.remove(keyOf(b->id_));
+    setState(*b, BlockState::Doomed);
+    doomedCount_++;
+  }
   /* destroyBlocks of nothing would return early: run what the notices deferred here. */
   runDeferred();
-  return rt_.hasStickyError() ? rt_.takeStickyError() : Status();
 }
 
 void Library::releaseDoomed()

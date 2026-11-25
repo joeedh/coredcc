@@ -84,6 +84,31 @@ class Duplicator {
     return rt.hasStickyError() ? rt.takeStickyError() : s;
   }
 
+  /* Through the provider's `duplicate`. The record comes first, so the data always has one. */
+  Result<BlockHandle> duplicate(const Datablock &b,
+                                const BlockTypeRegistry::Entry &type,
+                                BlockId id)
+  {
+    PlaceholderInfo info;
+    info.name = b.name();
+    info.typeName = type.info.name;
+    Result<BlockHandle> made = lib_.addPlaceholder(id, std::move(info));
+    if (!made.ok()) {
+      return made;
+    }
+    made_.append(*made);
+    BlockCopy out;
+    detail::LibraryFiller::Scope scope(lib_);
+    BlockProvider p = type.provider.get();
+    Status s = sticky(rt_, p.duplicate(b, out));
+    void *data = detail::PayloadAccess::data(out);
+    if (s.ok() && !data) {
+      s = Status::error(StatusCode::Internal, "duplicate succeeded without calling setData");
+    }
+    CDCC_TRY(filler_.setData(*made, data, std::move(s)));
+    return made;
+  }
+
   Status copyBlock(BlockHandle h, const Datablock &b)
   {
     Result<BlockId> id = freshId(b.id().client);
@@ -94,24 +119,12 @@ class Duplicator {
     Result<BlockHandle> made = BlockHandle();
     const BlockTypeRegistry::Entry *type = types_.find(b.type());
     if (b.state() == BlockState::Live && type->provider->hasDuplicate()) {
-      BlockCopy out;
-      Status s;
-      {
-        detail::LibraryFiller::Scope scope(lib_);
-        BlockProvider p = type->provider.get();
-        s = sticky(rt_, p.duplicate(b, out));
-      }
-      CDCC_TRY(s);
-      if (!detail::PayloadAccess::data(out)) {
-        return Status::error(StatusCode::Internal, "duplicate succeeded without calling setData");
-      }
-      made = lib_.createWithId(b.type(), *id, b.name().c_str(),
-                               detail::PayloadAccess::data(out));
+      made = duplicate(b, *type, *id);
     }
     else {
       PlaceholderInfo info;
       info.name = b.name();
-      info.sourceName = b.sourceName();
+      info.sourceName = b.sourceStored() ? b.sourceName() : string();
       if (b.state() == BlockState::Live) {
         Result<BlockPayload> payload = writePayload(lib_, h);
         if (!payload.ok()) {
@@ -133,12 +146,14 @@ class Duplicator {
             (std::string("it is ") + blockStateName(b.state()) + ", without its data").c_str());
       }
       made = lib_.addPlaceholder(*id, std::move(info));
+      if (made.ok()) {
+        made_.append(*made);
+      }
     }
     if (!made.ok()) {
       return made.status();
     }
     copy.to = *made;
-    made_.append(copy.to);
     copies_.append(copy);
     ids_.add(b.id(), *id);
     lib_.setFlag(copy.to, BlockFlags::FakeUser, b.hasFlag(BlockFlags::FakeUser));

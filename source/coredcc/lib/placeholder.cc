@@ -1,6 +1,6 @@
 /* Placeholders: adding, filling and cutting them, and renaming any record. */
-#include "coredcc/lib/io/format.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/lib/type_names.h"
 
 #include <string>
 #include <utility>
@@ -31,12 +31,13 @@ Result<BlockHandle> Library::addPlaceholder(BlockId id, PlaceholderInfo info)
     return Status::error(StatusCode::InvalidArgument,
                          "addPlaceholder: a MissingType placeholder needs its type's name");
   }
-  const TypeId type = noType ? TypeId() : TypeId::of(info.typeName.c_str());
-  Result<BlockHandle> h = addRecord(type, id, info.name.c_str(), nullptr);
+  Result<BlockHandle> h =
+      addRecord(detail::typeNamed(info.typeName.c_str()), id, info.name.c_str(), nullptr);
   Datablock *b = rec(*h);
   b->state_ = BlockState::Placeholder;
   b->placeholderReason_ = info.reason;
   b->placeholderType_ = std::move(info.typeName);
+  b->sourceStored_ = info.sourceName.size() > 0;
   b->sourceName_ = std::move(info.sourceName);
   b->placeholderData_ = std::move(info.payload);
   return h;
@@ -54,32 +55,6 @@ Result<BlockHandle> Library::addPlaceholder(BlockId id,
   return addPlaceholder(id, std::move(info));
 }
 
-Result<BlockHandle> Library::adopt(BlockHandle h,
-                                   const BlockTypeRegistry::Entry &type,
-                                   std::string_view name,
-                                   void *clientData)
-{
-  Datablock *b = rec(h);
-  if (b->type_ && b->type_ != type.id) {
-    return Status::error(StatusCode::TypeMismatch,
-                         ("createWithId: the block was saved as a '" +
-                          std::string(b->placeholderType_.c_str()) + "', not a '" +
-                          type.info.name.c_str() + "'")
-                             .c_str());
-  }
-  if (detail::libio::hasCriticalField(b->fileExtension())) {
-    return Status::error(StatusCode::Unsupported,
-                         "createWithId: the block's record in the file needs a newer build");
-  }
-  b->type_ = type.id;
-  b->name_ = std::string(name).c_str();
-  b->clientData_ = clientData;
-  b->placeholderType_ = litestl::util::string();
-  b->placeholderData_ = BlockPayload(); /* the provider reports the references now */
-  setState(*b, BlockState::Live);
-  return h;
-}
-
 const Vector<RefCell> *Library::refTable(BlockHandle h, TypeId attachment) const
 {
   const Datablock *b = rec(h);
@@ -91,7 +66,7 @@ const Vector<RefCell> *Library::refTable(BlockHandle h, TypeId attachment) const
   }
   const Vector<RefCell> *table = nullptr;
   forEachOpaqueAttachment(h, [&](const OpaqueAttachment &o) {
-    if (TypeId::of(o.typeName.c_str()) == attachment) {
+    if (detail::typeNamed(o.typeName.c_str()) == attachment) {
       table = &o.payload.refs;
     }
   });

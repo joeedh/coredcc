@@ -33,7 +33,7 @@ stage TA2 (`docs/plans/2026-11-19-test-app.md`). Branch `p2-layout`.
 | Attachment type registry, serializer, duplicate policy, opaque attachments | P1c notes | A1, A4 |
 | Attach and detach commands | P1e notes | A3 |
 | `Library::rename`; enumerating slots, attachments, overrides | lib and api review D8 | A2 |
-| `forceUnlink` for references inside a placeholder | §8a | A2 |
+| `unlinkRef` (planned as `forceUnlink`) for references inside a placeholder | §8a | A2 |
 | `CreatedBlocks` with BlockIds | command review, design 9 | A3 |
 | Library section: save, load, placeholders | §8a, §14 | A4 |
 | Append with rekeying; duplicate | §8a | A5 |
@@ -312,7 +312,8 @@ Status Library::attach(BlockHandle h, TypeId type, void *data);    // the type m
     out of the cascade (they are the host's).
 - **Placeholder refs:** a placeholder keeps its ref table, visited by `foreachRef`.
   `forceUnlinkRef(h, index)` nulls a row (indices stay valid), and `core.block.unlinkRef` is the
-  undoable command. `forceUnlink` on slots stays.
+  undoable command. `forceUnlink` on slots stays. (Both were renamed by the review: `unlinkRef` and
+  `removeSlot`.)
 - **Two reasons** (`PlaceholderReason`):
   - `MissingType`: a record from a file whose type or payload can't be read. A GC root.
   - `MissingBlock`: the target of a Strong or OptStrong ref that has no record, or a record saved
@@ -534,6 +535,8 @@ class Layout { Vector<LayoutNode> nodes; Vector<LayoutAttr> attrs; ... };   // p
 - **Layout file:** `apps/testapp/layouts/testapp.xml`. Testbus: `panel({xml} | {file})`,
   `panelState()`, `panelSet(id, value)`, `panelClick(id)`; the last two dispatch DOM events on the
   widget. `info().build` is `ta2`.
+- **Library IO for TS hosts** (review of library IO, 18): minimal facades for save, load, append and
+  resolve, with their reports.
 
 ## Step B5: `gen-paths`
 - `apiCatalog(ctx)` (JSON: every ApiStruct's members through `meta`'s writer, and the commands
@@ -606,11 +609,14 @@ Each step is committed with the full gate green. P2a and P2b merge to master sep
 Those the pressure test couldn't, or that the revision added:
 1. Nothing outside `lib/` depends on `destroyFromHistory` destroying a Host-pinned block at once.
 2. A Doomed block never reappears through relations, saves, `deletePreview` or `validate`.
-3. The writer's output always loads, for any library P1's API can build.
-4. Loading is linear, within the budget, on any input.
+3. The writer's output always loads, for any library P1's API can build. *Broke (review, 4):* null and
+   repeated attachments. Fixed in round 2: the API refuses them.
+4. Loading is linear, within the budget, on any input. *Broke (review, 5):* a pointer's key escaped the
+   budget, and ids with equal low halves made saves quadratic (15). Fixed in rounds 1 and 2.
 5. `markDeleted` on Placeholder and Detached breaks no P1 rule (`destroyBlocks`' severing,
    the audit, weak-target notices).
 6. Adoption keeps every pin, slot and attachment, and undo of the adopting command is sound.
+   *Broke (review, 3):* undo lost the record. Fixed in round 2 with un-adopt.
 7. An unread entry and its refs survive any number of load and save rounds.
 8. wasm: an allocation beyond the memory limit fails the probe, and doesn't corrupt memory.
 9. DOM events work in a hidden NW.js window (TA0 already runs hidden).
@@ -918,3 +924,47 @@ Numbers are the report's (`docs/reports/feature-report-library-io-2026-11-24.md`
 - **The golden file changed** (4 more bytes per record), and its names are shorter so that BLCK stays
   below the compression threshold.
 - **Mutations:** 60 in these changes, all caught (8 of them only after the tests were extended).
+
+### Review of library IO, round 2 (2026-11-24)
+- **3 and 9, un-adopt:** `Library::unadopt` and `readopt` (`lib/adopt.cc`). The record keeps its handle,
+  id and pins; the data moves to a second record in the Doomed state, which already means "held only
+  by Host pins, reached only by its handle". What the record was is a stack, because an append's
+  record without data can fill a missing block that the host then fills. Claim 6 holds now.
+  - Host pins on the record hold the data through a pin of their own (`Adoption::lent`).
+    `LibraryPin::dataAlive` is false while it is taken back.
+  - `onHostDestroyed` and `onHostRestored` reach the data while it is taken back.
+  - Slots go back as a whole. Attachments that came with the data go with it.
+- **6:** the references of a Transient block that gets a record are in its ref table, so what they lead
+  to survives a load until the host fills it.
+- **7:** a save marks up to three times, the extra ones only when there are Host pins or Transient
+  blocks that are left out.
+- **10:** `Scope` takes a const Library and casts it: a save takes one, and what its providers may do is
+  deferred. Scopes nest. `lib/payload_access.h` has the forms that run inside one.
+- **13:** `BlockStorage` serves attachment types too. `SaveReport::skippedAttachments` is gone.
+- **16:** refused, not redirected to the command's own Library: the Context's root and owners are the
+  other document's. The executor then drops the step, as for any failed undo.
+- **17:** taken: the same value, a number of the other type that converts back, or another type
+  altogether (an enum's key). Kept as unread: the rest.
+- **26:** `loadBytes` is exact for a load of this build, which a test checks to the byte.
+- **27:** `LinearHistory` measures a step again after its undo and redo (`executor.cc`). Sizes are what
+  providers say: without `memSize`, only the record counts.
+- **28 and the batch delete:** `core.block.delete` and `core.block.duplicate` have `block` and `blocks`;
+  either may be empty. C++ has `deletePreview(lib, span)` and `destroyFromHistory(span)`.
+- **30:** a `rekey` that fails in a load is an issue, and the block gets a random id.
+- **Mutations:** 133, of which 127 fail a test. The other 6:
+  - two were redundant code, now removed (`destroyBlocks` releasing lent pins, which a block without
+    Host pins doesn't have, and `CreatedBlocks::discard` dropping a pin early);
+  - two can't be seen: a stale handle left in `Adoption::lent`, and `canRun` of a detach, whose `exec`
+    refuses the same;
+  - the bound before converting a float to an int (undefined without it, and x86 gives the same
+    answer);
+  - a linear scan in `deletePreview`, which is too cheap for the time test's bound.
+
+### Deferred by the review of library IO
+Not scheduled; whoever needs one adds it to a plan.
+- **19:** choosing which blocks of a file to append, and listing its contents without loading it. The
+  options go into `AppendOptions`.
+- **20:** `LoadOptions::ignoreChecksum`: read on past a wrong checksum, with the damaged records as
+  issues. The format allows it: records are length-prefixed, and blobs have their own sizes.
+- **21:** aliases for renamed block types, attachment types, structs, runtime owners and slot
+  namespaces. `detail::typeNamed` is where the types' go.

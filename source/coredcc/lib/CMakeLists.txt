@@ -1,5 +1,6 @@
 coredcc_library(coredcc_lib
   SOURCES
+    adopt.cc
     attachment.cc
     bag_refs.cc
     bindings.cc

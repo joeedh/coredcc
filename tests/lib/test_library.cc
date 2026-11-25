@@ -398,8 +398,8 @@ static void test_placeholders_and_slots()
   test_assert(lib.slot(*ph, TypeId::of("gone.Widget"), 4) != nullptr);
   test_assert(lib.slot(*ph, TypeId::of("other.Ns"), 4) == nullptr); /* namespaced */
   test_assert(*lib.collect() == 0);
-  test_assert(lib.forceUnlink(*ph, TypeId::of("gone.Widget"), 4).ok());
-  test_assert(lib.forceUnlink(*ph, TypeId::of("gone.Widget"), 4).code() == StatusCode::NotFound);
+  test_assert(lib.removeSlot(*ph, TypeId::of("gone.Widget"), 4).ok());
+  test_assert(lib.removeSlot(*ph, TypeId::of("gone.Widget"), 4).code() == StatusCode::NotFound);
   test_assert(*lib.collect() == 1 && lib.get(target) == nullptr);
   test_assert(lib.get(*ph) != nullptr); /* placeholders are roots */
 }

@@ -1,10 +1,13 @@
 #include "coredcc/command/block_edits.h"
 
 #include "coredcc/api/change_bus.h"
+#include "coredcc/api/ref_text.h"
 #include "coredcc/command/executor.h"
 #include "coredcc/command/history_block.h"
+#include "coredcc/lib/type_names.h"
 
 #include "litestl/binding/binding.h"
+#include "litestl/util/map.h"
 
 #include <string>
 
@@ -27,6 +30,47 @@ Result<BlockHandle> blockInput(Context &ctx)
     return Status::error(StatusCode::FailedPrecondition, "block: no such block");
   }
   return h;
+}
+
+Result<litestl::util::Vector<BlockHandle>> blocksInput(Context &ctx)
+{
+  const std::string text = ctx.inputs()->get("blocks")->asString().c_str();
+  const PropValue *block = ctx.inputs()->get("block");
+  const bool hasBlock = block->tryPointer() && !block->tryPointer()->isNull();
+  litestl::util::Vector<BlockHandle> out;
+  litestl::util::Map<BlockHandle, bool> seen;
+  if (hasBlock || text.empty()) {
+    Result<BlockHandle> h = blockInput(ctx);
+    if (!h.ok()) {
+      return h.status();
+    }
+    out.append(*h);
+    seen.add(*h, true);
+  }
+  Library *lib = ctx.library();
+  if (!lib) {
+    return Status::error(StatusCode::FailedPrecondition, "the Context has no Library");
+  }
+  Result<litestl::util::Vector<BlockId>> ids = parseBlockIds(ctx.runtime(), text);
+  if (!ids.ok()) {
+    return Status::error(ids.status().code(),
+                         (std::string("blocks: ") + ids.status().message()).c_str());
+  }
+  for (const BlockId &id : *ids) {
+    const BlockHandle h = lib->find(id);
+    if (!h) {
+      return Status::error(StatusCode::FailedPrecondition,
+                           ("blocks: no such block " + formatBlockId(ctx.runtime(), id)).c_str());
+    }
+    if (!seen.lookup_ptr(h)) {
+      seen.add(h, true);
+      out.append(h);
+    }
+  }
+  if (out.size() == 0) {
+    return Status::error(StatusCode::FailedPrecondition, "block, blocks: no block is named");
+  }
+  return out;
 }
 
 } // namespace detail
@@ -62,7 +106,11 @@ struct RenameBlock {
   }
   Status apply(Context &ctx, const std::string &name)
   {
-    CDCC_TRY(ctx.library()->rename(block.get(), name));
+    Result<Library *> lib = detail::libraryOf(ctx, block.library());
+    if (!lib.ok()) {
+      return lib.status();
+    }
+    CDCC_TRY((*lib)->rename(block.get(), name));
     ctx.runtime().ext<ChangeBus>().notify(OwnerKey::ofBlock(block.id()), "name");
     return Status();
   }
@@ -113,7 +161,7 @@ struct UnlinkRef {
     const int64_t at = ctx.inputs()->get("index")->asInt();
     if (const std::string name = ctx.inputs()->get("attachment")->asString().c_str(); !name.empty())
     {
-      attachment = TypeId::of(name);
+      attachment = detail::typeNamed(name);
     }
     const litestl::util::Vector<RefCell> *rows = lib.refTable(*h, attachment);
     if (!rows || at < 0 || at >= int64_t(rows->size())) {
@@ -121,14 +169,27 @@ struct UnlinkRef {
     }
     index = int(at);
     before = (*rows)[index].target;
-    CDCC_TRY(lib.forceUnlinkRef(*h, index, attachment));
     block = HistoryBlock(lib, *h);
     target = HistoryBlock(lib, lib.find(before));
-    return Status();
+    return apply(ctx, BlockId());
   }
   Status apply(Context &ctx, BlockId to)
   {
-    return ctx.library()->relinkRef(block.get(), index, to, attachment);
+    Result<Library *> lib = detail::libraryOf(ctx, block.library());
+    if (!lib.ok()) {
+      return lib.status();
+    }
+    const Datablock *b = (*lib)->get(block.get());
+    if (b && !(*lib)->refTable(block.get(), attachment)) {
+      return Status::error(
+          StatusCode::FailedPrecondition,
+          ("'" + std::string(b->name().c_str()) + "' has been read since its reference was cut, so "
+           "its references are its provider's: clear the history when placeholders are resolved")
+              .c_str());
+    }
+    CDCC_TRY((*lib)->relinkRef(block.get(), index, to, attachment));
+    ctx.runtime().ext<ChangeBus>().notify(OwnerKey::ofBlock(block.id()), "references");
+    return Status();
   }
   void undo(Context &ctx)
   {

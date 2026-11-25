@@ -1,6 +1,7 @@
 #include "coredcc/api/library_io.h"
 
 #include "coredcc/api/change_bus.h"
+#include "coredcc/lib/io/load.h"
 #include "coredcc/lib/library.h"
 
 namespace coredcc {
@@ -45,7 +46,7 @@ Result<LoadReport> loadLibrary(Context &ctx,
 
 Result<AppendResult> appendLibrary(Context &ctx,
                                    std::span<const uint8_t> bytes,
-                                   const LoadOptions &options)
+                                   const AppendOptions &options)
 {
   if (!ctx.library()) {
     return noLibrary("appendLibrary");

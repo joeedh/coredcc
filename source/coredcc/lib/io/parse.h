@@ -76,7 +76,8 @@ struct ParsedFile {
   litestl::util::Vector<ParsedSlot> slots;
   litestl::util::Vector<ParsedAttachment> attachments;
   litestl::util::Vector<litestl::util::Vector<uint8_t>> blobs;
-  /** Strong targets that aren't records, here or in the library: each becomes one. Canonical, sorted, distinct. */
+  /** Strong targets that aren't records, here or in the library: each becomes one. Canonical,
+   * sorted, distinct. */
   litestl::util::Vector<BlockId> missing;
   Budget budget;
 };
@@ -89,7 +90,7 @@ Result<std::unique_ptr<ParsedFile>> parseLibrary(std::span<const uint8_t> bytes,
                                                  const LoadLimits &limits,
                                                  IoIssues &issues);
 
-/** Gives an imported block an id, or a null one. */
+/** Gives an imported block an id, or a null one. May leave a sticky error. */
 using RekeyFn =
     litestl::util::function<BlockId(const ParsedRecord &, BlockId id, const RekeyContext &)>;
 
@@ -106,10 +107,15 @@ Status planAppend(ParsedFile &file,
                   IoIssues &issues);
 
 /**
- * Gives every record its id in `lib` (client aliases applied), and every reference its target.
+ * Gives every record its id in `lib` (client aliases applied; `rekey` is asked for one whose id
+ * another record then has), and every reference its target.
  * Checks the names against the Runtime's and the library's, then adds those they don't know to
  * lib.fileNames().
  */
-Status planIds(ParsedFile &file, Library &lib, const LoadLimits &limits, IoIssues &issues);
+Status planIds(ParsedFile &file,
+               Library &lib,
+               const LoadLimits &limits,
+               RekeyFn rekey,
+               IoIssues &issues);
 
 } // namespace coredcc::detail::libio

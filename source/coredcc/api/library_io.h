@@ -22,7 +22,7 @@ namespace coredcc {
  *   report lists all of it.
  * - Ids are kept, except where a client alias makes one id of two: the block under the old
  *   name gets a new one.
- * - Not undoable. Busy during a sweep, a load or an evaluation.
+ * - Not undoable. Busy during a sweep, a load, a save or an evaluation.
  */
 Result<LoadReport> loadLibrary(Context &ctx,
                                std::span<const uint8_t> bytes,
@@ -34,7 +34,10 @@ Result<LoadReport> loadLibrary(Context &ctx,
  * - Every block of the coredcc client gets a fresh id; other clients' blocks get what their
  *   type's `rekey` answers. A block whose type is missing, has no `rekey`, refuses, or answers
  *   an id that is in use or another client's, refuses the whole append (FailedPrecondition,
- *   naming the types).
+ *   naming the types). Choosing which blocks to append isn't possible yet.
+ * - An answer may be the id of a MissingBlock here, of no type or the block's, unless its record
+ *   has fields of a newer build. The import fills it. Slots it has are replaced by the file's;
+ *   attachments it has stay, with an issue for the file's.
  * - References within the file follow the new ids. Others find their blocks in the library, or
  *   get MissingBlock records. Blocks that were roots in the file become FakeUser here.
  * - Otherwise as loadLibrary: a refused append changes nothing, and one that isn't refused works.
@@ -42,12 +45,13 @@ Result<LoadReport> loadLibrary(Context &ctx,
  */
 Result<AppendResult> appendLibrary(Context &ctx,
                                    std::span<const uint8_t> bytes,
-                                   const LoadOptions &options = {});
+                                   const AppendOptions &options = {});
 
 /**
  * Reads the MissingType placeholders and opaque attachments whose types have been registered
  * since the load. The report's blocks are those that changed; its issues say why the others
- * didn't.
+ * didn't. Not undoable: clear the history first, as before a load. The undo of a step that cut
+ * a reference of such a placeholder (core.block.unlinkRef) fails afterwards.
  */
 Result<LoadReport> resolvePlaceholders(Context &ctx);
 

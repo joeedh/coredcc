@@ -7,6 +7,7 @@
 #include "coredcc/base/iface/owned.h"
 #include "coredcc/base/runtime.h"
 #include "coredcc/lib/block_io.h"
+#include "coredcc/lib/registry.h"
 
 #include "litestl/util/map.h"
 #include "litestl/util/string.h"
@@ -24,9 +25,10 @@ namespace coredcc {
  * - `create` makes empty data, for code that attaches by type name alone.
  * - `copy` makes a copy for a duplicate of `from` (DuplicatePolicy::Copy needs it). References
  *   are copied as they are; the library remaps them.
- * - `serialize` and `deserialize` come together, and work as BlockProvider's do. A type
- *   without them isn't saved.
- * - `foreachRef` reports the data's references, as BlockProvider::foreachRef does.
+ * - `serialize` and `deserialize` come together, and work as BlockProvider's do. A type without
+ *   them says in its info that it is Transient.
+ * - `foreachRef` reports the data's references, as BlockProvider::foreachRef does. A save checks
+ *   them against what `serialize` wrote.
  * - `onWeakTargetLost` is told when a block that the data weakly references (`foreachRef` says)
  *   is about to be destroyed. The block may be in any state.
  */
@@ -108,6 +110,7 @@ struct AttachmentTypeInfo {
   /** The payload version `serialize` writes. */
   uint32_t payloadVersion = 1;
   DuplicatePolicy onDuplicate = DuplicatePolicy::Drop;
+  BlockStorage storage = BlockStorage::Unspecified;
 };
 
 /** Attachment types and their providers. A Runtime extension. */
@@ -127,7 +130,8 @@ class AttachmentTypeRegistry {
   AttachmentTypeRegistry &operator=(const AttachmentTypeRegistry &) = delete;
 
   /** Registers a type. Takes the provider. Refuses one of serialize and deserialize without
-   * the other, DuplicatePolicy::Copy without `copy`, and a block type's name. */
+   * the other, a `storage` that contradicts them, DuplicatePolicy::Copy without `copy`, and a
+   * block type's name. */
   Result<TypeId> add(AttachmentTypeInfo info, Owned<AttachmentProvider> provider);
   const Entry *find(TypeId type) const;
 

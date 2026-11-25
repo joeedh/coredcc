@@ -5,10 +5,12 @@
 #include "coredcc/command/executor.h"
 #include "coredcc/command/history_block.h"
 #include "coredcc/lib/attachment.h"
+#include "coredcc/lib/type_names.h"
 
 #include "litestl/binding/binding.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace coredcc {
@@ -35,6 +37,8 @@ struct DetachedData {
   Runtime *rt = nullptr;
   TypeId type;
   void *data = nullptr;
+  /* Instead of data: one that this build couldn't read. */
+  std::optional<OpaqueAttachment> opaque;
 
   void destroy()
   {
@@ -60,15 +64,32 @@ struct AttachmentEdit {
   }
   Status attach(Context &ctx)
   {
-    CDCC_TRY(ctx.library()->attach(block.get(), held->type, held->data));
-    held->data = nullptr;
+    Result<Library *> lib = detail::libraryOf(ctx, block.library());
+    if (!lib.ok()) {
+      return lib.status();
+    }
+    if (held->opaque) {
+      CDCC_TRY((*lib)->attachOpaque(block.get(), *held->opaque));
+      held->opaque.reset();
+    }
+    else {
+      CDCC_TRY((*lib)->attach(block.get(), held->type, held->data));
+      held->data = nullptr;
+    }
     targets.clear();
     notify(ctx);
     return Status();
   }
   Status detach(Context &ctx)
   {
-    Library &lib = *ctx.library();
+    Result<Library *> in = detail::libraryOf(ctx, block.library());
+    if (!in.ok()) {
+      return in.status();
+    }
+    Library &lib = **in;
+    if (!lib.attachment(block.get(), held->type)) {
+      return detachOpaque(ctx, lib);
+    }
     Result<void *> d = lib.detach(block.get(), held->type);
     if (!d.ok()) {
       return d.status();
@@ -100,6 +121,30 @@ struct AttachmentEdit {
     notify(ctx);
     return Status();
   }
+  Status detachOpaque(Context &ctx, Library &lib)
+  {
+    Result<OpaqueAttachment> o = lib.detachOpaque(block.get(), held->type);
+    if (!o.ok()) {
+      return o.status();
+    }
+    held->opaque = std::move(o).value();
+    for (const RefCell &cell : held->opaque->payload.refs) {
+      if (const BlockHandle t = lib.find(cell.target)) {
+        targets.append(HistoryBlock(lib, t));
+      }
+    }
+    notify(ctx);
+    return Status();
+  }
+  uint64_t memSize() const
+  {
+    uint64_t n = uint64_t(targets.size()) * sizeof(HistoryBlock);
+    if (held->opaque) {
+      n += uint64_t(held->opaque->payload.bytes.size()) +
+           uint64_t(held->opaque->payload.refs.size()) * sizeof(RefCell);
+    }
+    return n;
+  }
   void notify(Context &ctx)
   {
     ctx.runtime().ext<ChangeBus>().notify(OwnerKey::ofBlock(block.id()), "attachments");
@@ -125,11 +170,15 @@ template <bool Attach> struct EditCommand {
 
   Status canRun(Context &ctx) const
   {
-    CDCC_TRY(detail::blockInput(ctx).status());
+    Result<BlockHandle> h = detail::blockInput(ctx);
+    if (!h.ok()) {
+      return h.status();
+    }
     const std::string name = ctx.inputs()->get("type")->asString().c_str();
-    const AttachmentTypeRegistry::Entry *e = findType(ctx.runtime(), TypeId::of(name));
+    const TypeId type = detail::typeNamed(name);
+    const AttachmentTypeRegistry::Entry *e = findType(ctx.runtime(), type);
     if (!e) {
-      return noType(name);
+      return !Attach && ctx.library()->hasAttachment(*h, type) ? Status() : noType(name);
     }
     if (Attach && !e->provider->hasCreate()) {
       return Status::error(StatusCode::Unsupported,
@@ -139,7 +188,7 @@ template <bool Attach> struct EditCommand {
   }
   Status exec(Context &ctx)
   {
-    const TypeId type = TypeId::of(ctx.inputs()->get("type")->asString().c_str());
+    const TypeId type = detail::typeNamed(ctx.inputs()->get("type")->asString().c_str());
     Result<BlockHandle> h = detail::blockInput(ctx);
     if (!h.ok()) {
       return h.status();
@@ -176,7 +225,7 @@ template <bool Attach> struct EditCommand {
   }
   uint64_t memSize() const
   {
-    return sizeof(*this) + uint64_t(edit.targets.size()) * sizeof(HistoryBlock);
+    return sizeof(*this) + edit.memSize();
   }
   void discard()
   {
@@ -205,6 +254,9 @@ struct AttachData {
     if (!ctx.library()) {
       return Status::error(StatusCode::FailedPrecondition, "the Context has no Library");
     }
+    if (!ctx.library()->get(target)) {
+      return Status::error(StatusCode::NotFound, "attachUndo: no such block");
+    }
     edit.begin(ctx, target, edit.held->type);
     return edit.attach(ctx);
   }
@@ -220,7 +272,7 @@ struct AttachData {
   }
   uint64_t memSize() const
   {
-    return sizeof(*this) + uint64_t(edit.targets.size()) * sizeof(HistoryBlock);
+    return sizeof(*this) + edit.memSize();
   }
   void discard()
   {
@@ -241,7 +293,13 @@ Status attachUndo(Context &ctx, BlockHandle h, TypeId type, void *data)
   Runtime &rt = ctx.runtime();
   if (!findType(rt, type)) {
     const char *name = rt.nameOf(type);
-    return noType(name ? name : "?");
+    return Status::error(
+        StatusCode::InvalidArgument,
+        ("attachUndo: no attachment type '" + std::string(name ? name : "?") + "' is registered")
+            .c_str());
+  }
+  if (!data) {
+    return Status::error(StatusCode::InvalidArgument, "attachUndo: the data is null");
   }
   auto held = std::make_shared<DetachedData>();
   held->rt = &rt;

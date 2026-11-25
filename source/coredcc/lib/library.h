@@ -17,6 +17,7 @@
 #include "litestl/util/vector.h"
 
 #include <memory>
+#include <span>
 #include <string_view>
 
 namespace coredcc {
@@ -34,7 +35,7 @@ struct LibraryToken;
  * **Busy rules.** While a sweep runs (collect(), destroyFromHistory(), the destructor),
  * providers' `destroy` may call back in: reads work, void mutations are deferred
  * until the sweep ends, and calls that return a Status fail with Busy. The same holds in
- * providers' `deserialize` while a load runs.
+ * providers' slots while a load, a save or a duplication runs.
  */
 class Library {
  public:
@@ -67,7 +68,8 @@ class Library {
    * the type's client. */
   Result<BlockHandle> create(TypeId type, std::string_view name, void *clientData);
   /** A new block with an id the client built (unique within the client: salt it per
-   * document). AlreadyExists if a record has the id. */
+   * document). AlreadyExists if a record has the id, except a MissingBlock of no type or this
+   * one, which is filled in place: it keeps its slots, attachments and flags. */
   Result<BlockHandle> createWithId(TypeId type,
                                    BlockId id,
                                    std::string_view name,
@@ -78,6 +80,18 @@ class Library {
    * AlreadyExists; any other record is FailedPrecondition: restore it instead.
    */
   Result<BlockHandle> reviveAs(TypeId type, BlockId id, std::string_view name, void *clientData);
+  /** Whether `h` was a MissingBlock that createWithId or an append filled. */
+  bool adopted(BlockHandle h) const;
+  /**
+   * The undo of filling a MissingBlock: `h` is one again, as it was, and what came since (the
+   * data, slots, attachments, flags) moves to a Doomed record, which is the result. Pin that
+   * (PinKind::Host, LibraryPin): its data is destroyed when the last pin goes, or when those that
+   * were on `h` go. FailedPrecondition when `h` is deleted or wasn't adopted.
+   */
+  Result<BlockHandle> unadopt(BlockHandle h);
+  /** The redo: moves it back into `h`. FailedPrecondition when `h` isn't missing any more,
+   * NotFound when the data is gone. */
+  Status readopt(BlockHandle h, BlockHandle kept);
   /** A record for a block whose type or data is missing (see PlaceholderReason). */
   Result<BlockHandle> addPlaceholder(BlockId id, PlaceholderInfo info);
   /** A MissingType placeholder without references. */
@@ -127,6 +141,9 @@ class Library {
    * History pins don't matter here: the step holding one can't undo past this one.
    */
   Status destroyFromHistory(BlockHandle h);
+  /** The same for many, in one pass over the library. Those that can't be destroyed stay; the
+   * result is the first error. */
+  Status destroyFromHistory(std::span<const BlockHandle> blocks);
   /** The host destroyed the data: Live -> Detached. On an InHistory block it changes the
    * state restoring goes back to. */
   Status onHostDestroyed(BlockId id);
@@ -171,10 +188,10 @@ class Library {
   /** Sets slot (ns, key) on `owner`. `ns` is the owning provider's or attachment's type,
    * so two clients' slots can't collide. */
   Status setSlot(BlockHandle owner, TypeId ns, int64_t key, BlockId target, RefKind kind);
-  /** The slot, or null. Valid until the next setSlot or forceUnlink on `owner`. */
+  /** The slot, or null. Valid until the next setSlot or removeSlot on `owner`. */
   const RefCell *slot(BlockHandle owner, TypeId ns, int64_t key) const;
   /** Removes a slot. */
-  Status forceUnlink(BlockHandle owner, TypeId ns, int64_t key);
+  Status removeSlot(BlockHandle owner, TypeId ns, int64_t key);
   /** Calls fn(TypeId ns, int64_t key, const RefCell &) for each slot. `fn` must not change
    * them. */
   template <class Fn> void forEachSlot(BlockHandle owner, Fn &&fn) const
@@ -193,11 +210,11 @@ class Library {
   const litestl::util::Vector<RefCell> *refTable(BlockHandle h, TypeId attachment = {}) const;
   /** Nulls row `index` of a table (its indices stay valid), so a block it references can be
    * deleted. */
-  Status forceUnlinkRef(BlockHandle h, int index, TypeId attachment = {})
+  Status unlinkRef(BlockHandle h, int index, TypeId attachment = {})
   {
     return relinkRef(h, index, BlockId(), attachment);
   }
-  /** Sets a row again: the undo of forceUnlinkRef. */
+  /** Sets a row again: the undo of unlinkRef. */
   Status relinkRef(BlockHandle h, int index, BlockId target, TypeId attachment = {});
 
   /** Every reference out of `h`: the provider's, the slots', then the attachments'
@@ -240,12 +257,18 @@ class Library {
 
   /** Attaches client data to a block under `type`, which must be in the
    * AttachmentTypeRegistry; its provider destroys the data with the block. AlreadyExists if
-   * the block has one, read or opaque. The undoable
-   * attach and detach commands are in command/. */
+   * the block has one, read or opaque. `data` isn't null, also for a tag. On an error the data
+   * stays the caller's. The undoable attach and detach commands are in command/. */
   Status attach(BlockHandle h, TypeId type, void *data);
   /** Removes an attachment without destroying it, returning its data. */
   Result<void *> detach(BlockHandle h, TypeId type);
   void *attachment(BlockHandle h, TypeId type) const;
+  /** Whether the block has an attachment of `type`, read or opaque. */
+  bool hasAttachment(BlockHandle h, TypeId type) const;
+  /** Removes an attachment that this build couldn't read. */
+  Result<OpaqueAttachment> detachOpaque(BlockHandle h, TypeId type);
+  /** Puts one back. AlreadyExists if the block has one of its type. */
+  Status attachOpaque(BlockHandle h, OpaqueAttachment attachment);
   /** Calls fn(TypeId, void *data) for each attachment. `fn` must not change them. */
   template <class Fn> void forEachAttachment(BlockHandle h, Fn &&fn) const
   {
@@ -306,7 +329,8 @@ class Library {
   {
     return sweeping_;
   }
-  /** Sweeping, collecting or loading: calls that return a Status fail with Busy. */
+  /** Sweeping, collecting, loading, saving or duplicating: calls that return a Status fail
+   * with Busy. */
   bool busy() const
   {
     return sweeping_ || collecting_ || loading_;
@@ -318,6 +342,9 @@ class Library {
   {
     pool_.setQuarantine(on);
   }
+
+  /** What `h` takes: its record, and its data if the provider says (BlockProvider::memSize). */
+  uint64_t memSize(BlockHandle h) const;
 
   /** At most one record per BlockId, and the index matches the records. */
   Status validate() const;
@@ -338,6 +365,11 @@ class Library {
                             const BlockTypeRegistry::Entry &type,
                             std::string_view name,
                             void *clientData);
+  /** Notes what `b`, a MissingBlock, is, before it is filled. */
+  void keepMissing(Datablock &b);
+  void splitAdopted(Datablock &from, Datablock &to);
+  /** The last Host pin on `b` is gone. */
+  void releaseLent(Datablock &b);
   /** A key for maps over block ids; only for this Library's maps. */
   BlockIdKey keyOf(const BlockId &id) const
   {
@@ -363,7 +395,10 @@ class Library {
   }
   /** A Live, Detached or Placeholder block with a Strong ref to `id`, or null. */
   const Datablock *strongUserOf(BlockId id) const;
-  Status doom(BlockHandle h);
+  /** For each block with a Strong user outside the history, that user. */
+  litestl::util::Map<BlockIdKey, const Datablock *> strongUsersOf(
+      std::span<const BlockHandle> blocks) const;
+  void doom(const litestl::util::Vector<BlockHandle> &blocks);
   /** onHostDestroyed and onHostRestored: the data's state goes from `from` to `to`. */
   Status hostChanged(Datablock &b, const char *op, BlockState from, BlockState to);
   /** Destroys the Doomed blocks that lost their last Host pin, unless the library is busy
@@ -402,7 +437,7 @@ class Library {
 
   int doomedCount_ = 0;
   bool releasing_ = false;
-  /** A load is calling providers. */
+  /** A load, a save or a duplication is calling providers. */
   bool loading_ = false;
   /** Doomed blocks without Host pins, waiting for releaseDoomed. */
   litestl::util::Vector<BlockHandle> released_;

@@ -362,11 +362,12 @@ describe('coredcc wasm-st spike', () => {
       }
     )
     cdcc.invoke(ctx, 'ts.add(amount=1)') /* recorded, memSize counted as 0 */
-    cdcc.undo(ctx)
+    cdcc.undo(ctx) /* memSize is read again */
+    assert.equal(warn.mock.callCount(), 2)
     cdcc.set(ctx, 'strength', 0.1) /* truncates the redo side: discard throws */
     assert.equal(cdcc.get(ctx, 'strength'), 0.1)
     assert.equal(spike.historySize(hostOf(ctx)), 1)
-    assert.equal(warn.mock.callCount(), 2)
+    assert.equal(warn.mock.callCount(), 3)
   })
 
   test('T5, T6: Float defaults, and numbers past int64 and 2^53', () => {

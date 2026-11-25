@@ -30,24 +30,33 @@ class LibraryFiller {
   /** While one lives, the library is busy and void mutations are deferred. */
   class Scope {
    public:
-    explicit Scope(Library &lib);
+    /** Const, for a save: what the providers may do to the library is deferred, and a Library
+     * is never a const object. They nest. */
+    explicit Scope(const Library &lib);
     ~Scope();
     Scope(const Scope &) = delete;
     Scope &operator=(const Scope &) = delete;
 
    private:
     Library &lib_;
+    bool before_;
   };
 
   /* ---- before the Scope ---- */
 
-  /** A record with the given flags and slots. */
-  Result<BlockHandle> addRecord(BlockId id, PlaceholderInfo info, BlockFlags flags);
+  /** A record with the given flags and slots. With `refill`, an append's: it fills the
+   * MissingBlock that has the id, if there is one. */
+  Result<BlockHandle> addRecord(BlockId id,
+                                PlaceholderInfo info,
+                                BlockFlags flags,
+                                bool refill = false);
   void addSlot(BlockHandle h, TypeId ns, int64_t key, const RefCell &cell);
-  void addOpaque(BlockHandle h, OpaqueAttachment attachment);
+  /** False if the block has one of its type. */
+  bool addOpaque(BlockHandle h, OpaqueAttachment attachment);
   void addAttachment(BlockHandle h, TypeId type, void *data);
   /** Copies the extension of the block's file record. */
   void setExtension(BlockHandle h, std::span<const uint8_t> bytes);
+  /** Where a placeholder came from, for messages. A source that was stored stays. */
   void setSource(BlockHandle h, const litestl::util::string &source);
 
   /* ---- inside it ---- */
@@ -62,7 +71,7 @@ class LibraryFiller {
   /* ---- after it ---- */
 
   /** Makes a MissingBlock record for each block noteMissing found. */
-  void makeMissing();
+  void makeMissing(const litestl::util::string &source = {});
 
   /** Ok when `lib` can be filled: not busy, not evaluating, no sticky error pending. */
   static Status ready(const Library &lib, const char *what);
@@ -74,6 +83,9 @@ class LibraryFiller {
                        BlockId id,
                        const PlaceholderInfo &info,
                        const RekeyContext &context);
+  /** Makes `data` the record's, which is Live then. If `s` isn't ok, the provider destroys it
+   * instead. */
+  Status setData(BlockHandle h, void *data, Status s);
   /** readPayload without its checks: `h` is Live and has no data. */
   static Status read(Library &lib,
                      BlockHandle h,

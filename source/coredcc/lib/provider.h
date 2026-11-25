@@ -18,8 +18,8 @@ class RekeyContext {
   {
     return lib_;
   }
-  /** Whether a block of the append may get `id`: it isn't null, and no block here or of the
-   * append has it. */
+  /** Whether the imported block may get `id`: it isn't null, no block of the append has it, and
+   * none here, except a MissingBlock that the import can fill. */
   bool isFree(const BlockId &id) const
   {
     return isFree_(self_, id);
@@ -40,10 +40,10 @@ class RekeyContext {
  *
  * - `data` resolves the block's data on every use; it may return null (a Detached
  *   block, a host object that went away).
- * - `foreachRef` is the single source of truth for the block's references. It is called
- *   for Live, InHistory and Detached blocks (a Detached block's targets must survive
- *   GC until the host restores it); report nothing if the data is gone. Report
- *   every RefCell in the block's data, strong and weak.
+ * - `foreachRef` is the single source of truth for the block's references. It is called for
+ *   Live, InHistory, Detached and Doomed blocks (a Detached block's targets must survive GC until
+ *   the host restores it, and a Doomed one's while something pins its data); report nothing if
+ *   the data is gone. Report every RefCell in the block's data, strong and weak.
  * - `destroy` frees the data (for a host-owned block, only the wrapper). It runs during
  *   a sweep: library reads are allowed, void mutations are deferred, creates fail.
  * - `queryInterface` (optional) answers interfaces the block type doesn't implement
@@ -60,7 +60,10 @@ class RekeyContext {
  *   them through foreachRef.
  * - `rekey` (optional) gives an imported block an id the client can resolve (a UUID in host
  *   data), one that `context.isFree`. A null id refuses the import. `imported` isn't a record
- *   yet; it has the id the file has, the type and the name.
+ *   yet; it has the id the file has, the type and the name. The id of a MissingBlock is free: the
+ *   import then fills it.
+ * - `memSize` (optional) is about what the block's data takes in memory, in bytes. The undo
+ *   history counts it for blocks that only the history holds.
  */
 struct BlockProvider : IfaceRef {
   void *data(const Datablock &block) const
@@ -123,6 +126,14 @@ struct BlockProvider : IfaceRef {
   {
     return CDCC_CALL(rekey, imported, context);
   }
+  bool hasMemSize() const
+  {
+    return CDCC_HAS(memSize);
+  }
+  uint64_t memSize(const Datablock &block) const
+  {
+    return CDCC_CALL(memSize, block);
+  }
 
   CDCC_INTERFACE(BlockProvider, "coredcc::BlockProvider")
   {
@@ -135,6 +146,7 @@ struct BlockProvider : IfaceRef {
     BIND_OPTIONAL_METHOD(st, deserialize, MARGS("block", "in"));
     BIND_OPTIONAL_METHOD(st, duplicate, MARGS("src", "out"));
     BIND_OPTIONAL_METHOD(st, rekey, MARGS("imported", "context"));
+    BIND_OPTIONAL_METHOD(st, memSize, MARGS("block"));
   }
 };
 

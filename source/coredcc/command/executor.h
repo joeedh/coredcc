@@ -128,7 +128,8 @@ class UndoHistory {
  * - A push folds into the head only when the head is at the cursor, nothing has been
  *   undone or redone since it was pushed, and neither record has sub-commands.
  * - Past the memory budget the oldest commands are discarded; the newest always stays.
- *   Each record's memSize is read once, when it is pushed (or folded into).
+ *   A record's memSize is read when it is pushed or folded into, and after its undo and redo
+ *   (what it holds changes); the budget is applied at the next push.
  * - Barriers stop undo.
  * - A failed redo has undone its own partial work; that command and everything after it
  *   are dropped.
@@ -170,6 +171,8 @@ class LinearHistory final : public UndoHistory {
  private:
   void truncateRedo();
   void enforceBudget();
+  /** An undone command may hold more, or less. */
+  void measure(CommandRecord &rec);
   void drop(CommandRecord *r);
 
   litestl::util::Vector<CommandRecord *> entries_;

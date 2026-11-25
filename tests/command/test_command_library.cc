@@ -116,7 +116,7 @@ static void test_append()
   damaged[60] ^= 1;
   test_assert(appendUndo(c.ctx, view(damaged)).status().code() == StatusCode::InvalidArgument);
   test_assert(c.history.size() == 0 && w.lib.size() == 3);
-  LoadOptions options;
+  AppendOptions options;
   options.limits.maxBlocks = 1;
   test_assert(appendUndo(c.ctx, view(bytes), options).status().code() == StatusCode::OutOfRange);
   /* The history's budget sees the file's size. */

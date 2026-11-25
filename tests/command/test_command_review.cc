@@ -534,7 +534,7 @@ static void test_delete_cascade_states()
     test_assert(s.ex.run(s.ctx, kDeleteBlockCommand, deleteInputs(s, s.w.meshes[0], false)).ok());
     test_assert(s.ex.undo(s.ctx).ok());
     BlockHandle rig = makeRig(s, s.w.meshes[0]);
-    test_assert(hasMsg(s.ex.redo(s.ctx), "would now also delete 'rig'"));
+    test_assert(hasMsg(s.ex.redo(s.ctx), "would now also delete rig"));
     test_assert(s.w.lib.get(s.w.meshes[0])->state() == BlockState::Live);
     test_assert(s.w.lib.get(rig)->state() == BlockState::Live && s.history.size() == 0);
   }

@@ -229,7 +229,7 @@ static void test_round_trip()
   test_assert(report.blocks == 6 && report.issues.total == 0); /* all but `missing` */
   test_assert(report.detached.size() == 1 && report.detached[0] == host);
   test_assert(report.transient.size() == 0 && report.throughTransient.size() == 0);
-  test_assert(report.skippedAttachments == 0);
+  test_assert(report.hostPinned.size() == 0);
   test_assert(bytes.size() < 4000); /* compressed: the entries alone are more than 6 KB */
   IoWorld r;
   LoadReport loaded;
@@ -479,7 +479,7 @@ static void test_transient()
   test_assert(w.lib.attach(root, kBare, &w).ok());
   SaveReport report;
   const Bytes bytes = w.save(&report);
-  test_assert(report.blocks == 3 && report.skippedAttachments == 1);
+  test_assert(report.blocks == 3 && report.hostPinned.size() == 0);
   test_assert(report.transient.size() == 1 && report.transient[0] == *th);
   test_assert(report.throughTransient.size() == 1 && report.throughTransient[0] == through);
   IoWorld r;
@@ -493,7 +493,7 @@ static void test_transient()
   /* The report starts empty each time. */
   IoWorld empty;
   empty.save(&report);
-  test_assert(report.blocks == 0 && report.transient.size() == 0 && report.skippedAttachments == 0);
+  test_assert(report.blocks == 0 && report.transient.size() == 0 && report.throughTransient.size() == 0);
 }
 
 static void test_save_fails()

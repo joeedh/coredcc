@@ -4,6 +4,8 @@
 #include "coredcc/lib/library.h"
 #include "coredcc/lib/payload_access.h"
 
+#include <cmath>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -251,6 +253,38 @@ void BlockReader::entries(Vector<BlockEntry> &out)
   }
 }
 
+/* Whether coercing `from` to `to` lost nothing: an enum's key or a number of another type is as
+ * good, a clamped number isn't. */
+static bool keptValue(const PropValue &from, const PropValue &to)
+{
+  if (from.type() == to.type()) {
+    return from == to;
+  }
+  if (const std::optional<int64_t> i = from.tryInt(); i && to.tryFloat()) {
+    const double d = *to.tryFloat();
+    return d == double(*i) && std::fabs(d) < 0x1p63 && int64_t(d) == *i;
+  }
+  if (const std::optional<double> d = from.tryFloat(); d && to.tryInt()) {
+    return double(*to.tryInt()) == *d;
+  }
+  return true;
+}
+
+/* Sets the entry, unless the value would change. */
+static bool setExactly(PropertyBag &bag, BagRefs &refs, int at, const PropValue &value)
+{
+  const bool wasSet = refs.isSet(bag, at);
+  const PropValue before = refs.value(bag, at);
+  if (!refs.setAt(bag, at, value).ok()) {
+    return false;
+  }
+  if (keptValue(value, bag.value(at))) {
+    return true;
+  }
+  (wasSet ? refs.setAt(bag, at, before) : refs.reset(bag, bag.def(at).apiName().c_str())).ignore();
+  return false;
+}
+
 void BlockReader::bag(PropertyBag &bag, BagRefs &refs, Vector<BlockEntry> &unread)
 {
   const uint32_t n = entryCount();
@@ -262,7 +296,7 @@ void BlockReader::bag(PropertyBag &bag, BagRefs &refs, Vector<BlockEntry> &unrea
     /* One ref for a pointer into a block, else none: anything more is a newer build's. */
     const bool plain = !e.unknownTag && e.refs.size() <= (isBlockPointer(e.value) ? 1u : 0u);
     const int at = plain ? bag.indexOf(e.name.c_str()) : -1;
-    if (at < 0 || !refs.setAt(bag, at, e.value).ok()) {
+    if (at < 0 || !setExactly(bag, refs, at, e.value)) {
       unread.append(std::move(e));
     }
   }
@@ -315,36 +349,21 @@ Status badState(const char *what, const Datablock &b, const char *want)
 
 } // namespace
 
-Result<BlockPayload> writePayload(const Library &lib, BlockHandle h)
+namespace {
+
+/* Takes the sticky error that a foreign provider left. */
+Status outcome(const Library &lib, Status s)
 {
-  CDCC_TRY(readyFor(lib, "writePayload"));
-  const Datablock *b = lib.get(h);
-  if (!b) {
-    return notFound("writePayload");
-  }
-  if (b->dataState() != BlockState::Live || b->state() == BlockState::Doomed) {
-    return badState("writePayload", *b, "Live or InHistory");
-  }
-  Result<const BlockTypeRegistry::Entry *> type = payloadType(lib, *b, "writePayload");
-  if (!type.ok()) {
-    return type.status();
-  }
-  BlockWriter out(lib);
-  Status s = (*type)->provider.get().serialize(*b, out);
-  if (lib.runtime().hasStickyError()) {
-    s = lib.runtime().takeStickyError(); /* a foreign serialize threw */
-  }
-  if (!s.ok()) {
-    return s;
-  }
-  Result<BlockPayload> p = detail::PayloadAccess::take(out, (*type)->info.payloadVersion);
-  if (p.ok() && lib.auditsRelations()) {
-    CDCC_TRY(checkPayloadRefs(lib, h, *p));
-  }
-  return p;
+  return lib.runtime().hasStickyError() ? lib.runtime().takeStickyError() : s;
 }
 
-Status checkPayloadRefs(const Library &lib, BlockHandle h, const BlockPayload &payload)
+using ForeachCell = litestl::util::function<void(RefCell &)>;
+
+/* Whether `payload`'s table and the references that `each` visits agree. */
+Status compareRefs(const Library &lib,
+                   const std::string &what,
+                   const BlockPayload &payload,
+                   litestl::util::function<Status(ForeachCell)> each)
 {
   /* Bit 0: strong, bit 1: weak. */
   const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
@@ -360,7 +379,7 @@ Status checkPayloadRefs(const Library &lib, BlockHandle h, const BlockPayload &p
   for (const RefCell &cell : payload.refs) {
     note(rows, cell);
   }
-  CDCC_TRY(lib.foreachDataRef(h, [&](RefCell &cell) { note(refs, cell); }));
+  CDCC_TRY(outcome(lib, each([&](RefCell &cell) { note(refs, cell); })));
   const auto differs = [](const Map<BlockIdKey, int> &a, const Map<BlockIdKey, int> &b) {
     for (const auto &pair : a) {
       const int *other = b.lookup_ptr(pair.key);
@@ -370,21 +389,106 @@ Status checkPayloadRefs(const Library &lib, BlockHandle h, const BlockPayload &p
     }
     return false;
   };
-  const Datablock *b = lib.get(h);
-  const std::string name = b ? b->name().c_str() : "?";
   if (differs(refs, rows)) {
     return Status::error(StatusCode::Internal,
-                         ("'" + name + "': foreachRef reports a reference that serialize "
-                                       "didn't write to the ref table (or of another strength)")
+                         (what + ": foreachRef reports a reference that serialize didn't write to "
+                                 "the ref table (or of another strength)")
                              .c_str());
   }
   if (differs(rows, refs)) {
     return Status::error(StatusCode::Internal,
-                         ("'" + name + "': serialize wrote a reference that foreachRef doesn't "
-                                       "report (or of another strength)")
+                         (what + ": serialize wrote a reference that foreachRef doesn't report "
+                                 "(or of another strength)")
                              .c_str());
   }
   return Status();
+}
+
+std::string quoted(const litestl::util::string &name)
+{
+  return "'" + std::string(name.c_str()) + "'";
+}
+
+} // namespace
+
+Status detail::PayloadAccess::checkRefs(const Library &lib,
+                                        BlockHandle h,
+                                        const BlockPayload &payload)
+{
+  const Datablock *b = lib.get(h);
+  return compareRefs(lib, b ? quoted(b->name()) : "'?'", payload,
+                     [&](ForeachCell fn) { return lib.foreachDataRef(h, std::move(fn)); });
+}
+
+Status detail::PayloadAccess::checkRefs(const Library &lib,
+                                        BlockHandle h,
+                                        const AttachmentTypeRegistry::Entry &type,
+                                        const void *data,
+                                        const BlockPayload &payload)
+{
+  const Datablock &b = *lib.get(h);
+  return compareRefs(
+      lib, quoted(b.name()) + ", attachment " + quoted(type.info.name), payload,
+      [&](ForeachCell fn) {
+        const AttachmentProvider p = type.provider.get();
+        if (p.hasForeachRef()) {
+          RefVisitor v([](void *to, RefCell &cell) { (*static_cast<ForeachCell *>(to))(cell); },
+                       &fn);
+          p.foreachRef(b, data, v);
+        }
+        return Status();
+      });
+}
+
+Result<BlockPayload> detail::PayloadAccess::write(const Library &lib, BlockHandle h)
+{
+  const Datablock *b = lib.get(h);
+  if (!b) {
+    return notFound("writePayload");
+  }
+  if (b->dataState() != BlockState::Live || b->state() == BlockState::Doomed) {
+    return badState("writePayload", *b, "Live or InHistory");
+  }
+  Result<const BlockTypeRegistry::Entry *> type = payloadType(lib, *b, "writePayload");
+  if (!type.ok()) {
+    return type.status();
+  }
+  BlockWriter out(lib);
+  CDCC_TRY(outcome(lib, (*type)->provider.get().serialize(*b, out)));
+  Result<BlockPayload> p = take(out, (*type)->info.payloadVersion);
+  if (p.ok() && lib.auditsRelations()) {
+    CDCC_TRY(checkRefs(lib, h, *p));
+  }
+  return p;
+}
+
+Result<BlockPayload> detail::PayloadAccess::writeAttachment(
+    const Library &lib,
+    BlockHandle h,
+    const AttachmentTypeRegistry::Entry &type,
+    const void *data)
+{
+  BlockWriter out(lib);
+  CDCC_TRY(outcome(lib, type.provider.get().serialize(*lib.get(h), data, out)));
+  Result<BlockPayload> p = take(out, type.info.payloadVersion);
+  if (p.ok() && lib.auditsRelations()) {
+    CDCC_TRY(checkRefs(lib, h, type, data, *p));
+  }
+  return p;
+}
+
+Result<BlockPayload> writePayload(const Library &lib, BlockHandle h)
+{
+  CDCC_TRY(readyFor(lib, "writePayload"));
+  detail::LibraryFiller::Scope scope(lib);
+  return detail::PayloadAccess::write(lib, h);
+}
+
+Status checkPayloadRefs(const Library &lib, BlockHandle h, const BlockPayload &payload)
+{
+  CDCC_TRY(readyFor(lib, "checkPayloadRefs"));
+  detail::LibraryFiller::Scope scope(lib);
+  return detail::PayloadAccess::checkRefs(lib, h, payload);
 }
 
 Status readPayload(Library &lib, BlockHandle h, const BlockPayload &payload)

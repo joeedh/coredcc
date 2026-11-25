@@ -111,20 +111,25 @@ Status sortRecords(const ParsedFile &file, const ClientRegistry &clients, Vector
   return Status();
 }
 
-/* Ids nothing in the library or the file has. */
+/* Ids that nothing in the library or the file has, or a MissingBlock that can be filled. */
 class IdSource {
  public:
   explicit IdSource(Library &lib) : lib_(lib) {}
   /* False if it is null or in use. */
   bool take(BlockId id)
   {
-    return !id.isNull() && !lib_.find(id) && taken_.insert(id).second;
+    return usable(id) && taken_.insert(id).second;
   }
   /* What a rekey may answer. */
   static bool isFree(const void *self, const BlockId &id)
   {
     const IdSource &s = *static_cast<const IdSource *>(self);
-    return !id.isNull() && !s.lib_.find(id) && !s.taken_.contains(id);
+    return s.usable(id) && !s.taken_.contains(id);
+  }
+  /* A block of this type asks. */
+  void askFor(TypeId type)
+  {
+    type_ = type;
   }
   Result<BlockId> fresh(ClientId client)
   {
@@ -138,13 +143,36 @@ class IdSource {
   }
 
  private:
+  bool usable(BlockId id) const
+  {
+    const Datablock *b = id.isNull() ? nullptr : lib_.get(lib_.find(id));
+    return !id.isNull() &&
+           (!b || (b->state() == BlockState::Placeholder &&
+                   b->placeholderReason() == PlaceholderReason::MissingBlock &&
+                   b->fileExtension().empty() && (!b->type() || b->type() == type_)));
+  }
+
   Library &lib_;
+  TypeId type_;
   std::set<BlockId> taken_;
 };
 
+/* What `rekey` answers for the record, if it can be used. */
+Result<BlockId> ask(RekeyFn &rekey, const ParsedRecord &r, BlockId id, Library &lib, IdSource &ids)
+{
+  ids.askFor(r.typeId);
+  BlockId to = rekey(r, id, RekeyContext(lib, &ids, &IdSource::isFree));
+  if (lib.runtime().hasStickyError()) {
+    return lib.runtime().takeStickyError();
+  }
+  to = to.isNull() ? to : lib.runtime().ext<ClientRegistry>().canonical(to);
+  return to.client == id.client && ids.take(to) ? to : BlockId();
+}
+
 /* Two records become one through a client alias: the one under the current name keeps the id,
- * and the others get fresh ones, which `moves` has. */
-Status planRecordIds(ParsedFile &file, Library &lib, IdMap &moves, IoIssues &issues)
+ * and the others get new ones, which `moves` has: from their client, or fresh. */
+Status planRecordIds(
+    ParsedFile &file, Library &lib, RekeyFn &rekey, IdMap &moves, IoIssues &issues)
 {
   Vector<Plan> plans;
   CDCC_TRY(sortRecords(file, lib.runtime().ext<ClientRegistry>(), plans));
@@ -159,7 +187,18 @@ Status planRecordIds(ParsedFile &file, Library &lib, IdMap &moves, IoIssues &iss
       r.id = p.id;
       continue;
     }
-    Result<BlockId> id = ids.fresh(p.id.client);
+    Result<BlockId> id = BlockId();
+    bool random = false;
+    if (p.id.client != ClientId::of(kCoredccClient)) {
+      id = ask(rekey, r, p.id, lib, ids);
+      if (!id.ok()) {
+        issues.add(p.id, r.name, id.status());
+      }
+      random = !id.ok() || id->isNull();
+    }
+    if (!id.ok() || id->isNull()) {
+      id = ids.fresh(p.id.client);
+    }
     if (!id.ok()) {
       return id.status();
     }
@@ -167,8 +206,10 @@ Status planRecordIds(ParsedFile &file, Library &lib, IdMap &moves, IoIssues &iss
     moves.add(p.stored, r.id);
     issues.add(r.id, r.name,
                Status::error(StatusCode::AlreadyExists,
-                             "another block has its id, under its client's current name: it "
-                             "got a new one"));
+                             random ? "another block has its id, under its client's current name: "
+                                      "it got a random one, which its client may not know" :
+                                      "another block has its id, under its client's current name: "
+                                      "it got a new one"));
   }
   return Status();
 }
@@ -191,12 +232,12 @@ Status planAppendIds(ParsedFile &file, Library &lib, RekeyFn &rekey, IdMap &move
       to = *id;
     }
     else {
-      to = rekey(r, p.id, RekeyContext(lib, &ids, &IdSource::isFree));
-      if (lib.runtime().hasStickyError()) {
-        return lib.runtime().takeStickyError();
+      Result<BlockId> answer = ask(rekey, r, p.id, lib, ids);
+      if (!answer.ok()) {
+        return answer.status();
       }
-      to = to.isNull() ? to : lib.runtime().ext<ClientRegistry>().canonical(to);
-      if (to.client != p.id.client || !ids.take(to)) {
+      to = *answer;
+      if (to.isNull()) {
         refused.insert(r.type.empty() ? "(no type)" : std::string(r.type));
         continue;
       }
@@ -271,11 +312,12 @@ Status placeRefs(ParsedFile &file, Library &lib, const LoadLimits &limits, const
 
 } // namespace
 
-Status planIds(ParsedFile &file, Library &lib, const LoadLimits &limits, IoIssues &issues)
+Status planIds(
+    ParsedFile &file, Library &lib, const LoadLimits &limits, RekeyFn rekey, IoIssues &issues)
 {
   CDCC_TRY(checkNames(file, lib.runtime(), lib.fileNames()));
   IdMap moves;
-  CDCC_TRY(planRecordIds(file, lib, moves, issues));
+  CDCC_TRY(planRecordIds(file, lib, rekey, moves, issues));
   CDCC_TRY(placeRefs(file, lib, limits, moves));
   addNames(file, lib, issues);
   return Status();

@@ -1,4 +1,5 @@
 #include "coredcc/lib/io/parse.h"
+#include "coredcc/lib/type_names.h"
 
 #include <algorithm>
 #include <cstring>
@@ -275,7 +276,7 @@ class Parser {
           in.fail(StatusCode::InvalidArgument, "an empty name");
         }
         name.client = ClientId::of(name.text);
-        name.type = TypeId::of(name.text);
+        name.type = typeNamed(name.text);
       }
       else if (form == uint8_t(NameForm::RawId)) {
         name.isRaw = true;

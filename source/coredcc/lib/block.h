@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <utility>
 
 namespace coredcc {
 
@@ -141,7 +142,7 @@ struct PlaceholderInfo {
   /** Empty only for a MissingBlock that was never a record. */
   litestl::util::string typeName;
   litestl::util::string name;
-  /** Where it came from (a file's name), for messages. */
+  /** Where it came from (a file's name), for messages. A save writes it. */
   litestl::util::string sourceName;
   /** MissingType: the stored payload. MissingBlock: only the ref table, the references the
    * block had. */
@@ -289,10 +290,15 @@ class Datablock {
   {
     return placeholderReason_;
   }
-  /** Where a placeholder came from, for messages. Kept when it is filled. */
+  /** Where a placeholder came from, for messages: what its file stored, or what the load said.
+   * A save writes only the former. Cleared when the placeholder is filled. */
   const litestl::util::string &sourceName() const
   {
     return sourceName_;
+  }
+  bool sourceStored() const
+  {
+    return sourceStored_;
   }
 
   /** Fields of its file record that a newer build wrote, as stored: a save writes them back. */
@@ -323,6 +329,46 @@ class Datablock {
     InterfaceId iface;
     IfaceRef ref;
   };
+  /** A MissingBlock's record, before it was filled. */
+  struct Missing {
+    TypeId type;
+    litestl::util::string name;
+    litestl::util::string typeName;
+    litestl::util::string sourceName;
+    bool sourceStored = false;
+    BlockPayload data;
+    BlockFlags flags = BlockFlags::None;
+    bool hadExtension = false;
+    litestl::util::Vector<Slot> slots;
+    /** The types of those it had, opaque ones included. */
+    litestl::util::Vector<TypeId> attachments;
+  };
+  /** Of a MissingBlock that was filled (Library::createWithId, an append). */
+  struct Adoption {
+    /** More than one when an append's record without data filled it first. */
+    litestl::util::Vector<Missing> was;
+    /** What the last unadopt gave. It may be gone. */
+    BlockHandle kept;
+    /** Data that the Host pins on this record hold, through a pin each. Empty without them. */
+    litestl::util::Vector<BlockHandle> lent;
+
+    void dropLent(BlockHandle h)
+    {
+      for (int i = int(lent.size()) - 1; i >= 0; i--) {
+        if (lent[i] == h) {
+          lent.remove_at(i);
+        }
+      }
+    }
+  };
+
+  void addOpaque(OpaqueAttachment o)
+  {
+    if (!opaque_) {
+      opaque_ = std::make_unique<litestl::util::Vector<OpaqueAttachment, 1>>();
+    }
+    opaque_->append(std::move(o));
+  }
 
   Library *lib_ = nullptr;
   BlockId id_;
@@ -342,10 +388,14 @@ class Datablock {
   litestl::util::Vector<Override> overrides_;
   litestl::util::string placeholderType_;
   litestl::util::string sourceName_;
+  /** The file had the source name, or addPlaceholder's caller gave it. */
+  bool sourceStored_ = false;
   PlaceholderReason placeholderReason_ = PlaceholderReason::MissingType;
   BlockPayload placeholderData_;
   /** Null for none. */
   std::unique_ptr<litestl::util::Vector<uint8_t>> fileExtension_;
+  /** Null for a record that was never a MissingBlock. */
+  std::unique_ptr<Adoption> adoption_;
 };
 
 } // namespace coredcc

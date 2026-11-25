@@ -151,17 +151,17 @@ static void test_placeholder_refs()
   test_assert(*w.lib.collect() == 1 && w.lib.get(a) && !w.lib.get(b)); /* keeps its target */
 
   uint64_t epoch = w.lib.epoch();
-  test_assert(w.lib.forceUnlinkRef(ph, 1).code() == StatusCode::OutOfRange);
-  test_assert(w.lib.forceUnlinkRef(ph, -1).code() == StatusCode::OutOfRange);
-  test_assert(w.lib.forceUnlinkRef(a, 0).code() == StatusCode::FailedPrecondition);
-  test_assert(w.lib.forceUnlinkRef(BlockHandle(), 0).code() == StatusCode::NotFound);
+  test_assert(w.lib.unlinkRef(ph, 1).code() == StatusCode::OutOfRange);
+  test_assert(w.lib.unlinkRef(ph, -1).code() == StatusCode::OutOfRange);
+  test_assert(w.lib.unlinkRef(a, 0).code() == StatusCode::FailedPrecondition);
+  test_assert(w.lib.unlinkRef(BlockHandle(), 0).code() == StatusCode::NotFound);
   test_assert(w.lib.epoch() == epoch);
-  test_assert(w.lib.forceUnlinkRef(ph, 0).ok() && w.lib.epoch() > epoch);
+  test_assert(w.lib.unlinkRef(ph, 0).ok() && w.lib.epoch() > epoch);
   test_assert(p->placeholderData().refs.size() == 1 && p->placeholderData().refs[0].isNull());
   test_assert(p->placeholderData().refs[0].kind == RefKind::Strong);
   test_assert(w.lib.usersOf(a).size() == 0);
   test_assert(w.lib.relinkRef(ph, 0, w.id(a)).ok() && w.lib.usersOf(a).size() == 1);
-  test_assert(w.lib.forceUnlinkRef(ph, 0).ok() && *w.lib.collect() == 1 && w.valid());
+  test_assert(w.lib.unlinkRef(ph, 0).ok() && *w.lib.collect() == 1 && w.valid());
 
   PlaceholderInfo none;
   test_assert(w.lib.addPlaceholder(w.newId(), none).status().code() ==
@@ -220,7 +220,7 @@ static void test_adoption()
   test_assert(b->placeholderData().refs.size() == 0 && b->placeholderType().size() == 0);
   test_assert(w.lib.epoch() > epoch && b->stateChanges() > changes);
   test_assert(w.lib.resolveRef(thing(w.lib, user)->owner) == lost);
-  w.lib.forceUnlink(lost, att, 3).ignore();
+  w.lib.removeSlot(lost, att, 3).ignore();
   test_assert(w.lib.usersOf(kept).size() == 0); /* the ref table is gone */
   test_assert(w.lib.createWithId(kThing, id, "again", nullptr).status().code() ==
               StatusCode::AlreadyExists);

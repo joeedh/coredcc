@@ -61,10 +61,10 @@ class ClientRegistry {
   litestl::util::Map<uint64_t, uint64_t> aliases_;
 };
 
-/** How a block type's data is saved. */
+/** How the data of a block type or an attachment type is saved. */
 enum class BlockStorage : uint8_t {
-  /** Not said: Payload if the provider has serialize and deserialize. A save reports the
-   * block's data as lost otherwise. */
+  /** Not said: Payload if the provider has serialize and deserialize. Otherwise a save of such
+   * data fails, naming the type. */
   Unspecified,
   /** Through the provider's serialize and deserialize. */
   Payload,

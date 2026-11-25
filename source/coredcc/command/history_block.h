@@ -1,8 +1,11 @@
 #pragma once
 
+#include "coredcc/base/status.h"
 #include "coredcc/lib/pin.h"
 
 namespace coredcc {
+
+class Context;
 
 /**
  * A block as an undo record keeps it: pinned (PinKind::History), by handle and id. The id
@@ -36,5 +39,18 @@ class HistoryBlock {
   LibraryPin pin_;
   BlockId id_;
 };
+
+namespace detail {
+/**
+ * The Library an undo record was made in, for a slot that runs in `ctx`. FailedPrecondition when
+ * it is gone, or `ctx` is of another: a host that undoes one document's command through another
+ * document's Context must not change that one.
+ */
+Result<Library *> libraryOf(const Context &ctx, Library *madeIn);
+inline Result<Library *> libraryOf(const Context &ctx, const LibraryRef &madeIn)
+{
+  return libraryOf(ctx, madeIn.get());
+}
+} // namespace detail
 
 } // namespace coredcc

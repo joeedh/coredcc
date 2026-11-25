@@ -1,5 +1,6 @@
 #include "coredcc/command/library_commands.h"
 
+#include "coredcc/api/ref_text.h"
 #include "coredcc/command/block_commands.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/command/executor.h"
@@ -23,17 +24,20 @@ struct MadeBlocks {
   LibraryRef lib;
   CreatedBlocks created;
 
-  void undo()
+  void undo(Context &ctx)
   {
-    if (Library *l = lib.get()) {
-      created.undo(*l);
+    Result<Library *> l = detail::libraryOf(ctx, lib);
+    if (l.ok()) {
+      created.undo(**l);
+    }
+    else {
+      ctx.runtime().setStickyError(l.status());
     }
   }
-  Status redo()
+  Status redo(Context &ctx)
   {
-    Library *l = lib.get();
-    return l ? created.redo(*l) :
-               Status::error(StatusCode::FailedPrecondition, "the Library is gone");
+    Result<Library *> l = detail::libraryOf(ctx, lib);
+    return l.ok() ? created.redo(**l) : l.status();
   }
   void discard()
   {
@@ -56,36 +60,44 @@ struct DuplicateBlock {
 
   Status canRun(Context &ctx) const
   {
-    return detail::blockInput(ctx).status();
+    return detail::blocksInput(ctx).status();
   }
   Status exec(Context &ctx)
   {
-    Result<BlockHandle> h = detail::blockInput(ctx);
-    if (!h.ok()) {
-      return h.status();
+    Result<Vector<BlockHandle>> from = detail::blocksInput(ctx);
+    if (!from.ok()) {
+      return from.status();
     }
     Library &lib = *ctx.library();
     made.lib = lib.ref();
-    Result<IdMap> ids = duplicateBlocks(lib, std::span<const BlockHandle>(&*h, 1));
+    Result<IdMap> ids =
+        duplicateBlocks(lib, std::span<const BlockHandle>(from->data(), size_t(from->size())));
     if (!ids.ok()) {
       return ids.status();
     }
+    Vector<BlockId> copies;
+    for (BlockHandle h : *from) {
+      copies.append(ids->find(lib.get(h)->id()));
+      made.created.add(lib, lib.find(copies.last()));
+    }
     StableRef out;
-    out.owner = OwnerKey::ofBlock(ids->find(lib.get(*h)->id()));
-    made.created.add(lib, lib.find(out.owner.block));
-    return ctx.outputs()->set("block", PropValue::ofPointer(out));
+    out.owner = OwnerKey::ofBlock(copies[0]);
+    CDCC_TRY(ctx.outputs()->set("block", PropValue::ofPointer(out)));
+    const std::string text = formatBlockIds(
+        ctx.runtime(), std::span<const BlockId>(copies.data(), size_t(copies.size())));
+    return ctx.outputs()->set("blocks", PropValue::ofString(text.c_str()));
   }
-  void undo(Context &)
+  void undo(Context &ctx)
   {
-    made.undo();
+    made.undo(ctx);
   }
-  Status redo(Context &)
+  Status redo(Context &ctx)
   {
-    return made.redo();
+    return made.redo(ctx);
   }
   uint64_t memSize() const
   {
-    return sizeof(*this);
+    return sizeof(*this) + made.created.memSize();
   }
   void discard()
   {
@@ -103,7 +115,7 @@ struct DuplicateBlock {
 /* What appendUndo asks for, and the answer. The spans are the caller's: exec runs at once. */
 struct AppendRequest {
   std::span<const uint8_t> bytes;
-  const LoadOptions *options = nullptr;
+  const AppendOptions *options = nullptr;
   AppendResult result;
 };
 
@@ -112,6 +124,7 @@ struct AppendBlocks {
   MadeBlocks made;
   /* MissingBlock records: kept for a redo, but not undone. */
   Vector<HistoryBlock> missing;
+  /* The file's, for data whose provider has no memSize. */
   uint64_t size = 0;
 
   Status canRun(Context &) const
@@ -143,18 +156,18 @@ struct AppendBlocks {
     req->result = std::move(r).value();
     return Status();
   }
-  void undo(Context &)
+  void undo(Context &ctx)
   {
-    made.undo();
+    made.undo(ctx);
   }
-  Status redo(Context &)
+  Status redo(Context &ctx)
   {
-    return made.redo();
+    return made.redo(ctx);
   }
   uint64_t memSize() const
   {
-    return sizeof(*this) + size +
-           uint64_t(made.created.size() + int(missing.size())) * sizeof(HistoryBlock);
+    return sizeof(*this) + size + made.created.memSize() +
+           uint64_t(missing.size()) * sizeof(HistoryBlock);
   }
   void discard()
   {
@@ -172,7 +185,7 @@ struct AppendBlocks {
 
 Result<AppendResult> appendUndo(Context &ctx,
                                 std::span<const uint8_t> bytes,
-                                const LoadOptions &options)
+                                const AppendOptions &options)
 {
   Runtime &rt = ctx.runtime();
   CommandExecutor *ex = ctx.executor();
@@ -204,7 +217,9 @@ Status detail::registerLibraryCommands(Runtime &rt)
   CommandDef duplicate(kDuplicateBlockCommand);
   duplicate.uiName("Duplicate Block")
       .input(PropertyDef::pointerProp("block", StructId()))
-      .output(PropertyDef::pointerProp("block", StructId()));
+      .input(PropertyDef::stringProp("blocks"))
+      .output(PropertyDef::pointerProp("block", StructId()))
+      .output(PropertyDef::stringProp("blocks"));
   CDCC_TRY(addCommandOnce<DuplicateBlock>(rt, std::move(duplicate)));
   CommandDef append(kAppendCommand);
   append.uiName("Append").flags(CommandFlags::Private);

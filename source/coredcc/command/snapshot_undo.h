@@ -34,6 +34,8 @@ class SnapshotRegistry {
   /** Null when there is none. */
   SnapshotProvider *find(std::string_view name);
 
+  Status validate() const;
+
  private:
   struct Entry {
     std::string name;
@@ -97,11 +99,14 @@ class SnapshotUndo {
 
   Status capture(Context &ctx, Blob &to);
   Status restore(Context &ctx, const Blob &from);
+  /** Whether `ctx` is of the Library that was captured. */
+  Status sameLibrary(Context &ctx) const;
 
   std::string name_;
   Blob before_, after_;
   Runtime *rt_ = nullptr;
   LibraryRef lib_;
+  bool inLibrary_ = false;
   PointerRef root_;
   bool restoreAtDiscard_ = false;
 };

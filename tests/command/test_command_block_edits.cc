@@ -225,10 +225,10 @@ static void test_unlink_opaque()
   test_assert(s.ex.undo(s.ctx).ok() && row() == mesh);
   test_assert(s.ex.redo(s.ctx).ok() && row().isNull());
   test_assert(s.ex.undo(s.ctx).ok());
-  test_assert(lib.forceUnlinkRef(owner, 0, TypeId::of("other")).code() == StatusCode::NotFound);
-  test_assert(lib.forceUnlinkRef(owner, 1, type).code() == StatusCode::OutOfRange);
+  test_assert(lib.unlinkRef(owner, 0, TypeId::of("other")).code() == StatusCode::NotFound);
+  test_assert(lib.unlinkRef(owner, 1, type).code() == StatusCode::OutOfRange);
   const uint64_t epoch = lib.epoch();
-  test_assert(lib.forceUnlinkRef(owner, 0, type).ok() && lib.epoch() > epoch);
+  test_assert(lib.unlinkRef(owner, 0, type).ok() && lib.epoch() > epoch);
 }
 
 /* Setting a pointer away from a block that isn't Live, and undoing, restores the link. */

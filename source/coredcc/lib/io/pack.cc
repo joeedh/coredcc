@@ -1,5 +1,5 @@
-#include "coredcc/lib/io/format.h"
 #include "coredcc/lib/io/library_io.h"
+#include "coredcc/lib/io/pack.h"
 
 #include "litestl/io/compress.h"
 #include "litestl/util/alloc.h"
@@ -88,7 +88,7 @@ Status unpack(std::span<const uint8_t> stored,
   if (!sizesFit) {
     return Status::error(StatusCode::InvalidArgument, "a block of data says the wrong size");
   }
-  const uint64_t cost = raw + raw / 2 + kBlobCost; /* a Vector allocates half as much again */
+  const uint64_t cost = unpackCost(raw);
   if (!budget.take(cost)) {
     return Status::error(StatusCode::OutOfRange, "the data needs more memory than allowed");
   }

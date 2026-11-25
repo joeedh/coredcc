@@ -79,7 +79,8 @@ static void test_missing_types()
   /* No name went into the Runtime. */
   test_assert(!w.rt.nameOf(kDoc) && !w.rt.nameOf(kNote));
   test_assert(w.lib.fileNames().nameOf(IdDomain::Type, kDoc.value));
-  /* Nothing reachable is lost, and it saves as it was, but for where it came from. */
+  /* Nothing reachable is lost, and it saves as it was: where it came from isn't written. */
+  test_assert(sameBytes(w.save(), bytes));
   test_assert(*w.lib.collect() == 0);
   {
     IoWorld again;
@@ -88,7 +89,7 @@ static void test_missing_types()
     test_assert(again.load(w.save(), nullptr, other).ok());
     const BlockHandle h = again.at(1);
     test_assert(again.lib.get(h)->state() == BlockState::Live);
-    test_assert(strcmp(again.lib.get(h)->sourceName().c_str(), "scene.cdcc") == 0);
+    test_assert(again.lib.get(h)->sourceName().size() == 0);
   }
 
   {
@@ -96,7 +97,7 @@ static void test_missing_types()
     LoadOptions other;
     other.sourceName = "other";
     test_assert(again.load(w.save(), nullptr, other).ok());
-    test_assert(strcmp(again.lib.get(again.at(1))->sourceName().c_str(), "scene.cdcc") == 0);
+    test_assert(strcmp(again.lib.get(again.at(1))->sourceName().c_str(), "other") == 0);
   }
 
   /* Then the types come. */

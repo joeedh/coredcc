@@ -6,6 +6,7 @@
 #include "coredcc/command/library_commands.h"
 
 #include "litestl/binding/binding.h"
+#include "litestl/util/map.h"
 
 #include <string>
 
@@ -14,13 +15,28 @@ namespace coredcc {
 namespace lbt = litestl::binding::types;
 using litestl::util::Vector;
 
+namespace {
+using HandleSet = litestl::util::Map<BlockHandle, bool>;
+}
+
 Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target)
 {
+  return deletePreview(lib, std::span<const BlockHandle>(&target, 1));
+}
+
+Vector<BlockHandle> deletePreview(const Library &lib, std::span<const BlockHandle> targets)
+{
   Vector<BlockHandle> out;
-  if (!lib.get(target)) {
-    return out;
+  HandleSet in;
+  const auto add = [&](BlockHandle h) {
+    if (lib.get(h) && !in.lookup_ptr(h)) {
+      in.add(h, true);
+      out.append(h);
+    }
+  };
+  for (BlockHandle h : targets) {
+    add(h);
   }
-  out.append(target);
   const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
   for (int i = 0; i < int(out.size()); i++) {
     const BlockId gone = lib.get(out[i])->id();
@@ -28,7 +44,7 @@ Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target)
       /* InHistory users are already gone, and Detached ones belong to the host
        * (destroyFromHistory guards their refs). */
       const BlockState state = lib.get(user)->state();
-      if (out.contains(user) ||
+      if (in.lookup_ptr(user) ||
           (state != BlockState::Live && state != BlockState::Placeholder))
       {
         continue;
@@ -39,7 +55,7 @@ Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target)
          })
           .ignore(); /* a provider failure is sticky; the preview stays partial */
       if (breaks) {
-        out.append(user);
+        add(user);
       }
     }
   }
@@ -50,31 +66,78 @@ Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target)
 
 namespace {
 
-/* Destroys a block that leaves the history, unless it is gone or was recreated Live. A
+/* Destroys blocks that leave the history, but those that are gone or were recreated Live. A
  * failure has no caller to return to. */
-void destroyDeleted(Library &lib, BlockHandle h)
+void destroyDeleted(Library &lib, const Vector<BlockHandle> &blocks)
 {
-  const Datablock *b = lib.get(h);
-  if (!b || b->state() != BlockState::InHistory) {
+  Vector<BlockHandle> deleted;
+  for (BlockHandle h : blocks) {
+    const Datablock *b = lib.get(h);
+    if (b && b->state() == BlockState::InHistory) {
+      deleted.append(h);
+    }
+  }
+  if (deleted.size() == 0) {
     return;
   }
-  if (Status s = lib.destroyFromHistory(h); !s.ok()) {
+  Status s = lib.destroyFromHistory(
+      std::span<const BlockHandle>(deleted.data(), size_t(deleted.size())));
+  if (!s.ok()) {
     lib.runtime().setStickyError(std::move(s));
   }
+}
+
+/* Deletes them all, or none. */
+Status deleteAll(Library &lib, const Vector<BlockHandle> &blocks)
+{
+  for (int i = 0; i < int(blocks.size()); i++) {
+    if (Status s = lib.markDeleted(blocks[i]); !s.ok()) {
+      for (int j = i - 1; j >= 0; j--) {
+        lib.restoreFromHistory(blocks[j]).ignore(); /* it was deleted a moment ago */
+      }
+      return s;
+    }
+  }
+  return Status();
 }
 
 } // namespace
 
 void CreatedBlocks::add(Library &lib, BlockHandle h)
 {
-  blocks_.append(HistoryBlock(lib, h));
+  Made m;
+  m.block = HistoryBlock(lib, h);
+  m.adopted = lib.adopted(h);
+  blocks_.append(std::move(m));
+}
+
+Status CreatedBlocks::undoOne(Library &lib, Made &m)
+{
+  if (!m.adopted) {
+    return lib.markDeleted(m.block.get());
+  }
+  Result<BlockHandle> kept = lib.unadopt(m.block.get());
+  if (!kept.ok()) {
+    return kept.status();
+  }
+  m.kept = LibraryPin(lib, *kept);
+  return Status();
+}
+
+Status CreatedBlocks::redoOne(Library &lib, Made &m)
+{
+  if (!m.adopted) {
+    return lib.restoreFromHistory(m.block.get());
+  }
+  CDCC_TRY(lib.readopt(m.block.get(), m.kept.handle()));
+  m.kept.reset();
+  return Status();
 }
 
 void CreatedBlocks::undo(Library &lib)
 {
   for (int i = int(blocks_.size()) - 1; i >= 0; i--) {
-    Status s = lib.markDeleted(blocks_[i].get());
-    if (!s.ok()) {
+    if (Status s = undoOne(lib, blocks_[i]); !s.ok()) {
       lib.runtime().setStickyError(std::move(s));
     }
   }
@@ -84,9 +147,9 @@ void CreatedBlocks::undo(Library &lib)
 Status CreatedBlocks::redo(Library &lib)
 {
   for (int i = 0; i < int(blocks_.size()); i++) {
-    if (Status s = lib.restoreFromHistory(blocks_[i].get()); !s.ok()) {
+    if (Status s = redoOne(lib, blocks_[i]); !s.ok()) {
       for (int j = i - 1; j >= 0; j--) {
-        lib.markDeleted(blocks_[j].get()).ignore(); /* back to undone */
+        undoOne(lib, blocks_[j]).ignore(); /* back to undone */
       }
       return s;
     }
@@ -97,14 +160,28 @@ Status CreatedBlocks::redo(Library &lib)
 
 void CreatedBlocks::discard(Library &lib)
 {
-  for (HistoryBlock &b : blocks_) {
-    const BlockHandle h = b.get();
-    b.release();
-    if (undone_) {
-      destroyDeleted(lib, h);
+  Vector<BlockHandle> gone;
+  for (Made &m : blocks_) {
+    const BlockHandle h = m.block.get();
+    m.block.release();
+    if (undone_ && !m.adopted) {
+      gone.append(h);
     }
   }
+  destroyDeleted(lib, gone);
   blocks_.clear();
+}
+
+uint64_t CreatedBlocks::memSize() const
+{
+  uint64_t n = uint64_t(blocks_.size()) * sizeof(Made);
+  for (int i = 0; undone_ && i < int(blocks_.size()); i++) {
+    const Made &m = blocks_[i];
+    if (const Library *lib = m.block.library()) {
+      n += lib->memSize(m.adopted ? m.kept.handle() : m.block.get());
+    }
+  }
+  return n;
 }
 
 namespace {
@@ -118,53 +195,71 @@ Library *libraryOf(Context &ctx, Status &err)
 }
 
 struct DeleteBlock {
-  Library *lib = nullptr;
+  LibraryRef lib;
+  /* The targets, then what went with them. */
   Vector<HistoryBlock> deleted;
+  int targets = 0;
   bool applied = false;
 
-  bool isDeleted(BlockHandle h) const
+  Vector<BlockHandle> handles(int n) const
   {
-    for (const HistoryBlock &b : deleted) {
-      if (b.get() == h) {
-        return true;
-      }
+    Vector<BlockHandle> out;
+    for (int i = 0; i < n; i++) {
+      out.append(deleted[i].get());
     }
-    return false;
+    return out;
+  }
+  void take(Library &l, const Vector<BlockHandle> &blocks)
+  {
+    for (BlockHandle h : blocks) {
+      deleted.append(HistoryBlock(l, h));
+    }
   }
   Status canRun(Context &ctx) const
   {
-    return detail::blockInput(ctx).status();
+    return detail::blocksInput(ctx).status();
   }
   Status exec(Context &ctx)
   {
-    lib = ctx.library();
-    const BlockHandle target = lib->find(ctx.inputs()->get("block")->tryPointer()->owner.block);
-    Vector<BlockHandle> preview = deletePreview(*lib, target);
-    if (preview.size() > 1 && !ctx.inputs()->get("cascade")->asBool()) {
-      std::string names;
-      for (int i = 1; i < int(preview.size()); i++) {
-        names += i > 1 ? ", " : "";
-        names += lib->get(preview[i])->name().c_str();
-      }
+    Result<Vector<BlockHandle>> asked = detail::blocksInput(ctx);
+    if (!asked.ok()) {
+      return asked.status();
+    }
+    Library &l = *ctx.library();
+    lib = l.ref();
+    targets = int(asked->size());
+    const Vector<BlockHandle> all =
+        deletePreview(l, std::span<const BlockHandle>(asked->data(), size_t(targets)));
+    if (int(all.size()) > targets && !ctx.inputs()->get("cascade")->asBool()) {
       return Status::error(StatusCode::FailedPrecondition,
-                           ("deleting it would also delete " + names).c_str());
+                           ("deleting it would also delete " + names(l, all, targets)).c_str());
     }
-    for (BlockHandle h : preview) {
-      if (Status s = lib->markDeleted(h); !s.ok()) {
-        undo(ctx); /* leave nothing half-done */
-        return s;
-      }
-      deleted.append(HistoryBlock(*lib, h));
-    }
+    CDCC_TRY(deleteAll(l, all));
+    take(l, all);
     applied = true;
-    ctx.outputs()->set("count", PropValue::ofInt(int64_t(deleted.size()))).ignore();
+    ctx.outputs()->set("count", PropValue::ofInt(int64_t(all.size()))).ignore();
     return Status();
+  }
+  static std::string names(const Library &l, const Vector<BlockHandle> &blocks, int from)
+  {
+    constexpr int kMost = 20;
+    std::string s;
+    for (int i = from; i < int(blocks.size()) && i < from + kMost; i++) {
+      s += i > from ? ", " : "";
+      s += l.get(blocks[i])->name().c_str();
+    }
+    const int more = int(blocks.size()) - from - kMost;
+    return more > 0 ? s + " and " + std::to_string(more) + " more" : s;
   }
   void undo(Context &ctx)
   {
+    Result<Library *> l = detail::libraryOf(ctx, lib);
+    if (!l.ok()) {
+      ctx.runtime().setStickyError(l.status());
+      return;
+    }
     for (int i = int(deleted.size()) - 1; i >= 0; i--) {
-      Status s = lib->restoreFromHistory(deleted[i].get());
-      if (!s.ok()) {
+      if (Status s = (*l)->restoreFromHistory(deleted[i].get()); !s.ok()) {
         ctx.runtime().setStickyError(std::move(s));
       }
     }
@@ -174,59 +269,53 @@ struct DeleteBlock {
    * the redo fails, rather than leaving its ref dangling. */
   Status redo(Context &ctx)
   {
-    Vector<BlockHandle> preview = deletePreview(*lib, deleted[0].get());
+    Result<Library *> l = detail::libraryOf(ctx, lib);
+    if (!l.ok()) {
+      return l.status();
+    }
+    const Vector<BlockHandle> first = handles(targets);
+    Vector<BlockHandle> all = handles(int(deleted.size()));
+    HandleSet known;
+    for (BlockHandle h : all) {
+      known.add(h, true);
+    }
     Vector<BlockHandle> extra;
-    for (BlockHandle h : preview) {
-      if (!isDeleted(h)) {
+    for (BlockHandle h : deletePreview(
+             **l, std::span<const BlockHandle>(first.data(), size_t(first.size()))))
+    {
+      if (!known.lookup_ptr(h)) {
         extra.append(h);
+        all.append(h);
       }
     }
     if (extra.size() > 0 && !ctx.inputs()->get("cascade")->asBool()) {
-      return Status::error(StatusCode::FailedPrecondition,
-                           ("redo: deleting it would now also delete '" +
-                            std::string(lib->get(extra[0])->name().c_str()) + "'")
-                               .c_str());
+      return Status::error(
+          StatusCode::FailedPrecondition,
+          ("redo: deleting it would now also delete " + names(**l, extra, 0)).c_str());
     }
-    Vector<BlockHandle> all, did;
-    for (const HistoryBlock &b : deleted) {
-      all.append(b.get());
-    }
-    for (BlockHandle h : extra) {
-      all.append(h);
-    }
-    Status s;
-    for (int i = 0; i < int(all.size()) && s.ok(); i++) {
-      s = lib->markDeleted(all[i]);
-      if (s.ok()) {
-        did.append(all[i]);
-      }
-    }
-    if (!s.ok()) {
-      for (int i = int(did.size()) - 1; i >= 0; i--) {
-        lib->restoreFromHistory(did[i]).ignore();
-      }
-      return s;
-    }
-    for (BlockHandle h : extra) {
-      deleted.append(HistoryBlock(*lib, h));
-    }
+    CDCC_TRY(deleteAll(**l, all));
+    take(**l, extra);
     applied = true;
     return Status();
   }
   uint64_t memSize() const
   {
-    return sizeof(*this) + uint64_t(deleted.size()) * sizeof(HistoryBlock);
+    uint64_t n = sizeof(*this) + uint64_t(deleted.size()) * sizeof(HistoryBlock);
+    const Library *l = lib.get();
+    for (int i = 0; l && applied && i < int(deleted.size()); i++) {
+      n += l->memSize(deleted[i].get());
+    }
+    return n;
   }
   void discard()
   {
-    for (HistoryBlock &b : deleted) {
-      const BlockHandle h = b.get();
-      b.release();
-      if (applied) {
-        destroyDeleted(*lib, h);
-      }
+    Library *l = lib.get();
+    const Vector<BlockHandle> gone =
+        l && applied ? handles(int(deleted.size())) : Vector<BlockHandle>();
+    deleted.clear(); /* unpins them */
+    if (l) {
+      destroyDeleted(*l, gone);
     }
-    deleted.clear();
   }
   static lbt::Struct<DeleteBlock> *defineBindings()
   {
@@ -283,6 +372,7 @@ Status registerBlockCommands(Runtime &rt)
     CommandDef del(kDeleteBlockCommand);
     del.uiName("Delete Block")
         .input(PropertyDef::pointerProp("block", StructId()))
+        .input(PropertyDef::stringProp("blocks"))
         .input(PropertyDef::boolProp("cascade").defaultValue(PropValue::ofBool(true)))
         .output(PropertyDef::intProp("count"));
     Result<const CommandDef *> d = addNativeCommand<DeleteBlock>(rt, std::move(del));

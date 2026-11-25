@@ -2,6 +2,7 @@
 #include "coredcc/lib/io/library_io.h"
 
 #include "coredcc/lib/attachment.h"
+#include "coredcc/lib/io/fill.h"
 #include "coredcc/lib/library.h"
 #include "coredcc/lib/payload_access.h"
 
@@ -9,6 +10,7 @@
 
 #include <algorithm>
 #include <map>
+#include <set>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -46,9 +48,9 @@ class Names {
     if (value == 0) {
       return 0;
     }
-    const uint32_t *known = byId_[int(domain)].lookup_ptr(value);
-    if (known) {
-      return *known;
+    const auto known = byId_[int(domain)].find(value);
+    if (known != byId_[int(domain)].end()) {
+      return known->second;
     }
     const char *name = nameOf(domain, value);
     const uint32_t index =
@@ -56,7 +58,7 @@ class Names {
     if (!name) {
       raw_.emplace(index, value);
     }
-    byId_[int(domain)].add(value, index);
+    byId_[int(domain)].emplace(value, index);
     return index;
   }
   /* Null when neither the Runtime nor a file named it. */
@@ -64,6 +66,10 @@ class Names {
   {
     const char *name = rt_.nameOf(domain, value);
     return name ? name : files_.nameOf(domain, value);
+  }
+  uint32_t size() const
+  {
+    return uint32_t(order_.size());
   }
   void write(BytesWriter &out) const
   {
@@ -93,7 +99,8 @@ class Names {
 
   const Runtime &rt_;
   const NameTable &files_;
-  Map<uint64_t, uint32_t> byId_[kIdDomainCount];
+  /* Ordered: a file chooses the ids, and litestl's hash of a number is easy to invert. */
+  std::map<uint64_t, uint32_t> byId_[kIdDomainCount];
   /* Keys have a form letter in front, so an id never equals a text. */
   std::map<std::string, uint32_t> index_;
   std::map<uint32_t, uint64_t> raw_;
@@ -127,11 +134,12 @@ class Saver {
       blocks.endSection(record);
     }
     CDCC_TRY(blocks.status());
-    report_.blocks = int64_t(items_.size());
     BytesWriter names;
     names_.write(names);
     CDCC_TRY(names.status());
-    return assemble(pack(view(names.data())), pack(view(blocks.data())));
+    const Stored packedNames = pack(view(names.data())), packedBlocks = pack(view(blocks.data()));
+    countLoad(packedNames, packedBlocks);
+    return assemble(packedNames, packedBlocks);
   }
 
  private:
@@ -152,14 +160,31 @@ class Saver {
     const BlockTypeRegistry::Entry *e = types_.find(b.type());
     return b.state() == BlockState::Live && e && e->info.storage == BlockStorage::Transient;
   }
+  /* What a block without its data keeps in a record. */
+  bool hasExtras(BlockHandle h, const Datablock &b) const
+  {
+    bool any = !b.fileExtension().empty();
+    lib_.forEachSlot(h, [&](TypeId, int64_t, const RefCell &) { any = true; });
+    lib_.forEachAttachment(h, [&](TypeId type, void *) {
+      any |= attachments_.find(type)->info.storage != BlockStorage::Transient;
+    });
+    lib_.forEachOpaqueAttachment(h, [&](const OpaqueAttachment &) { any = true; });
+    return any;
+  }
+  /* A Transient block that isn't in the file. */
+  bool isLeftOut(BlockHandle h, const Datablock &b) const
+  {
+    return isTransient(b) && !hasExtras(h, b);
+  }
   static bool wasRecord(const Datablock &b)
   {
     return b.placeholderReason() == PlaceholderReason::MissingType || b.type();
   }
-  static bool isSaveRoot(const Datablock &b)
+  /* A root that a load gives back. */
+  static bool isLastingRoot(const Datablock &b)
   {
     return b.hasFlag(BlockFlags::Root) || b.hasFlag(BlockFlags::FakeUser) ||
-           b.pins(PinKind::Host) > 0 || b.state() == BlockState::Detached ||
+           b.state() == BlockState::Detached ||
            (b.state() == BlockState::Placeholder && wasRecord(b));
   }
   /* A bare MissingBlock is made again from the references to it. */
@@ -168,27 +193,28 @@ class Saver {
     if (b.state() != BlockState::Placeholder || wasRecord(b)) {
       return true;
     }
-    bool any = b.name().size() > 0 || b.hasFlag(BlockFlags::Root) ||
-               b.hasFlag(BlockFlags::FakeUser);
-    lib_.forEachSlot(h, [&](TypeId, int64_t, const RefCell &) { any = true; });
-    lib_.forEachAttachment(h, [&](TypeId, void *) { any = true; });
-    lib_.forEachOpaqueAttachment(h, [&](const OpaqueAttachment &) { any = true; });
-    return any;
+    return b.name().size() > 0 || b.hasFlag(BlockFlags::Root) ||
+           b.hasFlag(BlockFlags::FakeUser) || hasExtras(h, b);
   }
 
-  Status mark(Map<BlockHandle, bool> &marked, bool throughTransient)
+  using Marked = Map<BlockHandle, bool>;
+  struct Along {
+    bool hostPins = true;
+    bool leftOut = true;
+  };
+  Status mark(Marked &marked, Along along)
   {
     Vector<BlockHandle> stack;
     const auto visit = [&](BlockHandle h, const Datablock &b) {
       if (!marked.lookup_ptr(h) && b.state() != BlockState::InHistory &&
-          (throughTransient || !isTransient(b)))
+          (along.leftOut || !isLeftOut(h, b)))
       {
         marked.add(h, true);
         stack.append(h);
       }
     };
     lib_.forEach([&](BlockHandle h, const Datablock &b) {
-      if (isSaveRoot(b)) {
+      if (isLastingRoot(b) || (along.hostPins && b.pins(PinKind::Host) > 0)) {
         visit(h, b);
       }
     });
@@ -211,9 +237,19 @@ class Saver {
 
   Status collectItems()
   {
-    Map<BlockHandle, bool> marked, direct;
-    CDCC_TRY(mark(marked, true));
-    CDCC_TRY(mark(direct, false));
+    Marked marked, withoutPins, withoutLeftOut;
+    CDCC_TRY(mark(marked, Along()));
+    bool pins = false, leftOut = false;
+    lib_.forEach([&](BlockHandle h, const Datablock &b) {
+      pins |= b.pins(PinKind::Host) > 0;
+      leftOut |= isLeftOut(h, b);
+    });
+    if (pins) {
+      CDCC_TRY(mark(withoutPins, Along{false, true}));
+    }
+    if (leftOut) {
+      CDCC_TRY(mark(withoutLeftOut, Along{true, false}));
+    }
     Vector<std::string> unsaved;
     struct Keyed {
       std::tuple<int, std::string, uint64_t> client;
@@ -234,6 +270,12 @@ class Saver {
       if (b.state() == BlockState::Live && e && e->info.storage == BlockStorage::Unspecified) {
         unsaved.append(e->info.name.c_str());
       }
+      lib_.forEachAttachment(h, [&](TypeId type, void *) {
+        const AttachmentTypeInfo &info = attachments_.find(type)->info;
+        if (info.storage == BlockStorage::Unspecified) {
+          unsaved.append("attachment " + std::string(info.name.c_str()));
+        }
+      });
     });
     std::sort(first(sorted), last(sorted), [](const Keyed &a, const Keyed &b) {
       return std::tie(a.client, a.local) < std::tie(b.client, b.local);
@@ -241,13 +283,18 @@ class Saver {
     for (const Keyed &k : sorted) {
       if (isTransient(*k.item.b)) {
         report_.transient.append(k.item.h);
-        continue;
+        if (!hasExtras(k.item.h, *k.item.b)) {
+          continue;
+        }
       }
       if (k.item.b->state() == BlockState::Detached) {
         report_.detached.append(k.item.h);
       }
-      if (!direct.lookup_ptr(k.item.h)) {
+      if (leftOut && !withoutLeftOut.lookup_ptr(k.item.h)) {
         report_.throughTransient.append(k.item.h);
+      }
+      if (pins && !withoutPins.lookup_ptr(k.item.h)) {
+        report_.hostPinned.append(k.item.h);
       }
       items_.append(k.item);
     }
@@ -262,7 +309,7 @@ class Saver {
       }
     }
     return Status::error(StatusCode::FailedPrecondition,
-                         ("these block types neither serialize nor are Transient: " + list).c_str());
+                         ("these types neither serialize nor are Transient: " + list).c_str());
   }
 
   /* ---- records ---- */
@@ -283,12 +330,16 @@ class Saver {
         id = BlockId(); /* the user deleted it */
       }
     }
+    if (isStrong(cell.kind) && !id.isNull()) {
+      strongTargets_.insert(id);
+    }
     out.u32(id.isNull() ? 0 : clientIndex(id.client));
     out.u64(id.local.hi);
     out.u64(id.local.lo);
   }
   void writeRows(BytesWriter &out, const Vector<RefCell> &rows)
   {
+    report_.loadBytes += uint64_t(rows.size()) * kRowCost;
     out.u32(uint32_t(rows.size()));
     for (const RefCell &cell : rows) {
       writeRow(out, cell);
@@ -302,6 +353,7 @@ class Saver {
     if (uint64_t(bytes.size()) > kMaxRaw) {
       return Status::error(StatusCode::OutOfRange, "the payload is too large");
     }
+    report_.loadBytes += kBlobCost + unpackCost(uint64_t(bytes.size()));
     blobs_.append(pack(view(bytes)));
     return uint32_t(blobs_.size());
   }
@@ -323,6 +375,7 @@ class Saver {
     std::sort(first(slots), last(slots), [](const Slot &a, const Slot &b) {
       return std::tie(a.ns, a.key) < std::tie(b.ns, b.key);
     });
+    report_.loadBytes += uint64_t(slots.size()) * kSlotCost;
     out.u32(uint32_t(slots.size()));
     for (const Slot &s : slots) {
       out.u32(names_.id(IdDomain::Type, s.type.value));
@@ -343,11 +396,8 @@ class Saver {
     Vector<Att> all;
     lib_.forEachAttachment(item.h, [&](TypeId type, void *data) {
       const AttachmentTypeRegistry::Entry *e = attachments_.find(type);
-      if (e->provider->hasSerialize()) {
+      if (e->info.storage != BlockStorage::Transient) {
         all.append(Att{e->info.name.c_str(), e, data, nullptr});
-      }
-      else {
-        report_.skippedAttachments++;
       }
     });
     lib_.forEachOpaqueAttachment(item.h, [&](const OpaqueAttachment &o) {
@@ -358,21 +408,22 @@ class Saver {
     for (const Att &a : all) {
       BlockPayload own;
       if (a.type) {
-        BlockWriter w(lib_);
-        Status s = takeSticky(a.type->provider.get().serialize(*item.b, a.data, w));
-        Result<BlockPayload> p = s.ok() ? PayloadAccess::take(w, a.type->info.payloadVersion) :
-                                        Result<BlockPayload>(s);
+        Result<BlockPayload> p = PayloadAccess::writeAttachment(lib_, item.h, *a.type, a.data);
         if (!p.ok()) {
           return Status::error(p.status().code(),
                                ("attachment '" + a.name + "': " + p.status().message()).c_str());
         }
         own = std::move(p).value();
+        if (!lib_.auditsRelations()) {
+          note(item, PayloadAccess::checkRefs(lib_, item.h, *a.type, a.data, own));
+        }
       }
       const BlockPayload &payload = a.opaque ? a.opaque->payload : own;
       Result<uint32_t> data = blob(payload.bytes);
       if (!data.ok()) {
         return data.status();
       }
+      report_.loadBytes += kAttachmentCost + a.name.size();
       out.u32(names_.text(a.name));
       out.u32(payload.version);
       out.u32(*data);
@@ -381,23 +432,28 @@ class Saver {
     return Status();
   }
 
+  void note(const Item &item, Status s)
+  {
+    if (!s.ok()) {
+      report_.issues.add(item.b->id(), item.b->name().c_str(), std::move(s));
+    }
+  }
+
   Status writeRecord(BytesWriter &out, const Item &item)
   {
     const Datablock &b = *item.b;
     StoredAs as = StoredAs::NoPayload;
     BlockPayload own;
     const BlockPayload *payload = &own;
-    if (b.state() == BlockState::Live) {
+    if (b.state() == BlockState::Live && !isTransient(b)) {
       as = StoredAs::Payload;
-      Result<BlockPayload> p = writePayload(lib_, item.h);
+      Result<BlockPayload> p = PayloadAccess::write(lib_, item.h);
       if (!p.ok()) {
         return p.status();
       }
       own = std::move(p).value();
       if (!lib_.auditsRelations()) {
-        if (Status s = checkPayloadRefs(lib_, item.h, own); !s.ok()) {
-          report_.issues.add(b.id(), b.name().c_str(), takeSticky(std::move(s)));
-        }
+        note(item, PayloadAccess::checkRefs(lib_, item.h, own));
       }
     }
     else if (b.state() == BlockState::Placeholder) {
@@ -406,7 +462,7 @@ class Saver {
         as = StoredAs::Payload;
       }
     }
-    else { /* Detached */
+    else { /* Detached or Transient */
       Status s = lib_.foreachDataRef(item.h, [&](RefCell &cell) { own.refs.append(cell); });
       CDCC_TRY(takeSticky(std::move(s)));
     }
@@ -421,7 +477,14 @@ class Saver {
             (b.hasFlag(BlockFlags::FakeUser) ? kFlagFakeUser : 0));
     out.u8(uint8_t(as));
     out.u32(payload->version);
-    out.u32(names_.text(b.sourceName().c_str()));
+    const std::string_view source = b.sourceStored() ? b.sourceName().c_str() : "";
+    const char *type = names_.nameOf(IdDomain::Type, b.type().value);
+    report_.loadBytes += kRecordCost + uint64_t(b.name().size()) + source.size() +
+                         (named ? std::string_view(b.placeholderType().c_str()) :
+                                  std::string_view(type ? type : ""))
+                             .size() +
+                         b.fileExtension().size();
+    out.u32(names_.text(source));
     writeRows(out, payload->refs);
     CDCC_TRY(writeSlots(out, item));
     CDCC_TRY(writeAttachments(out, item));
@@ -436,6 +499,19 @@ class Saver {
   }
 
   /* ---- the file ---- */
+
+  void countLoad(const Stored &names, const Stored &blocks)
+  {
+    report_.blocks = int64_t(items_.size());
+    for (const Item &item : items_) {
+      strongTargets_.erase(item.b->id());
+    }
+    report_.loadBlocks = report_.blocks + int64_t(strongTargets_.size());
+    report_.loadBytes += uint64_t(strongTargets_.size()) * kRecordCost +
+                         uint64_t(names_.size()) * kNameCost +
+                         (names.lz4 ? unpackCost(names.raw) : 0) +
+                         (blocks.lz4 ? unpackCost(blocks.raw) : 0);
+  }
 
   static void chunkHeader(BytesWriter &out, uint32_t tag, bool lz4, uint64_t raw, uint64_t stored)
   {
@@ -493,6 +569,7 @@ class Saver {
   Names names_;
   Vector<Item> items_;
   Vector<Stored> blobs_;
+  std::set<BlockId> strongTargets_;
 };
 
 } // namespace
@@ -511,6 +588,7 @@ Result<Vector<uint8_t>> saveLibrary(const Library &lib, SaveReport *report)
   SaveReport own;
   SaveReport &to = report ? *report : own;
   to = SaveReport();
+  detail::LibraryFiller::Scope scope(lib);
   return detail::libio::Saver(lib, to).run();
 }
 

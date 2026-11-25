@@ -321,6 +321,13 @@ void LinearHistory::enforceBudget()
   }
 }
 
+void LinearHistory::measure(CommandRecord &rec)
+{
+  used_ -= rec.cachedSize_;
+  rec.cachedSize_ = rec.memSize();
+  used_ += rec.cachedSize_;
+}
+
 bool LinearHistory::canUndo() const
 {
   return cursor_ > floor_;
@@ -354,6 +361,7 @@ Status LinearHistory::undo(Context &ctx)
     Status s = rt.takeStickyError();
     return combine(s, "; ", Status::error(s.code(), note.c_str()));
   }
+  measure(*rec);
   return Status();
 }
 
@@ -373,6 +381,7 @@ Status LinearHistory::redo(Context &ctx)
     truncateRedo(); /* the failed command (already rolled back) and what depends on it */
     return s;
   }
+  measure(*entries_[cursor_]);
   cursor_++;
   return Status();
 }

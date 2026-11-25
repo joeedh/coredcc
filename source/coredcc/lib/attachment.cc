@@ -1,7 +1,5 @@
 #include "coredcc/lib/attachment.h"
 
-#include "coredcc/lib/registry.h"
-
 #include <string>
 #include <utility>
 
@@ -25,6 +23,16 @@ Result<TypeId> AttachmentTypeRegistry::add(AttachmentTypeInfo info,
     return Status::error(
         StatusCode::InvalidArgument,
         (what + " has one of serialize and deserialize: it needs both or neither").c_str());
+  }
+  const bool canSave = provider->hasSerialize();
+  if (info.storage == (canSave ? BlockStorage::Transient : BlockStorage::Payload)) {
+    return Status::error(
+        StatusCode::InvalidArgument,
+        (what + (canSave ? " is Transient, but has serialize" : " is Payload, but has no serialize"))
+            .c_str());
+  }
+  if (canSave) {
+    info.storage = BlockStorage::Payload;
   }
   if (info.onDuplicate == DuplicatePolicy::Copy && !provider->hasCopy()) {
     return Status::error(StatusCode::InvalidArgument,

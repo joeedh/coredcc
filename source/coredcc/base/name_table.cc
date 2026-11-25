@@ -22,14 +22,14 @@ bool NameTable::debugAddAs(IdDomain domain, uint64_t id, std::string_view name)
     return false;
   }
   bytes_ += cost;
-  names_[int(domain)].add(id, lsString(name));
+  names_[int(domain)].emplace(id, lsString(name));
   return true;
 }
 
 const char *NameTable::nameOf(IdDomain domain, uint64_t id) const
 {
-  const litestl::util::string *s = names_[int(domain)].lookup_ptr(id);
-  return s ? s->c_str() : nullptr;
+  const auto it = names_[int(domain)].find(id);
+  return it == names_[int(domain)].end() ? nullptr : it->second.c_str();
 }
 
 } // namespace coredcc
