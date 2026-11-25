@@ -206,13 +206,21 @@ describe('coredcc wasm-st spike', () => {
   })
 
   test('sets of one gesture are one undo step', () => {
-    for (const x of [0.6, 0.7, 0.8]) cdcc.set(ctx, 'strength', x, 5)
+    const drag = cdcc.beginGesture(ctx)
+    for (const x of [0.6, 0.7, 0.8]) cdcc.set(ctx, 'strength', x, drag)
     assert.equal(spike.historySize(hostOf(ctx)), 1)
-    cdcc.set(ctx, 'strength', 0.9, 6)
+    cdcc.set(ctx, 'strength', 0.9, cdcc.beginGesture(ctx))
     assert.equal(spike.historySize(hostOf(ctx)), 2)
     cdcc.undo(ctx)
     cdcc.undo(ctx)
     assert.equal(cdcc.get(ctx, 'strength'), 0.5)
+    assert.throws(() => cdcc.set(ctx, 'strength', 1, drag + 2), fails(StatusCode.InvalidArgument, /beginGesture/))
+    const cancelled = cdcc.beginGesture(ctx)
+    for (const x of [0.6, 0.7]) cdcc.set(ctx, 'strength', x, cancelled)
+    cdcc.set(ctx, 'count', 4, cancelled)
+    cdcc.cancelGesture(ctx, cancelled)
+    assert.deepEqual([cdcc.get(ctx, 'strength'), cdcc.get(ctx, 'count')], [0.5, 0])
+    assert.equal(cdcc.canRedo(ctx), false)
     for (const g of [0, -1, 1.5, NaN, 2 ** 60]) assert.throws(() => cdcc.set(ctx, 'strength', 1, g), TypeError)
   })
 
@@ -226,9 +234,9 @@ describe('coredcc wasm-st spike', () => {
     const [prop, tool] = root.children!
     assert.equal(prop.effectivePath, '/items["Cube"].weight')
     assert.equal(cdcc.get(ctx, prop.effectivePath), 1)
-    assert.deepEqual(prop.enabledIf, {path: 'enabled', not: true})
+    assert.deepEqual(prop.enabledIf, {path: '/enabled', not: true})
     assert.equal(tool.label, 'Weigh')
-    assert.equal(tool.prefix, 'items["Cube"]')
+    assert.equal(tool.prefix, '/items["Cube"]')
     assert.throws(() => cdcc.parseLayout(`<layout>
 <x/></layout>`), fails(StatusCode.InvalidArgument, /layout 2:1/))
 

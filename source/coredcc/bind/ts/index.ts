@@ -110,7 +110,7 @@ export function get(ctx: Context, path: string, opts: {names?: boolean} = {}): N
   return take(cd.getValue(ctx, path), (v) => (opts.names ? toNamed(ctx, path, v) : toJs(ctx, v)))
 }
 /** An undoable set; from a command's exec, a sub-command. Sets of one member with the same
- * `gesture` (a positive integer: one slider drag) are one undo step. */
+ * `gesture` (one slider drag, from beginGesture) are one undo step. */
 export function set(ctx: Context, path: string, value: Writable, gesture?: number) {
   if (gesture !== undefined && !(Number.isSafeInteger(gesture) && gesture > 0)) {
     throw new TypeError(`set: a gesture is a positive integer, not ${gesture}`)
@@ -118,6 +118,14 @@ export function set(ctx: Context, path: string, value: Writable, gesture?: numbe
   withValue(ctx, value, (v) =>
     check(gesture === undefined ? cd.setValue(ctx, path, v) : cd.setValueGesture(ctx, path, v, BigInt(gesture)))
   )
+}
+/** A new gesture's id: for the sets of one drag. */
+export function beginGesture(ctx: Context): number {
+  return take(cd.beginGesture(ctx), Number)
+}
+/** Takes back what a gesture's sets did, if no other command ran since (Escape). Not redoable. */
+export function cancelGesture(ctx: Context, gesture: number) {
+  check(cd.cancelGesture(ctx, BigInt(gesture)))
 }
 /** The raw, unrecorded write, for a command's exec, undo and redo. */
 export function write(ctx: Context, path: string, value: Writable) {

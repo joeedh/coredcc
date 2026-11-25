@@ -106,6 +106,64 @@ static void test_save()
   s.history.clear();
 }
 
+static void test_cancel_gesture()
+{
+  Setup s;
+  Context &ctx = s.ctx;
+  Runtime &rt = s.w.rt;
+  test_assert(!isGesture(rt, 0) && !isGesture(rt, 1));
+  test_assert(cancelGesture(ctx, 1).code() == StatusCode::InvalidArgument);
+  const uint64_t a = beginGesture(rt), b = beginGesture(rt);
+  test_assert(a != 0 && a != b && isGesture(rt, a) && isGesture(rt, b) && !isGesture(rt, b + 1));
+  const double free = getValue(ctx, "tool.free")->asFloat();
+  const auto set = [&](const char *path, double v, uint64_t g) {
+    test_assert(setValueUndo(ctx, path, PropValue::ofFloat(v), g).ok());
+  };
+  /* Several members, and not those of another gesture before it. */
+  set("tool.strength", 0.125, b);
+  for (int i = 1; i <= 3; i++) {
+    set("tool.strength", 0.25 * i, a);
+    set("tool.free", i, a);
+  }
+  test_assert(s.history.size() == 7);
+  test_assert(cancelGesture(ctx, a).ok());
+  test_assert(s.w.tool.strength == 0.125 && getValue(ctx, "tool.free")->asFloat() == free);
+  test_assert(s.history.size() == 1 && !s.history.canRedo() && s.history.validate().ok());
+  test_assert(cancelGesture(ctx, a).ok() && s.history.size() == 1); /* there is none now */
+  /* What comes after doesn't fold into what was before. */
+  set("tool.strength", 0.375, b);
+  test_assert(s.history.size() == 2 && s.history.head());
+  test_assert(cancelGesture(ctx, b).ok() && s.history.size() == 0 && s.w.tool.strength == 0.5);
+
+  /* Not if a command was run since, or one undone. */
+  set("tool.strength", 0.25, a);
+  test_assert(s.runAdd(1).ok() && cancelGesture(ctx, a).ok() && s.history.size() == 2);
+  test_assert(s.ex.undo(ctx).ok() && cancelGesture(ctx, a).ok() && s.w.tool.strength == 0.25);
+  test_assert(s.history.size() == 2 && s.history.canRedo());
+  /* Nor past a barrier. */
+  set("tool.strength", 0.75, b);
+  s.history.pushBarrier();
+  test_assert(cancelGesture(ctx, b).ok() && s.w.tool.strength == 0.75);
+
+  /* An undo that fails is reported, and dropped. */
+  set("tool.free", 5, a);
+  rt.setStickyError(Status::error(StatusCode::Internal, "stray"));
+  test_assert(cancelGesture(ctx, a).code() == StatusCode::FailedPrecondition);
+  test_assert(getValue(ctx, "tool.free")->asFloat() == 5 && cancelGesture(ctx, a).ok());
+  test_assert(getValue(ctx, "tool.free")->asFloat() == free);
+  const int size = s.history.size();
+  test_assert(setValueUndo(ctx, "objects[0].location[0]", PropValue::ofFloat(3), a).ok());
+  Library &lib = s.w.lib;
+  const BlockHandle h = s.w.scene.objects[0];
+  test_assert(lib.markDeleted(h).ok());
+  test_assert(!cancelGesture(ctx, a).ok() && s.history.size() == size && !rt.hasStickyError());
+
+  Context bare(&rt, &lib, ctx.root());
+  test_assert(cancelGesture(bare, a).code() == StatusCode::FailedPrecondition);
+  test_assert(s.ex.beginInteractive(ctx, *s.drag, s.drag->newInputs()).ok());
+  test_assert(cancelGesture(ctx, a).code() == StatusCode::Busy && s.ex.cancel(ctx).ok());
+}
+
 static void test_invoke_and_last_used()
 {
   Setup s;
@@ -263,6 +321,7 @@ int main()
   test_set_value_undo();
   test_save();
   test_invoke_and_last_used();
+  test_cancel_gesture();
   test_command_defaults_path();
   test_literals();
   test_registration();

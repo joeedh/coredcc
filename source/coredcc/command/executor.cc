@@ -300,7 +300,7 @@ void LinearHistory::push(RecordPtr rec)
   used_ += rec->cachedSize_;
   entries_.append(rec.release());
   cursor_ = int(entries_.size());
-  headFoldable_ = true;
+  headValid_ = headFoldable_ = true;
   enforceBudget();
 }
 
@@ -351,7 +351,7 @@ Status LinearHistory::undo(Context &ctx)
     return Status::error(StatusCode::FailedPrecondition, "nothing to undo");
   }
   HistoryCall call(inCall_);
-  headFoldable_ = false;
+  headValid_ = headFoldable_ = false;
   Runtime &rt = ctx.runtime();
   const bool stray = rt.hasStickyError();
   CommandRecord *rec = entries_[--cursor_];
@@ -378,7 +378,7 @@ Status LinearHistory::redo(Context &ctx)
     return Status::error(StatusCode::FailedPrecondition, "nothing to redo");
   }
   HistoryCall call(inCall_);
-  headFoldable_ = false;
+  headValid_ = headFoldable_ = false;
   Status s = entries_[cursor_]->redo(ctx);
   if (!s.ok()) {
     truncateRedo(); /* the failed command (already rolled back) and what depends on it */
@@ -391,7 +391,7 @@ Status LinearHistory::redo(Context &ctx)
 
 CommandRecord *LinearHistory::head()
 {
-  return headFoldable_ && cursor_ > floor_ ? entries_[cursor_ - 1] : nullptr;
+  return headValid_ && cursor_ > floor_ ? entries_[cursor_ - 1] : nullptr;
 }
 
 RecordPtr LinearHistory::popHead()
@@ -414,7 +414,7 @@ void LinearHistory::clear()
   cursor_ = 0;
   truncateRedo();
   floor_ = 0;
-  headFoldable_ = false;
+  headValid_ = headFoldable_ = false;
 }
 
 void LinearHistory::setMemoryBudget(uint64_t bytes)
@@ -809,6 +809,31 @@ Status CommandExecutor::rerunHead(Context &ctx, PropertyBag newInputs)
     history_->push(std::move(old));
   }
   return collect(out.status());
+}
+
+Status CommandExecutor::revertHead(Context &ctx,
+                                   litestl::util::function_ref<bool(CommandRecord &rec)> which)
+{
+  CDCC_TRY(rt_.busyIfEvaluating("revertHead"));
+  CDCC_TRY(refuseNested("revertHead"));
+  if (open_) {
+    return busy("revertHead");
+  }
+  Binding bind(ctx, this);
+  CDCC_TRY(bind.status());
+  while (CommandRecord *head = history_ ? history_->head() : nullptr) {
+    if (!which(*head)) {
+      break;
+    }
+    RecordPtr rec = history_->popHead();
+    {
+      SlotScope slot(slotDepth_);
+      rec->undo(ctx);
+      rec->discard();
+    }
+    CDCC_TRY(collect(Status()));
+  }
+  return Status();
 }
 
 Status CommandExecutor::beginInteractive(Context &ctx, const CommandDef &def, PropertyBag inputs)

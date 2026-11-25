@@ -301,18 +301,20 @@ static void test_facades()
   test_assert(sc::makePointer(ctx, "").value == PropValue::nullPointer());
 
   /* A gesture folds; another one, and none, don't. */
+  const int64_t drag = sc::beginGesture(ctx).value;
+  test_assert(drag > 0 && sc::beginGesture(ctx).value == drag + 1);
   const auto size = [&]() { return m.s.history.size(); };
-  test_assert(sc::setValueGesture(ctx, "i", sc::makeInt(1), 7).ok());
-  test_assert(sc::setValueGesture(ctx, "i", sc::makeInt(2), 7).ok() && size() == 1);
-  test_assert(sc::setValueGesture(ctx, "i", sc::makeInt(3), 8).ok() && size() == 2);
+  test_assert(sc::setValueGesture(ctx, "i", sc::makeInt(1), drag).ok());
+  test_assert(sc::setValueGesture(ctx, "i", sc::makeInt(2), drag).ok() && size() == 1);
+  test_assert(sc::setValueGesture(ctx, "i", sc::makeInt(3), drag + 1).ok() && size() == 2);
   test_assert(sc::setValue(ctx, "i", sc::makeInt(4)).ok() && size() == 3);
   test_assert(sc::setValue(ctx, "i", sc::makeInt(5)).ok() && size() == 4);
   for (int n = 0; n < 4; n++) {
     test_assert(sc::undo(ctx).ok());
   }
   test_assert(m.rich.i == 0);
-  for (int64_t gesture : {int64_t(0), int64_t(-1)}) {
-    test_assert(hasMsg(sc::setValueGesture(ctx, "i", sc::makeInt(1), gesture), "is positive"));
+  for (int64_t gesture : {int64_t(0), int64_t(-1), drag + 2}) {
+    test_assert(hasMsg(sc::setValueGesture(ctx, "i", sc::makeInt(1), gesture), "isn't from beginGesture"));
   }
   ctx.setExecutor(nullptr);
   test_assert(hasMsg(sc::setValueGesture(ctx, "i", sc::makeInt(1), 1), "setValueGesture: the"));

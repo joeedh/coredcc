@@ -138,7 +138,12 @@ ValueResult getValue(Context &ctx, const string &path);
  * a script command (undo, discard...): use writeValue there.
  */
 Status setValue(Context &ctx, const string &path, const PropValue &value);
-/** As setValue; calls with one `gesture` (positive) on one member fold into one undo step. */
+/** A new gesture, for setValueGesture. Not from a kernel. */
+IntResult beginGesture(Context &ctx);
+/** Takes back what the gesture's sets did, as far as they are the last commands. Not from a slot. */
+Status cancelGesture(Context &ctx, int64_t gesture);
+/** As setValue; calls with one `gesture`, from beginGesture, on one member fold into one undo
+ * step. */
 Status setValueGesture(Context &ctx, const string &path, const PropValue &value, int64_t gesture);
 /** The raw write, not recorded: for a command's exec and undo, on state they capture
  * themselves. Don't set one member through both setValue and writeValue in a command. */

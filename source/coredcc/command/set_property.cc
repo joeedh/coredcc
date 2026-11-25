@@ -233,6 +233,13 @@ struct SetProperty {
 
 constexpr const char *kImpl = "core.setProperty#impl";
 
+/* The last gesture's id. */
+struct Gestures {
+  static constexpr const char *kExtName = "coredcc.Gestures";
+  explicit Gestures(Runtime *) {}
+  uint64_t last = 0;
+};
+
 Result<const CommandDef *> setPropertyDef(Runtime &rt)
 {
   if (const CommandDef *d = rt.ext<CommandRegistry>().find(kSetPropertyCommand)) {
@@ -281,6 +288,32 @@ Status setValueUndo(Context &ctx, const Path &path, const PropValue &value, uint
                                 : ex->runInstance(ctx, **def, std::move(cmd).value(),
                                                   (*def)->newInputs());
   return out.ok() ? Status() : out.status();
+}
+
+uint64_t beginGesture(Runtime &rt)
+{
+  return ++rt.ext<Gestures>().last;
+}
+
+bool isGesture(const Runtime &rt, uint64_t gestureId)
+{
+  const Gestures *g = rt.findExt<Gestures>();
+  return g && gestureId > 0 && gestureId <= g->last;
+}
+
+Status cancelGesture(Context &ctx, uint64_t gestureId)
+{
+  if (!isGesture(ctx.runtime(), gestureId)) {
+    return Status::error(StatusCode::InvalidArgument, "cancelGesture: not beginGesture's id");
+  }
+  if (!ctx.executor()) {
+    return Status::error(StatusCode::FailedPrecondition,
+                         "cancelGesture: the Context has no executor");
+  }
+  return ctx.executor()->revertHead(ctx, [gestureId](CommandRecord &rec) {
+    const SetProperty *set = rec.command().as<SetProperty>();
+    return set && set->gesture == gestureId;
+  });
 }
 
 Status setValueUndo(Context &ctx, std::string_view path, const PropValue &value, uint64_t gestureId)

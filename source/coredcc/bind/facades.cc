@@ -341,10 +341,23 @@ Status setValue(Context &ctx, const string &path, const PropValue &value)
 {
   return setUndo(ctx, "setValue", path, value, 0);
 }
+IntResult beginGesture(Context &ctx)
+{
+  if (Status s = detail::kernelGate(ctx, "beginGesture"); !s.ok()) {
+    return failed<IntResult>(std::move(s));
+  }
+  return ok<IntResult>(int64_t(coredcc::beginGesture(ctx.runtime())));
+}
+Status cancelGesture(Context &ctx, int64_t gesture)
+{
+  CDCC_TRY(slotGate(ctx, "cancelGesture", {}));
+  return coredcc::cancelGesture(ctx, uint64_t(gesture));
+}
 Status setValueGesture(Context &ctx, const string &path, const PropValue &value, int64_t gesture)
 {
-  if (gesture <= 0) {
-    return error(StatusCode::InvalidArgument, "setValueGesture: a gesture's id is positive");
+  if (!isGesture(ctx.runtime(), uint64_t(gesture))) {
+    return error(StatusCode::InvalidArgument,
+                 "setValueGesture: " + std::to_string(gesture) + " isn't from beginGesture");
   }
   return setUndo(ctx, "setValueGesture", path, value, uint64_t(gesture));
 }

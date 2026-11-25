@@ -127,7 +127,8 @@ class UndoHistory {
   /** The command an undo would undo, if nothing has been undone since it was pushed
    * (the last-command panel's target); else null. */
   virtual CommandRecord *head() = 0;
-  /** Removes head() without undoing or discarding it. */
+  /** Removes head() without undoing or discarding it. The one before it is then head(), but
+   * nothing folds into it. */
   virtual RecordPtr popHead() = 0;
   virtual void clear() = 0;
 };
@@ -192,6 +193,8 @@ class LinearHistory final : public UndoHistory {
   bool inCall_ = false;
   /** Undo stops here (a barrier). */
   int floor_ = 0;
+  /** Nothing was undone or redone since the last push. */
+  bool headValid_ = false;
   bool headFoldable_ = false;
   uint64_t budget_ = uint64_t(256) << 20;
 };
@@ -254,6 +257,13 @@ class CommandExecutor {
    * the inputs).
    */
   Status rerunHead(Context &ctx, PropertyBag newInputs);
+
+  /**
+   * Undoes and drops the commands at the history's head that `which` is true for, the newest
+   * first, until one isn't: a drag that is cancelled. They can't be redone. If undoing one leaves
+   * an error, it is dropped, and that is the end.
+   */
+  Status revertHead(Context &ctx, litestl::util::function_ref<bool(CommandRecord &rec)> which);
 
   /** Starts an Interactive command: exec captures state, then the tool edits live.
    * `ctx` must outlive the open command: destroying the executor cancels through it. */
