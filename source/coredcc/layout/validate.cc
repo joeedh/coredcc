@@ -235,7 +235,7 @@ class Validator {
     const bool text = !arg.value.isTuple && arg.value.items.size() == 1 &&
                       arg.value.items[0].kind == RawScalar::Kind::String;
     if (in.kind() != PropKind::Pointer || !text) {
-      return parseLiteral(rt_, in, arg.value).status();
+      return checkLiteral(rt_, in, arg.value);
     }
     const std::string_view s = arg.value.items[0].text.c_str();
     const size_t first = s.find_first_not_of(" \t");

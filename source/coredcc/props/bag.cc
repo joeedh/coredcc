@@ -41,6 +41,25 @@ const PropValue *PropertyBag::get(std::string_view name) const
   return i >= 0 ? &entries_[i].value : nullptr;
 }
 
+PropertyDef PropertyBag::resolvedDef(int i) const
+{
+  const PropertyDef &d = def(i);
+  return d.isDynamic() ? d.resolved(this) : d;
+}
+
+litestl::util::Vector<int> PropertyBag::setOrder() const
+{
+  litestl::util::Vector<int> out;
+  for (bool dynamic : {false, true}) {
+    for (int i = 0; i < size(); i++) {
+      if (def(i).isDynamic() == dynamic) {
+        out.append(i);
+      }
+    }
+  }
+  return out;
+}
+
 bool PropertyBag::isSet(std::string_view name) const
 {
   const int i = indexOf(name);
@@ -77,7 +96,7 @@ Status PropertyBag::setAt(int i, const PropValue &value)
     entries_[i].wasSet = false;
     return Status();
   }
-  Result<PropValue> v = coerce(def.isDynamic() ? def.resolved(this) : def, value);
+  Result<PropValue> v = coerce(resolvedDef(i), value);
   if (!v.ok()) {
     return v.status();
   }

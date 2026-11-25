@@ -25,8 +25,13 @@ namespace coredcc {
  */
 Result<std::string> formatLiteral(const Runtime &rt, const PropertyDef &def, const PropValue &value);
 
-/** A parsed literal as a value of `def`, coerced (so clamped). */
+/** A parsed literal as a value of `def`, coerced (so clamped). A dynamic def must be resolved
+ * for its owner first. */
 Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw);
+
+/** Whether a literal could be a value of `def`. A dynamic def's kind is all that counts: its
+ * items and length depend on its owner. */
+Status checkLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw);
 
 /** `ref` as a value of a Pointer def. A target whose struct inherits from the def's is accepted. */
 Result<PropValue> coercePointer(Runtime &rt, const PropertyDef &def, StableRef ref);

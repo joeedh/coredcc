@@ -93,7 +93,7 @@ Status combine(const Status &first, const char *joint, const Status &second)
 Result<PropertyBag> conformInputs(const CommandDef &def, const PropertyBag &given)
 {
   PropertyBag bag = def.newInputs();
-  for (int i = 0; i < given.size(); i++) {
+  for (int i : given.setOrder()) {
     const char *name = given.def(i).apiName().c_str();
     const int at = bag.indexOf(name);
     if (at < 0) {
@@ -923,17 +923,24 @@ Result<PropertyBag> inputsFromInvocation(Context &ctx, const CommandDef &def, co
   Runtime &rt = ctx.runtime();
   PropertyBag bag = def.newInputs();
   rt.ext<LastUsedStore>().apply(def, bag);
-  for (const InvocationArg &arg : inv.args) {
-    const PropertyDef *in = def.findInput(arg.name.c_str());
-    if (!in) {
-      return detail::unknownInput(def, arg);
+  /* Those that aren't dynamic first, since the others may depend on them. */
+  for (bool dynamic : {false, true}) {
+    for (const InvocationArg &arg : inv.args) {
+      const int i = bag.indexOf(arg.name.c_str());
+      if (i < 0) {
+        return detail::unknownInput(def, arg);
+      }
+      if (bag.def(i).isDynamic() != dynamic) {
+        continue;
+      }
+      const PropertyDef in = bag.resolvedDef(i);
+      Result<PropValue> v = in.kind() == PropKind::Pointer ? parsePointer(ctx, in, arg.value) :
+                                                             parseLiteral(rt, in, arg.value);
+      if (!v.ok()) {
+        return v.status();
+      }
+      CDCC_TRY(bag.setAt(i, *v));
     }
-    Result<PropValue> v = in->kind() == PropKind::Pointer ? parsePointer(ctx, *in, arg.value) :
-                                                            parseLiteral(rt, *in, arg.value);
-    if (!v.ok()) {
-      return v.status();
-    }
-    CDCC_TRY(bag.set(arg.name.c_str(), *v));
   }
   return bag;
 }

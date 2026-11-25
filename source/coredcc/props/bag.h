@@ -41,6 +41,10 @@ class PropertyBag {
 
   /** The index of `name`, or -1. */
   int indexOf(std::string_view name) const;
+  /** The def of entry `i` as it is now: a dynamic one is resolved with the bag. */
+  PropertyDef resolvedDef(int i) const;
+  /** The indices, with those of dynamic defs last: the order to set them in. */
+  litestl::util::Vector<int> setOrder() const;
   /** The value of `name`, or null if there is no such property. */
   const PropValue *get(std::string_view name) const;
   bool isSet(std::string_view name) const;

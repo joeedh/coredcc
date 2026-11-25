@@ -132,7 +132,10 @@ Result<double> number(const PropertyDef &def, const RawScalar &s)
 
 } // namespace
 
-Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw)
+namespace {
+
+/* A literal as a value of the def's kind, whatever its range, items and length are. */
+Result<PropValue> literalValue(const Runtime &rt, const PropertyDef &def, const RawValue &raw)
 {
   const int comps = componentCount(def.kind());
   if (comps > 1) {
@@ -147,7 +150,7 @@ Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const 
       }
       c[i] = *d;
     }
-    return coerce(def, PropValue::ofComponents(valueTypeFor(def.kind()), c));
+    return PropValue::ofComponents(valueTypeFor(def.kind()), c);
   }
   if (raw.isTuple || raw.items.size() != 1) {
     return bad(def, "expected a single value, not a tuple");
@@ -163,18 +166,18 @@ Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const 
       }
       if (s.kind == RawScalar::Kind::Number && s.isInteger) {
         Result<int64_t> i = integer(def, text);
-        return i.ok() ? coerce(def, PropValue::ofInt(*i)) : Result<PropValue>(i.status());
+        return i.ok() ? Result<PropValue>(PropValue::ofInt(*i)) : Result<PropValue>(i.status());
       }
       return bad(def, std::string("expected true or false, got '") + text + "'");
     case PropKind::Int:
       if (s.kind == RawScalar::Kind::Number && s.isInteger) {
         Result<int64_t> i = integer(def, text);
-        return i.ok() ? coerce(def, PropValue::ofInt(*i)) : Result<PropValue>(i.status());
+        return i.ok() ? Result<PropValue>(PropValue::ofInt(*i)) : Result<PropValue>(i.status());
       }
       break;
     case PropKind::String:
       if (s.kind == RawScalar::Kind::String) {
-        return coerce(def, PropValue::ofString(text));
+        return PropValue::ofString(text);
       }
       return bad(def, "expected a quoted string");
     case PropKind::Enum:
@@ -184,16 +187,19 @@ Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const 
         if (!i.ok()) {
           return i.status();
         }
-        return coerce(def, def.kind() == PropKind::Enum ? PropValue::ofEnum(*i) :
-                                                          PropValue::ofFlags(uint64_t(*i)));
+        return def.kind() == PropKind::Enum ? PropValue::ofEnum(*i) :
+                                              PropValue::ofFlags(uint64_t(*i));
       }
-      return coerce(def, PropValue::ofString(text)); /* a key, or "A|B" */
+      if (s.kind == RawScalar::Kind::Number) {
+        return bad(def, std::string("expected a key or an integer, got '") + text + "'");
+      }
+      return PropValue::ofString(text); /* a key, or "A|B" */
     case PropKind::Pointer: {
       if (s.kind != RawScalar::Kind::String) {
         return bad(def, "expected a quoted reference or path");
       }
       Result<StableRef> ref = parseRef(rt, text);
-      return ref.ok() ? coerce(def, PropValue::ofPointer(std::move(ref).value())) :
+      return ref.ok() ? Result<PropValue>(PropValue::ofPointer(std::move(ref).value())) :
                         Result<PropValue>(bad(def, ref.status().message()));
     }
     case PropKind::Collection:
@@ -208,7 +214,20 @@ Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const 
   if (!d.ok()) {
     return d.status();
   }
-  return coerce(def, PropValue::ofFloat(*d));
+  return PropValue::ofFloat(*d);
+}
+
+} // namespace
+
+Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw)
+{
+  Result<PropValue> v = literalValue(rt, def, raw);
+  return v.ok() ? coerce(def, *v) : v;
+}
+
+Status checkLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw)
+{
+  return (def.isDynamic() ? literalValue(rt, def, raw) : parseLiteral(rt, def, raw)).status();
 }
 
 Result<PropValue> parsePointer(Context &ctx, const PropertyDef &def, const RawValue &raw)

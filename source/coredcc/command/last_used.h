@@ -55,14 +55,10 @@ class LastUsedStore {
   Status validate() const;
 
  private:
-  struct Value {
-    litestl::util::string name;
-    PropValue value;
-  };
-  struct Entry {
-    const CommandDef *def = nullptr;
-    litestl::util::Vector<Value> values;
-    const PropValue *find(std::string_view name) const;
+  /* The command's inputs, of which those that are remembered are set. The bag is what a
+   * `commandDefaults` item points to: dynamic inputs are resolved with it. */
+  struct Entry : PropertyBag {
+    const CommandDef *command = nullptr;
   };
   void changed();
   void destroyEntries();

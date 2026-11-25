@@ -26,23 +26,14 @@ LastUsedStore::~LastUsedStore()
   destroyEntries();
 }
 
-const PropValue *LastUsedStore::Entry::find(std::string_view name) const
-{
-  for (const Value &v : values) {
-    if (name == v.name.c_str()) {
-      return &v.value;
-    }
-  }
-  return nullptr;
-}
-
 LastUsedStore::Entry &LastUsedStore::entry(const CommandDef &def)
 {
   if (Entry **e = byId_.lookup_ptr(def.id().value)) {
     return **e;
   }
   Entry *e = litestl::alloc::New<Entry>("coredcc::LastUsedStore::Entry");
-  e->def = &def;
+  static_cast<PropertyBag &>(*e) = def.newInputs();
+  e->command = &def;
   entries_.append(e);
   byId_.add(def.id().value, e);
   return *e;
@@ -56,7 +47,7 @@ const LastUsedStore::Entry *LastUsedStore::findEntry(const CommandDef &def) cons
 
 void LastUsedStore::remember(const CommandDef &def, const PropertyBag &inputs)
 {
-  for (int i = 0; i < inputs.size(); i++) {
+  for (int i : inputs.setOrder()) {
     if (inputs.wasSet(i) && storable(inputs.def(i))) {
       set(def, inputs.def(i).apiName().c_str(), inputs.value(i)).ignore(); /* coerced */
     }
@@ -69,9 +60,10 @@ void LastUsedStore::apply(const CommandDef &def, PropertyBag &bag) const
   if (!e) {
     return;
   }
-  for (const Value &v : e->values) {
-    if (bag.indexOf(v.name.c_str()) >= 0) {
-      bag.set(v.name.c_str(), v.value).ignore(); /* a def that changed: keep the default */
+  for (int i : e->setOrder()) {
+    const char *name = e->def(i).apiName().c_str();
+    if (e->wasSet(i) && bag.indexOf(name) >= 0) {
+      bag.set(name, e->value(i)).ignore(); /* a def that changed: keep the default */
     }
   }
 }
@@ -79,7 +71,7 @@ void LastUsedStore::apply(const CommandDef &def, PropertyBag &bag) const
 const PropValue *LastUsedStore::get(const CommandDef &def, std::string_view input) const
 {
   const Entry *e = findEntry(def);
-  return e ? e->find(input) : nullptr;
+  return e && e->isSet(input) ? e->PropertyBag::get(input) : nullptr;
 }
 
 Status LastUsedStore::set(const CommandDef &def, std::string_view input, const PropValue &value)
@@ -95,29 +87,21 @@ Status LastUsedStore::set(const CommandDef &def, std::string_view input, const P
                          (std::string(input) + ": Pointer and Collection inputs aren't kept")
                              .c_str());
   }
-  Result<PropValue> v = coerce(*in, value);
-  if (!v.ok()) {
-    return v.status();
-  }
   Entry &e = entry(def);
-  for (Value &old : e.values) {
-    if (input == old.name.c_str()) {
-      if (!(old.value == *v)) {
-        old.value = *v;
-        changed();
-      }
-      return Status();
-    }
+  const int i = e.indexOf(input);
+  const PropValue before = e.value(i);
+  const bool wasSet = e.wasSet(i);
+  CDCC_TRY(e.setAt(i, value));
+  if (e.wasSet(i) != wasSet || !(e.value(i) == before)) {
+    changed();
   }
-  e.values.append(Value{lsString(input), *v});
-  changed();
   return Status();
 }
 
 void LastUsedStore::forget(const CommandDef &def)
 {
   if (Entry **e = byId_.lookup_ptr(def.id().value)) {
-    (*e)->values.clear();
+    (*e)->resetAll();
     changed();
   }
 }
@@ -147,25 +131,19 @@ std::string LastUsedStore::serialize() const
 {
   std::string out;
   for (const Entry *e : entries_) {
-    if (e->values.size() == 0) {
-      continue;
-    }
-    out += e->def->name().c_str();
-    out += '(';
-    bool first = true;
-    for (const Value &v : e->values) {
-      const PropertyDef *in = e->def->findInput(v.name.c_str());
-      Result<std::string> lit = in ? formatLiteral(rt_, *in, v.value) : Result<std::string>("");
-      if (!in || !lit.ok()) {
+    std::string args;
+    for (int i = 0; i < e->size(); i++) {
+      if (!e->wasSet(i)) {
         continue;
       }
-      out += first ? "" : " ";
-      out += v.name.c_str();
-      out += '=';
-      out += *lit;
-      first = false;
+      Result<std::string> lit = formatLiteral(rt_, e->resolvedDef(i), e->value(i));
+      if (lit.ok()) {
+        args += (args.empty() ? "" : " ") + std::string(e->def(i).apiName().c_str()) + "=" + *lit;
+      }
     }
-    out += ")\n";
+    if (!args.empty()) {
+      out += std::string(e->command->name().c_str()) + "(" + args + ")\n";
+    }
   }
   return out;
 }
@@ -203,14 +181,17 @@ Status LastUsedStore::load(std::string_view text)
     if (!def) {
       continue; /* a command that's gone */
     }
-    for (const InvocationArg &arg : inv->args) {
-      const PropertyDef *in = def->findInput(arg.name.c_str());
-      if (!in) {
-        continue;
-      }
-      Result<PropValue> v = parseLiteral(rt_, *in, arg.value);
-      if (v.ok()) {
-        set(*def, arg.name.c_str(), *v).ignore();
+    const Entry &e = entry(*def);
+    for (bool dynamic : {false, true}) {
+      for (const InvocationArg &arg : inv->args) {
+        const int i = e.indexOf(arg.name.c_str());
+        if (i < 0 || e.def(i).isDynamic() != dynamic) {
+          continue;
+        }
+        Result<PropValue> v = parseLiteral(rt_, e.resolvedDef(i), arg.value);
+        if (v.ok()) {
+          set(*def, arg.name.c_str(), *v).ignore();
+        }
       }
     }
   }
@@ -237,12 +218,13 @@ StructId LastUsedStore::itemStruct(const CommandDef &def)
     const std::string input = in.apiName().c_str();
     ValueAccessor a;
     a.get = [input](const PointerRef &self, Context &) {
-      const Entry *e = static_cast<const Entry *>(self.data);
-      const PropValue *v = e->find(input);
-      return v ? *v : e->def->findInput(input)->defaultValue();
+      const PropertyBag &bag = *static_cast<const PropertyBag *>(self.data);
+      const int i = bag.indexOf(input);
+      return bag.wasSet(i) ? bag.value(i) : bag.def(i).defaultValue();
     };
-    a.set = [this, input](const PointerRef &self, Context &, const PropValue &v) {
-      return set(*static_cast<const Entry *>(self.data)->def, input, v);
+    const CommandDef *command = &def; /* registered, so it stays */
+    a.set = [this, command, input](const PointerRef &, Context &, const PropValue &v) {
+      return set(*command, input, v);
     };
     PropertyDef d = in;
     d.access(PropAccess::NoUndo); /* preferences, not document edits */
@@ -265,13 +247,14 @@ void LastUsedStore::addCollectionTo(ApiStruct &root, std::string_view memberName
   };
   c.at = [this](const PointerRef &, Context &, int64_t i) {
     const CommandDef &def = rt_.ext<CommandRegistry>().at(int(i));
-    return PointerRef{&entry(def), itemStruct(def), OwnerKey()};
+    return PointerRef{static_cast<PropertyBag *>(&entry(def)), itemStruct(def), OwnerKey()};
   };
   c.lookup = [this](const PointerRef &, Context &, const KeySegment &key) {
     const CommandDef *def = key.kind == KeySegment::Kind::StringKey ?
                                 rt_.ext<CommandRegistry>().find(key.text.c_str()) :
                                 nullptr;
-    return def ? PointerRef{&entry(*def), itemStruct(*def), OwnerKey()} : PointerRef();
+    PropertyBag *bag = def ? &entry(*def) : nullptr;
+    return bag ? PointerRef{bag, itemStruct(*def), OwnerKey()} : PointerRef();
   };
   c.staticItem = [this](const KeySegment &key) -> Result<StructId> {
     const CommandRegistry &commands = rt_.ext<CommandRegistry>();
@@ -280,7 +263,8 @@ void LastUsedStore::addCollectionTo(ApiStruct &root, std::string_view memberName
     return def ? Result<StructId>(itemStruct(*def)) : commands.unknown(key.text.c_str());
   };
   c.keyOf = [](const PointerRef &, Context &, const PointerRef &item) {
-    return KeySegment::stringKey(static_cast<const Entry *>(item.data)->def->name().c_str());
+    const auto *e = static_cast<const Entry *>(static_cast<const PropertyBag *>(item.data));
+    return KeySegment::stringKey(e->command->name().c_str());
   };
   root.addCollection(PropertyDef::collectionProp(memberName, StructId::of(kItemBase))
                          .access(PropAccess::NoUndo),
