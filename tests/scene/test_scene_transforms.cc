@@ -590,15 +590,16 @@ void testDelete()
       return p;
     });
     const BlockHandle kh = k.hostObject("h", 1.0), gone = k.object("gone", 4.0),
-                      one = k.object("one", 1.0), two = k.object("two", 2.0);
-    k.setParent(gone, kh);
+                      other = k.object("other", 4.0), one = k.object("one", 1.0),
+                      two = k.object("two", 2.0);
+    k.setParent(other, kh);
     k.setParent(one, gone);
-    k.setParent(two, gone);
+    k.setParent(two, other);
     if (by == 1) {
       k.obj(two).setTransformType("test.fn");
       k.obj(two).channels = ChannelBlock(1);
     }
-    k.select({gone});
+    k.select({gone, other});
     ScopedConnection arm = k.rt.ext<ChangeBus>().addListener([&](const OwnerKey *key) {
       if (*key == OwnerKey::ofBlock(k.idOf(one))) {
         throws = by == 1;

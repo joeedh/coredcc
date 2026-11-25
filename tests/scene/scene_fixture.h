@@ -156,4 +156,14 @@ inline TransformState chain(Rand &r, const Types &t, int depth, double span, boo
   return p;
 }
 
+inline bool sameBits(const TransformState &a, const TransformState &b)
+{
+  bool same =
+      !memcmp(static_cast<const double *>(a.world), static_cast<const double *>(b.world), 128);
+  for (int i = 0; i < 4; i++) {
+    same &= a.rotation[i] == b.rotation[i] && (i == 3 || a.localScale[i] == b.localScale[i]);
+  }
+  return same;
+}
+
 } // namespace scene_test

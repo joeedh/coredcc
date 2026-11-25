@@ -9,6 +9,7 @@
 #include "litestl/util/vector.h"
 
 #include <memory>
+#include <span>
 
 namespace coredcc {
 
@@ -27,7 +28,7 @@ class SceneEvaluator;
  *   counts once, and is listed where it is first.
  * - Objects are referenced with OptStrong cells. One that isn't Live (deleted, or its host
  *   took it away) stays in its place and isn't listed. A cell whose object has no record
- *   any more goes with the next call of `prune`, which the membership commands make.
+ *   any more goes with the next call of `prune`, which the membership commands make when records went.
  * - A scene is a GC root (newScene sets BlockFlags::Root).
  * - The objects of a scene, not their parents, are what is evaluated for it. A parent that isn't
  *   in the scene is evaluated too.
@@ -60,8 +61,28 @@ class Scene {
   Status add(Library &lib, BlockHandle h, int index = -1);
   /** Removes a member: the place it had. NotFound otherwise. */
   Result<int> remove(Library &lib, const BlockId &id);
+
+  /** Where a member was: the place, and the member before it, if any. */
+  struct Place {
+    BlockId id;
+    BlockId previous;
+    int index = 0;
+  };
+  /** Removes several in one pass: where they were, in order. All or none; NotFound if one isn't a
+   * member. An id may be there twice. */
+  Result<litestl::util::Vector<Place>> removeMany(Library &lib, std::span<const BlockId> ids);
+  /** The other way: each behind the member that was before it, or where that is no member any more, at
+   * its place. Those without a record and those that are members are left out; the first one is the
+   * error. */
+  Status putBack(Library &lib, std::span<const Place> places);
+  /** Adds several at the end, in one pass. All or none; fails as `add`, and for one that is there
+   * twice. */
+  Status addMany(Library &lib, std::span<const BlockHandle> blocks);
+
   /** Drops cells that are null or double, or whose block has no record. Returns how many. */
   int prune(Library &lib);
+  /** The same, unless no record went since the last time. */
+  void pruneRemoved(Library &lib);
   /** All cells, for reading. */
   const litestl::util::Vector<RefCell> &cells() const
   {
@@ -119,6 +140,18 @@ class Scene {
     int rebuilds = 0;
   };
   const Counters &counters() const;
+
+  /** What the last evaluateScene that changed a result changed. */
+  struct Changes {
+    /** Moves by one with each evaluation that changes a result. Who has seen the version before this
+     * one needs only the places. */
+    uint64_t version = 0;
+    /** The objects are others, or in another order, than before: all may be different. */
+    bool all = false;
+    /** Places in evaluatedObjects, parents before children; empty with `all`. */
+    litestl::util::Vector<int32_t> places;
+  };
+  const Changes &lastChanges() const;
   /** Over the bounds of the last evaluation. */
   const SceneBvh &bvh() const;
 
@@ -175,6 +208,8 @@ class Scene {
   mutable int indexCount_ = 0;
   mutable uint64_t indexEpoch_ = 0;
   mutable uint64_t indexGeneration_ = 0;
+  /** Library::removedCount at the last prune. */
+  uint64_t prunedAt_ = ~uint64_t(0);
 
   mutable litestl::util::Vector<BlockHandle> live_;
   mutable uint64_t liveEpoch_ = 0;

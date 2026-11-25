@@ -2,6 +2,8 @@
  * test_scene_paths.cc has the datapath. */
 #include "scene_doc.h"
 
+#include <algorithm>
+
 test_init;
 
 using namespace scene_test;
@@ -583,16 +585,6 @@ struct Oracle {
   }
 };
 
-bool sameBits(const TransformState &a, const TransformState &b)
-{
-  bool same =
-      !memcmp(static_cast<const double *>(a.world), static_cast<const double *>(b.world), 128);
-  for (int i = 0; i < 4; i++) {
-    same &= a.rotation[i] == b.rotation[i] && (i == 3 || a.localScale[i] == b.localScale[i]);
-  }
-  return same;
-}
-
 void testRandom()
 {
   const int steps = 400 * coredcc_test::testScale();
@@ -609,7 +601,7 @@ void testRandom()
     all.append(h);
   }
   Oracle oracle{d, {}};
-  int cycles = 0, outsiders = 0, invalid = 0;
+  int cycles = 0, outsiders = 0, invalid = 0, every = 0, some = 0, none = 0;
   for (int step = 0; step < steps; step++) {
     const int changes = int(r.below(4));
     for (int k = 0; k < changes; k++) {
@@ -675,7 +667,52 @@ void testRandom()
         }
       }
     }
+    const Vector<BlockHandle> wasThere = d.sc().evaluatedObjects();
+    Vector<ObjectEval> was;
+    for (BlockHandle h : wasThere) {
+      was.append(d.result(h));
+    }
+    const uint64_t version = d.sc().lastChanges().version;
     d.evaluate();
+
+    /* What changed, by comparing all of it. */
+    const Scene::Changes &last = d.sc().lastChanges();
+    const Vector<BlockHandle> isThere = d.sc().evaluatedObjects();
+    bool others = step == 0 || isThere.size() != wasThere.size();
+    for (int i = 0; !others && i < int(isThere.size()); i++) {
+      others = isThere[i] != wasThere[i];
+    }
+    if (others) {
+      test_assert(last.version == version + 1 && last.all && last.places.size() == 0);
+      every++;
+    }
+    else {
+      Vector<int32_t> differ;
+      for (int i = 0; i < int(isThere.size()); i++) {
+        if (!d.result(isThere[i]).same(was[i])) {
+          differ.append(i);
+        }
+      }
+      test_assert(last.version == version + (differ.size() ? 1 : 0));
+      if (differ.size()) {
+        Vector<int32_t> places = last.places;
+        std::sort(places.data(), places.data() + places.size());
+        test_assert(!last.all && places.size() == differ.size() &&
+                    std::equal(places.data(), places.data() + places.size(), differ.data()));
+        /* Parents before children. */
+        for (int i = 0; i < int(last.places.size()); i++) {
+          const BlockHandle h = isThere[last.places[i]];
+          if (d.result(h).status != EvalStatus::Cycle) {
+            const BlockHandle p = oracle.parentOf(h);
+            for (int k = i + 1; k < int(last.places.size()); k++) {
+              test_assert(isThere[last.places[k]] != p);
+            }
+          }
+        }
+        some += int(differ.size()) < int(isThere.size());
+      }
+      none += differ.size() == 0;
+    }
 
     /* The members, in order, then every ancestor, once. */
     Vector<BlockHandle> want;
@@ -729,6 +766,8 @@ void testRandom()
           invalid,
           n.revalidations,
           n.rebuilds);
+  fprintf(stderr, "changes: %d times all, %d some, %d none\n", every, some, none);
+  test_assert(every > 50 && some > 20 && none > 20);
   test_assert(cycles > 50 && outsiders > 50 && invalid > 50 && n.revalidations > n.rebuilds);
 }
 

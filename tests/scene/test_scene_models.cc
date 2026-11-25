@@ -217,6 +217,49 @@ void testMatrix(const Types &t)
   const TransformState s = eval(*t.matrix, c, TransformState());
   test_assert(lengthOf(s.localScale - double3(-2, 3, 4)) < 1e-12);
   test_assert(std::fabs(std::fabs(s.rotation.dot(q)) - 1.0) < 1e-12);
+
+  /* The state's rotation and scale are decomposeTrs's: at right angles, nearly, and not at all; of
+   * ordinary, tiny and huge lengths. */
+  for (int i = 0; i < 4000; i++) {
+    const double lengths[] = {1.0, 1.0, 1e-90, 1e-161, 1e90, 1e160};
+    Linear l = Linear::of(r.rotation()).scaled(r.vec(3) * lengths[r.below(6)]);
+    if (i % 2) {
+      const double shears[] = {0.0, 1e-16, 3e-15, 9e-15, 1.1e-14, 1e-12, 1e-6, 0.3};
+      l.col[1] = l.col[1] + l.col[r.coin() ? 0 : 2] * shears[r.below(8)];
+    }
+    if (r.below(10) == 0) {
+      l.col[r.below(3)] = double3(0, 0, 0);
+    }
+    for (int k = 0; k < 3; k++) {
+      put(c, matrix_transform::kColumns + 3 * k, l.col[k]);
+    }
+    const TransformState got = eval(*t.matrix, c, TransformState());
+    double3 at, scale;
+    quatd rotation;
+    litestl::math::decomposeTrs(solve::affine(l, double3(0, 0, 0)), at, rotation, scale);
+    for (int k = 0; k < 3; k++) {
+      test_assert(std::fabs(got.localScale[k] - scale[k]) <= 1e-13 * std::fabs(scale[k]));
+    }
+    test_assert(std::fabs(got.rotation.dot(rotation.normalized())) > 1.0 - 1e-13);
+  }
+}
+
+/* Each rotation alone, about each axis: most of them are zero. */
+void testFbxRotations(const Types &t)
+{
+  for (int group : {fbx::kRotation, fbx::kPreRotation, fbx::kPostRotation}) {
+    for (int axis = 0; axis < 3; axis++) {
+      ChannelBlock c = t.fbx->defaults();
+      c.set(group + axis, 0.7);
+      double3 unit(0, 0, 0);
+      unit[axis] = 1.0;
+      quatd want = quatd::fromAxisAngle(unit, 0.7);
+      want = group == fbx::kPostRotation ? want.conjugated() : want;
+      const TransformState s = eval(*t.fbx, c, TransformState());
+      test_assert(std::fabs(s.rotation.dot(want)) > 1.0 - 1e-12);
+      test_assert(difference(s.world, solve::affine(Linear::of(want), double3(0, 0, 0))) < 1e-12);
+    }
+  }
 }
 
 /* A long chain keeps a unit rotation, and any channel values are accepted. */
@@ -564,7 +607,8 @@ int main()
     testChannels();
     testFbxGolden(t);
     testTrs(t);
-    testMatrix(t);
+    testFbxRotations(t);
+  testMatrix(t);
     testRobust(t);
   }
   testRegistry();

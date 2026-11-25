@@ -39,7 +39,7 @@ Result<ChannelBlock> solveKeeping(const TransformType &type,
 namespace {
 
 using detail::SceneOf;
-using HandleSet = litestl::util::Map<BlockHandle, int>;
+using detail::HandleSet;
 
 Status failed(const std::string &what)
 {
@@ -71,8 +71,6 @@ Result<BlockHandle> parentOf(const Library &lib, BlockHandle h)
 struct Walk {
   /* The nearest ancestor for which `stop` was true, or null. */
   BlockHandle found;
-  /* Ancestors that were passed. */
-  int passed = 0;
   /* The object is its own ancestor. */
   bool cycle = false;
 };
@@ -92,7 +90,6 @@ template <class Stop> Result<Walk> walkUp(const Library &lib, BlockHandle h, Sto
     if (!w.found && stop(*p)) {
       w.found = *p;
     }
-    w.passed += w.found ? 0 : 1;
     p = lib.query<Transformable>(*p) ? parentOf(lib, *p) : Result<BlockHandle>(BlockHandle());
   }
   return p.ok() ? Result<Walk>(w) : Result<Walk>(p.status());
@@ -199,8 +196,10 @@ struct SetParent : ChangesCommand {
     Vector<BlockHandle> usable;
     Vector<ChannelBlock> channels;
     bool otherwise = false;
+    detail::StateCache states(*s.lib, time);
     for (BlockHandle h : objects) {
-      Result<ChannelBlock> c = kept(*s.lib, h, keep, time, parentState, approximate, otherwise);
+      Result<ChannelBlock> c =
+          kept(*s.lib, states, h, keep, time, parentState, approximate, otherwise);
       if (!c.ok()) {
         CDCC_TRY(skips.add(*s.lib, h, c.status()));
         continue;
@@ -224,6 +223,7 @@ struct SetParent : ChangesCommand {
   }
   /* An object's channels under another parent, if its place is kept; an error if it can't have one. */
   static Result<ChannelBlock> kept(const Library &lib,
+                                   detail::StateCache &states,
                                    BlockHandle h,
                                    bool keep,
                                    double time,
@@ -241,7 +241,8 @@ struct SetParent : ChangesCommand {
     if (!keep) {
       return ChannelBlock();
     }
-    Result<TransformState> world = computeState(lib, h, time);
+    Result<TransformState> above = states.stateAbove(h, *r);
+    Result<TransformState> world = above.ok() ? states.stateUnder(*r, *above) : above;
     if (!world.ok()) {
       return world.status();
     }
@@ -291,6 +292,7 @@ struct SetTransformType : ChangesCommand {
     Vector<ChannelBlock> channels;
     bool otherwise = false;
     int done = 0;
+    detail::StateCache states(*s.lib, time);
     for (BlockHandle h : objects) {
       Result<ObjectRead> r = readObject(*s.lib, h);
       if (r.ok() && r->info.transformType == id && r->channels.size() == type.channelCount()) {
@@ -298,7 +300,7 @@ struct SetTransformType : ChangesCommand {
         continue;
       }
       Result<ChannelBlock> c =
-          r.ok() ? converted(*s.lib, *r, h, type, keep, time, approximate, otherwise) : r.status();
+          r.ok() ? converted(states, *r, h, type, keep, time, approximate, otherwise) : r.status();
       if (!c.ok()) {
         CDCC_TRY(skips.add(*s.lib, h, c.status()));
         continue;
@@ -320,7 +322,7 @@ struct SetTransformType : ChangesCommand {
     skips.output(ctx);
     return skips.outcome(done + int(usable.size()));
   }
-  static Result<ChannelBlock> converted(const Library &lib,
+  static Result<ChannelBlock> converted(detail::StateCache &states,
                                         const ObjectRead &r,
                                         BlockHandle h,
                                         const TransformType &type,
@@ -335,10 +337,10 @@ struct SetTransformType : ChangesCommand {
     if (!keep) {
       return type.defaults();
     }
-    Result<TransformState> world = computeState(lib, h, time);
-    Result<TransformState> parent = computeParentState(lib, h, time);
-    if (!world.ok() || !parent.ok()) {
-      return world.ok() ? parent.status() : world.status();
+    Result<TransformState> parent = states.stateAbove(h, r);
+    Result<TransformState> world = parent.ok() ? states.stateUnder(r, *parent) : parent;
+    if (!world.ok()) {
+      return world.status();
     }
     return solveKeeping(
         type, EvalCtx(type.defaults(), time), *world, *parent, approximate, otherwise);
@@ -436,6 +438,8 @@ struct DeleteObjects : ChangesCommand {
         all.append(h);
       }
     });
+    detail::StateCache states(lib, time);
+    detail::Ancestry ancestry(lib, gone);
     for (BlockHandle h : all) {
       const Transformable t = lib.query<Transformable>(h);
       if (!t || !t.hasSetParentId()) {
@@ -448,18 +452,17 @@ struct DeleteObjects : ChangesCommand {
       if (!*p || !gone.lookup_ptr(*p)) {
         continue;
       }
-      Result<Walk> up =
-          walkUp(lib, h, [&](BlockHandle x) { return gone.lookup_ptr(x) == nullptr; });
-      Result<Walk> root = walkUp(lib, h, [](BlockHandle) { return false; });
-      Result<TransformState> world = computeState(lib, h, time);
-      if (!up.ok() || !root.ok() || !world.ok()) {
-        return up.ok() ? (root.ok() ? world.status() : root.status()) : up.status();
+      Result<detail::Ancestry::Place> place = ancestry.place(h);
+      Result<detail::Ancestry::Place> above = ancestry.place(*p);
+      Result<TransformState> world = states.state(h);
+      if (!place.ok() || !above.ok() || !world.ok()) {
+        return !place.ok() ? place.status() : !above.ok() ? above.status() : world.status();
       }
       Child c;
       c.object = h;
-      c.parent = up->found;
+      c.parent = place->cycle ? BlockHandle() : above->outside;
       c.world = *world;
-      c.depth = root->passed;
+      c.depth = place->depth;
       out.append(c);
     }
     std::stable_sort(out.data(), out.data() + out.size(), [](const Child &a, const Child &b) {
@@ -488,8 +491,11 @@ struct DeleteObjects : ChangesCommand {
       if (found.size() > 0) {
         CDCC_TRY(below.remember(*s.lib, moving, time));
       }
+      /* Parents first, so the state of a parent is final when it is asked for. Those on cycles come
+       * before all others, and get no parent. */
+      detail::StateCache parents(*s.lib, time);
       for (const Child &c : found) {
-        CDCC_TRY(reparent(ctx, c, time, approximate));
+        CDCC_TRY(reparent(ctx, c, parents, time, approximate));
       }
     }
     const CommandDef *del = ctx.runtime().ext<CommandRegistry>().find(kDeleteBlockCommand);
@@ -513,12 +519,16 @@ struct DeleteObjects : ChangesCommand {
     return Status();
   }
   /* Under the parents as they are by now: those before it have moved. */
-  Status reparent(Context &ctx, const Child &c, double time, int &approximate)
+  Status reparent(Context &ctx,
+                  const Child &c,
+                  detail::StateCache &parents,
+                  double time,
+                  int &approximate)
   {
     const Library &lib = *ctx.library();
     Result<ObjectRead> r = readObject(lib, c.object);
     Result<TransformState> parent =
-        c.parent ? computeState(lib, c.parent, time) : Result<TransformState>(TransformState());
+        c.parent ? parents.parentState(c.parent) : Result<TransformState>(TransformState());
     const Status failure = r.ok() ? parent.status() : r.status();
     if (!failure.ok()) {
       changes.undo(ctx);
@@ -616,8 +626,9 @@ Status ApplyDelta::exec(Context &ctx)
   detail::Skips skips;
   Vector<Base> usable;
   HandleSet moved;
+  detail::StateCache states(*s.lib, time_);
   for (BlockHandle h : objects) {
-    Result<Base> b = baseOf(*s.lib, h, delta);
+    Result<Base> b = baseOf(*s.lib, states, h, delta);
     if (!b.ok()) {
       CDCC_TRY(skips.add(*s.lib, h, b.status()));
       continue;
@@ -625,13 +636,13 @@ Status ApplyDelta::exec(Context &ctx)
     usable.append(std::move(*b));
     moved.add(h, 0);
   }
+  detail::Ancestry ancestry(*s.lib, moved);
   for (Base &b : usable) {
-    Result<Walk> up = walkUp(
-        *s.lib, b.object, [&](BlockHandle p) { return moved.lookup_ptr(p) != nullptr; });
-    if (!up.ok()) {
-      return detail::about(*s.lib, b.object, up.status());
+    Result<bool> below = ancestry.below(b.object);
+    if (!below.ok()) {
+      return detail::about(*s.lib, b.object, below.status());
     }
-    if (!up->found) {
+    if (!*below) {
       bases_.append(std::move(b));
     }
   }
@@ -644,13 +655,14 @@ Status ApplyDelta::exec(Context &ctx)
 
 /* An object that the delta can be applied to. */
 Result<ApplyDelta::Base> ApplyDelta::baseOf(const Library &lib,
+                                            detail::StateCache &states,
                                             BlockHandle h,
                                             const TransformDelta &delta) const
 {
   Result<ObjectRead> r = readObject(lib, h);
-  Result<TransformState> parent = computeParentState(lib, h, time_);
-  if (!r.ok() || !parent.ok()) {
-    return r.ok() ? parent.status() : r.status();
+  Result<TransformState> parent = r.ok() ? states.stateAbove(h, *r) : r.status();
+  if (!parent.ok()) {
+    return parent.status();
   }
   if (!r->type) {
     return failed("its transform type isn't registered");

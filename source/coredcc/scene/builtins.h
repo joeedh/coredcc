@@ -58,7 +58,8 @@ enum Channel : int32_t {
 enum InheritType : int32_t { kRrSs = 0, kRSrs = 1, kRrs = 2 };
 } // namespace fbx
 
-/** The columns of an affine matrix. Its state's rotation and scale come from decomposeTrs. */
+/** The columns of an affine matrix. Its state's rotation and scale are those of decomposeTrs, but for
+ * rounding. */
 namespace matrix_transform {
 enum Channel : int32_t { kColumns = 0, kTranslation = 9, kCount = 12 };
 } // namespace matrix_transform

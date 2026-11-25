@@ -23,6 +23,10 @@
 
 namespace coredcc {
 
+namespace detail {
+class StateCache;
+}
+
 /* Membership (membership_commands.cc). Link, unlink and add also drop members without a
  * record. */
 
@@ -166,7 +170,10 @@ class ApplyDelta {
     TransformState parent;
     ChannelBlock solved; /* for exec's delta, until it is written */
   };
-  Result<Base> baseOf(const Library &lib, BlockHandle h, const TransformDelta &delta) const;
+  Result<Base> baseOf(const Library &lib,
+                      detail::StateCache &states,
+                      BlockHandle h,
+                      const TransformDelta &delta) const;
 
   litestl::util::Vector<Base> bases_;
   double time_ = 0.0;

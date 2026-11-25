@@ -1057,6 +1057,48 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   out of range, two equally near rotations, an approximation that changes neither rotation nor scale, a
   busy Library, 0 / 0). The 7 were written again and are found, 1 of them by a new test.
 
+### Review of objects and transforms, round 2
+- **What:** findings 4, 7, 21 and 23 of the report, which has the numbers.
+- **Files:** `state_cache.{h,cc}` (from `kept_worlds`), `Scene::{removeMany,putBack,addMany,pruneRemoved,
+  lastChanges}`; tests `test_scene_many` and `test_scene_growth`; `tests/bench/bench_scene_commands.cc`.
+- **In `lib/` and `command/`** (P2's):
+  - `Library::removedCount()`, moved by sweeps and by dooming.
+  - `deletePreview` scans each user's cells once.
+  - `detail::HistoryDestroys`, a Runtime extension: while a scope is open, blocks that leave the history are
+    collected, and destroyed by one `destroyFromHistory` per Library when it closes. `LinearHistory` opens one
+    in `truncateRedo` (so also in `clear` and barriers) and in `enforceBudget`, before the executor looks at
+    the sticky error. `CommandRecord` knows its Runtime for that.
+- **`putBack`** puts each member behind the one that was before it, also when that one is put back in the same
+  call; without it, at its old place among what is there by then.
+- **`pruneRemoved`** leaves cells that became double by an alias or a remapping until a record goes or `prune` is
+  called. They are harmless: `objects`, `indexOf` and `removeMany` know of them.
+- **Deleting:** the state of each new parent is computed once. A capability whose answer changes when a child is
+  written isn't asked again in the same command. One test relied on the old order of reads:
+  it now uses another parent.
+- **Undoing an add** still looks at all cells (0.1 ms at 100,000), since a cell may be there twice.
+- **Growth tests** compare 16N with N, and not 2N with N: the factor between linear and quadratic is 16 then, more
+  than a busy machine's noise.
+- **Not done:** refitting only the changed boxes of a SceneBvh from the list of changes.
+- **Benchmark** (`bench_scene_commands`, 100,000 objects, release, ms before and after):
+
+  | Case | Before | After |
+  |---|---|---|
+  | unlink 1,000; undo; redo | 1,469; 1,638; 1,959 | 4; 3; 1 |
+  | unlink 10,000 (every 10th) | 23,033 | 15 |
+  | core.object.add, 200 times; undo; redo | 863; 265; 841 | 3; 20; 0.1 |
+  | a command after 200 undone adds | 3,032 | 16 |
+  | delete 10,000; redo | 3,447; 1,712 | 75; 30 |
+  | applyDelta of all; drag update of all | 318; 122 | 326; 125 |
+  | chain of 4,000: applyDelta | 3,408 | 8 |
+  | chain of 4,000: setParent to none | 1,566 | 13 |
+  | chain of 4,000: setTransformType | 4,003 | 11 |
+  | chain of 4,000: delete every 2nd | 2,650 | 16 |
+  | evaluate, unchanged: TRS, FBX, Matrix (best) | 17, 25, 28 | 17, 22, 17 |
+
+- **Mutations:** 55 distinct ones, one at a time; 48 were found. Two survived in code that turned out not to be
+  needed, which has been removed. The other five change nothing a caller sees: four break the index of members,
+  which checks itself and is made again, and one closes a nested batch early, which puts it into the outer one.
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms

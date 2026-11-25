@@ -298,7 +298,7 @@ struct Link {
   {
     Result<SceneOf> s = detail::sceneOf(ctx);
     const BlockHandle h = *detail::blockOf(ctx, "object");
-    s->scene->prune(*s->lib);
+    s->scene->pruneRemoved(*s->lib);
     CDCC_TRY(s->scene->add(*s->lib, h));
     scene.block = HistoryBlock(*s->lib, s->handle);
     object = HistoryBlock(*s->lib, h);
@@ -319,7 +319,7 @@ struct Link {
     if (!s.ok()) {
       return s.status();
     }
-    s->scene->prune(*s->lib);
+    s->scene->pruneRemoved(*s->lib);
     CDCC_TRY(s->scene->add(*s->lib, object.get()));
     scene.changed(ctx, kObjects);
     return Status();
@@ -344,14 +344,10 @@ struct Link {
 /* ---- unlink ---- */
 
 struct Unlink {
-  struct Removed {
-    HistoryBlock object;
-    /* The member before it, or null, and its place: just before it was removed. */
-    BlockId previous;
-    int index = 0;
-  };
   HeldScene scene;
-  Vector<Removed> removed;
+  Vector<HistoryBlock> objects;
+  /* Where they were. */
+  Vector<Scene::Place> places;
 
   Status canRun(Context &ctx) const
   {
@@ -360,16 +356,14 @@ struct Unlink {
   Status exec(Context &ctx)
   {
     Result<SceneOf> s = detail::sceneOf(ctx);
-    Result<Vector<BlockHandle>> selected = detail::targetObjects(ctx);
-    s->scene->prune(*s->lib);
+    Result<Vector<BlockHandle>> targets = detail::targetObjects(ctx);
+    s->scene->pruneRemoved(*s->lib);
     scene.block = HistoryBlock(*s->lib, s->handle);
-    for (BlockHandle h : *selected) {
-      Removed r;
-      r.object = HistoryBlock(*s->lib, h);
-      removed.append(std::move(r));
+    for (BlockHandle h : *targets) {
+      objects.append(HistoryBlock(*s->lib, h));
     }
     CDCC_TRY(apply(ctx));
-    ctx.outputs()->set("count", PropValue::ofInt(int64_t(removed.size()))).ignore();
+    ctx.outputs()->set("count", PropValue::ofInt(int64_t(objects.size()))).ignore();
     return Status();
   }
   Status apply(Context &ctx)
@@ -378,37 +372,24 @@ struct Unlink {
     if (!s.ok()) {
       return s.status();
     }
-    for (int i = 0; i < int(removed.size()); i++) {
-      Removed &r = removed[i];
-      const int at = s->scene->indexOf(*s->lib, r.object.id());
-      r.index = at;
-      r.previous = at > 0 ? s->scene->cells()[at - 1].target : BlockId();
-      if (Status e = s->scene->remove(*s->lib, r.object.id()).status(); !e.ok()) {
-        putBack(*s, i).ignore();
-        return e;
-      }
+    Vector<BlockId> ids;
+    for (const HistoryBlock &o : objects) {
+      ids.append(o.id());
     }
+    Result<Vector<Scene::Place>> removed =
+        s->scene->removeMany(*s->lib, {ids.data(), size_t(ids.size())});
+    if (!removed.ok()) {
+      return removed.status();
+    }
+    places = std::move(*removed);
     scene.changed(ctx, kObjects);
     return Status();
-  }
-  /* The first `count` of them. */
-  Status putBack(const SceneOf &s, int count) const
-  {
-    Status first;
-    for (int i = count - 1; i >= 0; i--) {
-      const Removed &r = removed[i];
-      const int previous = s.scene->indexOf(*s.lib, r.previous);
-      const int at = previous >= 0 ? previous + 1 : r.index;
-      if (Status e = s.scene->add(*s.lib, r.object.get(), at); !e.ok() && first.ok()) {
-        first = std::move(e);
-      }
-    }
-    return first;
   }
   void undo(Context &ctx)
   {
     Result<SceneOf> s = scene.get(ctx);
-    report(ctx, s.ok() ? putBack(*s, int(removed.size())) : s.status());
+    report(ctx,
+           s.ok() ? s->scene->putBack(*s->lib, {places.data(), size_t(places.size())}) : s.status());
     if (s.ok()) {
       scene.changed(ctx, kObjects);
     }
@@ -419,12 +400,13 @@ struct Unlink {
   }
   uint64_t memSize() const
   {
-    return sizeof(*this) + uint64_t(removed.size()) * sizeof(Removed);
+    return sizeof(*this) + uint64_t(objects.size()) * sizeof(HistoryBlock) +
+           uint64_t(places.size()) * sizeof(Scene::Place);
   }
   void discard()
   {
     scene.block.release();
-    removed.clear();
+    objects.clear();
   }
   static lbt::Struct<Unlink> *defineBindings()
   {
@@ -670,7 +652,7 @@ struct AddObject {
     object = l->get(*h)->id();
     Status e = place(ctx, *h, *memberOf(ctx, "parent"), s->scene->time());
     if (e.ok()) {
-      s->scene->prune(*l);
+      s->scene->pruneRemoved(*l);
       e = s->scene->add(*l, *h);
     }
     if (!e.ok()) {
@@ -704,7 +686,7 @@ struct AddObject {
       return s.status();
     }
     CDCC_TRY(created.redo(*s->lib));
-    s->scene->prune(*s->lib);
+    s->scene->pruneRemoved(*s->lib);
     if (Status e = s->scene->add(*s->lib, s->lib->find(object)); !e.ok()) {
       created.undo(*s->lib);
       return e;

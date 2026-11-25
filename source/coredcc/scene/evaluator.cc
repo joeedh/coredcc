@@ -311,10 +311,12 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
   const EvaluatedStore &old = stores_[front_];
   EvaluatedStore &out = stores_[1 - front_];
   const int n = int(members_.size());
-  bool differs = old.index != index_;
+  const bool others = old.index != index_;
+  bool differs = others;
   if (differs) {
     out.objects.resize(n);
   }
+  differing_.clear();
 
   const TransformState root;
   const TransformType *lastType = nullptr;
@@ -393,14 +395,19 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
       e.bounds = Box3d();
     }
 
-    if (!differs) {
-      if (e.same(old.objects[i])) {
+    if (!others) {
+      if (!e.same(old.objects[i])) {
+        differing_.append(i);
+      }
+      else if (!differs) {
         continue;
       }
-      differs = true;
-      out.objects.resize(n);
-      for (int j = 0; j < k; j++) {
-        out.objects[order_[j]] = old.objects[order_[j]];
+      if (!differs) {
+        differs = true;
+        out.objects.resize(n);
+        for (int j = 0; j < k; j++) {
+          out.objects[order_[j]] = old.objects[order_[j]];
+        }
       }
     }
     out.objects[i] = e;
@@ -431,7 +438,12 @@ Status SceneEvaluator::run(const Scene &scene, const Library &lib, bool &changed
     const Pass pass = evaluateAll(scene, lib, foreign);
     if (pass != Pass::Stale) {
       changed = pass == Pass::Changed;
-      front_ = changed ? 1 - front_ : front_;
+      if (changed) {
+        changes.version++;
+        changes.all = stores_[front_].index != index_;
+        std::swap(changes.places, differing_);
+        front_ = 1 - front_;
+      }
       return changed || !bvh.valid() ?
                  bvh.update(stores_[front_], lib.runtime().ext<SceneSettings>().bvh) :
                  Status();

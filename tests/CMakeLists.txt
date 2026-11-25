@@ -19,6 +19,8 @@ coredcc_test(test_scene_solve SOURCES scene/test_scene_solve.cc DEPS coredcc_sce
 coredcc_test(test_scene_scale SOURCES scene/test_scene_scale.cc DEPS coredcc_scene)
 coredcc_test(test_scene_aspects SOURCES scene/test_scene_aspects.cc DEPS coredcc_scene coredcc_graph)
 coredcc_test(test_scene_mixed SOURCES scene/test_scene_mixed.cc DEPS coredcc_scene)
+coredcc_test(test_scene_many SOURCES scene/test_scene_many.cc DEPS coredcc_scene)
+coredcc_test(test_scene_growth SOURCES scene/test_scene_growth.cc DEPS coredcc_scene)
 coredcc_test(test_scene_eval SOURCES scene/test_scene_eval.cc DEPS coredcc_scene)
 coredcc_test(test_scene_cache SOURCES scene/test_scene_cache.cc DEPS coredcc_scene)
 coredcc_test(test_scene_paths SOURCES scene/test_scene_paths.cc DEPS coredcc_scene)

@@ -7,6 +7,7 @@
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
+#include <algorithm>
 #include <string>
 
 namespace coredcc {
@@ -135,20 +136,176 @@ Status Scene::add(Library &lib, BlockHandle h, int index)
 
 Result<int> Scene::remove(Library &lib, const BlockId &id)
 {
-  ensureFreshIndex(lib);
-  const int at = lookup(lib, id);
-  if (at < 0) {
-    return Status::error(StatusCode::NotFound, "Scene::remove: the block isn't in the scene");
-  }
+  Result<Vector<Place>> places = removeMany(lib, std::span<const BlockId>(&id, 1));
+  return places.ok() ? Result<int>((*places)[0].index) : Result<int>(places.status());
+}
+
+Result<Vector<Scene::Place>> Scene::removeMany(Library &lib, std::span<const BlockId> ids)
+{
   if (lib.busy()) {
     return Status::error(StatusCode::Busy, "Scene::remove: the library is busy");
   }
-  cells_.remove_at(at);
-  for (int i = indexDoubles_ ? lookup(lib, id) : -1; i >= 0; i = lookup(lib, id)) {
-    cells_.remove_at(i);
+  const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
+  Vector<Place> places;
+  litestl::util::Map<BlockId, char> wanted;
+  const Status missing =
+      Status::error(StatusCode::NotFound, "Scene::remove: the block isn't in the scene");
+  for (const BlockId &id : ids) {
+    if (id.isNull()) {
+      return missing;
+    }
+    wanted.add(clients.canonical(id), 0);
+  }
+  if (ids.empty()) {
+    return places;
+  }
+  /* One id, as undo has it for each step, needs no lookups. */
+  const BlockId only = ids.size() == 1 ? clients.canonical(ids[0]) : BlockId();
+  const auto isWanted = [&](const RefCell &c) {
+    return ids.size() == 1 ? c.target.local == only.local && clients.canonical(c.target) == only :
+                             wanted.lookup_ptr(clients.canonical(c.target)) != nullptr;
+  };
+  Vector<int> at;
+  BlockId previous;
+  litestl::util::Map<BlockId, char> found;
+  for (int i = 0; i < int(cells_.size()); i++) {
+    if (isWanted(cells_[i])) {
+      at.append(i);
+      if (found.add(clients.canonical(cells_[i].target), 0)) {
+        places.append(Place{cells_[i].target, previous, i});
+      }
+    }
+    previous = cells_[i].target;
+  }
+  if (places.size() != wanted.size()) {
+    return missing;
+  }
+  int kept = at[0], next = 0;
+  for (int i = at[0]; i < int(cells_.size()); i++) {
+    if (next < int(at.size()) && at[next] == i) {
+      next++;
+      continue;
+    }
+    cells_[kept++] = cells_[i];
+  }
+  const bool last = at.size() == 1 && at[0] == kept;
+  cells_.resize(kept);
+  if (last && indexValid_ && indexCount_ == kept + 1) {
+    index_.remove(clients.canonical(places[0].id)); /* the others are where they were */
+    indexCount_ = kept;
+  }
+  else {
+    indexValid_ = false;
   }
   lib.noteRefsChanged();
-  return at;
+  return places;
+}
+
+Status Scene::putBack(Library &lib, std::span<const Place> places)
+{
+  const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
+  const auto canonical = [&](const BlockId &id) { return id.isNull() ? id : clients.canonical(id); };
+  struct Item {
+    RefCell cell;
+    BlockId previous;
+    int index;
+    bool put = false;
+  };
+  Status first;
+  Vector<Item> items;
+  litestl::util::Map<BlockId, int> itemOf, behind; /* by its own id, and by the one before it */
+  ensureFreshIndex(lib);
+  for (const Place &p : places) {
+    RefCell cell(RefKind::OptStrong);
+    Status s;
+    if (!lib.find(p.id)) {
+      s = Status::error(StatusCode::NotFound, "Scene::putBack: no such block");
+    }
+    else if (lookup(lib, p.id) >= 0 || itemOf.lookup_ptr(canonical(p.id))) {
+      s = Status::error(StatusCode::AlreadyExists, "Scene::putBack: the block is in the scene");
+    }
+    else {
+      s = lib.writeRef(cell, p.id);
+    }
+    if (!s.ok()) {
+      first = first.ok() ? s : first;
+      continue;
+    }
+    itemOf.add(cell.target, int(items.size()));
+    items.append(Item{cell, canonical(p.previous), p.index});
+  }
+  Vector<int> byIndex;
+  for (int i = 0; i < int(items.size()); i++) {
+    const BlockId &p = items[i].previous;
+    const bool known = !p.isNull() && (lookup(lib, p) >= 0 || itemOf.lookup_ptr(p));
+    if (!known || !behind.add(p, i)) {
+      byIndex.append(i);
+    }
+  }
+  std::stable_sort(byIndex.data(), byIndex.data() + byIndex.size(), [&](int a, int b) {
+    return items[a].index < items[b].index;
+  });
+
+  Vector<RefCell> out;
+  out.ensure_capacity(cells_.size() + items.size());
+  /* A cell, and those that come behind it. */
+  const auto append = [&](const RefCell &cell) {
+    out.append(cell);
+    const int *i = cell.isNull() ? nullptr : behind.lookup_ptr(canonical(cell.target));
+    while (i && !items[*i].put) {
+      items[*i].put = true;
+      out.append(items[*i].cell);
+      i = behind.lookup_ptr(items[*i].cell.target);
+    }
+  };
+  const auto put = [&](int i) {
+    if (!items[i].put) {
+      items[i].put = true;
+      append(items[i].cell);
+    }
+  };
+  int next = 0;
+  for (const RefCell &c : cells_) {
+    for (; next < int(byIndex.size()) && items[byIndex[next]].index <= int(out.size()); next++) {
+      put(byIndex[next]);
+    }
+    append(c);
+  }
+  for (; next < int(byIndex.size()); next++) {
+    put(byIndex[next]);
+  }
+  for (int i = 0; i < int(items.size()); i++) {
+    put(i); /* those that name each other */
+  }
+  cells_ = std::move(out);
+  indexValid_ = false;
+  return first;
+}
+
+Status Scene::addMany(Library &lib, std::span<const BlockHandle> blocks)
+{
+  if (lib.busy()) {
+    return Status::error(StatusCode::Busy, "Scene::addMany: the library is busy");
+  }
+  litestl::util::Map<BlockHandle, char> seen;
+  for (BlockHandle h : blocks) {
+    const Datablock *b = lib.get(h);
+    if (!b) {
+      return Status::error(StatusCode::NotFound, "Scene::add: no such block");
+    }
+    if (lookup(lib, b->id()) >= 0 || !seen.add(h, 0)) {
+      return Status::error(StatusCode::AlreadyExists,
+                           ("'" + std::string(b->name().c_str()) + "' is in the scene").c_str());
+    }
+  }
+  for (BlockHandle h : blocks) {
+    RefCell cell(RefKind::OptStrong);
+    CDCC_TRY(lib.writeRef(cell, lib.get(h)->id())); /* only Busy */
+    index_.add(cell.target, int(cells_.size()));
+    cells_.append(cell);
+    indexCount_ = int(cells_.size());
+  }
+  return Status();
 }
 
 int Scene::prune(Library &lib)
@@ -169,7 +326,15 @@ int Scene::prune(Library &lib)
     cells_.resize(kept);
     lib.noteRefsChanged();
   }
+  prunedAt_ = lib.removedCount();
   return n - kept;
+}
+
+void Scene::pruneRemoved(Library &lib)
+{
+  if (prunedAt_ != lib.removedCount()) {
+    prune(lib);
+  }
 }
 
 Vector<BlockHandle> Scene::selected(const Library &lib) const
@@ -219,6 +384,11 @@ Vector<BlockHandle> Scene::evaluatedObjects() const
 const Scene::Counters &Scene::counters() const
 {
   return evaluator_->counters;
+}
+
+const Scene::Changes &Scene::lastChanges() const
+{
+  return evaluator_->changes;
 }
 
 const SceneBvh &Scene::bvh() const

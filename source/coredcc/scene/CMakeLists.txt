@@ -24,6 +24,7 @@ coredcc_library(coredcc_scene
     scene_bvh.cc
     scene_io.cc
     solve.cc
+    state_cache.cc
     transform.cc
     transform_commands.cc
     transform_registry.cc

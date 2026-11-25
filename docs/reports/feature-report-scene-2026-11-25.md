@@ -43,7 +43,14 @@
      with another rotation, found with singular vectors; a mirror by command, with a child.
    - *Not exact, as before:* factors that would shear. They are applied along the object's own axes.
 3. **Commands will ignore P5c's channel overrides.** *Round 3.*
-4. **Membership edits are quadratic.** *Round 2.*
+4. **Membership edits were quadratic.** *Fixed:* `Scene::removeMany`, `putBack` and `addMany` take one pass,
+   and unlink uses them; the membership commands prune only after records have gone
+   (`Library::removedCount`); `deletePreview` looks at each user once; the history destroys what leaves it
+   in one call (`detail::HistoryDestroys`).
+   - 100,000 objects: unlinking 1,000 from 1,470 ms to 4 ms, 10,000 from 15.4 s to 13 ms; an added object from
+     4.3 ms to 0.02 ms; deleting 10,000 from 3.4 s to 75 ms; the command after 200 undone adds from 3.0 s to
+     16 ms. Undo and redo are alike.
+   - *Tested:* against one at a time and against the old preview, at random; `test_scene_growth`.
 5. **An undo that meets a Detached object failed,** dropped the history and left the object changed.
    *Fixed:* undo, redo, drags and cancelling skip objects that aren't Live, and what would have been written
    waits until they are (`PendingWrites`; the Library calls `addReviveListener`'s listeners from
@@ -55,7 +62,13 @@
 6. **Scripts can't read results in bulk, write a world matrix, or walk the hierarchy.** *Round 3.*
 
 ## Medium
-7. **Per-object ancestor walks make deep chains quadratic.** *Round 2.*
+7. **Per-object ancestor walks made deep chains quadratic.** *Fixed for commands:* `StateCache` and `Ancestry`
+   answer for many objects, and compute each one once. Applies to applyDelta, setParent, setTransformType, delete
+   and what keepWorld counts.
+   - A chain of 4,000: applyDelta from 3.4 s to 8 ms, setParent from 1.6 s to 13 ms, setTransformType from 4.0 s
+     to 11 ms, deleting every second one from 2.6 s to 16 ms.
+   - `computeState` of one object still walks up its ancestors, as documented. Hosts that want many use
+     `evaluateScene`.
 8. **One bad object blocked a command on all.** *Fixed* for `applyDelta`, `dragDelta`, `setParent`,
    `setTransformType` and `setRotationMode`: they leave out what they can't work on, count it in the output
    `skipped`, and fail when nothing is left. An object below one that is left out moves by itself. In a
@@ -94,12 +107,21 @@
     for now. No feature yet.
 19. **There is no object-level duplicate.** *Round 3.*
 20. **A foreign transform type can declare very little.** *Round 3.*
-21. **Change reporting is all or nothing.** *Round 2.*
+21. **Change reporting was all or nothing.** *Fixed for C++:* `Scene::lastChanges` has a version and the places
+    that differ from the evaluation before. Scripts get it with the bulk facade (finding 6, round 3).
+    - *Deferred:* watchers of `evaluated` still hear of any change. An owner per object would be posted 100,000
+      times in a drag of all.
 
 ## Low
 22. **`registerSceneTypes` said Ok after a partial failure.** *Fixed:* it is done only when the last thing it
     registers is there, so it fails each time.
-23. **FBX and Matrix miss the 20 ms target.** *Round 2.*
+23. **FBX and Matrix missed the 20 ms target.** Measured on an idle machine, 100,000 objects without data blocks,
+    unchanged, best ms (median): TRS 17 (18), FBX 25 (26), Matrix 28 (29). *Now:* TRS 17 (17), FBX 22 (23),
+    Matrix 17 (18).
+    - Matrix decomposes columns at right angles without `hypot`. A state that is decomposed only when a child asks
+      for it wasn't needed for that.
+    - FBX leaves out zero rotations. It is still above 20 ms; the rest is its pivots, matrix products and the
+      rotation itself.
 24. **Selected objects that are hidden or made unselectable later** were still transformed and deleted.
     *Decided:* they stay selected, so that showing them again brings the selection back, but commands that
     work on the selection leave them out. `objects` may name them. Documented in `commands.h`.

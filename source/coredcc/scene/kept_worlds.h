@@ -1,24 +1,10 @@
 #pragma once
 
-#include "coredcc/scene/object.h"
+#include "coredcc/scene/state_cache.h"
 
-#include "litestl/util/map.h"
 #include "litestl/util/vector.h"
 
 namespace coredcc::detail {
-
-/** The states of objects, each computed once. For as long as nothing changes. */
-class StateCache {
- public:
-  StateCache(const Library &lib, double time) : lib_(lib), time_(time) {}
-  /** As computeState. */
-  Result<TransformState> state(BlockHandle object);
-
- private:
-  const Library &lib_;
-  double time_;
-  litestl::util::Map<BlockHandle, TransformState> states_;
-};
 
 /** Whether children can be elsewhere under `b` than under `a`, with the same matrix. */
 bool inheritsOtherwise(const TransformState &a, const TransformState &b);
@@ -31,7 +17,7 @@ class KeptWorlds {
  public:
   /** Remembers where the objects below `changing` are, without those in it. */
   Status remember(const Library &lib,
-                  const litestl::util::Map<BlockHandle, int> &changing,
+                  const HandleSet &changing,
                   double time);
   /** How many of them are elsewhere now. */
   int moved(const Library &lib) const;

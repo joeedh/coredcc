@@ -22,6 +22,12 @@ struct Node {
   int32_t inherit;
 };
 
+/* eulerToQuat. Most pre- and post-rotations are zero. */
+quatd eulerOf(const double3 &v, EulerOrder order)
+{
+  return v[0] == 0.0 && v[1] == 0.0 && v[2] == 0.0 ? quatd() : eulerToQuat(v, order);
+}
+
 Node readNode(const EvalCtx &ctx)
 {
   Node n;
@@ -31,11 +37,11 @@ Node readNode(const EvalCtx &ctx)
   n.rotationPivot = readVec3(ctx, fbx::kRotationPivot);
   n.scalingOffset = readVec3(ctx, fbx::kScalingOffset);
   n.scalingPivot = readVec3(ctx, fbx::kScalingPivot);
-  n.pre = eulerToQuat(readVec3(ctx, fbx::kPreRotation), EulerOrder::XYZ);
-  n.post = eulerToQuat(readVec3(ctx, fbx::kPostRotation), EulerOrder::XYZ);
+  n.pre = eulerOf(readVec3(ctx, fbx::kPreRotation), EulerOrder::XYZ);
+  n.post = eulerOf(readVec3(ctx, fbx::kPostRotation), EulerOrder::XYZ);
   n.order = EulerOrder(ctx.enumChannel(fbx::kRotationOrder, 6));
   n.inherit = ctx.enumChannel(fbx::kInheritType, 3);
-  n.rotation = n.pre * eulerToQuat(readVec3(ctx, fbx::kRotation), n.order) * n.post.conjugated();
+  n.rotation = n.pre * eulerOf(readVec3(ctx, fbx::kRotation), n.order) * n.post.conjugated();
   return n;
 }
 

@@ -6,17 +6,9 @@
 
 namespace coredcc::detail {
 
-using litestl::util::Map;
 using litestl::util::Vector;
 
 namespace {
-
-BlockHandle liveParent(const Library &lib, const ObjectRead &r)
-{
-  const BlockHandle p = r.info.parent.isNull() ? BlockHandle() : lib.find(r.info.parent);
-  const Datablock *b = lib.get(p);
-  return b && b->state() == BlockState::Live ? p : BlockHandle();
-}
 
 bool samePlace(const mat4d &a, const mat4d &b)
 {
@@ -41,90 +33,26 @@ bool inheritsOtherwise(const TransformState &a, const TransformState &b)
   return !same;
 }
 
-Result<TransformState> StateCache::state(BlockHandle object)
-{
-  struct Step {
-    BlockHandle object;
-    ObjectRead read;
-  };
-  Vector<Step> steps;
-  Map<BlockHandle, int> seen;
-  TransformState state;
-  for (BlockHandle h = object; h;) {
-    if (const TransformState *known = states_.lookup_ptr(h)) {
-      state = *known;
-      break;
-    }
-    if (!seen.add(h, 0)) {
-      return computeState(lib_, object, time_); /* a cycle is above it */
-    }
-    if (h != object && !lib_.query<Transformable>(h)) {
-      break; /* the origin */
-    }
-    Result<ObjectRead> r = readObject(lib_, h);
-    if (!r.ok()) {
-      return r.status();
-    }
-    const BlockHandle parent = liveParent(lib_, *r);
-    steps.append(Step{h, std::move(*r)});
-    h = parent;
-  }
-  for (int i = int(steps.size()) - 1; i >= 0; i--) {
-    const ObjectRead &r = steps[i].read;
-    const TransformState parent = state;
-    Status error;
-    evaluateObject(lib_.runtime(), r.type, r.channels, time_, parent, state, error);
-    if (!error.ok()) {
-      return error;
-    }
-    states_.add(steps[i].object, state);
-  }
-  return state;
-}
-
-Status KeptWorlds::remember(const Library &lib, const Map<BlockHandle, int> &changing, double time)
+Status KeptWorlds::remember(const Library &lib, const HandleSet &changing, double time)
 {
   time_ = time;
-  Map<BlockHandle, BlockHandle> parents;
   Vector<BlockHandle> all;
   lib.forEach([&](BlockHandle h, const Datablock &b) {
     if (b.state() == BlockState::Live) {
       all.append(h);
     }
   });
+  StateCache states(lib, time);
+  Ancestry ancestry(lib, changing);
   for (BlockHandle h : all) {
-    if (!lib.query<Transformable>(h)) {
+    if (!lib.query<Transformable>(h) || changing.lookup_ptr(h)) {
       continue;
     }
-    Result<ObjectRead> r = readObject(lib, h);
-    if (!r.ok()) {
-      return r.status();
+    Result<Ancestry::Place> place = ancestry.place(h);
+    if (!place.ok()) {
+      return place.status();
     }
-    parents.add(h, liveParent(lib, *r));
-  }
-  StateCache states(lib, time);
-  Map<BlockHandle, int> below; /* 1: changes, or is below one that does */
-  for (BlockHandle h : all) {
-    Vector<BlockHandle> path;
-    Map<BlockHandle, int> seen;
-    int is = 0;
-    for (BlockHandle x = h; x && seen.add(x, 0);) {
-      if (changing.lookup_ptr(x)) {
-        is = 1;
-        break;
-      }
-      if (const int *known = below.lookup_ptr(x)) {
-        is = *known;
-        break;
-      }
-      path.append(x);
-      const BlockHandle *p = parents.lookup_ptr(x);
-      x = p ? *p : BlockHandle();
-    }
-    for (BlockHandle x : path) {
-      below.add(x, is);
-    }
-    if (is && !changing.lookup_ptr(h)) {
+    if (place->within) {
       Result<TransformState> s = states.state(h);
       if (!s.ok()) {
         return s.status();

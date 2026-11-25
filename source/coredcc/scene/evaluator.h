@@ -68,6 +68,7 @@ struct LookupKey {
 class SceneEvaluator {
  public:
   Scene::Counters counters;
+  Scene::Changes changes;
   SceneBvh bvh;
 
   /** Evaluates, and makes the results the last ones if they differ, with their BVH. Opens the EvaluationScope;
@@ -107,6 +108,8 @@ class SceneEvaluator {
   LookupKey key_;
   bool valid_ = false;
   ChannelBlock scratch_;
+  /** The places that differ, of the pass that runs. */
+  litestl::util::Vector<int32_t> differing_;
   EvaluatedStore stores_[2];
   int front_ = 0;
 };
