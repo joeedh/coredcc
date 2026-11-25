@@ -4,6 +4,7 @@
 #include "fake_host.h"
 
 #include "coredcc/api/ref_text.h"
+#include "coredcc/bind/checked.h"
 #include "coredcc/bind/facades.h"
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/bind/foreign_transform.h"
@@ -189,7 +190,7 @@ void testRegistration()
     refused(invalid, "two channels", channel("radius", sc::makeInt(1), false));
     refused(invalid, "reserved", channel("length", sc::makeInt(1), false));
     refused(invalid, "reserved", channel("active", sc::makeInt(1), false));
-    refused(invalid, "String", channel("s", sc::makeString("x"), false));
+    refused(invalid, "String", channel("s", PropValue::ofString("x"), false));
     refused(invalid, "2^53", channel("i", sc::makeInt(int64_t(1) << 60), false));
     refused(invalid, "distance", channel("i", sc::makeInt(1), true));
     refused(invalid, "distance", channel("b", sc::makeBool(true), true));
@@ -603,6 +604,41 @@ void testPick()
   test_assert(host.allReleasedOnce());
 }
 
+/* What is bound refuses a NUL in any string. */
+void testNul()
+{
+  using sc::detail::Checked;
+  CommandDoc d;
+  string nul("a");
+  nul += char(0);
+  nul += "b";
+  Context &ctx = *d.ctx;
+  const StatusCode bad = StatusCode::InvalidArgument;
+  const int scenes = d.lib->size();
+  test_assert(isError(Checked<&sc::newScene>::call(ctx, nul).status, bad, "argument 2"));
+  test_assert(isError(Checked<&sc::setScene>::call(ctx, nul), bad, "argument 2"));
+  test_assert(isError(Checked<&sc::worldMatrix>::call(ctx, nul).status, bad, "argument 2"));
+  test_assert(isError(Checked<&sc::blockIdText>::call(ctx, nul).status, bad, "argument 2"));
+  test_assert(isError(Checked<&sc::formatValue>::call(ctx, nul).status, bad, "argument 2"));
+  test_assert(isError(Checked<&sc::parseValue>::call(ctx, "scene", nul).status, bad, "argument 3"));
+  test_assert(d.lib->size() == scenes);
+  TransformTypeInfo *info = sc::newTransformType("js.nul");
+  test_assert(isError(Checked<&sc::transformTypeUiName>::call(*info, nul), bad, "argument 2"));
+  test_assert(isError(Checked<&sc::transformChannel>::call(*info, nul, sc::makeFloat(1), false), bad, "argument 2"));
+  test_assert(info->channels.size() == 0);
+  {
+    fakehost::Host host;
+    const fakehost::lf::Handle h = host.add(Obj());
+    test_assert(isError(sc::registerForeignTransformType(ctx, *info, h, nul), bad, "NUL"));
+    test_assert(host.releasesOf(h) == 1);
+  }
+  litestl::alloc::Delete(info);
+  /* A def's id is refused later. */
+  info = sc::newTransformType(nul);
+  test_assert(isError(d.rt.ext<TransformRegistry>().canAdd(*info), bad, "NUL"));
+  litestl::alloc::Delete(info);
+}
+
 } // namespace
 
 int main()
@@ -613,6 +649,7 @@ int main()
   testGates();
   testCommandSlots();
   testFacades();
+  testNul();
   testPick();
   return test_end();
 }

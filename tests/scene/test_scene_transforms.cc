@@ -368,7 +368,10 @@ void testDrag()
   t.axis = double3(0, 0, 1);
   for (int i = 1; i <= 72; i++) {
     t.angle = i * 0.174532925199433;
-    must(drag->update(*d.ctx, t));
+    must(d.ex->updateInteractive(*d.ctx, [&](Context &c, Command &cmd) {
+      test_assert(cmd.as<ApplyDelta>() == drag);
+      return drag->update(c, t);
+    }));
   }
   test_assert(std::fabs(d.obj(a).channels.get(trs::kRotationEuler + 2) - 4 * 3.14159265358979) <
               1e-9);

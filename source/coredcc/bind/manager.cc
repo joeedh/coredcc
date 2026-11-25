@@ -422,31 +422,32 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
 
 void addSceneFacades(litestl::binding::BindingManager *mgr)
 {
-  BIND_FUNCTION(mgr, "coredcc::vec3", script::vec3, MARGS("x", "y", "z"));
-  BIND_FUNCTION(mgr, "coredcc::vec3At", script::vec3At, MARGS("v", "i"));
-  BIND_FUNCTION(mgr, "coredcc::vec3Put", script::vec3Put, MARGS("v", "i", "x"));
+  BIND_FACADE(mgr, "coredcc::vec3", script::vec3, MARGS("x", "y", "z"));
+  BIND_FACADE(mgr, "coredcc::vec3At", script::vec3At, MARGS("v", "i"));
+  BIND_FACADE(mgr, "coredcc::vec3Put", script::vec3Put, MARGS("v", "i", "x"));
 
   BIND_FUNCTION(mgr, "coredcc::newTransformType", script::newTransformType, MARGS("id"))
       .returnsOwned();
-  BIND_FUNCTION(mgr,
-                "coredcc::transformTypeUiName",
-                script::transformTypeUiName,
-                MARGS("type", "s"));
-  BIND_FUNCTION(mgr,
-                "coredcc::transformChannel",
-                script::transformChannel,
-                MARGS("type", "name", "defaultValue", "distance"));
+  BIND_FACADE(mgr,
+              "coredcc::transformTypeUiName",
+              script::transformTypeUiName,
+              MARGS("type", "s"));
+  BIND_FACADE(mgr,
+              "coredcc::transformChannel",
+              script::transformChannel,
+              MARGS("type", "name", "defaultValue", "distance"));
+  /* It checks its strings itself: it takes a count of the model, whatever they are. */
   BIND_FUNCTION(mgr,
                 "coredcc::registerForeignTransformType",
                 script::registerForeignTransformType,
                 MARGS("ctx", "type", "model", "slots"));
 
-  BIND_FUNCTION(mgr, "coredcc::newScene", script::newScene, MARGS("ctx", "name"));
-  BIND_FUNCTION(mgr, "coredcc::setScene", script::setScene, MARGS("ctx", "scene"));
-  BIND_FUNCTION(mgr, "coredcc::blockIdText", script::blockIdText, MARGS("ctx", "block"));
-  BIND_FUNCTION(mgr, "coredcc::evaluateScene", script::evaluateScene, MARGS("ctx"));
-  BIND_FUNCTION(mgr, "coredcc::worldMatrix", script::worldMatrix, MARGS("ctx", "object"));
-  BIND_FUNCTION(mgr, "coredcc::pick", script::pick, MARGS("ctx", "view", "x", "y", "options"));
+  BIND_FACADE(mgr, "coredcc::newScene", script::newScene, MARGS("ctx", "name"));
+  BIND_FACADE(mgr, "coredcc::setScene", script::setScene, MARGS("ctx", "scene"));
+  BIND_FACADE(mgr, "coredcc::blockIdText", script::blockIdText, MARGS("ctx", "block"));
+  BIND_FACADE(mgr, "coredcc::evaluateScene", script::evaluateScene, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::worldMatrix", script::worldMatrix, MARGS("ctx", "object"));
+  BIND_FACADE(mgr, "coredcc::pick", script::pick, MARGS("ctx", "view", "x", "y", "options"));
 }
 
 } // namespace

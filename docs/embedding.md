@@ -169,7 +169,8 @@ Unreal, coredcc is exactly one module, so they exist once.
   - a notification of the block: what `setValue` and the commands do, `writeTransform`, `writeParent`, and
     `ChangeBus::notify` with its owner after the host moved the object itself;
   - `invalidateData` after the host changed its geometry (also for the data block of an object: notify
-    the block that has the Spatial);
+    the block that has the Spatial). Its kinds are the change's aspects, so a kernel that asked for the
+    positions doesn't run for a selection: name all that changed;
   - a move of the Library's epoch: creating, deleting and restoring blocks, `onHostDestroyed` and
     `onHostRestored`, `writeRef` and `noteRefsChanged`, overrides. A block's data pointer may change only
     between the two host calls.

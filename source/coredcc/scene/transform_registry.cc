@@ -5,6 +5,7 @@
 
 #include "litestl/util/alloc.h"
 
+#include <cstring>
 #include <string>
 
 namespace coredcc {
@@ -82,6 +83,9 @@ Status TransformRegistry::canAdd(const TransformTypeInfo &info) const
   CDCC_TRY(rt_.busyIfEvaluating("adding a transform type"));
   if (info.name.size() == 0) {
     return bad(info.name, "it has no name");
+  }
+  if (strlen(info.name.c_str()) != size_t(info.name.size())) {
+    return bad(info.name, "a name can't hold a NUL");
   }
   if (rt_.ext<ApiRegistry>().find(StructId::of(info.name.c_str()))) {
     return Status::error(StatusCode::AlreadyExists,

@@ -70,7 +70,7 @@ ValueResult newScene(Context &ctx, const string &name)
     return failed<ValueResult>(reg.unknown(kNewSceneCommand));
   }
   PropertyBag in = def->newInputs();
-  if (Status s = in.set("name", makeString(name)); !s.ok()) {
+  if (Status s = in.set("name", PropValue::ofString(name.c_str())); !s.ok()) {
     return failed<ValueResult>(std::move(s));
   }
   Result<PropertyBag> out = detail::runCommand(ctx, *def, std::move(in));

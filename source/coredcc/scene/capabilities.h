@@ -202,7 +202,9 @@ template <class I> I objectQuery(const Library &lib, BlockHandle object)
 }
 
 /** Tells everyone that a block's own data changed, other than through the datapath: its
- * Invalidation, if it has one, then the ChangeBus. `kinds` are InvalidateKinds. */
+ * Invalidation, if it has one, then the ChangeBus, where `kinds` are the change's aspects: a graph
+ * kernel that uses others doesn't run. What isn't in a kind that a kernel asked for isn't seen by it,
+ * so name all that changed. */
 Status invalidateData(Context &ctx, BlockHandle block, InvalidateKinds kinds);
 
 } // namespace coredcc

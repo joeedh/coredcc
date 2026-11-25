@@ -126,7 +126,9 @@ class ObjectChanges {
  * `update` with the total delta since then as often as it likes, and commits or cancels:
  *
  *     executor.beginInteractive(ctx, def, def.newInputs());
- *     executor.interactiveCommand()->as<ApplyDelta>()->update(ctx, delta);
+ *     executor.updateInteractive(ctx, [&](Context &c, Command &cmd) {
+ *       return cmd.as<ApplyDelta>()->update(c, delta);
+ *     });
  */
 class ApplyDelta {
  public:

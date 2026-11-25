@@ -462,7 +462,7 @@ Status invalidateData(Context &ctx, BlockHandle block, InvalidateKinds kinds)
     i.invalidate(uint32_t(kinds));
     s = pending ? Status() : thrown(ctx.runtime());
   }
-  ctx.runtime().ext<ChangeBus>().notify(owner);
+  ctx.runtime().ext<ChangeBus>().notify(owner, {}, ChangeAspects(kinds));
   return s;
 }
 

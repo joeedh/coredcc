@@ -1033,6 +1033,11 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   What was missing: a transform type that is registered late. `embedding.md` has the rule for hosts.
 - **`solveDelta`** asks `solveWorld` (Exact) a second time when a scale isn't exact. Only an exception of
   that attempt is an error (StatusCode::Internal, which foreign exceptions have).
+- **After rebasing** on master `46734ea`: `invalidateData` gives its kinds as ChangeAspects
+  (`test_scene_aspects`: kernels with and without them, a Selection-only change); the facades are bound with
+  BIND_FACADE, and `registerForeignTransformType` refuses a NUL itself, since it takes a count of the model
+  whatever happens; `TransformRegistry::canAdd` refuses a NUL in a name; drags are documented with
+  `updateInteractive`. Five mutations, all found (one by a static_assert).
 - **Renamed:** the capability `Elements` is `ElementAccess`, since graphs have a payload `Elements` (both
   in master and in `compile_embed`). Architecture §8 still says Elements.
 - **Deferred:** solving descendants that inherit FBX-style (17), a data matrix, instancing and sub-keys
