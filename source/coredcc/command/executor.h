@@ -95,6 +95,8 @@ class CommandRecord {
   PropertyBag inputs_;
   PropertyBag outputs_;
   litestl::util::Vector<CommandRecord *> subs_;
+  /** The executor's. */
+  Runtime *rt_ = nullptr;
   bool fromFactory_ = false;
   std::optional<StableRef> prefix_;
   /** memSize() when the history took it, for the budget's running total. */

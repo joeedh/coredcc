@@ -38,6 +38,9 @@ Vector<BlockHandle> deletePreview(const Library &lib, std::span<const BlockHandl
     add(h);
   }
   const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
+  /* A user of many (a scene) has its cells looked at once: the Strong users, by target. */
+  litestl::util::Map<BlockId, HandleSet> strong;
+  HandleSet scanned;
   for (int i = 0; i < int(out.size()); i++) {
     const BlockId gone = lib.get(out[i])->id();
     for (BlockHandle user : lib.usersOf(out[i])) {
@@ -49,12 +52,19 @@ Vector<BlockHandle> deletePreview(const Library &lib, std::span<const BlockHandl
       {
         continue;
       }
-      bool breaks = false;
-      lib.foreachRef(user, [&](RefCell &cell) {
-           breaks |= cell.kind == RefKind::Strong && clients.canonical(cell.target) == gone;
-         })
-          .ignore(); /* a provider failure is sticky; the preview stays partial */
-      if (breaks) {
+      if (scanned.add(user, true)) {
+        lib.foreachRef(user, [&](RefCell &cell) {
+             if (cell.kind == RefKind::Strong && !cell.target.isNull()) {
+               const BlockId target = clients.canonical(cell.target);
+               if (!strong.lookup_ptr(target)) {
+                 strong.add(target, HandleSet());
+               }
+               strong.lookup_ptr(target)->add(user, true);
+             }
+           })
+            .ignore(); /* a provider failure is sticky; the preview stays partial */
+      }
+      if (const HandleSet *users = strong.lookup_ptr(gone); users && users->lookup_ptr(user)) {
         add(user);
       }
     }
@@ -65,6 +75,15 @@ Vector<BlockHandle> deletePreview(const Library &lib, std::span<const BlockHandl
 /* ---- CreatedBlocks ---- */
 
 namespace {
+
+void destroyNow(Library &lib, const Vector<BlockHandle> &blocks)
+{
+  Status s =
+      lib.destroyFromHistory(std::span<const BlockHandle>(blocks.data(), size_t(blocks.size())));
+  if (!s.ok()) {
+    lib.runtime().setStickyError(std::move(s));
+  }
+}
 
 /* Destroys blocks that leave the history, but those that are gone or were recreated Live. A
  * failure has no caller to return to. */
@@ -80,10 +99,8 @@ void destroyDeleted(Library &lib, const Vector<BlockHandle> &blocks)
   if (deleted.size() == 0) {
     return;
   }
-  Status s = lib.destroyFromHistory(
-      std::span<const BlockHandle>(deleted.data(), size_t(deleted.size())));
-  if (!s.ok()) {
-    lib.runtime().setStickyError(std::move(s));
+  if (!lib.runtime().ext<detail::HistoryDestroys>().take(lib, deleted)) {
+    destroyNow(lib, deleted);
   }
 }
 
@@ -102,6 +119,41 @@ Status deleteAll(Library &lib, const Vector<BlockHandle> &blocks)
 }
 
 } // namespace
+
+namespace detail {
+
+bool HistoryDestroys::take(Library &lib, const Vector<BlockHandle> &blocks)
+{
+  if (depth_ == 0) {
+    return false;
+  }
+  for (Batch &b : batches_) {
+    if (b.lib.get() == &lib) {
+      for (BlockHandle h : blocks) {
+        b.blocks.append(h);
+      }
+      return true;
+    }
+  }
+  batches_.append(Batch{lib.ref(), blocks});
+  return true;
+}
+
+void HistoryDestroys::close()
+{
+  if (--depth_ > 0) {
+    return;
+  }
+  const Vector<Batch> batches = std::move(batches_);
+  batches_ = Vector<Batch>();
+  for (const Batch &b : batches) {
+    if (Library *lib = b.lib.get()) {
+      destroyDeleted(*lib, b.blocks);
+    }
+  }
+}
+
+} // namespace detail
 
 void CreatedBlocks::add(Library &lib, BlockHandle h)
 {

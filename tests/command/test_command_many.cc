@@ -10,6 +10,7 @@
 #include "coredcc/command/library_commands.h"
 
 #include "../lib/io_fixture.h"
+#include "fuzz.h"
 
 #include <chrono>
 
@@ -152,6 +153,56 @@ static void test_delete()
   test_assert(w.lib.markDeleted(w.at(8)).ok());
   test_assert(refusedWith(c.run(kDeleteBlockCommand, BlockId(), c.list({7, 8})), "is InHistory"));
   test_assert(c.isLive(7) && w.lib.get(w.at(8))->state() == BlockState::InHistory);
+}
+
+/* Against looking at each user again for each target. */
+static void test_preview_random()
+{
+  SplitMix64 r(17);
+  int taken = 0;
+  for (int round = 0; round < 60 * testScale(); round++) {
+    IoWorld w;
+    for (uint64_t n = 1; n <= 16; n++) {
+      w.doc(n, "d");
+    }
+    for (uint64_t n = 1; n <= 16; n++) {
+      const auto any = [&]() { return w.at(1 + r.below(16)); };
+      w.link(w.at(n), r.below(3) ? any() : BlockHandle(), r.below(3) ? any() : BlockHandle());
+      for (int i = int(r.below(3)); i > 0; i--) {
+        const RefKind kind = r.below(2) ? RefKind::Strong : RefKind::OptStrong;
+        test_assert(w.lib.setSlot(w.at(n), kNote, i, w.id(any()), kind).ok());
+      }
+    }
+    const BlockHandle targets[] = {w.at(1 + r.below(16)), w.at(1 + r.below(16))};
+    Vector<BlockHandle> want;
+    for (BlockHandle h : targets) {
+      if (!want.contains(h)) {
+        want.append(h);
+      }
+    }
+    for (int i = 0; i < int(want.size()); i++) {
+      for (BlockHandle user : w.lib.usersOf(want[i])) {
+        bool breaks = false;
+        test_assert(w.lib
+                        .foreachRef(user,
+                                    [&](RefCell &c) {
+                                      breaks |= c.kind == RefKind::Strong &&
+                                                c.target == w.id(want[i]);
+                                    })
+                        .ok());
+        if (breaks && !want.contains(user)) {
+          want.append(user);
+        }
+      }
+    }
+    const Vector<BlockHandle> got = deletePreview(w.lib, targets);
+    test_assert(got.size() == want.size());
+    for (int i = 0; i < int(got.size()); i++) {
+      test_assert(got[i] == want[i]);
+    }
+    taken += int(got.size());
+  }
+  test_assert(taken > 200);
 }
 
 /* A cascade of many is named in part. */
@@ -359,6 +410,84 @@ Bytes hosted()
 
 } // namespace
 
+/* Commands that leave the history together, in two Libraries, one with a block that can't go. */
+static void test_dropped_together()
+{
+  CommandWorld c;
+  IoWorld &w = c.w;
+  test_assert(addNativeCommand<Adopt>(w.rt, CommandDef("test.adopt")).ok());
+  Library other(&w.rt);
+  Context there(&w.rt, &other, PointerRef());
+  there.setExecutor(&c.ex);
+  for (int i = 0; i < 6; i++) {
+    test_assert(c.ex.run(i % 2 ? there : c.ctx, "test.adopt", PropertyBag()).ok());
+  }
+  for (int i = 5; i >= 0; i--) {
+    test_assert(c.ex.undo(i % 2 ? there : c.ctx).ok());
+  }
+  test_assert(w.lib.size() == 3 && other.size() == 3);
+  const uint64_t gone = w.lib.removedCount();
+  const int destroyed = w.docs.destroyed;
+  test_assert(c.ex.run(c.ctx, "test.adopt", PropertyBag()).ok());
+  test_assert(w.lib.size() == 1 && other.size() == 0 && w.lib.removedCount() == gone + 3);
+  test_assert(w.docs.destroyed == destroyed + 6 && c.history.size() == 1);
+
+  /* By the budget. */
+  for (int i = 0; i < 2; i++) {
+    test_assert(c.ex.run(there, "test.adopt", PropertyBag()).ok());
+  }
+  c.history.clear();
+  test_assert(w.lib.size() == 1 && other.size() == 2); /* they were done: the documents' */
+  const auto all = [](Library &lib) {
+    Vector<BlockHandle> out;
+    lib.forEach([&](BlockHandle h, const Datablock &) { out.append(h); });
+    return out;
+  };
+  for (int i = 0; i < 2; i++) {
+    const BlockId id = other.get(all(other)[i])->id();
+    PropertyBag in = w.rt.ext<CommandRegistry>().find(kDeleteBlockCommand)->newInputs();
+    test_assert(in.set("block", pointer(id)).ok());
+    test_assert(c.ex.run(there, kDeleteBlockCommand, std::move(in)).ok());
+  }
+  c.history.setMemoryBudget(1);
+  test_assert(other.size() == 1 && c.history.size() == 1);
+  c.history.setMemoryBudget(uint64_t(1) << 40);
+  {
+    /* A history that is dropped while another one is. */
+    const detail::HistoryDestroysScope outer(w.rt);
+    c.history.clear();
+    test_assert(other.size() == 1);
+  }
+  test_assert(other.size() == 0);
+
+  /* The block of one of them is still held: the others go, and the command says so. */
+  const BlockHandle before = all(w.lib)[0];
+  for (int i = 0; i < 3; i++) {
+    test_assert(c.ex.run(c.ctx, "test.adopt", PropertyBag()).ok());
+  }
+  Vector<BlockHandle> blocks;
+  for (BlockHandle h : all(w.lib)) {
+    if (h != before) {
+      blocks.append(h);
+    }
+  }
+  const BlockHandle user = w.doc(90, "user");
+  for (int i = 0; i < 3; i++) {
+    test_assert(c.ex.undo(c.ctx).ok());
+  }
+  w.link(user, blocks[1]);
+  Result<PropertyBag> res = c.ex.run(c.ctx, "test.adopt", PropertyBag());
+  test_assert(hasMsg(res.status(), "history's upkeep failed") &&
+              hasMsg(res.status(), "'user' still holds a Strong ref"));
+  int held = 0;
+  for (BlockHandle h : blocks) {
+    held += w.lib.get(h) != nullptr;
+  }
+  test_assert(held == 1 && w.lib.get(blocks[1]) && c.history.size() == 1);
+  w.link(user, BlockHandle());
+  test_assert(w.lib.destroyFromHistory(blocks[1]).ok());
+}
+
 static void test_adopt()
 {
   const Bytes bytes = hosted();
@@ -517,10 +646,12 @@ static void test_unlink_after_resolve()
 int main()
 {
   test_delete();
+  test_preview_random();
   test_delete_names();
   test_delete_time();
   test_duplicate();
   test_memory();
+  test_dropped_together();
   test_adopt();
   test_append_fills();
   test_detach_opaque();

@@ -248,6 +248,7 @@ void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
     }
     else {
       byId_.remove(keyOf(b->id_));
+      removed_++;
     }
     pool_.destroy(h);
   }

@@ -198,6 +198,7 @@ void Library::doom(const Vector<BlockHandle> &blocks)
   for (BlockHandle h : blocks) {
     Datablock *b = rec(h);
     byId_.remove(keyOf(b->id_));
+    removed_++;
     setState(*b, BlockState::Doomed);
     doomedCount_++;
   }

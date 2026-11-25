@@ -80,4 +80,50 @@ Status registerBlockCommands(Runtime &rt);
 inline constexpr const char *kDeleteBlockCommand = "core.block.delete";
 inline constexpr const char *kPurgeCommand = "core.block.purge";
 
+namespace detail {
+
+/** Blocks that leave the history in one go: destroyed together, since each call of destroyFromHistory
+ * looks at the whole Library. A Runtime extension. */
+class HistoryDestroys {
+ public:
+  static constexpr const char *kExtName = "coredcc.HistoryDestroys";
+  explicit HistoryDestroys(Runtime *) {}
+
+  void open()
+  {
+    depth_++;
+  }
+  void close();
+  /** False unless it is open. */
+  bool take(Library &lib, const litestl::util::Vector<BlockHandle> &blocks);
+
+ private:
+  struct Batch {
+    LibraryRef lib;
+    litestl::util::Vector<BlockHandle> blocks;
+  };
+  litestl::util::Vector<Batch> batches_;
+  int depth_ = 0;
+};
+
+/** Keeps the batch open. */
+class HistoryDestroysScope {
+ public:
+  explicit HistoryDestroysScope(Runtime &rt) : batch_(rt.ext<HistoryDestroys>())
+  {
+    batch_.open();
+  }
+  ~HistoryDestroysScope()
+  {
+    batch_.close();
+  }
+  HistoryDestroysScope(const HistoryDestroysScope &) = delete;
+  HistoryDestroysScope &operator=(const HistoryDestroysScope &) = delete;
+
+ private:
+  HistoryDestroys &batch_;
+};
+
+} // namespace detail
+
 } // namespace coredcc

@@ -1,6 +1,7 @@
 #include "coredcc/command/executor.h"
 
 #include "coredcc/api/resolve.h"
+#include "coredcc/command/block_commands.h"
 #include "coredcc/command/last_used.h"
 #include "coredcc/base/text.h"
 #include "coredcc/command/literal.h"
@@ -269,6 +270,10 @@ void LinearHistory::drop(CommandRecord *r)
 
 void LinearHistory::truncateRedo()
 {
+  if (int(entries_.size()) == cursor_) {
+    return;
+  }
+  const detail::HistoryDestroysScope together(*entries_.last()->rt_);
   while (int(entries_.size()) > cursor_) {
     CommandRecord *r = entries_.last();
     entries_.pop_back();
@@ -314,6 +319,10 @@ void LinearHistory::pushBarrier()
 
 void LinearHistory::enforceBudget()
 {
+  if (used_ <= budget_) {
+    return;
+  }
+  const detail::HistoryDestroysScope together(*entries_.last()->rt_);
   /* Drop the oldest, never the newest. */
   while (used_ > budget_ && entries_.size() > 1 && cursor_ > 1) {
     CommandRecord *oldest = entries_[0];
@@ -552,6 +561,7 @@ Result<RecordPtr> CommandExecutor::start(Context &ctx,
   }
   RecordPtr rec(litestl::alloc::New<CommandRecord>("coredcc::CommandRecord", &def,
                                                    std::move(cmd), std::move(bag).value()));
+  rec->rt_ = &rt_;
   rec->fromFactory_ = fromFactory;
   rec->prefix_ = std::move(prefix);
   Status ok;

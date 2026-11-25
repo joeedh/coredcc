@@ -339,6 +339,12 @@ class Library {
   {
     return sweeping_;
   }
+  /** How many records have gone, by sweeps and destroyFromHistory. While it is the same, a reference
+   * to a block that had a record still has one. */
+  uint64_t removedCount() const
+  {
+    return removed_;
+  }
   /** Sweeping, collecting, loading, saving or duplicating: calls that return a Status fail
    * with Busy. */
   bool busy() const
@@ -448,6 +454,7 @@ class Library {
   std::shared_ptr<detail::LibraryToken> token_;
 
   int doomedCount_ = 0;
+  uint64_t removed_ = 0;
   bool releasing_ = false;
   /** A load, a save or a duplication is calling providers. */
   bool loading_ = false;
