@@ -20,6 +20,9 @@ coredcc_test(test_props_value_io SOURCES props/test_value_io.cc DEPS coredcc_pro
 coredcc_test(test_parse_path SOURCES parse/test_path.cc DEPS coredcc_parse)
 coredcc_test(test_parse_invocation SOURCES parse/test_invocation.cc DEPS coredcc_parse)
 coredcc_test(test_parse_fuzz SOURCES parse/test_fuzz.cc DEPS coredcc_parse)
+coredcc_test(test_layout_xml SOURCES layout/test_xml.cc DEPS coredcc_layout)
+coredcc_test(test_layout_builder SOURCES layout/test_builder.cc DEPS coredcc_layout)
+coredcc_test(test_layout_hostile SOURCES layout/test_hostile.cc DEPS coredcc_layout)
 coredcc_test(test_lib_library SOURCES lib/test_library.cc DEPS coredcc_lib)
 coredcc_test(test_lib_lifetime SOURCES lib/test_lifetime.cc DEPS coredcc_lib)
 coredcc_test(test_lib_block_io SOURCES lib/test_block_io.cc DEPS coredcc_lib)
@@ -77,7 +80,7 @@ coredcc_test(test_bind_foreign SOURCES bind/test_bind_foreign.cc DEPS coredcc_bi
 coredcc_test(test_bind_review SOURCES bind/test_bind_review.cc DEPS coredcc_bind)
 coredcc_test(test_bind_graph SOURCES bind/test_bind_graph.cc DEPS coredcc_bind)
 if(WIN32)
-  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_bvh coredcc_command)
+  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_bvh coredcc_command coredcc_layout)
 endif()
 
 add_subdirectory(bench)

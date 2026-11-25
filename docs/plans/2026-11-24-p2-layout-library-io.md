@@ -900,6 +900,28 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
   All are caught but one, which is equivalent: `unsignedInteger` one past 2^53 reaches `integer`,
   which quotes it as well.
 
+### B2: layout nodes, XML, JSON, builder (2026-11-25)
+- **Files:** `layout/{layout,builder,xml,draft}.{h,cc}` and `json.cc`. `draft` is what the parser and the
+  builder fill in, and the checks they share.
+- **The root is a node of its own kind** (`Layout`). It may have a `path`, `id` and `class`.
+- **Syntax is checked when a layout is made:** paths, conditions, invocations, bools, unique ids, and
+  which children and attributes each kind may have. So a `Layout` is always well formed, and joining
+  paths can't fail. Whether names exist is B3's.
+- **A fifth limit, 1,024 bytes for a path joined with its prefixes.** Otherwise 1 MiB of text makes
+  gigabytes of effective paths.
+- **A node's own paths, its conditions too, are relative to its parent's prefix,** never to its own
+  `path`.
+- **`custom` has a required `tag`.** Unknown elements inside one are Customs whose tag is their name, and
+  elements of known names keep their meaning. Attributes that aren't a Custom's own are free ones.
+- **Text:** in `label` and `tool` it is the label, with blanks collapsed; a label attribute and text are
+  an error. In `custom` it is kept but for the space around it, and can't be mixed with elements.
+- **JSON has joined paths** for conditions (`{path, not}`) and `prefix` for tools, so a frontend never
+  joins paths itself.
+- **The builder's bools are set with `setFlag`:** an overload of `set` took string literals.
+- **Mutations:** 142, of which 139 fail a test. The rest change only speed or memory (a break in a loop
+  that the next line makes redundant, one node more in the builder), or were a duplicated check that is
+  removed.
+
 ### Review of library IO, round 1 (2026-11-24)
 Numbers are the report's (`docs/reports/feature-report-library-io-2026-11-24.md`, with round 2).
 - **1:** `BagRefs` (`lib/bag_refs.h`) is a bag's cells by name. The cell says which block, the bag's

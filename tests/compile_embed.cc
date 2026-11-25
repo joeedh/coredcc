@@ -46,6 +46,10 @@
 #include "coredcc/base/status.h"
 #include "coredcc/base/text.h"
 #include "coredcc/base/utf8.h"
+#include "coredcc/layout/builder.h"
+#include "coredcc/layout/draft.h"
+#include "coredcc/layout/layout.h"
+#include "coredcc/layout/xml.h"
 #include "coredcc/lib/attachment.h"
 #include "coredcc/lib/block.h"
 #include "coredcc/lib/bag_refs.h"
@@ -145,6 +149,10 @@ int main()
     ray.origin = {0.25, 0.25, -1};
     ray.dir = {0, 0, 1};
     test_assert(bvh.rayClosest(ray) && bvh.rayAny(ray) && bvh.nearest(ray.origin, 2));
+    coredcc::LayoutBuilder layout;
+    layout.root().panel("Panel").prop("a.b").visibleIf("!c");
+    test_assert(coredcc::layoutToJson(*layout.finish()).size() > 0);
+    test_assert(coredcc::parseLayout("<layout/>").ok());
     test_assert(!coredcc::AnyBvh().build(rt, coredcc::AnyBvhSource()).ok());
     test_assert(rt.validateAll().ok());
   }

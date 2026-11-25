@@ -1,0 +1,10 @@
+coredcc_library(coredcc_layout
+  SOURCES
+    builder.cc
+    draft.cc
+    json.cc
+    layout.cc
+    xml.cc
+  DEPS
+    coredcc_parse
+)
