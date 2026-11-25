@@ -39,6 +39,10 @@ Status ready(const Library &lib, const char *what)
 
 /* ---- Object ---- */
 
+/* Six cache lines. Evaluating goes through all objects: what most of them do not use belongs in
+ * FileData, or in another place. */
+static_assert(sizeof(Object) <= 384);
+
 void Object::setTransformType(std::string_view name)
 {
   if (TypeId::of(name) != type_) {
@@ -56,7 +60,7 @@ void Object::read(ObjectInfo &info, ChannelBlock &out) const
   info.parent = parent.target();
   info.data = data.target();
   info.flags = uint32_t(flags);
-  if (pending_) {
+  if (file_ && file_->pending) {
     const_cast<Object *>(this)->resolve(); /* the type came after the object */
   }
   out = channels;
@@ -66,9 +70,9 @@ void Object::read(ObjectInfo &info, ChannelBlock &out) const
 Status Object::writeChannels(const ChannelBlock &in)
 {
   /* No channels are what read() gave of an object that waits for its type: an undo. */
-  if (pending_ && unreadType_ == typeName_ && in.size() > 0) {
-    pending_ = false;
-    unread_.clear();
+  if (fileOfType() && file_->pending && in.size() > 0) {
+    file_->pending = false;
+    file_->unread.clear();
   }
   channels = in;
   return Status();

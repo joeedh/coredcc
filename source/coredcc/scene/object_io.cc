@@ -39,14 +39,16 @@ std::string numberName(int i)
 void Object::write(BlockWriter &out) const
 {
   const TransformType *type = rt_->ext<TransformRegistry>().find(type_);
-  const bool pending = pending_ && unreadType_ == typeName_;
+  const FileData *file = fileOfType();
+  const bool pending = file && file->pending;
   const bool named = type && !pending && channels.size() == type->channelCount();
 
-  Vector<BlockEntry> fields = fields_;
+  Vector<BlockEntry> fields;
+  for (const BlockEntry &e : unreadFields()) {
+    fields.append(e);
+  }
   fields.append(detail::valueField(kType, PropValue::ofString(typeName_.c_str())));
-  const uint32_t version = named                     ? type->version() :
-                           unreadType_ == typeName_ ? unreadVersion_ :
-                                                      0;
+  const uint32_t version = named ? type->version() : file ? file->version : 0;
   if (version) {
     fields.append(detail::valueField(kVersion, PropValue::ofInt(version)));
   }
@@ -54,7 +56,7 @@ void Object::write(BlockWriter &out) const
     fields.append(detail::valueField(kFlags, PropValue::ofFlags(uint32_t(flags))));
   }
   /* Numbered as the channels are, when those have no names. */
-  std::string locks = unreadType_ == typeName_ ? unreadLocks_.c_str() : "";
+  std::string locks = file ? file->locks.c_str() : "";
   const auto add = [&locks](const std::string &name) {
     locks += locks.empty() || name.empty() ? name : " " + name;
   };
@@ -95,7 +97,8 @@ void Object::readFrom(BlockReader &in)
 {
   std::string type, locks;
   uint32_t version = 0;
-  detail::readFields(in, fields_, [&](const BlockEntry &e) {
+  file_.make();
+  detail::readFields(in, file_->fields, [&](const BlockEntry &e) {
     if (detail::isValueField(e, kType, PropValue::Type::String)) {
       type = e.value.asString().c_str();
       return true;
@@ -125,7 +128,7 @@ void Object::readFrom(BlockReader &in)
     channels = known->defaults();
   }
   Vector<double> numbers;
-  detail::readFields(in, unread_, [&](const BlockEntry &e) {
+  detail::readFields(in, file_->unread, [&](const BlockEntry &e) {
     if (e.name.c_str()[0] != '#') {
       return known && detail::takeChannel(*known, e, channels);
     }
@@ -140,11 +143,11 @@ void Object::readFrom(BlockReader &in)
     return;
   }
   setTransformType(type);
-  unreadType_ = typeName_;
-  unreadVersion_ = version;
-  pending_ = numbers.size() == 0 && !known;
-  unreadLocks_ = litestl::util::string(locks.c_str());
-  if (!pending_) {
+  file_->type = typeName_;
+  file_->version = version;
+  file_->pending = numbers.size() == 0 && !known;
+  file_->locks = string(locks.c_str());
+  if (!file_->pending) {
     takeLocks(known);
   }
   if (numbers.size() > 0) {
@@ -153,31 +156,43 @@ void Object::readFrom(BlockReader &in)
       channels.set(i, numbers[i]);
     }
   }
+  dropFileData(known && numbers.size() == 0);
+}
+
+/* If there is nothing in it. `versionKnown`: the type's own version is what would be written. */
+void Object::dropFileData(bool versionKnown)
+{
+  if (!file_->pending && file_->fields.size() == 0 && file_->unread.size() == 0 &&
+      file_->locks.size() == 0 && (versionKnown || file_->version == 0))
+  {
+    file_.reset();
+  }
 }
 
 /* Whether it reads from `version`, as `entries`. An error is sticky: whoever asked gets it, once. */
 bool Object::upgrade(const TransformType &type, Vector<BlockEntry> &entries)
 {
-  if (unreadVersion_ == type.version()) {
+  const uint32_t from = file_->version;
+  if (from == type.version()) {
     return true;
   }
-  if (unreadVersion_ > type.version() || rt_->hasStickyError()) {
+  if (from > type.version() || rt_->hasStickyError()) {
     return false;
   }
   if (!type.model().hasUpgrade()) {
     return true;
   }
   ChannelEntries in(entries);
-  Status s = type.model().upgrade(unreadVersion_, in);
+  Status s = type.model().upgrade(from, in);
   if (rt_->hasStickyError()) {
     s = rt_->takeStickyError();
   }
-  upgradeFailed_ = !s.ok();
-  if (upgradeFailed_) {
+  file_->upgradeFailed = !s.ok();
+  if (!s.ok()) {
     rt_->setStickyError(Status::error(
         s.code(),
         ("upgrading the channels of a '" + std::string(type.name().c_str()) + "', version " +
-         std::to_string(unreadVersion_) + ": " + s.message())
+         std::to_string(from) + ": " + s.message())
             .c_str()));
   }
   return s.ok();
@@ -186,22 +201,23 @@ bool Object::upgrade(const TransformType &type, Vector<BlockEntry> &entries)
 void Object::resolve()
 {
   const TransformType *type = rt_->ext<TransformRegistry>().find(type_);
-  if (!pending_ || upgradeFailed_ || !type || unreadType_ != typeName_) {
+  if (!fileOfType() || !file_->pending || file_->upgradeFailed || !type) {
     return;
   }
-  Vector<BlockEntry> entries = unread_;
+  Vector<BlockEntry> entries = file_->unread;
   if (upgrade(*type, entries)) {
     channels = detail::takeChannels(*type, entries);
-    unread_ = std::move(entries);
-    pending_ = false;
+    file_->unread = std::move(entries);
+    file_->pending = false;
     takeLocks(type);
+    dropFileData(true);
   }
 }
 
-/* Those that are in unreadLocks_ and that this build knows. */
+/* Those that are in the file's locks and that this build knows. */
 void Object::takeLocks(const TransformType *type)
 {
-  std::string names = unreadLocks_.c_str(), rest;
+  std::string names = file_->locks.c_str(), rest;
   locks_ = 0;
   if (type) {
     locks_ = detail::lockMask(*type, names, &rest);
@@ -223,13 +239,15 @@ void Object::takeLocks(const TransformType *type)
       rest += rest.empty() ? name : " " + name;
     }
   }
-  unreadLocks_ = litestl::util::string(rest.c_str());
+  file_->locks = string(rest.c_str());
 }
 
 uint64_t Object::memSize() const
 {
   return sizeof(Object) + uint64_t(channels.size()) * sizeof(double) +
-         detail::fieldsMemSize(unread_) + detail::fieldsMemSize(fields_);
+         (file_ ? sizeof(FileData) + detail::fieldsMemSize(file_->unread) +
+                      detail::fieldsMemSize(file_->fields) :
+                  0);
 }
 
 /* ---- ChannelEntries ---- */

@@ -344,17 +344,60 @@ bool hasEntry(Library &lib, BlockHandle h, const char *name)
   return detail::hasField(all, name);
 }
 
+/* What is kept although there are no unread entries. */
+void testLittleOfAFile()
+{
+  VersionDoc d;
+  must(d.addType(2, "scale", true));
+  const auto read = [&](const char *type, int version, int numbers, const char *locks) {
+    Fields f(d);
+    if (version) {
+      f.fields.append(detail::valueField("transformVersion", PropValue::ofInt(version)));
+    }
+    if (*locks) {
+      f.fields.append(detail::valueField("locks", PropValue::ofString(locks)));
+    }
+    for (int i = 0; i < numbers; i++) {
+      f.entry(("#" + std::to_string(i)).c_str(), PropValue::ofFloat(1.5));
+    }
+    BlockHandle h;
+    must(readInto(d, kObjectType, f.payload(type), &h));
+    return h;
+  };
+  const BlockHandle locked = read(kTrsTransform, 0, 0, "ghost");
+  test_assert(hasEntry(*d.lib, locked, "locks") && !hasEntry(*d.lib, locked, "transformVersion"));
+  test_assert(hasEntry(*d.lib, read("no.type", 3, 1, ""), "transformVersion"));
+  test_assert(hasEntry(*d.lib, read("io.versioned", 2, 3, ""), "transformVersion"));
+  /* No channels at all, until the type is there. */
+  const BlockHandle late = read("io.late", 0, 0, "");
+  TransformTypeInfo info;
+  info.name = "io.late";
+  info.channels.append(PropertyDef::floatProp("x").defaultValue(PropValue::ofFloat(7.0)));
+  const char *impl = "io.late#impl";
+  must(registerImpl<TransformModel, FnModel>(d.rt, impl));
+  FnModel *m = litestl::alloc::New<FnModel>("FnModel");
+  m->fn = [](const EvalCtx &, const TransformState &p) { return p; };
+  must(d.rt.ext<TransformRegistry>()
+           .add(std::move(info), own<TransformModel>(d.rt, impl, m).value())
+           .status());
+  test_assert(computeState(*d.lib, late, 0.0).ok());
+  test_assert(d.obj(late).channels.size() == 1 && d.obj(late).channels.get(0) == 7.0);
+}
+
 void testVersions()
 {
   VersionDoc old, middle, now;
   const Bytes v0 = old.saved(0, "size"), v1 = middle.saved(1, "scale"), v2 = now.saved(2, "scale");
   test_assert(now.upgrader->calls == 0);
+  const uint64_t small = sizeof(Object) + 2 * sizeof(double); /* nothing of a file is kept */
   {
     Loaded l(now, v0);
+    test_assert(l.obj("v").memSize() > small);
     test_assert(now.upgrader->calls == 0 && l.obj("v").channels.size() == 0); /* when it's asked for */
     test_assert(same(save(l.lib), v0));
     test_assert(xOf(l.lib, l.byName("v")) == 6.0 && now.upgrader->calls == 1);
     test_assert(l.obj("v").channels.get(1) == 5.0 && l.obj("v").unread().empty());
+    test_assert(l.obj("v").memSize() == small);
     test_assert(xOf(l.lib, l.byName("v")) == 6.0 && now.upgrader->calls == 1);
     /* It is of the new version then. */
     Loaded again(now, save(l.lib));
@@ -367,6 +410,7 @@ void testVersions()
   {
     Loaded l(now, v2);
     test_assert(l.obj("v").channels.size() == 2 && now.upgrader->calls == 2);
+    test_assert(l.obj("v").memSize() == small);
   }
   /* Without the slot, by name. */
   {
@@ -384,6 +428,19 @@ void testVersions()
   test_assert(l.sc().evaluated(l.byName("v"), e) && e.status == EvalStatus::Invalid);
   test_assert(l.obj("v").channels.size() == 0 && l.obj("v").unread().size() == 2);
   test_assert(same(save(l.lib), v2));
+  {
+    /* A copy has its own. */
+    Loaded two(old, v2);
+    const BlockHandle v = two.byName("v");
+    Result<IdMap> ids = duplicateBlocks(two.lib, std::span<const BlockHandle>(&v, 1));
+    must(ids.status());
+    const BlockHandle copy = two.lib.find(ids->find(two.lib.get(v)->id()));
+    Object &c = *static_cast<Object *>(two.lib.get(copy)->clientData());
+    test_assert(c.unread().size() == 2);
+    must(c.writeChannels(ChannelBlock(2)));
+    const Object &first = *static_cast<Object *>(two.lib.get(v)->clientData());
+    test_assert(c.unread().empty() && first.unread().size() == 2);
+  }
   /* Also next to channels that are put there directly, which are no named ones then. */
   l.obj("v").channels = ChannelBlock(2);
   test_assert(hasEntry(l.lib, l.byName("v"), "#0"));
@@ -423,6 +480,7 @@ void testVersions()
   Loaded waits(late, v2);
   must(late.addType(2, "scale", true));
   test_assert(xOf(waits.lib, waits.byName("v")) == 3.0 && late.upgrader->calls == 0);
+  testLittleOfAFile();
   VersionDoc large;
   test_assert(large.addType(uint32_t(1) << 31, "scale", false).code() == StatusCode::InvalidArgument);
 }

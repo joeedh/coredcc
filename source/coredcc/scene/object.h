@@ -6,9 +6,51 @@
 #include "coredcc/scene/overrides.h"
 #include "coredcc/scene/transform_registry.h"
 
+#include <memory>
 #include <span>
+#include <utility>
 
 namespace coredcc {
+
+namespace detail {
+
+/** Nothing, or a T of its own: copies have copies. */
+template <class T> class OwnCopy {
+ public:
+  OwnCopy() = default;
+  OwnCopy(const OwnCopy &b) : p_(b.p_ ? std::make_unique<T>(*b.p_) : nullptr) {}
+  OwnCopy(OwnCopy &&) noexcept = default;
+  OwnCopy &operator=(OwnCopy b) noexcept
+  {
+    p_ = std::move(b.p_);
+    return *this;
+  }
+  void make()
+  {
+    p_ = std::make_unique<T>();
+  }
+  void reset()
+  {
+    p_.reset();
+  }
+  explicit operator bool() const
+  {
+    return p_ != nullptr;
+  }
+  T *operator->() const
+  {
+    return p_.get();
+  }
+  T *get() const
+  {
+    return p_.get();
+  }
+
+ private:
+  std::unique_ptr<T> p_;
+};
+
+} // namespace detail
 
 /** coredcc's own object: a block of type kObjectType. */
 inline constexpr const char *kObjectType = "coredcc.Object";
@@ -24,6 +66,12 @@ inline constexpr const char *kSceneObjectStruct = "coredcc.SceneObject";
 
 /** The data of a `coredcc.Object`. Implements Transformable. */
 class Object {
+  struct FileData;
+  /* First, with `flags`: evaluating reads them, and the members up to `channels`, of every object. */
+  TypeId type_;
+  uint64_t locks_ = 0;
+  detail::OwnCopy<FileData> file_;
+
  public:
   ObjectFlags flags = ObjectFlags::None;
   /** Kept alive by its children, also when it is in no scene. Deleting it doesn't delete them. */
@@ -66,13 +114,14 @@ class Object {
   /** What a file has for the object, besides its channels, that this build doesn't know. */
   std::span<const BlockEntry> unreadFields() const
   {
-    return std::span<const BlockEntry>(fields_.data(), size_t(fields_.size()));
+    return file_ ? std::span<const BlockEntry>(file_->fields.data(), size_t(file_->fields.size())) :
+                   std::span<const BlockEntry>();
   }
   /** What a file has for this transform type that no channel takes, or that waits for the type. */
   std::span<const BlockEntry> unread() const
   {
-    return unreadType_ == typeName_ ?
-               std::span<const BlockEntry>(unread_.data(), size_t(unread_.size())) :
+    const FileData *f = fileOfType();
+    return f ? std::span<const BlockEntry>(f->unread.data(), size_t(f->unread.size())) :
                std::span<const BlockEntry>();
   }
   /** Every reference, for the provider. */
@@ -80,9 +129,11 @@ class Object {
   {
     fn(parent.cell());
     fn(data.cell());
-    foreachCellOf(fields_, fn);
-    if (unreadType_ == typeName_) {
-      foreachCellOf(unread_, fn);
+    if (file_) {
+      foreachCellOf(file_->fields, fn);
+    }
+    if (fileOfType()) {
+      foreachCellOf(file_->unread, fn);
     }
   }
   uint64_t memSize() const;
@@ -99,24 +150,33 @@ class Object {
       }
     }
   }
+  /* What few objects have. In the object itself it took 1.8 KB of each one, and evaluating many was
+   * slower by half. */
+  struct FileData {
+    litestl::util::Vector<BlockEntry> fields;
+
+    /* The transform type that the rest is of. After a change to another type it is kept for an undo,
+     * but isn't the object's. */
+    litestl::util::string type;
+    litestl::util::Vector<BlockEntry> unread;
+    /* Names of locked channels that this build doesn't know. */
+    litestl::util::string locks;
+    uint32_t version = 0;
+    /* `unread` is all of the type's channels, not read yet. */
+    bool pending = false;
+    bool upgradeFailed = false;
+  };
+  /* If there is something of the type that the object has now. */
+  const FileData *fileOfType() const
+  {
+    return file_ && file_->type == typeName_ ? file_.get() : nullptr;
+  }
   bool upgrade(const TransformType &type, litestl::util::Vector<BlockEntry> &entries);
   void takeLocks(const TransformType *type);
+  void dropFileData(bool versionKnown);
 
   Runtime *rt_;
   litestl::util::string typeName_;
-  TypeId type_;
-
-  /* Of the type `unreadType_`. After a change to another type they are kept for an undo, but aren't
-   * the object's. `pending_`: they are all of the type's channels, not read yet. */
-  uint64_t locks_ = 0;
-  litestl::util::Vector<BlockEntry> unread_;
-  /* Of unreadType_ too: names of locked channels that this build doesn't know. */
-  litestl::util::string unreadLocks_;
-  litestl::util::string unreadType_;
-  uint32_t unreadVersion_ = 0;
-  bool pending_ = false;
-  bool upgradeFailed_ = false;
-  litestl::util::Vector<BlockEntry> fields_;
 };
 
 /** A new Object with a transform type's defaults. */
