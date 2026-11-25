@@ -34,6 +34,7 @@
 #include "coredcc/base/text.h"
 #include "coredcc/lib/block.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/lib/pin.h"
 #include "coredcc/lib/provider.h"
 #include "coredcc/lib/registry.h"
 #include "coredcc/parse/invocation.h"

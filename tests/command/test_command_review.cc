@@ -481,6 +481,8 @@ static void test_history_pins()
     Result<PropValue> cube = getValue(s.ctx, "objects[0].data");
     Result<PropValue> sphere = getValue(s.ctx, "objects[1].data");
     test_assert(setValueUndo(s.ctx, "objects[0].data", *sphere).ok());
+    const Datablock *old = s.w.lib.get(s.w.meshes[0]);
+    test_assert(old->pins(PinKind::History) == 1 && old->pins(PinKind::Host) == 0);
     test_assert(invoke(s.ctx, "core.block.purge").ok());
     test_assert(s.w.lib.get(s.w.meshes[0]) != nullptr);
     test_assert(s.ex.undo(s.ctx).ok());
@@ -494,6 +496,12 @@ static void test_history_pins()
       s.w.lib.setFlag(ob, BlockFlags::FakeUser, true);
     }
     test_assert(invoke(s.ctx, "test.createMesh").ok());
+    int history = 0, host = 0;
+    s.w.lib.forEach([&](BlockHandle, const Datablock &b) {
+      history += b.pins(PinKind::History);
+      host += b.pins(PinKind::Host);
+    });
+    test_assert(history == 1 && host == 0);
     test_assert(invoke(s.ctx, "core.block.purge").ok());
     test_assert(s.ex.undo(s.ctx).ok() && s.ex.redo(s.ctx).ok());
     s.history.clear();

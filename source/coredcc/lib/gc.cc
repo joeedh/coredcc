@@ -77,6 +77,7 @@ void Library::endNoCollect()
 {
   CDCC_CHECK(noCollect_ > 0, "endNoCollect without beginNoCollect");
   noCollect_--;
+  releaseDoomed();
 }
 
 Result<int> Library::collect()
@@ -95,11 +96,13 @@ Result<int> Library::collect()
   collecting_ = true;
   struct ClearOnExit {
     bool &flag;
+    Library &lib;
     ~ClearOnExit()
     {
       flag = false;
+      lib.releaseDoomed(); /* unpinned while marking */
     }
-  } clearOnExit{collecting_};
+  } clearOnExit{collecting_, *this};
   auto providerFailure = [this](Status s) {
     Status sticky = rt_.takeStickyError();
     return sticky.ok() ? s : sticky;
@@ -120,12 +123,12 @@ Result<int> Library::collect()
   }
 
   /* Mark. Every record that isn't Live is held by something (the history, the host, a
-   * file), so it is a root too. */
+   * file, a Doomed block's Host pins), so it is a root too. */
   Map<BlockHandle, bool> marked;
   Vector<BlockHandle> stack;
-  forEach([&](BlockHandle h, const Datablock &b) {
+  pool_.forEach([&](BlockHandle h, Datablock &b) {
     if (b.state_ != BlockState::Live || b.hasFlag(BlockFlags::Root) ||
-        b.hasFlag(BlockFlags::FakeUser) || b.pins_ > 0)
+        b.hasFlag(BlockFlags::FakeUser) || b.pins() > 0)
     {
       marked.add(h, true);
       stack.append(h);
@@ -160,21 +163,24 @@ Result<int> Library::collect()
     /* A provider failed during the sweep; the blocks are gone regardless. */
     return rt_.takeStickyError();
   }
+  releaseDoomed();
+  if (Status s = takeDeferredErrors(); !s.ok()) {
+    return s;
+  }
   return int(garbage.size());
 }
 
-void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
+void Library::noticeWeakLost(const Vector<BlockHandle> &lost)
 {
-  if (garbage.size() == 0) {
+  Map<BlockId, bool> dying;
+  for (BlockHandle h : lost) {
+    if (rec(h)->state_ != BlockState::Doomed) {
+      dying.add(rec(h)->id_, true);
+    }
+  }
+  if (dying.size() == 0) {
     return;
   }
-  sweeping_ = true;
-  Map<BlockId, bool> dying;
-  for (BlockHandle h : garbage) {
-    dying.add(rec(h)->id_, true);
-  }
-
-  /* Phase 1a: tell survivors that hold weak refs into the garbage. */
   forEach([&](BlockHandle user, const Datablock &u) {
     if (dying.lookup_ptr(u.id_)) {
       return;
@@ -183,18 +189,28 @@ void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
     if (!p || !p.hasOnWeakTargetLost()) {
       return;
     }
-    Vector<BlockHandle> lost;
+    Vector<BlockHandle> hit;
     foreachRef(user, [&](RefCell &cell) {
       if (cell.kind == RefKind::Weak && !cell.target.isNull() &&
           dying.lookup_ptr(clients_.canonical(cell.target)))
       {
-        lost.append(find(cell.target));
+        hit.append(find(cell.target));
       }
     }).ignore();
-    for (BlockHandle l : lost) {
+    for (BlockHandle l : hit) {
       p.onWeakTargetLost(u, *rec(l));
     }
   });
+}
+
+void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
+{
+  if (garbage.size() == 0) {
+    return;
+  }
+  sweeping_ = true;
+  /* Phase 1a: tell survivors that hold weak refs into the garbage. */
+  noticeWeakLost(garbage);
   /* Phase 1b: sever every reference out of the garbage, so no destroy reaches another
    * dying block through one. */
   for (BlockHandle h : garbage) {
@@ -216,7 +232,12 @@ void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
         a.destroy(a.data);
       }
     }
-    byId_.remove(b->id_);
+    if (b->state_ == BlockState::Doomed) {
+      doomedCount_--; /* its id may be another record's */
+    }
+    else {
+      byId_.remove(b->id_);
+    }
     pool_.destroy(h);
   }
   sweeping_ = false;

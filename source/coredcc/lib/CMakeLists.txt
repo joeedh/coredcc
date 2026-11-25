@@ -3,6 +3,7 @@ coredcc_library(coredcc_lib
     bindings.cc
     gc.cc
     library.cc
+    lifetime.cc
     registry.cc
   DEPS
     coredcc_base

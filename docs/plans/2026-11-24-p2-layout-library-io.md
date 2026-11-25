@@ -709,3 +709,17 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
 ### Couldn't be verified
 - wasm out-of-memory behaviour; DOM events in a hidden window; `compile_embed` with the new headers;
   an actual FNV-1a collision. The first three are in "Claims to check while implementing".
+
+## Implementation notes
+
+### A1, commit 1: lifetime (2026-11-24)
+- The published API is unchanged. Where the plan left a choice:
+  - **`data(h)` is null for a Doomed block,** as for every block that isn't Live. Its data is
+    reached through `get(h)->clientData()` or the pointer the pin's holder already has.
+  - **`size()` doesn't count Doomed blocks.** It matches `forEach` and the index.
+  - **A cached handle to a Doomed block isn't trusted** by `resolveRef`: the record keeps its
+    old id, which may name another block.
+  - **Unpinning a block that has no pin of that kind aborts,** as the single count did.
+  - The recheck at destruction counts only Strong refs (RefKind::Strong), the same check
+    `destroyFromHistory` makes.
+  - A sticky error that is pending when a deferred destroy runs is put back afterwards.

@@ -36,7 +36,7 @@ struct SetProperty {
     }
     const BlockHandle h = l->find(r->owner.block);
     if (l->get(h)) {
-      l->pin(h);
+      l->pin(h, PinKind::History);
       lib = l;
       pins.append(h);
     }
@@ -89,7 +89,7 @@ struct SetProperty {
   void discard()
   {
     for (BlockHandle h : pins) {
-      lib->unpin(h);
+      lib->unpin(h, PinKind::History);
     }
     pins.clear();
   }

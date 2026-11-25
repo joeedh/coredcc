@@ -56,7 +56,7 @@ void reportDestroy(Library &lib, Status s)
 
 void CreatedBlocks::add(Library &lib, BlockHandle h)
 {
-  lib.pin(h);
+  lib.pin(h, PinKind::History);
   blocks_.append(h);
 }
 
@@ -88,7 +88,7 @@ Status CreatedBlocks::redo(Library &lib)
 void CreatedBlocks::discard(Library &lib)
 {
   for (BlockHandle h : blocks_) {
-    lib.unpin(h);
+    lib.unpin(h, PinKind::History);
   }
   if (undone_) {
     for (BlockHandle h : blocks_) {

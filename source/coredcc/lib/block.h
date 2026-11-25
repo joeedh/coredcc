@@ -33,9 +33,24 @@ enum class BlockState : uint8_t {
   Detached,
   /** A missing client or type: the record keeps the type name and payload bytes. */
   Placeholder,
+  /**
+   * Dropped by the history while Host pins still hold its data. It has no id any more
+   * (another record may take it), so only its handle reaches it; it goes when its last
+   * Host pin does. Listings, relations and files skip it.
+   */
+  Doomed,
 };
 
 const char *blockStateName(BlockState state);
+
+/** Who keeps a block. Both kinds are GC roots; only Host pins also keep a block's data
+ * past destroyFromHistory, and make it a root of a saved file. */
+enum class PinKind : uint8_t {
+  /** Something using the block's data now: a graph payload, evaluated state, a host. */
+  Host,
+  /** An undo record that can bring back a reference to the block. */
+  History,
+};
 
 enum class BlockFlags : uint32_t {
   None = 0,
@@ -176,9 +191,20 @@ class Datablock {
   {
     return coredcc::hasFlag(flags_, f);
   }
+  /** Pins of both kinds. */
   int pins() const
   {
-    return pins_;
+    return pins_[0] + pins_[1];
+  }
+  int pins(PinKind kind) const
+  {
+    return pins_[int(kind)];
+  }
+  /** Bumped by every state transition. Two equal readings mean the block was never
+   * deleted, detached or restored in between. */
+  uint64_t stateChanges() const
+  {
+    return stateChanges_;
   }
   /** The pointer the client gave at creation, typically what BlockProvider::data
    * returns. */
@@ -222,7 +248,8 @@ class Datablock {
   litestl::util::string name_;
   BlockState state_ = BlockState::Live;
   BlockFlags flags_ = BlockFlags::None;
-  int pins_ = 0;
+  uint64_t stateChanges_ = 0;
+  int pins_[2] = {0, 0};
   void *clientData_ = nullptr;
   litestl::util::Vector<Slot> slots_;
   litestl::util::Vector<Attachment> attachments_;

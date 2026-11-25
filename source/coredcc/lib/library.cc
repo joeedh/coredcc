@@ -1,5 +1,7 @@
 #include "coredcc/lib/library.h"
 
+#include "coredcc/lib/pin.h"
+
 #include <cstring>
 #include <string>
 
@@ -19,6 +21,8 @@ const char *blockStateName(BlockState state)
       return "Detached";
     case BlockState::Placeholder:
       return "Placeholder";
+    case BlockState::Doomed:
+      return "Doomed";
   }
   return "?";
 }
@@ -46,8 +50,10 @@ Status noBlock(const char *op)
 } // namespace
 
 Library::Library(Runtime *rt)
-    : rt_(*rt), types_(rt->ext<BlockTypeRegistry>()), clients_(rt->ext<ClientRegistry>())
+    : rt_(*rt), types_(rt->ext<BlockTypeRegistry>()), clients_(rt->ext<ClientRegistry>()),
+      token_(std::make_shared<detail::LibraryToken>())
 {
+  token_->lib = this;
 #ifdef NDEBUG
   audit_ = false;
 #else
@@ -57,6 +63,7 @@ Library::Library(Runtime *rt)
 
 Library::~Library()
 {
+  token_->lib = nullptr; /* LibraryRefs and LibraryPins are dead from here on */
   Vector<BlockHandle> all;
   pool_.forEach([&all](BlockHandle h, Datablock &) { all.append(h); });
   destroyBlocks(all);
@@ -64,7 +71,7 @@ Library::~Library()
 
 Status Library::busyIfSweeping(const char *what) const
 {
-  if (!sweeping_ && !collecting_) {
+  if (!busy()) {
     return Status();
   }
   return Status::error(StatusCode::Busy,
@@ -249,8 +256,7 @@ Status Library::markDeleted(BlockHandle h)
   if (b->state_ != BlockState::Live) {
     return wrongState(*b, "markDeleted", BlockState::Live);
   }
-  b->state_ = BlockState::InHistory;
-  epoch_++;
+  setState(*b, BlockState::InHistory);
   return Status();
 }
 
@@ -264,46 +270,7 @@ Status Library::restoreFromHistory(BlockHandle h)
   if (b->state_ != BlockState::InHistory) {
     return wrongState(*b, "restoreFromHistory", BlockState::InHistory);
   }
-  b->state_ = BlockState::Live;
-  epoch_++;
-  return Status();
-}
-
-Status Library::destroyFromHistory(BlockHandle h)
-{
-  CDCC_TRY(busyIfSweeping("destroyFromHistory"));
-  Datablock *b = rec(h);
-  if (!b) {
-    return noBlock("destroyFromHistory");
-  }
-  if (b->state_ != BlockState::InHistory) {
-    return wrongState(*b, "destroyFromHistory", BlockState::InHistory);
-  }
-  /* A Live or Detached block's Strong ref would dangle: the delete should have taken
-   * that user too. Refuse; the block stays InHistory, which GC treats as a root. */
-  const BlockId id = b->id_;
-  for (BlockHandle user : usersOf(h)) {
-    const Datablock *u = rec(user);
-    if (u->state_ != BlockState::Live && u->state_ != BlockState::Detached) {
-      continue;
-    }
-    bool strong = false;
-    foreachRef(user, [&](RefCell &cell) {
-      strong |= cell.kind == RefKind::Strong && clients_.canonical(cell.target) == id;
-    }).ignore();
-    if (strong) {
-      return Status::error(StatusCode::FailedPrecondition,
-                           ("destroyFromHistory: '" + std::string(u->name_.c_str()) +
-                            "' still holds a Strong ref to '" + b->name_.c_str() + "'")
-                               .c_str());
-    }
-  }
-  Vector<BlockHandle> one;
-  one.append(h);
-  destroyBlocks(one);
-  if (rt_.hasStickyError()) {
-    return rt_.takeStickyError(); /* the provider's destroy failed; the block is gone */
-  }
+  setState(*b, BlockState::Live);
   return Status();
 }
 
@@ -317,8 +284,7 @@ Status Library::onHostDestroyed(BlockId id)
   if (b->state_ != BlockState::Live) {
     return wrongState(*b, "onHostDestroyed", BlockState::Live);
   }
-  b->state_ = BlockState::Detached;
-  epoch_++;
+  setState(*b, BlockState::Detached);
   return Status();
 }
 
@@ -332,8 +298,7 @@ Status Library::onHostRestored(BlockId id)
   if (b->state_ != BlockState::Detached) {
     return wrongState(*b, "onHostRestored", BlockState::Detached);
   }
-  b->state_ = BlockState::Live;
-  epoch_++;
+  setState(*b, BlockState::Live);
   return Status();
 }
 
@@ -345,25 +310,6 @@ void Library::setFlag(BlockHandle h, BlockFlags flag, bool on)
   runOrDefer([this, h, flag, on]() {
     if (Datablock *b = rec(h)) {
       b->flags_ = on ? (b->flags_ | flag) : (b->flags_ & ~flag);
-    }
-  });
-}
-
-void Library::pin(BlockHandle h)
-{
-  runOrDefer([this, h]() {
-    if (Datablock *b = rec(h)) {
-      b->pins_++;
-    }
-  });
-}
-
-void Library::unpin(BlockHandle h)
-{
-  runOrDefer([this, h]() {
-    if (Datablock *b = rec(h)) {
-      CDCC_CHECK(b->pins_ > 0, "unpin without a pin");
-      b->pins_--;
     }
   });
 }
@@ -387,7 +333,8 @@ BlockHandle Library::resolveRef(const RefCell &cell) const
   }
   const BlockId want = clients_.canonical(cell.target);
   const Datablock *cached = rec(cell.cache);
-  if (!cached || cached->id_ != want) {
+  /* A Doomed record keeps its old id, which may name another record by now. */
+  if (!cached || cached->id_ != want || cached->state_ == BlockState::Doomed) {
     cell.cache = find(want);
     cached = rec(cell.cache);
   }
@@ -478,10 +425,9 @@ Status Library::foreachRef(BlockHandle h, litestl::util::function<void(RefCell &
     return noBlock("foreachRef");
   }
   /* The provider can enumerate while its data or wrapper exists: Live, held by the
-   * history, or Detached (whose targets must survive until the host restores it). */
-  if (b->state_ == BlockState::Live || b->state_ == BlockState::InHistory ||
-      b->state_ == BlockState::Detached)
-  {
+   * history, Detached (whose targets must survive until the host restores it), or Doomed
+   * (whose pinned data may reach them). */
+  if (b->state_ != BlockState::Placeholder) {
     if (BlockProvider p = types_.provider(b->type_)) {
       const bool stickyBefore = rt_.hasStickyError();
       RefVisitor visitor([](void *ctx, RefCell &cell) {
@@ -548,10 +494,12 @@ Status Library::setOverride(BlockHandle h, InterfaceId iface, IfaceRef ref)
   for (Datablock::Override &o : b->overrides_) {
     if (o.iface == iface) {
       o.ref = ref;
+      epoch_++; /* what query() answers changed */
       return Status();
     }
   }
   b->overrides_.append(Datablock::Override{iface, ref});
+  epoch_++;
   b->flags_ = b->flags_ | BlockFlags::HasOverrides;
   return Status();
 }
@@ -566,6 +514,7 @@ void Library::clearOverride(BlockHandle h, InterfaceId iface)
     for (int i = 0; i < int(b->overrides_.size()); i++) {
       if (b->overrides_[i].iface == iface) {
         b->overrides_.remove_at(i);
+        epoch_++;
         break;
       }
     }
@@ -588,6 +537,7 @@ Status Library::attach(BlockHandle h, TypeId type, void *data, void (*destroy)(v
     return Status::error(StatusCode::AlreadyExists, "attach: the block has this attachment");
   }
   b->attachments_.append(Datablock::Attachment{type, data, destroy});
+  epoch_++;
   return Status();
 }
 
@@ -602,6 +552,7 @@ Result<void *> Library::detach(BlockHandle h, TypeId type)
     if (b->attachments_[i].type == type) {
       void *data = b->attachments_[i].data;
       b->attachments_.remove_at(i);
+      epoch_++;
       return data;
     }
   }
@@ -626,9 +577,16 @@ void *Library::attachment(BlockHandle h, TypeId type) const
 
 Status Library::validate() const
 {
-  if (int(byId_.size()) != pool_.size()) {
+  if (int(byId_.size()) != size()) {
     return Status::error(StatusCode::Internal,
                          "Library: the id index and the records differ in size");
+  }
+  int doomed = 0;
+  const_cast<Library *>(this)->pool_.forEach([&doomed](BlockHandle, Datablock &b) {
+    doomed += b.state_ == BlockState::Doomed ? 1 : 0;
+  });
+  if (doomed != doomedCount_) {
+    return Status::error(StatusCode::Internal, "Library: the Doomed count is out of date");
   }
   renormalizeIds();
   Status status;

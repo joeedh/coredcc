@@ -14,9 +14,15 @@
 #include "litestl/util/map.h"
 #include "litestl/util/vector.h"
 
+#include <memory>
 #include <string_view>
 
 namespace coredcc {
+
+class LibraryRef;
+namespace detail {
+struct LibraryToken;
+}
 
 /**
  * The block records of one document. The host creates Libraries (a Runtime may have
@@ -37,6 +43,8 @@ class Library {
   {
     return rt_;
   }
+  /** A weak reference, for code that may outlive this Library (coredcc/lib/pin.h). */
+  LibraryRef ref() const;
 
   /* ---- creating ---- */
 
@@ -66,16 +74,21 @@ class Library {
 
   /** The record for `id` (its client normalized through aliases), or a null handle. */
   BlockHandle find(BlockId id) const;
+  /** The record, Doomed ones included. */
   const Datablock *get(BlockHandle h) const;
+  /** Records with an id: Doomed ones aren't counted. */
   int size() const
   {
-    return pool_.size();
+    return pool_.size() - doomedCount_;
   }
-  /** Calls fn(BlockHandle, const Datablock&) for every record. */
+  /** Calls fn(BlockHandle, const Datablock&) for every record that isn't Doomed. */
   template <class Fn> void forEach(Fn &&fn) const
   {
-    const_cast<HandlePool<Datablock> &>(pool_).forEach(
-        [&fn](BlockHandle h, Datablock &b) { fn(h, static_cast<const Datablock &>(b)); });
+    const_cast<HandlePool<Datablock> &>(pool_).forEach([&fn](BlockHandle h, Datablock &b) {
+      if (b.state_ != BlockState::Doomed) {
+        fn(h, static_cast<const Datablock &>(b));
+      }
+    });
   }
 
   /* ---- states ---- */
@@ -84,7 +97,16 @@ class Library {
   Status markDeleted(BlockHandle h);
   /** InHistory -> Live. */
   Status restoreFromHistory(BlockHandle h);
-  /** Destroys an InHistory block now, when the history drops the step that holds it. */
+  /**
+   * Destroys an InHistory block, when the history drops the step that holds it. Refused
+   * (FailedPrecondition) while a Live or Detached block holds a Strong ref to it.
+   *
+   * With Host pins it returns ok and the block becomes Doomed instead: its id is free at
+   * once, and it is destroyed when the last Host pin goes (or when the sweep or
+   * no-collect scope that happens in ends). If a Live or Detached block holds a Strong
+   * ref to its id by then, and no other record has the id, it goes back to InHistory.
+   * History pins don't matter here: the step holding one can't undo past this one.
+   */
   Status destroyFromHistory(BlockHandle h);
   /** The host destroyed the data: Live -> Detached. */
   Status onHostDestroyed(BlockId id);
@@ -94,10 +116,11 @@ class Library {
   /* ---- flags and pins (void: deferred during a sweep) ---- */
 
   void setFlag(BlockHandle h, BlockFlags flag, bool on);
-  /** Host pins are GC roots: graph payloads and evaluated state pin blocks whose data
-   * they alias. */
-  void pin(BlockHandle h);
-  void unpin(BlockHandle h);
+  /** Pins are GC roots (see PinKind). LibraryPin (coredcc/lib/pin.h) is the RAII form.
+   * A handle whose record is gone is ignored; unpinning a block that has no pin of that
+   * kind aborts. Main thread only. */
+  void pin(BlockHandle h, PinKind kind = PinKind::Host);
+  void unpin(BlockHandle h, PinKind kind = PinKind::Host);
 
   /* ---- data and references ---- */
 
@@ -178,6 +201,10 @@ class Library {
    * after a provider call (a foreign foreachRef that threw) aborts before anything is
    * destroyed, and is returned. With the relations audit on, a stale relations cache (a
    * reference written without the library seeing it) is an Internal error.
+   *
+   * Errors from the deferred destruction of Doomed blocks have no caller to go to. They
+   * don't become the Runtime's sticky error: the next collect() returns them, after its
+   * own work.
    */
   Result<int> collect();
   /** Interactive commands and evaluation open these; collect() is Busy inside them. */
@@ -195,6 +222,11 @@ class Library {
   bool sweeping() const
   {
     return sweeping_;
+  }
+  /** Sweeping or collecting: calls that return a Status fail with Busy. */
+  bool busy() const
+  {
+    return sweeping_ || collecting_;
   }
 
   /** Never reuse a freed record's slot, so a stale handle always resolves to null. For
@@ -224,6 +256,22 @@ class Library {
                       Status &status) const;
   /** Two-phase destruction of `garbage` (see collect). */
   void destroyBlocks(const litestl::util::Vector<BlockHandle> &garbage);
+  /** Tells weak users outside `lost` that its blocks go. Doomed ones were told before. */
+  void noticeWeakLost(const litestl::util::Vector<BlockHandle> &lost);
+  void setState(Datablock &b, BlockState state)
+  {
+    b.state_ = state;
+    b.stateChanges_++;
+    epoch_++;
+  }
+  /** A Live or Detached block with a Strong ref to `id`, or null. */
+  const Datablock *strongUserOf(BlockId id) const;
+  Status doom(BlockHandle h);
+  /** Destroys the Doomed blocks that lost their last Host pin, unless the library is busy
+   * or in a no-collect scope. */
+  void releaseDoomed();
+  void releaseOneDoomed(BlockHandle h);
+  Status takeDeferredErrors();
 
   Runtime &rt_;
   BlockTypeRegistry &types_;
@@ -240,6 +288,15 @@ class Library {
   void renormalizeIds() const;
   bool audit_;
   litestl::util::Vector<litestl::util::function<void()>> deferred_;
+  std::shared_ptr<detail::LibraryToken> token_;
+
+  int doomedCount_ = 0;
+  bool releasing_ = false;
+  /** Doomed blocks without Host pins, waiting for releaseDoomed. */
+  litestl::util::Vector<BlockHandle> released_;
+  /** Errors of deferred destructions: the first few, and how many there were. */
+  litestl::util::Vector<Status> deferredErrors_;
+  int deferredErrorCount_ = 0;
 
   mutable uint64_t relationsEpoch_ = 0;
   mutable litestl::util::Map<BlockId, litestl::util::Vector<BlockHandle>> relations_;
