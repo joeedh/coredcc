@@ -78,6 +78,11 @@ template <class R, class... A, R (*F)(A...), int Owned> struct Checked<F, Owned>
       ->setArgNames(ARGNAMES)
 
 /** BIND_FACADE of a facade that takes over a foreign handle: argument `owned`, from 1. */
-#define BIND_OWNING_FACADE(mgr, qualifiedName, fn, owned, ARGNAMES)                        (mgr)                                                                                        ->addFunction(::litestl::binding::types::makeFunction<                                                 &::coredcc::script::detail::Checked<&fn, owned>::call>(                        qualifiedName))                                                                      ->setArgNames(ARGNAMES)
+#define BIND_OWNING_FACADE(mgr, qualifiedName, fn, owned, ARGNAMES)                      \
+  (mgr)                                                                                  \
+      ->addFunction(::litestl::binding::types::makeFunction<                             \
+                    &::coredcc::script::detail::Checked<&fn, owned>::call>(              \
+          qualifiedName))                                                                \
+      ->setArgNames(ARGNAMES)
 
 } // namespace coredcc::script::detail

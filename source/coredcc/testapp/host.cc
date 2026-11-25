@@ -222,6 +222,11 @@ int32_t liveInstances(Host &h)
   const script::ForeignBindings *fb = h.runtime().findExt<script::ForeignBindings>();
   return fb ? fb->liveInstances() : 0;
 }
+/** What is allocated, by everything: for tests of what is given back. */
+int32_t liveBytes()
+{
+  return int32_t(litestl::alloc::getMemorySize());
+}
 /** The Runtime's and the history's invariants, and that no command is still running:
  * called between commands, a running executor means one was abandoned mid-run. */
 Status validate(Host &h)
@@ -255,6 +260,7 @@ litestl::binding::BindingManager *manager()
     BIND_FUNCTION(mgr, "testapp::watched", testapp::watched, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::graphInstances", testapp::graphInstances, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::liveInstances", testapp::liveInstances, MARGS("h"));
+    BIND_FUNCTION(mgr, "testapp::liveBytes", testapp::liveBytes, MARGS());
     BIND_FUNCTION(mgr, "testapp::validate", testapp::validate, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::abortForTest", testapp::abortForTest, MARGS());
     mgr->validate();

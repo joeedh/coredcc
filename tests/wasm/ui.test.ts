@@ -6,6 +6,7 @@ import {afterEach, beforeEach, describe, test} from 'node:test'
 
 import * as cdcc from 'coredcc-script'
 import {CommandFlags, ScriptError, StatusCode, type Context, type ScriptCommand, type Session} from 'coredcc-script'
+import * as cd from 'coredcc-gen/coredcc/functions'
 import * as spike from 'coredcc-gen/testapp/functions'
 import type {Commands, Root} from 'coredcc-paths'
 
@@ -427,6 +428,41 @@ describe('coredcc wasm-st UI', () => {
     other[Symbol.dispose]()
     assert.throws(() => late.add('', 'ts.weigh'), /disposed/)
     assert.throws(() => new cdcc.ToolChecks(other.ctx), /disposed/)
+  })
+
+  test('what is made for a call is given back by its end', async () => {
+    weigh()
+    const inputs = {by: 2}
+    const at = {prefix: '/items["Cube"]'}
+    /* Not at a garbage collection: finalizers are tasks, so none runs in here. A slot's error
+     * is given back in a microtask. */
+    const bytes = async (fn: () => void) => {
+      fn() /* what is made once */
+      await Promise.resolve()
+      const before = spike.liveBytes()
+      fn()
+      await Promise.resolve()
+      return spike.liveBytes() - before
+    }
+    const raw: {[Symbol.dispose](): void}[] = []
+    assert.ok((await bytes(() => raw.push(cd.newRunInputs()))) > 0)
+    for (const r of raw) r[Symbol.dispose]()
+    assert.equal(await bytes(() => cdcc.canRun(ctx, 'ts.weigh', inputs, at)), 0)
+    assert.equal(await bytes(() => cdcc.canRun(ctx, 'ts.weigh', {by: 50}, at)), 0)
+    assert.equal(await bytes(() => cdcc.canRun(ctx, 'ts.nope', inputs)), 0)
+    assert.equal(await bytes(() => assert.throws(() => cdcc.run(ctx, 'ts.weigh', {'': 1}))), 0)
+    const odd = {note: 'x', by: {} as never} /* refused before it runs */
+    assert.equal(await bytes(() => assert.throws(() => cdcc.run(ctx, 'ts.weigh', odd), TypeError)), 0)
+    const checks = (end: (tools: cdcc.ToolChecks, other: Session) => void) => () => {
+      const other = open()
+      const tools = new cdcc.ToolChecks(other.ctx)
+      tools.add('', 'ts.weigh(by=1)')
+      tools.changed()
+      end(tools, other)
+      other[Symbol.dispose]()
+    }
+    assert.equal(await bytes(checks((tools) => tools[Symbol.dispose]())), 0)
+    assert.equal(await bytes(checks(() => {})), 0) /* with the session */
   })
 
   test('interactive commands', () => {
