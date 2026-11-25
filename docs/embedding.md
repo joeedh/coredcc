@@ -109,6 +109,23 @@ Unreal, coredcc is exactly one module, so they exist once.
   whose items have structs of their own.
 - **A node's own paths are relative to its parent's prefix;** a leading `/` is the Context's root.
   The paths that a Layout and its JSON give start with `/`, so a Context's own prefix doesn't change them.
+- **The JSON** (`layoutJson`, `parseLayout` in TS) has `version`, 1, at its root: fields are only added
+  under it. Each node has its `kind` and what was written, and the joined `effectivePath`, `prefix` (a
+  tool's, with its own `path`), `optionsPath` and condition paths, so a frontend joins nothing. `attrs` has the
+  host's `data-` attributes, and all of a `custom` node's.
+- **Versions.** `<layout version="2">` in a coredcc that knows 1: elements and attributes that it doesn't
+  know are skipped, and `validateLayout` warns of each. Without a version, or with 1, they are errors.
+  `list`, `menu`, `include` and `slot` are reserved, also inside a `custom` node.
+- **Conditions** are of a Bool, an enum's key, a pointer (it points to something), a collection's
+  length (it isn't 0) or a String (it isn't empty). One without a value is false, also if it is
+  negated. `conditionHolds` is the rule, in C++ and in TS.
+- **What isn't there.** A container whose own `path` names nothing now is hidden (`containerIsThere`),
+  unless `validateLayout` has an Error about it. A prop shows why it has no value, and a tool is
+  disabled when `canInvoke` gives a reason.
+- **`canInvoke` and `ToolChecks`** ask each command's `canRun`, so keep those cheap. An open
+  interactive command, or a stray error, is a reason for every tool.
+- **The active item as a prop** is the collection's own pointer member (`activeItem`), not
+  `items.active`, which can't be null.
 - **`invokeAt` runs a tool under its prefix,** which is resolved when it starts: undo and redo run where
   it ran, also if the prefix's path leads elsewhere by then. The command's own paths are under the prefix
   too, unless they start with `/`.
@@ -118,11 +135,16 @@ Unreal, coredcc is exactly one module, so they exist once.
 ## Watching paths from scripts
 - **A `PathReader` that watches holds the Context.** Dispose of it, or `unwatch`, before the Context
   goes; a `Session` does that for its readers.
-- **Nothing is called back.** `flushChanges` runs the ChangeBus, and `takeChanged` says which paths of
-  a reader changed since it was last asked. Call them as often as the UI should follow.
-- **Widgets may need to be made again.** `takeChangedMeta` says which paths lead to another struct or
-  member, or to a dynamic def that is another now (its range, its items). `meta` marks such defs with
+- **Nothing is called back.** `flushChanges` runs the ChangeBus, and `takeChanges` gives the paths of
+  a reader that changed since they were last taken, with their values or errors, in one call. Call
+  them as often as the UI should follow. After `watch`, `takeAll` gives them all.
+- **Widgets may need to be made again.** A change's `metaChanged` says that its path leads to another
+  struct or member, or to a dynamic def that is another now (its range, its items). `meta` marks such defs with
   `dynamic`. Their watchers are read at every flush that has changes, so a hook should be cheap.
+- **Pending changes are merged.** Past 4,096 distinct ones the next flush reads every watcher. A host
+  that never flushes holds no more than that.
+- **Types.** `generatePaths(apiCatalog(ctx))` is a file of types, for `typed<Root, Commands>(ctx)`. Make
+  it again when structs or commands change. It describes what is registered at that time.
 - **`libraryResolve` needs an empty history;** `clearHistory` first.
 
 ## Threading

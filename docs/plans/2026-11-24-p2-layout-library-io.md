@@ -1064,6 +1064,29 @@ The findings and what was done are in the
   `commandDefaults`, and two uses of a field's copy of its text), and 3 cannot be seen: the kind and the kind of meta in
   `sameAs` each imply the other, and `.` and `/` are as long as each other in the limit of a joined path.
 
+### Review of layouts, round 2 (2026-11-25)
+- **Findings** and their resolutions:
+  [report](../reports/feature-report-layout-2026-11-25.md), 6 to 11, 13 to 15, 19 to 23, 25 to 27.
+- **New files:** `bind/run_facades.*`, `bind/ts/run.ts`, `bind/ts/typed.ts`. The TS suites are
+  `spike.test.ts` and `ui.test.ts`, over `fixture.ts`.
+- **In P5's areas:** ChangeBus's pending changes and `watch` (a `start` to read into), and the
+  executor's `canRun` and `interactiveDef`.
+- **`canRun` refuses with an uncollected sticky error,** and leaves it: the next command reports it, as
+  it would have.
+- **A reader's values are JSON,** not a packed buffer: 1,000 take about 6 ms in a wasm debug build, and
+  JSON needs no decoder of its own.
+- **`typed` takes literal paths.** One that isn't a literal (a layout's) is as with the plain calls.
+- **A Tool has its own `path`,** as a Prop does, rather than an attribute that clears the prefix: "/"
+  does that.
+
+### Deferred by the review of layouts
+- **A registry of layouts by name,** `include` and `slot`: when there are add-ons that bring layouts.
+- **List templates** (`list`) and **menus** (`menu`): with the first frontend that needs them. The
+  names are reserved, and refused by this version.
+- **Localization:** texts are as written. A host can translate `label` and `description` by node id.
+- **Units per host:** `displayUnit` is of a def. A preference (metric, imperial) is the host's, which
+  passes another unit to `formatNumber`.
+
 ### Deferred by the review of library IO
 Not scheduled; whoever needs one adds it to a plan.
 - **19:** choosing which blocks of a file to append, and listing its contents without loading it. The

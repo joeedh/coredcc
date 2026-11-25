@@ -357,7 +357,7 @@ Design aim: one metadata type serves both roles, command input and datapath memb
   - `NumericMeta`: hard and soft ranges, step, precision, base and display units.
   - `EnumMeta`: a list of `EnumItem {key, value: int64, uiName, description, icon}`.
   - `StringMeta`: max length.
-  - `VectorMeta`: `NumericMeta` plus per-component names.
+  - Vectors: `NumericMeta`; `componentName` gives the names of components.
 - **`defaultValue`,** a `PropValue`.
 - **`dynamic`,** an optional callback `(PointerRef, Context&) -> patch`. It covers enum
   items or ranges that depend on the object at read time.
@@ -1002,7 +1002,7 @@ produces so that a stroke command can override `redo` by replaying them.
   - `tool` (an invocation string);
   - `toolOptions` (a command or tool id);
   - `label`;
-  - `separator`. It is emitted as `sep` for path.ux.
+  - `separator`, which path.ux's adapter emits as `sep`.
 - **Escape hatch:** `custom` (a tag name and free attributes).
 
 Shared attributes:
