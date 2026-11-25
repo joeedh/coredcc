@@ -11,6 +11,7 @@
 #include "coredcc/bind/path_reader.h"
 #include "coredcc/bind/run_facades.h"
 #include "coredcc/bind/scene_facades.h"
+#include "coredcc/bvh/any_source.h"
 #include "coredcc/command/command.h"
 #include "coredcc/scene/evaluated.h"
 
@@ -57,6 +58,9 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<quatd>());
   mgr->add(Bind<double3>());
   mgr->add(Bind<Box3d>());
+  mgr->add(Bind<RayHit>());
+  mgr->add(Bind<NearestHit>());
+  mgr->add(Bind<AnyBvh>());
   mgr->add(Bind<ChannelBlock>());
   mgr->add(Bind<EvalCtx>());
   mgr->add(Bind<TransformState>());
@@ -68,7 +72,14 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<ObjectEval>());
   mgr->add(Bind<View>());
   mgr->add(Bind<ViewPoint>());
+  mgr->add(Bind<ViewRegion>());
   mgr->add(Bind<ViewMath>());
+  mgr->add(Bind<RegionQuery>());
+  mgr->add(Bind<PickOptions>());
+  mgr->add(Bind<PickQuery>());
+  mgr->add(Bind<PickSink>());
+  mgr->add(Bind<NearQuery>());
+  mgr->add(Bind<NearSink>());
   mgr->add(Bind<MatrixResult>());
   mgr->add(Bind<PickedObject>());
   mgr->add(Bind<PickList>());
@@ -433,7 +444,7 @@ void addSceneFacades(litestl::binding::BindingManager *mgr)
   BIND_FUNCTION(mgr, "coredcc::blockIdText", script::blockIdText, MARGS("ctx", "block"));
   BIND_FUNCTION(mgr, "coredcc::evaluateScene", script::evaluateScene, MARGS("ctx"));
   BIND_FUNCTION(mgr, "coredcc::worldMatrix", script::worldMatrix, MARGS("ctx", "object"));
-  BIND_FUNCTION(mgr, "coredcc::pick", script::pick, MARGS("ctx", "view", "x", "y", "radius"));
+  BIND_FUNCTION(mgr, "coredcc::pick", script::pick, MARGS("ctx", "view", "x", "y", "options"));
 }
 
 } // namespace

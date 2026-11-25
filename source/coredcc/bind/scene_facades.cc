@@ -4,7 +4,7 @@
 #include "coredcc/bind/detail.h"
 #include "coredcc/command/executor.h"
 #include "coredcc/scene/commands.h"
-#include "coredcc/scene/pick.h"
+#include "coredcc/scene/pick_scene.h"
 
 #include <string>
 
@@ -129,7 +129,7 @@ MatrixResult worldMatrix(Context &ctx, const string &object)
   return s.ok() ? ok<MatrixResult>(s->world) : failed<MatrixResult>(s.status());
 }
 
-PickResult pick(Context &ctx, const View &view, double x, double y, double radius)
+PickResult pick(Context &ctx, const View &view, double x, double y, const PickOptions &options)
 {
   if (Status s = slotGate(ctx, "pick", {"exec"}); !s.ok()) {
     return failed<PickResult>(std::move(s));
@@ -149,7 +149,7 @@ PickResult pick(Context &ctx, const View &view, double x, double y, double radiu
     return r;
   }
   litestl::util::Vector<PickHit> hits;
-  Status picked = pickScene(ctx, ctx.scene(), math, x, y, radius, PickFilter(), hits);
+  Status picked = pickScene(ctx, ctx.scene(), math, x, y, options, PickFilter(), hits);
   if (r.status.ok()) {
     r.status = std::move(picked);
   }
@@ -162,6 +162,12 @@ PickResult pick(Context &ctx, const View &view, double x, double y, double radiu
     p.distance = h.distance;
     p.depth = h.depth;
     p.point = h.point;
+    p.instance = h.instance;
+    p.normal = h.normal;
+    p.u = h.u;
+    p.v = h.v;
+    p.backFacing = h.backFacing;
+    p.thin = h.thin;
     r.value.hits.append(std::move(p));
   }
   return r;
@@ -180,6 +186,12 @@ const lbt::Struct<PickedObject> *PickedObject::defineBindings()
     BIND_STRUCT_MEMBER(st, distance);
     BIND_STRUCT_MEMBER(st, depth);
     BIND_STRUCT_MEMBER(st, point);
+    BIND_STRUCT_MEMBER(st, instance);
+    BIND_STRUCT_MEMBER(st, normal);
+    BIND_STRUCT_MEMBER(st, u);
+    BIND_STRUCT_MEMBER(st, v);
+    BIND_STRUCT_MEMBER(st, backFacing);
+    BIND_STRUCT_MEMBER(st, thin);
   }
   return st;
 }

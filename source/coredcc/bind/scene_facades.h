@@ -8,6 +8,7 @@
 
 #include "coredcc/bind/facades.h"
 #include "coredcc/draw/view.h"
+#include "coredcc/scene/pick.h"
 #include "coredcc/scene/transform.h"
 
 #include "litestl/util/vector.h"
@@ -58,6 +59,11 @@ struct PickedObject {
   double distance = 0.0;
   double depth = 0.0;
   double3 point;
+  int32_t instance = -1;
+  double3 normal;
+  double u = 0.0, v = 0.0;
+  bool backFacing = false;
+  bool thin = false;
 
   static const litestl::binding::types::Struct<PickedObject> *defineBindings();
 };
@@ -88,6 +94,6 @@ struct PickResult {
  * and unselectable ones. A script's exception comes with the hits of the other objects. When the
  * scene can't be evaluated, there are none.
  */
-PickResult pick(Context &ctx, const View &view, double x, double y, double radius);
+PickResult pick(Context &ctx, const View &view, double x, double y, const PickOptions &options);
 
 } // namespace coredcc::script

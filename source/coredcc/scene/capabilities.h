@@ -7,8 +7,10 @@
 
 #include "coredcc/base/flags.h"
 #include "coredcc/base/iface/iface.h"
+#include "coredcc/base/invalidate.h"
 #include "coredcc/bvh/box.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/scene/nearest.h"
 #include "coredcc/scene/pick.h"
 #include "coredcc/scene/transform.h"
 
@@ -92,9 +94,14 @@ enum class ElementDomain : int32_t { Point = 0, Edge = 1, Face = 2 };
  *
  * - `localBounds`: a box around the geometry; empty for none.
  * - `domains`: bit d is set for each ElementDomain d it has.
- * - `closestElements`: the elements of a domain within `radius` of `co`, nearest first.
+ * - `closestElements`: gives the sink the elements of `query.domain()` within `query.radius()` of
+ *   `query.point()`, or at least those that are nearest in the world. Others may be given too.
  * - `pick` (optional): gives the sink the shapes that may be near a pixel. Without it, the bounds
- *   are what can be picked. It may not change anything.
+ *   are what can be picked.
+ * - `elementsInRegion` (optional): the elements of a domain that may be in a region. Without it, a
+ *   region selects the object, by its bounds.
+ *
+ * None of them may change anything.
  */
 struct Spatial : IfaceRef {
   Box3d localBounds() const
@@ -105,11 +112,9 @@ struct Spatial : IfaceRef {
   {
     return CDCC_CALL(domains);
   }
-  litestl::util::Vector<int32_t> closestElements(const double3 &co,
-                                                 double radius,
-                                                 int32_t domain) const
+  void closestElements(const NearQuery &query, NearSink &sink) const
   {
-    return CDCC_CALL(closestElements, co, radius, domain);
+    CDCC_CALL(closestElements, query, sink);
   }
   bool hasPick() const
   {
@@ -119,25 +124,24 @@ struct Spatial : IfaceRef {
   {
     CDCC_CALL(pick, query, sink);
   }
+  bool hasElementsInRegion() const
+  {
+    return CDCC_HAS(elementsInRegion);
+  }
+  litestl::util::Vector<int32_t> elementsInRegion(const RegionQuery &query, int32_t domain) const
+  {
+    return CDCC_CALL(elementsInRegion, query, domain);
+  }
 
   CDCC_INTERFACE(Spatial, "coredcc::Spatial")
   {
     BIND_STRUCT_METHOD(st, localBounds, MARGS());
     BIND_STRUCT_METHOD(st, domains, MARGS());
-    BIND_STRUCT_METHOD(st, closestElements, MARGS("co", "radius", "domain"));
+    BIND_STRUCT_METHOD(st, closestElements, MARGS("query", "sink"));
     BIND_OPTIONAL_METHOD(st, pick, MARGS("query", "sink"));
+    BIND_OPTIONAL_METHOD(st, elementsInRegion, MARGS("query", "domain"));
   }
 };
-
-enum class InvalidateKinds : uint32_t {
-  None = 0,
-  Topology = 1 << 0,
-  Positions = 1 << 1,
-  Attributes = 1 << 2,
-  Selection = 1 << 3,
-  Materials = 1 << 4,
-};
-CDCC_FLAG_OPERATORS(InvalidateKinds)
 
 /** A block that keeps something made from its data, and has to hear of changes made by others.
  * Called by invalidateData only. */

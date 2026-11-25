@@ -256,7 +256,7 @@ const suite = () => {
       () => cdcc.worldMatrix(ctx, o),
       () => cdcc.newScene(ctx, 'x'),
       () => cdcc.setScene(ctx, null),
-      () => cdcc.pick(ctx, view, 50, 50, 1),
+      () => cdcc.pick(ctx, view, 50, 50),
       () => cdcc.defineTransformType(ctx, {...polar, id: 'ts.inside'}),
     ]
     for (const f of busy) assert.throws(() => run(f as () => unknown), fails(StatusCode.Internal, /Busy|not from|evaluat/))
@@ -307,13 +307,13 @@ const suite = () => {
   test('picking', () => {
     /* Nothing in the test app has bounds, so nothing is found; what is wrong is said. */
     add('name="a"')
-    assert.deepEqual(cdcc.pick(ctx, view, 50, 50, 100), [])
-    assert.throws(() => cdcc.pick(ctx, {...view, viewport: [0, 0, 0, 0]}, 1, 1, 1), fails(StatusCode.InvalidArgument, /./))
-    assert.throws(() => cdcc.pick(ctx, {...view, reversedZ: true}, 1, 1, 1), fails(StatusCode.InvalidArgument, /./))
-    assert.throws(() => cdcc.pick(ctx, {...view, depth: '-1..1'}, 1, 1, -1), fails(StatusCode.InvalidArgument, /./))
-    assert.throws(() => cdcc.pick(ctx, {...view, proj: [1]}, 1, 1, 1), /proj has 16 numbers, not 1/)
+    assert.deepEqual(cdcc.pick(ctx, view, 50, 50, {radius: 100}), [])
+    assert.throws(() => cdcc.pick(ctx, {...view, viewport: [0, 0, 0, 0]}, 1, 1), fails(StatusCode.InvalidArgument, /./))
+    assert.throws(() => cdcc.pick(ctx, {...view, reversedZ: true}, 1, 1), fails(StatusCode.InvalidArgument, /./))
+    assert.throws(() => cdcc.pick(ctx, {...view, depth: '-1..1'}, 1, 1, {radius: -1}), fails(StatusCode.InvalidArgument, /./))
+    assert.throws(() => cdcc.pick(ctx, {...view, proj: [1]}, 1, 1), /proj has 16 numbers, not 1/)
     cdcc.setScene(ctx, null)
-    assert.throws(() => cdcc.pick(ctx, view, 1, 1, 1), fails(StatusCode.FailedPrecondition, /no scene/))
+    assert.throws(() => cdcc.pick(ctx, view, 1, 1), fails(StatusCode.FailedPrecondition, /no scene/))
   })
 }
 

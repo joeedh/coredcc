@@ -7,27 +7,47 @@
 #include "scene_doc.h"
 
 #include "coredcc/bvh/kernels.h"
-#include "coredcc/scene/pick.h"
+#include "coredcc/scene/capabilities.h"
+#include "coredcc/scene/pick_scene.h"
 
 #include <utility>
 
 namespace scene_test {
 
-/* Coordinates of one shape: a triangle's corners, or a capsule's ends. */
+enum class Kind { Triangle, Capsule, Point, Segment };
+
+/* Coordinates of one shape: a triangle's corners, a capsule's or a segment's ends, or a point. */
 struct Prim {
   double3 q[3];
   double radius = 0.0;
-  bool triangle = true;
+  Kind kind = Kind::Triangle;
+  double pixels = 0.0;
+
+  int corners() const
+  {
+    return kind == Kind::Triangle ? 3 : kind == Kind::Point ? 1 : 2;
+  }
+  ElementDomain domain() const
+  {
+    return kind == Kind::Triangle ? ElementDomain::Face :
+           kind == Kind::Point    ? ElementDomain::Point :
+                                    ElementDomain::Edge;
+  }
 };
 
 struct Geo {
   std::vector<Prim> prims;
   Box3d box;
-  /* Gives the sink only what is in the query's planes, and what the ray hits first. */
+  /* Gives the sinks only what is in the query's planes or radius, and what the ray hits first. */
   bool useBvh = false;
+  /* With it: no triangles but what the ray hits first, if no others are wanted. */
+  bool useRay = false;
   GeometryBvh<TriangleSource<double>> triangles;
   GeometryBvh<CapsuleSource<double>> capsules;
   std::function<void(const PickQuery &, PickSink &)> onPick;
+  /* closestElements and elementsInRegion. */
+  std::function<void()> onNear;
+  std::function<void()> onDomains;
   mutable int given = 0;
 
   void build()
@@ -39,9 +59,10 @@ struct Geo {
       /* Both have all: a shape of the other kind is one that is left out. */
       const double none = std::numeric_limits<double>::quiet_NaN();
       const double3 nan(none, none, none);
-      t.append(p.triangle ? p.q[0] : nan, p.q[1], p.q[2]);
-      c.append(p.triangle ? nan : p.q[0], p.q[1], p.radius);
-      for (int i = 0; i < (p.triangle ? 3 : 2); i++) {
+      const bool triangle = p.kind == Kind::Triangle;
+      t.append(triangle ? p.q[0] : nan, p.q[1], p.q[2]);
+      c.append(triangle ? nan : p.q[0], p.q[p.kind == Kind::Point ? 0 : 1], p.radius);
+      for (int i = 0; i < p.corners(); i++) {
         box.include(p.q[i][0] - p.radius, p.q[i][1] - p.radius, p.q[i][2] - p.radius);
         box.include(p.q[i][0] + p.radius, p.q[i][1] + p.radius, p.q[i][2] + p.radius);
       }
@@ -55,12 +76,20 @@ struct Geo {
   {
     const Prim &p = prims[size_t(i)];
     given++;
-    sink.element(int32_t(p.triangle ? ElementDomain::Face : ElementDomain::Edge), i);
-    if (p.triangle) {
-      sink.triangle(p.q[0], p.q[1], p.q[2]);
-    }
-    else {
-      sink.capsule(p.q[0], p.q[1], p.radius);
+    sink.element(int32_t(p.domain()), i);
+    switch (p.kind) {
+      case Kind::Triangle:
+        sink.triangle(p.q[0], p.q[1], p.q[2]);
+        break;
+      case Kind::Capsule:
+        sink.capsule(p.q[0], p.q[1], p.radius);
+        break;
+      case Kind::Point:
+        sink.point(p.q[0], p.pixels);
+        break;
+      case Kind::Segment:
+        sink.segment(p.q[0], p.q[1], p.pixels);
+        break;
     }
   }
 
@@ -70,11 +99,58 @@ struct Geo {
   }
   uint32_t domains() const
   {
-    return 4;
+    if (onDomains) {
+      onDomains();
+    }
+    return 7;
   }
-  Vector<int32_t> closestElements(const double3 &, double, int32_t) const
+  /* Exact for what moves and turns, and for points. */
+  void closestElements(const NearQuery &query, NearSink &sink) const
   {
-    return Vector<int32_t>();
+    if (onNear) {
+      onNear();
+    }
+    const auto near = [&](int i) {
+      const Prim &p = prims[size_t(i)];
+      if (int32_t(p.domain()) != query.domain()) {
+        return true;
+      }
+      const double3 &a = p.q[0];
+      const double3 at = p.kind == Kind::Triangle ?
+                             bvh::closestOnTriangle(query.point(), a, p.q[1], p.q[2]) :
+                         p.kind == Kind::Point ? a :
+                                                 bvh::closestOnSegment(query.point(), a, p.q[1]);
+      if (useBvh && lengthOf(at - query.point()) > sink.radius()) {
+        return true;
+      }
+      given++;
+      sink.add(i, at);
+      return true;
+    };
+    if (!useBvh || !bvh::finite(query.radius())) {
+      for (int i = 0; i < int(prims.size()); i++) {
+        near(i);
+      }
+      return;
+    }
+    must(triangles.sphereOverlap(query.point(), query.radius(), near));
+    must(capsules.sphereOverlap(query.point(), query.radius(), near));
+  }
+  Vector<int32_t> elementsInRegion(const RegionQuery &query, int32_t domain) const
+  {
+    if (onNear) {
+      onNear();
+    }
+    Vector<int32_t> out;
+    const auto in = [&](int i) {
+      if (int32_t(prims[size_t(i)].domain()) == domain) {
+        out.append(i);
+      }
+      return true;
+    };
+    must(triangles.region(query.planes(), in));
+    must(capsules.region(query.planes(), in));
+    return out;
   }
   void pick(const PickQuery &query, PickSink &sink) const
   {
@@ -92,7 +168,9 @@ struct Geo {
       give(sink, i);
       return true;
     };
-    must(triangles.region(query.planes(), near));
+    if (!useRay || !query.hasRay() || query.surfaceRadiusDevicePixels() > 0.0) {
+      must(triangles.region(query.planes(), near));
+    }
     must(capsules.region(query.planes(), near));
     if (query.hasRay()) {
       for (const RayHit &hit :
@@ -109,11 +187,21 @@ struct Geo {
     auto *st = new lbt::Struct<Geo>("test::Geo", sizeof(Geo));
     BIND_STRUCT_METHOD(st, localBounds, MARGS());
     BIND_STRUCT_METHOD(st, domains, MARGS());
-    BIND_STRUCT_METHOD(st, closestElements, MARGS("co", "radius", "domain"));
+    BIND_STRUCT_METHOD(st, closestElements, MARGS("query", "sink"));
     BIND_STRUCT_METHOD(st, pick, MARGS("query", "sink"));
+    BIND_STRUCT_METHOD(st, elementsInRegion, MARGS("query", "domain"));
     return st;
   }
 };
+
+/** Without `thin`, no solid is. */
+inline PickOptions within(double radius, bool thin = true)
+{
+  PickOptions o;
+  o.radius = radius;
+  o.thinRadius = thin ? o.thinRadius : 0.0;
+  return o;
+}
 
 struct PickDoc : Doc {
   PickDoc()
@@ -149,20 +237,20 @@ struct PickDoc : Doc {
   Status tryPick(const ViewMath &view,
                  double x,
                  double y,
-                 double radius,
+                 const PickOptions &options,
                  Vector<PickHit> &hits,
                  const PickFilter &filter = {})
   {
-    return pickScene(*ctx, scene, view, x, y, radius, filter, hits);
+    return pickScene(*ctx, scene, view, x, y, options, filter, hits);
   }
   Vector<PickHit> picks(const ViewMath &view,
                         double x,
                         double y,
-                        double radius,
+                        const PickOptions &options,
                         const PickFilter &filter = {})
   {
     Vector<PickHit> hits;
-    must(tryPick(view, x, y, radius, hits, filter));
+    must(tryPick(view, x, y, options, hits, filter));
     return hits;
   }
 };
@@ -172,7 +260,7 @@ inline Prim ball(const double3 &center, double radius)
   Prim p;
   p.q[0] = p.q[1] = center;
   p.radius = radius;
-  p.triangle = false;
+  p.kind = Kind::Capsule;
   return p;
 }
 inline Prim curve(const double3 &a, const double3 &b, double radius)
@@ -201,24 +289,34 @@ struct Expected {
   bool depthKnown = true;
 };
 
-/** A triangle in the world: clipped to the near plane, projected, its outline walked. */
+/** A triangle in the world: clipped to the near and the far plane, projected, its outline walked. */
 inline Expected expectTriangle(const ViewMath &view, const double3 (&w)[3], double x, double y)
 {
   Expected e;
   std::vector<std::pair<long double, long double>> outline;
-  for (int i = 0; i < 3; i++) {
-    const double3 a = w[i], b = w[(i + 1) % 3];
-    const double da = view.viewDistance(a), db = view.viewDistance(b);
-    const auto add = [&](const double3 &p) {
-      const ViewPoint v = view.project(p);
-      outline.push_back({(long double)(v.x) - x, (long double)(v.y) - y});
+  std::vector<double3> polygon(w, w + 3);
+  const double4 &far = view.farPlane();
+  const double length = std::hypot(far[0], far[1], far[2]);
+  for (int plane = 0; plane < (length > 0.0 ? 2 : 1); plane++) {
+    const auto side = [&](const double3 &p) {
+      return plane == 0 ? view.viewDistance(p) : dotPoint(far, p) / length;
     };
-    if (da >= 0.0) {
-      add(a);
+    std::vector<double3> in;
+    for (size_t i = 0; i < polygon.size(); i++) {
+      const double3 a = polygon[i], b = polygon[(i + 1) % polygon.size()];
+      const double da = side(a), db = side(b);
+      if (da >= 0.0) {
+        in.push_back(a);
+      }
+      if ((da >= 0.0) != (db >= 0.0)) {
+        in.push_back(da >= 0.0 ? a + (b - a) * (da / (da - db)) : b + (a - b) * (db / (db - da)));
+      }
     }
-    if ((da >= 0.0) != (db >= 0.0)) {
-      add(da >= 0.0 ? a + (b - a) * (da / (da - db)) : b + (a - b) * (db / (db - da)));
-    }
+    polygon = in;
+  }
+  for (const double3 &p : polygon) {
+    const ViewPoint v = view.project(p);
+    outline.push_back({(long double)(v.x) - x, (long double)(v.y) - y});
   }
   if (outline.empty()) {
     return e;

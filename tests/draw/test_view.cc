@@ -1,6 +1,8 @@
 /* View and ViewMath: every convention, at scene offsets up to 1e9. */
 #include "coredcc/draw/view.h"
 
+#include "coredcc/bvh/geometry_bvh.h"
+
 #include "litestl/binding/binding.h"
 #include "litestl/math/matrix_bindings.h"
 
@@ -48,6 +50,7 @@ struct Rand {
 };
 
 int g_failures = 0;
+int g_past = 0; /* points past a far plane */
 void expect(bool ok, const char *what)
 {
   if (!ok && g_failures++ < 20) {
@@ -225,6 +228,23 @@ void testCase(const Convention &c, Rand &r, double offset)
       const double3 before = p - n * ((distance + 0.005) / n.length());
       const double side = n.dot(before) + m.nearPlane()[3];
       expect(side < 0.0 && !m.project(before).visible, "a point before the near plane is visible");
+      const double4 &far = m.farPlane();
+      expect(dot(far) > 0.0, "farPlane is wrong");
+      if (c.infinite) {
+        expect(far[0] == 0.0 && far[1] == 0.0 && far[2] == 0.0 && far[3] == 1.0, "no far plane");
+      }
+      else {
+        const double3 past = p + n * ((k.zFar - k.zNear - distance) * 1.001 / n.length());
+        const double there = far[0] * past[0] + far[1] * past[1] + far[2] * past[2] + far[3];
+        expect(there < 0.0 && !m.project(past).visible, "a point past the far plane is visible");
+        expect(!m.project(past).behind, "a point past the far plane is behind");
+      }
+      for (int e = 0; e < 4; e++) {
+        expect(m.nearPlaneAt(e) == m.nearPlane()[e] && m.farPlaneAt(e) == far[e], "elements");
+        for (int row = 0; row < 3; row++) {
+          expect(m.pixelRowAt(row, e) == rows[row][e], "pixelRowAt");
+        }
+      }
     }
 
     /* One logical pixel along the image's y is dpiScale device pixels. */
@@ -282,31 +302,44 @@ void testRegion(const Convention &c, Rand &r, double offset)
   const double *vp = k.v.viewport;
   for (int i = 0; i < 20; i++) {
     const double radius = i % 4 == 0 ? r.range(0.0, 0.2) : r.range(0.0, 20.0);
-    const double want = (std::max)(radius * k.v.dpiScale, 0.5);
+    double wantX = (std::max)(radius * k.v.dpiScale, 0.5), wantY = wantX;
     const double cx = vp[0] + r.range(0, 1) * vp[2], cy = vp[1] + r.range(0, 1) * vp[3];
-    const ViewRegion g = m.regionFromPixel(cx, cy, radius);
+    ViewRegion g = m.regionFromPixel(cx, cy, radius);
+    if (i % 3 == 0) {
+      /* A rectangle, from any of its corners to the opposite one. */
+      const double hx = r.range(-100.0, 100.0), hy = r.coin() ? r.range(-100.0, 100.0) : 0.1;
+      g = m.regionFromRect(cx - hx, cy - hy, cx + hx, cy + hy);
+      wantX = (std::max)(std::fabs(hx), 0.5);
+      wantY = (std::max)(std::fabs(hy), 0.5);
+    }
+    for (int p = 0; p < ViewRegion::kPlanes; p++) {
+      expect(g.planeAt(p, 0) == g.planes[p].n[0] && g.planeAt(p, 2) == g.planes[p].n[2] &&
+                 g.planeAt(p, 3) == g.planes[p].w,
+             "planeAt");
+    }
     for (int j = 0; j < 30; j++) {
       /* Near the square's border. */
       const double reach = j % 3 == 0 ? r.range(0.0, 1.0) : j % 3 == 1 ? 1.0 : r.range(0.999, 1.001);
-      double dx = reach * want * (r.coin() ? 1 : -1), dy = r.range(-1.0, 1.0) * want;
-      if (r.coin()) {
-        std::swap(dx, dy);
-      }
+      const bool flip = r.coin();
+      const double edge = reach * (r.coin() ? 1 : -1), along = r.range(-1.0, 1.0);
+      const double dx = (flip ? along : edge) * wantX, dy = (flip ? edge : along) * wantY;
       const double ndcX = (cx + dx - vp[0]) / vp[2] * 2.0 - 1.0;
       const double ndcY = 1.0 - (cy + dy - vp[1]) / vp[3] * 2.0;
       const double3 p =
           pointAt(k, m, ndcX, ndcY, j % 5 == 0 ? r.range(-0.01, 0.01) : std::exp(r.range(-5, 8)));
       const ViewPoint at = m.project(p);
-      const bool in = at.visible && std::fabs(at.x - cx) <= want && std::fabs(at.y - cy) <= want;
+      const bool in = at.visible && std::fabs(at.x - cx) <= wantX && std::fabs(at.y - cy) <= wantY;
       bool inside = true;
       for (const BvhPlane &plane : g.planes) {
         inside = inside && plane.n.dot(p) + plane.w >= 0.0;
       }
       expect(!in || inside, "the region excludes a point in the square");
       if (offset <= 1e3 && !at.behind) {
-        const bool farOut = std::fabs(at.x - cx) > want * 1.01 + 0.01 ||
-                            std::fabs(at.y - cy) > want * 1.01 + 0.01 || at.distance < -1e-6;
+        const bool farOut = std::fabs(at.x - cx) > wantX * 1.01 + 0.01 ||
+                            std::fabs(at.y - cy) > wantY * 1.01 + 0.01 || at.distance < -1e-6 ||
+                            at.distance > (k.zFar - k.zNear) * (1.0 + 1e-6);
         expect(!(farOut && inside), "the region is larger than the square");
+        g_past += at.distance > k.zFar - k.zNear;
       }
     }
   }
@@ -331,7 +364,132 @@ void testConventions()
       }
     }
   }
-  test_assert(g_failures == 0);
+  test_assert(g_failures == 0 && g_past > 1000);
+}
+
+/* ---- matrices that aren't quite what they should be ---- */
+
+/* As three.js and gl-matrix invert: by cofactors, without knowing that the matrix is affine. */
+mat4d generalInverse(const mat4d &m)
+{
+  const double *a = m;
+  mat4d out;
+  double *o = out;
+  const double b00 = a[0] * a[5] - a[1] * a[4], b01 = a[0] * a[6] - a[2] * a[4],
+               b02 = a[0] * a[7] - a[3] * a[4], b03 = a[1] * a[6] - a[2] * a[5],
+               b04 = a[1] * a[7] - a[3] * a[5], b05 = a[2] * a[7] - a[3] * a[6],
+               b06 = a[8] * a[13] - a[9] * a[12], b07 = a[8] * a[14] - a[10] * a[12],
+               b08 = a[8] * a[15] - a[11] * a[12], b09 = a[9] * a[14] - a[10] * a[13],
+               b10 = a[9] * a[15] - a[11] * a[13], b11 = a[10] * a[15] - a[11] * a[14];
+  const double det =
+      1.0 / (b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06);
+  o[0] = (a[5] * b11 - a[6] * b10 + a[7] * b09) * det;
+  o[1] = (a[2] * b10 - a[1] * b11 - a[3] * b09) * det;
+  o[2] = (a[13] * b05 - a[14] * b04 + a[15] * b03) * det;
+  o[3] = (a[10] * b04 - a[9] * b05 - a[11] * b03) * det;
+  o[4] = (a[6] * b08 - a[4] * b11 - a[7] * b07) * det;
+  o[5] = (a[0] * b11 - a[2] * b08 + a[3] * b07) * det;
+  o[6] = (a[14] * b02 - a[12] * b05 - a[15] * b01) * det;
+  o[7] = (a[8] * b05 - a[10] * b02 + a[11] * b01) * det;
+  o[8] = (a[4] * b10 - a[5] * b08 + a[7] * b06) * det;
+  o[9] = (a[1] * b08 - a[0] * b10 - a[3] * b06) * det;
+  o[10] = (a[12] * b04 - a[13] * b02 + a[15] * b00) * det;
+  o[11] = (a[9] * b02 - a[8] * b04 - a[11] * b00) * det;
+  o[12] = (a[5] * b07 - a[4] * b09 - a[6] * b06) * det;
+  o[13] = (a[0] * b09 - a[1] * b07 + a[2] * b06) * det;
+  o[14] = (a[13] * b01 - a[12] * b03 - a[14] * b00) * det;
+  o[15] = (a[8] * b03 - a[9] * b01 + a[10] * b00) * det;
+  return out;
+}
+
+mat4d asFloat(const mat4d &m)
+{
+  mat4d out;
+  const double *a = m;
+  double *o = out;
+  for (int i = 0; i < 16; i++) {
+    o[i] = float(a[i]);
+  }
+  return out;
+}
+
+/* The length of a matrix's translation. */
+double length3(const mat4d &m)
+{
+  const double *e = m;
+  return std::hypot(e[12], e[13], e[14]);
+}
+
+void testRounded()
+{
+  Rand r(12);
+  int inexact = 0, inexactProj = 0;
+  for (int i = 0; i < 4000 * coredcc_test::testScale(); i++) {
+    const int bits = int(r.next() % 64);
+    Convention c{(bits & 1) != 0, (bits & 2) != 0,  (bits & 4) != 0,
+                 (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0};
+    c.infinite = c.infinite && !c.ortho;
+    Case k = makeCase(c, r, i % 2 ? 1e3 : 0.0);
+    View v = k.v;
+    mat4d inverse;
+    test_assert(litestl::math::tryInverse(k.v.view, inverse));
+    v.view = generalInverse(inverse);
+    double *m = v.view;
+    const bool scaled = i % 5 == 0;
+    if (i % 5 < 2) {
+      /* Scaled a bit, or with rounding in the last row. */
+      const double by = r.range(-9e-7, 9e-7);
+      for (int col = 0; col < 4; col++) {
+        for (int row = 0; scaled && row < 4; row++) {
+          m[col * 4 + row] *= 1.0 + by;
+        }
+        if (!scaled && col < 3) {
+          m[col * 4 + 3] = by * std::fabs(m[col * 4 + r.next() % 3]);
+        }
+      }
+    }
+    inexact += m[3] != 0.0 || m[7] != 0.0 || m[11] != 0.0 || m[15] != 1.0;
+    v.proj = generalInverse(generalInverse(k.v.proj));
+    double *p = v.proj;
+    if (i % 2) {
+      /* What a product of matrices, or a float one, leaves. */
+      const double noise = (i % 4 == 1 ? 1e-15 : 5e-7) * r.range(-1.0, 1.0);
+      for (int col = 0; col < 2; col++) {
+        const double big = (std::max)(std::fabs(p[col * 4]), std::fabs(p[col * 4 + 1]));
+        p[col * 4 + 2] = big * noise;
+        p[col * 4 + 3] = -big * noise;
+      }
+      (c.ortho ? p[11] : p[15]) = noise * std::fabs(c.ortho ? p[10] : p[14]);
+    }
+    inexactProj += p[2] != 0.0 || p[6] != 0.0 || p[3] != 0.0 || p[7] != 0.0 ||
+                   (c.ortho ? p[11] != 0.0 : p[15] != 0.0);
+    if (i % 3 == 0) {
+      v.view = asFloat(v.view);
+      v.proj = asFloat(v.proj);
+    }
+    const Status s = v.validate();
+    ViewMath exact, rounded;
+    if (!s.ok() || !rounded.set(v).ok() || !exact.set(k.v).ok()) {
+      fprintf(stderr, "  %s\n", s.message());
+      expect(false, "a rounded view is refused");
+      continue;
+    }
+    /* What it stores is exact. */
+    const double *w = rounded.view().view;
+    expect(w[3] == 0.0 && w[7] == 0.0 && w[11] == 0.0 && w[15] == 1.0, "the stored view isn't affine");
+    const double3 at = pointAt(k, exact, r.range(-1, 1), r.range(-1, 1), r.range(1.0, 15.0));
+    const ViewPoint a = exact.project(at), b = rounded.project(at);
+    const double px = i % 3 == 0 ? (i % 2 ? 100.0 : 1.0) : 1e-4;
+    expect(b.visible && std::fabs(a.x - b.x) < px && std::fabs(a.y - b.y) < px,
+           "a rounded view projects elsewhere");
+    if (i % 3 != 0) {
+      const double far = length3(rounded.view().view);
+      expect(std::fabs(exact.viewDistance(at) - rounded.viewDistance(at)) < 1e-8 * (1.0 + far),
+             "a rounded view has other distances");
+    }
+  }
+  printf("inexact inverses: %d views, %d projections\n", inexact, inexactProj);
+  test_assert(inexact > 400 && inexactProj > 100 && g_failures == 0);
 }
 
 View baseView()
@@ -366,6 +524,19 @@ void testValidate()
       {"isn't finite", [](View &v) { v.proj[0][0] = std::numeric_limits<double>::infinity(); }},
       {"isn't affine", [](View &v) { v.view[1][3] = 0.1; }},
       {"isn't affine", [](View &v) { v.view[3][3] = 2; }},
+      {"isn't affine", [](View &v) { v.view[0][3] = 1e-5; }},
+      {"isn't affine", [](View &v) { v.view[2][3] = -1e-5; }},
+      {"isn't affine", [](View &v) { v.view[3][3] = 1.00001; }},
+      {"oblique", [](View &v) { v.proj[0][2] = 1e-4; }},
+      {"oblique", [](View &v) { v.proj[1][2] = -1e-4; }},
+      {"oblique", [](View &v) { v.proj[0][3] = -1e-4; }},
+      {"ortho is missing", [](View &v) { v.proj[3][3] = 1e-4; }},
+      {"isn't orthographic",
+       [&](View &v) {
+         v.proj = orthoProj;
+         v.ortho = true;
+         v.proj[2][3] = 1e-4;
+       }},
       {"isn't invertible", [](View &v) { v.view[0] = v.view[1]; }},
       {"isn't invertible", [](View &v) { v.proj[1][1] = 0; }},
       {"oblique", [](View &v) { v.proj[0][2] = 0.1; }},
@@ -442,6 +613,10 @@ void testValidate()
   test_assert(v.validate().ok());
   v.infiniteFar = false;
   test_assert(v.validate().ok());
+  /* And there is no far plane then: it would be noise. */
+  ViewMath m;
+  test_assert(m.set(v).ok() && m.farPlane()[3] == 1.0 && m.farPlane()[2] == 0.0);
+  test_assert(m.project(double3(1, 2, 3) * -1e7).visible);
 }
 
 void testUnset()
@@ -450,6 +625,7 @@ void testUnset()
   test_assert(!m.valid() && m.project(double3(1, 2, 3)).behind);
   test_assert(!m.unproject(0, 0, 0.5).ok() && !m.rayFromPixel(0, 0).valid());
   const ViewRegion g = m.regionFromPixel(0, 0, 5);
+  test_assert(m.regionFromRect(0, 0, 9, 9).planes[0].w < 0.0);
   TriangleSource<double> triangles;
   triangles.append(double3(), double3(1, 0, 0), double3(0, 1, 0));
   GeometryBvh<TriangleSource<double>> bvh;
@@ -469,6 +645,18 @@ void testScripts()
   v.putViewport(2, 640);
   v.putViewport(4, 1);
   v.putViewport(-1, 1);
+  test_assert(v.depthRange() == 0 && v.hand() == 0 && v.upAxis() == 1);
+  v.setConventions(1, 1, 0);
+  test_assert(v.depthRange() == 1 && v.hand() == 1 && v.upAxis() == 0);
+  ViewMath m;
+  for (int i : {-1, 4}) {
+    test_assert(m.nearPlaneAt(i) == 0.0 && m.farPlaneAt(i) == 0.0 && m.pixelRowAt(0, i) == 0.0);
+    test_assert(ViewRegion().planeAt(0, i) == 0.0);
+  }
+  test_assert(m.pixelRowAt(3, 0) == 0.0 && m.pixelRowAt(-1, 0) == 0.0);
+  test_assert(ViewRegion().planeAt(6, 3) == 0.0 && ViewRegion().planeAt(-1, 3) == 0.0);
+  test_assert(ViewRegion().planeCount() == 6);
+  test_assert(ViewRegion::defineBindings() == ViewRegion::defineBindings());
   test_assert(v.viewportAt(2) == 640 && v.viewportAt(0) == 0 && v.viewportAt(4) == 0 &&
               v.viewportAt(-1) == 0);
 }
@@ -478,6 +666,7 @@ void testScripts()
 int main()
 {
   testConventions();
+  testRounded();
   testValidate();
   testUnset();
   testScripts();

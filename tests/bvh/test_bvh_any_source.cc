@@ -9,8 +9,10 @@
 
 #include "test_util.h"
 
+#include <algorithm>
 #include <new>
 #include <thread>
+#include <type_traits>
 
 test_init;
 
@@ -128,6 +130,159 @@ void testNative()
   test_assert(bvh.build(rt, ref(rt, src)).ok() && bvh.boxes().bvh().size() == 0);
 }
 
+void testRefit()
+{
+  Runtime rt;
+  test_assert((registerImpl<AnyBvhSource, NativeSource>(rt, "test.NativeSource").ok()));
+  NativeSource src;
+  fill(src, 9000);
+  AnyBvh bvh;
+  GeometryBvh<BoxSource> want;
+  test_assert(bvh.build(rt, ref(rt, src)).ok() && want.build(direct(src)).ok());
+  const auto same = [&] { return sameTree(bvh.boxes().bvh(), want.bvh()); };
+  Rand r(6);
+  const auto move = [&](int first, int count) {
+    for (int i = first; i < first + count; i++) {
+      const double by = r.range(-3, 3);
+      src.boxes[i].min[2] += by;
+      src.boxes[i].max[2] += by + 0.1;
+    }
+  };
+  move(0, 9000);
+  src.calls = 0;
+  test_assert(bvh.refit(rt, ref(rt, src)).ok() && src.calls == 3);
+  test_assert(want.refit(direct(src)).ok() && same() && bvh.growth() > 1.0);
+  /* Some. */
+  move(100, 5000);
+  src.calls = 0;
+  test_assert(bvh.refit(rt, ref(rt, src), 100, 5000).ok() && src.calls == 2);
+  test_assert(want.refit(direct(src)).ok() && same());
+  test_assert(bvh.refit(rt, ref(rt, src), 9000, 0).ok() && src.calls == 2 && same());
+  for (const auto &[first, count] :
+       {std::pair{-1, 2}, std::pair{0, -1}, std::pair{8999, 2}, std::pair{9001, 0}})
+  {
+    test_assert(bvh.refit(rt, ref(rt, src), first, count).code() == StatusCode::OutOfRange);
+  }
+  test_assert(src.calls == 2 && same());
+
+  /* Failures change nothing. */
+  move(0, 9000);
+  src.wrongLengthAt = 3;
+  test_assert(bvh.refit(rt, ref(rt, src)).code() == StatusCode::InvalidArgument);
+  src.wrongLengthAt = 4;
+  test_assert(bvh.refit(rt, ref(rt, src), 0, 100).code() == StatusCode::InvalidArgument);
+  src.wrongLengthAt = -1;
+  test_assert(bvh.refit(rt, AnyBvhSource()).code() == StatusCode::InvalidArgument);
+  test_assert(bvh.refit(rt, AnyBvhSource(), 0, 1).code() == StatusCode::InvalidArgument);
+  rt.setStickyError(Status::error(StatusCode::Internal, "earlier"));
+  test_assert(bvh.refit(rt, ref(rt, src), 0, 1).code() == StatusCode::FailedPrecondition);
+  test_assert(rt.takeStickyError().code() == StatusCode::Internal && same());
+
+  /* What has to be done. */
+  src.calls = 0;
+  test_assert(bvh.onInvalidate(rt, ref(rt, src), InvalidateKinds::Selection).ok() && same());
+  test_assert(src.calls == 0);
+  test_assert(bvh.onInvalidate(rt, ref(rt, src), InvalidateKinds::Positions).ok());
+  test_assert(src.calls == 3 && want.refit(direct(src)).ok() && same());
+  test_assert(bvh.onInvalidate(rt, ref(rt, src), InvalidateKinds::Topology).ok());
+  test_assert(src.calls == 6 && want.build(direct(src)).ok() && same());
+  src.boxes.pop_back();
+  test_assert(bvh.refit(rt, ref(rt, src)).code() == StatusCode::FailedPrecondition && same());
+  src.calls = 0;
+  test_assert(bvh.onInvalidate(rt, ref(rt, src), InvalidateKinds::Positions).ok());
+  test_assert(src.calls == 3 && want.build(direct(src)).ok() && same());
+}
+
+/* What scripts call. */
+void testNumbers()
+{
+  NativeSource src;
+  fill(src, 500);
+  AnyBvh bvh;
+  GeometryBvh<BoxSource> want;
+  const auto same = [&] { return sameTree(bvh.boxes().bvh(), want.bvh()); };
+  Vector<double> all = src.bounds(0, 500);
+  test_assert(bvh.buildFrom(all).ok() && want.build(direct(src)).ok() && same());
+  test_assert(bvh.size() == 500 && bvh.growth() == 1.0);
+  Rand r(7);
+  for (int i = 0; i < 500; i++) {
+    src.boxes[i].max[0] += r.range(0.0, 1.0);
+  }
+  test_assert(bvh.refitFrom(src.bounds(0, 500)).ok() && want.refit(direct(src)).ok() && same());
+  Vector<int32_t> some;
+  Vector<double> values;
+  for (int i = 490; i > 0; i -= 7) {
+    src.boxes[i].min[1] -= 2.0;
+    some.append(i);
+    for (double v : src.bounds(i, 1)) {
+      values.append(v);
+    }
+  }
+  test_assert(bvh.refitSome(some, values).ok() && want.refit(direct(src)).ok() && same());
+  /* Wrong lengths. */
+  values.pop_back();
+  all.pop_back();
+  test_assert(bvh.refitSome(some, values).code() == StatusCode::InvalidArgument && same());
+  test_assert(bvh.refitFrom(all).code() == StatusCode::InvalidArgument && same());
+  test_assert(bvh.buildFrom(all).code() == StatusCode::InvalidArgument && same());
+
+  int rays = 0, found = 0;
+  for (int k = 0; k < 300; k++) {
+    Ray ray;
+    ray.origin = r.vec(12.0);
+    ray.dir = r.vec(1.0);
+    ray.tMin = r.range(0.0, 2.0);
+    ray.tMax = r.range(2.0, 40.0);
+    const RayHit a = bvh.rayClosest(ray.origin, ray.dir, ray.tMin, ray.tMax);
+    const RayHit b = want.rayClosest(ray);
+    test_assert(a.primitive == b.primitive && a.t == b.t);
+    const NearestHit n = bvh.nearest(ray.origin, 3.0), m = want.nearest(ray.origin, 3.0);
+    test_assert(n.primitive == m.primitive && n.distance == m.distance);
+    std::vector<int> hits[3];
+    const auto into = [&](int i) {
+      return [&hits, i](const auto &h) {
+        if constexpr (std::is_same_v<std::decay_t<decltype(h)>, int>) {
+          hits[i].push_back(h);
+        } else {
+          hits[i].push_back(h.primitive);
+        }
+        return true;
+      };
+    };
+    BvhPlane planes[2];
+    Vector<double> numbers;
+    for (BvhPlane &p : planes) {
+      p.n = r.vec(1.0);
+      p.w = r.range(-5.0, 5.0);
+      for (int i = 0; i < 4; i++) {
+        numbers.append(i < 3 ? p.n[i] : p.w);
+      }
+    }
+    test_assert(want.rayAll(ray, into(0)).ok());
+    test_assert(want.sphereOverlap(ray.origin, 3.0, into(1)).ok());
+    test_assert(want.region(planes, into(2)).ok());
+    const Vector<int32_t> got[3] = {bvh.rayAll(ray.origin, ray.dir, ray.tMin, ray.tMax),
+                                    bvh.sphereOverlap(ray.origin, 3.0),
+                                    bvh.region(numbers)};
+    for (int i = 0; i < 3; i++) {
+      std::sort(hits[i].begin(), hits[i].end());
+      test_assert(got[i].size() == hits[i].size() &&
+                  std::equal(hits[i].begin(), hits[i].end(), got[i].data()));
+      found += int(hits[i].size());
+    }
+    rays += bool(a);
+    numbers.pop_back();
+    test_assert(bvh.region(numbers).size() == 0);
+  }
+  test_assert(rays > 20 && found > 10000);
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  test_assert(bvh.sphereOverlap(double3(), nan).size() == 0);
+  test_assert(bvh.rayAll(double3(nan, 0, 0), double3(0, 0, 1), 0, 1).size() == 0);
+  test_assert(AnyBvh::defineBindings() == AnyBvh::defineBindings());
+  test_assert(RayHit::defineBindings() == RayHit::defineBindings());
+  test_assert(NearestHit::defineBindings() == NearestHit::defineBindings());
+}
+
 void testForeign()
 {
   fakehost::Host host;
@@ -208,6 +363,8 @@ int main()
 {
   testBoxBinding();
   testNative();
+  testRefit();
+  testNumbers();
   testForeign();
   return test_end();
 }

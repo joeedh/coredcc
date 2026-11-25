@@ -58,8 +58,29 @@ enum class Layout {
   Long,
   /* Centers on a line, doubling in distance. */
   Exponential,
+  /* Flat and axis-aligned, on multiples of 0.1, overlapping: many ties. */
+  Lattice,
+  /* Small things far from the origin. */
+  Far,
+  /* Triangles without an area, along the axes. */
+  Edges,
   Count,
 };
+
+inline double lattice(Rand &r, int steps)
+{
+  return 0.1 * (r.below(2 * steps + 1) - steps);
+}
+/* The second corner of something on the lattice: flat on one axis. */
+inline double3 latticeEnd(Rand &r, const double3 &a)
+{
+  double3 b = a;
+  const int flat = r.below(3);
+  for (int i = 0; i < 3; i++) {
+    b[i] += i == flat ? 0.0 : 0.1 * (1 + r.below(12));
+  }
+  return b;
+}
 
 inline double3 place(Rand &r, Layout layout, int i)
 {
@@ -75,6 +96,12 @@ inline double3 place(Rand &r, Layout layout, int i)
       return double3(1.0, 2.0, 3.0);
     case Layout::Exponential:
       return double3(std::ldexp(1.0, i % 30), 0.0, 0.0);
+    case Layout::Lattice: {
+      const double x = lattice(r, 8), y = lattice(r, 8);
+      return double3(x, y, lattice(r, 8));
+    }
+    case Layout::Far:
+      return double3(3e6, -5e6, 1e6) + r.vec(0.5);
     default:
       return r.vec(10.0);
   }
@@ -90,6 +117,17 @@ template <class S> TriangleSource<S> triangles(Rand &r, Layout layout, int n)
     if (layout == Layout::AllEqual) {
       b = a + e1;
       c = a + e2;
+    } else if (layout == Layout::Lattice) {
+      /* One half of a rectangle. */
+      c = latticeEnd(r, a);
+      b = a;
+      const int axis = r.below(3);
+      b[axis] = c[axis];
+    } else if (layout == Layout::Edges) {
+      const int axis = r.below(3);
+      b = c = a;
+      b[axis] += r.range(-2.0, 2.0);
+      c[axis] += r.range(-2.0, 2.0);
     } else if (layout == Layout::Long) {
       a = r.vec(10.0);
       b = a * -1.0;
@@ -121,6 +159,10 @@ template <class S> CapsuleSource<S> capsules(Rand &r, Layout layout, int n)
     double3 b = layout == Layout::AllEqual ? a + double3(1, 0, 0)
                 : layout == Layout::Long   ? r.vec(10.0)
                                            : a + r.vec(0.5);
+    if (layout == Layout::Lattice) {
+      b = a;
+      b[r.below(3)] += 0.1 * (1 + r.below(8));
+    }
     if (r.below(10) == 0) {
       b = a;
     }
@@ -146,7 +188,9 @@ inline BoxSource boxes(Rand &r, Layout layout, int n)
     const double3 p = place(r, layout, i);
     Box3d b;
     b.include(p[0], p[1], p[2]);
-    const double3 q = layout == Layout::AllEqual ? p + double3(1, 1, 1) : p + r.vec(0.5);
+    const double3 q = layout == Layout::AllEqual  ? p + double3(1, 1, 1)
+                      : layout == Layout::Lattice ? latticeEnd(r, p)
+                                                  : p + r.vec(0.5);
     b.include(q[0], q[1], q[2]);
     src.append(b);
   }

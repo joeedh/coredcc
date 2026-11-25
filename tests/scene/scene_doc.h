@@ -40,10 +40,7 @@ struct Shape {
   {
     return 1;
   }
-  Vector<int32_t> closestElements(const double3 &, double, int32_t) const
-  {
-    return Vector<int32_t>();
-  }
+  void closestElements(const NearQuery &, NearSink &) const {}
   void invalidate(uint32_t kinds)
   {
     invalidated |= kinds;
@@ -53,7 +50,7 @@ struct Shape {
     auto *st = new lbt::Struct<Shape>("test::Shape", sizeof(Shape));
     BIND_STRUCT_METHOD(st, localBounds, MARGS());
     BIND_STRUCT_METHOD(st, domains, MARGS());
-    BIND_STRUCT_METHOD(st, closestElements, MARGS("co", "radius", "domain"));
+    BIND_STRUCT_METHOD(st, closestElements, MARGS("query", "sink"));
     BIND_STRUCT_METHOD(st, invalidate, MARGS("kinds"));
     return st;
   }

@@ -1,4 +1,4 @@
-/* Building and refitting: extreme coordinates, options, determinism, refit. */
+/* Building: extreme coordinates, options, determinism. */
 #include "bvh_fixture.h"
 
 #include "litestl/util/task.h"
@@ -165,6 +165,47 @@ template <class S> void testScale()
   }
 }
 
+/* A source that says it is larger than it can be. */
+struct Huge {
+  using Scalar = float;
+  int64_t count;
+  int64_t size() const
+  {
+    return count;
+  }
+  Box3f bounds(int) const
+  {
+    test_assert(false);
+    return Box3f();
+  }
+};
+struct Unsigned {
+  using Scalar = float;
+  uint64_t size() const
+  {
+    return uint64_t(1) << 32;
+  }
+  Box3f bounds(int) const
+  {
+    test_assert(false);
+    return Box3f();
+  }
+};
+
+void testSize()
+{
+  Boxes<float> src;
+  src.add(0, 0, 0, 1, 1, 1);
+  Bvh<float> bvh;
+  test_assert(bvh.build(src).ok());
+  test_assert(bvh.build(Huge{int64_t(1) << 31}).code() == StatusCode::OutOfRange);
+  test_assert(bvh.build(Huge{(int64_t(1) << 32) + 1}).code() == StatusCode::OutOfRange);
+  test_assert(bvh.build(Unsigned()).code() == StatusCode::OutOfRange);
+  test_assert(bvh.build(Huge{-1}).code() == StatusCode::InvalidArgument);
+  test_assert(bvh.refit(Huge{(int64_t(1) << 32) + 1}).code() == StatusCode::FailedPrecondition);
+  test_assert(bvh.size() == 1 && bvh.nodes().size() == 1);
+}
+
 void testOptions()
 {
   Boxes<float> src;
@@ -223,85 +264,6 @@ template <class S> void testDeterminism()
   test_assert(sameTree(serial, parallel));
 }
 
-void testRefit()
-{
-  Rand r(41);
-  const int n = 3000;
-  TriangleSource<float> src = triangles<float>(r, Layout::Uniform, n);
-  GeometryBvh<TriangleSource<float>> bvh;
-  BvhOptions opts;
-  opts.leafSize = 8;
-  test_assert(bvh.build(src, opts).ok());
-  const double before = bvh.bvh().cost();
-  test_assert(before > 1.0);
-  const Vector<int> order = bvh.bvh().order();
-
-  /* The same geometry: the same tree. */
-  Bvh<float> same;
-  test_assert(same.build(src, opts).ok());
-  test_assert(same.refit(src).ok() && sameTree(same, bvh.bvh()) && same.cost() == before);
-
-  /* Moved: the shape is kept, the bounds are tight again, and the cost grew. */
-  TriangleSource<float> moved = triangles<float>(r, Layout::Uniform, n);
-  test_assert(bvh.onInvalidate(GeometryChange::Positions, moved).ok());
-  test_assert(treeProblem(bvh.bvh(), moved, 8) == nullptr);
-  test_assert(memcmp(order.data(), bvh.bvh().order().data(), order.size() * sizeof(int)) == 0);
-  test_assert(bvh.bvh().cost() > before * 2);
-  Box3f all;
-  for (int i = 0; i < n; i++) {
-    all.include(moved.bounds(i));
-  }
-  const Box3f got = bvh.bvh().bounds();
-  test_assert(memcmp(&all, &got, sizeof(all)) == 0);
-  for (int k = 0; k < 200; k++) {
-    Ray ray;
-    ray.origin = r.vec(12);
-    ray.dir = moved.corner(r.below(n), 0) - ray.origin;
-    const bvh::RayQuery q(ray);
-    double limit = q.tMax, best = -1.0;
-    moved.rayRange(q, 0, n, limit, [&](int, double t, double, double, bool) {
-      best = t;
-      limit = t;
-      return true;
-    });
-    const RayHit h = bvh.rayClosest(ray);
-    test_assert(bool(h) == (best >= 0.0) && (!h || h.t == q.toRayT(best)));
-  }
-
-  /* Topology: a new tree. */
-  test_assert(
-      bvh.onInvalidate(GeometryChange::Topology | GeometryChange::Positions, moved).ok());
-  test_assert(bvh.bvh().cost() < before * 1.5 && treeProblem(bvh.bvh(), moved, 8) == nullptr);
-
-  /* Refused: another size, another set left out. onInvalidate builds instead. */
-  Boxes<float> some;
-  for (int i = 0; i < 100; i++) {
-    some.add(float(i), 0, 0, float(i) + 0.5f, 1, 1);
-  }
-  some.boxes[7] = Box3f();
-  Bvh<float> tree;
-  BvhOptions two;
-  two.leafSize = 2;
-  test_assert(tree.build(some, two).ok() && tree.skipped() == 1 && tree.refit(some).ok());
-  Bvh<float> copy = tree;
-  Boxes<float> other = some;
-  other.boxes[7] = other.boxes[6]; /* one more usable */
-  test_assert(tree.refit(other).code() == StatusCode::FailedPrecondition);
-  other.boxes[8] = Box3f(); /* the same number, another one */
-  test_assert(tree.refit(other).code() == StatusCode::FailedPrecondition);
-  other = some;
-  other.boxes[8].max[1] = std::numeric_limits<float>::infinity();
-  test_assert(tree.refit(other).code() == StatusCode::FailedPrecondition);
-  other = some;
-  other.add(0, 0, 0, 1, 1, 1);
-  test_assert(tree.refit(other).code() == StatusCode::FailedPrecondition);
-  test_assert(sameTree(tree, copy));
-
-  TriangleSource<float> fewer = triangles<float>(r, Layout::Clustered, 10);
-  test_assert(bvh.onInvalidate(GeometryChange::Positions, fewer).ok());
-  test_assert(bvh.bvh().size() == 10 && treeProblem(bvh.bvh(), fewer, 8) == nullptr);
-}
-
 void testFromWorker()
 {
   /* A build on a pool worker is serial, and the same. */
@@ -324,13 +286,13 @@ void testFromWorker()
 int main()
 {
   testOptions();
+  testSize();
   testExtremes<float>();
   testExtremes<double>();
   testDeterminism<float>();
   testDeterminism<double>();
   testScale<float>();
   testScale<double>();
-  testRefit();
   testFromWorker();
   return test_end();
 }

@@ -83,11 +83,20 @@ uint32_t rayTriangles(const RayQuery &q,
     if ((neg && pos) || det[k] == 0.0) {
       continue;
     }
-    const double t = out.t[k] / det[k];
-    if (t >= q.tMin && t <= limit) {
+    double lo[3], hi[3];
+    for (int axis = 0; axis < 3; axis++) {
+      const double a = double(coords[axis][first + k]), b = double(coords[3 + axis][first + k]);
+      const double c = double(coords[6 + axis][first + k]);
+      lo[axis] = std::fmin(a, std::fmin(b, c));
+      hi[axis] = std::fmax(a, std::fmax(b, c));
+    }
+    double t = out.t[k] / det[k];
+    if (q.keep(lo, hi, t) && t >= q.tMin && t <= limit) {
       out.t[k] = t;
       out.u[k] = ev[k] / det[k];
       out.v[k] = ew[k] / det[k];
+      /* dir . ((b - a) x (c - a)) is -det * dir[kz] (the axes are a right-handed cycle). */
+      out.back[k] = (det[k] < 0.0) == (q.dir[q.kz] > 0.0);
       hits |= 1u << k;
     }
   }
@@ -99,22 +108,29 @@ template uint32_t rayTriangles<float>(
 template uint32_t rayTriangles<double>(
     const RayQuery &, const double *const[9], int, int, double, TriangleBlockHits &);
 
-bool raySphere(
+/* The ray is taken relative to the solid: a point of it, in the world's coordinates, has their
+ * rounding. */
+static bool sphere(
     const RayQuery &q, const double3 &c, double r, double limit, double &t, bool &inside)
 {
-  if (!(r >= 0.0)) {
-    return false;
-  }
-  inside = distanceSq(q.at(q.tMin), c) <= r * r;
+  const double3 from = q.origin - c;
+  const double3 start = from + q.dir * q.tMin;
+  inside = dot(start, start) <= r * r;
   if (inside) {
     t = q.tMin;
     return q.tMin <= limit;
   }
   /* From the closest approach, not b^2 - ac: that cancels for far, small spheres. */
   const double speedSq = dot(q.dir, q.dir);
-  const double mid = dot(c - q.origin, q.dir) / speedSq;
-  const double3 miss = q.at(mid) - c;
+  const double mid = -dot(from, q.dir) / speedSq;
+  const double3 miss = from + q.dir * mid;
   return entry(mid, dot(miss, miss), speedSq, r, t) && t >= q.tMin && t <= limit;
+}
+
+bool raySphere(
+    const RayQuery &q, const double3 &c, double r, double limit, double &t, bool &inside)
+{
+  return r >= 0.0 && sphere(q, c, r, limit, t, inside);
 }
 
 bool rayCapsule(const RayQuery &q,
@@ -128,8 +144,9 @@ bool rayCapsule(const RayQuery &q,
   if (!(r >= 0.0)) {
     return false;
   }
-  const double3 start = q.at(q.tMin);
-  inside = distanceSq(start, closestOnSegment(start, a, b)) <= r * r;
+  const double3 from = q.origin - a, axis = b - a;
+  const double3 start = from + q.dir * q.tMin;
+  inside = distanceSq(start, closestOnSegment(start, double3(), axis)) <= r * r;
   if (inside) {
     t = q.tMin;
     return q.tMin <= limit;
@@ -139,15 +156,14 @@ bool rayCapsule(const RayQuery &q,
   t = limit;
   double s;
   bool in;
-  if (raySphere(q, a, r, t, s, in)) {
+  if (sphere(q, a, r, t, s, in)) {
     t = s;
     hit = true;
   }
-  if (raySphere(q, b, r, t, s, in)) {
+  if (sphere(q, b, r, t, s, in)) {
     t = s;
     hit = true;
   }
-  const double3 axis = b - a;
   const double len = std::sqrt(dot(axis, axis));
   if (!(len > 0.0) || !finite(len)) {
     return hit;
@@ -157,12 +173,12 @@ bool rayCapsule(const RayQuery &q,
   const double3 across = q.dir - n * dot(q.dir, n);
   const double speedSq = dot(across, across);
   if (speedSq > 0.0) {
-    const double mid = dot(a - q.origin, across) / speedSq;
-    double3 miss = q.at(mid) - a;
+    const double mid = -dot(from, across) / speedSq;
+    double3 miss = from + q.dir * mid;
     miss = miss - n * dot(miss, n);
-    if (entry(mid, dot(miss, miss), speedSq, r, s) && s >= q.tMin && s <= t) {
-      const double along = dot(q.at(s) - a, n);
-      if (along >= 0.0 && along <= len) {
+    if (entry(mid, dot(miss, miss), speedSq, r, s)) {
+      const double along = dot(from + q.dir * s, n);
+      if (along >= 0.0 && along <= len && s >= q.tMin && s <= t) {
         t = s;
         hit = true;
       }
@@ -174,7 +190,7 @@ bool rayCapsule(const RayQuery &q,
 bool rayBox(const RayQuery &q, const Box3d &box, double limit, double &t, bool &inside)
 {
   inside = box.contains(q.at(q.tMin));
-  return q.slab(box.min, box.max, limit, t);
+  return q.boxSlab(box.min, box.max, limit, t);
 }
 
 double3 closestOnSegment(const double3 &p, const double3 &a, const double3 &b)

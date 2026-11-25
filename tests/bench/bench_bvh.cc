@@ -181,12 +181,27 @@ template <class Src, class Make> int run(const Args &args, Make make)
   const Src src = make(args.count, 0.0), moved = make(args.count, 0.003);
   const Vector<Ray> coherent = coherentRays(args.queries), random = randomRays(args.queries);
   const Vector<Region> picks = regions(coherent, args.queries / 16);
+  /* Around what the random rays hit: what a brush or a snap asks for. */
+  Vector<double3> points;
+  {
+    GeometryBvh<Src> bvh;
+    if (!bvh.build(src).ok()) {
+      return 1;
+    }
+    Rand r(8);
+    for (int i = 0; i < int(random.size()) && int(points.size()) < args.queries / 16; i++) {
+      if (const RayHit h = bvh.rayClosest(random[i])) {
+        points.append(random[i].origin + random[i].dir * h.t + r.vec(0.02));
+      }
+    }
+  }
+  const double radius = args.count > 100000 ? 0.02 : 0.1;
   for (int leaf : args.leaves) {
     GeometryBvh<Src> bvh;
     BvhOptions opts;
     opts.leafSize = leaf;
     double build = 1e300, buildSerial = 1e300, refit = 1e300;
-    double tCoherent = 1e300, tRandom = 1e300, tRegion = 1e300;
+    double tCoherent = 1e300, tRandom = 1e300, tRegion = 1e300, tSphere = 1e300, tNearest = 1e300;
     uint64_t sum = 0, found = 0;
     for (int rep = 0; rep < args.reps; rep++) {
       opts.parallel = false;
@@ -228,9 +243,26 @@ template <class Src, class Make> int run(const Args &args, Make make)
         }
       }
       tRegion = std::fmin(tRegion, ms(t) * 1e6 / double(picks.size()));
+      t = Clock::now();
+      for (const double3 &p : points) {
+        const Status s = bvh.sphereOverlap(p, radius, [&](int) {
+          found++;
+          return true;
+        });
+        if (!s.ok()) {
+          return 1;
+        }
+      }
+      tSphere = std::fmin(tSphere, ms(t) * 1e6 / double(points.size()));
+      t = Clock::now();
+      for (const double3 &p : points) {
+        sum += uint64_t(bvh.nearest(p, 10.0).primitive + 1);
+      }
+      tNearest = std::fmin(tNearest, ms(t) * 1e6 / double(points.size()));
     }
     printf("{\"source\":\"%s\",\"count\":%d,\"leaf\":%d,\"buildMs\":%.4f,\"serialBuildMs\":%.4f,"
            "\"refitMs\":%.4f,\"coherentNs\":%.1f,\"randomNs\":%.1f,\"regionNs\":%.1f,"
+           "\"sphereNs\":%.1f,\"nearestNs\":%.1f,"
            "\"nodes\":%d,\"nodeBytes\":%.0f,\"cost\":%.3f,\"check\":%llu}\n",
            args.source,
            src.size(),
@@ -241,6 +273,8 @@ template <class Src, class Make> int run(const Args &args, Make make)
            tCoherent,
            tRandom,
            tRegion,
+           tSphere,
+           tNearest,
            int(bvh.bvh().nodes().size()),
            double(bvh.bvh().nodes().size() * sizeof(BvhNode<float>)),
            bvh.bvh().cost(),

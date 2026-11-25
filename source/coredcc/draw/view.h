@@ -1,7 +1,6 @@
 #pragma once
 
 #include "coredcc/base/status.h"
-#include "coredcc/bvh/geometry_bvh.h"
 #include "coredcc/bvh/ray.h"
 
 #include "litestl/math/transform.h"
@@ -33,7 +32,11 @@ struct View {
   double viewport[4] = {0, 0, 0, 0};
   /** World to view space, affine. */
   mat4d view;
-  /** View to clip space. The depth of a point may depend on its view z only. */
+  /**
+   * View to clip space. The depth of a point may depend on its view z only. Here as in `view`, an
+   * element that must be 0 may differ by rounding, as a general inverse leaves it: by 1e-6 of what
+   * is in its column. It then counts as 0.
+   */
   mat4d proj;
   DepthRange depth = DepthRange::ZeroToOne;
   /** The near plane has the largest depth, 1. */
@@ -58,6 +61,18 @@ struct View {
   double viewportAt(int32_t i) const;
   void putViewport(int32_t i, double value);
   void setConventions(int32_t depthRange, int32_t hand, int32_t upAxis);
+  int32_t depthRange() const
+  {
+    return int32_t(depth);
+  }
+  int32_t hand() const
+  {
+    return int32_t(handedness);
+  }
+  int32_t upAxis() const
+  {
+    return int32_t(up);
+  }
   static litestl::binding::types::Struct<View> *defineBindings();
 };
 
@@ -71,21 +86,32 @@ struct ViewPoint {
   double distance = 0.0;
   /** Perspective: on the eye's plane or behind it. */
   bool behind = false;
-  /** On the near plane or past it. A point that isn't can't be seen. */
+  /** Between the near and the far plane, or on them. It may be outside the viewport. */
   bool visible = false;
 
   static litestl::binding::types::Struct<ViewPoint> *defineBindings();
 };
 
-/** The half-spaces of a small square around a pixel: four sides and the near plane. */
+/** The half-spaces of a rectangle of the image: four sides, the near and the far plane. Without a
+ * far plane, the last one contains everything. Nothing cuts it off at the edge of the viewport. */
 struct ViewRegion {
-  static constexpr int kPlanes = 5;
+  static constexpr int kPlanes = 6;
+  static constexpr int kNear = 4, kFar = 5;
   BvhPlane planes[kPlanes];
+
+  /* For scripts: the plane's normal, then its `w`. 0 out of range. */
+  int32_t planeCount() const
+  {
+    return kPlanes;
+  }
+  double planeAt(int32_t plane, int32_t i) const;
+  static litestl::binding::types::Struct<ViewRegion> *defineBindings();
 };
 
 /**
- * Conversions between the world and the pixels of a valid View. Pixels are device pixels, y
- * down; radii and sizes are in logical pixels, which are `dpiScale` device pixels.
+ * Conversions between the world and the pixels of a valid View. Positions are in device pixels, y
+ * down; radii and sizes are in logical pixels, which are `dpiScale` device pixels, unless their
+ * name says otherwise.
  */
 class ViewMath {
  public:
@@ -108,16 +134,19 @@ class ViewMath {
   Result<double3> unproject(double x, double y, double depth) const;
   /**
    * Through a pixel, starting on the near plane, in the direction of increasing distance. The
-   * direction has unit length, so t is a world distance. In an orthographic view the near plane
-   * may be behind the eye.
+   * direction has unit length, so t is a world distance. It doesn't end at the far plane: its tMax
+   * is the largest there is. In an orthographic view the near plane may be behind the eye.
    */
   Ray rayFromPixel(double x, double y) const;
   /**
-   * Planes around every point that projects to within `radius` logical pixels of a pixel, in x
-   * and in y, and is past the near plane. The radius is at least half a device pixel. Each
-   * plane is moved out by 1e-12 of the size of its terms, so rounding doesn't exclude a point.
+   * Planes around every visible point that projects to within `radius` logical pixels of a pixel,
+   * in x and in y. The radius is at least half a device pixel. Each plane is moved out by 1e-12 of
+   * the size of its terms, so rounding doesn't exclude a point.
    */
   ViewRegion regionFromPixel(double x, double y, double radius) const;
+  /** The same for a rectangle between two opposite corners, in device pixels: at least half a pixel
+   * to each side of its middle. */
+  ViewRegion regionFromRect(double x0, double y0, double x1, double y1) const;
   /** The world length of a logical pixel at `p`, along the image. 0 when `p` is behind. */
   double pixelSizeAt(const double3 &p) const;
   /** The distance along the view direction from the near plane, in world units: negative
@@ -134,23 +163,35 @@ class ViewMath {
   {
     return nearPlane_;
   }
+  /** The same for the far plane. (0, 0, 0, 1) when it is at infinity, also for float matrices that
+   * can't be told from that. */
+  const double4 &farPlane() const
+  {
+    return farPlane_;
+  }
 
   /* For scripts. */
   Status unprojectTo(double x, double y, double depth, double3 &out) const;
   double3 rayOrigin(double x, double y) const;
   double3 rayDirection(double x, double y) const;
+  /** Row 0 to 2 and element 0 to 3 of pixelRows(), and the planes' elements. 0 out of range. */
+  double pixelRowAt(int32_t row, int32_t i) const;
+  double nearPlaneAt(int32_t i) const;
+  double farPlaneAt(int32_t i) const;
   static litestl::binding::types::Struct<ViewMath> *defineBindings();
 
  private:
   double4 unprojectToView(double x, double y, double depth) const;
+  /* Device pixels: the middle, and half of the size. */
+  ViewRegion regionAround(double x, double y, double halfW, double halfH) const;
 
   View view_;
   mat4d invView_, invProj_;
   /** Clip-space rows, in view space. */
   double4 clip_[4];
-  /** The near plane in view space. */
-  double4 nearView_;
-  double4 nearPlane_;
+  /** The near and the far plane in view space. */
+  double4 nearView_, farView_;
+  double4 nearPlane_, farPlane_;
   double4 pixelRows_[3];
   /** 1 / the length of nearPlane_'s normal. */
   double nearScale_ = 0.0;

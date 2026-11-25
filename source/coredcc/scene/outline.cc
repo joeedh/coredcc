@@ -119,7 +119,7 @@ double3 toward(const double3 &p, const double3 &v, double r)
 }
 
 /* A capsule, where `m.q + d >= 0`. */
-struct ClippedCapsule {
+struct CutCapsule {
   double3 a, b;
   double r;
   double3 m;
@@ -183,6 +183,44 @@ struct ClippedCapsule {
   }
 };
 
+/* A capsule between the near and the far plane. */
+struct ClippedCapsule {
+  CutCapsule front, back;
+
+  ClippedCapsule(const ScreenMap &map, const double3 &a, const double3 &b, double r)
+      : front{a, b, r, xyz(map.front), map.front[3]}, back{a, b, r, xyz(map.back), map.back[3]}
+  {
+  }
+
+  /* The largest point before one of the planes is the answer if it is also before the other. If
+   * neither is, both values are the same, since the planes are parallel and something is between
+   * them: so is anything on the line between the two points. */
+  bool support(const double3 &g, double3 &best) const
+  {
+    if (!front.support(g, best)) {
+      return false;
+    }
+    const double past = back.side(best);
+    if (past >= 0.0) {
+      return true;
+    }
+    double3 other;
+    if (!back.support(g, other)) {
+      return false;
+    }
+    const double before = front.side(other);
+    if (before >= 0.0) {
+      best = other;
+      return true;
+    }
+    /* In the middle of what of that line is between the planes. */
+    const double in = front.side(best), over = back.side(other);
+    const double t0 = past / (past - over), t1 = in / (in - before);
+    best = best + (other - best) * (0.5 * (t0 + t1));
+    return true;
+  }
+};
+
 bool project(const ScreenMap &map, const double3 &q, Corner &out)
 {
   out.q = q;
@@ -232,10 +270,10 @@ bool closestOnCapsule(const ScreenMap &map,
                       double limit,
                       ScreenPoint &out)
 {
-  const ClippedCapsule solid{a, b, r, xyz(map.front), map.front[3]};
+  const ClippedCapsule solid(map, a, b, r);
   double3 first;
   Corner c[3];
-  if (!solid.support(solid.m, first) || !project(map, first, c[0])) {
+  if (!solid.support(solid.front.m, first) || !project(map, first, c[0])) {
     return false;
   }
   Nearest n = nearestOnPoint(c, 0);
@@ -278,61 +316,75 @@ bool closestOnCapsule(const ScreenMap &map,
 
 namespace {
 
-/* Not divided yet. */
+/* Not divided yet. `side` is front or back: what is cut next. */
 struct Homogeneous {
-  double x, y, w, front;
+  double x, y, w;
+  double side[2];
   double3 q;
 };
 
 /* From the visible end, whichever triangle the edge is of, so that shared edges stay shared. */
-Homogeneous onNearPlane(const Homogeneous &in, const Homogeneous &outside)
+Homogeneous onPlane(const Homogeneous &in, const Homogeneous &outside, int plane)
 {
-  const double t = in.front / (in.front - outside.front);
+  const double t = in.side[plane] / (in.side[plane] - outside.side[plane]);
   const auto mix = [t](double a, double b) { return a + (b - a) * t; };
-  return {mix(in.x, outside.x),
-          mix(in.y, outside.y),
-          mix(in.w, outside.w),
-          0.0,
-          in.q + (outside.q - in.q) * t};
+  Homogeneous r{mix(in.x, outside.x),
+                mix(in.y, outside.y),
+                mix(in.w, outside.w),
+                {mix(in.side[0], outside.side[0]), mix(in.side[1], outside.side[1])},
+                in.q + (outside.q - in.q) * t};
+  r.side[plane] = 0.0;
+  return r;
+}
+
+/* Cuts a point, a segment or a closed polygon. Returns how many corners there are now. */
+int cut(const Homogeneous *from, int count, int plane, Homogeneous *to)
+{
+  int n = 0;
+  for (int i = 0; i < count; i++) {
+    const Homogeneous &p = from[i], &next = from[(i + 1) % count];
+    const bool in = p.side[plane] >= 0.0, nextIn = next.side[plane] >= 0.0;
+    if (in) {
+      to[n++] = p;
+    }
+    /* A segment has one edge. */
+    if (in != nextIn && (count > 2 || i == 0)) {
+      to[n++] = in ? onPlane(p, next, plane) : onPlane(next, p, plane);
+    }
+  }
+  return n;
 }
 
 } // namespace
 
 bool closestOnCorners(const ScreenMap &map, const double3 *corners, int count, ScreenPoint &out)
 {
-  Homogeneous h[3];
+  Homogeneous h[5], cutOnce[5];
   for (int i = 0; i < count; i++) {
     const double3 &q = corners[i];
-    h[i] = {dotPoint(map.x, q), dotPoint(map.y, q), dotPoint(map.w, q), dotPoint(map.front, q), q};
+    h[i] = {dotPoint(map.x, q),
+            dotPoint(map.y, q),
+            dotPoint(map.w, q),
+            {dotPoint(map.front, q), dotPoint(map.back, q)},
+            q};
   }
-  Corner c[4];
-  int n = 0;
-  const auto add = [&](const Homogeneous &p) {
-    c[n++] = {p.x / p.w, p.y / p.w, p.w, p.q};
-    return p.w > 0.0 && bvh::finite(c[n - 1].x) && bvh::finite(c[n - 1].y);
-  };
-  /* A segment has one edge, a triangle three. */
-  for (int i = 0; i < count; i++) {
-    const Homogeneous &p = h[i], &next = h[(i + 1) % count];
-    const bool in = p.front >= 0.0, nextIn = next.front >= 0.0;
-    if (in && !add(p)) {
-      return false;
-    }
-    if (in != nextIn && (count == 3 || i == 0) &&
-        !add(in ? onNearPlane(p, next) : onNearPlane(next, p)))
-    {
+  /* A triangle that has been cut to a point or a line is as good as one. */
+  int n = cut(h, count, 0, cutOnce);
+  n = cut(cutOnce, n, 1, h);
+  Corner c[5];
+  for (int i = 0; i < n; i++) {
+    c[i] = {h[i].x / h[i].w, h[i].y / h[i].w, h[i].w, h[i].q};
+    if (!(h[i].w > 0.0) || !bvh::finite(c[i].x) || !bvh::finite(c[i].y)) {
       return false;
     }
   }
   if (n == 0) {
     return false;
   }
-  Nearest best = n == 1 ? nearestOnPoint(c, 0) :
-                 n == 2 ? nearestOnSegment(c, 0, 1) :
-                          nearestOnTriangle(c, 0, 1, 2);
-  if (n == 4) {
-    const Nearest other = nearestOnTriangle(c, 0, 2, 3);
-    best = other.distance < best.distance ? other : best;
+  Nearest best = n == 1 ? nearestOnPoint(c, 0) : nearestOnSegment(c, 0, 1);
+  for (int i = 2; i < n; i++) {
+    const Nearest other = nearestOnTriangle(c, 0, i - 1, i);
+    best = i == 2 || other.distance < best.distance ? other : best;
   }
   out.distance = best.distance > kCoveredPixels ? best.distance : 0.0;
   out.point = unprojected(c, best);

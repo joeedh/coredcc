@@ -61,7 +61,7 @@ function runBench(exe, source, count, leaves, extra = []) {
   return r.stdout.trim().split('\n').map((line) => JSON.parse(line))
 }
 
-const KINDS = ['coherentNs', 'randomNs', 'regionNs']
+const KINDS = ['coherentNs', 'randomNs', 'regionNs', 'sphereNs', 'nearestNs']
 const TOLERANCE = 1.1
 
 /**
@@ -101,6 +101,8 @@ const COLUMNS = [
   ['coherent ray ns', (r) => r.coherentNs.toFixed(0)],
   ['random ray ns', (r) => r.randomNs.toFixed(0)],
   ['region ns', (r) => r.regionNs.toFixed(0)],
+  ['sphere ns', (r) => r.sphereNs.toFixed(0)],
+  ['nearest ns', (r) => r.nearestNs.toFixed(0)],
   ['build ms', (r) => r.buildMs.toFixed(1)],
   ['serial build ms', (r) => r.serialBuildMs.toFixed(1)],
   ['refit ms', (r) => r.refitMs.toFixed(1)],
@@ -128,8 +130,8 @@ function report(main, confirm, d) {
     '',
     `- **Leaf size ${d.winner.leaf}.** The default is ${DEFAULT_LEAF}.`,
     '- The rule: the largest size whose worst slowdown is at most 10%. A slowdown is against the best',
-    '  size, for one query kind (coherent and random closest ray, region) on one data set; nothing is',
-    '  averaged.',
+    '  size, for one query kind (coherent and random closest ray, region, sphere overlap, nearest)',
+    '  on one data set; nothing is averaged.',
     ...(d.within ? [] : ['- **No size is within 10% everywhere.** This is the one with the smallest worst slowdown.']),
     ...(d.winner.leaf === LEAVES[0] ? ['- **It is the smallest size measured,** so a smaller one could be better.'] : []),
     ...(opts.quick ? ['- **A smoke test: too few queries to mean anything.**'] : []),

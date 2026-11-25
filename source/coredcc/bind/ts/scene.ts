@@ -13,6 +13,7 @@ import type {Status} from 'coredcc-gen/coredcc/Status'
 import {StatusCode} from 'coredcc-gen/coredcc/StatusCode'
 import type {TransformDelta as BoundDelta} from 'coredcc-gen/coredcc/TransformDelta'
 import type {TransformState as BoundState} from 'coredcc-gen/coredcc/TransformState'
+import type {PickOptions as BoundPickOptions} from 'coredcc-gen/coredcc/PickOptions'
 import type {View as BoundView} from 'coredcc-gen/coredcc/View'
 import {internal, Ref, toJs, type Writable} from './index'
 
@@ -241,6 +242,30 @@ export interface PickedObject {
   distance: number
   depth: number
   point: number[]
+  /** -1 for none. */
+  instance: number
+  /** Of unit length, or 0 where there is none. */
+  normal: number[]
+  /** Where `point` is on a triangle or a segment. */
+  u: number
+  v: number
+  backFacing: boolean
+  /** A point, a segment, or a solid that is thin on the screen. */
+  thin: boolean
+}
+
+/** scene/pick.h's PickOptions. Sizes are in logical pixels. */
+export interface PickOptions {
+  radius?: number
+  /** A bit for each element domain that is wanted. All of them, if it is left out. */
+  domains?: number
+  shapeRadius?: number
+  /** 0 for all. */
+  maxHits?: number
+  everyDomain?: boolean
+  occlusion?: boolean
+  thinRadius?: number
+  slope?: number
 }
 
 function withView<R>(spec: ViewSpec, fn: (v: BoundView) => R): R {
@@ -261,28 +286,51 @@ function withView<R>(spec: ViewSpec, fn: (v: BoundView) => R): R {
   }
 }
 
-/** The objects within `radius` logical pixels of a device pixel, the best first. Evaluates the
- * scene. Hidden and unselectable objects can't be picked. */
-export function pick(ctx: Context, view: ViewSpec, x: number, y: number, radius: number): PickedObject[] {
-  return withView(view, (v) =>
-    internal.take(cd.pick(ctx, v, x, y, radius), (list) => {
-      const out: PickedObject[] = []
-      for (let i = 0; i < list.size(); i++) {
-        const p = list.at(i)
-        try {
-          out.push({
-            object: new Ref(p.object),
-            domain: p.domain,
-            element: p.element,
-            distance: p.distance,
-            depth: p.depth,
-            point: readVec3(p.point),
-          })
-        } finally {
-          p[Symbol.dispose]()
-        }
+function withPickOptions<R>(spec: PickOptions, fn: (o: BoundPickOptions) => R): R {
+  const o = getBindingBackend().construct('coredcc::PickOptions') as BoundPickOptions
+  try {
+    /* Not Object.assign: it would take any property the spec has. */
+    o.radius = spec.radius ?? o.radius
+    o.domains = spec.domains ?? o.domains
+    o.shapeRadius = spec.shapeRadius ?? o.shapeRadius
+    o.maxHits = spec.maxHits ?? o.maxHits
+    o.everyDomain = spec.everyDomain ?? o.everyDomain
+    o.occlusion = spec.occlusion ?? o.occlusion
+    o.thinRadius = spec.thinRadius ?? o.thinRadius
+    o.slope = spec.slope ?? o.slope
+    return fn(o)
+  } finally {
+    o[Symbol.dispose]()
+  }
+}
+
+/** The objects at or near a device pixel, the best first (scene/pick_scene.h has the order).
+ * Evaluates the scene. Hidden and unselectable objects can't be picked. */
+export function pick(ctx: Context, view: ViewSpec, x: number, y: number, options: PickOptions = {}): PickedObject[] {
+  const picked = withView(view, (v) => withPickOptions(options, (o) => cd.pick(ctx, v, x, y, o)))
+  return internal.take(picked, (list) => {
+    const out: PickedObject[] = []
+    for (let i = 0; i < list.size(); i++) {
+      const p = list.at(i)
+      try {
+        out.push({
+          object: new Ref(p.object),
+          domain: p.domain,
+          element: p.element,
+          distance: p.distance,
+          depth: p.depth,
+          point: readVec3(p.point),
+          instance: p.instance,
+          normal: readVec3(p.normal),
+          u: p.u,
+          v: p.v,
+          backFacing: p.backFacing,
+          thin: p.thin,
+        })
+      } finally {
+        p[Symbol.dispose]()
       }
-      return out
-    })
-  )
+    }
+    return out
+  })
 }

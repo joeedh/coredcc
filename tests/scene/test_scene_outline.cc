@@ -12,11 +12,13 @@ namespace {
 
 struct Tally {
   int shapes = 0, covered = 0, hidden = 0, crossing = 0, eye = 0, behind = 0, undecided = 0;
+  int past = 0, cutFar = 0, both = 0;
 
   void print(const char *name) const
   {
     printf("%s: %d, %d covered, %d hidden, %d across the near plane, %d across the eye plane, "
-           "%d ends behind the near plane, %d undecided\n",
+           "%d ends behind the near plane, %d undecided; %d past the far plane, %d across it, %d across "
+           "both\n",
            name,
            shapes,
            covered,
@@ -24,7 +26,10 @@ struct Tally {
            crossing,
            eye,
            behind,
-           undecided);
+           undecided,
+           past,
+           cutFar,
+           both);
   }
 };
 
@@ -47,25 +52,33 @@ void check(const ScreenMap &map,
            Tally &tally)
 {
   double front = -std::numeric_limits<double>::infinity(), back = -front, w = back;
+  double before = front, after = back; /* of the far plane */
   double size = std::fabs(map.front[3]);
   for (const double3 &q : ends) {
     front = std::fmax(front, dotPoint(map.front, q) + r * normalLength(map.front));
     back = std::fmin(back, dotPoint(map.front, q) - r * normalLength(map.front));
     w = std::fmin(w, dotPoint(map.w, q) - r * normalLength(map.w));
     size = std::fmax(size, std::fabs(dotPoint(map.front, q)));
+    before = std::fmax(before, dotPoint(map.back, q) + r * normalLength(map.back));
+    after = std::fmin(after, dotPoint(map.back, q) - r * normalLength(map.back));
   }
   tally.shapes++;
-  if (std::fabs(front) < 1e-9 * (1.0 + size)) {
+  const double slack = 1e-9 * (1.0 + size);
+  if (std::fabs(front) < slack || std::fabs(before) < slack) {
     tally.undecided++;
     return;
   }
+  const bool there = front > 0.0 && before > 0.0;
   tally.hidden += front < 0.0;
+  tally.past += before < 0.0;
+  tally.cutFar += before > 0.0 && after < 0.0;
+  tally.both += before > 0.0 && after < 0.0 && front > 0.0 && back < 0.0;
   tally.crossing += front > 0.0 && back < 0.0;
   tally.eye += front > 0.0 && w < 0.0;
   for (const double3 &q : ends) {
     tally.behind += front > 0.0 && dotPoint(map.front, q) < 0.0;
   }
-  if (!expect(found == (front > 0.0), "found, or not")) {
+  if (!expect(found == there, "found, or not")) {
     return;
   }
   if (!found) {
@@ -152,6 +165,7 @@ void testCapsules()
   tally.print("capsules");
   test_assert(tally.covered > count / 20 && tally.crossing > count / 20);
   test_assert(tally.eye > count / 50 && tally.hidden > count / 20 && tally.undecided < count / 50);
+  test_assert(tally.past > count / 50 && tally.cutFar > count / 100 && tally.both > count / 500);
 }
 
 /* Spheres and capsules on a grid of pixels around them, from 1 to 100 pixels large. */
@@ -212,10 +226,11 @@ void testCorners()
   tally.print("corners");
   test_assert(tally.covered > count / 20 && tally.crossing > count / 20);
   test_assert(tally.eye > count / 50 && tally.hidden > count / 20 && tally.undecided < count / 50);
+  test_assert(tally.past > count / 50 && tally.cutFar > count / 100 && tally.both > count / 500);
 }
 
 /* Cursors on the shared edges and vertices of a fan are covered by a triangle of it, whether the
- * near plane cuts the fan or not. */
+ * near or the far plane cuts the fan or not. */
 void testWatertight()
 {
   Rand r(13);
@@ -225,6 +240,7 @@ void testWatertight()
     c.ortho = r.coin();
     c.zNear = c.ortho ? r.range(-1.0, 1.0) : 0.01;
     c.eye = double3(0.0, 0.0, r.range(0.0, 3.0));
+    c.zFar = r.coin() ? 1000.0 : c.zNear + r.range(0.5, 4.0);
     const ViewMath view = viewOf(c);
     const mat4d world = solve::affine(randomLinear(r, int(r.below(3))), r.vec(0.5));
     const int n = 5;
@@ -246,7 +262,7 @@ void testWatertight()
       const double3 t[3] = {hub, rim[k], rim[(k + 1) % n]};
       ScreenPoint p;
       covered |= detail::closestOnCorners(map, t, 3, p) && p.distance == 0.0;
-      crosses |= dotPoint(map.front, rim[k]) < 0.0;
+      crosses |= dotPoint(map.front, rim[k]) < 0.0 || dotPoint(map.back, rim[k]) < 0.0;
     }
     expect(covered, "an edge leaks");
     (crosses ? cut : whole)++;

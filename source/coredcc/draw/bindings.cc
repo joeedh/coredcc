@@ -26,6 +26,9 @@ lbt::Struct<View> *View::defineBindings()
     BIND_STRUCT_METHOD(st, viewportAt, MARGS("i"));
     BIND_STRUCT_METHOD(st, putViewport, MARGS("i", "value"));
     BIND_STRUCT_METHOD(st, setConventions, MARGS("depthRange", "hand", "upAxis"));
+    BIND_STRUCT_METHOD(st, depthRange, MARGS());
+    BIND_STRUCT_METHOD(st, hand, MARGS());
+    BIND_STRUCT_METHOD(st, upAxis, MARGS());
     BIND_STRUCT_METHOD(st, validate, MARGS());
   }
   return st;
@@ -49,6 +52,20 @@ lbt::Struct<ViewPoint> *ViewPoint::defineBindings()
   return st;
 }
 
+lbt::Struct<ViewRegion> *ViewRegion::defineBindings()
+{
+  static lbt::Struct<ViewRegion> *st = nullptr;
+  if (!st) {
+    litestl::alloc::PermanentGuard guard;
+    st = new lbt::Struct<ViewRegion>("coredcc::ViewRegion", sizeof(ViewRegion));
+    BIND_STRUCT_DEFAULT_CONSTRUCTOR(st);
+    BIND_STRUCT_COPY_CONSTRUCTOR(st);
+    BIND_STRUCT_METHOD(st, planeCount, MARGS());
+    BIND_STRUCT_METHOD(st, planeAt, MARGS("plane", "i"));
+  }
+  return st;
+}
+
 lbt::Struct<ViewMath> *ViewMath::defineBindings()
 {
   static lbt::Struct<ViewMath> *st = nullptr;
@@ -63,6 +80,11 @@ lbt::Struct<ViewMath> *ViewMath::defineBindings()
     BIND_STRUCT_METHOD(st, unprojectTo, MARGS("x", "y", "depth", "out"));
     BIND_STRUCT_METHOD(st, rayOrigin, MARGS("x", "y"));
     BIND_STRUCT_METHOD(st, rayDirection, MARGS("x", "y"));
+    BIND_STRUCT_METHOD(st, regionFromPixel, MARGS("x", "y", "radius"));
+    BIND_STRUCT_METHOD(st, regionFromRect, MARGS("x0", "y0", "x1", "y1"));
+    BIND_STRUCT_METHOD(st, pixelRowAt, MARGS("row", "i"));
+    BIND_STRUCT_METHOD(st, nearPlaneAt, MARGS("i"));
+    BIND_STRUCT_METHOD(st, farPlaneAt, MARGS("i"));
     BIND_STRUCT_METHOD(st, pixelSizeAt, MARGS("p"));
     BIND_STRUCT_METHOD(st, viewDistance, MARGS("p"));
   }

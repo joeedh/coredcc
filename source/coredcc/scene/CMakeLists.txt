@@ -7,10 +7,14 @@ coredcc_library(coredcc_scene
     fbx.cc
     matrix.cc
     membership_commands.cc
+    nearest.cc
     object.cc
     object_changes.cc
     outline.cc
     pick.cc
+    pick_filter.cc
+    pick_scene.cc
+    query_bindings.cc
     scene.cc
     scene_bvh.cc
     solve.cc

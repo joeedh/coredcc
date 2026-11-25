@@ -24,6 +24,13 @@ test_init;
 
 namespace {
 
+PickOptions near(double radius)
+{
+  PickOptions o;
+  o.radius = radius;
+  return o;
+}
+
 /* The "JS object" of a model for channels `radius` and `angle`: the location is the polar point
  * in the plane of x and y. */
 struct Polar {
@@ -363,7 +370,7 @@ void testGates()
           sc::blockIdText(ctx, name).status,
           sc::evaluateScene(ctx),
           sc::worldMatrix(ctx, name).status,
-          sc::pick(ctx, viewOfXy(), 50, 50, 5).status,
+          sc::pick(ctx, viewOfXy(), 50, 50, near(5)).status,
           sc::getValue(ctx, "scene.time").status,
           sc::setValue(ctx, "scene.time", sc::makeFloat(1)),
           sc::writeValue(ctx, "scene.time", sc::makeFloat(1)),
@@ -416,7 +423,7 @@ void testCommandSlots()
       seen.push_back(sc::blockIdText(ctx, name).status);
       seen.push_back(sc::evaluateScene(ctx));
       seen.push_back(sc::worldMatrix(ctx, name).status);
-      seen.push_back(sc::pick(ctx, viewOfXy(), 50, 50, 5).status);
+      seen.push_back(sc::pick(ctx, viewOfXy(), 50, 50, near(5)).status);
     };
     Obj command;
     command.methods["canRun"] = [&](void **, void *ret, string *) {
@@ -517,7 +524,7 @@ void testFacades()
   must(sc::setScene(ctx, ""));
   test_assert(!ctx.scene());
   test_assert(isError(sc::evaluateScene(ctx), StatusCode::NotFound));
-  test_assert(isError(sc::pick(ctx, viewOfXy(), 50, 50, 5).status,
+  test_assert(isError(sc::pick(ctx, viewOfXy(), 50, 50, near(5)).status,
                       StatusCode::FailedPrecondition,
                       "no scene"));
   must(sc::setScene(ctx, str(textOf(d, first))));
@@ -551,7 +558,7 @@ void testPick()
     }
     d.obj(hidden).flags = ObjectFlags::Hidden;
     /* Pixel (65, 50) is (3, 0); no evaluation was made. */
-    sc::PickResult r = sc::pick(ctx, viewOfXy(), 65, 50, 2);
+    sc::PickResult r = sc::pick(ctx, viewOfXy(), 65, 50, near(2));
     test_assert(r.status.ok() && r.value.size() == 2);
     test_assert(isText(r.value.at(0).object, textOf(d, high)));
     test_assert(isText(r.value.at(1).object, textOf(d, low)));
@@ -560,20 +567,20 @@ void testPick()
     test_assert(r.value.at(2).object.size() == 0 && r.value.at(-1).domain == -1);
     /* It evaluates. */
     put(d.obj(high).channels, trs::kLocation, double3(-5, 0, 0));
-    r = sc::pick(ctx, viewOfXy(), 65, 50, 2);
+    r = sc::pick(ctx, viewOfXy(), 65, 50, near(2));
     test_assert(r.status.ok() && r.value.size() == 1);
     test_assert(isText(r.value.at(0).object, textOf(d, low)));
 
     View bad = viewOfXy();
     bad.viewport[2] = 0;
-    test_assert(sc::pick(ctx, bad, 65, 50, 2).status.code() == StatusCode::InvalidArgument);
+    test_assert(sc::pick(ctx, bad, 65, 50, near(2)).status.code() == StatusCode::InvalidArgument);
 
     /* A model that throws doesn't keep the others from being found. */
     must(registerPolar(d, host, model, "js.polar"));
     d.obj(off).setTransformType("js.polar");
     d.obj(off).channels = d.rt.ext<TransformRegistry>().find("js.polar")->defaults();
     model.throwEvaluate = true;
-    r = sc::pick(ctx, viewOfXy(), 65, 50, 2);
+    r = sc::pick(ctx, viewOfXy(), 65, 50, near(2));
     test_assert(isError(r.status, StatusCode::Internal, "no state") && !d.rt.hasStickyError());
     test_assert(r.value.size() == 1 && isText(r.value.at(0).object, textOf(d, low)));
     model.throwEvaluate = false;
@@ -585,11 +592,11 @@ void testPick()
     d.host(host2).onRead = [&](ObjectInfo &info) {
       info.parent = d.idOf(flip++ % 2 ? low : high);
     };
-    r = sc::pick(ctx, viewOfXy(), 65, 50, 2);
+    r = sc::pick(ctx, viewOfXy(), 65, 50, near(2));
     test_assert(isError(r.status, StatusCode::FailedPrecondition) && r.value.size() == 0);
     d.host(host2).onRead = nullptr;
     d.rt.setStickyError(Status::error(StatusCode::Internal, "earlier"));
-    r = sc::pick(ctx, viewOfXy(), 65, 50, 2);
+    r = sc::pick(ctx, viewOfXy(), 65, 50, near(2));
     test_assert(isError(r.status, StatusCode::FailedPrecondition) && r.value.size() == 0);
     test_assert(!strcmp(d.rt.takeStickyError().message(), "earlier"));
   }

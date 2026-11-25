@@ -1,7 +1,7 @@
 /* evaluateScene on many native objects, each with a data block that has bounds. Not a test: build
  * the bench_scene target (release) and run it on an idle machine.
  *
- *   bench_scene [--count N] [--reps N]
+ *   bench_scene [--count N] [--reps N] [--leaf N]
  *
  * One line per case: the best, the median and the worst of the repetitions, in ms. The targets
  * (P3's exit criteria) are for 100,000 objects, and include what evaluateScene does to the
@@ -10,7 +10,8 @@
 #include "coredcc/api/resolve.h"
 #include "coredcc/lib/provider.h"
 #include "coredcc/scene/builtins.h"
-#include "coredcc/scene/pick.h"
+#include "coredcc/scene/capabilities.h"
+#include "coredcc/scene/pick_scene.h"
 #include "coredcc/scene/scene.h"
 
 #include "litestl/util/alloc.h"
@@ -39,16 +40,13 @@ struct Shape {
   {
     return 1;
   }
-  Vector<int32_t> closestElements(const double3 &, double, int32_t) const
-  {
-    return Vector<int32_t>();
-  }
+  void closestElements(const NearQuery &, NearSink &) const {}
   static lbt::Struct<Shape> *defineBindings()
   {
     auto *st = new lbt::Struct<Shape>("bench::Shape", sizeof(Shape));
     BIND_STRUCT_METHOD(st, localBounds, MARGS());
     BIND_STRUCT_METHOD(st, domains, MARGS());
-    BIND_STRUCT_METHOD(st, closestElements, MARGS("co", "radius", "domain"));
+    BIND_STRUCT_METHOD(st, closestElements, MARGS("query", "sink"));
     return st;
   }
 };
@@ -108,10 +106,13 @@ template <class Before, class Fn> void measure(const char *name, Before &&before
 
 int main(int argc, char **argv)
 {
-  int count = 100000;
+  int count = 100000, leaf = 0;
   for (int i = 1; i + 1 < argc; i += 2) {
     if (!strcmp(argv[i], "--count")) {
       count = std::max(atoi(argv[i + 1]), 2);
+    }
+    else if (!strcmp(argv[i], "--leaf")) {
+      leaf = atoi(argv[i + 1]);
     }
     else if (!strcmp(argv[i], "--reps")) {
       g_reps = std::max(atoi(argv[i + 1]), 1);
@@ -120,6 +121,9 @@ int main(int argc, char **argv)
 
   Runtime rt;
   must(registerSceneTypes(rt));
+  if (leaf > 0) {
+    rt.ext<SceneSettings>().bvh.leafSize = leaf;
+  }
   must(registerImpl<BlockProvider, ShapeProvider>(rt, "bench.Shape#provider"));
   must(registerImpl<Spatial, Shape>(rt, "bench.Shape"));
   Result<Owned<BlockProvider>> provider = own<BlockProvider>(
@@ -202,6 +206,26 @@ int main(int argc, char **argv)
 
   const SceneBvh::Counters &n = scene.bvh().counters();
   printf("BVH: %d builds, %d refits\n", n.builds, n.refits);
+  /* Objects, at 1,000 places. */
+  Vector<BlockHandle> found;
+  size_t sum = 0;
+  const auto place = [](int k) { return double3(k * 7 % 317, k * 13 % 315, g_reps - 1); };
+  measure("objects on 1000 rays", nothing, [&] {
+    for (int k = 0; k < 1000; k++) {
+      Ray ray;
+      ray.origin = place(k) + double3(0.0, 0.0, 200.0);
+      ray.dir = double3(0.1, 0.05, -1.0);
+      must(scene.bvh().objectsOnRay(ray, found));
+      sum += found.size();
+    }
+  });
+  measure("objects near 1000 points", nothing, [&] {
+    for (int k = 0; k < 1000; k++) {
+      must(scene.bvh().objectsNear(place(k), 3.0, found));
+      sum += found.size();
+    }
+  });
+  printf("  %d objects\n", int(sum / size_t(g_reps)));
   View v;
   v.viewport[2] = 1920.0;
   v.viewport[3] = 1080.0;
@@ -215,7 +239,9 @@ int main(int argc, char **argv)
     size_t found = 0;
     const std::string name = "pick, radius " + std::to_string(int(radius));
     measure(name.c_str(), nothing, [&] {
-      must(pickScene(ctx, *sceneBlock, view, 960.0, 540.0, radius, {}, hits));
+      PickOptions options;
+      options.radius = radius;
+      must(pickScene(ctx, *sceneBlock, view, 960.0, 540.0, options, {}, hits));
       found = hits.size();
     });
     printf("  %d objects\n", int(found));

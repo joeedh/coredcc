@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <memory>
 
 #if defined(__EMSCRIPTEN_PTHREADS__)
@@ -101,6 +102,9 @@ struct Binning {
 /** Half the surface area of a box whose extents are multiplied by `scale` / 2. */
 template <class S> double scaledArea(const Box3<S> &b, double scale)
 {
+  if (b.empty()) {
+    return 0.0;
+  }
   double d[3];
   for (int a = 0; a < 3; a++) {
     d[a] = (0.5 * double(b.max[a]) - 0.5 * double(b.min[a])) * scale;
@@ -461,25 +465,85 @@ Status buildTree(Vector<PrimBox<S>> &prims, const BvhOptions &opts, Vector<BvhNo
   return Status();
 }
 
+namespace {
+
+template <class S> Box3<S> boxOf(const BvhNode<S> &n)
+{
+  Box3<S> b;
+  for (int a = 0; a < 3; a++) {
+    b.min[a] = n.min[a];
+    b.max[a] = n.max[a];
+  }
+  return b;
+}
+
+/* The square root of an eighth of the surface area, without overflow. */
+template <class S> double sizeOf(const BvhNode<S> &n)
+{
+  const Box3<S> box = boxOf(n); /* if it is empty, `big` stays 0 */
+  double d[3], big = 0.0;
+  for (int a = 0; a < 3; a++) {
+    d[a] = 0.5 * double(box.max[a]) - 0.5 * double(box.min[a]);
+    big = d[a] > big ? d[a] : big;
+  }
+  if (!(big > 0.0)) {
+    return 0.0;
+  }
+  for (double &x : d) {
+    x /= big;
+  }
+  return big * std::sqrt(d[0] * d[1] + d[1] * d[2] + d[2] * d[0]);
+}
+
+/* A node counts as at most this much larger: one that covers the scene now is bad, but how far
+ * away the thing is that made it so doesn't matter. */
+constexpr double kMaxGrowth = 8.0;
+/* Nodes smaller than this, relative to their parents, count as this large: points and flat boxes. */
+constexpr double kSmallNode = 1e-6;
+
+} // namespace
+
+template <class S> Vector<double> nodeSizes(const Vector<BvhNode<S>> &nodes)
+{
+  Vector<double> sizes;
+  sizes.resize(nodes.size());
+  for (int i = 0; i < int(nodes.size()); i++) {
+    sizes[i] = sizeOf(nodes[i]);
+  }
+  return sizes;
+}
+
+template <class S>
+double treeGrowth(const Vector<BvhNode<S>> &nodes, const Vector<double> &built)
+{
+  if (nodes.size() == 0) {
+    return 1.0;
+  }
+  const auto term = [&](int i, int parent) {
+    const double was = (std::max)(built[i], built[parent] * kSmallNode), now = sizeOf(nodes[i]);
+    const double grown = now <= was ? 1.0 : was > 0.0 ? now / was : kMaxGrowth;
+    return (std::min)(grown * grown, kMaxGrowth);
+  };
+  double sum = term(0, 0);
+  for (int i = 0; i < int(nodes.size()); i++) {
+    if (nodes[i].count == 0) {
+      sum += term(i + 1, i) + term(int(nodes[i].rightOrFirst), i);
+    }
+  }
+  return sum / double(nodes.size());
+}
+
 template <class S> double treeCost(const Vector<BvhNode<S>> &nodes)
 {
   if (nodes.size() == 0) {
     return 0.0;
   }
-  const auto box = [](const BvhNode<S> &n) {
-    Box3<S> b;
-    for (int a = 0; a < 3; a++) {
-      b.min[a] = n.min[a];
-      b.max[a] = n.max[a];
-    }
-    return b;
-  };
-  const double scale = areaScale(box(nodes[0]));
-  const double root = finite(scale) ? scaledArea(box(nodes[0]), scale) : 0.0;
+  const double scale = areaScale(boxOf(nodes[0]));
+  const double root = finite(scale) ? scaledArea(boxOf(nodes[0]), scale) : 0.0;
   double cost = 0.0;
   for (const BvhNode<S> &n : nodes) {
     /* A root without area (one point, or a line): every node counts as if always hit. */
-    const double p = root > 0.0 ? scaledArea(box(n), scale) / root : 1.0;
+    const double p = root > 0.0 ? scaledArea(boxOf(n), scale) / root : 1.0;
     cost += p * (n.count > 0 ? double(n.count) : 1.0);
   }
   return cost;
@@ -491,5 +555,9 @@ template Status
 buildTree<double>(Vector<PrimBox<double>> &, const BvhOptions &, Vector<BvhNode<double>> &);
 template double treeCost<float>(const Vector<BvhNode<float>> &);
 template double treeCost<double>(const Vector<BvhNode<double>> &);
+template Vector<double> nodeSizes<float>(const Vector<BvhNode<float>> &);
+template Vector<double> nodeSizes<double>(const Vector<BvhNode<double>> &);
+template double treeGrowth<float>(const Vector<BvhNode<float>> &, const Vector<double> &);
+template double treeGrowth<double>(const Vector<BvhNode<double>> &, const Vector<double> &);
 
 } // namespace coredcc::bvh

@@ -85,7 +85,67 @@ double farDepthOf(const View &v)
   return !v.reversedZ ? 1.0 : v.depth == DepthRange::ZeroToOne ? 0.0 : -1.0;
 }
 
-/* A perspective projection's depth at distance d before the eye is `a + b / d`. */
+/* What a projection has that a float one can't have more exactly. */
+constexpr double kAtInfinity = 1e-6;
+
+/* The largest element of the rows of a column. */
+double columnScale(const mat4d &m, int col, int rows)
+{
+  double big = 0.0;
+  for (int r = 0; r < rows; r++) {
+    big = std::fmax(big, std::fabs(element(m, r, col)));
+  }
+  return big;
+}
+
+/* Makes 0 what is meant to be 0: matrices often come from a general inverse. */
+void clean(View &v)
+{
+  constexpr double kRound = 1e-6;
+  double *m = v.view, *p = v.proj;
+  bool affine = std::fabs(m[15] - 1.0) <= kRound;
+  for (int c = 0; c < 3; c++) {
+    affine = affine && std::fabs(m[c * 4 + 3]) <= kRound * columnScale(v.view, c, 3);
+  }
+  if (affine) {
+    for (int c = 0; c < 4; c++) {
+      for (int r = 0; r < 3; r++) {
+        m[c * 4 + r] /= m[15];
+      }
+      m[c * 4 + 3] = c < 3 ? 0.0 : m[15];
+    }
+    m[15] = 1.0;
+  }
+  const auto round = [p](int row, int col, double scale) {
+    if (std::fabs(p[col * 4 + row]) <= kRound * scale) {
+      p[col * 4 + row] = 0.0;
+    }
+  };
+  for (int c = 0; c < 2; c++) {
+    round(2, c, columnScale(v.proj, c, 2));
+    round(3, c, columnScale(v.proj, c, 2));
+  }
+  if (v.ortho) {
+    round(3, 2, std::fabs(element(v.proj, 2, 2)));
+  }
+  else {
+    round(3, 3, std::fabs(element(v.proj, 2, 3)));
+  }
+}
+
+/* A perspective projection's depth at distance d before the eye is `a + b / d`. This is how far `a`
+ * is from the far plane's depth. */
+double farGap(const View &v)
+{
+  const double a = element(v.proj, 2, 2) / element(v.proj, 3, 2);
+  return farDepthOf(v) - a;
+}
+
+bool farAtInfinity(const View &v)
+{
+  return !v.ortho && std::fabs(farGap(v)) <= kAtInfinity;
+}
+
 Status checkPerspectiveDepth(const View &v)
 {
   const double k = std::fabs(element(v.proj, 3, 2));
@@ -100,8 +160,8 @@ Status checkPerspectiveDepth(const View &v)
     return bad("the near plane isn't in front of the eye: the depth range is wrong");
   }
   /* A float projection with a distant far plane can't be told from an infinite one. */
-  const double gap = farDepthOf(v) - a;
-  const bool atInfinity = std::fabs(gap) <= 1e-6;
+  const double gap = farGap(v);
+  const bool atInfinity = std::fabs(gap) <= kAtInfinity;
   if (v.infiniteFar && !atInfinity) {
     return bad("infiniteFar, but the projection has a far plane");
   }
@@ -111,65 +171,73 @@ Status checkPerspectiveDepth(const View &v)
   return Status();
 }
 
-} // namespace
-
-Status View::validate() const
+/* Cleans the view, and says what is wrong with it. */
+Status checkView(View &v)
 {
-  for (double v : viewport) {
-    if (!bvh::finite(v)) {
+  for (double x : v.viewport) {
+    if (!bvh::finite(x)) {
       return bad("the viewport isn't finite");
     }
   }
-  if (!(viewport[2] > 0.0) || !(viewport[3] > 0.0)) {
+  if (!(v.viewport[2] > 0.0) || !(v.viewport[3] > 0.0)) {
     return bad("the viewport is empty");
   }
-  if (!(dpiScale > 0.0) || !bvh::finite(dpiScale)) {
+  if (!(v.dpiScale > 0.0) || !bvh::finite(v.dpiScale)) {
     return bad("dpiScale isn't a positive number");
   }
-  if ((depth != DepthRange::ZeroToOne && depth != DepthRange::MinusOneToOne) ||
-      (handedness != Handedness::Right && handedness != Handedness::Left) ||
-      (up != UpAxis::Y && up != UpAxis::Z))
+  if ((v.depth != DepthRange::ZeroToOne && v.depth != DepthRange::MinusOneToOne) ||
+      (v.handedness != Handedness::Right && v.handedness != Handedness::Left) ||
+      (v.up != UpAxis::Y && v.up != UpAxis::Z))
   {
     return bad("an enum has no such value");
   }
   mat4d inverse;
-  if (!allFinite(view) || !allFinite(proj)) {
+  if (!allFinite(v.view) || !allFinite(v.proj)) {
     return bad("a matrix isn't finite");
   }
-  const double4 last = rowOf(view, 3);
+  clean(v);
+  const double4 last = rowOf(v.view, 3);
   if (last[0] != 0.0 || last[1] != 0.0 || last[2] != 0.0 || last[3] != 1.0) {
     return bad("the view matrix isn't affine");
   }
-  if (!tryInverse(view, inverse) || !tryInverse(proj, inverse)) {
+  if (!tryInverse(v.view, inverse) || !tryInverse(v.proj, inverse)) {
     return bad("a matrix isn't invertible");
   }
 
-  const double4 z = rowOf(proj, 2), w = rowOf(proj, 3);
+  const double4 z = rowOf(v.proj, 2), w = rowOf(v.proj, 3);
   if (z[0] != 0.0 || z[1] != 0.0 || w[0] != 0.0 || w[1] != 0.0) {
     return bad("the projection's depth depends on x or y (an oblique near plane)");
   }
-  if (ortho ? !(w[2] == 0.0 && w[3] > 0.0) : !(w[2] != 0.0 && w[3] == 0.0)) {
-    return bad(ortho ? "ortho, but the projection isn't orthographic" :
+  if (v.ortho ? !(w[2] == 0.0 && w[3] > 0.0) : !(w[2] != 0.0 && w[3] == 0.0)) {
+    return bad(v.ortho ? "ortho, but the projection isn't orthographic" :
                        "the projection isn't a perspective one: ortho is missing");
   }
-  if (ortho && infiniteFar) {
+  if (v.ortho && v.infiniteFar) {
     return bad("an orthographic view has no infinite far plane");
   }
-  if (!ortho) {
-    CDCC_TRY(checkPerspectiveDepth(*this));
+  if (!v.ortho) {
+    CDCC_TRY(checkPerspectiveDepth(v));
   }
 
   /* Normalized device coordinates (x right, y up, depth away from the eye) are left-handed.
    * The projection is block triangular, so its determinant's sign is exact. */
-  const double xy = element(proj, 0, 0) * element(proj, 1, 1) -
-                    element(proj, 0, 1) * element(proj, 1, 0);
-  const double orientation = sign(linearSign(view)) * sign(xy) * sign(z[2] * w[3] - z[3] * w[2]) *
-                             (reversedZ ? -1.0 : 1.0);
-  if (orientation != (handedness == Handedness::Right ? -1.0 : 1.0)) {
-    return bad(ortho ? "the matrices contradict handedness (or reversedZ, or the image is mirrored)" :
+  const double xy = element(v.proj, 0, 0) * element(v.proj, 1, 1) -
+                    element(v.proj, 0, 1) * element(v.proj, 1, 0);
+  const double orientation = sign(linearSign(v.view)) * sign(xy) * sign(z[2] * w[3] - z[3] * w[2]) *
+                             (v.reversedZ ? -1.0 : 1.0);
+  if (orientation != (v.handedness == Handedness::Right ? -1.0 : 1.0)) {
+    return bad(v.ortho ? "the matrices contradict handedness (or reversedZ, or the image is mirrored)" :
                        "the matrices contradict handedness (or the image is mirrored)");
   }
   return Status();
+}
+
+} // namespace
+
+Status View::validate() const
+{
+  View copy = *this;
+  return checkView(copy);
 }
 
 double View::viewportAt(int32_t i) const
@@ -191,11 +259,20 @@ void View::setConventions(int32_t depthRange, int32_t hand, int32_t upAxis)
   up = UpAxis(upAxis);
 }
 
-Status ViewMath::set(const View &v)
+double ViewRegion::planeAt(int32_t plane, int32_t i) const
 {
-  CDCC_TRY(v.validate());
+  if (plane < 0 || plane >= kPlanes || i < 0 || i > 3) {
+    return 0.0;
+  }
+  return i < 3 ? planes[plane].n[i] : planes[plane].w;
+}
+
+Status ViewMath::set(const View &given)
+{
   ViewMath m;
-  m.view_ = v;
+  m.view_ = given;
+  CDCC_TRY(checkView(m.view_));
+  const View &v = m.view_;
   if (!tryInverse(v.view, m.invView_) || !tryInverse(v.proj, m.invProj_)) {
     return bad("a matrix isn't invertible");
   }
@@ -204,7 +281,12 @@ Status ViewMath::set(const View &v)
   }
   const double4 &cx = m.clip_[0], &cy = m.clip_[1], &cz = m.clip_[2], &cw = m.clip_[3];
   m.nearView_ = v.reversedZ ? cw - cz : v.depth == DepthRange::ZeroToOne ? cz : cw + cz;
+  m.farView_ = farAtInfinity(v) ? double4(0.0, 0.0, 0.0, 1.0) :
+               !v.reversedZ     ? cw - cz :
+               v.depth == DepthRange::ZeroToOne ? cz :
+                                                  cw + cz;
   m.nearPlane_ = planeToLocal(v.view, m.nearView_);
+  m.farPlane_ = planeToLocal(v.view, m.farView_);
   m.nearScale_ = 1.0 / length3(m.nearPlane_);
   m.nearDepth_ = nearDepthOf(v);
   m.midDepth_ = 0.5 * (nearDepthOf(v) + farDepthOf(v));
@@ -234,7 +316,7 @@ ViewPoint ViewMath::project(const double3 &p) const
   const double w = dot4(clip_[3], v), nearSide = dot4(nearView_, v);
   r.distance = nearSide * nearScale_;
   r.behind = !(w > 0.0);
-  r.visible = !r.behind && nearSide >= 0.0;
+  r.visible = !r.behind && nearSide >= 0.0 && dot4(farView_, v) >= 0.0;
   if (!r.behind) {
     const double *vp = view_.viewport;
     r.x = vp[0] + (0.5 + 0.5 * (dot4(clip_[0], v) / w)) * vp[2];
@@ -285,13 +367,32 @@ Ray ViewMath::rayFromPixel(double x, double y) const
 
 ViewRegion ViewMath::regionFromPixel(double x, double y, double radius) const
 {
+  const double r = radius * view_.dpiScale;
+  return regionAround(x, y, r, r);
+}
+
+ViewRegion ViewMath::regionFromRect(double x0, double y0, double x1, double y1) const
+{
+  return regionAround(0.5 * (x0 + x1),
+                      0.5 * (y0 + y1),
+                      0.5 * std::fabs(x1 - x0),
+                      0.5 * std::fabs(y1 - y0));
+}
+
+ViewRegion ViewMath::regionAround(double x, double y, double halfW, double halfH) const
+{
   const double *vp = view_.viewport;
-  const double r = std::fmax(radius * view_.dpiScale, 0.5) * (1.0 + 1e-9);
+  const double rx = std::fmax(halfW, 0.5) * (1.0 + 1e-9);
+  const double ry = std::fmax(halfH, 0.5) * (1.0 + 1e-9);
   const double cx = (x - vp[0]) / vp[2] * 2.0 - 1.0, cy = 1.0 - (y - vp[1]) / vp[3] * 2.0;
-  const double hx = 2.0 * r / vp[2], hy = 2.0 * r / vp[3];
+  const double hx = 2.0 * rx / vp[2], hy = 2.0 * ry / vp[3];
   const double4 &X = clip_[0], &Y = clip_[1], &W = clip_[3];
-  const double4 planes[ViewRegion::kPlanes] = {
-      X - W * (cx - hx), W * (cx + hx) - X, Y - W * (cy - hy), W * (cy + hy) - Y, nearView_};
+  const double4 planes[ViewRegion::kPlanes] = {X - W * (cx - hx),
+                                               W * (cx + hx) - X,
+                                               Y - W * (cy - hy),
+                                               W * (cy + hy) - Y,
+                                               nearView_,
+                                               farView_};
   ViewRegion out;
   if (!valid_) {
     out.planes[0].w = -1.0; /* nothing is inside */
@@ -347,6 +448,21 @@ double3 ViewMath::rayOrigin(double x, double y) const
 double3 ViewMath::rayDirection(double x, double y) const
 {
   return rayFromPixel(x, y).dir;
+}
+
+double ViewMath::pixelRowAt(int32_t row, int32_t i) const
+{
+  return row >= 0 && row < 3 && i >= 0 && i < 4 ? pixelRows_[row][i] : 0.0;
+}
+
+double ViewMath::nearPlaneAt(int32_t i) const
+{
+  return i >= 0 && i < 4 ? nearPlane_[i] : 0.0;
+}
+
+double ViewMath::farPlaneAt(int32_t i) const
+{
+  return i >= 0 && i < 4 ? farPlane_[i] : 0.0;
 }
 
 } // namespace coredcc

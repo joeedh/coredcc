@@ -226,6 +226,7 @@ void testTriangles()
       expect(std::fabs(got.t - want) < 1e-9 * want, "t is wrong");
       expect(std::fabs(got.u - u) < 1e-9 && std::fabs(got.v - v) < 1e-9, "u or v is wrong");
       expect(!got.inside, "a triangle has no inside");
+      expect(got.backFacing == (dot(normal, unit) > 0.0), "backFacing is wrong");
       /* The limits are inclusive, and nothing outside them is hit. */
       Ray clipped = ray;
       clipped.tMax = got.t;
@@ -359,6 +360,174 @@ void testSolids()
   expect(bvh::raySphere(q, double3(5, 0, 0), 1.0, 8.0 * (1 + 1e-12), t, in) && q.toRayT(t) == 4.0, "entry");
   expect(!bvh::raySphere(q, double3(5, 0, 0), 1.0, 7.9, t, in), "a limit before the entry");
   expect(!bvh::raySphere(q, double3(-5, 0, 0), 1.0, q.tMax, t, in), "behind the ray");
+}
+
+/* The same far from the origin, at coordinates that are exact there. The answer is the same too: it
+ * may depend only on how far things are from the ray's origin. */
+void testFarSolids()
+{
+  Rand r(6);
+  int hits = 0, starts = 0;
+  const auto exact = [&](double size) {
+    double3 v = r.vec(size);
+    for (int i = 0; i < 3; i++) {
+      v[i] = std::ldexp(std::round(std::ldexp(v[i], 26)), -26);
+    }
+    return v;
+  };
+  for (int k = 0; k < 40000 * coredcc_test::testScale(); k++) {
+    const double3 far(5e6, -3e6, 1e6);
+    const double3 a = exact(1.0), b = r.below(4) == 0 ? a : exact(1.0);
+    const double radius = r.range(0.01, 0.5);
+    Ray ray;
+    ray.dir = exact(1.0);
+    /* Next to the surface, half of the time. */
+    ray.origin = exact(3.0);
+    ray.tMin = r.below(2) ? 0.0 : r.range(0.0, 1.0);
+    if (r.below(2)) {
+      ray.origin = a + ray.dir * (radius / length(ray.dir) * r.range(0.999, 1.001));
+      for (int i = 0; i < 3; i++) {
+        ray.origin[i] = std::ldexp(std::round(std::ldexp(ray.origin[i], 26)), -26);
+      }
+      ray.dir = ray.dir * (r.below(2) ? 1.0 : -1.0);
+    }
+    Ray moved = ray;
+    moved.origin += far;
+    if (length(double3(moved.origin - far) - ray.origin) != 0.0) {
+      continue;
+    }
+    const bvh::RayQuery q(ray), p(moved);
+    double t[4];
+    bool inside[4];
+    const bool c1 = bvh::rayCapsule(q, a, b, radius, q.tMax, t[0], inside[0]);
+    const bool c2 = bvh::rayCapsule(p, a + far, b + far, radius, p.tMax, t[1], inside[1]);
+    const bool s1 = bvh::raySphere(q, a, radius, q.tMax, t[2], inside[2]);
+    const bool s2 = bvh::raySphere(p, a + far, radius, p.tMax, t[3], inside[3]);
+    expect(c1 == c2 && (!c1 || (t[0] == t[1] && inside[0] == inside[1])), "a far capsule");
+    expect(s1 == s2 && (!s1 || (t[2] == t[3] && inside[2] == inside[3])), "a far sphere");
+    /* From where it entered: inside or not depends on the last bits. */
+    if (c1 && s1) {
+      for (int solid = 0; solid < 2; solid++) {
+        Ray on = ray, onMoved = moved;
+        on.tMin = onMoved.tMin = q.toRayT(t[solid * 2]);
+        const bvh::RayQuery q2(on), p2(onMoved);
+        double u[2];
+        bool in[2] = {false, false};
+        const bool h1 = solid ? bvh::raySphere(q2, a, radius, q2.tMax, u[0], in[0]) :
+                                bvh::rayCapsule(q2, a, b, radius, q2.tMax, u[0], in[0]);
+        const bool h2 = solid ? bvh::raySphere(p2, a + far, radius, p2.tMax, u[1], in[1]) :
+                                bvh::rayCapsule(p2, a + far, b + far, radius, p2.tMax, u[1], in[1]);
+        expect(h1 == h2 && (!h1 || (u[0] == u[1] && in[0] == in[1])), "a far solid's surface");
+      }
+    }
+    hits += c1 + s1;
+    starts += (c1 && inside[0]) + (s1 && inside[2]);
+  }
+  test_assert(hits > 10000 && starts > 2000);
+}
+
+/* nodeSlab makes a box larger by a part of how far it reaches, on every side, however the ray comes. */
+void testSlack()
+{
+  const double slack = bvh::kNodeSlack;
+  for (int side = 0; side < 2; side++) {
+    const double outside = side ? 2.0 : 0.5;
+    /* A ray that is almost along x, below a box that starts at y = 2e-3. */
+    Ray ray;
+    ray.dir = double3(1.0, 1e-3, 0.0);
+    double enter;
+    const double lo[3] = {1.0, 2e-3 + outside * 2.0 * slack, -1.0}, hi[3] = {2.0, 1.0, 1.0};
+    test_assert(bvh::RayQuery(ray).nodeSlab(lo, hi, 1e300, enter) == (side == 0));
+    /* One beside a box that is far larger along y than along x. */
+    ray.dir = double3(1.0, 0.5, 0.25);
+    const double up[3] = {1.0, 1.0 + outside * 1e6 * slack, -1.0}, top[3] = {2.0, 1e6, 1.0};
+    test_assert(bvh::RayQuery(ray).nodeSlab(up, top, 1e300, enter) == (side == 0));
+  }
+}
+
+/* Triangles without an area, along an axis: where a ray that meets one hits it is known all the same. */
+void testEdges()
+{
+  Rand r(7);
+  int hits = 0;
+  for (int k = 0; k < 300000 * coredcc_test::testScale(); k++) {
+    float corner[9];
+    const int axis = r.below(3);
+    for (int i = 0; i < 3; i++) {
+      corner[i] = corner[3 + i] = corner[6 + i] = float(r.range(-9, 9));
+    }
+    corner[3 + axis] += float(r.range(-1, 1));
+    corner[6 + axis] += float(r.range(-1, 1));
+    double3 on(corner[0], corner[1], corner[2]);
+    on[axis] += (double(corner[3 + axis]) - double(corner[axis])) * r.unit();
+    Ray ray;
+    ray.origin = on + r.vec(2.0);
+    ray.dir = on - ray.origin;
+    const bvh::RayQuery q(ray);
+    const float *const coords[9] = {corner,     corner + 1, corner + 2, corner + 3, corner + 4,
+                                    corner + 5, corner + 6, corner + 7, corner + 8};
+    bvh::TriangleBlockHits out;
+    if (bvh::rayTriangles(q, coords, 0, 1, q.tMax, out) == 0) {
+      continue;
+    }
+    hits++;
+    const double t = q.toRayT(out.t[0]);
+    expect(std::fabs(t - 1.0) < 1e-9 || std::fabs(ray.dir[axis]) > 50.0 * std::fabs(ray.dir[(axis + 1) % 3]) ||
+               std::fabs(ray.dir[axis]) > 50.0 * std::fabs(ray.dir[(axis + 2) % 3]),
+           "where an edge is hit");
+  }
+  test_assert(hits > 1000);
+}
+
+/* Rays through corners and along edges of boxes, at integer coordinates: exactly. */
+void testBoxCorners()
+{
+  Rand r(5);
+  for (int k = 0; k < 20000 * coredcc_test::testScale(); k++) {
+    Box3d box;
+    double3 corner;
+    Ray ray;
+    const double size = std::ldexp(1.0, r.below(41) - 20);
+    for (int i = 0; i < 3; i++) {
+      const int lo = r.below(41) - 20, hi = lo + r.below(5);
+      box.min[i] = lo * size;
+      box.max[i] = hi * size;
+      corner[i] = (r.below(2) ? lo : hi) * size;
+      ray.dir[i] = (r.below(61) - 30) * size;
+    }
+    ray.dir[r.below(3)] += 31.0 * size;
+    ray.origin = corner - ray.dir * (1 + r.below(20));
+    const bvh::RayQuery q(ray);
+    double t;
+    bool inside;
+    expect(bvh::rayBox(q, box, q.tMax, t, inside), "a ray through a corner missed");
+    if (inside) {
+      continue;
+    }
+    /* The hit is the entry, as close as it can be. */
+    const double3 at = q.at(t);
+    expect(std::sqrt(box.distanceSq(at)) <= 1e-13 * (length(ray.origin) + length(corner)),
+           "the entry isn't on the box");
+    /* Just beside it. */
+    ray.origin[0] += 1e-9 * length(ray.dir) * (r.below(2) ? 1.0 : -1.0);
+    const bvh::RayQuery beside(ray);
+    double enter = -(std::numeric_limits<double>::infinity)(), leave = -enter;
+    bool misses = false;
+    for (int i = 0; i < 3; i++) {
+      if (ray.dir[i] == 0.0) {
+        misses = misses || ray.origin[i] < box.min[i] || ray.origin[i] > box.max[i];
+        continue;
+      }
+      const double a = (box.min[i] - ray.origin[i]) / ray.dir[i];
+      const double b = (box.max[i] - ray.origin[i]) / ray.dir[i];
+      enter = (std::max)(enter, (std::min)(a, b));
+      leave = (std::min)(leave, (std::max)(a, b));
+    }
+    if (misses || std::fabs(enter - leave) > 1e-11) {
+      expect(bvh::rayBox(beside, box, beside.tMax, t, inside) == (!misses && enter < leave),
+             "a ray beside a corner");
+    }
+  }
 }
 
 /* ---- closest points: the optimality condition of a convex set ---- */
@@ -495,6 +664,10 @@ int main()
   testBoxes();
   testTriangles();
   testSolids();
+  testBoxCorners();
+  testFarSolids();
+  testEdges();
+  testSlack();
   testClosest();
   testLattice();
   testWatertight();

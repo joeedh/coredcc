@@ -431,7 +431,9 @@ Status SceneEvaluator::run(const Scene &scene, const Library &lib, bool &changed
     if (pass != Pass::Stale) {
       changed = pass == Pass::Changed;
       front_ = changed ? 1 - front_ : front_;
-      return changed ? bvh.update(stores_[front_]) : Status();
+      return changed || !bvh.valid() ?
+                 bvh.update(stores_[front_], lib.runtime().ext<SceneSettings>().bvh) :
+                 Status();
     }
     if (attempt == 0) {
       counters.rebuilds++;

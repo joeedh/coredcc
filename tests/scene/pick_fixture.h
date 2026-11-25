@@ -21,6 +21,7 @@ struct ViewCase {
   bool ortho = false;
   /** Orthographic: may be negative, so behind the eye. */
   double zNear = 0.1;
+  double zFar = 1000.0;
   double3 eye = double3(0.0, 0.0, 10.0);
   double3 target = double3(0.0, 0.0, 0.0);
   double3 up = double3(0.0, 1.0, 0.0);
@@ -44,7 +45,7 @@ inline ViewMath viewOf(const ViewCase &c)
   v.ortho = c.ortho;
   v.infiniteFar = c.infinite && !c.ortho;
   v.view = litestl::math::lookAt(c.eye, c.target, c.up);
-  const double aspect = 16.0 / 9.0, far = 1000.0;
+  const double aspect = 16.0 / 9.0, far = c.zFar;
   v.proj = c.ortho ? litestl::math::orthographic(
                          -3.0 * aspect, 3.0 * aspect, -3.0, 3.0, c.zNear, far, v.depth, c.reversed) :
                      litestl::math::perspective(1.0,
@@ -70,6 +71,7 @@ inline ViewCase randomView(Rand &r)
   ViewCase c;
   c.ortho = r.below(3) == 0;
   c.zNear = c.ortho ? r.range(-8.0, 5.0) : nears[r.below(4)];
+  c.zFar = r.coin() ? 1000.0 : c.zNear + r.range(0.5, 8.0);
   c.eye = r.vec(4.0);
   c.target = c.eye + r.vec(1.0) + double3(0.0, 0.0, 0.1);
   c.up = r.vec(1.0);
@@ -120,6 +122,9 @@ inline ScreenMap mapOf(const ViewMath &v, const mat4d &world, double x, double y
   m.y = planeToLocal(world, p[1] - p[2] * y);
   m.w = planeToLocal(world, p[2]);
   m.front = planeToLocal(world, front * (1.0 / std::hypot(front[0], front[1], front[2])));
+  const double4 &back = v.farPlane();
+  const double length = std::hypot(back[0], back[1], back[2]);
+  m.back = length > 0.0 ? planeToLocal(world, back * (1.0 / length)) : double4(0, 0, 0, 1);
   return m;
 }
 
@@ -131,8 +136,11 @@ inline double normalLength(const double4 &row)
 /**
  * How certainly all of a solid's visible part (the points within `r` of the hull of `ends`) is at least
  * `distance` from the cursor, beyond the line across `n`: whether `L = n.(x, y) - distance w` is
- * never negative there. Proven if the answer isn't negative. For any k >= 0, the smallest `L - k front` of the whole solid is a lower
- * bound, and the best one is exact. It is concave in k, so a search finds it.
+ * never negative there. Proven if the answer isn't negative.
+ *
+ * For any k >= 0, the smallest `L - k front` of the whole solid is a lower bound, and so is that of
+ * `L - k back`. The best one is exact: `front + back` is a positive constant, so of both factors only
+ * what is left of the larger one counts. Each is concave in k, so a search finds it.
  */
 inline double provenDistance(const ScreenMap &map,
                            const std::vector<double3> &ends,
@@ -152,22 +160,24 @@ inline double provenDistance(const ScreenMap &map,
   }
   terms += r * (normalLength(map.x) + normalLength(map.y) + normalLength(map.w) * distance);
   const double tolerance = 1e-10 * terms + 1e-300;
-  const auto bound = [&](double k) {
-    const double4 row = line - map.front * k;
+  const auto bound = [&](const double4 &plane, double k) {
+    const double4 row = line - plane * k;
     double low = std::numeric_limits<double>::infinity();
     for (const double3 &q : ends) {
       low = std::fmin(low, dotPoint(row, q));
     }
     return low - r * normalLength(row);
   };
-  double best = bound(0.0);
+  double best = bound(map.front, 0.0);
   for (double scale = 1e-9; scale < 1e15 && best < -tolerance; scale *= 1e3) {
-    double lo = 0.0, hi = scale;
-    for (int i = 0; i < 160 && best < -tolerance; i++) {
-      const double a = lo + (hi - lo) / 3.0, b = hi - (hi - lo) / 3.0;
-      const double va = bound(a), vb = bound(b);
-      best = std::fmax(best, std::fmax(va, vb));
-      (va < vb ? lo : hi) = va < vb ? a : b;
+    for (const double4 *plane : {&map.front, &map.back}) {
+      double lo = 0.0, hi = scale;
+      for (int i = 0; i < 160 && best < -tolerance; i++) {
+        const double a = lo + (hi - lo) / 3.0, b = hi - (hi - lo) / 3.0;
+        const double va = bound(*plane, a), vb = bound(*plane, b);
+        best = std::fmax(best, std::fmax(va, vb));
+        (va < vb ? lo : hi) = va < vb ? a : b;
+      }
     }
   }
   return best + tolerance;
@@ -206,6 +216,7 @@ inline bool atDistance(const ScreenMap &map, const ScreenPoint &p, double &nx, d
   ny = dotPoint(map.y, p.point) / w;
   const double length = std::hypot(nx, ny);
   const bool ok = w > 0.0 && dotPoint(map.front, p.point) >= -1e-9 &&
+                  dotPoint(map.back, p.point) >= -1e-9 &&
                   std::fabs(length - p.distance) <= 1.1e-4 + 1e-9 * length;
   if (!ok) {
     fprintf(stderr,

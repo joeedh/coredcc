@@ -13,6 +13,7 @@ constexpr int kTriangleBlock = 16;
 
 struct TriangleBlockHits {
   double t[kTriangleBlock], u[kTriangleBlock], v[kTriangleBlock];
+  bool back[kTriangleBlock];
 };
 
 /**
@@ -66,11 +67,11 @@ inline bool outsidePlane(double best, double size)
 }
 
 /** Whether a box is certainly outside the half-space; see outsidePlane(). */
-template <class S> bool boxOutside(const S *lo, const S *hi, const double *plane)
+template <class S> bool boxOutside(const S *lo, const S *hi, const BvhPlane &plane)
 {
-  double best = plane[3], size = std::fabs(plane[3]);
+  double best = plane.w, size = std::fabs(plane.w);
   for (int a = 0; a < 3; a++) {
-    const double x = plane[a] * double(lo[a]), y = plane[a] * double(hi[a]);
+    const double x = plane.n[a] * double(lo[a]), y = plane.n[a] * double(hi[a]);
     best += x > y ? x : y;
     const double ax = std::fabs(x), ay = std::fabs(y);
     size += ax > ay ? ax : ay;

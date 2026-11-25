@@ -1,30 +1,56 @@
 #pragma once
 
 #include "coredcc/bvh/box.h"
+#include "coredcc/bvh/bvh.h"
 #include "coredcc/bvh/kernels.h"
+#include "coredcc/bvh/parallel.h"
 #include "coredcc/bvh/ray.h"
 
 #include "litestl/util/vector.h"
 
+#include <cmath>
+#include <concepts>
 #include <cstdint>
 #include <utility>
 
 /*
  * The built-in primitive sources: triangles, capsules, spheres and boxes, each a structure
- * of arrays. GeometryBvh stores one in leaf order. Every source has:
- *
- *   using Scalar;  int size();  Box3<Scalar> bounds(i);
- *   Source permuted(order);                        // a copy: element k is order[k]
- *   bool rayRange(q, first, count, limit, hit);    // see GeometryBvh
- *   double3 closest(i, p);                         // the point of primitive i nearest to p
- *   bool outside(i, plane);                        // certainly outside `n.p + w >= 0`
- *
+ * of arrays. They are GeometrySources, which is what GeometryBvh stores in leaf order.
  * Coordinates are object space, radii object units. A primitive whose bounds aren't
  * finite, or whose radius is negative or NaN, has an unusable box, so it is left out.
  */
 namespace coredcc {
 
 namespace bvh {
+
+/** For concepts: what a rayRange() calls. */
+struct AnyHit {
+  bool operator()(int, const PrimHit &) const;
+};
+
+/** Takes element `order[k]` of `from` as element k. `from` and `to` aren't the same. */
+template <class T>
+void gatherColumn(const litestl::util::Vector<T> &from,
+                  const litestl::util::Vector<int> &order,
+                  bool parallel,
+                  litestl::util::Vector<T> &to)
+{
+  to.resize(order.size());
+  forChunks(int(order.size()), 1 << 15, parallel, [&](litestl::util::IndexRange r) {
+    for (int k : r) {
+      to[k] = from[order[k]];
+    }
+  });
+}
+template <class T>
+void reorderColumn(litestl::util::Vector<T> &col,
+                   const litestl::util::Vector<int> &order,
+                   bool parallel)
+{
+  litestl::util::Vector<T> was = std::move(col);
+  col = litestl::util::Vector<T>();
+  gatherColumn(was, order, parallel, col);
+}
 
 /** One growing array per coordinate. */
 template <class S, int N> struct Columns {
@@ -40,16 +66,23 @@ template <class S, int N> struct Columns {
       col[c].append(S(row[c]));
     }
   }
-  Columns permuted(const litestl::util::Vector<int> &order) const
+  void gather(const Columns &from, const litestl::util::Vector<int> &order, bool parallel)
   {
-    Columns r;
     for (int c = 0; c < N; c++) {
-      r.col[c].resize(order.size());
-      for (int k = 0; k < int(order.size()); k++) {
-        r.col[c][k] = col[c][order[k]];
-      }
+      gatherColumn(from.col[c], order, parallel, col[c]);
     }
-    return r;
+  }
+  void reorder(const litestl::util::Vector<int> &order, bool parallel)
+  {
+    for (int c = 0; c < N; c++) {
+      reorderColumn(col[c], order, parallel);
+    }
+  }
+  void set(int i, const Columns &from, int j)
+  {
+    for (int c = 0; c < N; c++) {
+      col[c][i] = from.col[c][j];
+    }
   }
   double3 point(int firstColumn, int i) const
   {
@@ -91,20 +124,52 @@ template <class S> Box3<S> boxAround(const double3 &a, const double3 &b, double 
 }
 
 /** Whether the ball of radius r around p is certainly outside the plane. */
-inline bool ballOutside(const double3 &p, double r, const double *plane)
+inline bool ballOutside(const double3 &p, double r, const BvhPlane &plane)
 {
-  double best = plane[3], size = std::fabs(plane[3]), normal = 0.0;
+  double best = plane.w, size = std::fabs(plane.w), normal = 0.0;
   for (int a = 0; a < 3; a++) {
-    const double term = plane[a] * p[a];
+    const double term = plane.n[a] * p[a];
     best += term;
     size += std::fabs(term);
-    normal += plane[a] * plane[a];
+    normal += plane.n[a] * plane.n[a];
   }
   const double reach = r * std::sqrt(normal);
   return outsidePlane(best + reach, size + reach);
 }
 
 } // namespace bvh
+
+/**
+ * What GeometryBvh is built over, and keeps a copy of in leaf order. Besides bounds:
+ *
+ * - `gather(from, order, parallel)`: become `order.size()` elements, with element k equal to
+ *   `from`'s `order[k]`. `reorder(order, parallel)`: the same from itself. `set(i, from, j)`: take
+ *   `from`'s element j as element i.
+ * - `rayRange(q, first, count, limit, hit)`: for each of those elements that the ray meets with
+ *   `q.tMin <= t <= limit`, call `hit(i, PrimHit) -> bool`; on false, return false at once. `limit`
+ *   is a reference that `hit` may lower.
+ * - `closest(i, p)`: the point of element i nearest to p, in the element's bounds up to rounding.
+ * - `outside(i, plane)`: the element is certainly outside the half-space. May be false for one that
+ *   is.
+ */
+template <class T>
+concept GeometrySource =
+    BvhSource<T> && std::default_initializable<T> && std::movable<T> &&
+    requires(T &mut,
+             const T &s,
+             int i,
+             const litestl::util::Vector<int> &order,
+             const bvh::RayQuery &q,
+             double &limit,
+             const double3 &p,
+             const BvhPlane &plane) {
+      mut.gather(s, order, true);
+      mut.reorder(order, true);
+      mut.set(i, s, i);
+      { s.rayRange(q, i, i, limit, bvh::AnyHit()) } -> std::same_as<bool>;
+      { s.closest(i, p) } -> std::convertible_to<double3>;
+      { s.outside(i, plane) } -> std::same_as<bool>;
+    };
 
 /** Triangles. One with no area can't be hit by a ray; to closest() it is a segment or a
  * point. */
@@ -142,11 +207,18 @@ template <class S> class TriangleSource {
     }
     return b;
   }
-  TriangleSource permuted(const litestl::util::Vector<int> &order) const
+  void
+  gather(const TriangleSource &from, const litestl::util::Vector<int> &order, bool parallel)
   {
-    TriangleSource r;
-    r.c_ = c_.permuted(order);
-    return r;
+    c_.gather(from.c_, order, parallel);
+  }
+  void reorder(const litestl::util::Vector<int> &order, bool parallel)
+  {
+    c_.reorder(order, parallel);
+  }
+  void set(int i, const TriangleSource &from, int j)
+  {
+    c_.set(i, from.c_, j);
   }
 
   template <class Hit>
@@ -162,7 +234,8 @@ template <class S> class TriangleSource {
       uint32_t mask = bvh::rayTriangles(q, coords, first + done, n, limit, block);
       for (int k = 0; mask != 0; k++, mask >>= 1) {
         if ((mask & 1) && block.t[k] <= limit &&
-            !hit(first + done + k, block.t[k], block.u[k], block.v[k], false))
+            !hit(first + done + k,
+                 bvh::PrimHit{block.t[k], block.u[k], block.v[k], false, block.back[k]}))
         {
           return false;
         }
@@ -174,7 +247,7 @@ template <class S> class TriangleSource {
   {
     return bvh::closestOnTriangle(p, corner(i, 0), corner(i, 1), corner(i, 2));
   }
-  bool outside(int i, const double *plane) const
+  bool outside(int i, const BvhPlane &plane) const
   {
     return bvh::ballOutside(corner(i, 0), 0.0, plane) &&
            bvh::ballOutside(corner(i, 1), 0.0, plane) &&
@@ -215,11 +288,18 @@ template <class S> class CapsuleSource {
   {
     return bvh::boxAround<S>(end(i, 0), end(i, 1), radius(i));
   }
-  CapsuleSource permuted(const litestl::util::Vector<int> &order) const
+  void
+  gather(const CapsuleSource &from, const litestl::util::Vector<int> &order, bool parallel)
   {
-    CapsuleSource r;
-    r.c_ = c_.permuted(order);
-    return r;
+    c_.gather(from.c_, order, parallel);
+  }
+  void reorder(const litestl::util::Vector<int> &order, bool parallel)
+  {
+    c_.reorder(order, parallel);
+  }
+  void set(int i, const CapsuleSource &from, int j)
+  {
+    c_.set(i, from.c_, j);
   }
 
   template <class Hit>
@@ -229,7 +309,7 @@ template <class S> class CapsuleSource {
       double t;
       bool inside;
       if (bvh::rayCapsule(q, end(i, 0), end(i, 1), radius(i), limit, t, inside) &&
-          !hit(i, t, 0.0, 0.0, inside))
+          !hit(i, bvh::PrimHit{t, 0.0, 0.0, inside, false}))
       {
         return false;
       }
@@ -241,7 +321,7 @@ template <class S> class CapsuleSource {
     const double3 c = bvh::closestOnSegment(p, end(i, 0), end(i, 1));
     return bvh::closestOnSphere(p, c, radius(i));
   }
-  bool outside(int i, const double *plane) const
+  bool outside(int i, const BvhPlane &plane) const
   {
     return bvh::ballOutside(end(i, 0), radius(i), plane) &&
            bvh::ballOutside(end(i, 1), radius(i), plane);
@@ -281,11 +361,18 @@ template <class S> class SphereSource {
   {
     return bvh::boxAround<S>(center(i), center(i), radius(i));
   }
-  SphereSource permuted(const litestl::util::Vector<int> &order) const
+  void
+  gather(const SphereSource &from, const litestl::util::Vector<int> &order, bool parallel)
   {
-    SphereSource r;
-    r.c_ = c_.permuted(order);
-    return r;
+    c_.gather(from.c_, order, parallel);
+  }
+  void reorder(const litestl::util::Vector<int> &order, bool parallel)
+  {
+    c_.reorder(order, parallel);
+  }
+  void set(int i, const SphereSource &from, int j)
+  {
+    c_.set(i, from.c_, j);
   }
 
   template <class Hit>
@@ -295,7 +382,7 @@ template <class S> class SphereSource {
       double t;
       bool inside;
       if (bvh::raySphere(q, center(i), radius(i), limit, t, inside) &&
-          !hit(i, t, 0.0, 0.0, inside))
+          !hit(i, bvh::PrimHit{t, 0.0, 0.0, inside, false}))
       {
         return false;
       }
@@ -306,7 +393,7 @@ template <class S> class SphereSource {
   {
     return bvh::closestOnSphere(p, center(i), radius(i));
   }
-  bool outside(int i, const double *plane) const
+  bool outside(int i, const BvhPlane &plane) const
   {
     return bvh::ballOutside(center(i), radius(i), plane);
   }
@@ -341,14 +428,17 @@ class BoxSource {
   {
     return boxes_[i];
   }
-  BoxSource permuted(const litestl::util::Vector<int> &order) const
+  void gather(const BoxSource &from, const litestl::util::Vector<int> &order, bool parallel)
   {
-    BoxSource r;
-    r.boxes_.resize(order.size());
-    for (int k = 0; k < int(order.size()); k++) {
-      r.boxes_[k] = boxes_[order[k]];
-    }
-    return r;
+    bvh::gatherColumn(from.boxes_, order, parallel, boxes_);
+  }
+  void reorder(const litestl::util::Vector<int> &order, bool parallel)
+  {
+    bvh::reorderColumn(boxes_, order, parallel);
+  }
+  void set(int i, const BoxSource &from, int j)
+  {
+    boxes_[i] = from.boxes_[j];
   }
 
   template <class Hit>
@@ -357,7 +447,7 @@ class BoxSource {
     for (int i = first; i < first + count; i++) {
       double t;
       bool inside;
-      if (bvh::rayBox(q, boxes_[i], limit, t, inside) && !hit(i, t, 0.0, 0.0, inside)) {
+      if (bvh::rayBox(q, boxes_[i], limit, t, inside) && !hit(i, bvh::PrimHit{t, 0.0, 0.0, inside, false})) {
         return false;
       }
     }
@@ -367,7 +457,7 @@ class BoxSource {
   {
     return bvh::closestOnBox(p, boxes_[i]);
   }
-  bool outside(int i, const double *plane) const
+  bool outside(int i, const BvhPlane &plane) const
   {
     return bvh::boxOutside(boxes_[i].min, boxes_[i].max, plane);
   }

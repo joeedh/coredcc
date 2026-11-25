@@ -29,7 +29,7 @@ Expected expectObject(const ViewMath &view, const Geo &g, const mat4d &world, do
   Expected best;
   for (const Prim &p : g.prims) {
     Expected e;
-    if (p.triangle) {
+    if (p.kind == Kind::Triangle) {
       const double3 w[3] = {transformPoint(world, p.q[0]),
                             transformPoint(world, p.q[1]),
                             transformPoint(world, p.q[2])};
@@ -77,7 +77,7 @@ void checkEntry(const ViewMath &view,
   expect(std::fabs(view.viewDistance(hit.point) - hit.depth) < 1e-6 * (1.0 + hit.depth), "depth");
   const Prim &p = g.prims[size_t(hit.element)];
   mat4d inverse;
-  if (p.triangle || !litestl::math::tryInverse(world, inverse)) {
+  if (p.kind == Kind::Triangle || !litestl::math::tryInverse(world, inverse)) {
     return;
   }
   const double3 q = transformPoint(inverse, hit.point);
@@ -119,6 +119,7 @@ void testLoop(bool ortho, bool behindEye)
     for (int v = 0; v < 4; v++) {
       ViewCase c = randomView(r);
       c.ortho = ortho;
+      c.zFar = r.below(3) == 0 ? r.range(2.0, 6.0) : 1000.0;
       c.zNear = ortho ? (behindEye ? -6.0 : 0.5) : behindEye ? 0.001 : 0.5;
       const ViewMath view = viewOf(c);
       for (int k = 0; k < 20; k++) {
@@ -133,7 +134,7 @@ void testLoop(bool ortho, bool behindEye)
           for (BlockHandle h : objects) {
             d.geo(d.lib->find(d.obj(h).data.target())).useBvh = mode == 1;
           }
-          hits[mode] = d.picks(view, x, y, radius);
+          hits[mode] = d.picks(view, x, y, within(radius, false));
         }
         expect(hits[0].size() == hits[1].size(), "all shapes, and those from the BVH");
         for (size_t i = 0; i < std::min(hits[0].size(), hits[1].size()); i++) {
@@ -212,7 +213,7 @@ void testBounds()
   const ViewMath view = viewOf(c);
   d.evaluate();
   const ViewPoint mid = view.project(double3(0, 0, 0)), edge = view.project(double3(1, 0, 1));
-  Vector<PickHit> hits = d.picks(view, mid.x, mid.y, 0.0);
+  Vector<PickHit> hits = d.picks(view, mid.x, mid.y, within(0.0));
   test_assert(hits.size() == 1 && hits[0].object == a && hits[0].covers());
   test_assert(hits[0].element == -1 && hits[0].domain == -1);
   test_assert(std::fabs(hits[0].depth - 8.5) < 1e-9 && std::fabs(hits[0].point[2] - 1.0) < 1e-9);
@@ -223,23 +224,23 @@ void testBounds()
   d.evaluate();
   const ObjectEval e = d.result(a);
   const ViewPoint corner = view.project(double3(e.bounds.max[0], e.bounds.max[1], 1.0));
-  test_assert(d.picks(view, corner.x - 3.0, corner.y + 3.0, 0.0).size() == 0);
+  test_assert(d.picks(view, corner.x - 3.0, corner.y + 3.0, within(0.0)).size() == 0);
   const double3 tip = transformPoint(e.state.world, double3(0.97, 0.97, 1.0));
   const ViewPoint in = view.project(tip);
-  hits = d.picks(view, in.x, in.y, 0.0);
+  hits = d.picks(view, in.x, in.y, within(0.0));
   test_assert(hits.size() == 1 && lengthOf(hits[0].point - tip) < 1e-9);
   d.obj(a).channels = d.trs->defaults();
   d.evaluate();
   /* Beside it. */
-  hits = d.picks(view, edge.x + 7.0, edge.y, 10.0);
+  hits = d.picks(view, edge.x + 7.0, edge.y, within(10.0));
   test_assert(hits.size() == 1 && !hits[0].covers() && hits[0].distance > 5.0 &&
               hits[0].distance <= 7.0);
-  test_assert(d.picks(view, edge.x + 12.0, edge.y, 10.0).size() == 0);
+  test_assert(d.picks(view, edge.x + 12.0, edge.y, within(10.0)).size() == 0);
   /* From inside: the surface behind the near plane isn't there, the one before it is. */
   c.eye = double3(0.0, 0.0, 0.3);
   c.target = double3(0.0, 0.0, -5.0);
   const ViewMath inside = viewOf(c);
-  hits = d.picks(inside, 1000.0, 560.0, 0.0);
+  hits = d.picks(inside, 1000.0, 560.0, within(0.0));
   test_assert(hits.size() == 1 && std::fabs(hits[0].depth - 0.8) < 1e-9);
   /* Flat, and a point. */
   for (int axes = 1; axes <= 3; axes++) {
@@ -250,13 +251,13 @@ void testBounds()
     }
     d.shape(shape).box = flat;
     d.evaluate();
-    hits = d.picks(view, mid.x + 3.0, mid.y, 5.0);
+    hits = d.picks(view, mid.x + 3.0, mid.y, within(5.0));
     test_assert(hits.size() == 1 && hits[0].distance <= 3.0 + 1e-9);
   }
   /* None. */
   d.shape(shape).box = Box3d();
   d.evaluate();
-  test_assert(d.picks(view, mid.x, mid.y, 5.0).size() == 0);
+  test_assert(d.picks(view, mid.x, mid.y, within(5.0)).size() == 0);
 }
 
 /* ---- the order ---- */
@@ -284,19 +285,22 @@ void testThin()
       "thick", identity(), d.geoBlock("thick", {curve(x * -2.0, x * 2.0, 0.1)}));
   d.evaluate();
   const ViewPoint at = view.project(double3(0.0, 0.0, 1.0));
-  Vector<PickHit> hits = d.picks(view, at.x, at.y, 10.0);
+  Vector<PickHit> hits = d.picks(view, at.x, at.y, within(10.0, false));
   test_assert(hits.size() == 2 && hits[0].object == thick && hits[1].object == thin);
   test_assert(hits[0].covers() && std::fabs(hits[1].distance - 7.0) < 0.05);
+  /* A curve that is thin comes first, if it is near enough. */
+  const Vector<PickHit> asThin = d.picks(view, at.x, at.y, within(10.0));
+  test_assert(asThin.size() == 2 && asThin[0].object == thin && asThin[0].thin && !asThin[1].thin);
   /* Covered by both, the nearer one wins. */
-  hits = d.picks(view, at.x, at.y - 8.0, 10.0);
+  hits = d.picks(view, at.x, at.y - 8.0, within(10.0, false));
   test_assert(hits.size() == 2 && hits[0].object == thin && hits[0].covers() && hits[1].covers());
   test_assert(hits[0].depth < hits[1].depth);
   /* Its end is where the matrix says: a ball a thousand pixels long. */
   const ViewPoint end = view.project(double3(2.0 + 1000.0 * pixel, 8.0 * pixel, 1.0));
-  hits = d.picks(view, end.x - 5.0, end.y, 0.0);
+  hits = d.picks(view, end.x - 5.0, end.y, within(0.0));
   test_assert(hits.size() == 1 && hits[0].object == thin);
-  test_assert(d.picks(view, end.x + 5.0, end.y, 4.9).size() == 0);
-  hits = d.picks(view, end.x + 5.0, end.y, 5.1);
+  test_assert(d.picks(view, end.x + 5.0, end.y, within(4.9)).size() == 0);
+  hits = d.picks(view, end.x + 5.0, end.y, within(5.1));
   test_assert(hits.size() == 1 && std::fabs(hits[0].distance - 5.0) < 0.02);
 }
 
@@ -315,7 +319,7 @@ void testOrder()
   const BlockHandle twin = at("twin", 0.0, 1.0);
   d.evaluate();
   const ViewPoint p = view.project(double3());
-  const Vector<PickHit> hits = d.picks(view, p.x, p.y, 10.0);
+  const Vector<PickHit> hits = d.picks(view, p.x, p.y, within(10.0));
   const BlockHandle order[] = {hitFront, twin, hitBack, missNear, missFar};
   test_assert(hits.size() == 5);
   for (int i = 0; i < int(hits.size()) && i < 5; i++) {
@@ -325,11 +329,11 @@ void testOrder()
   must(d.sc().remove(*d.lib, d.idOf(hitFront)).status());
   must(d.sc().add(*d.lib, hitFront));
   d.evaluate();
-  test_assert(d.picks(view, p.x, p.y, 10.0)[0].object == twin);
+  test_assert(d.picks(view, p.x, p.y, within(10.0))[0].object == twin);
   /* Logical pixels. */
   ViewCase c;
   c.dpiScale = 2.0;
-  const Vector<PickHit> dense = d.picks(viewOf(c), p.x, p.y, 2.5);
+  const Vector<PickHit> dense = d.picks(viewOf(c), p.x, p.y, within(2.5));
   test_assert(dense.size() == 4 && std::fabs(dense[3].distance - 2.0) < 0.01);
 
   /* Of one object's shapes: what covers, then the front one. An element's domain. */
@@ -340,7 +344,9 @@ void testOrder()
                                                 ball(double3(0, 0, 3), 0.1),
                                                 ball(double3(4.0 * pixel, 0, 4), 0.001)}));
   d.evaluate();
-  const Vector<PickHit> best = d.picks(view, p.x, p.y, 10.0);
+  Vector<PickHit> best = d.picks(view, p.x, p.y, within(10.0));
+  test_assert(best[0].object == many && best[0].element == 2);
+  best = d.picks(view, p.x, p.y, within(10.0, false));
   test_assert(best[0].object == many && best[0].element == 1);
   test_assert(best[0].domain == int32_t(ElementDomain::Edge));
   test_assert(std::fabs(best[0].point[2] - 3.1) < 1e-6);
@@ -366,7 +372,7 @@ void testFlattened()
                                    solve::affine(flat, double3(0.0, 0.0, 0.5)),
                                    d.geoBlock("flat", {ball(double3(), 1.0)}));
     d.evaluate();
-    const Vector<PickHit> hits = d.picks(view, p.x, p.y, 0.0);
+    const Vector<PickHit> hits = d.picks(view, p.x, p.y, within(0.0));
     test_assert(hits.size() == 1 && hits[0].object == h && hits[0].covers());
     test_assert(lengthOf(hits[0].point - double3(0.1, 0.1, 0.5)) < 1e-4);
     must(d.sc().remove(*d.lib, d.idOf(h)).status());
@@ -379,16 +385,19 @@ void testSink()
 {
   const ViewMath view = viewOf(ViewCase());
   const ViewPoint p = view.project(double3(0.2, 0.0, 0.0));
-  const ViewRegion region = view.regionFromPixel(p.x, p.y, 4.0);
-  const PickQuery q(view, region, p.x, p.y, 4.0, identity());
+  const PickCursor cursor(view, p.x, p.y, within(4.0));
+  const PickQuery q(cursor, identity());
   const double nan = std::numeric_limits<double>::quiet_NaN();
   const double inf = std::numeric_limits<double>::infinity();
   const double3 at(0.2, 0.0, 0.0), bad(0.2, nan, 0.0), worse(inf, 0.0, 0.0);
   {
     PickSink s(q);
-    test_assert(!s.any());
+    test_assert(!s.any() && s.best().element == -1);
     s.point(bad);
+    s.point(at, nan);
+    s.point(at, -1.0);
     s.segment(at, worse);
+    s.segment(at, at, inf);
     s.triangle(at, at, bad);
     s.sphere(at, -1.0);
     s.sphere(at, nan);
@@ -396,7 +405,8 @@ void testSink()
     s.sphere(bad, 1.0);
     s.capsule(at, worse, 1.0);
     s.box(Box3d());
-    s.point(double3(0.2, 0.0, 11.0)); /* behind */
+    s.point(double3(0.2, 0.0, 11.0));    /* behind */
+    s.point(double3(0.2, 0.0, -1000.0)); /* past the far plane */
     test_assert(!s.any());
     s.point(at);
     test_assert(s.any() && s.best().covers() && s.best().element == -1);
@@ -409,23 +419,29 @@ void testSink()
   s.element(1, 8);
   s.segment(at + double3(-1.0, 2.0 * pixel, 0.0), at + double3(1.0, 2.0 * pixel, 0.0));
   test_assert(std::fabs(s.best().distance - 2.0) < 0.01 && s.best().element == 8);
+  test_assert(std::fabs(s.best().u - 0.5) < 1e-3);
+  /* Behind it. */
   s.element(2, 9);
   s.triangle(at + double3(-1, -1, -2), at + double3(1, -1, -2), at + double3(0, 1, -2));
-  test_assert(s.best().covers() && s.best().element == 9 && s.best().domain == 2);
+  test_assert(s.best().element == 8 && s.occluder().depth > 11.0);
   s.element(0, 10);
   s.sphere(at, pixel);
-  test_assert(s.best().element == 10);
-  s.element(0, 11);
+  test_assert(s.best().element == 10 && s.best().covers());
+  s.element(1, 11);
   s.capsule(at + double3(0, 0, -1), at + double3(0, 0, 2), pixel);
-  test_assert(s.best().element == 11);
-  s.element(0, 12);
+  test_assert(s.best().element == 10);
+  /* In front of everything. */
+  s.element(2, 12);
   Box3d box;
   box.include(0.0, -1.0, 3.0);
   box.include(1.0, 1.0, 4.0);
+  s.instance(5);
   s.box(box);
   test_assert(s.best().element == 12 && std::fabs(s.best().point[2] - 4.0) < 1e-9);
+  test_assert(s.best().instance == 5 && s.best().normal[2] == 1.0 && !s.best().backFacing);
   /* The first of equals, and no empty box. */
-  s.element(0, 13);
+  s.element(2, 13);
+  s.instance(-1);
   s.box(box);
   std::swap(box.min[2], box.max[2]);
   box.min[2] = 6.0;
@@ -433,15 +449,78 @@ void testSink()
   test_assert(s.best().element == 12);
 
   /* For scripts. */
-  test_assert(q.planeCount() == 5 && q.hasRay() && q.radiusPixels() == 4.0);
-  for (int i = 0; i < 5; i++) {
+  test_assert(q.planeCount() == 6 && q.hasRay() && q.radiusDevicePixels() == 4.0);
+  test_assert(q.surfaceRadiusDevicePixels() == 4.0 && q.limitDepth() == inf && q.occlusion());
+  test_assert(q.domains() == ~0u && q.wants(-1) && q.wants(31) && q.wants(40));
+  const Vector<double> values = q.planeValues();
+  test_assert(values.size() == 24);
+  for (int i = 0; i < 6; i++) {
     test_assert(q.planeNormal(i)[0] == q.planes()[size_t(i)].n[0]);
     test_assert(q.planeOffset(i) == q.planes()[size_t(i)].w);
     test_assert(q.planeNormal(i).dot(at) + q.planeOffset(i) > 0.0);
+    test_assert(values[i * 4 + 1] == q.planeNormal(i)[1] && values[i * 4 + 3] == q.planeOffset(i));
   }
-  test_assert(q.planeOffset(5) == 0.0 && q.planeOffset(-1) == 0.0 && q.planeNormal(5)[0] == 0.0);
+  test_assert(q.planeOffset(6) == 0.0 && q.planeOffset(-1) == 0.0 && q.planeNormal(6)[0] == 0.0);
   test_assert(q.rayOrigin()[2] == q.ray().origin[2] && q.rayDirection()[2] == q.ray().dir[2]);
+  test_assert(q.rayLimit() == q.ray().tMax && std::fabs(q.rayLimit() - 1000.0) < 10.0);
   test_assert(sc::foreignImplementable(detail::ifaceDesc<Spatial>()).ok());
+  test_assert(PickOptions::defineBindings() == PickOptions::defineBindings());
+}
+
+/* The calls that take many shapes are like those that take one. */
+void testBulk()
+{
+  Rand r(8);
+  const ViewMath view = viewOf(ViewCase());
+  const ViewPoint p = view.project(double3());
+  const PickCursor cursor(view, p.x, p.y, within(400.0));
+  const PickQuery q(cursor, identity());
+  const int kPer[4] = {3, 6, 9, 7};
+  for (int round = 0; round < 50; round++) {
+    PickSink one(q), many(q);
+    for (int kind = 0; kind < 4; kind++) {
+      Vector<int32_t> elements;
+      Vector<double> values;
+      for (int i = 0; i < 5; i++) {
+        double v[9];
+        for (int k = 0; k < kPer[kind]; k++) {
+          v[k] = k == 6 && kind == 3 ? r.range(0.0, 0.3) : r.range(-1.0, 1.0);
+          values.append(v[k]);
+        }
+        elements.append(int32_t(r.below(100)));
+        const auto at = [&](int k) { return double3(v[k], v[k + 1], v[k + 2]); };
+        one.element(kind, elements[i]);
+        if (kind == 0) {
+          one.point(at(0), 3.0);
+        }
+        else if (kind == 1) {
+          one.segment(at(0), at(3), 2.0);
+        }
+        else if (kind == 2) {
+          one.triangle(at(0), at(3), at(6));
+        }
+        else {
+          one.capsule(at(0), at(3), v[6]);
+        }
+      }
+      const auto give = [&](const Vector<double> &v) {
+        return kind == 0 ? many.points(kind, elements, v, 3.0) :
+               kind == 1 ? many.segments(kind, elements, v, 2.0) :
+               kind == 2 ? many.triangles(kind, elements, v) :
+                           many.capsules(kind, elements, v);
+      };
+      Vector<double> fewer = values;
+      fewer.pop_back();
+      test_assert(isError(give(fewer), StatusCode::InvalidArgument, "elements"));
+      must(give(values));
+    }
+    const auto &a = one.kept(), &b = many.kept();
+    test_assert(a.size() == b.size() && a.size() >= 3);
+    for (int i = 0; i < int((std::min)(a.size(), b.size())); i++) {
+      test_assert(a[i].hit.element == b[i].hit.element && a[i].hit.domain == b[i].hit.domain &&
+                  a[i].hit.distance == b[i].hit.distance && a[i].hit.depth == b[i].hit.depth);
+    }
+  }
 }
 
 /* Object-space planes and rays, under any matrix, at an offset. */
@@ -466,11 +545,13 @@ void testQuery()
       continue;
     }
     const double x = p.x + (border ? 3.0 : r.range(-3.0, 3.0)), y = p.y + r.range(-3.0, 3.0);
-    const PickQuery q(view, view.regionFromPixel(x, y, 3.0), x, y, 3.0, world);
+    const PickCursor cursor(view, x, y, within(3.0));
+    const PickQuery q(cursor, world);
     for (const BvhPlane &plane : q.planes()) {
       expect(plane.n.dot(local) + plane.w >= 0.0, "a point within the radius is in the region");
     }
-    const PickQuery far(view, view.regionFromPixel(x + 100.0, y, 3.0), x + 100.0, y, 3.0, world);
+    const PickCursor farCursor(view, x + 100.0, y, within(3.0));
+    const PickQuery far(farCursor, world);
     bool outside = false;
     for (const BvhPlane &plane : far.planes()) {
       outside |= plane.n.dot(local) + plane.w < 0.0;
@@ -499,7 +580,7 @@ void testFilter()
   const ViewPoint p = view.project(double3());
   const auto found = [&](const PickFilter &f) {
     std::string names;
-    for (const PickHit &h : d.picks(view, p.x, p.y, 0.0, f)) {
+    for (const PickHit &h : d.picks(view, p.x, p.y, within(0.0), f)) {
       names += d.lib->get(h.object)->name().c_str();
     }
     return names;
@@ -533,24 +614,31 @@ void testErrors()
   const ViewPoint p = view.project(double3());
   Vector<PickHit> hits;
   hits.append(PickHit());
-  test_assert(isError(d.tryPick(view, p.x, p.y, 5.0, hits), StatusCode::FailedPrecondition, "evaluated"));
+  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::FailedPrecondition, "evaluated"));
   test_assert(hits.size() == 0);
   d.evaluate();
   const double nan = std::numeric_limits<double>::quiet_NaN();
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 12; i++) {
+    PickOptions options = within(5.0);
+    double *values[] = {
+        &options.radius, &options.shapeRadius, &options.thinRadius, &options.slope};
+    if (i >= 3 && i < 11) {
+      *values[(i - 3) % 4] = i < 7 ? nan : -1.0;
+    }
+    options.maxHits = i == 11 ? -1 : 0;
     test_assert(isError(d.tryPick(i == 0 ? ViewMath() : view,
                                   i == 1 ? nan : p.x,
                                   i == 2 ? nan : p.y,
-                                  i == 3 ? nan : i == 4 ? -1.0 : 5.0,
+                                  options,
                                   hits),
                         StatusCode::InvalidArgument));
   }
-  test_assert(isError(pickScene(*d.ctx, a, view, p.x, p.y, 5.0, {}, hits), StatusCode::NotFound));
+  test_assert(isError(pickScene(*d.ctx, a, view, p.x, p.y, within(5.0), {}, hits), StatusCode::NotFound));
   Context none(&d.rt, nullptr, PointerRef());
-  test_assert(isError(pickScene(none, d.scene, view, p.x, p.y, 5.0, {}, hits),
+  test_assert(isError(pickScene(none, d.scene, view, p.x, p.y, within(5.0), {}, hits),
                       StatusCode::FailedPrecondition));
   d.rt.setStickyError(boom("pending"));
-  test_assert(isError(d.tryPick(view, p.x, p.y, 5.0, hits), StatusCode::FailedPrecondition, "pending"));
+  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::FailedPrecondition, "pending"));
   d.rt.takeStickyError().ignore();
 
   /* Two that throw: the first is returned, the others' hits are there. */
@@ -561,7 +649,7 @@ void testErrors()
   };
   const BlockHandle c = d.placed("c", identity(), throwing);
   d.evaluate();
-  test_assert(isError(d.tryPick(view, p.x, p.y, 5.0, hits), StatusCode::Internal, "first"));
+  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::Internal, "first"));
   test_assert(hits.size() == 1 && hits[0].object == b && calls == 2 && !d.rt.hasStickyError());
   (void)c;
   /* A read that throws, and a query. */
@@ -569,9 +657,9 @@ void testErrors()
   const BlockHandle host = d.hostObject("host");
   d.host(host).info.data = d.idOf(data);
   d.evaluate();
-  test_assert(d.picks(view, p.x, p.y, 5.0).size() == 4);
+  test_assert(d.picks(view, p.x, p.y, within(5.0)).size() == 4);
   d.host(host).onRead = [&](ObjectInfo &) { d.rt.setStickyError(boom("read")); };
-  test_assert(isError(d.tryPick(view, p.x, p.y, 5.0, hits), StatusCode::Internal, "read"));
+  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::Internal, "read"));
   test_assert(hits.size() == 3);
   d.host(host).onRead = nullptr;
   d.host(host).info.data = BlockId();
@@ -581,7 +669,7 @@ void testErrors()
     }
     return QueryAnswer();
   };
-  test_assert(isError(d.tryPick(view, p.x, p.y, 5.0, hits), StatusCode::Internal, "query"));
+  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::Internal, "query"));
   test_assert(hits.size() == 3 && !d.rt.hasStickyError());
   d.query = nullptr;
 
@@ -590,10 +678,10 @@ void testErrors()
   d.geo(throwing).onPick = [&](const PickQuery &, PickSink &) {
     Vector<PickHit> more;
     inside[0] = evaluateScene(*d.ctx);
-    inside[1] = d.tryPick(view, p.x, p.y, 5.0, more);
+    inside[1] = d.tryPick(view, p.x, p.y, within(5.0), more);
     inside[2] = setValue(*d.ctx, "scene.frame", PropValue::ofFloat(3.0));
   };
-  must(d.tryPick(view, p.x, p.y, 5.0, hits));
+  must(d.tryPick(view, p.x, p.y, within(5.0), hits));
   for (const Status &s : inside) {
     test_assert(s.code() == StatusCode::Busy);
   }
@@ -601,7 +689,7 @@ void testErrors()
   const BlockHandle shape = d.shapeBlock("shape", 1.0);
   d.setData(b, shape);
   Status during;
-  d.shape(shape).onBounds = [&] { during = d.tryPick(view, p.x, p.y, 5.0, hits); };
+  d.shape(shape).onBounds = [&] { during = d.tryPick(view, p.x, p.y, within(5.0), hits); };
   d.evaluate();
   test_assert(during.code() == StatusCode::Busy);
   /* While blocks are destroyed. */
@@ -612,7 +700,7 @@ void testErrors()
     delete static_cast<Shape *>(s);
   };
   during = Status();
-  whenFreed = [&] { during = d.tryPick(view, p.x, p.y, 5.0, hits); };
+  whenFreed = [&] { during = d.tryPick(view, p.x, p.y, within(5.0), hits); };
   must(d.lib->markDeleted(doomed));
   must(d.lib->destroyFromHistory(doomed));
   test_assert(during.code() == StatusCode::Busy);
@@ -631,6 +719,7 @@ int main()
   testOrder();
   testFlattened();
   testSink();
+  testBulk();
   testQuery();
   testFilter();
   testErrors();

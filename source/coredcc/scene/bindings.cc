@@ -1,6 +1,5 @@
 /* Binding descriptors for the transform types. */
 #include "coredcc/scene/evaluated.h"
-#include "coredcc/scene/pick.h"
 #include "coredcc/scene/transform_registry.h"
 
 #include "litestl/binding/binding.h"
@@ -148,41 +147,6 @@ lbt::Struct<ObjectEval> *ObjectEval::defineBindings()
     BIND_STRUCT_MEMBER(st, bounds);
     BIND_STRUCT_MEMBER(st, status);
     BIND_STRUCT_MEMBER(st, member);
-  }
-  return st;
-}
-
-lbt::Struct<PickQuery> *PickQuery::defineBindings()
-{
-  static lbt::Struct<PickQuery> *st = nullptr;
-  if (!st) {
-    litestl::alloc::PermanentGuard guard;
-    st = new lbt::Struct<PickQuery>("coredcc::PickQuery", sizeof(PickQuery));
-    BIND_STRUCT_METHOD(st, planeCount, MARGS());
-    BIND_STRUCT_METHOD(st, planeNormal, MARGS("i"));
-    BIND_STRUCT_METHOD(st, planeOffset, MARGS("i"));
-    BIND_STRUCT_METHOD(st, hasRay, MARGS());
-    BIND_STRUCT_METHOD(st, rayOrigin, MARGS());
-    BIND_STRUCT_METHOD(st, rayDirection, MARGS());
-    BIND_STRUCT_METHOD(st, radiusPixels, MARGS());
-  }
-  return st;
-}
-
-lbt::Struct<PickSink> *PickSink::defineBindings()
-{
-  static lbt::Struct<PickSink> *st = nullptr;
-  if (!st) {
-    litestl::alloc::PermanentGuard guard;
-    st = new lbt::Struct<PickSink>("coredcc::PickSink", sizeof(PickSink));
-    BIND_STRUCT_METHOD(st, element, MARGS("domain", "element"));
-    BIND_STRUCT_METHOD(st, point, MARGS("p"));
-    BIND_STRUCT_METHOD(st, segment, MARGS("a", "b"));
-    BIND_STRUCT_METHOD(st, triangle, MARGS("a", "b", "c"));
-    BIND_STRUCT_METHOD(st, sphere, MARGS("center", "radius"));
-    BIND_STRUCT_METHOD(st, capsule, MARGS("a", "b", "radius"));
-    BIND_STRUCT_METHOD(st, box, MARGS("box"));
-    BIND_STRUCT_METHOD(st, any, MARGS());
   }
   return st;
 }
