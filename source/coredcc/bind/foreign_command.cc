@@ -1,5 +1,7 @@
 #include "coredcc/bind/foreign_command.h"
 
+#include "coredcc/bind/detail.h"
+
 #include "coredcc/base/iface/owned.h"
 #include "coredcc/base/iface/registry.h"
 
@@ -19,17 +21,12 @@ namespace coredcc::script {
 namespace lb = litestl::binding;
 namespace lf = litestl::binding::foreign;
 
+using detail::error;
+using detail::scriptProp;
+using detail::splitSlots;
+using detail::view;
+
 namespace {
-
-std::string_view view(const string &s)
-{
-  return std::string_view(s.c_str(), size_t(s.size()));
-}
-
-Status error(StatusCode code, const std::string &message)
-{
-  return Status::error(code, message.c_str());
-}
 
 void *selfOf(lf::Handle h)
 {
@@ -65,7 +62,7 @@ class ForeignBindings::Dispatcher final : public ForeignDispatcher {
   explicit Dispatcher(ForeignBindings *fb) : fb_(*fb) {}
   Status call(const IfaceTable &table, void *self, int slot, void **args, void *ret) override
   {
-    return fb_.call(handleOf(self), table.ifaceDesc->methods[slot], args, ret);
+    return fb_.call(handleOf(self), table.ifaceDesc, table.ifaceDesc->methods[slot], args, ret);
   }
 
  private:
@@ -83,7 +80,7 @@ ForeignBindings::~ForeignBindings()
   CDCC_CHECK(live_ == 0,
              "script command instances outlive the Runtime: destroy the executor and the "
              "history before it");
-  for (lf::Handle h : factories_) {
+  for (lf::Handle h : handles_) {
     lf::release(h);
   }
   litestl::alloc::Delete(dispatcher_);
@@ -94,12 +91,16 @@ ForeignDispatcher *ForeignBindings::dispatcher()
   return dispatcher_;
 }
 
-Status ForeignBindings::call(lf::Handle h, const lbt::Method *m, void **args, void *ret)
+Status ForeignBindings::call(lf::Handle h,
+                             const lbt::_StructBase *iface,
+                             const lbt::Method *m,
+                             void **args,
+                             void *ret)
 {
   string err;
-  slots_.append(m->name.c_str());
+  frames_.append(Frame{iface, m});
   const bool ok = lf::call(h, m, args, ret, &err);
-  slots_.pop_back();
+  frames_.pop_back();
   if (ok) {
     return Status();
   }
@@ -107,9 +108,9 @@ Status ForeignBindings::call(lf::Handle h, const lbt::Method *m, void **args, vo
                        err.size() > 0 ? err.c_str() : "a script call failed");
 }
 
-void ForeignBindings::keepFactory(lf::Handle h)
+void ForeignBindings::keepHandle(lf::Handle h)
 {
-  factories_.append(h);
+  handles_.append(h);
 }
 
 bool inForeignCall(const Runtime &rt)
@@ -118,19 +119,22 @@ bool inForeignCall(const Runtime &rt)
   return fb && fb->depth() > 0;
 }
 
-bool inForeignSlot(const Runtime &rt, std::initializer_list<const char *> slots)
+bool inForeignSlot(const Runtime &rt,
+                   const lbt::_StructBase *iface,
+                   std::initializer_list<const char *> slots)
 {
   const ForeignBindings *fb = rt.findExt<ForeignBindings>();
-  const char *cur = fb ? fb->currentSlot() : nullptr;
-  if (!cur) {
+  const ForeignBindings::Frame *f = fb ? fb->currentFrame() : nullptr;
+  /* By name: another module may have a descriptor of its own. */
+  if (!f || strcmp(f->iface->name.c_str(), iface->name.c_str()) != 0) {
     return false;
   }
   for (const char *s : slots) {
-    if (strcmp(cur, s) == 0) {
+    if (strcmp(f->method->name.c_str(), s) == 0) {
       return true;
     }
   }
-  return false;
+  return slots.size() == 0;
 }
 
 /* ---- foreignImplementable ---- */
@@ -269,13 +273,10 @@ Status defFlags(CommandDef &def, uint32_t flags)
   return Status();
 }
 
-namespace {
-
-/* A def of `defaultValue`'s kind, for defInput and defOutput. */
-Result<PropertyDef> scriptProp(const char *what,
-                               const string &name,
-                               const PropValue &defaultValue,
-                               bool taken)
+Result<PropertyDef> detail::scriptProp(const char *what,
+                                       const string &name,
+                                       const PropValue &defaultValue,
+                                       bool taken)
 {
   const std::string_view n = view(name);
   if (!isIdentifier(n)) {
@@ -314,8 +315,6 @@ Result<PropertyDef> scriptProp(const char *what,
   return pd;
 }
 
-} // namespace
-
 Status defInput(CommandDef &def, const string &name, const PropValue &defaultValue)
 {
   const bool taken = def.findInput(view(name)) != nullptr;
@@ -349,7 +348,8 @@ Result<Owned<Command>> makeInstance(Runtime &rt, TypeId type, lf::Handle factory
 {
   const lbt::Method *make = ForeignFactory::defineBindings()->findMethod("make");
   lf::Handle h = 0;
-  Status s = rt.ext<ForeignBindings>().call(factory, make, nullptr, &h);
+  Status s = rt.ext<ForeignBindings>().call(
+      factory, ForeignFactory::defineBindings(), make, nullptr, &h);
   if (!s.ok()) {
     return error(s.code(), std::string("the command factory failed: ") + s.message());
   }
@@ -372,7 +372,9 @@ Result<Owned<Command>> makeInstance(Runtime &rt, TypeId type, lf::Handle factory
       &fb);
 }
 
-std::vector<std::string> splitSlots(const string &slots)
+} // namespace
+
+std::vector<std::string> detail::splitSlots(const string &slots)
 {
   std::vector<std::string> out;
   std::string cur;
@@ -392,6 +394,8 @@ std::vector<std::string> splitSlots(const string &slots)
   }
   return out;
 }
+
+namespace {
 
 Status registerWith(Runtime &rt, const CommandDef &def, lf::Handle factory, const string &slots)
 {
@@ -418,7 +422,7 @@ Status registerWith(Runtime &rt, const CommandDef &def, lf::Handle factory, cons
     return error(StatusCode::Unsupported,
                  "command '" + cmd + "': scripts can't fold commands (foldKey, foldFrom) yet");
   }
-  CDCC_TRY(foreignImplementable(detail::ifaceDesc<Command>()));
+  CDCC_TRY(foreignImplementable(coredcc::detail::ifaceDesc<Command>()));
 
   std::vector<const char *> present;
   for (const std::string &n : names) {
@@ -452,7 +456,7 @@ Status registerForeignCommand(Context &ctx,
   Runtime &rt = ctx.runtime();
   Status s = registerWith(rt, def, factory, slots);
   if (s.ok()) {
-    rt.ext<ForeignBindings>().keepFactory(factory);
+    rt.ext<ForeignBindings>().keepHandle(factory);
   }
   else {
     lf::release(factory);

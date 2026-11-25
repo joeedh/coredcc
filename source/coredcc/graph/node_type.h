@@ -164,6 +164,15 @@ class NodeTypeDef {
   NodeTypeDef &param(PropertyDef def, bool weak = false);
   NodeTypeDef &kernel(Owned<GraphKernel> kernel);
 
+  const litestl::util::string &name() const
+  {
+    return name_;
+  }
+  /** A copy without the kernel. */
+  NodeTypeDef copy() const;
+  /** Bound without members: scripts use bind/'s facades. */
+  static const litestl::binding::types::Struct<NodeTypeDef> *defineBindings();
+
  private:
   friend class NodeTypeRegistry;
   struct Input {
@@ -214,6 +223,8 @@ class NodeTypeRegistry {
    * defs and no Optional inputs, and there is a kernel and an output.
    */
   Result<const NodeType *> add(NodeTypeDef def);
+  /** What `add` would say of `def`, but for its kernel. */
+  Status check(const NodeTypeDef &def) const;
   /** The type, or null. */
   const NodeType *find(std::string_view name) const;
   /** The NotFound error for `name`, with suggestions. */
@@ -234,6 +245,8 @@ class NodeTypeRegistry {
   Status validate() const;
 
  private:
+  /** A type made of `def`, without its kernel. Owned by the caller (alloc::Delete). */
+  Result<NodeType *> build(const NodeTypeDef &def) const;
   Result<const NodeType *> store(NodeType *type);
 
   Runtime &rt_;

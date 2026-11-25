@@ -2,9 +2,11 @@
 
 #include "coredcc/api/resolve.h"
 #include "coredcc/base/text.h"
+#include "coredcc/bind/detail.h"
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/command/executor.h"
 #include "coredcc/command/set_property.h"
+#include "coredcc/graph/node_type.h"
 #include "coredcc/parse/invocation.h"
 
 #include "litestl/binding/binding.h"
@@ -16,18 +18,13 @@
 namespace coredcc::script {
 
 namespace lbt = litestl::binding::types;
+using detail::error;
+using detail::failed;
+using detail::ok;
+using detail::slotGate;
+using detail::view;
 
 namespace {
-
-std::string_view view(const string &s)
-{
-  return std::string_view(s.c_str(), size_t(s.size()));
-}
-
-Status error(StatusCode code, const std::string &message)
-{
-  return Status::error(code, message.c_str());
-}
 
 Status wrongType(const PropValue &v, const char *want)
 {
@@ -40,39 +37,6 @@ Status notInSlot(const char *what)
 {
   return error(StatusCode::FailedPrecondition,
                std::string(what) + ": only inside a command's slots");
-}
-
-/* Busy unless no script slot is running or the innermost one is in `allowed`: a
- * script's discard, run while the host clears the history, must not push into it. */
-Status slotGate(Context &ctx, const char *what, std::initializer_list<const char *> allowed)
-{
-  const ForeignBindings *fb = ctx.runtime().findExt<ForeignBindings>();
-  const char *slot = fb ? fb->currentSlot() : nullptr;
-  if (!slot || inForeignSlot(ctx.runtime(), allowed)) {
-    return Status();
-  }
-  std::string where;
-  for (const char *a : allowed) {
-    where += std::string(where.empty() ? "" : ", ") + a;
-  }
-  return error(StatusCode::Busy,
-               std::string(what) + ": not from a script command's " + slot +
-                   (where.empty() ? std::string(" (only outside script slots)")
-                                  : " (only from " + where + ")"));
-}
-
-template <class R, class T> R ok(T value)
-{
-  R r;
-  r.value = std::move(value);
-  return r;
-}
-
-template <class R> R failed(Status s)
-{
-  R r;
-  r.status = std::move(s);
-  return r;
 }
 
 ValueResult lookup(const PropertyBag &bag, const string &name)
@@ -91,6 +55,47 @@ ValueResult lookup(const PropertyBag &bag, const string &name)
 }
 
 } // namespace
+
+/* ---- gates ---- */
+
+Status detail::kernelGate(Context &ctx, const char *what)
+{
+  if (!inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<GraphKernel>())) {
+    return Status();
+  }
+  return error(StatusCode::Busy, std::string(what) + ": not from a script kernel (only its "
+                                                     "node's inputs, params and outputs)");
+}
+
+Status detail::slotGate(Context &ctx,
+                        const char *what,
+                        std::initializer_list<const char *> allowed)
+{
+  CDCC_TRY(kernelGate(ctx, what));
+  const ForeignBindings *fb = ctx.runtime().findExt<ForeignBindings>();
+  const ForeignBindings::Frame *frame = fb ? fb->currentFrame() : nullptr;
+  if (!frame || (allowed.size() > 0 &&
+                 inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<Command>(), allowed)))
+  {
+    return Status();
+  }
+  std::string where;
+  for (const char *a : allowed) {
+    where += std::string(where.empty() ? "" : ", ") + a;
+  }
+  return error(StatusCode::Busy,
+               std::string(what) + ": not from a script's " + frame->iface->name.c_str() + "." +
+                   frame->method->name.c_str() +
+                   (where.empty() ? std::string(" (only outside script slots)")
+                                  : " (only from a command's " + where + ")"));
+}
+
+Result<PropertyBag> detail::runCommand(Context &ctx, const CommandDef &def, PropertyBag inputs)
+{
+  CommandExecutor *ex = ctx.executor();
+  return inForeignCall(ctx.runtime()) ? ex->runSub(ctx, def, std::move(inputs)) :
+                                        ex->run(ctx, def, std::move(inputs));
+}
 
 /* ---- Status ---- */
 
@@ -206,6 +211,9 @@ StringResult bagName(const PropertyBag &bag, int32_t i)
 
 ValueResult inputGet(Context &ctx, const string &name)
 {
+  if (Status s = detail::kernelGate(ctx, "inputGet"); !s.ok()) {
+    return failed<ValueResult>(std::move(s));
+  }
   if (!ctx.inputs()) {
     return failed<ValueResult>(notInSlot("inputGet"));
   }
@@ -213,6 +221,7 @@ ValueResult inputGet(Context &ctx, const string &name)
 }
 Status outputSet(Context &ctx, const string &name, const PropValue &value)
 {
+  CDCC_TRY(detail::kernelGate(ctx, "outputSet"));
   if (!ctx.outputs()) {
     return notInSlot("outputSet");
   }
@@ -220,6 +229,9 @@ Status outputSet(Context &ctx, const string &name, const PropValue &value)
 }
 ValueResult outputGet(Context &ctx, const string &name)
 {
+  if (Status s = detail::kernelGate(ctx, "outputGet"); !s.ok()) {
+    return failed<ValueResult>(std::move(s));
+  }
   if (!ctx.outputs()) {
     return failed<ValueResult>(notInSlot("outputGet"));
   }
@@ -230,11 +242,15 @@ ValueResult outputGet(Context &ctx, const string &name)
 
 Status resolvePath(Context &ctx, const string &path)
 {
+  CDCC_TRY(detail::kernelGate(ctx, "resolvePath"));
   Result<ResolvedPath> r = resolve(ctx, view(path));
   return r.ok() ? Status() : r.status();
 }
 ValueResult getValue(Context &ctx, const string &path)
 {
+  if (Status s = detail::kernelGate(ctx, "getValue"); !s.ok()) {
+    return failed<ValueResult>(std::move(s));
+  }
   Result<PropValue> r = coredcc::getValue(ctx, view(path));
   return r.ok() ? ok<ValueResult>(std::move(r).value()) : failed<ValueResult>(r.status());
 }
@@ -279,7 +295,7 @@ BagResult invoke(Context &ctx, const string &invocation)
   if (!inputs.ok()) {
     return failed<BagResult>(inputs.status());
   }
-  Result<PropertyBag> r = ex->runSub(ctx, *def, std::move(inputs).value());
+  Result<PropertyBag> r = detail::runCommand(ctx, *def, std::move(inputs).value());
   return r.ok() ? ok<BagResult>(std::move(r).value()) : failed<BagResult>(r.status());
 }
 Status undo(Context &ctx)
@@ -300,6 +316,9 @@ Status redo(Context &ctx)
 }
 static BoolResult historyCan(Context &ctx, const char *what, bool undo)
 {
+  if (Status s = detail::kernelGate(ctx, what); !s.ok()) {
+    return failed<BoolResult>(std::move(s));
+  }
   CommandExecutor *ex = ctx.executor();
   if (!ex) {
     return failed<BoolResult>(
@@ -319,27 +338,11 @@ BoolResult canRedo(Context &ctx)
 
 /* ---- result struct descriptors ---- */
 
-#define CDCC_RESULT_BINDINGS(T)                                                          \
-  const lbt::Struct<T> *T::defineBindings()                                              \
-  {                                                                                      \
-    static lbt::Struct<T> *st = nullptr;                                                 \
-    if (!st) {                                                                           \
-      litestl::alloc::PermanentGuard guard;                                              \
-      st = new lbt::Struct<T>("coredcc::" #T, sizeof(T));                                \
-      BIND_STRUCT_COPY_CONSTRUCTOR(st);                                                  \
-      BIND_STRUCT_MEMBER(st, status);                                                    \
-      BIND_STRUCT_MEMBER(st, value);                                                     \
-    }                                                                                    \
-    return st;                                                                           \
-  }
-
 CDCC_RESULT_BINDINGS(BoolResult)
 CDCC_RESULT_BINDINGS(IntResult)
 CDCC_RESULT_BINDINGS(FloatResult)
 CDCC_RESULT_BINDINGS(StringResult)
 CDCC_RESULT_BINDINGS(ValueResult)
 CDCC_RESULT_BINDINGS(BagResult)
-
-#undef CDCC_RESULT_BINDINGS
 
 } // namespace coredcc::script

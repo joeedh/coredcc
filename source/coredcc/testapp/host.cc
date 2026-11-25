@@ -4,8 +4,11 @@
  * (apps/testapp) and the TS spike (tests/wasm/spike.test.ts) both drive it. */
 #include "coredcc/api/struct.h"
 #include "coredcc/bind/foreign_command.h"
+#include "coredcc/bind/graph_facades.h"
 #include "coredcc/bind/manager.h"
 #include "coredcc/command/executor.h"
+#include "coredcc/graph/commands.h"
+#include "coredcc/graph/provider.h"
 #include "coredcc/lib/library.h"
 
 #include "litestl/binding/binding.h"
@@ -13,6 +16,8 @@
 #include "litestl/util/alloc.h"
 
 #include <emscripten/emscripten.h>
+
+#include <functional>
 
 namespace testapp {
 
@@ -31,6 +36,43 @@ struct Data {
 };
 
 inline const StructId kData = StructId::of("TestApp");
+
+/* The graphs, by name. */
+CollectionAccessor graphsAccessor()
+{
+  const StructId type = StructId::of(kGraphDefType);
+  auto find = [type](Context &ctx, const std::function<bool(const Datablock &)> &want) {
+    PointerRef r;
+    const Library &lib = *ctx.library();
+    lib.forEach([&](BlockHandle h, const Datablock &b) {
+      if (!r.data && graphDefOf(lib, h) && want(b)) {
+        r.data = graphDefOf(lib, h);
+        r.type = type;
+        r.owner = OwnerKey::ofBlock(b.id());
+      }
+    });
+    return r;
+  };
+  CollectionAccessor c;
+  c.length = [](const PointerRef &, Context &ctx) {
+    int64_t n = 0;
+    ctx.library()->forEach(
+        [&](BlockHandle h, const Datablock &) { n += graphDefOf(*ctx.library(), h) != nullptr; });
+    return n;
+  };
+  c.at = [find](const PointerRef &, Context &ctx, int64_t i) {
+    return find(ctx, [i](const Datablock &) mutable { return i-- == 0; });
+  };
+  c.lookup = [find](const PointerRef &, Context &ctx, const KeySegment &key) {
+    return find(ctx, [&key](const Datablock &b) { return b.name() == key.text; });
+  };
+  c.keyOf = [](const PointerRef &, Context &ctx, const PointerRef &item) {
+    const Library &lib = *ctx.library();
+    return KeySegment::stringKey(lib.get(lib.find(item.owner.block))->name().c_str());
+  };
+  c.itemStruct = type;
+  return c;
+}
 
 /**
  * Everything one document needs, owned in destruction order: the context, executor and
@@ -90,6 +132,9 @@ class Host {
     s.addField(PropertyDef::vecProp("offset", 3), &Data::offset);
     s.addField(PropertyDef::enumProp("mode").item("OBJECT", 0).item("EDIT", 1), &Data::mode);
     s.addField(PropertyDef::flagsProp("flags").item("SELECT", 1).item("HIDE", 2), &Data::flags);
+    CDCC_CHECK(registerGraphCommands(rt_).ok(), "testapp: registering graphs");
+    s.addCollection(PropertyDef::collectionProp("graphs", StructId::of(kGraphDefType)),
+                    graphsAccessor());
     CDCC_CHECK(reg.add(std::move(s)).ok(), "testapp: registering the root struct");
     Data *data = &data_;
     CDCC_CHECK(reg.addRuntimeOwner("testapp", kData, [data]() { return (void *)data; }).ok(),
@@ -116,6 +161,10 @@ Context *context(Host &h)
 int32_t historySize(Host &h)
 {
   return h.history().size();
+}
+int32_t graphInstances(Host &h)
+{
+  return script::graphInstanceCount(h.context());
 }
 int32_t liveInstances(Host &h)
 {
@@ -150,6 +199,7 @@ litestl::binding::BindingManager *manager()
     BIND_FUNCTION(mgr, "testapp::create", testapp::create, MARGS()).returnsOwned();
     BIND_FUNCTION(mgr, "testapp::context", testapp::context, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::historySize", testapp::historySize, MARGS("h"));
+    BIND_FUNCTION(mgr, "testapp::graphInstances", testapp::graphInstances, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::liveInstances", testapp::liveInstances, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::validate", testapp::validate, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::abortForTest", testapp::abortForTest, MARGS());

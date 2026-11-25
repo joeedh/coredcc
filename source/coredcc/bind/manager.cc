@@ -2,6 +2,7 @@
 
 #include "coredcc/bind/facades.h"
 #include "coredcc/bind/foreign_command.h"
+#include "coredcc/bind/graph_facades.h"
 #include "coredcc/command/command.h"
 
 #include "litestl/binding/binding.h"
@@ -31,6 +32,11 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<CommandDef>());
   mgr->add(Bind<Command>());
   mgr->add(Bind<ForeignFactory>());
+  mgr->add(Bind<NodeTypeDef>());
+  mgr->add(Bind<NodeExecContext>());
+  mgr->add(Bind<GraphKernel>());
+  mgr->add(Bind<ScriptGraph>());
+  mgr->add(Bind<GraphResult>());
 }
 
 void addFacades(litestl::binding::BindingManager *mgr)
@@ -85,6 +91,70 @@ void addFacades(litestl::binding::BindingManager *mgr)
                 MARGS("ctx", "def", "factory", "slots"));
 }
 
+void addGraphFacades(litestl::binding::BindingManager *mgr)
+{
+  BIND_FUNCTION(mgr, "coredcc::newNodeType", script::newNodeType, MARGS("id")).returnsOwned();
+  BIND_FUNCTION(mgr, "coredcc::nodeTypeUiName", script::nodeTypeUiName, MARGS("def", "s"));
+  BIND_FUNCTION(mgr,
+                "coredcc::nodeTypeInput",
+                script::nodeTypeInput,
+                MARGS("def", "name", "defaultValue"));
+  BIND_FUNCTION(mgr,
+                "coredcc::nodeTypePayloadInput",
+                script::nodeTypePayloadInput,
+                MARGS("def", "name", "socketType"));
+  BIND_FUNCTION(mgr,
+                "coredcc::nodeTypeOutput",
+                script::nodeTypeOutput,
+                MARGS("def", "name", "socketType"));
+  BIND_FUNCTION(mgr,
+                "coredcc::nodeTypeParam",
+                script::nodeTypeParam,
+                MARGS("def", "name", "defaultValue"));
+  BIND_FUNCTION(mgr,
+                "coredcc::registerForeignNodeType",
+                script::registerForeignNodeType,
+                MARGS("ctx", "def", "kernel", "slots"));
+
+  BIND_FUNCTION(mgr, "coredcc::nodeInput", script::nodeInput, MARGS("node", "name"));
+  BIND_FUNCTION(mgr, "coredcc::nodeParam", script::nodeParam, MARGS("node", "name"));
+  BIND_FUNCTION(mgr, "coredcc::nodeOutput", script::nodeOutput, MARGS("node", "name", "value"));
+  BIND_FUNCTION(mgr, "coredcc::nodePass", script::nodePass, MARGS("node", "input", "output"));
+
+  BIND_FUNCTION(mgr, "coredcc::graphCreate", script::graphCreate, MARGS("ctx", "name"));
+  BIND_FUNCTION(mgr,
+                "coredcc::graphAddNode",
+                script::graphAddNode,
+                MARGS("ctx", "graphPath", "type", "x", "y"));
+  BIND_FUNCTION(mgr,
+                "coredcc::graphRemoveNode",
+                script::graphRemoveNode,
+                MARGS("ctx", "graphPath", "node"));
+  BIND_FUNCTION(mgr,
+                "coredcc::graphLink",
+                script::graphLink,
+                MARGS("ctx", "graphPath", "from", "fromSocket", "to", "toSocket"));
+  BIND_FUNCTION(mgr,
+                "coredcc::graphUnlink",
+                script::graphUnlink,
+                MARGS("ctx", "graphPath", "link"));
+  BIND_FUNCTION(mgr,
+                "coredcc::graphAddInterface",
+                script::graphAddInterface,
+                MARGS("ctx", "graphPath", "output", "name", "type"));
+
+  BIND_FUNCTION(mgr, "coredcc::graphInstance", script::graphInstance, MARGS("ctx", "graphPath"));
+  BIND_FUNCTION(mgr,
+                "coredcc::graphSetInput",
+                script::graphSetInput,
+                MARGS("graph", "name", "value"));
+  BIND_FUNCTION(mgr, "coredcc::graphClearInput", script::graphClearInput, MARGS("graph", "name"));
+  BIND_FUNCTION(mgr, "coredcc::graphEvaluate", script::graphEvaluate, MARGS("graph", "output"));
+  BIND_FUNCTION(mgr, "coredcc::graphErrorText", script::graphErrorText, MARGS("graph", "output"));
+  BIND_FUNCTION(mgr, "coredcc::graphClose", script::graphClose, MARGS("graph"));
+  BIND_FUNCTION(mgr, "coredcc::graphInstanceCount", script::graphInstanceCount, MARGS("ctx"));
+}
+
 } // namespace
 
 void addBindings(litestl::binding::BindingManager *mgr)
@@ -92,6 +162,7 @@ void addBindings(litestl::binding::BindingManager *mgr)
   litestl::alloc::PermanentGuard guard;
   addTypes(mgr);
   addFacades(mgr);
+  addGraphFacades(mgr);
 }
 
 litestl::binding::BindingManager *bindings()

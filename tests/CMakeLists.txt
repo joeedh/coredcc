@@ -55,6 +55,7 @@ coredcc_test(test_graph_random SOURCES graph/test_graph_random.cc DEPS coredcc_g
 coredcc_test(test_bind_facades SOURCES bind/test_bind_facades.cc DEPS coredcc_bind)
 coredcc_test(test_bind_foreign SOURCES bind/test_bind_foreign.cc DEPS coredcc_bind)
 coredcc_test(test_bind_review SOURCES bind/test_bind_review.cc DEPS coredcc_bind)
+coredcc_test(test_bind_graph SOURCES bind/test_bind_graph.cc DEPS coredcc_bind)
 if(WIN32)
   coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_bvh coredcc_command)
 endif()

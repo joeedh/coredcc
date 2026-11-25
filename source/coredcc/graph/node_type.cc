@@ -166,6 +166,17 @@ static std::string idName(std::string_view name)
   return "node:" + std::string(name);
 }
 
+NodeTypeDef NodeTypeDef::copy() const
+{
+  NodeTypeDef d(name_.c_str());
+  d.uiName_ = uiName_;
+  d.inputs_ = inputs_;
+  d.outputs_ = outputs_;
+  d.literalDefs_ = literalDefs_;
+  d.params_ = params_;
+  return d;
+}
+
 Result<const NodeType *> NodeTypeRegistry::store(NodeType *type)
 {
   Result<TypeId> id = rt_.registerId<IdDomain::Type>(idName(type->name.c_str()));
@@ -188,6 +199,29 @@ Result<const NodeType *> NodeTypeRegistry::store(NodeType *type)
 Result<const NodeType *> NodeTypeRegistry::add(NodeTypeDef def)
 {
   CDCC_TRY(rt_.busyIfEvaluating("adding a node type"));
+  if (!def.kernel_) {
+    return invalid(std::string("node type '") + def.name_.c_str() + "' has no kernel");
+  }
+  Result<NodeType *> type = build(def);
+  if (!type.ok()) {
+    return type.status();
+  }
+  (*type)->kernel = std::move(def.kernel_);
+  return store(*type);
+}
+
+Status NodeTypeRegistry::check(const NodeTypeDef &def) const
+{
+  CDCC_TRY(rt_.busyIfEvaluating("adding a node type"));
+  Result<NodeType *> type = build(def);
+  if (type.ok()) {
+    litestl::alloc::Delete(*type);
+  }
+  return type.status();
+}
+
+Result<NodeType *> NodeTypeRegistry::build(const NodeTypeDef &def) const
+{
   const SocketTypeRegistry &sockets = rt_.ext<SocketTypeRegistry>();
   const std::string where = std::string("node type '") + def.name_.c_str() + "'";
 
@@ -198,9 +232,6 @@ Result<const NodeType *> NodeTypeRegistry::add(NodeTypeDef def)
     return Status::error(StatusCode::AlreadyExists, (where + " is registered already").c_str());
   }
   CDCC_TRY(detail::checkNodeStructs(rt_, def.name_.c_str()));
-  if (!def.kernel_) {
-    return invalid(where + " has no kernel");
-  }
   if (def.outputs_.size() == 0) {
     return invalid(where + " has no outputs");
   }
@@ -267,7 +298,7 @@ Result<const NodeType *> NodeTypeRegistry::add(NodeTypeDef def)
     t->outputs.append(NodeOutputDef{out.name, type});
   }
 
-  for (NodeParamDef &p : def.params_) {
+  for (const NodeParamDef &p : def.params_) {
     const char *name = p.def.apiName().c_str();
     CDCC_TRY(checkMemberName(where, name));
     if (t->paramIndex(name) >= 0) {
@@ -284,7 +315,7 @@ Result<const NodeType *> NodeTypeRegistry::add(NodeTypeDef def)
     if (p.weak && p.def.kind() != PropKind::Pointer) {
       return invalid(where + ": param '" + name + "' is weak, but isn't a pointer");
     }
-    t->params.append(std::move(p));
+    t->params.append(p);
   }
 
   for (const NodeInputDef &d : t->inputs) {
@@ -293,10 +324,9 @@ Result<const NodeType *> NodeTypeRegistry::add(NodeTypeDef def)
   for (const NodeOutputDef &d : t->outputs) {
     t->outputInfos.append(SocketInfo{d.name, d.name, d.type->name});
   }
-  t->literalDefs = std::move(def.literalDefs_);
-  t->kernel = std::move(def.kernel_);
+  t->literalDefs = def.literalDefs_;
   guard.t = nullptr;
-  return store(t);
+  return t;
 }
 
 const NodeType *NodeTypeRegistry::find(std::string_view name) const

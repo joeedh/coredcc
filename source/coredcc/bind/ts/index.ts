@@ -29,9 +29,11 @@ import type {CommandDef} from 'coredcc-gen/coredcc/CommandDef'
 import {CommandFlags} from 'coredcc-gen/coredcc/CommandFlags'
 import type {Context} from 'coredcc-gen/coredcc/Context'
 import * as cd from 'coredcc-gen/coredcc/functions'
+import type {NodeExecContext} from 'coredcc-gen/coredcc/NodeExecContext'
 import type {PropertyBag} from 'coredcc-gen/coredcc/PropertyBag'
 import type {PropValue} from 'coredcc-gen/coredcc/PropValue'
 import {PropValueType} from 'coredcc-gen/coredcc/PropValueType'
+import type {ScriptGraph} from 'coredcc-gen/coredcc/ScriptGraph'
 import type {Status} from 'coredcc-gen/coredcc/Status'
 import {StatusCode} from 'coredcc-gen/coredcc/StatusCode'
 
@@ -140,7 +142,8 @@ export function load(module: object, getManager = 'CDCC_GetManager', opts: {repl
 
 /* ---- sessions ---- */
 
-/* Script command slots in progress: a document can't close under one. */
+/* Script slots (of commands and graph kernels) in progress: a document can't close under
+ * one. */
 let slotDepth = 0
 
 /**
@@ -370,7 +373,7 @@ const isThenable = (v: unknown) =>
 function sync<T>(slot: string, r: T): T {
   if (isThenable(r)) {
     ;(r as unknown as Promise<unknown>).catch(() => {}) /* reported here, not as unhandled */
-    throw new TypeError(`${slot} returned a Promise: command slots are synchronous`)
+    throw new TypeError(`${slot} returned a Promise: slots are synchronous`)
   }
   return r
 }
@@ -491,5 +494,177 @@ export function registerCommand(ctx: Context, spec: CommandSpec, Cls: new () => 
     check(cd.registerForeignCommand(ctx, def as CommandDef, backend.foreignHandle(factory), slots.join(' ')))
   } finally {
     def[Symbol.dispose]()
+  }
+}
+
+/* ---- graphs ---- */
+
+/**
+ * A node being evaluated, valid during its `evaluate`. A kernel computes its outputs from its
+ * inputs and params alone; inside it, everything that takes a Context fails (Busy).
+ */
+export class NodeContext {
+  private node: NodeExecContext | undefined
+  constructor(node: NodeExecContext) {
+    this.node = node
+  }
+  private get raw(): NodeExecContext {
+    if (!this.node) throw new Error('the node was already evaluated')
+    return this.node
+  }
+  /** Not for payload inputs, which can only be passed on. */
+  input(name: string): Value {
+    return take(cd.nodeInput(this.raw, name), toJs)
+  }
+  param(name: string): Value {
+    return take(cd.nodeParam(this.raw, name), toJs)
+  }
+  /** Converted to the output's type, as `set` converts to a member's. */
+  output(name: string, value: Writable) {
+    const raw = this.raw
+    withValue(value, (v) => check(cd.nodeOutput(raw, name, v)))
+  }
+  /** Sets an output to an input of the same type. */
+  pass(input: string, output: string) {
+    check(cd.nodePass(this.raw, input, output))
+  }
+  /** Called when the evaluation ends. */
+  close() {
+    this.node = undefined
+  }
+}
+
+/** A payload input of a node type: `inputs: {mesh: payload('my.Mesh')}`. */
+export class PayloadInput {
+  constructor(readonly socketType: string) {}
+}
+export const payload = (socketType: string) => new PayloadInput(socketType)
+
+export interface NodeTypeSpec {
+  /** Dotted, e.g. "my.scale". The `core.` and `graph.` namespaces are reserved. */
+  id: string
+  uiName?: string
+  /** Inputs by name, typed by their defaults (Bool, Int, Float, String, Vec2-4). A whole
+   * number declares an Int: use `float(1)` for a Float. */
+  inputs?: Record<string, Writable | PayloadInput>
+  params?: Record<string, Writable>
+  /** Socket types by name: `{value: 'float'}`. */
+  outputs: Record<string, string>
+  /** Sets every output. Synchronous. A throw fails the node (Internal, or a ScriptError's
+   * code). One function for all nodes of the type: it keeps no state. */
+  evaluate(node: NodeContext): void
+}
+
+/** Registers a node type, for as long as the document is open. */
+export function defineNodeType(ctx: Context, spec: NodeTypeSpec) {
+  checkCtx(ctx)
+  if (typeof spec.evaluate !== 'function') {
+    throw new TypeError(`defineNodeType: ${spec.id}: evaluate must be a function`)
+  }
+  const backend = getBindingBackend()
+  const def = cd.newNodeType(spec.id)
+  if (!def) throw new Error(`defineNodeType: no def for ${spec.id}`)
+  try {
+    if (spec.uiName !== undefined) check(cd.nodeTypeUiName(def, spec.uiName))
+    for (const [name, v] of Object.entries(spec.inputs ?? {})) {
+      if (v instanceof PayloadInput) check(cd.nodeTypePayloadInput(def, name, v.socketType))
+      else withValue(v, (pv) => check(cd.nodeTypeInput(def, name, pv)))
+    }
+    for (const [name, v] of Object.entries(spec.params ?? {})) {
+      withValue(v, (pv) => check(cd.nodeTypeParam(def, name, pv)))
+    }
+    for (const [name, type] of Object.entries(spec.outputs)) check(cd.nodeTypeOutput(def, name, type))
+    const kernel = {
+      evaluate(raw: NodeExecContext): Status | undefined {
+        const node = new NodeContext(raw)
+        slotDepth++
+        try {
+          sync('evaluate', spec.evaluate(node))
+          return undefined
+        } catch (e) {
+          return statusOf(StatusCode.Internal, e)
+        } finally {
+          slotDepth--
+          node.close()
+        }
+      },
+    }
+    check(cd.registerForeignNodeType(ctx, def, backend.foreignHandle(kernel), 'evaluate'))
+  } finally {
+    def[Symbol.dispose]()
+  }
+}
+
+/** Makes a graph block; a pointer to it, for a pointer member. Undoable, as are the other
+ * edits, which take a path to a graph or to a pointer to one. */
+export function graphCreate(ctx: Context, name: string): PropValue {
+  return take(cd.graphCreate(ctx, name), copyValue)
+}
+/** The new node's id. */
+export function graphAddNode(ctx: Context, path: string, type: string, x = 0, y = 0): number {
+  return take(cd.graphAddNode(ctx, path, type, x, y), Number)
+}
+export function graphRemoveNode(ctx: Context, path: string, node: number) {
+  check(cd.graphRemoveNode(ctx, path, BigInt(node)))
+}
+/** The new link's id. Sockets are named by key: an input's or output's name, or `#<id>` for
+ * one of a graph's interface (on group, input and output nodes). */
+export function graphLink(
+  ctx: Context,
+  path: string,
+  from: number,
+  fromSocket: string,
+  to: number,
+  toSocket: string
+): number {
+  return take(cd.graphLink(ctx, path, BigInt(from), fromSocket, BigInt(to), toSocket), Number)
+}
+export function graphUnlink(ctx: Context, path: string, link: number) {
+  check(cd.graphUnlink(ctx, path, BigInt(link)))
+}
+/** The new interface socket's id. */
+export function graphAddInterface(
+  ctx: Context,
+  path: string,
+  side: 'input' | 'output',
+  name: string,
+  type: string
+): number {
+  return take(cd.graphAddInterface(ctx, path, side === 'output', name, type), Number)
+}
+
+/** An evaluated graph. Closed by `using`, and with its document. */
+export class GraphInstance implements Disposable {
+  private raw: ScriptGraph | undefined
+  constructor(ctx: Context, path: string) {
+    checkCtx(ctx)
+    this.raw = take(
+      cd.graphInstance(ctx, path),
+      (v) => getBindingBackend().constructWith('coredcc::ScriptGraph', 'copy', v) as ScriptGraph
+    )
+  }
+  private get graph(): ScriptGraph {
+    if (!this.raw) throw new Error('the graph instance was disposed')
+    return this.raw
+  }
+  /** Sets an interface input by name; `undefined` goes back to its default. */
+  setInput(name: string, value: Writable | undefined) {
+    const graph = this.graph
+    if (value === undefined) check(cd.graphClearInput(graph, name))
+    else withValue(value, (v) => check(cd.graphSetInput(graph, name, v)))
+  }
+  /** An interface output's value, by name. */
+  evaluate(output: string): Value {
+    return take(cd.graphEvaluate(this.graph, output), toJs)
+  }
+  /** Why `output` had no value when last evaluated; "" if it had one. */
+  errorText(output: string): string {
+    return cd.graphErrorText(this.graph, output)
+  }
+  /** An evaluation in progress (when a kernel disposes of its own) is completed. */
+  [Symbol.dispose]() {
+    const raw = this.raw
+    this.raw = undefined
+    raw?.[Symbol.dispose]()
   }
 }

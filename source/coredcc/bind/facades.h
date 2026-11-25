@@ -16,7 +16,7 @@
  * - `setValue` and `invoke` only in `exec`, where they run as sub-commands;
  * - `writeValue` only in `exec`, `undo` and `redo`;
  * - `undo` and `redo` never;
- * - reads anywhere.
+ * - reads anywhere but in a graph kernel (graph_facades.h), where all that takes a Context is Busy.
  *
  * Outside any script slot (a script's top level) every facade is allowed.
  */

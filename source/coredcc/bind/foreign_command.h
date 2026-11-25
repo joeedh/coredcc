@@ -44,7 +44,7 @@ struct ForeignFactory {
 
 /**
  * The Runtime extension behind script commands: the dispatcher every foreign table
- * shares, the foreign calls in progress, and the factory handles it owns.
+ * shares, the foreign calls in progress, and the handles it owns.
  *
  * It counts the live script command instances. Destroying it (with the Runtime) while
  * any is alive aborts, naming the cause: a history or executor outlived the Runtime.
@@ -54,29 +54,34 @@ class ForeignBindings {
   static constexpr const char *kExtName = "coredcc.script.ForeignBindings";
 
   explicit ForeignBindings(Runtime *rt);
-  /** Releases the factory handles. Aborts if script command instances are alive. */
+  /** Releases the handles it keeps. Aborts if script command instances are alive. */
   ~ForeignBindings();
   ForeignBindings(const ForeignBindings &) = delete;
   ForeignBindings &operator=(const ForeignBindings &) = delete;
 
   ForeignDispatcher *dispatcher();
-  /** foreign::call with `m` on the slot stack; Internal with the host's message on
-   * failure. */
+  /** foreign::call with method `m` of `iface` on the slot stack; Internal with the host's
+   * message on failure. */
   Status call(litestl::binding::foreign::Handle h,
-              const litestl::binding::types::Method *m,
+              const lbt::_StructBase *iface,
+              const lbt::Method *m,
               void **args,
               void *ret);
   /** Foreign calls in progress. While it is above 0, facades that would reenter the
    * executor or the history are Busy, per slot (see facades.h). */
   int depth() const
   {
-    return int(slots_.size());
+    return int(frames_.size());
   }
-  /** The innermost foreign call's method name (a Command slot, or `make`); null when
-   * none is in progress. */
-  const char *currentSlot() const
+  /** A foreign call: a method of an interface, or of ForeignFactory. */
+  struct Frame {
+    const lbt::_StructBase *iface = nullptr;
+    const lbt::Method *method = nullptr;
+  };
+  /** The innermost foreign call; null when none is in progress. */
+  const Frame *currentFrame() const
   {
-    return slots_.size() > 0 ? slots_[int(slots_.size()) - 1] : nullptr;
+    return frames_.size() > 0 ? &frames_[int(frames_.size()) - 1] : nullptr;
   }
   /** Live script command instances, made by a factory and not yet destroyed. */
   int liveInstances() const
@@ -91,22 +96,25 @@ class ForeignBindings {
   {
     live_--;
   }
-  /** Takes the count of a factory handle, released when the Runtime goes. */
-  void keepFactory(litestl::binding::foreign::Handle h);
+  /** Takes the count of a handle (a factory's, a kernel's), released when the Runtime
+   * goes. */
+  void keepHandle(litestl::binding::foreign::Handle h);
 
  private:
   class Dispatcher;
   Dispatcher *dispatcher_;
-  litestl::util::Vector<const char *> slots_;
+  litestl::util::Vector<Frame> frames_;
   int live_ = 0;
-  litestl::util::Vector<litestl::binding::foreign::Handle> factories_;
+  litestl::util::Vector<litestl::binding::foreign::Handle> handles_;
 };
 
 /** Whether a foreign call is in progress on `rt`. */
 bool inForeignCall(const Runtime &rt);
-/** Whether the innermost foreign call on `rt` is one of `slots`. False when none is in
- * progress. */
-bool inForeignSlot(const Runtime &rt, std::initializer_list<const char *> slots);
+/** Whether the innermost foreign call on `rt` is one of `iface`'s methods; with `slots`, one
+ * of those. False when none is in progress. */
+bool inForeignSlot(const Runtime &rt,
+                   const lbt::_StructBase *iface,
+                   std::initializer_list<const char *> slots = {});
 
 /**
  * Ok if every slot of `iface` can be implemented by a script. Else Unsupported, naming the
