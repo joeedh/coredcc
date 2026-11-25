@@ -22,14 +22,23 @@ namespace graph {
 class Evaluator;
 }
 
-/** A node of an instance: the group nodes on the way down from its root, then the node. */
+/**
+ * A node of an instance: the group nodes on the way down from its root, then the node. A
+ * foreach node on the way leads into one of its elements, by key.
+ *
+ * Paths into elements are for `report` and `peek`, and where errors come from. They lead to
+ * elements with a state of their own.
+ */
 struct NodePath {
   litestl::util::Vector<NodeId, 2> groups;
   NodeId node;
+  /** Of each foreach node on the way, the outermost first. The origin of an error may have
+   * one more: an element that its foreach node couldn't evaluate. */
+  litestl::util::Vector<int64_t, 1> elements{};
   bool operator==(const NodePath &b) const;
   /** Groups first, as for nested file names; a shorter path before its extensions. */
   bool operator<(const NodePath &b) const;
-  /** `12/34/56`. */
+  /** `12/34/56`, and with elements `12/34/56[7, 8]`. */
   std::string toString() const;
 };
 
@@ -40,7 +49,8 @@ struct SocketPath {
   /** A socket key; for an interface output (a null node), its name or key. */
   litestl::util::string key;
 
-  /** An interface output of the root, by name or by key (`#<id>`). */
+  /** An interface output of the root, by name or by key (`#<id>`). `peek` also takes one of
+   * a graph inside, by key: with groups, and a null node. */
   static SocketPath output(std::string_view nameOrKey);
   /** A node's socket. */
   static SocketPath of(NodePath node, std::string_view key, SocketSide side = SocketSide::Output);
@@ -52,14 +62,12 @@ struct SocketPath {
 
 /** Why a socket has no value. */
 struct GraphError {
-  /** The error as the node that failed gave it, and where that was. */
+  /** The error as the node that failed gave it, and where that was. The message has the
+   * elements, too. */
   Status status;
   NodePath origin;
   /** The input at fault (a conversion, a cycle), or "" for the node. */
   litestl::util::string socket;
-  /** If it is in elements of foreach nodes: their keys, the outermost first. The message
-   * has them too. */
-  litestl::util::Vector<int64_t, 1> elements;
   bool operator==(const GraphError &b) const;
 };
 
@@ -87,7 +95,7 @@ struct GraphMemory {
 
 struct NodeReport {
   enum class State : uint8_t {
-    /** Never reached by an evaluation, or not a node that can fail. */
+    /** Not reached by an evaluation (or dropped), or not a node that can fail. */
     NotEvaluated,
     Ok,
     /** Its kernel failed, or it couldn't run. */
@@ -95,13 +103,22 @@ struct NodeReport {
     /** Something it depends on failed. */
     InputFailed,
   };
+  /** A group's is the worst of the nodes in it. */
   State state = State::NotEvaluated;
-  /** Failed and InputFailed. */
+  /** Failed and InputFailed. A group's is of one of its nodes in that state. */
   GraphError error;
-  /** How often its kernel ran. */
+  /** Whether the state is that of the document as it is: evaluating what the node gives would
+   * do nothing. A group's: whether it was looked at since anything moved. */
+  bool current = false;
+  /** How often its kernel ran. A group's numbers are the sums of its nodes'; a foreach's
+   * elements aren't counted one by one. */
   uint64_t runs = 0;
-  /** How long its last run took. */
+  /** How long its last run took. A foreach's is with its elements. */
   double seconds = 0;
+  /** How long all of its runs took. */
+  double totalSeconds = 0;
+  /** What it keeps: its outputs, and the frames of its group or elements. */
+  GraphMemory memory;
   /** Foreach nodes: the elements of its last run, and how many of them have a state of their
    * own. The others share one: to run them again costs all of their kernels. */
   int elements = 0;
@@ -196,11 +213,20 @@ class GraphInstance {
    * another type. The value of an input that is removed stays, for when undo brings it back;
    * None by its key, or `clear`, drops it. */
   Status setInput(std::string_view nameOrKey, GraphValue v);
+  /** What is known of a node, without evaluating. A group's looks at all in it. */
   NodeReport report(const NodePath &node) const;
+  /** The value a socket of any node had when it was last computed, without evaluating, which
+   * `report` may say isn't current. None if it wasn't computed or has an error. An input's, or a
+   * group's output, is None too while an edit may have changed it. */
+  GraphValue peek(const SocketPath &socket) const;
   /** Makes the next evaluation run failed kernels again, though nothing changed. */
   Status retry();
   /** Drops everything evaluated. Inputs stay, but for those the interface doesn't have. */
   Status clear();
+  /** Drops what a node keeps: its outputs, or all in its group or elements. It is computed
+   * again when something needs it. NotFound if nothing is kept of it, Unsupported for a path
+   * into an element. */
+  Status drop(const NodePath &node);
   /** Drops what is kept of a socket for `value` and the calls with it. Caches stay. */
   Status forget(const SocketPath &socket);
   /** For kernels (NodeExecContext::userData). Not a dependency. */

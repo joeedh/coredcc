@@ -79,6 +79,7 @@ struct KernelState {
   ErrorPtr error;
   uint64_t runs = 0;
   double seconds = 0;
+  double totalSeconds = 0;
   /** Foreach nodes. */
   std::unique_ptr<Foreach> foreach;
   /** What reads its outputs, and the blocks it used. In a frame with Dependents. */
@@ -124,6 +125,16 @@ struct Element {
 struct Foreach {
   ~Foreach();
   void clear();
+  /** Calls fn(Element &). */
+  template <class Fn> void forEachElement(Fn &&fn) const
+  {
+    for (auto &pair : cached) {
+      fn(*pair.value);
+    }
+    if (shared) {
+      fn(*shared);
+    }
+  }
 
   uint64_t defSerial = 0;
   litestl::util::Map<int64_t, Element *> cached;
@@ -228,17 +239,11 @@ struct Frame {
   }
 
   /** Calls fn(Element &) for every element of its foreach nodes. */
-  template <class Fn> void forEachElement(Fn &&fn)
+  template <class Fn> void forEachElement(Fn &&fn) const
   {
-    for (KernelState *k : kernels) {
-      if (!k || !k->foreach) {
-        continue;
-      }
-      for (auto &pair : k->foreach->cached) {
-        fn(*pair.value);
-      }
-      if (k->foreach->shared) {
-        fn(*k->foreach->shared);
+    for (const KernelState *k : kernels) {
+      if (k && k->foreach) {
+        k->foreach->forEachElement(fn);
       }
     }
   }

@@ -194,6 +194,9 @@ Status GraphDef::restoreNode(const NodeState &state)
     lib->noteRefsChanged(); /* the extras' */
   }
   const uint64_t version = stamp(true, !is(n->typeName_, kGraphOutputType));
+  if (isGroup || n->refs_.size() > 0) {
+    refsVersion_ = version;
+  }
   n->paramVersion_ = version;
   for (NodeValue &v : n->params_) {
     v.version = version;
@@ -219,6 +222,7 @@ Status GraphDef::removeNode(NodeId id)
   while (n->out_.size() > 0) {
     detachLink(n->out_.last());
   }
+  const bool hadRefs = isGroupType(n->typeName_) || n->refs_.size() > 0;
   bool refs = !n->group_.isNull() || hasRefs(n->extras_);
   for (const NodeBlockRef &r : n->refs_) {
     refs |= !r.cell.isNull();
@@ -228,7 +232,10 @@ Status GraphDef::removeNode(NodeId id)
   if (refs && lib_.get()) {
     lib_.get()->noteRefsChanged();
   }
-  stamp(true);
+  const uint64_t version = stamp(true);
+  if (hadRefs) {
+    refsVersion_ = version;
+  }
   announce(true);
   return Status();
 }
@@ -303,7 +310,7 @@ Status GraphDef::setParam(NodeId id, std::string_view name, const PropValue &val
   const NodeParamDef &param = type->params[i];
   if (param.def.kind() == PropKind::Pointer) {
     CDCC_TRY(setParamRef(n, param, value));
-    n->paramVersion_ = stampNode(id);
+    n->paramVersion_ = refsVersion_ = stampNode(id);
     announce(false);
     return Status();
   }
@@ -485,7 +492,7 @@ Status GraphDef::setGroup(NodeId id, BlockId def)
   if (lib) {
     CDCC_TRY(lib->writeRef(n->group_, def));
   }
-  n->paramVersion_ = stamp(true);
+  n->paramVersion_ = refsVersion_ = stamp(true);
   announce(true);
   return Status();
 }
@@ -921,7 +928,7 @@ Status GraphDef::restoreRef(NodeId id, std::string_view param, BlockId target)
   else if (lib) {
     CDCC_TRY(lib->writeRef(n->group_, target));
   }
-  n->paramVersion_ = group ? stamp(true) : stampNode(id);
+  n->paramVersion_ = refsVersion_ = group ? stamp(true) : stampNode(id);
   announce(group);
   return Status();
 }

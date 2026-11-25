@@ -21,6 +21,7 @@ coredcc_library(coredcc_graph
     payload.cc
     provider.cc
     reach.cc
+    reports.cc
     socket_type.cc
     system.cc
     topology.cc

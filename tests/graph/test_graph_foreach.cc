@@ -198,7 +198,7 @@ void testRuns()
   test_assert(l.is({1, 2, 3}, {{"sum", {12, 13, 16}}, {"c2", {0, 0, 0}}}, 3));
   test_assert(w.lib.markDeleted(g.h).ok());
   test_assert(l.fails(StatusCode::NotFound, {1}, "element 1: "));
-  test_assert(l.error()->origin == at({l.node}, group));
+  test_assert(place(l.error()) == at({l.node}, group));
   test_assert(w.lib.restoreFromHistory(g.h).ok());
   test_assert(l.is({1, 2, 3}, {{"sum", {12, 13, 16}}, {"c2", {0, 0, 0}}}, 0));
   /* Other data under the group's id: the content is as new as it was, but another. */

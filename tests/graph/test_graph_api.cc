@@ -168,7 +168,12 @@ void testInterface()
   const std::string byId = path("out", g, ".sockets[#") + std::to_string(ia) + "]";
   test_assert(d.is(socket + ".value", fl(3)) && d.is(byId + ".isSet", PropValue::ofBool(false)));
   test_assert(d.is(socket + ".name", str("a")) && d.is(socket + ".type", str("float")));
-  test_assert(hasCode(d.set(socket + ".value", fl(5)), StatusCode::FailedPrecondition));
+  /* Setting the value puts it in use, as one step. */
+  test_assert(d.set(socket + ".value", fl(5)).ok() && d.is(socket + ".value", fl(5)));
+  test_assert(d.is(socket + ".isSet", PropValue::ofBool(true)) && d.undo().ok());
+  test_assert(d.is(socket + ".isSet", PropValue::ofBool(false)) && d.is(socket + ".value", fl(3)));
+  test_assert(d.redo().ok() && d.is(socket + ".isSet", PropValue::ofBool(true)));
+  test_assert(d.undo().ok() && o.node(g)->literals().size() == 0);
   test_assert(d.set(socket + ".isSet", PropValue::ofBool(true)).ok());
   test_assert(d.is(socket + ".value", fl(3)) && d.set(byId + ".value", fl(5)).ok());
   GraphInstance inst(&d.rt, &d.lib, outer.id);

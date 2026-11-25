@@ -10,6 +10,7 @@
 #include "coredcc/graph/topology.h"
 #include "coredcc/lib/library.h"
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 
@@ -136,7 +137,7 @@ GraphDef::GraphDef(Runtime *rt, Library *lib, BlockId self)
     nextDef_->prevDef_ = this;
   }
   types.defs_ = this;
-  structureVersion_ = contentVersion_ = interfaceVersion_ = rt_.nextVersion();
+  structureVersion_ = contentVersion_ = interfaceVersion_ = refsVersion_ = rt_.nextVersion();
   rt_.ext<GraphSystem>().noteStructure(structureVersion_);
 }
 
@@ -344,8 +345,14 @@ PropValue GraphDef::paramValue(const GraphNode &node, std::string_view name) con
   return def.hasAccess(PropAccess::Optional) ? PropValue() : def.defaultValue();
 }
 
-Vector<LinkDiagnostic> GraphDef::diagnostics() const
+const Vector<LinkDiagnostic> &GraphDef::diagnostics() const
 {
+  /* All it depends on is in the topology's key, sockets of other defs included. */
+  const std::shared_ptr<const GraphTopology> topo = topology();
+  if (diagnosedAt_ == topo->serial) {
+    return diagnostics_;
+  }
+  diagnosedAt_ = topo->serial;
   const SocketTypeRegistry &types = rt_.ext<SocketTypeRegistry>();
   auto typeOfSocket = [&](const GraphNode &n, SocketSide side, const string &key, Status &status) {
     if (const std::optional<SocketInfo> s = findSocket(n, side, key.c_str())) {
@@ -363,8 +370,9 @@ Vector<LinkDiagnostic> GraphDef::diagnostics() const
                                .c_str());
     return static_cast<const SocketType *>(nullptr);
   };
-  Vector<LinkDiagnostic> out;
-  forEachLink([&](const GraphLink &l) {
+  diagnostics_.clear();
+  for (int i = 0; i < linkCount(); i++) {
+    const GraphLink &l = *linkAt(i);
     Status status;
     const SocketType *from = typeOfSocket(*l.from, SocketSide::Output, l.fromKey, status);
     const SocketType *to =
@@ -376,10 +384,46 @@ Vector<LinkDiagnostic> GraphDef::diagnostics() const
                                  .c_str());
     }
     if (!status.ok()) {
-      out.append(LinkDiagnostic{l.id, status});
+      diagnostics_.append(LinkDiagnostic{
+          l.id, status, isInteriorKey(l.fromKey.c_str()) || isInteriorKey(l.toKey.c_str())});
     }
-  });
-  return out;
+  }
+  return diagnostics_;
+}
+
+const LinkDiagnostic *GraphDef::diagnostic(LinkId link) const
+{
+  const Vector<LinkDiagnostic> &list = diagnostics();
+  const LinkDiagnostic *end = list.data() + list.size();
+  const LinkDiagnostic *at = std::lower_bound(
+      list.data(), end, link, [](const LinkDiagnostic &d, LinkId id) { return d.link < id; });
+  return at != end && at->link == link ? at : nullptr;
+}
+
+const GraphLink *GraphDef::linkAt(int index) const
+{
+  if (linkIndex_.size() == 0) {
+    forEachLink([&](const GraphLink &l) { linkIndex_.append(&l); });
+    std::sort(linkIndex_.begin(), linkIndex_.end(),
+              [](const GraphLink *a, const GraphLink *b) { return a->id < b->id; });
+  }
+  return index >= 0 && index < int(linkIndex_.size()) ? linkIndex_[index] : nullptr;
+}
+
+const Vector<const GraphNode *> &GraphDef::flaggedNodes() const
+{
+  const uint64_t types = rt_.ext<NodeTypeRegistry>().stamp();
+  if (flaggedAt_ != structureVersion_ || flaggedTypes_ != types) {
+    flaggedAt_ = structureVersion_;
+    flaggedTypes_ = types;
+    flagged_.clear();
+    forEachNode([&](const GraphNode &n) {
+      if (n.type() && n.type()->flags != NodeTypeFlags::None) {
+        flagged_.append(&n);
+      }
+    });
+  }
+  return flagged_;
 }
 
 NodeState GraphDef::stateOf(const GraphNode &node) const
@@ -507,6 +551,7 @@ void GraphDef::typeAdded(const NodeType &type)
       n->type_ = &type;
       untyped_--;
       matchParamRefs(n);
+      refsVersion_ = rt_.nextVersion();
       if (Library *lib = lib_.get()) {
         lib->noteRefsChanged();
       }
@@ -551,6 +596,7 @@ GraphLink *GraphDef::attachLink(const LinkState &state, GraphNode *from, GraphNo
   from->out_.append(l);
   to->in_.append(l);
   links_.add(l->id.value, l);
+  linkIndex_.clear();
   if (to->inByKey_) {
     to->inByKey_->add({l->toKey}, l);
   }
@@ -581,6 +627,7 @@ void GraphDef::detachLink(GraphLink *link)
     link->to->inByKey_->remove({link->toKey});
   }
   links_.remove(link->id.value);
+  linkIndex_.clear();
   litestl::alloc::Delete(link);
 }
 

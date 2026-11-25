@@ -564,7 +564,7 @@ void testGroups()
   test_assert(g.report(at(g2)).state == NodeReport::State::Failed);
   test_assert(hasCode(alone.evaluate(SocketPath::output("sum")), StatusCode::NotFound));
   test_assert(w.lib.restoreFromHistory(inner.h).ok() && num(g, last) == 5 && gr.take() == 0);
-  test_assert(g.report(at(g2)).state == NodeReport::State::NotEvaluated);
+  test_assert(g.report(at(g2)).state == NodeReport::State::Ok);
   test_assert(num(alone, SocketPath::output("sum")) == 6); /* 0 + 6, set above */
 
   /* Another def, and none. */

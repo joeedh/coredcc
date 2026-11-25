@@ -183,6 +183,7 @@ void Evaluator::computeForeach(Frame &f, int node)
     k.ran = true;
     k.runError = std::move(error);
     k.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    k.totalSeconds += k.seconds;
   }
   if (sink_.set) {
     sink_.set->add(k.trace, *sink_.trace);
@@ -256,10 +257,10 @@ static ErrorPtr inElement(const GraphError &e, int64_t key)
   out.status = Status::error(
       e.status.code(),
       ("element " + std::to_string(key) + ": " + e.status.message()).c_str());
-  out.elements.clear();
-  out.elements.append(key);
-  for (int64_t inner : e.elements) {
-    out.elements.append(inner);
+  out.origin.elements.clear();
+  out.origin.elements.append(key);
+  for (int64_t inner : e.origin.elements) {
+    out.origin.elements.append(inner);
   }
   return std::make_shared<const GraphError>(std::move(out));
 }

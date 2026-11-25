@@ -323,6 +323,9 @@ struct LinkState {
 struct LinkDiagnostic {
   LinkId link;
   Status status;
+  /** Whether an end is an interior socket (graph/interior.h): such links go stale when a node
+   * inside goes, so a program that makes them removes them. */
+  bool interior = false;
 };
 
 /** What a cached answer about a document depends on. */
@@ -405,6 +408,13 @@ class GraphDef {
   {
     return interfaceVersion_;
   }
+  /** Moves when an edit of the def may have changed what its group nodes and Pointer params
+   * refer to, or which nodes have some. A Library may write the references too (a block was
+   * replaced): that moves Library::epoch only. */
+  uint64_t refsVersion() const
+  {
+    return refsVersion_;
+  }
 
   /* ---- reading ---- */
 
@@ -428,15 +438,22 @@ class GraphDef {
       fn(static_cast<const GraphNode &>(*n));
     }
   }
-  /** The same, for the nodes whose type has all of `flags`. */
+  /** The same, for the nodes whose type has all of `flags`, at the cost of those whose type has
+   * any. Not of nodes in groups: their defs have their own. `fn` can't edit the def. */
   template <class Fn> void forEachNode(NodeTypeFlags flags, Fn &&fn) const
   {
-    forEachNode([&](const GraphNode &n) {
-      if (n.type() && (n.type()->flags & flags) == flags) {
-        fn(n);
+    if (flags == NodeTypeFlags::None) {
+      return forEachNode(fn);
+    }
+    for (const GraphNode *n : flaggedNodes()) {
+      if ((n->type()->flags & flags) == flags) {
+        fn(*n);
       }
-    });
+    }
   }
+  /** The link at `index`, 0 to linkCount() - 1, in the order of their ids: the same in
+   * every session. Cheap while no links come or go. */
+  const GraphLink *linkAt(int index) const;
   /** Calls fn(const GraphLink &), in no particular order. */
   template <class Fn> void forEachLink(Fn &&fn) const
   {
@@ -471,12 +488,19 @@ class GraphDef {
                           const SocketType &type) const;
   /** Whether a literal is in use there. */
   bool usesLiteral(const GraphNode &node, std::string_view key) const;
-  /** Links that don't work. */
-  litestl::util::Vector<LinkDiagnostic> diagnostics() const;
+  /** Links that don't work, in the order of their ids. Valid until the next edit of anything;
+   * kept while nothing that they depend on changes. */
+  const litestl::util::Vector<LinkDiagnostic> &diagnostics() const;
+  /** The diagnostic of a link, or null if it works. */
+  const LinkDiagnostic *diagnostic(LinkId link) const;
 
   /** A node's state, for insertNode. It doesn't say where the node is in node order. */
   NodeState stateOf(const GraphNode &node) const;
   static LinkState stateOf(const GraphLink &link);
+
+  /** An id that nothing in the def has, for insertNode, insertLink and addInterface: to paste
+   * what was copied, with its links. */
+  int64_t newId();
 
   /* ---- nodes ---- */
 
@@ -585,7 +609,7 @@ class GraphDef {
   uint64_t stamp(bool structural, bool links = false);
   /** Tells the ChangeBus about an edit of a block's def. */
   void announce(bool structural);
-  int64_t newId();
+  const litestl::util::Vector<const GraphNode *> &flaggedNodes() const;
   bool idTaken(int64_t id) const;
   /** Puts the node after `after`, or first. */
   void attachNode(GraphNode *n, GraphNode *after);
@@ -633,6 +657,7 @@ class GraphDef {
   uint64_t structureVersion_;
   uint64_t contentVersion_;
   uint64_t interfaceVersion_;
+  uint64_t refsVersion_;
   /** Node order. */
   GraphNode *first_ = nullptr;
   GraphNode *last_ = nullptr;
@@ -645,6 +670,15 @@ class GraphDef {
   GraphDef *prevDef_ = nullptr;
   GraphDef *nextDef_ = nullptr;
   litestl::util::Map<int64_t, GraphLink *> links_;
+  /** The links by id, for linkAt; empty when out of date. */
+  mutable litestl::util::Vector<const GraphLink *> linkIndex_;
+  /** Nodes whose type has a flag, as of these versions. */
+  mutable litestl::util::Vector<const GraphNode *> flagged_;
+  mutable uint64_t flaggedAt_ = 0;
+  mutable uint64_t flaggedTypes_ = 0;
+  /** As of the topology of that serial. */
+  mutable litestl::util::Vector<LinkDiagnostic> diagnostics_;
+  mutable uint64_t diagnosedAt_ = 0;
   litestl::util::Vector<InterfaceSocket> ifaceIn_;
   litestl::util::Vector<InterfaceSocket> ifaceOut_;
   mutable std::shared_ptr<const GraphTopology> topo_;

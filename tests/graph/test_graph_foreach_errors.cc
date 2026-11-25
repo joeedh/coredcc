@@ -21,7 +21,7 @@ void testErrors()
   l.set(table({1, 2, 3}, {{"a", {5, -100, 6}}}));
   const uint64_t runs = l.inst.totalRuns();
   test_assert(l.fails(StatusCode::OutOfRange, {2}, "element 2: a is -100"));
-  test_assert(l.inst.totalRuns() - runs == 2 && l.error()->origin == at({l.node}, l.add));
+  test_assert(l.inst.totalRuns() - runs == 2 && place(l.error()) == at({l.node}, l.add));
   test_assert(l.inst.report(self).state == NodeReport::State::Failed && l.ran() == 2);
   test_assert(l.inst.report(self).seconds > 0);
   test_assert(l.inst.lastGood(l.path)->payload<Elements>()->columns[0].values[1].asFloat() == 2);
@@ -80,7 +80,7 @@ void testErrors()
   const uint64_t before = l.inst.totalRuns();
   test_assert(l.fails(StatusCode::OutOfRange, {}, "a is -100"));
   test_assert(l.inst.report(self).state == NodeReport::State::InputFailed);
-  test_assert(l.inst.totalRuns() - before == 1 && l.error()->origin == at({}, bad));
+  test_assert(l.inst.totalRuns() - before == 1 && place(l.error()) == at({}, bad));
   test_assert(l.root.def->unlink(link).ok());
   test_assert(l.is({1, 2}, {{"sum", {1, 2}}, {"c2", {9, 9}}}, 4));
 
@@ -140,7 +140,7 @@ void testSharedErrors()
   test_assert(l.root.def->setParam(l.node, kMaxCachedParam, PropValue::ofInt(1)).ok());
   l.set(table({1, 2, 3, 4}, {{"a", {1, 2, -100, 4}}}));
   test_assert(l.fails(StatusCode::OutOfRange, {3}, "element 3: a is -100") && l.ran() == 1);
-  test_assert(l.error()->origin == at({l.node}, l.add));
+  test_assert(place(l.error()) == at({l.node}, l.add));
   w.rt.touch();
   test_assert(!l.evaluate().ok() && l.ran() == 0);
   l.set(table({1, 2, 3, 4}, {{"a", {1, -100, -100, 4}}}));
@@ -225,7 +225,7 @@ void testNested()
   w.thing(h).value = -100;
   w.notify(idOf(w.lib, h));
   test_assert(l.fails(StatusCode::OutOfRange, {10, 0}, "element 10: element 0: a is -100"));
-  test_assert(l.error()->origin == at({l.node, n.inner}, n.leafSum));
+  test_assert(place(l.error()) == at({l.node, n.inner}, n.leafSum));
   /* The same with shared states, at each level. */
   w.thing(h).value = 7;
   w.notify(idOf(w.lib, h));
@@ -267,7 +267,7 @@ void testGroups()
   link.toKey = interfaceKey(t);
   test_assert(l.inner.def->insertLink(link).ok());
   test_assert(l.fails(StatusCode::FailedPrecondition, {1}, "element 1: the graph contains itself"));
-  test_assert(l.error()->origin == at({l.node}, state.id));
+  test_assert(place(l.error()) == at({l.node}, state.id));
   test_assert(l.inner.def->removeNode(state.id).ok() && l.inner.def->removeInterface(t).ok());
   test_assert(l.is({1}, {{"sum", {4}}, {"c2", {0}}}, 0));
 
@@ -286,7 +286,7 @@ void testGroups()
   test_assert(w.lib.collect().ok() && w.lib.get(l.inner.h));
   test_assert(r.setGroup(l.node, BlockId()).ok());
   test_assert(l.fails(StatusCode::NotFound, {}, "the group has no graph"));
-  test_assert(l.error()->origin == at({}, l.node) && l.inst.elementCount() == 1);
+  test_assert(place(l.error()) == at({}, l.node) && l.inst.elementCount() == 1);
   test_assert(r.setGroup(l.node, l.inner.id).ok());
   test_assert(l.is({1}, {{"sum", {4}}, {"c2", {0}}}, 0));
   test_assert(w.lib.markDeleted(l.inner.h).ok());
@@ -340,7 +340,7 @@ void testLateTypes()
   test_assert(l.inner.def->unlink(l.inner.def->node(l.add)->linkInto("b")->id).ok());
   test_assert(l.inner.def->insertLink(link).ok());
   test_assert(l.fails(StatusCode::NotFound, {1}, "element 1: "));
-  test_assert(l.error()->origin == at({l.node}, s.id) && l.ran() == 1);
+  test_assert(place(l.error()) == at({l.node}, s.id) && l.ran() == 1);
   w.rt.touch();
   test_assert(!l.evaluate().ok() && l.ran() == 0);
   NodeTypeDef late("late.give");

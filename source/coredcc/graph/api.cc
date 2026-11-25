@@ -175,13 +175,7 @@ CollectionAccessor linksAccessor()
   const StructId type = StructId::of(kLinkStruct);
   c.length = [](const PointerRef &self, Context &) { return int64_t(graphOf(self).linkCount()); };
   c.at = [type](const PointerRef &self, Context &, int64_t i) {
-    PointerRef r;
-    graphOf(self).forEachLink([&](const GraphLink &l) {
-      if (i-- == 0) {
-        r = inside(const_cast<GraphLink *>(&l), type);
-      }
-    });
-    return r;
+    return inside(const_cast<GraphLink *>(graphOf(self).linkAt(int(i))), type);
   };
   c.lookup = [type](const PointerRef &self, Context &, const KeySegment &key) {
     const GraphLink *l = key.kind == KeySegment::Kind::Handle ?
@@ -346,7 +340,7 @@ void addSocketStructs(ApiRegistry &reg, const SocketType &type)
   socket.add(type.literalDef("value"), std::move(value))
       .dynamic([](PropertyDef &def, const PointerRef &self, Context &) {
         const GraphSocketAddress &a = addressOf(self);
-        if (lost(a) || !a.node->def().usesLiteral(*a.node, a.key.c_str())) {
+        if (lost(a)) {
           def.access(PropAccess::ReadOnly);
         }
       });
@@ -491,6 +485,13 @@ ApiStruct linkStruct()
   });
   readOnly(st, PropertyDef::stringProp("toSocket"), [link](const PointerRef &self, Context &) {
     return text(link(self).toKey);
+  });
+  PropertyDef error = PropertyDef::stringProp("error");
+  error.description("Why the link doesn't work, or nothing if it does");
+  readOnly(st, std::move(error), [link](const PointerRef &self, Context &) {
+    const GraphLink &l = link(self);
+    const LinkDiagnostic *d = l.to->def().diagnostic(l.id);
+    return PropValue::ofString(d ? d->status.message() : "");
   });
   return st;
 }

@@ -7,6 +7,7 @@
 #include "coredcc/base/iface/iface.h"
 #include "coredcc/base/runtime.h"
 #include "coredcc/graph/exec_context.h"
+#include "coredcc/graph/system.h"
 #include "coredcc/lib/pin.h"
 
 #include "litestl/util/map.h"
@@ -18,7 +19,6 @@
 
 namespace coredcc {
 
-class GraphSystem;
 struct SocketType;
 
 namespace graph {
@@ -58,6 +58,11 @@ class TypeChains {
   static constexpr int kEmpty = -1;
   /** `chain` with `type` after it. */
   int extend(int chain, const SocketType *type);
+  /** What they take, about. */
+  size_t bytes() const
+  {
+    return size_t(ids_.size()) * (sizeof(Key) + sizeof(int));
+  }
 
  private:
   struct Key {
@@ -90,6 +95,8 @@ struct BlockDep {
   /** A kernel may use its name. */
   uint64_t renames = 0;
   uint64_t version = 0;
+  /** So that the block is followed while this is there. */
+  BlockVersionPtr follows;
   bool operator==(const BlockDep &) const = default;
 };
 
@@ -101,7 +108,13 @@ struct QueryDep {
   InterfaceId iface;
   const IfaceTable *table = nullptr;
   void *self = nullptr;
-  bool operator==(const QueryDep &) const = default;
+  /** As in BlockDep; of all aspects, as any notification may go with another answer. */
+  BlockVersionPtr follows;
+  bool operator==(const QueryDep &b) const
+  {
+    return id == b.id && handle == b.handle && iface == b.iface && table == b.table &&
+           self == b.self;
+  }
 };
 
 /** A node's type isn't part of it: a node whose type changed has new state. */

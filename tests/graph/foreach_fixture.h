@@ -234,6 +234,14 @@ inline void redirect(GraphDef &def, Library &lib, BlockId to)
   def.foreachRef(v);
 }
 
+/* Where an error comes from, whichever element it is in. */
+inline NodePath place(const GraphError *e)
+{
+  NodePath p = e->origin;
+  p.elements.clear();
+  return p;
+}
+
 inline NodePath at(std::initializer_list<NodeId> groups, NodeId node)
 {
   NodePath p;
@@ -360,8 +368,8 @@ struct Loop {
     const Status s = evaluate();
     const GraphError *e = error();
     const bool ok = e && s.code() == code && !inst.value(path) &&
-                    e->elements.size() == elements.size() &&
-                    std::equal(elements.begin(), elements.end(), e->elements.begin()) &&
+                    e->origin.elements.size() == elements.size() &&
+                    std::equal(elements.begin(), elements.end(), e->origin.elements.begin()) &&
                     strncmp(e->status.message(), message, strlen(message)) == 0;
     if (!ok) {
       printf("%s\n", s.toString().c_str());

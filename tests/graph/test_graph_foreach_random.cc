@@ -458,8 +458,9 @@ struct Fuzz {
         failed = true;
         const GraphError &error = *inst.error(p);
         e.elements = {key};
-        e.elements.insert(e.elements.end(), error.elements.begin(), error.elements.end());
-        NodePath origin = error.origin;
+        const auto &inner = error.origin.elements;
+        e.elements.insert(e.elements.end(), inner.begin(), inner.end());
+        NodePath origin = place(&error);
         origin.groups = {};
         origin.groups.append(node);
         for (NodeId id : error.origin.groups) {
@@ -505,8 +506,9 @@ struct Fuzz {
     }
     if (!st.ok()) {
       totals.failures++;
-      if (!(error->origin == e.origin) || error->elements.size() != e.elements.size() ||
-          !std::equal(e.elements.begin(), e.elements.end(), error->elements.begin()))
+      const auto &elements = error->origin.elements;
+      if (!(place(error) == e.origin) || elements.size() != e.elements.size() ||
+          !std::equal(e.elements.begin(), e.elements.end(), elements.begin()))
       {
         return wrong("the error's origin");
       }

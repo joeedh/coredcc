@@ -131,6 +131,17 @@ enum class NodeTypeFlags : uint32_t {
   /** Its nodes write to something outside the graph, which a program that evaluates it does
    * from their outputs (GraphDef::forEachNode(flags) finds them). */
   OutputAdapter = 1 << 0,
+  /**
+   * The kernel may run on any thread, and at the same time as itself and others. Nothing
+   * does so yet: kernels run one at a time on the main thread, and one without the flag always
+   * will. A kernel that has it
+   * - keeps no state of its own, or guards it;
+   * - reads `userData` only, and only what nothing writes during an evaluation;
+   * - doesn't use `library()`, `runtime()`, payloads that alias blocks, or scripts;
+   * - calls useBlock, paramBlock, queryBlock and alias only before it does anything long, as
+   *   those may wait for the main thread.
+   */
+  ThreadSafe = 1 << 1,
 };
 constexpr NodeTypeFlags operator|(NodeTypeFlags a, NodeTypeFlags b)
 {

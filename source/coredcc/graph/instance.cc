@@ -15,15 +15,10 @@ using litestl::util::Vector;
 
 bool NodePath::operator==(const NodePath &b) const
 {
-  if (node != b.node || groups.size() != b.groups.size()) {
-    return false;
-  }
-  for (int i = 0; i < int(groups.size()); i++) {
-    if (groups[i] != b.groups[i]) {
-      return false;
-    }
-  }
-  return true;
+  return node == b.node && groups.size() == b.groups.size() &&
+         elements.size() == b.elements.size() &&
+         std::equal(groups.begin(), groups.end(), b.groups.begin()) &&
+         std::equal(elements.begin(), elements.end(), b.elements.begin());
 }
 
 bool NodePath::operator<(const NodePath &b) const
@@ -46,7 +41,11 @@ std::string NodePath::toString() const
   for (NodeId id : groups) {
     s += std::to_string(id.value) + "/";
   }
-  return s + std::to_string(node.value);
+  s += std::to_string(node.value);
+  for (int i = 0; i < int(elements.size()); i++) {
+    s += (i ? ", " : "[") + std::to_string(elements[i]);
+  }
+  return elements.size() > 0 ? s + "]" : s;
 }
 
 SocketPath SocketPath::output(std::string_view nameOrKey)
@@ -90,8 +89,6 @@ bool GraphError::operator==(const GraphError &b) const
 {
   return status.code() == b.status.code() &&
          strcmp(status.message(), b.status.message()) == 0 && origin == b.origin &&
-         elements.size() == b.elements.size() &&
-         std::equal(elements.begin(), elements.end(), b.elements.begin()) &&
          strcmp(socket.c_str(), b.socket.c_str()) == 0;
 }
 
@@ -154,6 +151,16 @@ Status GraphInstance::setInput(std::string_view nameOrKey, GraphValue v)
 NodeReport GraphInstance::report(const NodePath &node) const
 {
   return e_->report(node);
+}
+
+GraphValue GraphInstance::peek(const SocketPath &socket) const
+{
+  return e_->peek(socket);
+}
+
+Status GraphInstance::drop(const NodePath &node)
+{
+  return e_->drop(node);
 }
 
 Status GraphInstance::retry()
@@ -343,46 +350,6 @@ Status Evaluator::setInput(std::string_view name, GraphValue v)
   return Status();
 }
 
-NodeReport Evaluator::report(const NodePath &path) const
-{
-  NodeReport r;
-  const Frame *f = root_.get();
-  for (int i = 0; f && f->topo && i < int(path.groups.size()); i++) {
-    const int at = f->topo->find(path.groups[i]);
-    const int group = at >= 0 ? f->topo->nodes[at].group : -1;
-    f = group >= 0 ? f->groups[group].child : nullptr;
-  }
-  const int at = f && f->topo ? f->topo->find(path.node) : -1;
-  if (at < 0) {
-    return r;
-  }
-  ErrorPtr error;
-  if (const KernelState *k = f->kernels[at]) {
-    if (k->foreach) {
-      r.elements = k->foreach->rows;
-      r.cachedElements = k->foreach->cachedRows;
-    }
-    r.runs = k->runs;
-    r.seconds = k->seconds;
-    if (k->visited) {
-      error = k->error;
-      r.state = !error         ? NodeReport::State::Ok :
-                k->inputFailed ? NodeReport::State::InputFailed :
-                                 NodeReport::State::Failed;
-    }
-  }
-  else if (f->topo->nodes[at].group >= 0) {
-    error = f->groups[f->topo->nodes[at].group].error;
-    if (error) {
-      r.state = NodeReport::State::Failed;
-    }
-  }
-  if (error) {
-    r.error = *error;
-  }
-  return r;
-}
-
 Status Evaluator::retry()
 {
   CDCC_TRY(rt_.busyIfEvaluating("GraphInstance::retry"));
@@ -420,6 +387,7 @@ Status Evaluator::clear()
     p.pulled = Pulled();
     p.reported = 0;
   }
+  chains_ = TypeChains(); /* nothing has any */
   dropPass();
   failedKey_ = Key();
   layout_++;

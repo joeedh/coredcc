@@ -856,6 +856,7 @@ void Evaluator::run(Frame &f, int node, KernelState &k, Trace trace)
   const auto start = std::chrono::steady_clock::now();
   Status status = n.type->kernel.get().evaluate(ctx);
   k.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+  k.totalSeconds += k.seconds;
   k.runs++;
   totalRuns++;
   if (rt_.hasStickyError()) {

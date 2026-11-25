@@ -11,6 +11,8 @@
 #include "litestl/util/map.h"
 #include "litestl/util/vector.h"
 
+#include <memory>
+
 namespace coredcc {
 
 /** Something evaluation may depend on changed: what Runtime::touch was called for. */
@@ -35,6 +37,13 @@ struct GraphEditNote {
   int64_t node = 0;
 };
 
+/** The version of aspects of a block. Who holds it has the block followed. */
+struct BlockVersion {
+  ChangeAspects aspects = kAllAspects;
+  uint64_t version = 0;
+};
+using BlockVersionPtr = std::shared_ptr<const BlockVersion>;
+
 /**
  * A version per block that some kernel used and the aspects of it that it used, moved by every
  * ChangeBus notification of some of those (and of all blocks, by notifyAll). Those count as edits (Runtime::touch), so the
@@ -49,8 +58,9 @@ class GraphSystem {
 
   explicit GraphSystem(Runtime *rt);
 
-  /** The version of aspects of a block. From the first call on, it follows their changes. */
-  uint64_t versionOf(BlockId id, ChangeAspects aspects = kAllAspects);
+  /** The version of aspects of a block, which moves with their changes while it is held. Not
+   * after notifyAll, or when the block's canonical id became another: it has another one then. */
+  BlockVersionPtr follow(BlockId id, ChangeAspects aspects = kAllAspects);
   /** Moves when the nodes, links, groups or interface of any GraphDef do, or one is made. */
   uint64_t structureVersion() const
   {
@@ -79,7 +89,7 @@ class GraphSystem {
                &journal_[int(number % kJournal)] :
                nullptr;
   }
-  /** Blocks followed. */
+  /** Blocks followed, with some that nobody follows any more. */
   int blockCount() const
   {
     return int(versions_.size());
@@ -88,16 +98,17 @@ class GraphSystem {
  private:
   void changed(const BusChange &change);
   void note(const GraphEditNote &edit);
+  void prune();
 
   Runtime &rt_;
   ClientRegistry &clients_;
   /** By canonical id. An id that became an alias leaves its entry behind, never found again;
    * its block has another version from then on, so its users run. */
-  struct Version {
-    ChangeAspects aspects = kAllAspects;
-    uint64_t version = 0;
-  };
-  litestl::util::Map<BlockId, litestl::util::Vector<Version, 1>> versions_;
+  using Versions = litestl::util::Vector<std::shared_ptr<BlockVersion>, 1>;
+  litestl::util::Map<BlockId, Versions> versions_;
+  /** How many blocks there may be before those that nobody holds go. */
+  size_t pruneAt_ = kPrune;
+  static constexpr size_t kPrune = 64;
   uint64_t structure_ = 0;
   static constexpr uint64_t kJournal = 4096;
   /** A ring, once it has kJournal. */

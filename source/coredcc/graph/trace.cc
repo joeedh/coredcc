@@ -48,7 +48,8 @@ BlockDep BlockReader::read(BlockId id, ChangeAspects aspects) const
   BlockDep d;
   d.id = id;
   d.aspects = aspects;
-  d.version = system_.versionOf(id, aspects);
+  d.follows = system_.follow(id, aspects);
+  d.version = d.follows->version;
   const Library *lib = lib_.get();
   d.handle = lib ? lib->find(id) : BlockHandle();
   if (const Datablock *b = lib ? lib->get(d.handle) : nullptr) {
@@ -65,11 +66,7 @@ QueryDep BlockReader::read(BlockHandle h, InterfaceId iface) const
   const IfaceRef r = lib ? lib->queryRaw(h, iface) : IfaceRef();
   const Datablock *b = lib ? lib->get(h) : nullptr;
   const BlockId id = b ? b->id() : BlockId();
-  if (b) {
-    /* Any notification of it may go with another answer, so all are followed. */
-    system_.versionOf(id);
-  }
-  return QueryDep{id, h, iface, r.table(), r.self()};
+  return QueryDep{id, h, iface, r.table(), r.self(), b ? system_.follow(id) : nullptr};
 }
 
 bool BlockReader::current(const Trace &t) const

@@ -97,6 +97,8 @@ class Evaluator {
   const Pulled *result(SocketHandle h) const;
   Status setInput(std::string_view name, GraphValue v);
   NodeReport report(const NodePath &node) const;
+  GraphValue peek(const SocketPath &socket) const;
+  Status drop(const NodePath &node);
   Status retry();
   Status clear();
   Status forget(const SocketPath &socket);
@@ -168,6 +170,16 @@ class Evaluator {
   void findReachable() const;
   void markStale(const Vertex &v);
   void markFrame(Frame &f);
+
+  /* reports.cc */
+  /** The frame of a path's groups and elements, if there is one. */
+  const Frame *frameAt(const NodePath &path) const;
+  uint64_t standingPass(const Frame &f) const;
+  /** Whether what was computed in `f` in `pass` is what it would be now. */
+  bool stands(const Frame &f, uint64_t pass) const;
+  GraphValue peekInput(const Frame &f, int input) const;
+  GraphValue peekOutput(const Frame &f, int node, int output) const;
+  void dropKernel(Frame &f, int node);
 
   /** The def, if it is this Runtime's and Library's. */
   GraphDef *findDef(Status &status) const;

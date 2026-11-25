@@ -87,6 +87,9 @@ void Evaluator::dropNewFrames()
       if (g.child && g.child->call == call_) {
         dropFrame(g.child);
         g.child = nullptr;
+        if (f->top->element) {
+          f->top->pass = 0; /* its inputs may have been from there */
+        }
       }
       else if (g.child) {
         stack.append(g.child);
