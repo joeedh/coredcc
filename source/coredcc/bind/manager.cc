@@ -436,11 +436,11 @@ void addSceneFacades(litestl::binding::BindingManager *mgr)
               "coredcc::transformChannel",
               script::transformChannel,
               MARGS("type", "name", "defaultValue", "distance"));
-  /* It checks its strings itself: it takes a count of the model, whatever they are. */
-  BIND_FUNCTION(mgr,
-                "coredcc::registerForeignTransformType",
-                script::registerForeignTransformType,
-                MARGS("ctx", "type", "model", "slots"));
+  BIND_OWNING_FACADE(mgr,
+                     "coredcc::registerForeignTransformType",
+                     script::registerForeignTransformType,
+                     3,
+                     MARGS("ctx", "type", "model", "slots"));
 
   BIND_FACADE(mgr, "coredcc::newScene", script::newScene, MARGS("ctx", "name"));
   BIND_FACADE(mgr, "coredcc::setScene", script::setScene, MARGS("ctx", "scene"));

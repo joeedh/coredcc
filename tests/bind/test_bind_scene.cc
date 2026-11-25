@@ -629,7 +629,8 @@ void testNul()
   {
     fakehost::Host host;
     const fakehost::lf::Handle h = host.add(Obj());
-    test_assert(isError(sc::registerForeignTransformType(ctx, *info, h, nul), bad, "NUL"));
+    using Entry = Checked<&sc::registerForeignTransformType, 3>;
+    test_assert(isError(Entry::call(ctx, *info, h, nul), bad, "argument 4"));
     test_assert(host.releasesOf(h) == 1);
   }
   litestl::alloc::Delete(info);

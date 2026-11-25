@@ -1,7 +1,6 @@
 #include "coredcc/bind/foreign_transform.h"
 
 #include "coredcc/base/iface/registry.h"
-#include "coredcc/bind/checked.h"
 #include "coredcc/bind/detail.h"
 #include "coredcc/bind/foreign_command.h"
 
@@ -113,10 +112,7 @@ Status registerForeignTransformType(Context &ctx,
     return error(StatusCode::InvalidArgument, "registerForeignTransformType: no model handle");
   }
   Runtime &rt = ctx.runtime();
-  Status s = detail::nulArgument(slots) ?
-                 error(StatusCode::InvalidArgument,
-                       "registerForeignTransformType: `slots` can't hold a NUL") :
-                 registerWith(rt, type, model, slots);
+  Status s = registerWith(rt, type, model, slots);
   if (s.ok()) {
     rt.ext<ForeignBindings>().keepHandle(model);
   }
