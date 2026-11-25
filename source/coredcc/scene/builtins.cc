@@ -59,7 +59,7 @@ TransformState childState(const TransformState &parent,
 Status singularParent()
 {
   return Status::error(StatusCode::FailedPrecondition,
-                       "the parent's matrix has no inverse (a scale of 0)");
+                       "the parent's matrix has no inverse (a scale of 0, or nearly 0)");
 }
 
 Status unsolvable()
@@ -70,11 +70,20 @@ Status unsolvable()
 
 namespace {
 
-/* A scale delta's linear part applied to a vector. */
-double3 scaleVector(const TransformDelta &delta, const double3 &v)
+/* A vector scaled along the delta's basis. */
+double3 scaleVector(const TransformDelta &delta, const double3 &factors, const double3 &v)
 {
   const quatd b = delta.basis.normalized();
-  return b.rotate(b.conjugated().rotate(v) * delta.vector);
+  return b.rotate(b.conjugated().rotate(v) * factors);
+}
+
+double3 signsOf(const TransformDelta &delta)
+{
+  double3 s;
+  for (int i = 0; i < 3; i++) {
+    s[i] = delta.vector[i] < 0.0 ? -1.0 : 1.0;
+  }
+  return s;
 }
 
 double3 unitOf(const double3 &v)
@@ -93,19 +102,81 @@ double3 shiftOf(const TransformDelta &delta, const double3 &point)
     case DeltaKind::Rotate:
       return delta.rotation().rotate(arm) - arm;
     case DeltaKind::Scale:
-      return scaleVector(delta, arm) - arm;
+      return scaleVector(delta, delta.vector, arm) - arm;
   }
   return double3();
 }
 
 double3 factorsAlong(const TransformDelta &delta, const Linear &axes)
 {
+  const double3 sizes(
+      std::fabs(delta.vector[0]), std::fabs(delta.vector[1]), std::fabs(delta.vector[2]));
   double3 f;
   for (int i = 0; i < 3; i++) {
     const double3 c = unitOf(axes.col[i]);
-    f[i] = scaleVector(delta, c).dot(c);
+    f[i] = scaleVector(delta, sizes, c).dot(c);
   }
   return f;
+}
+
+/* But for rounding. */
+static bool sameRotation(const quatd &a, const quatd &b)
+{
+  const double side = a.dot(b) < 0.0 ? -1.0 : 1.0;
+  double e = 0.0;
+  for (int i = 0; i < 4; i++) {
+    e = std::fmax(e, std::fabs(a[i] - b[i] * side));
+  }
+  return e < 1e-12;
+}
+
+bool mirrors(const TransformDelta &delta)
+{
+  const double3 s = signsOf(delta);
+  return s[0] < 0.0 || s[1] < 0.0 || s[2] < 0.0;
+}
+
+Linear mirrored(const TransformDelta &delta, const Linear &m)
+{
+  const double3 s = signsOf(delta);
+  Linear r;
+  for (int i = 0; i < 3; i++) {
+    r.col[i] = scaleVector(delta, s, m.col[i]);
+  }
+  return r;
+}
+
+Status takeMirror(const Linear &x,
+                  quatd &rotation,
+                  double3 &scale,
+                  bool &turned)
+{
+  /* Pairs of signs are a half turn. For a mirror with a determinant of -1, rotationScale adds the one
+   * that is missing. */
+  static const double kSigns[4][3] = {{1, 1, 1}, {-1, -1, 1}, {-1, 1, -1}, {1, -1, -1}};
+  const quatd current = rotation.normalized();
+  double best = -1.0;
+  double3 factors;
+  for (const double *f : kSigns) {
+    const double3 signs(f[0], f[1], f[2]);
+    solve::RotationScale rs;
+    if (!solve::rotationScale(
+            x.scaled(signs), Linear::identity(), current, double3(1, 1, 1), rs))
+    {
+      return unsolvable();
+    }
+    const double nearness = std::fabs(rs.rotation.dot(current));
+    if (nearness > best + 1e-9) {
+      best = nearness;
+      turned = !sameRotation(rs.rotation, current);
+      rotation = turned ? rs.rotation : current;
+      for (int i = 0; i < 3; i++) {
+        factors[i] = signs[i] * (rs.scale[i] < 0.0 ? -1.0 : 1.0);
+      }
+    }
+  }
+  scale = scale * factors;
+  return Status();
 }
 
 quatd turnUnder(const TransformDelta &delta, const solve::ParentSolver &solver, const Linear &p)

@@ -13,7 +13,7 @@ namespace coredcc {
 /** What evaluateScene found for one object. */
 struct ObjectEval {
   TransformState state;
-  /** In the object's space; empty for none. From its data block's Spatial, or its own. */
+  /** In the data's space; empty for none. From its data block's Spatial, or its own. */
   Box3d localBounds;
   /** A box around localBounds in the world; empty when that isn't finite. */
   Box3d bounds;
@@ -21,6 +21,12 @@ struct ObjectEval {
   /** Whether it is a member of the scene, not only a parent of one. */
   bool member = false;
 
+  /** From the data's space to the world: what to draw and to find its geometry with. The same as
+   * `state.world` for now; objects will have an offset of the data that children don't have. */
+  const mat4d &dataWorld() const
+  {
+    return state.world;
+  }
   /** Bitwise. */
   bool same(const ObjectEval &b) const;
   static litestl::binding::types::Struct<ObjectEval> *defineBindings();

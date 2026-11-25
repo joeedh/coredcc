@@ -1,11 +1,9 @@
 /* Objects and scenes in files: saving and loading, transform types that aren't there or have other
  * channels, duplicating, appending, and payloads that are wrong. */
-#include "command_doc.h"
 #include "fuzz.h"
+#include "io_doc.h"
 
-#include "coredcc/api/library_io.h"
 #include "coredcc/lib/duplicate.h"
-#include "coredcc/lib/payload_access.h"
 #include "coredcc/scene/channel_io.h"
 
 #include <cmath>
@@ -17,141 +15,11 @@ using namespace scene_test;
 
 namespace {
 
-using Bytes = Vector<uint8_t>;
-using detail::PayloadAccess;
-
-std::span<const uint8_t> view(const Bytes &b)
-{
-  return std::span<const uint8_t>(b.data(), size_t(b.size()));
-}
-bool same(const Bytes &a, const Bytes &b)
-{
-  return a.size() == b.size() && memcmp(a.data(), b.data(), size_t(a.size())) == 0;
-}
-bool sameBits(double a, double b)
-{
-  return memcmp(&a, &b, sizeof(a)) == 0;
-}
-Bytes save(const Library &lib)
-{
-  SaveReport report;
-  Result<Bytes> b = saveLibrary(lib, &report);
-  must(b.status());
-  test_assert(report.issues.total == 0);
-  return *b;
-}
-
-/* A transform type with a channel of each kind. `version` 1 has other channels: `size` is an Int,
- * `count` a Float, `mode` has other items and numbers, and `extra` isn't there. */
-TransformTypeInfo everyKind(int version)
-{
-  TransformTypeInfo info;
-  info.name = "io.type";
-  info.channels.append(PropertyDef::boolProp("on"));
-  PropertyDef size = version ? PropertyDef::intProp("size") : PropertyDef::floatProp("size");
-  info.channels.append(size);
-  info.channels.append(version ? PropertyDef::floatProp("count") : PropertyDef::intProp("count"));
-  const int base = version ? 20 : 0;
-  PropertyDef mode = PropertyDef::enumProp("mode");
-  if (!version) {
-    mode.item("ONE", 1).item("TWO", 2).item("THREE", 3).defaultValue(PropValue::ofEnum(1));
-  }
-  else {
-    mode.item("TWO", base + 2).item("ONE", base + 1).defaultValue(PropValue::ofEnum(base + 2));
-  }
-  info.channels.append(std::move(mode));
-  if (!version) {
-    info.channels.append(PropertyDef::vecProp("extra", 3));
-  }
-  info.channels.append(PropertyDef::vecProp("at", 2));
-  info.channels.append(PropertyDef::vecProp("four", 4));
-  info.channels.append(PropertyDef::quatProp("turn"));
-  return info;
-}
-
-struct IoDoc : CommandDoc {
-  IoDoc()
-  {
-    lib->setAuditRelations(true);
-  }
-  void addEveryKind(int version = 0)
-  {
-    const char *impl = "io.type#impl";
-    must(registerImpl<TransformModel, FnModel>(rt, impl));
-    FnModel *m = litestl::alloc::New<FnModel>("FnModel");
-    m->fn = [](const EvalCtx &, const TransformState &p) { return p; };
-    Result<Owned<TransformModel>> owned = own<TransformModel>(rt, impl, m);
-    must(owned.status());
-    must(rt.ext<TransformRegistry>().add(everyKind(version), std::move(owned).value()).status());
-  }
-  BlockHandle byName(const char *name)
-  {
-    BlockHandle found;
-    lib->forEach([&](BlockHandle h, const Datablock &b) {
-      if (strcmp(b.name().c_str(), name) == 0 && b.state() == BlockState::Live) {
-        found = h;
-      }
-    });
-    return found;
-  }
-};
-
-/* Loads into a library of its own. */
-struct Loaded {
-  Library lib;
-  Context ctx;
-  LoadReport report;
-
-  Loaded(IoDoc &d, const Bytes &bytes, int64_t issues = 0) : lib(&d.rt), ctx(&d.rt, &lib, d.ctx->root())
-  {
-    lib.setAuditRelations(true);
-    Result<LoadReport> r = loadLibrary(ctx, view(bytes));
-    must(r.status());
-    report = *r;
-    for (const IoIssue &i : report.issues.first) {
-      if (issues == 0) {
-        printf("issue: %s\n", i.why.toString().c_str());
-      }
-    }
-    test_assert(report.issues.total == issues);
-    ctx.setScene(byName("Scene"));
-  }
-  BlockHandle byName(const char *name) const
-  {
-    BlockHandle found;
-    lib.forEach([&](BlockHandle h, const Datablock &b) {
-      if (strcmp(b.name().c_str(), name) == 0 && b.state() == BlockState::Live) {
-        found = h;
-      }
-    });
-    return found;
-  }
-  Object &obj(const char *name) const
-  {
-    const BlockHandle h = byName(name);
-    test_assert(bool(h));
-    return *static_cast<Object *>(lib.get(h)->clientData());
-  }
-  Scene &sc() const
-  {
-    return *Scene::of(lib, byName("Scene"));
-  }
-};
-
 double oddNumber(coredcc_test::SplitMix64 &r)
 {
   const double odd[] = {0.0, -0.0, 1.0, 1e300, 5e-324, std::numeric_limits<double>::infinity(),
                         -std::numeric_limits<double>::infinity(), 0.1, -1.0 / 3.0};
   return r.below(3) ? double(int64_t(r.next())) * 0x1p-40 : odd[r.below(9)];
-}
-
-bool sameChannels(const ChannelBlock &a, const ChannelBlock &b)
-{
-  bool same = a.size() == b.size();
-  for (int i = 0; i < a.size() && same; i++) {
-    same = sameBits(a.get(i), b.get(i));
-  }
-  return same;
 }
 
 /* ---- saving and loading ---- */
@@ -215,6 +83,12 @@ void testRoundTrip()
     }
     d.sc().frame = double(int64_t(r.next())) * 0x1p-50;
     d.sc().units.rate = *FrameRate::of(1 + r.below(100000), 1 + r.below(1001));
+    d.sc().units.startFrame = double(int64_t(r.next())) * 0x1p-40;
+    for (UnitFamily f : {UnitFamily::Length, UnitFamily::Angle, UnitFamily::Time, UnitFamily::Mass,
+                         UnitFamily::Factor})
+    {
+      must(d.sc().units.setDisplayIndex(f, int(r.below(uint32_t(UnitSettings::unitCount(f))))));
+    }
 
     const Bytes bytes = save(*d.lib);
     test_assert(same(bytes, save(*d.lib)));
@@ -225,7 +99,8 @@ void testRoundTrip()
       const Object &x = d.obj(objects[i]), &y = b.obj(("o" + std::to_string(i)).c_str());
       test_assert(x.transformType() == y.transformType() && x.flags == y.flags);
       test_assert(x.parent.target() == y.parent.target() && x.data.target() == y.data.target());
-      test_assert(y.data.cell().kind == RefKind::OptStrong && y.parent.cell().kind == RefKind::Weak);
+      test_assert(y.data.cell().kind == RefKind::OptStrong && y.parent.cell().kind == RefKind::OptStrong);
+      test_assert(y.unreadFields().empty());
       test_assert(sameChannels(x.channels, y.channels) && y.unread().empty());
     }
     Scene &x = d.sc(), &y = b.sc();
@@ -272,10 +147,10 @@ void testGone()
   must(d.lib->markDeleted(b));
   Loaded l(d, save(*d.lib));
   test_assert(!l.byName("b") && l.sc().cells().size() == 2 && l.sc().objects(l.lib).size() == 2);
-  /* Weak references keep their ids. */
+  /* Weak references keep their ids, others go. */
   test_assert(l.sc().selection().size() == 3 && l.sc().selected(l.lib).size() == 2);
   test_assert(!l.sc().active(l.lib) && !l.lib.resolveRef(l.obj("a").parent.cell()));
-  test_assert(l.obj("c").data.target().isNull() && !l.obj("c").parent.target().isNull());
+  test_assert(l.obj("c").data.target().isNull() && l.obj("a").parent.target().isNull());
   /* Places are found without the one that isn't there. */
   test_assert(l.sc().indexOf(l.lib, l.byName("c")) == 1);
   must(l.sc().add(l.lib, l.byName("Scene")));
@@ -290,6 +165,7 @@ void testGone()
   test_assert(nulls.sc().selection().size() == 0);
   /* A host's number that isn't one doesn't make a file that can't be read. */
   d.sc().frame = std::numeric_limits<double>::quiet_NaN();
+  d.sc().units.startFrame = std::numeric_limits<double>::infinity();
   Loaded m(d, save(*d.lib));
   test_assert(m.sc().frame == 0.0 && m.sc().units == UnitSettings());
 }
@@ -373,7 +249,7 @@ void testMissingType()
   must(evaluateScene(l.ctx));
   test_assert(l.sc().evaluated(odd, e) && e.status == EvalStatus::Ok);
   test_assert(sameChannels(o.channels, from.channels) && o.unread().empty());
-  /* Also by a path, or by a save, as the first thing that happens. */
+  /* Also by a path, as the first thing that happens. A save has no need of it. */
   test_assert(copy.channels.size() == 0);
   Result<PropValue> v = getValue(l.ctx, "scene.objects[\"odd\"].transform.size");
   test_assert(v.ok() && v->asFloat() == 2.5);
@@ -386,7 +262,7 @@ void testMissingType()
   IoDoc g;
   Loaded later(g, bytes);
   g.addEveryKind();
-  test_assert(same(save(later.lib), bytes) && later.obj("odd").unread().empty());
+  test_assert(same(save(later.lib), bytes));
 }
 
 /* Channels that are written while the type isn't there replace the file's; they have no names. */
@@ -410,54 +286,12 @@ void testNumbers()
   ChannelBlock read;
   l.obj("odd").read(info, read);
   test_assert(sameChannels(read, three));
+  again.obj("odd").read(info, read);
+  test_assert(sameChannels(read, three));
   /* Nor do those of another count. */
   a.obj(a.byName("odd")).channels = three;
   Loaded wrong(a, save(*a.lib));
   test_assert(sameChannels(wrong.obj("odd").channels, three));
-}
-
-/* Entries of a build that doesn't exist: of a type of value, or with references. */
-struct Fields {
-  IoDoc &d;
-  BlockWriter out;
-  Vector<BlockEntry> entries;
-  Vector<double> numbers;
-  RefCell parent{RefKind::Weak}, data{RefKind::OptStrong};
-
-  explicit Fields(IoDoc &doc) : d(doc), out(*doc.lib) {}
-  BlockEntry &entry(const char *name, PropValue v)
-  {
-    BlockEntry e;
-    e.name = name;
-    e.value = std::move(v);
-    entries.append(std::move(e));
-    return entries[int(entries.size()) - 1];
-  }
-  BlockPayload payload(const char *type = kTrsTransform)
-  {
-    out.bytes().str(type);
-    out.bytes().u32(0);
-    out.ref(parent);
-    out.ref(data);
-    out.entries(std::span<const BlockEntry>(entries.data(), size_t(entries.size())));
-    out.bytes().array(std::span<const double>(numbers.data(), size_t(numbers.size())));
-    Result<BlockPayload> p = PayloadAccess::take(out, 1);
-    must(p.status());
-    return *p;
-  }
-};
-
-Status readInto(IoDoc &d, const char *type, const BlockPayload &p, BlockHandle *out = nullptr)
-{
-  const BlockId id{ClientId::of(kCoredccClient), d.rt.newLocalId()};
-  Result<BlockHandle> h = d.lib->createWithId(TypeId::of(type), id, "read", nullptr);
-  must(h.status());
-  const Status s = readPayload(*d.lib, *h, p);
-  test_assert(s.ok() == (d.lib->get(*h)->clientData() != nullptr));
-  if (out) {
-    *out = *h;
-  }
-  return s;
 }
 
 /* A build where the type has other channels. */
@@ -546,7 +380,7 @@ void testUnread()
   Result<BlockPayload> again = writePayload(*d.lib, h);
   must(again.status());
   must(checkPayloadRefs(*d.lib, h, *again));
-  test_assert(again->refs.size() == 4);
+  test_assert(again->refs.size() == 2);
   BlockHandle h2;
   must(readInto(d, kObjectType, *again, &h2));
   test_assert(d.obj(h2).unread().size() == 5 && d.obj(h2).unread()[2].raw.size() == 1);
@@ -639,26 +473,22 @@ void testAliases()
   BlockId alias = d.idOf(a);
   alias.client = ClientId::of("other.client");
   BlockWriter out(*d.lib);
-  RefCell cell(RefKind::OptStrong), weak(RefKind::Weak);
-  for (int list = 0; list < 2; list++) {
-    out.bytes().u32(4);
-    cell.target = d.idOf(a);
-    out.ref(cell);
-    out.ref(RefCell(RefKind::OptStrong));
-    cell.target = alias;
-    out.ref(cell);
-    out.ref(cell);
-    if (list == 0) {
-      out.ref(weak);
-    }
+  Vector<RefCell> list;
+  for (const BlockId &id : {d.idOf(a), BlockId(), alias, alias}) {
+    RefCell cell(RefKind::OptStrong);
+    cell.target = id;
+    list.append(cell);
   }
-  out.bytes().f64(1);
-  out.bytes().f64(2);
+  const std::span<const RefCell> cells(list.data(), size_t(list.size()));
+  out.entries(std::vector<BlockEntry>{detail::refField("selected", cells),
+                                      detail::refField("objects", cells),
+                                      detail::refField("objects", cells)});
   BlockHandle h;
   d.lib->setAuditRelations(false);
   must(readInto(d, kSceneType, *PayloadAccess::take(out, 1), &h));
   const Scene &s = *Scene::of(*d.lib, h);
-  test_assert(s.cells().size() == 1 && s.selection().size() == 1 && s.units.rate == *FrameRate::of(2));
+  test_assert(s.cells().size() == 1 && s.selection().size() == 1);
+  test_assert(s.cells()[0].kind == RefKind::OptStrong && s.selection()[0].kind == RefKind::Weak);
   test_assert(s.objects(*d.lib).size() == 1 && s.selected(*d.lib).size() == 1);
 }
 
@@ -710,7 +540,7 @@ void testHostile()
   test_assert(refused > 500 && read > 500);
   /* What isn't read leaves no name behind. */
   BlockWriter out(*d.lib);
-  out.bytes().str("io.nothing");
+  out.entry(detail::valueField("transformType", PropValue::ofString("io.nothing")));
   test_assert(!readInto(d, kObjectType, *PayloadAccess::take(out, 1)).ok());
   test_assert(!d.rt.nameOf(TypeId::of("io.nothing")));
   d.lib->setQuarantine(false);

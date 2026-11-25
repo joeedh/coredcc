@@ -269,7 +269,18 @@ Status Library::restoreFromHistory(BlockHandle h)
     return wrongState(*b, "restoreFromHistory", BlockState::InHistory);
   }
   setState(*b, b->deletedFrom_);
+  revived(h);
   return Status();
+}
+
+void Library::revived(BlockHandle h)
+{
+  const Datablock *b = rec(h);
+  if (b && b->state_ == BlockState::Live) {
+    for (int i = 0; i < int(reviveListeners_.size()); i++) {
+      reviveListeners_[i](*this, h);
+    }
+  }
 }
 
 Status Library::hostChanged(Datablock &b, const char *op, BlockState from, BlockState to)
@@ -311,7 +322,9 @@ Status Library::onHostRestored(BlockId id)
   if (!b) {
     return noBlock("onHostRestored");
   }
-  return hostChanged(*b, "onHostRestored", BlockState::Detached, BlockState::Live);
+  CDCC_TRY(hostChanged(*b, "onHostRestored", BlockState::Detached, BlockState::Live));
+  revived(find(id));
+  return Status();
 }
 
 /* ---- flags and pins ---- */

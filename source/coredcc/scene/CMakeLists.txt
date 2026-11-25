@@ -6,18 +6,23 @@ coredcc_library(coredcc_scene
     evaluated.cc
     evaluator.cc
     fbx.cc
+    kept_worlds.cc
     matrix.cc
     membership_commands.cc
     nearest.cc
     object.cc
     object_changes.cc
+    object_io.cc
     outline.cc
+    payload_fields.cc
+    pending_writes.cc
     pick.cc
     pick_filter.cc
     pick_scene.cc
     query_bindings.cc
     scene.cc
     scene_bvh.cc
+    scene_io.cc
     solve.cc
     transform.cc
     transform_commands.cc

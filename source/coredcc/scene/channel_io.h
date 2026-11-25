@@ -29,6 +29,10 @@ void appendChannels(const TransformType &type,
                     const ChannelBlock &channels,
                     litestl::util::Vector<BlockEntry> &out);
 
+/** Sets the channel that the entry is of, if it is one's value exactly (numbers may have become of
+ * another type). */
+bool takeChannel(const TransformType &type, const BlockEntry &e, ChannelBlock &out);
+
 /** The type's defaults, with the entries over them. Those that no def takes stay in `entries`. Of two
  * with one name, the later counts. */
 ChannelBlock takeChannels(const TransformType &type, litestl::util::Vector<BlockEntry> &entries);

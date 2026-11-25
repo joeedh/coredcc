@@ -11,6 +11,8 @@ namespace {
 
 constexpr double kZeroColumn = 1e-12;
 constexpr double kSameResidual = 1e-9;
+/* A world vector of length 1 may be one of this length in the space of a parent of size 1. */
+constexpr double kLargestCondition = 1e12;
 
 double lengthOf(const double3 &v)
 {
@@ -275,7 +277,7 @@ bool ParentSolver::set(const mat4d &world)
   p_ = Linear::of(world);
   inverse_ = Linear::of(inverse);
   translation_ = translationOf(world);
-  return finite3(translation_);
+  return finite3(translation_) && p_.norm() * inverse_.norm() <= kLargestCondition;
 }
 
 double3 ParentSolver::vector(const double3 &b) const

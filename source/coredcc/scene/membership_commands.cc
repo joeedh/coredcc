@@ -82,11 +82,43 @@ Result<Vector<BlockHandle>> targetObjects(Context &ctx)
     }
     return named;
   }
-  Vector<BlockHandle> selected = s->scene->selected(*s->lib);
-  if (selected.size() == 0) {
-    return Status::error(StatusCode::FailedPrecondition, "no object is selected");
+  const Vector<BlockHandle> selected = s->scene->selected(*s->lib);
+  Vector<BlockHandle> out;
+  for (BlockHandle h : selected) {
+    const ObjectFlags unreachable = ObjectFlags::Hidden | ObjectFlags::Unselectable;
+    if ((flagsOf(*s->lib, h) & unreachable) == ObjectFlags::None) {
+      out.append(h);
+    }
   }
-  return selected;
+  if (out.size() == 0) {
+    return Status::error(StatusCode::FailedPrecondition,
+                         selected.size() == 0 ? "no object is selected" :
+                                                "what is selected is hidden or unselectable");
+  }
+  return out;
+}
+
+ObjectFlags flagsOf(const Library &lib, BlockHandle h)
+{
+  Result<ObjectRead> r = readObject(lib, h);
+  return r.ok() ? ObjectFlags(r->info.flags) : ObjectFlags::None;
+}
+
+Status Skips::add(const Library &lib, BlockHandle h, const Status &why)
+{
+  Status s = about(lib, h, why);
+  if (why.code() != StatusCode::FailedPrecondition && why.code() != StatusCode::Unsupported) {
+    return s;
+  }
+  if (count_++ == 0) {
+    first_ = std::move(s);
+  }
+  return Status();
+}
+
+void Skips::output(Context &ctx) const
+{
+  ctx.outputs()->set("skipped", PropValue::ofInt(count_)).ignore();
 }
 
 Result<BlockHandle> blockOf(Context &ctx, const char *input)
@@ -477,19 +509,7 @@ struct Select {
     if (m == SelectMode::All || m == SelectMode::None) {
       return Status();
     }
-    Result<Vector<BlockHandle>> named = namedObjects(ctx);
-    if (!named.ok()) {
-      return named.status();
-    }
-    if (m == SelectMode::Remove) {
-      return Status();
-    }
-    for (BlockHandle h : *named) {
-      if ((flagsOf(*s->lib, h) & uint32_t(ObjectFlags::Unselectable)) != 0) {
-        return detail::about(*s->lib, h, failed("isn't selectable"));
-      }
-    }
-    return Status();
+    return namedObjects(ctx).status();
   }
   /* What `object` or `objects` names. */
   static Result<Vector<BlockHandle>> namedObjects(Context &ctx)
@@ -513,12 +533,6 @@ struct Select {
     }
     return out;
   }
-  /* A block that isn't Transformable has none. */
-  static uint32_t flagsOf(const Library &lib, BlockHandle h)
-  {
-    Result<ObjectRead> r = readObject(lib, h);
-    return r.ok() ? r->info.flags : 0;
-  }
   Status exec(Context &ctx)
   {
     Result<SceneOf> s = detail::sceneOf(ctx);
@@ -529,16 +543,24 @@ struct Select {
     }
     const SelectMode m = mode(ctx);
     if (m == SelectMode::All) {
-      constexpr uint32_t skip = uint32_t(ObjectFlags::Hidden | ObjectFlags::Unselectable);
+      constexpr ObjectFlags skip = ObjectFlags::Hidden | ObjectFlags::Unselectable;
       const Vector<BlockHandle> objects = s->scene->objects(lib);
       for (BlockHandle h : objects) {
-        if ((flagsOf(lib, h) & skip) == 0) {
+        if ((detail::flagsOf(lib, h) & skip) == ObjectFlags::None) {
           after.append(lib.get(h)->id());
         }
       }
     }
     else if (m != SelectMode::None) {
-      const Vector<BlockHandle> named = *namedObjects(ctx);
+      Vector<BlockHandle> named;
+      const Vector<BlockHandle> all = *namedObjects(ctx);
+      for (BlockHandle h : all) {
+        const ObjectFlags f = detail::flagsOf(lib, h) & ObjectFlags::Unselectable;
+        if (m == SelectMode::Remove || f == ObjectFlags::None) {
+          named.append(h);
+        }
+      }
+      ctx.outputs()->set("skipped", PropValue::ofInt(all.size() - named.size())).ignore();
       const Vector<BlockHandle> selected =
           m == SelectMode::Set ? Vector<BlockHandle>() : s->scene->selected(lib);
       litestl::util::Map<BlockHandle, char> isNamed, isSelected;
@@ -751,7 +773,8 @@ Status detail::registerMembershipCommands(Runtime &rt)
                  .item("ALL", int64_t(SelectMode::All))
                  .item("NONE", int64_t(SelectMode::None)))
       .input(blockInputDef("object"))
-      .input(detail::objectsInput());
+      .input(detail::objectsInput())
+      .output(PropertyDef::intProp("skipped"));
   CDCC_TRY(addCommandOnce<Select>(rt, std::move(select)));
 
   CommandDef add(kAddObjectCommand);

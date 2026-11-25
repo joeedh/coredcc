@@ -1,5 +1,6 @@
 #include "coredcc/scene/evaluator.h"
 
+#include "coredcc/scene/pending_writes.h"
 #include "coredcc/api/change_bus.h"
 #include "coredcc/base/iface/registry.h"
 #include "coredcc/lib/pin.h"
@@ -387,7 +388,7 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
       const Box3d box = sp.localBounds();
       e.localBounds = !takeError(rt, foreign) && box.allFinite() ? box : Box3d();
     }
-    e.bounds = transformBox(e.localBounds, static_cast<const double *>(e.state.world));
+    e.bounds = transformBox(e.localBounds, static_cast<const double *>(e.dataWorld()));
     if (!e.bounds.allFinite()) {
       e.bounds = Box3d();
     }
@@ -460,6 +461,7 @@ Status evaluateScene(Context &ctx, BlockHandle h)
   if (rt.hasStickyError()) {
     return Status::error(StatusCode::FailedPrecondition, "evaluateScene: an error is pending");
   }
+  rt.ext<detail::PendingWrites>().flush(*lib); /* what couldn't be written when its object came back */
   Scene *scene = Scene::of(*lib, h);
   if (!scene) {
     return Status::error(StatusCode::NotFound, "evaluateScene: no such scene");

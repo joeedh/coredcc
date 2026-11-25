@@ -2,6 +2,7 @@
 
 #include "coredcc/base/iface/iface.h"
 #include "coredcc/base/status.h"
+#include "coredcc/scene/channel_entries.h"
 #include "coredcc/scene/eval_ctx.h"
 
 #include "litestl/math/matrix_bindings.h"
@@ -92,6 +93,9 @@ struct TransformDelta {
  *   same interaction (or `base`): where several channel values mean the same, such as Euler
  *   angles, the ones nearest to it are wanted. `out` starts as a copy of `nearTo`. Without the
  *   slot, setWorld in Closest mode is used.
+ * - `upgrade` (optional) changes what a file has of version `version` to what this build's
+ *   channels are (TransformTypeInfo::version). After an error the object keeps the file's channels
+ *   unread, and its status is Invalid.
  */
 struct TransformModel : IfaceRef {
   TransformState evaluate(const EvalCtx &ctx, const TransformState &parent) const
@@ -119,12 +123,22 @@ struct TransformModel : IfaceRef {
     return CDCC_CALL(applyDelta, base, nearTo, delta, parent, out);
   }
 
+  bool hasUpgrade() const
+  {
+    return CDCC_HAS(upgrade);
+  }
+  Status upgrade(uint32_t version, ChannelEntries &channels) const
+  {
+    return CDCC_CALL(upgrade, version, channels);
+  }
+
   CDCC_INTERFACE(TransformModel, "coredcc::TransformModel")
   {
     BIND_STRUCT_METHOD(st, evaluate, MARGS("ctx", "parent"));
     BIND_STRUCT_METHOD(st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
     BIND_OPTIONAL_METHOD(
         st, applyDelta, MARGS("base", "nearTo", "delta", "parent", "out"));
+    BIND_OPTIONAL_METHOD(st, upgrade, MARGS("version", "channels"));
   }
 };
 

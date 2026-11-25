@@ -161,10 +161,33 @@ Unreal, coredcc is exactly one module, so they exist once.
   - `evaluateScene`, for the scene's BVH only. `rt.ext<SceneSettings>().bvh.parallel = false` keeps it
     off the pool; `leafSize` and `bins` are there too.
 
+## Objects and geometry of a host
+- A block type that implements `Transformable` is an object, and one that implements `Spatial` has
+  geometry. coredcc asks them when it evaluates or picks, and keeps nothing that it can't ask again.
+- **Graphs don't ask again** unless they hear of a change. What a block answers to `queryBlock` (whether it
+  implements an interface, and everything the interface's slots return) may change only with one of:
+  - a notification of the block: what `setValue` and the commands do, `writeTransform`, `writeParent`, and
+    `ChangeBus::notify` with its owner after the host moved the object itself;
+  - `invalidateData` after the host changed its geometry (also for the data block of an object: notify
+    the block that has the Spatial);
+  - a move of the Library's epoch: creating, deleting and restoring blocks, `onHostDestroyed` and
+    `onHostRestored`, `writeRef` and `noteRefsChanged`, overrides. A block's data pointer may change only
+    between the two host calls.
+  If a graph's result is old, `GraphInstance::setIncremental(false)` says whether a notification is missing.
+- **An object that the host takes away** (`onHostDestroyed`) isn't an error for undo, redo or a drag. What
+  they would have written to it is written when it is back: `onHostRestored` calls its `writeChannels`, so
+  its data must be there by then. If it can't be written just then (an evaluation is going on, an error is
+  pending), the next `evaluateScene` does it.
+- **Parents are kept alive** by their children, and saved with them, also when they are in no scene.
+
 ## Scenes in files
 - Objects and scenes are saved with the library. The Context's scene isn't: set it after a load.
 - Register transform types before loading. The objects of a type that isn't there stand where their
   parents are; their channels are kept, and read when it is registered.
+- **A transform type that changes its channels** raises `TransformTypeInfo::version`, and has an `upgrade`
+  slot that changes what older files have. A newer file's channels are kept unread.
+- What a newer build put into an object or a scene is kept, and saved again. `dataMatrix` and `parentKey`
+  are reserved. `ObjectEval::dataWorld` is what to draw an object's data with.
 - A duplicated or appended scene isn't a GC root (`BlockFlags::Root`); an appended one has FakeUser.
 
 ## Units and frames

@@ -7,7 +7,6 @@
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
-#include <cmath>
 #include <string>
 
 namespace coredcc {
@@ -35,17 +34,35 @@ void Scene::ensureIndex(const Library &lib) const
     return;
   }
   index_.clear();
+  indexDoubles_ = false;
   for (int i = 0; i < int(cells_.size()); i++) {
-    if (!cells_[i].isNull()) {
-      index_.add(clients.canonical(cells_[i].target), i);
+    if (!cells_[i].isNull() && !index_.add(clients.canonical(cells_[i].target), i)) {
+      indexDoubles_ = true;
     }
   }
   indexValid_ = true;
+  indexEpoch_ = lib.epoch();
   indexCount_ = int(cells_.size());
   indexGeneration_ = clients.generation();
 }
 
 int Scene::indexOf(const Library &lib, const BlockId &id) const
+{
+  const int i = lookup(lib, id);
+  if (i >= 0 || id.isNull() || indexEpoch_ == lib.epoch()) {
+    return i;
+  }
+  ensureFreshIndex(lib);
+  return lookup(lib, id);
+}
+
+void Scene::ensureFreshIndex(const Library &lib) const
+{
+  indexValid_ = indexValid_ && indexEpoch_ == lib.epoch();
+  ensureIndex(lib);
+}
+
+int Scene::lookup(const Library &lib, const BlockId &id) const
 {
   const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
   const BlockId want = clients.canonical(id);
@@ -70,8 +87,17 @@ const Vector<BlockHandle> &Scene::objects(const Library &lib) const
   const uint64_t clients = lib.runtime().ext<ClientRegistry>().generation();
   if (liveEpoch_ != lib.epoch() || liveGeneration_ != clients) {
     live_.clear();
+    Vector<uint8_t> seen;
     for (const RefCell &c : cells_) {
-      if (const BlockHandle h = lib.resolveRef(c)) {
+      const BlockHandle h = lib.resolveRef(c);
+      if (!h) {
+        continue;
+      }
+      while (seen.size() <= h.index) {
+        seen.append(0);
+      }
+      if (!seen[h.index]) {
+        seen[h.index] = 1;
         live_.append(h);
       }
     }
@@ -87,7 +113,7 @@ Status Scene::add(Library &lib, BlockHandle h, int index)
   if (!b) {
     return Status::error(StatusCode::NotFound, "Scene::add: no such block");
   }
-  if (contains(lib, h)) {
+  if (lookup(lib, b->id()) >= 0) {
     return Status::error(StatusCode::AlreadyExists,
                          ("'" + std::string(b->name().c_str()) + "' is in the scene").c_str());
   }
@@ -109,7 +135,8 @@ Status Scene::add(Library &lib, BlockHandle h, int index)
 
 Result<int> Scene::remove(Library &lib, const BlockId &id)
 {
-  const int at = indexOf(lib, id);
+  ensureFreshIndex(lib);
+  const int at = lookup(lib, id);
   if (at < 0) {
     return Status::error(StatusCode::NotFound, "Scene::remove: the block isn't in the scene");
   }
@@ -117,6 +144,9 @@ Result<int> Scene::remove(Library &lib, const BlockId &id)
     return Status::error(StatusCode::Busy, "Scene::remove: the library is busy");
   }
   cells_.remove_at(at);
+  for (int i = indexDoubles_ ? lookup(lib, id) : -1; i >= 0; i = lookup(lib, id)) {
+    cells_.remove_at(i);
+  }
   lib.noteRefsChanged();
   return at;
 }
@@ -125,8 +155,13 @@ int Scene::prune(Library &lib)
 {
   int kept = 0;
   const int n = int(cells_.size());
+  const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
+  ensureFreshIndex(lib);
   for (int i = 0; i < n; i++) {
-    if (!cells_[i].isNull() && lib.find(cells_[i].target)) {
+    if (cells_[i].isNull() || !lib.find(cells_[i].target)) {
+      continue;
+    }
+    if (!indexDoubles_ || *index_.lookup_ptr(clients.canonical(cells_[i].target)) == i) {
       cells_[kept++] = cells_[i];
     }
   }
@@ -191,82 +226,11 @@ const SceneBvh &Scene::bvh() const
   return evaluator_->bvh;
 }
 
-/* ---- files ---- */
+/* ---- the block ---- */
 
 namespace {
 
 constexpr uint32_t kScenePayload = 1;
-
-void writeCells(BlockWriter &out, const Vector<RefCell> &cells)
-{
-  uint32_t n = 0;
-  for (const RefCell &c : cells) {
-    n += c.isNull() ? 0 : 1;
-  }
-  out.bytes().u32(n);
-  for (const RefCell &c : cells) {
-    if (!c.isNull()) {
-      out.ref(c);
-    }
-  }
-}
-
-/* Those that aren't null, once each, so it takes no more memory than the ref table. A save writes null
- * for a deleted block. */
-void readCells(BlockReader &in, RefKind kind, Vector<RefCell> &out)
-{
-  const uint32_t n = in.bytes().count(sizeof(uint32_t));
-  const ClientRegistry &clients = in.library().runtime().ext<ClientRegistry>();
-  litestl::util::Map<BlockId, int> seen;
-  for (uint32_t i = 0; i < n; i++) {
-    RefCell cell(kind);
-    in.ref(cell);
-    if (!cell.isNull() && seen.add(clients.canonical(cell.target), 0)) {
-      out.append(cell);
-    }
-  }
-}
-
-} // namespace
-
-void Scene::write(BlockWriter &out) const
-{
-  writeCells(out, cells_);
-  out.ref(active_.cell());
-  writeCells(out, selection_);
-  out.bytes().f64(frame);
-  out.bytes().f64(units.rate.fps());
-}
-
-void Scene::readFrom(BlockReader &in)
-{
-  readCells(in, RefKind::OptStrong, cells_);
-  in.ref(active_.cell());
-  readCells(in, RefKind::Weak, selection_);
-  const double f = in.bytes().f64(), rate = in.bytes().f64();
-  frame = std::isfinite(f) ? f : frame;
-  units.rate = FrameRate::nearest(rate);
-}
-
-Scene *Scene::duplicate() const
-{
-  Scene *s = litestl::alloc::New<Scene>("coredcc::Scene");
-  s->cells_ = cells_;
-  s->selection_ = selection_;
-  s->active_ = active_;
-  s->frame = frame;
-  s->units = units;
-  return s;
-}
-
-uint64_t Scene::memSize() const
-{
-  return sizeof(Scene) + (uint64_t(cells_.size()) + selection_.size()) * sizeof(RefCell);
-}
-
-/* ---- the block ---- */
-
-namespace {
 
 struct SceneProvider {
   void *data(const Datablock &b) const

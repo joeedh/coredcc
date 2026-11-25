@@ -159,7 +159,7 @@ Status nearestInScene(Context &ctx,
     if (scope.thrown() || (domains >> options.domain & 1) == 0) {
       continue;
     }
-    const NearQuery query(point, radius, options, e.state.world);
+    const NearQuery query(point, radius, options, e.dataWorld());
     NearSink sink(query);
     s.closestElements(query, sink);
     if (scope.thrown()) {

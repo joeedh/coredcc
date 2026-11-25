@@ -1,5 +1,6 @@
 #include "coredcc/scene/transform_registry.h"
 
+#include "coredcc/api/change_bus.h"
 #include "coredcc/scene/channel_io.h"
 
 #include "litestl/util/alloc.h"
@@ -88,6 +89,9 @@ Status TransformRegistry::canAdd(const TransformTypeInfo &info) const
                           "': a transform type or a struct has that name already")
                              .c_str());
   }
+  if (info.version > uint32_t(INT32_MAX)) {
+    return bad(info.name, "its version is too large");
+  }
   for (int i = 0; i < int(info.channels.size()); i++) {
     const std::string name = info.channels[i].apiName().c_str();
     CDCC_TRY(checkDef(info.name, info.channels[i]));
@@ -139,12 +143,14 @@ Result<const TransformType *> TransformRegistry::add(TransformTypeInfo info,
   type->name_ = info.name;
   type->struct_ = (*added)->id();
   type->defaults_ = std::move(defaults);
+  type->version_ = info.version;
   type->distance_ = std::move(distance);
   type->defs_ = std::move(info.channels);
   type->model_ = std::move(model);
   type->rt_ = &rt_;
   types_.append(type);
   byId_.add(id->value, type);
+  rt_.ext<ChangeBus>().notifyAll(); /* objects that waited for it answer otherwise now */
   return static_cast<const TransformType *>(type);
 }
 

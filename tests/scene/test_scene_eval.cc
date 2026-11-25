@@ -91,7 +91,7 @@ void testSelection()
   test_assert(!sc.active(*d.lib) && !sc.activeCell().isNull());
 }
 
-/* A scene is a root, its members live through it; the parent and the selection are weak. */
+/* A scene is a root, its members live through it, and their parents; the selection is weak. */
 void testCollect()
 {
   Doc d;
@@ -105,8 +105,8 @@ void testCollect()
   must(d.lib->writeRef(d.sc().activeCell(), d.idOf(picked)));
   test_assert(d.lib->usersOf(parent).size() == 1 && d.lib->usersOf(data).size() == 1);
   Result<int> n = d.lib->collect();
-  test_assert(n.ok() && *n == 2);
-  test_assert(d.lib->get(a) && d.lib->get(data) && !d.lib->get(parent) && !d.lib->get(picked));
+  test_assert(n.ok() && *n == 1);
+  test_assert(d.lib->get(a) && d.lib->get(data) && d.lib->get(parent) && !d.lib->get(picked));
   test_assert(d.lib->get(d.scene));
   d.evaluate();
   test_assert(closeTo(d.result(a).bounds.max[0], 1.0));
@@ -450,7 +450,7 @@ void testCapabilities()
   const Spatial sp = objectQuery<Spatial>(*d.lib, a);
   test_assert(sp && sp.localBounds().max[0] == 1.0);
   test_assert(bool(objectQuery<Transformable>(*d.lib, a)));
-  test_assert(bool(objectQuery<Spatial>(*d.lib, data)) && !objectQuery<Elements>(*d.lib, a));
+  test_assert(bool(objectQuery<Spatial>(*d.lib, data)) && !objectQuery<ElementAccess>(*d.lib, a));
 
   ChangeBus &bus = d.rt.ext<ChangeBus>();
   Vector<OwnerKey> heard;

@@ -73,7 +73,21 @@ Status unsolvable();
 
 /** How far a delta moves a point. Exactly 0 for a rotation's or a scale's pivot. */
 double3 shiftOf(const TransformDelta &delta, const double3 &point);
-/** A scale delta's factor along each of the node's own world axes. */
+/* A scale delta is a mirror, for its negative factors, and then a scale by the sizes of its factors.
+ * The mirror changes the node's rotation, and is exact under parents without shear. The sizes are
+ * applied along the node's own axes, so the rest may not be exact: see solveDelta. */
+
+/** Whether a scale delta has a negative factor. */
+bool mirrors(const TransformDelta &delta);
+/** A linear part in the world, mirrored. */
+solve::Linear mirrored(const TransformDelta &delta, const solve::Linear &m);
+/** Sets a node's rotation and scale to their mirrored ones, with the rotation nearest to the one it
+ * has. `turned`: whether that is another one. `x` is what the mirror makes of the rotation, in the node's parent. */
+Status takeMirror(const solve::Linear &x,
+                  quatd &rotation,
+                  double3 &scale,
+                  bool &turned);
+/** The size of a scale delta's factor along each of the node's own world axes. */
 double3 factorsAlong(const TransformDelta &delta, const solve::Linear &axes);
 /** The local rotation that turns points under `parent` around the same world axis as `delta`, by
  * the same angle: a conjugation, where that is a rotation. */

@@ -23,6 +23,8 @@ class SceneEvaluator;
  * The data of a `coredcc.Scene`: which objects are in it, in order, which one is active, which
  * are selected, and the time.
  *
+ * - A block is a member once. Cells that were written behind the scene's back may name one twice: it
+ *   counts once, and is listed where it is first.
  * - Objects are referenced with OptStrong cells. One that isn't Live (deleted, or its host
  *   took it away) stays in its place and isn't listed. A cell whose object has no record
  *   any more goes with the next call of `prune`, which the membership commands make.
@@ -52,12 +54,13 @@ class Scene {
   /** Its place among all members, or -1. */
   int indexOf(const Library &lib, BlockHandle h) const;
   int indexOf(const Library &lib, const BlockId &id) const;
-  /** Adds a block that isn't a member; at the end for `index` -1. Not checked to be
-   * Transformable: what isn't is at the origin. */
+  /** Adds a block; at the end for `index` -1. Not checked to be Transformable: what isn't is at the
+   * origin. AlreadyExists for a member. (One that cells written behind the scene's back name is found
+   * out after `contains`, or the like, was asked since: it is in two cells then, which is the same.) */
   Status add(Library &lib, BlockHandle h, int index = -1);
   /** Removes a member: the place it had. NotFound otherwise. */
   Result<int> remove(Library &lib, const BlockId &id);
-  /** Drops cells that are null, or whose block has no record. Returns how many. */
+  /** Drops cells that are null or double, or whose block has no record. Returns how many. */
   int prune(Library &lib);
   /** All cells, for reading. */
   const litestl::util::Vector<RefCell> &cells() const
@@ -119,7 +122,7 @@ class Scene {
   /** Over the bounds of the last evaluation. */
   const SceneBvh &bvh() const;
 
-  /* ---- files ---- */
+  /* ---- files: what this build doesn't know is kept, and written again ---- */
 
   void write(BlockWriter &out) const;
   /** Fails the reader for a payload that is wrong. */
@@ -127,6 +130,10 @@ class Scene {
   /** A copy for another block, not evaluated. */
   Scene *duplicate() const;
   uint64_t memSize() const;
+  std::span<const BlockEntry> unreadFields() const
+  {
+    return std::span<const BlockEntry>(fields_.data(), size_t(fields_.size()));
+  }
 
   /** Every reference, for the provider. */
   template <class Fn> void foreachCell(Fn &&fn)
@@ -138,22 +145,35 @@ class Scene {
     for (RefCell &c : selection_) {
       fn(c);
     }
+    for (BlockEntry &e : fields_) {
+      for (RefCell &c : e.refs) {
+        fn(c);
+      }
+    }
   }
 
  private:
   friend class detail::SceneEvaluator;
   friend Status evaluateScene(Context &ctx, BlockHandle scene);
   void ensureIndex(const Library &lib) const;
+  /** The same, as of the Library's epoch. */
+  void ensureFreshIndex(const Library &lib) const;
+  /** As indexOf, but for the epoch. */
+  int lookup(const Library &lib, const BlockId &id) const;
 
   litestl::util::Vector<RefCell> cells_;
   litestl::util::Vector<RefCell> selection_;
   WeakRef<Object> active_;
+  litestl::util::Vector<BlockEntry> fields_;
 
-  /* Canonical id to place. Made again when the number of cells is another one; a hit is checked
-   * against the cell, since remapping and sweeps write cells behind its back. */
+  /* Canonical id to its first place. Remapping, sweeps, a host's undo and whoever calls writeRef write
+   * cells behind its back. So it is made again when the number of cells is another one, when a place
+   * isn't of the id it is for, and when an id isn't there and the Library's epoch moved. */
   mutable litestl::util::Map<BlockId, int> index_;
   mutable bool indexValid_ = false;
+  mutable bool indexDoubles_ = false;
   mutable int indexCount_ = 0;
+  mutable uint64_t indexEpoch_ = 0;
   mutable uint64_t indexGeneration_ = 0;
 
   mutable litestl::util::Vector<BlockHandle> live_;

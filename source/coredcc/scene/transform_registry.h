@@ -25,6 +25,12 @@ struct TransformTypeInfo {
    * have subtype Distance: solveWorld's tolerance comes from their size.
    */
   litestl::util::Vector<PropertyDef, 1> channels;
+  /**
+   * Of the channels, in files. Raise it when a channel is renamed or means something else: then
+   * TransformModel::upgrade gets what older files have. Without that slot, an older file's channels
+   * are read by name. A newer file's aren't read, but kept.
+   */
+  uint32_t version = 0;
 
   static litestl::binding::types::Struct<TransformTypeInfo> *defineBindings();
 };
@@ -53,6 +59,10 @@ class TransformType {
   {
     return defaults_;
   }
+  uint32_t version() const
+  {
+    return version_;
+  }
   /** The defs of its channels, in order. */
   const litestl::util::Vector<PropertyDef, 1> &channelDefs() const
   {
@@ -78,6 +88,7 @@ class TransformType {
   litestl::util::string name_;
   StructId struct_;
   ChannelBlock defaults_;
+  uint32_t version_ = 0;
   litestl::util::Vector<PropertyDef, 1> defs_;
   litestl::util::Vector<uint8_t> distance_;
   Owned<TransformModel> model_;
@@ -104,7 +115,8 @@ class TransformRegistry {
   /** Why a type can't be added: a channel def, or a name that is taken (AlreadyExists). Busy while
    * a scene or a graph evaluates. */
   Status canAdd(const TransformTypeInfo &info) const;
-  /** Registers a type and takes its model. Fails as canAdd does, leaving nothing behind. */
+  /** Registers a type and takes its model. Fails as canAdd does, leaving nothing behind. Posts that
+   * anything may have changed: there may be objects of the type already. */
   Result<const TransformType *> add(TransformTypeInfo info, Owned<TransformModel> model);
   const TransformType *find(TypeId id) const;
   const TransformType *find(std::string_view name) const
@@ -157,7 +169,12 @@ Result<ChannelBlock> solveWorld(const TransformType &type,
                                 SetWorldMode mode);
 
 /** Applies `delta`, the total since `base`. `nearTo` is the previous result of the interaction,
- * or base's channels: Euler angles stay continuous with it. */
+ * or base's channels: Euler angles stay continuous with it.
+ *
+ * A scale that the channels can hold exactly (within 1e-9) is exact. So is a mirror (factors of 1 and
+ * -1, or of one size), but under parents with shear. Other factors along other axes than the object's
+ * would shear it: then its scales are multiplied by the sizes of the factors along its own axes,
+ * after the mirror that their signs are. */
 Result<ChannelBlock> solveDelta(const TransformType &type,
                                 const EvalCtx &base,
                                 const ChannelBlock &nearTo,

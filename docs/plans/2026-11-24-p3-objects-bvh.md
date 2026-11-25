@@ -1000,8 +1000,8 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   Float member (`scene.units.fps`) is enough for undo.
 - **`startFrame`** is the frame at time 0, so `Scene::time()` is `(frame - startFrame) / fps`. As a unit,
   a frame is a length of time, without it.
-- **`Scene::fps` is `Scene::units.rate`,** and the path is `scene.units.fps`. The payload has
-  only the rate so far; the rest comes with the payload's entries (the review's finding 11).
+- **`Scene::fps` is `Scene::units.rate`,** and the path is `scene.units.fps`. All of it is in the
+  payload since the review's finding 11.
 - **Members** are `lengthUnit`, `angleUnit`, ... since `length` is reserved by the datapath.
 - **`Context::units()`** finds the settings through the API struct of the active scene's block type: a
   Pointer member `units` to `coredcc.UnitSettings` (`addUnitSettings`). So a host's own scene type has
@@ -1016,6 +1016,32 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   were in code that isn't needed, which is gone; the tests now find 4; and 2 change nothing that can be
   seen (rounding where truncation gives the same, a guard before a cast of NaN). Of the 5, 4 were
   written again and are found, and 1 was in code that is gone.
+
+### Review of objects and transforms, round 1
+- **Report:** `docs/reports/feature-report-scene-2026-11-25.md`, with what was decided for each finding.
+  Round 1 is 1, 2, 5, 8, 11, 12, 13, 16, 17, 18, 22 and 24. This replaces what the steps above say
+  about Weak parents and positional payloads.
+- **Files:** `object_io.cc`, `scene_io.cc`, `payload_fields.{h,cc}`, `channel_entries.h`,
+  `pending_writes.{h,cc}`, `kept_worlds.{h,cc}`; tests `test_scene_formats`, `test_scene_scale` and
+  `test_scene_mixed`, and `io_doc.h`.
+- **In `lib/`** (P2's): `BlockReader::entries(fn)` and `Library::addReviveListener`.
+- **Formats:** an object is two entry lists. The first has `transformType`, `transformVersion`, `flags`,
+  `parent`, `data`, and is open to more. The second has the channels, by name. A scene is one list.
+  What isn't known, or has a kind that isn't expected, is kept as it is.
+- **`queryBlock` rule:** Object and Scene notify through the datapath and the commands; `invalidateData`
+  notifies the block; detaching, restoring, deleting and reference writes move the Library's epoch.
+  What was missing: a transform type that is registered late. `embedding.md` has the rule for hosts.
+- **`solveDelta`** asks `solveWorld` (Exact) a second time when a scale isn't exact. Only an exception of
+  that attempt is an error (StatusCode::Internal, which foreign exceptions have).
+- **Renamed:** the capability `Elements` is `ElementAccess`, since graphs have a payload `Elements` (both
+  in master and in `compile_embed`). Architecture §8 still says Elements.
+- **Deferred:** solving descendants that inherit FBX-style (17), a data matrix, instancing and sub-keys
+  (18), `TransformModel::upgrade` from scripts (with 20, round 3).
+- **Mutations:** 155, each alone. 111 were found at first and 7 didn't compile. Of the 37 that survived, 8
+  were in code that isn't needed, which is gone; the tests now find 18; 11 can't be seen or aren't
+  tested: 4 change only the cost, 1 only memory, and 6 are guards or ties (casts of a frame rate that is
+  out of range, two equally near rotations, an approximation that changes neither rotation nor scale, a
+  busy Library, 0 / 0). The 7 were written again and are found, 1 of them by a new test.
 
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.

@@ -149,6 +149,12 @@ class Library {
   Status onHostDestroyed(BlockId id);
   /** The host brought it back: Detached -> Live, also of an InHistory block. */
   Status onHostRestored(BlockId id);
+  /** `fn` is called with each block that onHostRestored or restoreFromHistory made Live. Listeners go
+   * with the Library. */
+  void addReviveListener(litestl::util::function<void(Library &, BlockHandle)> fn)
+  {
+    reviveListeners_.append(std::move(fn));
+  }
 
   /* ---- flags and pins (void: deferred during a sweep) ---- */
 
@@ -437,6 +443,8 @@ class Library {
   void renormalizeIds() const;
   bool audit_;
   litestl::util::Vector<litestl::util::function<void()>> deferred_;
+  litestl::util::Vector<litestl::util::function<void(Library &, BlockHandle)>> reviveListeners_;
+  void revived(BlockHandle h);
   std::shared_ptr<detail::LibraryToken> token_;
 
   int doomedCount_ = 0;

@@ -1,7 +1,7 @@
 #include "coredcc/scene/transform.h"
 
 #include "coredcc/bvh/box.h"
-#include "coredcc/scene/solve.h"
+#include "coredcc/scene/models.h"
 #include "coredcc/scene/transform_registry.h"
 
 #include <cmath>
@@ -137,10 +137,8 @@ Status checkTarget(const mat4d &target)
 
 Status checkParent(const TransformState &parent)
 {
-  mat4d inverse;
-  return litestl::math::tryInverse(parent.world, inverse) ?
-             Status() :
-             failed("the parent's matrix has no inverse (a scale of 0)");
+  solve::ParentSolver solver;
+  return solver.set(parent.world) ? Status() : models::singularParent();
 }
 
 /* Within a few roundings of the numbers that were added up. */
@@ -281,7 +279,21 @@ Result<ChannelBlock> solveDelta(const TransformType &type,
   if (s = checkResult(type, out, base.time(), parent, state); !s.ok()) {
     return s;
   }
-  return out;
+  if (delta.kind != DeltaKind::Scale) {
+    return out;
+  }
+  /* A model scales along its own axes. Other channels may give exactly what was asked for. */
+  Result<TransformState> from = evaluateTransform(type, base, parent);
+  if (!from.ok()) {
+    return from.status();
+  }
+  const mat4d target = delta.matrix() * from->world;
+  if (solve::sameLinear(state.world, target)) {
+    return out;
+  }
+  Result<ChannelBlock> exact = solveWorld(type, base, target, parent, SetWorldMode::Exact);
+  const bool threw = exact.status().code() == StatusCode::Internal;
+  return exact.ok() || threw ? exact : Result<ChannelBlock>(std::move(out));
 }
 
 } // namespace coredcc

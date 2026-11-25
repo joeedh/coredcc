@@ -4,6 +4,7 @@
 #include "coredcc/command/block_commands.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/command/executor.h"
+#include "coredcc/scene/kept_worlds.h"
 #include "coredcc/scene/models.h"
 
 #include "litestl/binding/binding.h"
@@ -129,6 +130,25 @@ void setApproximate(Context &ctx, int n)
   ctx.outputs()->set("approximate", PropValue::ofInt(n)).ignore();
 }
 
+/* Channels that keep an object at `state`; `otherwise` is set if what is below it may move. */
+Result<ChannelBlock> solveKeeping(const TransformType &type,
+                                  const EvalCtx &current,
+                                  const TransformState &state,
+                                  const TransformState &parent,
+                                  int &approximate,
+                                  bool &otherwise)
+{
+  const int before = approximate;
+  Result<ChannelBlock> c =
+      detail::solveKeeping(type, current, state.world, parent, approximate);
+  otherwise = otherwise || approximate > before;
+  if (c.ok()) {
+    Result<TransformState> now = evaluateTransform(type, EvalCtx(*c, current.time()), parent);
+    otherwise = otherwise || !now.ok() || detail::inheritsOtherwise(state, *now);
+  }
+  return c;
+}
+
 /* ---- setParent ---- */
 
 struct SetParent : ChangesCommand {
@@ -175,34 +195,61 @@ struct SetParent : ChangesCommand {
       }
       parentState = *p;
     }
+    detail::Skips skips;
+    Vector<BlockHandle> usable;
     Vector<ChannelBlock> channels;
+    bool otherwise = false;
     for (BlockHandle h : objects) {
-      if (!keep) {
+      Result<ChannelBlock> c = kept(*s.lib, h, keep, time, parentState, approximate, otherwise);
+      if (!c.ok()) {
+        CDCC_TRY(skips.add(*s.lib, h, c.status()));
         continue;
       }
-      Result<ObjectRead> r = readObject(*s.lib, h);
-      Result<TransformState> world = computeState(*s.lib, h, time);
-      if (!r.ok() || !world.ok()) {
-        return detail::about(*s.lib, h, r.ok() ? world.status() : r.status());
-      }
-      if (!r->type) {
-        return detail::about(*s.lib, h, failed("its transform type isn't registered"));
-      }
-      Result<ChannelBlock> c = detail::solveKeeping(
-          *r->type, EvalCtx(r->channels, time), world->world, parentState, approximate);
-      if (!c.ok()) {
-        return detail::about(*s.lib, h, c.status());
-      }
+      usable.append(h);
       channels.append(std::move(*c));
     }
-    for (int i = 0; i < int(objects.size()); i++) {
+    detail::KeptWorlds below;
+    if (otherwise) {
+      CDCC_TRY(below.remember(*s.lib, setOf(usable), time));
+    }
+    for (int i = 0; i < int(usable.size()); i++) {
       ObjectChanges::Values v;
       v.channels = keep ? &channels[i] : nullptr;
       v.parent = &id;
-      CDCC_TRY(changes.write(ctx, objects[i], v));
+      CDCC_TRY(changes.write(ctx, usable[i], v));
     }
-    setApproximate(ctx, approximate);
-    return Status();
+    setApproximate(ctx, approximate + below.moved(*s.lib));
+    skips.output(ctx);
+    return skips.outcome(int(usable.size()));
+  }
+  /* An object's channels under another parent, if its place is kept; an error if it can't have one. */
+  static Result<ChannelBlock> kept(const Library &lib,
+                                   BlockHandle h,
+                                   bool keep,
+                                   double time,
+                                   const TransformState &parent,
+                                   int &approximate,
+                                   bool &otherwise)
+  {
+    Result<ObjectRead> r = readObject(lib, h);
+    if (!r.ok()) {
+      return r.status();
+    }
+    if (!r->iface.hasSetParentId()) {
+      return Status::error(StatusCode::Unsupported, "this object's parent can't be changed");
+    }
+    if (!keep) {
+      return ChannelBlock();
+    }
+    Result<TransformState> world = computeState(lib, h, time);
+    if (!world.ok()) {
+      return world.status();
+    }
+    if (!r->type) {
+      return failed("its transform type isn't registered");
+    }
+    return solveKeeping(
+        *r->type, EvalCtx(r->channels, time), *world, parent, approximate, otherwise);
   }
   static lbt::Struct<SetParent> *defineBindings()
   {
@@ -239,32 +286,62 @@ struct SetTransformType : ChangesCommand {
     const bool keep = ctx.inputs()->get("keepWorld")->asBool();
     const double time = s.scene->time();
     int approximate = 0;
+    detail::Skips skips;
+    Vector<BlockHandle> usable;
     Vector<ChannelBlock> channels;
+    bool otherwise = false;
+    int done = 0;
     for (BlockHandle h : objects) {
-      channels.append(type.defaults());
-      if (!keep) {
+      Result<ObjectRead> r = readObject(*s.lib, h);
+      if (r.ok() && r->info.transformType == id && r->channels.size() == type.channelCount()) {
+        done++; /* it has the type */
         continue;
       }
-      Result<TransformState> world = computeState(*s.lib, h, time);
-      Result<TransformState> parent = computeParentState(*s.lib, h, time);
-      if (!world.ok() || !parent.ok()) {
-        return detail::about(*s.lib, h, world.ok() ? parent.status() : world.status());
-      }
-      Result<ChannelBlock> c = detail::solveKeeping(
-          type, EvalCtx(type.defaults(), time), world->world, *parent, approximate);
+      Result<ChannelBlock> c =
+          r.ok() ? converted(*s.lib, *r, h, type, keep, time, approximate, otherwise) : r.status();
       if (!c.ok()) {
-        return detail::about(*s.lib, h, c.status());
+        CDCC_TRY(skips.add(*s.lib, h, c.status()));
+        continue;
       }
-      channels[int(channels.size()) - 1] = std::move(*c);
+      usable.append(h);
+      channels.append(std::move(*c));
     }
-    for (int i = 0; i < int(objects.size()); i++) {
+    detail::KeptWorlds below;
+    if (otherwise) {
+      CDCC_TRY(below.remember(*s.lib, setOf(usable), time));
+    }
+    for (int i = 0; i < int(usable.size()); i++) {
       ObjectChanges::Values v;
       v.channels = &channels[i];
       v.type = &id;
-      CDCC_TRY(changes.write(ctx, objects[i], v));
+      CDCC_TRY(changes.write(ctx, usable[i], v));
     }
-    setApproximate(ctx, approximate);
-    return Status();
+    setApproximate(ctx, approximate + below.moved(*s.lib));
+    skips.output(ctx);
+    return skips.outcome(done + int(usable.size()));
+  }
+  static Result<ChannelBlock> converted(const Library &lib,
+                                        const ObjectRead &r,
+                                        BlockHandle h,
+                                        const TransformType &type,
+                                        bool keep,
+                                        double time,
+                                        int &approximate,
+                                        bool &otherwise)
+  {
+    if (!r.iface.hasSetTransformTypeId()) {
+      return Status::error(StatusCode::Unsupported, "this object's transform type can't be changed");
+    }
+    if (!keep) {
+      return type.defaults();
+    }
+    Result<TransformState> world = computeState(lib, h, time);
+    Result<TransformState> parent = computeParentState(lib, h, time);
+    if (!world.ok() || !parent.ok()) {
+      return world.ok() ? parent.status() : world.status();
+    }
+    return solveKeeping(
+        type, EvalCtx(type.defaults(), time), *world, *parent, approximate, otherwise);
   }
   static lbt::Struct<SetTransformType> *defineBindings()
   {
@@ -284,30 +361,43 @@ struct SetRotationMode : ChangesCommand {
     if (!objects.ok()) {
       return objects.status();
     }
+    detail::Skips skips;
+    int usable = 0;
     for (BlockHandle h : *objects) {
       Result<ObjectRead> r = readObject(*ctx.library(), h);
-      if (!r.ok()) {
-        return r.status();
-      }
-      if (r->info.transformType != TypeId::of(kTrsTransform) ||
-          r->channels.size() != trs::kCount)
-      {
-        return detail::about(*ctx.library(), h, failed("has no rotation mode"));
+      const Status why = usableFor(r);
+      usable += why.ok() ? 1 : 0;
+      if (!why.ok()) {
+        CDCC_TRY(skips.add(*ctx.library(), h, why));
       }
     }
-    return Status();
+    return skips.outcome(usable);
+  }
+  static Status usableFor(const Result<ObjectRead> &r)
+  {
+    return !r.ok() ? r.status() :
+           r->info.transformType == TypeId::of(kTrsTransform) &&
+                   r->channels.size() == trs::kCount ?
+                     Status() :
+                     failed("has no rotation mode");
   }
   Status exec(Context &ctx)
   {
     const int32_t mode = int32_t(ctx.inputs()->get("mode")->asEnum());
     const Vector<BlockHandle> objects = *detail::targetObjects(ctx);
+    detail::Skips skips;
     for (BlockHandle h : objects) {
       Result<ObjectRead> r = readObject(*ctx.library(), h);
-      const ChannelBlock c = r.ok() ? models::withRotationMode(r->channels, mode) : ChannelBlock();
+      if (const Status why = usableFor(r); !why.ok()) {
+        CDCC_TRY(skips.add(*ctx.library(), h, why));
+        continue;
+      }
+      const ChannelBlock c = models::withRotationMode(r->channels, mode);
       ObjectChanges::Values v;
       v.channels = &c;
       CDCC_TRY(changes.write(ctx, h, v));
     }
+    skips.output(ctx);
     return Status();
   }
   static lbt::Struct<SetRotationMode> *defineBindings()
@@ -383,6 +473,7 @@ struct DeleteObjects : ChangesCommand {
     const Vector<BlockHandle> objects = *detail::targetObjects(ctx);
     const double time = s.scene->time();
     int approximate = 0;
+    detail::KeptWorlds below;
     if (ctx.inputs()->get("keepChildrenWorld")->asBool()) {
       HandleSet gone;
       for (BlockHandle x : deletePreview(*s.lib, {objects.data(), objects.size()})) {
@@ -390,6 +481,13 @@ struct DeleteObjects : ChangesCommand {
       }
       Vector<Child> found;
       CDCC_TRY(children(*s.lib, gone, time, found));
+      HandleSet moving;
+      for (const Child &c : found) {
+        moving.add(c.object, 0);
+      }
+      if (found.size() > 0) {
+        CDCC_TRY(below.remember(*s.lib, moving, time));
+      }
       for (const Child &c : found) {
         CDCC_TRY(reparent(ctx, c, time, approximate));
       }
@@ -411,7 +509,7 @@ struct DeleteObjects : ChangesCommand {
     }
     const int64_t count = out->get("count")->asInt();
     ctx.outputs()->set("count", PropValue::ofInt(count)).ignore();
-    setApproximate(ctx, approximate);
+    setApproximate(ctx, approximate + below.moved(*s.lib));
     return Status();
   }
   /* Under the parents as they are by now: those before it have moved. */
@@ -495,7 +593,8 @@ CommandDef deltaDef(const char *name, const char *uiName)
       .input(PropertyDef::vecProp("axis", 3).defaultValue(
           PropValue::ofComponents(PropValue::Type::Vec3, z)))
       .input(PropertyDef::floatProp("angle").subtype(PropSubtype::Angle).unit(UnitFamily::Angle))
-      .input(detail::objectsInput());
+      .input(detail::objectsInput())
+      .output(PropertyDef::intProp("skipped"));
   return def;
 }
 
@@ -512,61 +611,86 @@ Status ApplyDelta::exec(Context &ctx)
 {
   const SceneOf s = *detail::sceneOf(ctx);
   const Vector<BlockHandle> objects = *detail::targetObjects(ctx);
-  const HandleSet selected = setOf(objects);
+  const TransformDelta delta = deltaInputs(ctx);
   time_ = s.scene->time();
+  detail::Skips skips;
+  Vector<Base> usable;
+  HandleSet moved;
   for (BlockHandle h : objects) {
-    Result<Walk> up =
-        walkUp(*s.lib, h, [&](BlockHandle p) { return selected.lookup_ptr(p) != nullptr; });
-    if (!up.ok()) {
-      return detail::about(*s.lib, h, up.status());
-    }
-    if (up->found) {
+    Result<Base> b = baseOf(*s.lib, h, delta);
+    if (!b.ok()) {
+      CDCC_TRY(skips.add(*s.lib, h, b.status()));
       continue;
     }
-    Result<ObjectRead> r = readObject(*s.lib, h);
-    Result<TransformState> parent = computeParentState(*s.lib, h, time_);
-    if (!r.ok() || !parent.ok()) {
-      return detail::about(*s.lib, h, r.ok() ? parent.status() : r.status());
-    }
-    if (!r->type) {
-      return detail::about(*s.lib, h, failed("its transform type isn't registered"));
-    }
-    Base b;
-    b.object = h;
-    b.type = r->info.transformType;
-    b.parent = *parent;
-    bases_.append(b);
+    usable.append(std::move(*b));
+    moved.add(h, 0);
   }
-  return update(ctx, deltaInputs(ctx));
+  for (Base &b : usable) {
+    Result<Walk> up = walkUp(
+        *s.lib, b.object, [&](BlockHandle p) { return moved.lookup_ptr(p) != nullptr; });
+    if (!up.ok()) {
+      return detail::about(*s.lib, b.object, up.status());
+    }
+    if (!up->found) {
+      bases_.append(std::move(b));
+    }
+  }
+  unusable_ = skips.count();
+  CDCC_TRY(skips.outcome(int(bases_.size())));
+  Status done = update(ctx, delta);
+  skips.output(ctx);
+  return done;
+}
+
+/* An object that the delta can be applied to. */
+Result<ApplyDelta::Base> ApplyDelta::baseOf(const Library &lib,
+                                            BlockHandle h,
+                                            const TransformDelta &delta) const
+{
+  Result<ObjectRead> r = readObject(lib, h);
+  Result<TransformState> parent = computeParentState(lib, h, time_);
+  if (!r.ok() || !parent.ok()) {
+    return r.ok() ? parent.status() : r.status();
+  }
+  if (!r->type) {
+    return failed("its transform type isn't registered");
+  }
+  Result<ChannelBlock> c =
+      solveDelta(*r->type, EvalCtx(r->channels, time_), r->channels, delta, *parent);
+  if (!c.ok()) {
+    return c.status();
+  }
+  Base b;
+  b.object = h;
+  b.type = r->info.transformType;
+  b.parent = *parent;
+  b.solved = std::move(*c);
+  return b;
 }
 
 Status ApplyDelta::update(Context &ctx, const TransformDelta &delta)
 {
   const bool first = changes_.size() == 0;
   const Library &lib = *ctx.library();
+  detail::Skips skips;
   Vector<ChannelBlock> channels;
   for (int i = 0; i < int(bases_.size()); i++) {
-    const Base &b = bases_[i];
+    Base &b = bases_[i];
+    if (first) { /* exec's delta */
+      channels.append(std::move(b.solved));
+      b.solved = ChannelBlock();
+      continue;
+    }
     const TransformType *type = ctx.runtime().ext<TransformRegistry>().find(b.type);
-    ChannelBlock base, last;
-    if (first) {
-      Result<ObjectRead> r = readObject(lib, b.object);
-      if (!r.ok()) {
-        return r.status();
-      }
-      base = r->channels;
-      last = r->channels;
-    }
-    else {
-      base = changes_.before(i);
-      last = changes_.after(i);
-    }
-    Result<ChannelBlock> c = solveDelta(*type, EvalCtx(base, time_), last, delta, b.parent);
+    const ChannelBlock &last = changes_.after(i);
+    Result<ChannelBlock> c =
+        solveDelta(*type, EvalCtx(changes_.before(i), time_), last, delta, b.parent);
     if (!c.ok()) {
-      return detail::about(lib, b.object, c.status());
+      CDCC_TRY(skips.add(lib, b.object, c.status()));
     }
-    channels.append(std::move(*c));
+    channels.append(c.ok() ? std::move(*c) : last);
   }
+  CDCC_TRY(skips.outcome(int(bases_.size()) - skips.count()));
   Vector<ChannelBlock> previous;
   for (int i = 0; i < int(bases_.size()); i++) {
     if (first) {
@@ -583,6 +707,7 @@ Status ApplyDelta::update(Context &ctx, const TransformDelta &delta)
       return detail::about(lib, bases_[i].object, s);
     }
   }
+  skipped_ = unusable_ + skips.count();
   return Status();
 }
 
@@ -602,13 +727,15 @@ Status detail::registerTransformCommands(Runtime &rt)
     return PropertyDef::boolProp("keepWorld").defaultValue(PropValue::ofBool(true));
   };
   const auto approximate = [] { return PropertyDef::intProp("approximate"); };
+  const auto skipped = [] { return PropertyDef::intProp("skipped"); };
 
   CommandDef parent(kSetParentCommand);
   parent.uiName("Set Parent")
       .input(PropertyDef::pointerProp("parent", StructId()))
       .input(keepWorld())
       .input(detail::objectsInput())
-      .output(approximate());
+      .output(approximate())
+      .output(skipped());
   CDCC_TRY(addCommandOnce<SetParent>(rt, std::move(parent)));
 
   CommandDef type(kSetTransformTypeCommand);
@@ -616,13 +743,15 @@ Status detail::registerTransformCommands(Runtime &rt)
       .input(PropertyDef::stringProp("type").defaultValue(PropValue::ofString(kTrsTransform)))
       .input(keepWorld())
       .input(detail::objectsInput())
-      .output(approximate());
+      .output(approximate())
+      .output(skipped());
   CDCC_TRY(addCommandOnce<SetTransformType>(rt, std::move(type)));
 
   CommandDef mode(kSetRotationModeCommand);
   mode.uiName("Set Rotation Mode")
       .input(models::orderEnum("mode").item("QUATERNION", trs::kQuaternionMode))
-      .input(detail::objectsInput());
+      .input(detail::objectsInput())
+      .output(skipped());
   CDCC_TRY(addCommandOnce<SetRotationMode>(rt, std::move(mode)));
 
   CDCC_TRY(addCommandOnce<ApplyDelta>(rt, deltaDef(kApplyDeltaCommand, "Transform")));

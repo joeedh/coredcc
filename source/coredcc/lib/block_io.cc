@@ -253,6 +253,21 @@ void BlockReader::entries(Vector<BlockEntry> &out)
   }
 }
 
+void BlockReader::entries(litestl::util::function<bool(BlockEntry &)> fn)
+{
+  const uint32_t n = bytes_.count(kMinEntryBytes);
+  for (uint32_t i = 0; i < n; i++) {
+    const uint64_t left = codec_.budget ? *codec_.budget : 0;
+    BlockEntry e;
+    if (!charge(sizeof(BlockEntry) * 4) || !readEntry(e)) {
+      return;
+    }
+    if (!fn(e) && codec_.budget) {
+      *codec_.budget = left;
+    }
+  }
+}
+
 /* Whether coercing `from` to `to` lost nothing: an enum's key or a number of another type is as
  * good, a clamped number isn't. */
 static bool keptValue(const PropValue &from, const PropValue &to)

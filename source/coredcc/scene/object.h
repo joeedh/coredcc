@@ -23,7 +23,8 @@ inline constexpr const char *kSceneObjectStruct = "coredcc.SceneObject";
 class Object {
  public:
   ObjectFlags flags = ObjectFlags::None;
-  WeakRef<Object> parent;
+  /** Kept alive by its children, also when it is in no scene. Deleting it doesn't delete them. */
+  OptRef<Object> parent;
   OptRef<void> data;
   /** Empty for an object of a file until its transform type is registered: read() has them. */
   ChannelBlock channels;
@@ -46,13 +47,21 @@ class Object {
   Status setParentId(const BlockId &id);
   Status setTransformTypeId(const TypeId &type);
 
-  /* Files. Channels that this build doesn't know are kept, and written again. */
+  /* Files. What this build doesn't know is kept, and written again: entries of a newer build, channels
+   * of a transform type that isn't there or is of another version. The names `dataMatrix` (an offset of
+   * the data that children don't have) and `parentKey` (a part of the parent) are reserved. */
 
   void write(BlockWriter &out) const;
   /** Fails the reader for a payload that is wrong. */
   void readFrom(BlockReader &in);
-  /** Reads the file's channels, if the transform type has been registered since. */
+  /** Reads the file's channels, if the transform type is there and can (TransformModel::upgrade). An
+   * error is sticky. */
   void resolve();
+  /** What a file has for the object, besides its channels, that this build doesn't know. */
+  std::span<const BlockEntry> unreadFields() const
+  {
+    return std::span<const BlockEntry>(fields_.data(), size_t(fields_.size()));
+  }
   /** What a file has for this transform type that no channel takes, or that waits for the type. */
   std::span<const BlockEntry> unread() const
   {
@@ -65,12 +74,9 @@ class Object {
   {
     fn(parent.cell());
     fn(data.cell());
+    foreachCellOf(fields_, fn);
     if (unreadType_ == typeName_) {
-      for (BlockEntry &e : unread_) {
-        for (RefCell &c : e.refs) {
-          fn(c);
-        }
-      }
+      foreachCellOf(unread_, fn);
     }
   }
   uint64_t memSize() const;
@@ -79,6 +85,16 @@ class Object {
   static litestl::binding::types::Struct<Object> *defineBindings();
 
  private:
+  template <class Fn> static void foreachCellOf(litestl::util::Vector<BlockEntry> &entries, Fn &&fn)
+  {
+    for (BlockEntry &e : entries) {
+      for (RefCell &c : e.refs) {
+        fn(c);
+      }
+    }
+  }
+  bool upgrade(const TransformType &type, litestl::util::Vector<BlockEntry> &entries);
+
   Runtime *rt_;
   litestl::util::string typeName_;
   TypeId type_;
@@ -87,7 +103,10 @@ class Object {
    * the object's. `pending_`: they are all of the type's channels, not read yet. */
   litestl::util::Vector<BlockEntry> unread_;
   litestl::util::string unreadType_;
+  uint32_t unreadVersion_ = 0;
   bool pending_ = false;
+  bool upgradeFailed_ = false;
+  litestl::util::Vector<BlockEntry> fields_;
 };
 
 /** A new Object with a transform type's defaults. */
@@ -157,13 +176,16 @@ Status writeTransformType(Context &ctx,
 Status writeParent(Context &ctx, BlockHandle object, const BlockId &parent);
 
 /** Registers the scene's types (idempotent): the transform types, the capabilities, the
- * blocks coredcc.Object and coredcc.Scene, their structs, and the owner of the results. */
+ * blocks coredcc.Object and coredcc.Scene, their structs, and the owner of the results. When one
+ * of the names is taken it fails, and again each time. */
 Status registerSceneTypes(Runtime &rt);
 
 namespace detail {
 Status registerObjectType(Runtime &rt);
 Status registerSceneType(Runtime &rt);
 Status registerEvaluated(Runtime &rt);
+/** Whether that was done: the last thing registerSceneTypes does. */
+bool evaluatedRegistered(Runtime &rt);
 /** The root of the block that `cell` names, or a null PointerRef unless it is Live. */
 PointerRef blockRoot(Context &ctx, BlockHandle h);
 } // namespace detail

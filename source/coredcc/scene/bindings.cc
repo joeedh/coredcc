@@ -86,6 +86,20 @@ lbt::Struct<TransformState> *TransformState::defineBindings()
   return st;
 }
 
+lbt::Struct<ChannelEntries> *ChannelEntries::defineBindings()
+{
+  static lbt::Struct<ChannelEntries> *st = nullptr;
+  if (!st) {
+    litestl::alloc::PermanentGuard guard;
+    st = new lbt::Struct<ChannelEntries>("coredcc::ChannelEntries", sizeof(ChannelEntries));
+    BIND_STRUCT_METHOD(st, get, MARGS("name"));
+    BIND_STRUCT_METHOD(st, set, MARGS("name", "value"));
+    BIND_STRUCT_METHOD(st, remove, MARGS("name"));
+    BIND_STRUCT_METHOD(st, rename, MARGS("from", "to"));
+  }
+  return st;
+}
+
 lbt::Struct<TransformTypeInfo> *TransformTypeInfo::defineBindings()
 {
   static lbt::Struct<TransformTypeInfo> *st = nullptr;

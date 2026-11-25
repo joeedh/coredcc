@@ -117,7 +117,17 @@ Status Trs::applyDelta(const EvalCtx &base,
     writeRotation(base, EvalCtx(hint), q, out);
   }
   else if (delta.kind == DeltaKind::Scale) {
-    writeVec3(out, trs::kScale, n.scale * factorsAlong(delta, p * Linear::of(n.rotation)));
+    quatd rotation = n.rotation;
+    double3 scale = n.scale;
+    if (mirrors(delta)) {
+      const Linear x = solver.linear(mirrored(delta, p * Linear::of(rotation)));
+      bool turned = false;
+      CDCC_TRY(takeMirror(x, rotation, scale, turned));
+      if (turned) {
+        writeRotation(base, EvalCtx(hint), rotation, out);
+      }
+    }
+    writeVec3(out, trs::kScale, scale * factorsAlong(delta, p * Linear::of(rotation)));
   }
   return Status();
 }

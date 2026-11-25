@@ -140,21 +140,24 @@ bool take(const PropertyDef &def, const PropValue &v, int32_t first, ChannelBloc
 
 } // namespace
 
+bool takeChannel(const TransformType &type, const BlockEntry &e, ChannelBlock &out)
+{
+  int32_t first = 0;
+  for (const PropertyDef &def : type.channelDefs()) {
+    if (def.apiName() == e.name) {
+      return e.refs.size() == 0 && take(def, e.value, first, out);
+    }
+    first += channelsOf(def.kind());
+  }
+  return false;
+}
+
 ChannelBlock takeChannels(const TransformType &type, Vector<BlockEntry> &entries)
 {
   ChannelBlock out = type.defaults();
   Vector<BlockEntry> unread;
   for (BlockEntry &e : entries) {
-    int32_t first = 0;
-    bool taken = false;
-    for (const PropertyDef &def : type.channelDefs()) {
-      if (def.apiName() == e.name) {
-        taken = e.refs.size() == 0 && take(def, e.value, first, out);
-        break;
-      }
-      first += channelsOf(def.kind());
-    }
-    if (!taken) {
+    if (!takeChannel(type, e, out)) {
       unread.append(std::move(e));
     }
   }

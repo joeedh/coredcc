@@ -70,9 +70,9 @@ Linear before(const Node &n, const TransformState &parent)
 }
 
 /* The node's world axes: its linear part without its scale. */
-Linear axesOf(const Node &n, const TransformState &parent)
+Linear axesOf(const Node &n, const quatd &rotation, const TransformState &parent)
 {
-  return before(n, parent) * Linear::of(n.rotation) * inherited(n, parent);
+  return before(n, parent) * Linear::of(rotation) * inherited(n, parent);
 }
 
 void writeRotation(const Node &n, const double3 &hint, const quatd &rotation, ChannelBlock &out)
@@ -87,7 +87,7 @@ TransformState Fbx::evaluate(const EvalCtx &ctx, const TransformState &parent) c
 {
   const Node n = readNode(ctx);
   return childState(parent,
-                    axesOf(n, parent).scaled(n.scale),
+                    axesOf(n, n.rotation, parent).scaled(n.scale),
                     n.translation + pivotOffset(n, n.rotation, n.scale),
                     n.rotation,
                     n.scale);
@@ -144,7 +144,18 @@ Status Fbx::applyDelta(const EvalCtx &base,
     writeRotation(n, hint, rotation, out);
   }
   else if (delta.kind == DeltaKind::Scale) {
-    scale = n.scale * factorsAlong(delta, axesOf(n, parent));
+    if (mirrors(delta)) {
+      const Linear m = mirrored(delta, before(n, parent) * Linear::of(rotation));
+      const Linear x = n.inherit == fbx::kRSrs ?
+                           solver.linear(m) :
+                           Linear::of(parent.rotation.normalized().conjugated()) * m;
+      bool turned = false;
+      CDCC_TRY(takeMirror(x, rotation, scale, turned));
+      if (turned) {
+        writeRotation(n, hint, rotation, out);
+      }
+    }
+    scale = scale * factorsAlong(delta, axesOf(n, rotation, parent));
     writeVec3(out, fbx::kScaling, scale);
   }
   const double3 offset = pivotOffset(n, n.rotation, n.scale);

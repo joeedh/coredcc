@@ -114,6 +114,9 @@ class BlockReader {
   void ref(RefCell &cell);
   /** Appends the entries one BlockWriter::entries() call wrote. */
   void entries(litestl::util::Vector<BlockEntry> &out);
+  /** The same, one at a time. `fn` says whether it kept the entry: one that it only read doesn't
+   * count toward the LoadLimits. */
+  void entries(litestl::util::function<bool(BlockEntry &)> fn);
   /** Sets the entries into the bag, and the cells of its pointers into blocks. Those no def
    * takes, or whose value it would change (a number out of its range), land in `unread`: keep
    * them, report their refs from foreachRef, and write them again, so a file survives a build

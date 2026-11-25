@@ -3,7 +3,6 @@
 #include "coredcc/api/change_bus.h"
 #include "coredcc/lib/provider.h"
 #include "coredcc/scene/builtins.h"
-#include "coredcc/scene/channel_io.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
@@ -87,80 +86,6 @@ Status Object::setTransformTypeId(const TypeId &type)
   return Status();
 }
 
-/* ---- files ---- */
-
-namespace {
-
-constexpr uint32_t kObjectPayload = 1;
-
-} // namespace
-
-/* The type's name, the flags and the references; the channels by name; and plain numbers, for channels
- * without names: the type isn't there, or has another count. */
-void Object::write(BlockWriter &out) const
-{
-  if (pending_) {
-    const_cast<Object *>(this)->resolve();
-  }
-  out.bytes().str(typeName_.c_str());
-  out.bytes().u32(uint32_t(flags));
-  out.ref(parent.cell());
-  out.ref(data.cell());
-  Vector<BlockEntry> entries;
-  for (const BlockEntry &e : unread()) {
-    entries.append(e);
-  }
-  const TransformType *type = rt_->ext<TransformRegistry>().find(type_);
-  const bool named = type && channels.size() == type->channelCount();
-  if (named) {
-    detail::appendChannels(*type, channels, entries);
-  }
-  out.entries(std::span<const BlockEntry>(entries.data(), size_t(entries.size())));
-  out.bytes().array(
-      std::span<const double>(channels.data(), size_t(named ? 0 : channels.size())));
-}
-
-void Object::readFrom(BlockReader &in)
-{
-  BytesReader &b = in.bytes();
-  const std::string type(b.str());
-  flags = ObjectFlags(b.u32());
-  in.ref(parent.cell());
-  in.ref(data.cell());
-  in.entries(unread_);
-  Vector<double> numbers;
-  b.array(numbers);
-  if (!b.ok()) {
-    return;
-  }
-  setTransformType(type);
-  channels.resize(int32_t(numbers.size()));
-  for (int32_t i = 0; i < int32_t(numbers.size()); i++) {
-    channels.set(i, numbers[i]);
-  }
-  unreadType_ = typeName_;
-  pending_ = numbers.size() == 0;
-  resolve();
-}
-
-void Object::resolve()
-{
-  const TransformType *type = rt_->ext<TransformRegistry>().find(type_);
-  if (pending_ && type && unreadType_ == typeName_) {
-    channels = detail::takeChannels(*type, unread_);
-    pending_ = false;
-  }
-}
-
-uint64_t Object::memSize() const
-{
-  uint64_t n = sizeof(Object) + uint64_t(channels.size()) * sizeof(double);
-  for (const BlockEntry &e : unread_) {
-    n += sizeof(BlockEntry) + e.raw.size() + e.refs.size() * sizeof(RefCell);
-  }
-  return n;
-}
-
 lbt::Struct<Object> *Object::defineBindings()
 {
   static lbt::Struct<Object> *st = nullptr;
@@ -176,6 +101,8 @@ lbt::Struct<Object> *Object::defineBindings()
 }
 
 namespace {
+
+constexpr uint32_t kObjectPayload = 1;
 
 struct ObjectProvider {
   void *data(const Datablock &b) const
@@ -646,7 +573,6 @@ ApiStruct objectStruct()
   return st;
 }
 
-/* A failed own() and add() leave nothing behind, so this can be called again. */
 Status addObjectBlock(Runtime &rt)
 {
   const std::string impl = std::string(kObjectType) + "#provider";
@@ -672,7 +598,7 @@ Status registerObjectType(Runtime &rt)
 {
   CDCC_TRY(registerInterface<Spatial>(rt));
   CDCC_TRY(registerInterface<Invalidation>(rt));
-  CDCC_TRY(registerInterface<Elements>(rt));
+  CDCC_TRY(registerInterface<ElementAccess>(rt));
   ApiRegistry &api = rt.ext<ApiRegistry>();
   ApiStruct dataStruct(kObjectDataStruct);
   dataStruct.uiName("Object Data");
@@ -689,7 +615,7 @@ Status registerObjectType(Runtime &rt)
 Status registerSceneTypes(Runtime &rt)
 {
   CDCC_TRY(registerTransformTypes(rt));
-  if (rt.ext<BlockTypeRegistry>().find(TypeId::of(kObjectType))) {
+  if (detail::evaluatedRegistered(rt)) {
     return Status();
   }
   CDCC_TRY(detail::registerObjectType(rt));

@@ -270,14 +270,17 @@ void testSelect()
   d.obj(b).flags = ObjectFlags::Unselectable;
   test_assert(select(kAll) == "c" && select(kAdd, a) == "ca");
   for (int m : {int(kSet), int(kAdd), int(kToggle)}) {
-    test_assert(isError(d.fails(kSelectCommand, {{"mode", mode(m)}, {"object", d.ptr(b)}}),
-                        StatusCode::FailedPrecondition,
-                        "'b': isn't selectable"));
     test_assert(isError(d.fails(kSelectCommand, {{"mode", mode(m)}, {"object", d.ptr(out)}}),
                         StatusCode::FailedPrecondition,
                         "'out': isn't in the scene"));
   }
-  test_assert(select(kRemove, b) == "ca");
+  test_assert(select(kRemove, b) == "ca" && select(kAdd, b) == "ca" && select(kToggle, b) == "ca");
+  test_assert(select(kSet, b).empty() && select(kSet, c) == "c" && select(kAdd, a) == "ca");
+  /* One that becomes unselectable later can be taken out. */
+  d.obj(a).flags = ObjectFlags::Unselectable;
+  test_assert(select(kRemove, a) == "c" && select(kSet, a).empty());
+  d.obj(a).flags = ObjectFlags::Hidden;
+  test_assert(select(kSet, c) == "c" && select(kAdd, a) == "ca");
   test_assert(isError(d.fails(kSelectCommand, {{"mode", mode(kAdd)}}),
                       StatusCode::FailedPrecondition));
 

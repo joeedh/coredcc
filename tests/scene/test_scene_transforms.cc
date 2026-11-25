@@ -63,15 +63,28 @@ void testSetParent()
   test_assert(isError(d.fails(kSetParentCommand, {{"parent", d.ptr(c)}}),
                       StatusCode::FailedPrecondition,
                       "no object is selected"));
-  /* The last of three can't be: the first two are taken back. */
-  d.select({a, b, h});
-  test_assert(isError(
-      d.fails(kSetParentCommand, {{"parent", d.ptr(p)}}), StatusCode::Unsupported, "'h'"));
+  /* The last of three can't be: it is left out. */
+  for (bool keep : {true, false}) {
+    d.select({a, b, h});
+    PropertyBag some =
+        d.cycle(kSetParentCommand, {{"parent", d.ptr(p)}, {"keepWorld", PropValue::ofBool(keep)}});
+    test_assert(some.get("skipped")->asInt() == 1 && d.obj(b).parent.target() == d.idOf(p));
+    d.undo();
+    d.select({h});
+    test_assert(isError(
+        d.fails(kSetParentCommand, {{"parent", d.ptr(p)}, {"keepWorld", PropValue::ofBool(keep)}}),
+        StatusCode::Unsupported,
+        "'h'"));
+  }
   d.obj(b).setTransformType("test.missing");
-  d.select({a, b});
+  d.select({b});
   test_assert(isError(d.fails(kSetParentCommand, {{"parent", d.ptr(p)}}),
                       StatusCode::FailedPrecondition,
                       "'b': its transform type"));
+  d.select({b, a});
+  test_assert(d.cycle(kSetParentCommand, {{"parent", d.ptr(p)}}).get("skipped")->asInt() == 1);
+  test_assert(d.obj(a).parent.target() == d.idOf(p) && d.obj(b).parent.target().isNull());
+  d.undo();
   d.cycle(kSetParentCommand,
           {{"parent", d.ptr(p)}, {"keepWorld", PropValue::ofBool(false)}});
   d.obj(b).setTransformType(kTrsTransform);
@@ -128,10 +141,10 @@ void testFailingWrites()
       isError(d.fails(kApplyDeltaCommand, {{"vector", move}}), StatusCode::Internal, "threw"));
   d.host(h).onWrite = nullptr;
 
-  /* One that its host took away in between, and that is written again when it is back. */
+  /* One that its host took away in between isn't a failure. */
   d.ok(kApplyDeltaCommand, {{"vector", move}});
   must(d.lib->onHostDestroyed(d.idOf(b)));
-  test_assert(!d.ex->undo(*d.ctx).ok());
+  d.undo();
   d.evaluate();
   test_assert(d.isAt(a, 1));
 }
@@ -186,10 +199,37 @@ void testTransformType()
   test_assert(!strcmp(d.obj(a).transformType().c_str(), "test.missing"));
   d.obj(a).setTransformType(kTrsTransform);
   d.obj(a).channels = d.trs->defaults();
-  /* One object that can't: the others keep theirs. */
-  const BlockHandle h = d.hostObject("h");
-  d.select({a, h});
-  test_assert(isError(d.fails(kSetTransformTypeCommand), StatusCode::Unsupported, "'h'"));
+  /* One object that can't is left out, and those that have the type stay to the bit. */
+  const BlockHandle h = d.hostObject("h"), odd = d.object("odd");
+  d.obj(odd).channels.set(trs::kRotationMode, 3);
+  d.obj(odd).channels.set(trs::kRotationEuler, 7.0);
+  const ChannelBlock was = d.obj(odd).channels;
+  d.obj(b).setTransformType(kFbxTransform);
+  d.obj(b).channels = d.fbx->defaults();
+  d.host(h).info.transformType = d.matrix->id();
+  d.host(h).channels = d.matrix->defaults();
+  for (bool keep : {true, false}) {
+    d.select({odd, h, b});
+    out = d.cycle(kSetTransformTypeCommand, {{"keepWorld", PropValue::ofBool(keep)}});
+    test_assert(out.get("skipped")->asInt() == 1 && d.obj(odd).channels == was);
+    test_assert(d.obj(b).transformTypeId() == d.trs->id());
+    d.undo();
+    d.select({h});
+    test_assert(isError(d.fails(kSetTransformTypeCommand, {{"keepWorld", PropValue::ofBool(keep)}}),
+                        StatusCode::Unsupported,
+                        "'h'"));
+    d.select({odd, h});
+    out = d.ok(kSetTransformTypeCommand, {{"keepWorld", PropValue::ofBool(keep)}});
+    test_assert(out.get("skipped")->asInt() == 1 && d.obj(odd).channels == was);
+  }
+  /* A host's object that has it, too. One with other channels than the type's doesn't. */
+  d.select({h});
+  out = d.ok(kSetTransformTypeCommand, {{"type", PropValue::ofString(kMatrixTransform)}});
+  test_assert(out.get("skipped")->asInt() == 0);
+  d.obj(odd).channels = ChannelBlock(2);
+  d.select({odd});
+  d.ok(kSetTransformTypeCommand, {{"keepWorld", PropValue::ofBool(false)}});
+  test_assert(d.obj(odd).channels == d.trs->defaults());
 }
 
 void testRotationMode()
@@ -221,6 +261,7 @@ void testRotationMode()
     const double3 l0 = get(before, trs::kLocation), l1 = get(d.obj(a).channels, trs::kLocation);
     test_assert(l0[0] == l1[0] && l0[1] == l1[1] && l0[2] == l1[2]);
   }
+  d.select({b});
   d.obj(b).setTransformType(kFbxTransform);
   d.obj(b).channels = d.fbx->defaults();
   test_assert(
@@ -302,7 +343,7 @@ void testApplyDelta()
   d.setParent(top, BlockHandle());
 
   d.obj(other).setTransformType("test.missing");
-  d.select({top, other});
+  d.select({other});
   test_assert(isError(d.fails(kApplyDeltaCommand), StatusCode::FailedPrecondition, "'other'"));
 }
 
@@ -467,7 +508,7 @@ void testDelete()
   d.select({mid});
   res = d.cycle(kDeleteObjectsCommand);
   test_assert(parent(low) == top && parent(side) == top);
-  test_assert(res.get("approximate")->asInt() == 2);
+  test_assert(res.get("approximate")->asInt() == 3); /* and `leaf`, below `low` */
   d.undo();
   put(d.obj(top).channels, trs::kScale, double3(1, 1, 1));
   d.obj(side).setTransformType(kTrsTransform);

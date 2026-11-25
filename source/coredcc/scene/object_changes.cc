@@ -4,17 +4,20 @@
 
 namespace coredcc {
 
-/* A parent before the rest, and a type with its channels. */
-Status ObjectChanges::apply(Context &ctx, const Change &c, const Stored &values)
+Status ObjectChanges::apply(Context &ctx, const Change &c, const StoredObject &values)
 {
-  const BlockHandle h = ctx.library()->find(c.object);
-  if (c.hasParent) {
-    CDCC_TRY(writeParent(ctx, h, values.parent));
+  Library &lib = *ctx.library();
+  const BlockHandle h = lib.find(c.object);
+  const Datablock *b = lib.get(h);
+  detail::PendingWrites &pending = ctx.runtime().ext<detail::PendingWrites>();
+  if (b && b->state() != BlockState::Live) {
+    pending.add(lib, c.object, c.fields, values);
   }
-  if (c.hasType) {
-    return writeTransformType(ctx, h, values.type, values.channels);
+  if (!b || b->state() != BlockState::Live) {
+    return Status(); /* without a record it is gone for good */
   }
-  return c.hasChannels ? writeTransform(ctx, h, values.channels) : Status();
+  pending.flush(lib, c.object); /* older */
+  return detail::writeStored(ctx, h, c.fields, values);
 }
 
 Status ObjectChanges::write(Context &ctx, BlockHandle object, const Values &values)
@@ -32,9 +35,9 @@ Status ObjectChanges::write(Context &ctx, BlockHandle object, const Values &valu
     c.before.type = r->info.transformType;
     c.before.parent = r->info.parent;
     c.after = c.before;
-    c.hasChannels = values.channels != nullptr;
-    c.hasType = values.type != nullptr;
-    c.hasParent = values.parent != nullptr;
+    c.fields.channels = values.channels != nullptr;
+    c.fields.type = values.type != nullptr;
+    c.fields.parent = values.parent != nullptr;
     if (values.channels) {
       c.after.channels = *values.channels;
     }
@@ -59,7 +62,7 @@ Status ObjectChanges::write(Context &ctx, BlockHandle object, const Values &valu
 Status ObjectChanges::rewrite(Context &ctx, int i, const ChannelBlock &channels)
 {
   CDCC_TRY(detail::libraryOf(ctx, lib_).status());
-  Stored after = changes_[i].after;
+  StoredObject after = changes_[i].after;
   after.channels = channels;
   CDCC_TRY(apply(ctx, changes_[i], after));
   changes_[i].after.channels = channels;

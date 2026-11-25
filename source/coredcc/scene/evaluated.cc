@@ -185,6 +185,11 @@ Status registerEvaluated(Runtime &rt)
   return Status();
 }
 
+bool evaluatedRegistered(Runtime &rt)
+{
+  return !rt.ext<EvaluatedKeys>().owner.isNull();
+}
+
 } // namespace detail
 
 void addEvaluated(ApiStruct &root)

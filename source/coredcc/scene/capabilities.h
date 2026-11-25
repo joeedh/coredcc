@@ -86,7 +86,7 @@ struct Transformable : IfaceRef {
   }
 };
 
-/** Kinds of elements, as numbers in Spatial and Elements. */
+/** Kinds of elements, as numbers in Spatial and ElementAccess. */
 enum class ElementDomain : int32_t { Point = 0, Edge = 1, Face = 2 };
 
 /**
@@ -159,12 +159,12 @@ struct Invalidation : IfaceRef {
 };
 
 /**
- * Elements by handle.
+ * Elements by handle. (Elements in the architecture, which is a graph's table in the code.)
  *
  * - `topoStamp` changes whenever handles may mean other elements.
  * - `positions`: three numbers per handle, in the block's own space.
  */
-struct Elements : IfaceRef {
+struct ElementAccess : IfaceRef {
   double topoStamp() const
   {
     return CDCC_CALL(topoStamp);
@@ -179,7 +179,7 @@ struct Elements : IfaceRef {
     return CDCC_CALL(positions, handles, domain);
   }
 
-  CDCC_INTERFACE(Elements, "coredcc::Elements")
+  CDCC_INTERFACE(ElementAccess, "coredcc::ElementAccess")
   {
     BIND_STRUCT_METHOD(st, topoStamp, MARGS());
     BIND_STRUCT_METHOD(st, elementCount, MARGS("domain"));

@@ -56,7 +56,8 @@ bool rotationScale(const Linear &x,
  */
 class ParentSolver {
  public:
-  /** False when `world` is singular. */
+  /** False when `world` is singular, or so nearly that a step in the world is a huge one in its
+   * space: when its largest scale is about 1e12 times its smallest. */
   bool set(const mat4d &world);
   /** y with `P y = b` (a direction). */
   double3 vector(const double3 &b) const;

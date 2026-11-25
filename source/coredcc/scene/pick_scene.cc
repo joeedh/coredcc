@@ -118,7 +118,7 @@ Status pickScene(Context &ctx,
     if (!s || !scene.evaluated(object, e)) {
       continue;
     }
-    const PickQuery query(cursor, e.state.world, best.limitDepth(), best.nearSurfaces());
+    const PickQuery query(cursor, e.dataWorld(), best.limitDepth(), best.nearSurfaces());
     PickSink sink(query);
     if (s.hasPick()) {
       s.pick(query, sink);
@@ -174,7 +174,7 @@ Status pickRegion(Context &ctx,
     }
     bool take = domain < 0 && !s.hasElementsInRegion();
     if (s.hasElementsInRegion()) {
-      const RegionQuery query(region, e.state.world);
+      const RegionQuery query(region, e.dataWorld());
       uint32_t domains = s.domains();
       if (scope.thrown()) {
         continue;

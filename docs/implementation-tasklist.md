@@ -17,7 +17,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | done (litestl #4 B, #5 A, #6 C1 merged; C2 moves to P1f) | — |
 | 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | reviewed | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md); [script bindings](reports/feature-report-bind-2026-11-22.md); [TS spike](reports/feature-report-ts-spike-2026-11-22.md); [TA1](reports/feature-report-ta1-2026-11-23.md) |
 | 6 | [P2 library IO and layout](plans/2026-11-24-p2-layout-library-io.md) | P2 | 5 | reviewed | [library IO](reports/feature-report-library-io-2026-11-24.md); [layout](reports/feature-report-layout-2026-11-25.md) |
-| 7 | P3 objects, transforms and BVH | P3 | 5 | in progress | objects and transforms; [BVH, View and picking](reports/feature-report-bvh-2026-11-25.md) |
+| 7 | P3 objects, transforms and BVH | P3 | 5 | in progress | [objects and transforms](reports/feature-report-scene-2026-11-25.md); [BVH, View and picking](reports/feature-report-bvh-2026-11-25.md) |
 | 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | todo | tools and overlay |
 | 9 | [P5 graph and instancing](plans/2026-11-24-p5-graph.md) | P5 | 5 | reviewed; benchmarks to be recorded on an idle machine | [graph](reports/feature-report-graph-2026-11-25.md) |
 | 10 | P5c scene evaluator | P5c | 7, 9 | todo | scene evaluator |

@@ -207,11 +207,12 @@ void testSelect()
   test_assert(select(kAll, "nonsense") == "abcef" && select(kNone, "nonsense").empty());
 
   d.obj(d.b).flags = ObjectFlags::Unselectable;
-  test_assert(isError(d.fails(kSelectCommand,
-                              {{"mode", PropValue::ofEnum(kAdd)}, {"objects", text(ids(d, {d.a, d.b}))}}),
-                      StatusCode::FailedPrecondition,
-                      "'b': isn't selectable"));
-  test_assert(select(kRemove, ids(d, {d.a, d.b})).empty());
+  test_assert(select(kSet, ids(d, {d.a, d.b})) == "a");
+  const PropertyBag selectOut = d.ok(
+      kSelectCommand,
+      {{"mode", PropValue::ofEnum(kSet)}, {"objects", text(ids(d, {d.b, d.a, d.b, d.c}))}});
+  test_assert(selectOut.get("skipped")->asInt() == 1);
+  test_assert(select(kRemove, ids(d, {d.a, d.b, d.c})).empty());
   test_assert(isError(d.fails(kSelectCommand,
                               {{"object", d.ptr(d.a)}, {"objects", text(ids(d, {d.a}))}}),
                       StatusCode::InvalidArgument,
