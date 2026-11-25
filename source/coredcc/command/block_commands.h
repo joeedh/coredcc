@@ -50,6 +50,7 @@ class CreatedBlocks {
  *   the users. Undo restores them all with their ids. Outputs `count`.
  * - `core.block.rename` and `core.block.unlinkRef` (block_edits.h).
  * - `core.block.attach` and `core.block.detach` (attachment_commands.h).
+ * - `core.block.duplicate` (library_commands.h).
  * - `core.block.purge()` collects garbage (NoUndo). Outputs `count`, the blocks freed.
  */
 Status registerBlockCommands(Runtime &rt);

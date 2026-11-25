@@ -44,6 +44,7 @@ struct NoteHost {
   DocFault fault = DocFault::None;
   bool failForeach = false;
   litestl::util::function<void()> onSerialize;
+  litestl::util::function<void()> onCopy;
   ~NoteHost()
   {
     test_assert(alive == 0); /* each destroyed once */
@@ -58,6 +59,21 @@ struct NoteProvider {
     host->alive--;
     host->severed += n->about.isNull() ? 1 : 0;
     litestl::alloc::Delete(n);
+  }
+  void *copy(const void *data)
+  {
+    if (host->onCopy) {
+      host->onCopy();
+    }
+    if (host->fault == DocFault::NoData) {
+      return nullptr;
+    }
+    if (host->fault == DocFault::Sticky) {
+      host->rt->setStickyError(Status::error(StatusCode::Internal, "copy threw"));
+      return nullptr;
+    }
+    host->alive++;
+    return litestl::alloc::New<Note>("Note", *static_cast<const Note *>(data));
   }
   Status serialize(const void *data, BlockWriter &out) const
   {
@@ -103,6 +119,7 @@ struct NoteProvider {
   {
     auto *st = new lbt::Struct<NoteProvider>("test::NoteProvider", sizeof(NoteProvider));
     BIND_STRUCT_METHOD(st, destroy, MARGS("data"));
+    BIND_STRUCT_METHOD(st, copy, MARGS("data"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("data", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("in"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("data", "visitor"));
@@ -124,10 +141,15 @@ struct BareProvider {
 inline const TypeId kNote = TypeId::of("test.Note");
 inline const TypeId kBare = TypeId::of("test.Bare");
 inline const TypeId kTransient = TypeId::of("test.Transient");
+inline const TypeId kPlain = TypeId::of("test.Plain");
+inline const TypeId kAcmePlain = TypeId::of("acme.Plain");
 inline const TypeId kAcmeDoc = TypeId::of("acme.Doc");
 inline const ClientId kAcme = ClientId::of("acme");
 
-inline void registerNote(Runtime &rt, NoteHost &host, uint32_t version = 2)
+inline void registerNote(Runtime &rt,
+                         NoteHost &host,
+                         uint32_t version = 2,
+                         DuplicatePolicy onDuplicate = DuplicatePolicy::Drop)
 {
   host.rt = &rt;
   test_assert((registerImpl<AttachmentProvider, NoteProvider>(rt, "test.Note#provider").ok()));
@@ -136,6 +158,7 @@ inline void registerNote(Runtime &rt, NoteHost &host, uint32_t version = 2)
   AttachmentTypeInfo info;
   info.name = "test.Note";
   info.version = version;
+  info.onDuplicate = onDuplicate;
   Result<Owned<AttachmentProvider>> owned = own<AttachmentProvider>(rt, "test.Note#provider", p);
   test_assert(owned.ok() &&
               rt.ext<AttachmentTypeRegistry>().add(info, std::move(owned).value()).ok());
@@ -178,6 +201,7 @@ struct Knows {
   bool note = true;
   uint32_t docVersion = 3;
   uint32_t noteVersion = 2;
+  DuplicatePolicy copyNotes = DuplicatePolicy::Drop;
 };
 
 struct IoWorld {
@@ -195,12 +219,14 @@ struct IoWorld {
     if (k.acme) {
       test_assert(rt.ext<ClientRegistry>().registerClient("acme").ok());
       registerDoc(rt, docs, 1, "acme.Doc", kAcme);
+      registerDoc<DocProviderT<false>>(rt, docs, 1, "acme.Plain", kAcme);
     }
+    registerDoc<DocProviderT<false>>(rt, docs, 1, "test.Plain");
     if (k.doc) {
       registerDoc(rt, docs, k.docVersion);
     }
     if (k.note) {
-      registerNote(rt, notes, k.noteVersion);
+      registerNote(rt, notes, k.noteVersion, k.copyNotes);
     }
     lib.setAuditRelations(true);
   }
@@ -223,7 +249,7 @@ struct IoWorld {
     Doc *d = litestl::alloc::New<Doc>("Doc");
     d->bag = makeDocBag(docs);
     d->number = int64_t(n) * 10;
-    const ClientId client = type == kAcmeDoc ? kAcme : ClientId::of(kCoredccClient);
+    const ClientId client = type == kAcmeDoc || type == kAcmePlain ? kAcme : ClientId::of(kCoredccClient);
     Result<BlockHandle> h = lib.createWithId(type, BlockId{client, LocalId{7, n}}, name, d);
     test_assert(h.ok());
     return h.ok() ? *h : BlockHandle();
@@ -275,6 +301,10 @@ struct IoWorld {
       return Status();
     }
     return r.status();
+  }
+  Result<AppendResult> append(const Bytes &b, const LoadOptions &options = {})
+  {
+    return detail::appendLibrary(lib, view(b), options);
   }
   BlockHandle at(uint64_t n, ClientId client = ClientId::of(kCoredccClient)) const
   {

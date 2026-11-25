@@ -5,8 +5,11 @@
  * touched, so a damaged file changes nothing.
  */
 
+#include "coredcc/lib/id_map.h"
 #include "coredcc/lib/io/format.h"
 #include "coredcc/lib/io/library_io.h"
+
+#include "litestl/util/function.h"
 
 #include <memory>
 
@@ -71,7 +74,7 @@ struct ParsedFile {
   litestl::util::Vector<ParsedSlot> slots;
   litestl::util::Vector<ParsedAttachment> attachments;
   litestl::util::Vector<litestl::util::Vector<uint8_t>> blobs;
-  /** Strong targets that aren't records: each becomes one. Canonical, sorted, distinct. */
+  /** Strong targets that aren't records, here or in the library: each becomes one. Canonical, sorted, distinct. */
   litestl::util::Vector<BlockId> missing;
   Budget budget;
 };
@@ -83,6 +86,21 @@ struct ParsedFile {
 Result<std::unique_ptr<ParsedFile>> parseLibrary(std::span<const uint8_t> bytes,
                                                  const LoadLimits &limits,
                                                  IoIssues &issues);
+
+/** Gives an imported block an id, or a null one. */
+using RekeyFn = litestl::util::function<BlockId(const ParsedRecord &, BlockId id)>;
+
+/**
+ * Like planIds, for an append to a library that has records: every record of the coredcc client
+ * gets a fresh id, and the others' come from `rekey`. FailedPrecondition, listing the types, when
+ * it gives none, or one that can't be used. `ids` maps the stored ids to the new ones.
+ */
+Status planAppend(ParsedFile &file,
+                  Library &lib,
+                  const LoadLimits &limits,
+                  RekeyFn rekey,
+                  IdMap &ids,
+                  IoIssues &issues);
 
 /**
  * Gives every record its id in `lib` (client aliases applied), and every reference its target.

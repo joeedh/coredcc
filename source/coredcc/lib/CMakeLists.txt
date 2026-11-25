@@ -3,6 +3,7 @@ coredcc_library(coredcc_lib
     attachment.cc
     bindings.cc
     block_io.cc
+    duplicate.cc
     gc.cc
     id_key.cc
     io/fill.cc

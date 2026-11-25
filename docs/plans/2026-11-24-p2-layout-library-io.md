@@ -833,10 +833,25 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
 - **An attachment type without `serialize`** is counted in `SaveReport::skippedAttachments`.
 - A name table that is full doesn't fail the load: those names are written as ids later, with an
   issue.
-- `Library::attach` is AlreadyExists over an opaque attachment of the type. Nothing removes one, and
-  `forceUnlinkRef` doesn't reach its table, so deleting a block that an opaque attachment
-  references Strongly takes the attachment's owner with it.
+- `Library::attach` is AlreadyExists over an opaque attachment of the type. Nothing removes one.
+  Its references can be cut (A5).
 - `Library::busy()` is also true in a load; the Busy message says "a sweep or a load".
 - A deleted (InHistory) placeholder isn't resolved; after its restore, the next
   `resolvePlaceholders` does.
 - `BytesWriter::raw`, `BytesReader::raw` and `Library::fileNames() const` are new.
+
+### A5: append and duplicate (2026-11-24)
+- **Files:** `lib/id_map.h`, `lib/duplicate.{h,cc}`, `command/library_commands.{h,cc}`; append is in
+  `lib/io/plan_ids.cc` and `load.cc`, and `api/library_io.h` has `appendLibrary`, which notifies.
+- **The opaque-attachment gap is closed:** `Library::refTable`, `forceUnlinkRef` and `relinkRef` take
+  an attachment's TypeId, and `core.block.unlinkRef` has an `attachment` input (a type name).
+- **Undoing an append leaves the MissingBlock records it made** (History-pinned until the discard).
+  The host may have filled one with `createWithId` by then, and undo mustn't take that block.
+- **A stored id and its canonical id are both in the IdMap.** When two records become one through an
+  alias, the canonical id maps to the one stored under the current name.
+- **`rekey` sees a temporary Datablock** in the Placeholder state, with the imported id, type and name,
+  and the library busy. An id that another record of the append got counts as in use.
+- **`LoadLimits::maxBlocks` bounds what an append adds**, not the library's size.
+- **Duplicating a placeholder** copies a MissingType one's payload. InHistory and Detached blocks and
+  missing blocks are FailedPrecondition: they have no data to copy.
+- FakeUser is copied. A duplicate runs no notification: the block is new, so nobody listens to it.

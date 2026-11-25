@@ -97,6 +97,7 @@ struct UnlinkRef {
   HistoryBlock target;
   BlockId before;
   int index = 0;
+  TypeId attachment;
 
   Status canRun(Context &ctx) const
   {
@@ -110,20 +111,24 @@ struct UnlinkRef {
     }
     Library &lib = *ctx.library();
     const int64_t at = ctx.inputs()->get("index")->asInt();
-    const litestl::util::Vector<RefCell> &rows = lib.get(*h)->placeholderData().refs;
-    if (at < 0 || at >= int64_t(rows.size())) {
+    if (const std::string name = ctx.inputs()->get("attachment")->asString().c_str(); !name.empty())
+    {
+      attachment = TypeId::of(name);
+    }
+    const litestl::util::Vector<RefCell> *rows = lib.refTable(*h, attachment);
+    if (!rows || at < 0 || at >= int64_t(rows->size())) {
       return Status::error(StatusCode::OutOfRange, "index: the block has no such reference");
     }
     index = int(at);
-    before = rows[index].target;
-    CDCC_TRY(lib.forceUnlinkRef(*h, index));
+    before = (*rows)[index].target;
+    CDCC_TRY(lib.forceUnlinkRef(*h, index, attachment));
     block = HistoryBlock(lib, *h);
     target = HistoryBlock(lib, lib.find(before));
     return Status();
   }
   Status apply(Context &ctx, BlockId to)
   {
-    return ctx.library()->relinkRef(block.get(), index, to);
+    return ctx.library()->relinkRef(block.get(), index, to, attachment);
   }
   void undo(Context &ctx)
   {
@@ -164,7 +169,8 @@ Status detail::registerBlockEdits(Runtime &rt)
   CommandDef unlink(kUnlinkRefCommand);
   unlink.uiName("Unlink Reference")
       .input(PropertyDef::pointerProp("block", StructId()))
-      .input(PropertyDef::intProp("index"));
+      .input(PropertyDef::intProp("index"))
+      .input(PropertyDef::stringProp("attachment"));
   return detail::addCommandOnce<UnlinkRef>(rt, std::move(unlink));
 }
 

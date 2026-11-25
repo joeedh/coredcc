@@ -1,6 +1,7 @@
 #include "coredcc/lib/io/fill.h"
 #include "coredcc/lib/io/parse.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -11,20 +12,6 @@ using litestl::util::Vector;
 using namespace libio;
 
 namespace {
-
-Status readyToFill(const Library &lib, const char *what)
-{
-  if (lib.busy()) {
-    return Status::error(StatusCode::Busy, (std::string(what) + ": the library is busy").c_str());
-  }
-  CDCC_TRY(lib.runtime().busyIfEvaluating(what));
-  if (lib.runtime().hasStickyError()) {
-    return Status::error(
-        StatusCode::FailedPrecondition,
-        (std::string(what) + ": a sticky error is pending; take it first").c_str());
-  }
-  return Status();
-}
 
 string own(std::string_view s)
 {
@@ -58,11 +45,16 @@ BlockFlags flagsOf(uint32_t stored)
   return f;
 }
 
+PlaceholderReason reasonOf(const ParsedRecord &r)
+{
+  return r.storedAs == StoredAs::NoPayload ? PlaceholderReason::MissingBlock :
+                                             PlaceholderReason::MissingType;
+}
+
 Status addRecord(LibraryFiller &filler, ParsedFile &file, const ParsedRecord &r, LoadReport &report)
 {
   PlaceholderInfo info;
-  info.reason = r.storedAs == StoredAs::NoPayload ? PlaceholderReason::MissingBlock :
-                                                    PlaceholderReason::MissingType;
+  info.reason = reasonOf(r);
   info.typeName = own(r.type);
   info.name = own(r.name);
   info.sourceName = own(r.source);
@@ -102,35 +94,22 @@ void countPlaceholders(const Library &lib, LoadReport &report)
   }
 }
 
-} // namespace
-
-Result<LoadReport> loadLibrary(Library &lib,
-                               std::span<const uint8_t> bytes,
-                               const LoadOptions &options)
+/* Every id is planned: from here on the load works. */
+void fillFile(Library &lib, ParsedFile &file, const LoadOptions &options, LoadReport &report)
 {
-  CDCC_TRY(readyToFill(lib, "loadLibrary"));
-  if (lib.size() > 0) {
-    return Status::error(StatusCode::FailedPrecondition,
-                         "loadLibrary: the library already has records");
-  }
-  LoadReport report;
-  Result<std::unique_ptr<ParsedFile>> parsed = parseLibrary(bytes, options.limits, report.issues);
-  if (!parsed.ok()) {
-    return parsed.status();
-  }
-  ParsedFile &file = **parsed;
-  CDCC_TRY(planIds(file, lib, options.limits, report.issues));
-
-  LibraryFiller filler(lib, report, file.budget.left, options.limits.maxBlocks);
+  const uint64_t maxBlocks = uint64_t(options.limits.maxBlocks) + uint64_t(lib.size());
+  LibraryFiller filler(lib, report, file.budget.left,
+                       uint32_t(std::min<uint64_t>(maxBlocks, UINT32_MAX)));
   for (const ParsedRecord &r : file.records) {
     if (Status s = addRecord(filler, file, r, report); !s.ok()) {
-      /* planIds gave every record its own id, so this doesn't happen. */
+      /* The plan gave every record its own id, so this doesn't happen. */
       report.issues.add(r.id, r.name, std::move(s));
     }
   }
+  report.records = int64_t(report.blocks.size());
   {
     LibraryFiller::Scope scope(lib);
-    const int records = int(report.blocks.size());
+    const int records = int(report.records);
     for (int i = 0; i < records; i++) {
       if (!filler.fill(report.blocks[i])) {
         filler.setSource(report.blocks[i], options.sourceName);
@@ -146,13 +125,62 @@ Result<LoadReport> loadLibrary(Library &lib,
   filler.makeMissing();
   report.missingBlock = 0;
   countPlaceholders(lib, report);
+}
+
+} // namespace
+
+Result<LoadReport> loadLibrary(Library &lib,
+                               std::span<const uint8_t> bytes,
+                               const LoadOptions &options)
+{
+  CDCC_TRY(LibraryFiller::ready(lib, "loadLibrary"));
+  if (lib.size() > 0) {
+    return Status::error(StatusCode::FailedPrecondition,
+                         "loadLibrary: the library already has records");
+  }
+  LoadReport report;
+  Result<std::unique_ptr<ParsedFile>> file = parseLibrary(bytes, options.limits, report.issues);
+  if (!file.ok()) {
+    return file.status();
+  }
+  CDCC_TRY(planIds(**file, lib, options.limits, report.issues));
+  fillFile(lib, **file, options, report);
   return report;
+}
+
+Result<AppendResult> appendLibrary(Library &lib,
+                                   std::span<const uint8_t> bytes,
+                                   const LoadOptions &options)
+{
+  lib.find(BlockId()); /* takes in client aliases that are new */
+  CDCC_TRY(LibraryFiller::ready(lib, "appendLibrary"));
+  AppendResult result;
+  Result<std::unique_ptr<ParsedFile>> file =
+      parseLibrary(bytes, options.limits, result.report.issues);
+  if (!file.ok()) {
+    return file.status();
+  }
+  const auto rekey = [&lib](const ParsedRecord &r, BlockId id) {
+    PlaceholderInfo info;
+    info.reason = reasonOf(r);
+    info.typeName = own(r.type);
+    info.name = own(r.name);
+    info.sourceName = own(r.source);
+    return LibraryFiller::rekey(lib, id, info);
+  };
+  CDCC_TRY(planAppend(**file, lib, options.limits, rekey, result.ids, result.report.issues));
+  for (ParsedRecord &r : (*file)->records) {
+    /* What was kept for itself there is kept here, but this document's roots are its own. */
+    r.flags = r.flags & kFlagRoot ? (r.flags & ~kFlagRoot) | kFlagFakeUser : r.flags;
+  }
+  fillFile(lib, **file, options, result.report);
+  return result;
 }
 
 Result<LoadReport> resolvePlaceholders(Library &lib)
 {
   lib.find(BlockId()); /* takes in client aliases that are new */
-  CDCC_TRY(readyToFill(lib, "resolvePlaceholders"));
+  CDCC_TRY(LibraryFiller::ready(lib, "resolvePlaceholders"));
   LoadReport report;
   const LoadLimits limits;
   LibraryFiller filler(lib, report, limits.maxBytes, UINT32_MAX);

@@ -87,6 +87,50 @@ void LibraryFiller::addOpaque(BlockHandle h, OpaqueAttachment attachment)
   b.opaque_->append(std::move(attachment));
 }
 
+void LibraryFiller::addAttachment(BlockHandle h, TypeId type, void *data)
+{
+  lib_.rec(h)->attachments_.append(Datablock::Attachment{type, data});
+  lib_.epoch_++;
+}
+
+Status LibraryFiller::ready(const Library &lib, const char *what)
+{
+  if (lib.busy()) {
+    return Status::error(StatusCode::Busy, (std::string(what) + ": the library is busy").c_str());
+  }
+  CDCC_TRY(lib.runtime().busyIfEvaluating(what));
+  if (lib.runtime().hasStickyError()) {
+    return Status::error(
+        StatusCode::FailedPrecondition,
+        (std::string(what) + ": a sticky error is pending; take it first").c_str());
+  }
+  return Status();
+}
+
+void LibraryFiller::destroy(const Vector<BlockHandle> &blocks)
+{
+  lib_.destroyBlocks(blocks);
+}
+
+BlockId LibraryFiller::rekey(Library &lib, BlockId id, const PlaceholderInfo &info)
+{
+  const TypeId type = info.typeName.size() > 0 ? TypeId::of(info.typeName.c_str()) : TypeId();
+  const BlockProvider p = lib.types_.provider(type);
+  if (!p || !p.hasRekey()) {
+    return BlockId();
+  }
+  Datablock b;
+  b.id_ = id;
+  b.type_ = type;
+  b.name_ = info.name;
+  b.state_ = BlockState::Placeholder;
+  b.placeholderReason_ = info.reason;
+  b.placeholderType_ = info.typeName;
+  b.sourceName_ = info.sourceName;
+  Scope scope(lib);
+  return p.rekey(b);
+}
+
 void LibraryFiller::setSource(BlockHandle h, const string &source)
 {
   Datablock &b = *lib_.rec(h);

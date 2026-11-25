@@ -3,6 +3,7 @@
 #include "coredcc/command/attachment_commands.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/command/executor.h"
+#include "coredcc/command/library_commands.h"
 
 #include "litestl/binding/binding.h"
 
@@ -298,7 +299,8 @@ Status registerBlockCommands(Runtime &rt)
     }
   }
   CDCC_TRY(detail::registerBlockEdits(rt));
-  return detail::registerAttachmentCommands(rt);
+  CDCC_TRY(detail::registerAttachmentCommands(rt));
+  return detail::registerLibraryCommands(rt);
 }
 
 } // namespace coredcc

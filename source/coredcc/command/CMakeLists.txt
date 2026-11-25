@@ -8,6 +8,7 @@ coredcc_library(coredcc_command
     executor.cc
     history_block.cc
     last_used.cc
+    library_commands.cc
     literal.cc
     set_property.cc
   DEPS

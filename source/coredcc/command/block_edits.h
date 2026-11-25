@@ -4,8 +4,9 @@
  * Commands that edit a block's record (registered by registerBlockCommands):
  * - `core.block.rename(block=<Pointer> name=<String>)`. Posts a change of the owner's
  *   `name`.
- * - `core.block.unlinkRef(block=<Pointer to a placeholder> index=<Int>)` nulls a row of a
- *   placeholder's ref table, so the block it references can be deleted.
+ * - `core.block.unlinkRef(block=<Pointer> index=<Int> attachment="")` nulls a row of the ref
+ *   table of a placeholder, or of the block's opaque attachment of the named type, so the block
+ *   it references can be deleted.
  */
 
 #include "coredcc/command/command.h"

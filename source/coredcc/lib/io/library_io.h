@@ -11,6 +11,7 @@
 
 #include "coredcc/base/status.h"
 #include "coredcc/lib/block.h"
+#include "coredcc/lib/id_map.h"
 
 #include "litestl/util/string.h"
 #include "litestl/util/vector.h"
@@ -96,10 +97,19 @@ struct LoadReport {
   /** The records that were made or changed: the file's, in its order, then MissingBlock
    * ones. */
   litestl::util::Vector<BlockHandle> blocks;
+  /** How many of `blocks`, from its start, the file had. 0 from resolvePlaceholders. */
+  int64_t records = 0;
   /** Records that stayed or became MissingType placeholders. */
   int64_t missingType = 0;
   /** MissingBlock records, those saved without data included. */
   int64_t missingBlock = 0;
+};
+
+/** What an append did. */
+struct AppendResult {
+  /** The new ids, by the ids the file has. */
+  IdMap ids;
+  LoadReport report;
 };
 
 namespace detail {
@@ -107,6 +117,9 @@ namespace detail {
 Result<LoadReport> loadLibrary(Library &lib,
                                std::span<const uint8_t> bytes,
                                const LoadOptions &options);
+Result<AppendResult> appendLibrary(Library &lib,
+                                   std::span<const uint8_t> bytes,
+                                   const LoadOptions &options);
 Result<LoadReport> resolvePlaceholders(Library &lib);
 } // namespace detail
 

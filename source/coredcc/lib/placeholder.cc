@@ -75,23 +75,45 @@ Result<BlockHandle> Library::adopt(BlockHandle h,
   return h;
 }
 
-Status Library::relinkRef(BlockHandle placeholder, int index, BlockId target)
+const Vector<RefCell> *Library::refTable(BlockHandle h, TypeId attachment) const
+{
+  const Datablock *b = rec(h);
+  if (!b) {
+    return nullptr;
+  }
+  if (!attachment) {
+    return b->state_ == BlockState::Placeholder ? &b->placeholderData_.refs : nullptr;
+  }
+  const Vector<RefCell> *table = nullptr;
+  forEachOpaqueAttachment(h, [&](const OpaqueAttachment &o) {
+    if (TypeId::of(o.typeName.c_str()) == attachment) {
+      table = &o.payload.refs;
+    }
+  });
+  return table;
+}
+
+Status Library::relinkRef(BlockHandle h, int index, BlockId target, TypeId attachment)
 {
   CDCC_TRY(busyIfSweeping("relinkRef"));
-  Datablock *b = rec(placeholder);
+  const Datablock *b = rec(h);
   if (!b) {
     return noBlock("relinkRef");
   }
-  if (b->state_ != BlockState::Placeholder) {
-    return Status::error(StatusCode::FailedPrecondition,
-                         ("relinkRef: block '" + std::string(b->name_.c_str()) + "' is " +
-                          blockStateName(b->state_) + ", not a placeholder")
-                             .c_str());
+  auto *rows = const_cast<Vector<RefCell> *>(refTable(h, attachment));
+  if (!rows) {
+    const std::string name = "relinkRef: block '" + std::string(b->name_.c_str()) + "' ";
+    return attachment ?
+               Status::error(StatusCode::NotFound,
+                             (name + "has no opaque attachment of this type").c_str()) :
+               Status::error(StatusCode::FailedPrecondition,
+                             (name + "is " + blockStateName(b->state_) + ", not a placeholder")
+                                 .c_str());
   }
-  if (index < 0 || index >= int(b->placeholderData_.refs.size())) {
+  if (index < 0 || index >= int(rows->size())) {
     return Status::error(StatusCode::OutOfRange, "relinkRef: no such row in the ref table");
   }
-  RefCell &row = b->placeholderData_.refs[index];
+  RefCell &row = (*rows)[index];
   row.target = target.isNull() ? target : clients_.canonical(target);
   row.cache = BlockHandle();
   epoch_++;

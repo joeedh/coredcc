@@ -45,6 +45,7 @@ class LibraryFiller {
   Result<BlockHandle> addRecord(BlockId id, PlaceholderInfo info, BlockFlags flags);
   void addSlot(BlockHandle h, TypeId ns, int64_t key, const RefCell &cell);
   void addOpaque(BlockHandle h, OpaqueAttachment attachment);
+  void addAttachment(BlockHandle h, TypeId type, void *data);
   void setSource(BlockHandle h, const litestl::util::string &source);
 
   /* ---- inside it ---- */
@@ -61,6 +62,13 @@ class LibraryFiller {
   /** Makes a MissingBlock record for each block noteMissing found. */
   void makeMissing();
 
+  /** Ok when `lib` can be filled: not busy, not evaluating, no sticky error pending. */
+  static Status ready(const Library &lib, const char *what);
+  /** Destroys records that a failed call made. */
+  void destroy(const litestl::util::Vector<BlockHandle> &blocks);
+  /** What the type's `rekey` makes of a block that isn't a record yet: null without a type, or a
+   * rekey. */
+  static BlockId rekey(Library &lib, BlockId id, const PlaceholderInfo &info);
   /** readPayload without its checks: `h` is Live and has no data. */
   static Status read(Library &lib,
                      BlockHandle h,

@@ -138,6 +138,11 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 - For TS, copy the file to the scratchpad first and copy it back afterwards, then grep
   for the disabled marker to confirm it's gone.
 
+### MSVC: LNK1235 "corrupt or invalid COFF symbol table"
+- Seen when many tests link at once, with several worktrees building and little memory free
+  (2026-11-24). Which links fail differs from run to run, and the library is fine: build again.
+  The cause isn't confirmed. If the same link fails each time, delete the `.lib` it names.
+
 ## Build cache and worktrees
 Design: `docs/plans/2026-11-23-build-cache-worktrees.md`. Windows only, native builds only.
 

@@ -29,6 +29,22 @@ Result<LoadReport> loadLibrary(Context &ctx,
                                const LoadOptions &options = {});
 
 /**
+ * Adds the blocks of `bytes` to the Context's library.
+ *
+ * - Every block of the coredcc client gets a fresh id; other clients' blocks get what their
+ *   type's `rekey` answers. A block whose type is missing, has no `rekey`, refuses, or answers
+ *   an id that is in use or another client's, refuses the whole append (FailedPrecondition,
+ *   naming the types).
+ * - References within the file follow the new ids. Others find their blocks in the library, or
+ *   get MissingBlock records. Blocks that were roots in the file become FakeUser here.
+ * - Otherwise as loadLibrary: a refused append changes nothing, and one that isn't refused works.
+ * - Not undoable by itself: see appendUndo (command/library_commands.h).
+ */
+Result<AppendResult> appendLibrary(Context &ctx,
+                                   std::span<const uint8_t> bytes,
+                                   const LoadOptions &options = {});
+
+/**
  * Reads the MissingType placeholders and opaque attachments whose types have been registered
  * since the load. The report's blocks are those that changed; its issues say why the others
  * didn't.

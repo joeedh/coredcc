@@ -186,16 +186,19 @@ class Library {
     }
   }
 
-  /* ---- a placeholder's references ---- */
+  /* ---- the ref tables of data this build can't read ---- */
 
-  /** Nulls row `index` of a placeholder's ref table (its indices stay valid), so a block it
-   * references can be deleted. */
-  Status forceUnlinkRef(BlockHandle placeholder, int index)
+  /** The ref table of a placeholder, or of `h`'s opaque attachment of the given type; null when
+   * there is none. Valid until the block changes. */
+  const litestl::util::Vector<RefCell> *refTable(BlockHandle h, TypeId attachment = {}) const;
+  /** Nulls row `index` of a table (its indices stay valid), so a block it references can be
+   * deleted. */
+  Status forceUnlinkRef(BlockHandle h, int index, TypeId attachment = {})
   {
-    return relinkRef(placeholder, index, BlockId());
+    return relinkRef(h, index, BlockId(), attachment);
   }
   /** Sets a row again: the undo of forceUnlinkRef. */
-  Status relinkRef(BlockHandle placeholder, int index, BlockId target);
+  Status relinkRef(BlockHandle h, int index, BlockId target, TypeId attachment = {});
 
   /** Every reference out of `h`: the provider's, the slots', then the attachments'
    * (opaque ones included). */

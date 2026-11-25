@@ -39,6 +39,10 @@ struct DocHost {
   uint32_t lastVersion = 0;
   litestl::util::function<void(BlockReader &)> onDeserialize;
   litestl::util::function<void(const Datablock &)> onDestroy;
+  /** What rekey answers; by default, another id of the same client. */
+  litestl::util::function<BlockId(const Datablock &)> onRekey;
+  int duplicated = 0;
+  litestl::util::function<void()> onDuplicate;
 };
 
 inline PropertyBag makeDocBag(const DocHost &host)
@@ -75,7 +79,8 @@ inline BlockEntry entryOf(const char *name, PropValue v, RefKind kind = RefKind:
   return e;
 }
 
-struct DocProvider {
+/* Without Extras, a provider has no duplicate and no rekey. */
+template <bool Extras> struct DocProviderT {
   DocHost *host = nullptr;
 
   void *data(const Datablock &b) const
@@ -183,6 +188,20 @@ struct DocProvider {
     if (!d) {
       return Status::error(StatusCode::FailedPrecondition, "no data");
     }
+    host->duplicated++;
+    if (host->onDuplicate) {
+      host->onDuplicate();
+    }
+    if (host->fault == DocFault::Error) {
+      return Status::error(StatusCode::Unsupported, "no copies today");
+    }
+    if (host->fault == DocFault::Sticky) {
+      host->rt->setStickyError(Status::error(StatusCode::Internal, "duplicate threw"));
+      return Status();
+    }
+    if (host->fault == DocFault::NoData) {
+      return Status();
+    }
     Doc *copy = litestl::alloc::New<Doc>("Doc");
     *copy = *d;
     out.setData(copy);
@@ -190,27 +209,35 @@ struct DocProvider {
   }
   BlockId rekey(const Datablock &imported) const
   {
+    if (host->onRekey) {
+      return host->onRekey(imported);
+    }
     BlockId id = imported.id();
     id.local.hi ^= 1;
     return id;
   }
-  static lbt::Struct<DocProvider> *defineBindings()
+  static lbt::Struct<DocProviderT> *defineBindings()
   {
-    auto *st = new lbt::Struct<DocProvider>("test::DocProvider", sizeof(DocProvider));
+    auto *st = new lbt::Struct<DocProviderT>(
+        Extras ? "test::DocProvider" : "test::PlainDocProvider", sizeof(DocProviderT));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
-    BIND_STRUCT_METHOD(st, duplicate, MARGS("src", "out"));
-    BIND_STRUCT_METHOD(st, rekey, MARGS("imported"));
+    if constexpr (Extras) {
+      BIND_STRUCT_METHOD(st, duplicate, MARGS("src", "out"));
+      BIND_STRUCT_METHOD(st, rekey, MARGS("imported"));
+    }
     return st;
   }
 };
+using DocProvider = DocProviderT<true>;
 
 inline const TypeId kDoc = TypeId::of("test.Doc");
 
 /** Any number of types can share a host. */
+template <class Provider = DocProvider>
 inline void registerDoc(Runtime &rt,
                         DocHost &host,
                         uint32_t version = 3,
@@ -219,8 +246,8 @@ inline void registerDoc(Runtime &rt,
 {
   host.rt = &rt;
   const std::string impl = std::string(name) + "#provider";
-  test_assert((registerImpl<BlockProvider, DocProvider>(rt, impl).ok()));
-  DocProvider *p = litestl::alloc::New<DocProvider>("provider");
+  test_assert((registerImpl<BlockProvider, Provider>(rt, impl).ok()));
+  Provider *p = litestl::alloc::New<Provider>("provider");
   p->host = &host;
   Result<Owned<BlockProvider>> owned = own<BlockProvider>(rt, impl, p);
   test_assert(owned.ok());

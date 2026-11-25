@@ -13,15 +13,20 @@ Status noLibrary(const char *what)
                        (std::string(what) + ": the Context has no Library").c_str());
 }
 
-Result<LoadReport> notifyAll(Context &ctx, Result<LoadReport> report)
+void notifyBlocks(Context &ctx, const LoadReport &report)
+{
+  ChangeBus &bus = ctx.runtime().ext<ChangeBus>();
+  for (BlockHandle h : report.blocks) {
+    if (const Datablock *b = ctx.library()->get(h)) {
+      bus.notify(OwnerKey::ofBlock(b->id()));
+    }
+  }
+}
+
+Result<LoadReport> notified(Context &ctx, Result<LoadReport> report)
 {
   if (report.ok()) {
-    ChangeBus &bus = ctx.runtime().ext<ChangeBus>();
-    for (BlockHandle h : report->blocks) {
-      if (const Datablock *b = ctx.library()->get(h)) {
-        bus.notify(OwnerKey::ofBlock(b->id()));
-      }
-    }
+    notifyBlocks(ctx, *report);
   }
   return report;
 }
@@ -35,7 +40,21 @@ Result<LoadReport> loadLibrary(Context &ctx,
   if (!ctx.library()) {
     return noLibrary("loadLibrary");
   }
-  return notifyAll(ctx, detail::loadLibrary(*ctx.library(), bytes, options));
+  return notified(ctx, detail::loadLibrary(*ctx.library(), bytes, options));
+}
+
+Result<AppendResult> appendLibrary(Context &ctx,
+                                   std::span<const uint8_t> bytes,
+                                   const LoadOptions &options)
+{
+  if (!ctx.library()) {
+    return noLibrary("appendLibrary");
+  }
+  Result<AppendResult> r = detail::appendLibrary(*ctx.library(), bytes, options);
+  if (r.ok()) {
+    notifyBlocks(ctx, r->report);
+  }
+  return r;
 }
 
 Result<LoadReport> resolvePlaceholders(Context &ctx)
@@ -43,7 +62,7 @@ Result<LoadReport> resolvePlaceholders(Context &ctx)
   if (!ctx.library()) {
     return noLibrary("resolvePlaceholders");
   }
-  return notifyAll(ctx, detail::resolvePlaceholders(*ctx.library()));
+  return notified(ctx, detail::resolvePlaceholders(*ctx.library()));
 }
 
 } // namespace coredcc

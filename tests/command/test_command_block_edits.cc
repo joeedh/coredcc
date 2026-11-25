@@ -1,6 +1,8 @@
 /* rename and unlinkRef, deleting placeholders, and pointer undo through PointerAccessor::cell. */
 #include "command_fixture.h"
 
+#include "coredcc/api/library_io.h"
+
 #include "coredcc/command/block_edits.h"
 #include "coredcc/command/history_block.h"
 
@@ -132,6 +134,102 @@ static void test_unlink_ref()
   test_assert(s.w.lib.validate().ok() && !s.w.rt.hasStickyError());
 }
 
+/* The references of an attachment this build can't read can be cut too. */
+static void test_unlink_opaque()
+{
+  Setup s;
+  const BlockId mesh = s.w.meshId(0);
+  /* Loading is how an opaque attachment comes about. */
+  BytesWriter names, blocks, data;
+  names.u32(2);
+  for (const char *name : {kCoredccClient, "gone.Notes"}) {
+    names.u8(0);
+    names.str(name);
+  }
+  blocks.u32(1);
+  const size_t record = blocks.beginSection();
+  blocks.u32(1);
+  blocks.u64(5);
+  blocks.u64(5);
+  blocks.u32(0);
+  blocks.str("owner");
+  blocks.u32(0);
+  blocks.u8(1);
+  blocks.u32(0);
+  blocks.u32(0);
+  blocks.u32(0);
+  blocks.u32(0);
+  blocks.u32(1);
+  blocks.u32(2);
+  blocks.u32(1);
+  blocks.u32(0);
+  blocks.u32(1);
+  blocks.u8(0);
+  blocks.u32(1);
+  blocks.u64(mesh.local.hi);
+  blocks.u64(mesh.local.lo);
+  blocks.u32(0);
+  blocks.endSection(record);
+  data.u32(0);
+  BytesWriter file;
+  const char magic[] = "CDCCLIB\n";
+  for (int i = 0; i < 8; i++) {
+    file.u8(uint8_t(magic[i]));
+  }
+  const uint64_t total = 28 + 3 * 24 + names.data().size() + blocks.data().size() + 4 + 8;
+  file.u32(1);
+  file.u32(1);
+  file.u64(total);
+  file.u32(3);
+  const char *tags[] = {"NAME", "BLCK", "DATA"};
+  const BytesWriter *parts[] = {&names, &blocks, &data};
+  for (int i = 0; i < 3; i++) {
+    for (int k = 0; k < 4; k++) {
+      file.u8(uint8_t(tags[i][k]));
+    }
+    file.u32(1);
+    file.u64(parts[i]->data().size());
+    file.u64(parts[i]->data().size());
+    file.raw(std::span(parts[i]->data().data(), size_t(parts[i]->data().size())));
+  }
+  file.u64(detail::fnv1a64(std::string_view(
+      reinterpret_cast<const char *>(file.data().data()), size_t(file.data().size()))));
+  Result<AppendResult> r =
+      appendLibrary(s.ctx, std::span(file.data().data(), size_t(file.data().size())));
+  test_assert(r.ok());
+  if (!r.ok()) {
+    fprintf(stderr, "%s\n", r.status().message());
+    return;
+  }
+  Library &lib = s.w.lib;
+  const BlockHandle owner = r->report.blocks[0];
+  const TypeId type = TypeId::of("gone.Notes");
+  const auto row = [&]() { return (*lib.refTable(owner, type))[0].target; };
+  test_assert(lib.refTable(owner) && lib.refTable(owner)->size() == 0 && row() == mesh);
+  test_assert(!lib.refTable(s.w.meshes[0]) && !lib.refTable(owner, TypeId::of("other")));
+  test_assert(!lib.refTable(BlockHandle()) && !lib.refTable(BlockHandle(), type));
+  test_assert(deletePreview(lib, s.w.meshes[0]).size() == 2);
+  const auto unlink = [&](int64_t index, const char *attachment) {
+    PropertyBag in = blockInputs(s, kUnlinkRefCommand, lib.get(owner)->id());
+    test_assert(in.set("index", PropValue::ofInt(index)).ok());
+    test_assert(in.set("attachment", PropValue::ofString(attachment)).ok());
+    return s.ex.run(s.ctx, kUnlinkRefCommand, std::move(in)).status();
+  };
+  test_assert(unlink(0, "").code() == StatusCode::OutOfRange);
+  test_assert(unlink(0, "other").code() == StatusCode::OutOfRange);
+  test_assert(unlink(1, "gone.Notes").code() == StatusCode::OutOfRange);
+  test_assert(unlink(0, "gone.Notes").ok() && row().isNull());
+  test_assert(deletePreview(lib, s.w.meshes[0]).size() == 1);
+  test_assert(lib.get(s.w.meshes[0])->pins(PinKind::History) == 1);
+  test_assert(s.ex.undo(s.ctx).ok() && row() == mesh);
+  test_assert(s.ex.redo(s.ctx).ok() && row().isNull());
+  test_assert(s.ex.undo(s.ctx).ok());
+  test_assert(lib.forceUnlinkRef(owner, 0, TypeId::of("other")).code() == StatusCode::NotFound);
+  test_assert(lib.forceUnlinkRef(owner, 1, type).code() == StatusCode::OutOfRange);
+  const uint64_t epoch = lib.epoch();
+  test_assert(lib.forceUnlinkRef(owner, 0, type).ok() && lib.epoch() > epoch);
+}
+
 /* Setting a pointer away from a block that isn't Live, and undoing, restores the link. */
 static void test_pointer_cell()
 {
@@ -230,6 +328,7 @@ int main()
 {
   test_rename();
   test_unlink_ref();
+  test_unlink_opaque();
   test_pointer_cell();
   test_history_block();
   return test_end();

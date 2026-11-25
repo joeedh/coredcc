@@ -37,6 +37,8 @@ Unreal, coredcc is exactly one module, so they exist once.
   by default, 128 MiB in a 32-bit process. Memory that providers allocate in `deserialize` is
   theirs to bound.
 - A load isn't undoable and needs a library without records: clear the history first.
+- `appendLibrary` adds a file's blocks to a library that has some, with new ids. `appendUndo` is the
+  same as an undo step. Blocks of a client other than coredcc need its provider's `rekey`.
 - **Transient blocks** (the host's data, such as actors) aren't in the file. References to them
   load as MissingBlock records. Create them again with `createWithId` under the same ids, so ids
   must be stable across sessions. `SaveReport` lists them, and the blocks only they lead to.
