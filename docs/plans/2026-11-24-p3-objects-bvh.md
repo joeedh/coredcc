@@ -986,8 +986,10 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 - **Deleted members:** the save writes their OptStrong cells null, and the load drops those. Weak
   references (parent, active, selection) keep the id of a block that isn't there, and answer none.
 - **`memSize`** is implemented for both.
-- **Mutations:** 82, each alone, against `test_scene_io`. All are found, or their code was redundant and is gone
-  (an unknown-tag check, two early returns, a memory charge that the ref table already bounds).
+- **Mutations:** 69, each alone, against `test_scene_io`. 55 were found at first and 2 didn't compile. Of the
+  12 that survived, 5 were in redundant code, which is gone (an unknown-tag check, two early returns, a
+  memory charge that the ref table already bounds, an index reset); the test now finds the other 7.
+  The 2 were written again and are found.
 
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
