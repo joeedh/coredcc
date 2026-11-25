@@ -77,6 +77,16 @@ enum class NodeRole : uint8_t {
   Group,
 };
 
+/** A socket as a node has it. */
+struct SocketInfo {
+  /** Its identifier, or `#<id>` for a socket of an interface. */
+  litestl::util::string key;
+  /** For display. */
+  litestl::util::string name;
+  litestl::util::string typeName;
+};
+using SocketInfos = litestl::util::Vector<SocketInfo, 1>;
+
 /** An input of a node type. */
 struct NodeInputDef {
   litestl::util::string name;
@@ -110,6 +120,9 @@ struct NodeType {
   litestl::util::Vector<NodeOutputDef> outputs;
   litestl::util::Vector<NodeParamDef> params;
   litestl::util::Vector<PropertyDef> literalDefs;
+  /** `inputs` and `outputs` in the form GraphDef::sockets gives. */
+  SocketInfos inputInfos;
+  SocketInfos outputInfos;
   Owned<GraphKernel> kernel;
   /** Identifies this registration. */
   uint64_t stamp = 0;

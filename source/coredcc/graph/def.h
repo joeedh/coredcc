@@ -72,15 +72,6 @@ struct SocketRef {
 
 enum class SocketSide : uint8_t { Input, Output };
 
-/** A socket as a node has it now. */
-struct SocketInfo {
-  litestl::util::string key;
-  /** For display. */
-  litestl::util::string name;
-  litestl::util::string typeName;
-  bool operator==(const SocketInfo &b) const;
-};
-
 /** A socket of a def's interface. */
 struct InterfaceSocket {
   /** In the same id space as nodes and links; random too, so it is unique across defs. */
@@ -107,6 +98,8 @@ struct NodeValue {
   /** Moves when the value does. */
   uint64_t version = 0;
 };
+
+using NodeValues = litestl::util::Vector<NodeValue, 1>;
 
 /** A block a node's Pointer param refers to. */
 struct NodeBlockRef {
@@ -155,20 +148,22 @@ class GraphNode {
     return pos_[1];
   }
   /** Params that were set, pointers excepted. An unset param has its def's default. */
-  const litestl::util::Vector<NodeValue> &params() const
+  const NodeValues &params() const
   {
     return params_;
   }
   /** Literals that were set, by socket key. */
-  const litestl::util::Vector<NodeValue> &literals() const
+  const NodeValues &literals() const
   {
     return literals_;
   }
   /** Pointer params. */
-  const litestl::util::Vector<NodeBlockRef> &blockRefs() const
+  const litestl::util::Vector<NodeBlockRef, 1> &blockRefs() const
   {
     return refs_;
   }
+  /** What a Pointer param refers to; null if it isn't set. */
+  BlockId blockTarget(std::string_view param) const;
   /** Group nodes: the def's block. */
   const RefCell &group() const
   {
@@ -180,11 +175,11 @@ class GraphNode {
     return paramVersion_;
   }
   /** Links into this node, at most one per input. */
-  const litestl::util::Vector<GraphLink *> &linksIn() const
+  const litestl::util::Vector<GraphLink *, 2> &linksIn() const
   {
     return in_;
   }
-  const litestl::util::Vector<GraphLink *> &linksOut() const
+  const litestl::util::Vector<GraphLink *, 2> &linksOut() const
   {
     return out_;
   }
@@ -202,16 +197,16 @@ class GraphNode {
   mutable const NodeType *type_ = nullptr;
   litestl::util::string label_;
   double pos_[2] = {0, 0};
-  litestl::util::Vector<NodeValue> params_;
-  litestl::util::Vector<NodeValue> literals_;
-  litestl::util::Vector<NodeBlockRef> refs_;
+  NodeValues params_;
+  NodeValues literals_;
+  litestl::util::Vector<NodeBlockRef, 1> refs_;
   RefCell group_{RefKind::OptStrong};
   uint64_t paramVersion_ = 0;
-  litestl::util::Vector<GraphLink *> in_;
-  litestl::util::Vector<GraphLink *> out_;
-  /** The sockets when they were last known; not undoable. */
-  mutable litestl::util::Vector<SocketInfo> inputs_;
-  mutable litestl::util::Vector<SocketInfo> outputs_;
+  litestl::util::Vector<GraphLink *, 2> in_;
+  litestl::util::Vector<GraphLink *, 2> out_;
+  /** The sockets when they were last known, unless the type says; not undoable. */
+  mutable SocketInfos inputs_;
+  mutable SocketInfos outputs_;
   /** The interface version the sockets are from. */
   mutable uint64_t socketsVersion_ = 0;
   /** Its place in GraphDef::nodes_. */
@@ -230,13 +225,13 @@ struct NodeState {
   litestl::util::string label;
   double pos[2] = {0, 0};
   /** Versions are ignored: an inserted node is stamped anew. */
-  litestl::util::Vector<NodeValue> params;
-  litestl::util::Vector<NodeValue> literals;
+  NodeValues params;
+  NodeValues literals;
   litestl::util::Vector<Ref> refs;
   BlockId group;
   /** Its sockets when last known, for a type or a group that isn't there. */
-  litestl::util::Vector<SocketInfo> inputs;
-  litestl::util::Vector<SocketInfo> outputs;
+  SocketInfos inputs;
+  SocketInfos outputs;
 };
 
 struct LinkState {
@@ -372,7 +367,7 @@ class GraphDef {
   const InterfaceSocket *interfaceSocket(SocketSide side, std::string_view name) const;
   /** A node's sockets: its type's, the interface's, or the last known ones when the type
    * or the group isn't there. */
-  const litestl::util::Vector<SocketInfo> &sockets(const GraphNode &node, SocketSide side) const;
+  const SocketInfos &sockets(const GraphNode &node, SocketSide side) const;
   /** The def a group node evaluates; null if it has none or its block isn't Live. */
   GraphDef *groupTarget(const GraphNode &node) const;
   /** The effective value of a param: the one set, or the default. None for a pointer or an

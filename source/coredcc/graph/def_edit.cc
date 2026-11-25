@@ -24,7 +24,7 @@ bool is(const string &a, const char *b)
   return strcmp(a.c_str(), b) == 0;
 }
 
-int findSocket(const Vector<SocketInfo> &list, std::string_view key)
+int findSocket(const SocketInfos &list, std::string_view key)
 {
   for (int i = 0; i < int(list.size()); i++) {
     if (key == list[i].key.c_str()) {
@@ -35,7 +35,7 @@ int findSocket(const Vector<SocketInfo> &list, std::string_view key)
 }
 
 Status noSocket(const GraphNode &n,
-                const Vector<SocketInfo> &list,
+                const SocketInfos &list,
                 const char *kind,
                 std::string_view key)
 {
@@ -51,7 +51,7 @@ Status noSocket(const GraphNode &n,
 }
 
 /* Sets, replaces or (on None) removes a value. */
-void store(Vector<NodeValue> &list, std::string_view name, PropValue value, uint64_t version)
+void store(NodeValues &list, std::string_view name, PropValue value, uint64_t version)
 {
   for (int i = 0; i < int(list.size()); i++) {
     if (name == list[i].name.c_str()) {
@@ -335,7 +335,7 @@ Status GraphDef::setLiteral(NodeId id, std::string_view input, const PropValue &
     return found.status();
   }
   GraphNode *n = *found;
-  const Vector<SocketInfo> &list = sockets(*n, SocketSide::Input);
+  const SocketInfos &list = sockets(*n, SocketSide::Input);
   const int i = findSocket(list, input);
   if (i < 0) {
     return noSocket(*n, list, "input", input);
@@ -408,12 +408,12 @@ Result<LinkId> GraphDef::link(SocketRef from, SocketRef to)
   if (!a.ok() || !b.ok()) {
     return a.ok() ? b.status() : a.status();
   }
-  const Vector<SocketInfo> &outs = sockets(**a, SocketSide::Output);
+  const SocketInfos &outs = sockets(**a, SocketSide::Output);
   const int o = findSocket(outs, from.key);
   if (o < 0) {
     return noSocket(**a, outs, "output", from.key);
   }
-  const Vector<SocketInfo> &ins = sockets(**b, SocketSide::Input);
+  const SocketInfos &ins = sockets(**b, SocketSide::Input);
   const int i = findSocket(ins, to.key);
   if (i < 0) {
     return noSocket(**b, ins, "input", to.key);

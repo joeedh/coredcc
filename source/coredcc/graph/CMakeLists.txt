@@ -4,13 +4,18 @@ coredcc_library(coredcc_graph
     builtin_nodes.cc
     def.cc
     def_edit.cc
+    evaluator.cc
     exec_context.cc
+    frame.cc
+    instance.cc
     node_type.cc
     payload.cc
     provider.cc
     reach.cc
     socket_type.cc
+    system.cc
     topology.cc
+    trace.cc
     value.cc
   DEPS
     coredcc_command

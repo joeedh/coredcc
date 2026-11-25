@@ -16,12 +16,6 @@ namespace coredcc {
 using litestl::util::string;
 using litestl::util::Vector;
 
-bool SocketInfo::operator==(const SocketInfo &b) const
-{
-  return strcmp(key.c_str(), b.key.c_str()) == 0 && strcmp(name.c_str(), b.name.c_str()) == 0 &&
-         strcmp(typeName.c_str(), b.typeName.c_str()) == 0;
-}
-
 string interfaceKey(int64_t id)
 {
   return string(("#" + std::to_string(id)).c_str());
@@ -42,7 +36,7 @@ const GraphLink *GraphNode::linkInto(std::string_view key) const
   return nullptr;
 }
 
-static const NodeValue *findValue(const Vector<NodeValue> &list, std::string_view name)
+static const NodeValue *findValue(const NodeValues &list, std::string_view name)
 {
   for (const NodeValue &v : list) {
     if (name == v.name.c_str()) {
@@ -60,6 +54,16 @@ const NodeValue *GraphNode::literal(std::string_view key) const
 const NodeValue *GraphNode::param(std::string_view name) const
 {
   return findValue(params_, name);
+}
+
+BlockId GraphNode::blockTarget(std::string_view param) const
+{
+  for (const NodeBlockRef &r : refs_) {
+    if (param == r.name.c_str()) {
+      return r.cell.target;
+    }
+  }
+  return BlockId();
 }
 
 GraphPassKey GraphPassKey::of(Runtime &rt, const Library *lib)
@@ -149,21 +153,11 @@ const NodeType *GraphDef::typeOf(const GraphNode &node) const
 {
   if (!node.type_) {
     node.type_ = rt_.ext<NodeTypeRegistry>().find(node.typeName_.c_str());
-    if (node.type_ && node.type_->role == NodeRole::Kernel) {
-      node.inputs_.clear();
-      node.outputs_.clear();
-      for (const NodeInputDef &d : node.type_->inputs) {
-        node.inputs_.append(SocketInfo{d.name, d.name, d.type->name});
-      }
-      for (const NodeOutputDef &d : node.type_->outputs) {
-        node.outputs_.append(SocketInfo{d.name, d.name, d.type->name});
-      }
-    }
   }
   return node.type_;
 }
 
-static void fromInterface(const Vector<InterfaceSocket> &iface, Vector<SocketInfo> &out)
+static void fromInterface(const Vector<InterfaceSocket> &iface, SocketInfos &out)
 {
   out.clear();
   for (const InterfaceSocket &s : iface) {
@@ -193,8 +187,11 @@ void GraphDef::refreshSockets(const GraphNode &node) const
   }
 }
 
-const Vector<SocketInfo> &GraphDef::sockets(const GraphNode &node, SocketSide side) const
+const SocketInfos &GraphDef::sockets(const GraphNode &node, SocketSide side) const
 {
+  if (const NodeType *type = typeOf(node); type && type->role == NodeRole::Kernel) {
+    return side == SocketSide::Input ? type->inputInfos : type->outputInfos;
+  }
   refreshSockets(node);
   return side == SocketSide::Input ? node.inputs_ : node.outputs_;
 }
@@ -265,7 +262,6 @@ Vector<LinkDiagnostic> GraphDef::diagnostics() const
 
 NodeState GraphDef::stateOf(const GraphNode &node) const
 {
-  refreshSockets(node);
   NodeState s;
   s.id = node.id_;
   s.typeName = node.typeName_;
@@ -278,8 +274,8 @@ NodeState GraphDef::stateOf(const GraphNode &node) const
     s.refs.append(NodeState::Ref{r.name, r.cell.target, r.cell.kind == RefKind::Weak});
   }
   s.group = node.group_.target;
-  s.inputs = node.inputs_;
-  s.outputs = node.outputs_;
+  s.inputs = sockets(node, SocketSide::Input);
+  s.outputs = sockets(node, SocketSide::Output);
   return s;
 }
 

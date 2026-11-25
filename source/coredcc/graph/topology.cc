@@ -2,8 +2,6 @@
 
 namespace coredcc {
 
-using litestl::util::Vector;
-
 int GraphTopology::inputIndex(const Node &n, std::string_view key) const
 {
   for (int i = 0; i < n.inCount; i++) {
@@ -37,17 +35,20 @@ std::shared_ptr<const GraphTopology> GraphTopology::build(const GraphDef &def)
   def.forEachNode([&](const GraphNode &n) {
     Node out;
     out.node = &n;
+    out.id = n.id();
     /* First: finding the sockets finds the type. */
-    const Vector<SocketInfo> &ins = def.sockets(n, SocketSide::Input);
-    const Vector<SocketInfo> &outs = def.sockets(n, SocketSide::Output);
+    const SocketInfos &ins = def.sockets(n, SocketSide::Input);
+    const SocketInfos &outs = def.sockets(n, SocketSide::Output);
     out.type = n.type();
     out.role = n.type() ? n.type()->role : NodeRole::Kernel;
     out.inBegin = int(t->inputs.size());
     out.inCount = int(ins.size());
     out.outBegin = int(t->outputs.size());
     out.outCount = int(outs.size());
+    const int index = int(t->nodes.size());
     for (const SocketInfo &s : ins) {
       Input in;
+      in.node = index;
       in.key = s.key;
       in.type = types.find(s.typeName.c_str());
       t->inputs.append(std::move(in));
@@ -55,7 +56,6 @@ std::shared_ptr<const GraphTopology> GraphTopology::build(const GraphDef &def)
     for (const SocketInfo &s : outs) {
       t->outputs.append(Output{s.key, types.find(s.typeName.c_str())});
     }
-    const int index = int(t->nodes.size());
     if (out.role == NodeRole::Group) {
       out.group = int(t->groups.size());
       const GraphDef *target = def.groupTarget(n);

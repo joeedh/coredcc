@@ -24,12 +24,15 @@ struct GraphTopology {
      * without a working link. */
     int fromNode = -1;
     int fromOutput = -1;
+    /** The node it is on. */
+    int node = -1;
   };
   struct Output {
     litestl::util::string key;
     const SocketType *type = nullptr;
   };
   struct Node {
+    NodeId id;
     const GraphNode *node = nullptr;
     /** Null while its type isn't registered; then the role is Kernel. */
     const NodeType *type = nullptr;

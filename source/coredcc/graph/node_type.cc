@@ -278,6 +278,12 @@ Result<const NodeType *> NodeTypeRegistry::add(NodeTypeDef def)
     t->params.append(std::move(p));
   }
 
+  for (const NodeInputDef &d : t->inputs) {
+    t->inputInfos.append(SocketInfo{d.name, d.name, d.type->name});
+  }
+  for (const NodeOutputDef &d : t->outputs) {
+    t->outputInfos.append(SocketInfo{d.name, d.name, d.type->name});
+  }
   t->literalDefs = std::move(def.literalDefs_);
   t->kernel = std::move(def.kernel_);
   guard.t = nullptr;
