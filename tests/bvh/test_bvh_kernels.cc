@@ -47,8 +47,11 @@ template <class S> Mesh bumpySphere(Rand &r, int n, int m, double3 offset)
   put(double3(0, 0, -1));
   for (int j = 1; j < m; j++) {
     for (int i = 0; i < n; i++) {
-      const double th = 3.14159265 * j / m, ph = 6.2831853 * i / n, s = 1 + r.range(-0.02, 0.02);
-      put(double3(std::sin(th) * std::cos(ph), std::sin(th) * std::sin(ph), std::cos(th)) * s);
+      const double th = 3.14159265 * j / m, ph = 6.2831853 * i / n,
+                   s = 1 + r.range(-0.02, 0.02);
+      put(double3(
+              std::sin(th) * std::cos(ph), std::sin(th) * std::sin(ph), std::cos(th)) *
+          s);
     }
   }
   for (int j = 0; j < m; j++) {
@@ -94,27 +97,27 @@ template <class S> int leaks(Aim aim, double3 offset, int leafSize, int rays)
     const double3 onEdge = a * (1.0 - s) + b * s;
     double3 origin = offset + r.vec(0.3), target = onEdge;
     switch (aim) {
-      case Aim::Random:
-        target = offset + r.vec(1.0);
-        break;
-      case Aim::Vertices:
-        target = a;
-        break;
-      case Aim::AxisThroughEdges:
-        /* Straight along an axis through the edge point, from the sphere's middle. */
-        if (std::fabs(onEdge[2] - offset[2]) < 0.3) {
-          continue;
-        }
-        origin = double3(onEdge[0], onEdge[1], offset[2]);
-        break;
-      case Aim::Outside: {
-        const double3 p = r.below(2) ? a : onEdge;
-        origin = offset + (p - offset) * r.range(2.0, 4.0) + r.vec(0.1);
-        target = p;
-        break;
+    case Aim::Random:
+      target = offset + r.vec(1.0);
+      break;
+    case Aim::Vertices:
+      target = a;
+      break;
+    case Aim::AxisThroughEdges:
+      /* Straight along an axis through the edge point, from the sphere's middle. */
+      if (std::fabs(onEdge[2] - offset[2]) < 0.3) {
+        continue;
       }
-      default:
-        break;
+      origin = double3(onEdge[0], onEdge[1], offset[2]);
+      break;
+    case Aim::Outside: {
+      const double3 p = r.below(2) ? a : onEdge;
+      origin = offset + (p - offset) * r.range(2.0, 4.0) + r.vec(0.1);
+      target = p;
+      break;
+    }
+    default:
+      break;
     }
     Ray ray;
     ray.origin = origin;
@@ -155,7 +158,9 @@ void testLattice()
       for (int i = 0; i <= 4 * n; i++) {
         for (int j = 0; j <= 4 * n; j++) {
           const double3 p = point(i * 0.25, j * 0.25, 0);
-          for (const double3 &d : {point(0, 0, 1), point(1, 2, 4), point(-3, 1, 4), point(2, 0, 4)}) {
+          for (const double3 &d :
+               {point(0, 0, 1), point(1, 2, 4), point(-3, 1, 4), point(2, 0, 4)})
+          {
             for (double side : {-1.0, 1.0}) {
               Ray ray;
               ray.origin = p + d * (2.0 * side);
@@ -213,7 +218,8 @@ void testTriangles()
 
     const double3 e1 = b - a, e2 = c - a, normal = e1.cross(e2);
     const double grazing = std::fabs(dot(normal, unit)) / (length(e1) * length(e2));
-    const double edge = (std::min)((std::min)(std::fabs(u), std::fabs(v)), std::fabs(1 - u - v));
+    const double edge =
+        (std::min)((std::min)(std::fabs(u), std::fabs(v)), std::fabs(1 - u - v));
     if (grazing < 1e-3 || edge < 1e-6) {
       continue; /* the reference itself isn't sure */
     }
@@ -224,7 +230,8 @@ void testTriangles()
     expect(bool(got) == hit, "a triangle hit or miss is wrong");
     if (got && hit) {
       expect(std::fabs(got.t - want) < 1e-9 * want, "t is wrong");
-      expect(std::fabs(got.u - u) < 1e-9 && std::fabs(got.v - v) < 1e-9, "u or v is wrong");
+      expect(std::fabs(got.u - u) < 1e-9 && std::fabs(got.v - v) < 1e-9,
+             "u or v is wrong");
       expect(!got.inside, "a triangle has no inside");
       expect(got.backFacing == (dot(normal, unit) > 0.0), "backFacing is wrong");
       /* The limits are inclusive, and nothing outside them is hit. */
@@ -264,11 +271,13 @@ void checkSolid(const Ray &ray, double scale, Distance distance, Cast cast)
     expect(hit && t == ray.tMin, "a start inside hits at tMin");
     return;
   }
-  /* The distance to a convex solid is convex along a line: ternary search for the least. */
+  /* The distance to a convex solid is convex along a line: ternary search for the least.
+   */
   double lo = ray.tMin, hi = ray.tMin + 100.0 * scale / dirLen;
   for (int i = 0; i < 200; i++) {
     const double m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3;
-    (distance(at(m1)) < distance(at(m2)) ? hi : lo) = distance(at(m1)) < distance(at(m2)) ? m2 : m1;
+    (distance(at(m1)) < distance(at(m2)) ? hi : lo) =
+        distance(at(m1)) < distance(at(m2)) ? m2 : m1;
   }
   const double least = distance(at(lo));
   if (std::fabs(least) < eps) {
@@ -318,9 +327,10 @@ void testSolids()
     const auto seg = [&](const double3 &p) {
       return length(p - bvh::closestOnSegment(p, a, b)) - radius;
     };
-    checkSolid(ray, scale, seg, [&](const bvh::RayQuery &q, double limit, double &t, bool &in) {
-      return bvh::rayCapsule(q, a, b, radius, limit, t, in);
-    });
+    checkSolid(
+        ray, scale, seg, [&](const bvh::RayQuery &q, double limit, double &t, bool &in) {
+          return bvh::rayCapsule(q, a, b, radius, limit, t, in);
+        });
     checkSolid(
         ray,
         scale,
@@ -356,14 +366,18 @@ void testSolids()
   const double nan = std::numeric_limits<double>::quiet_NaN();
   expect(!bvh::raySphere(q, double3(5, 0, 0), -1.0, q.tMax, t, in), "negative radius");
   expect(!bvh::raySphere(q, double3(5, 0, 0), nan, q.tMax, t, in), "NaN radius");
-  expect(!bvh::rayCapsule(q, double3(5, 0, 0), double3(6, 0, 0), nan, q.tMax, t, in), "NaN radius");
-  expect(bvh::raySphere(q, double3(5, 0, 0), 1.0, 8.0 * (1 + 1e-12), t, in) && q.toRayT(t) == 4.0, "entry");
-  expect(!bvh::raySphere(q, double3(5, 0, 0), 1.0, 7.9, t, in), "a limit before the entry");
+  expect(!bvh::rayCapsule(q, double3(5, 0, 0), double3(6, 0, 0), nan, q.tMax, t, in),
+         "NaN radius");
+  expect(bvh::raySphere(q, double3(5, 0, 0), 1.0, 8.0 * (1 + 1e-12), t, in) &&
+             q.toRayT(t) == 4.0,
+         "entry");
+  expect(!bvh::raySphere(q, double3(5, 0, 0), 1.0, 7.9, t, in),
+         "a limit before the entry");
   expect(!bvh::raySphere(q, double3(-5, 0, 0), 1.0, q.tMax, t, in), "behind the ray");
 }
 
-/* The same far from the origin, at coordinates that are exact there. The answer is the same too: it
- * may depend only on how far things are from the ray's origin. */
+/* The same far from the origin, at coordinates that are exact there. The answer is the
+ * same too: it may depend only on how far things are from the ray's origin. */
 void testFarSolids()
 {
   Rand r(6);
@@ -403,7 +417,8 @@ void testFarSolids()
     const bool c2 = bvh::rayCapsule(p, a + far, b + far, radius, p.tMax, t[1], inside[1]);
     const bool s1 = bvh::raySphere(q, a, radius, q.tMax, t[2], inside[2]);
     const bool s2 = bvh::raySphere(p, a + far, radius, p.tMax, t[3], inside[3]);
-    expect(c1 == c2 && (!c1 || (t[0] == t[1] && inside[0] == inside[1])), "a far capsule");
+    expect(c1 == c2 && (!c1 || (t[0] == t[1] && inside[0] == inside[1])),
+           "a far capsule");
     expect(s1 == s2 && (!s1 || (t[2] == t[3] && inside[2] == inside[3])), "a far sphere");
     /* From where it entered: inside or not depends on the last bits. */
     if (c1 && s1) {
@@ -413,11 +428,13 @@ void testFarSolids()
         const bvh::RayQuery q2(on), p2(onMoved);
         double u[2];
         bool in[2] = {false, false};
-        const bool h1 = solid ? bvh::raySphere(q2, a, radius, q2.tMax, u[0], in[0]) :
-                                bvh::rayCapsule(q2, a, b, radius, q2.tMax, u[0], in[0]);
-        const bool h2 = solid ? bvh::raySphere(p2, a + far, radius, p2.tMax, u[1], in[1]) :
-                                bvh::rayCapsule(p2, a + far, b + far, radius, p2.tMax, u[1], in[1]);
-        expect(h1 == h2 && (!h1 || (u[0] == u[1] && in[0] == in[1])), "a far solid's surface");
+        const bool h1 = solid ? bvh::raySphere(q2, a, radius, q2.tMax, u[0], in[0])
+                              : bvh::rayCapsule(q2, a, b, radius, q2.tMax, u[0], in[0]);
+        const bool h2 =
+            solid ? bvh::raySphere(p2, a + far, radius, p2.tMax, u[1], in[1])
+                  : bvh::rayCapsule(p2, a + far, b + far, radius, p2.tMax, u[1], in[1]);
+        expect(h1 == h2 && (!h1 || (u[0] == u[1] && in[0] == in[1])),
+               "a far solid's surface");
       }
     }
     hits += c1 + s1;
@@ -426,7 +443,8 @@ void testFarSolids()
   test_assert(hits > 10000 && starts > 2000);
 }
 
-/* nodeSlab makes a box larger by a part of how far it reaches, on every side, however the ray comes. */
+/* nodeSlab makes a box larger by a part of how far it reaches, on every side, however the
+ * ray comes. */
 void testSlack()
 {
   const double slack = bvh::kNodeSlack;
@@ -436,16 +454,19 @@ void testSlack()
     Ray ray;
     ray.dir = double3(1.0, 1e-3, 0.0);
     double enter;
-    const double lo[3] = {1.0, 2e-3 + outside * 2.0 * slack, -1.0}, hi[3] = {2.0, 1.0, 1.0};
+    const double lo[3] = {1.0, 2e-3 + outside * 2.0 * slack, -1.0},
+                 hi[3] = {2.0, 1.0, 1.0};
     test_assert(bvh::RayQuery(ray).nodeSlab(lo, hi, 1e300, enter) == (side == 0));
     /* One beside a box that is far larger along y than along x. */
     ray.dir = double3(1.0, 0.5, 0.25);
-    const double up[3] = {1.0, 1.0 + outside * 1e6 * slack, -1.0}, top[3] = {2.0, 1e6, 1.0};
+    const double up[3] = {1.0, 1.0 + outside * 1e6 * slack, -1.0},
+                 top[3] = {2.0, 1e6, 1.0};
     test_assert(bvh::RayQuery(ray).nodeSlab(up, top, 1e300, enter) == (side == 0));
   }
 }
 
-/* Triangles without an area, along an axis: where a ray that meets one hits it is known all the same. */
+/* Triangles without an area, along an axis: where a ray that meets one hits it is known
+ * all the same. */
 void testEdges()
 {
   Rand r(7);
@@ -464,15 +485,23 @@ void testEdges()
     ray.origin = on + r.vec(2.0);
     ray.dir = on - ray.origin;
     const bvh::RayQuery q(ray);
-    const float *const coords[9] = {corner,     corner + 1, corner + 2, corner + 3, corner + 4,
-                                    corner + 5, corner + 6, corner + 7, corner + 8};
+    const float *const coords[9] = {corner,
+                                    corner + 1,
+                                    corner + 2,
+                                    corner + 3,
+                                    corner + 4,
+                                    corner + 5,
+                                    corner + 6,
+                                    corner + 7,
+                                    corner + 8};
     bvh::TriangleBlockHits out;
     if (bvh::rayTriangles(q, coords, 0, 1, q.tMax, out) == 0) {
       continue;
     }
     hits++;
     const double t = q.toRayT(out.t[0]);
-    expect(std::fabs(t - 1.0) < 1e-9 || std::fabs(ray.dir[axis]) > 50.0 * std::fabs(ray.dir[(axis + 1) % 3]) ||
+    expect(std::fabs(t - 1.0) < 1e-9 ||
+               std::fabs(ray.dir[axis]) > 50.0 * std::fabs(ray.dir[(axis + 1) % 3]) ||
                std::fabs(ray.dir[axis]) > 50.0 * std::fabs(ray.dir[(axis + 2) % 3]),
            "where an edge is hit");
   }
@@ -524,7 +553,8 @@ void testBoxCorners()
       leave = (std::min)(leave, (std::max)(a, b));
     }
     if (misses || std::fabs(enter - leave) > 1e-11) {
-      expect(bvh::rayBox(beside, box, beside.tMax, t, inside) == (!misses && enter < leave),
+      expect(bvh::rayBox(beside, box, beside.tMax, t, inside) ==
+                 (!misses && enter < leave),
              "a ray beside a corner");
     }
   }
@@ -548,7 +578,8 @@ void testClosest()
       c = a + (b - a) * r.range(-1, 2); /* collinear, up to rounding */
     }
     /* Some on the line of a triangle without area, where its normal is noise. */
-    const double3 p = kind == 2 && r.unit() < 0.5 ? a + (b - a) * r.range(-1, 2) : r.vec(2.0 * scale);
+    const double3 p =
+        kind == 2 && r.unit() < 0.5 ? a + (b - a) * r.range(-1, 2) : r.vec(2.0 * scale);
     const double tol = 1e-9 * scale * scale;
     const double3 t = bvh::closestOnTriangle(p, a, b, c);
     /* (p - t).(x - t) <= 0 for every x of the set: its corners are enough. */
@@ -562,12 +593,14 @@ void testClosest()
       const double u = dot((b - a).cross(t - a), normal) / area;
       const double v = dot((t - a).cross(c - a), normal) / area;
       expect(u > -1e-9 && v > -1e-9 && u + v < 1 + 1e-9, "outside the triangle");
-      expect(std::fabs(dot(t - a, normal)) < 1e-9 * length(normal) * scale, "off the plane");
+      expect(std::fabs(dot(t - a, normal)) < 1e-9 * length(normal) * scale,
+             "off the plane");
     }
     /* A point of a thin triangle, not of its edges. */
     const double3 thin = a + (b - a) * 0.4 + (b - a).cross(r.vec(1.0)) * 1e-5;
     const double3 in = (a + b + thin) / 3.0;
-    expect(length(bvh::closestOnTriangle(in, a, b, thin) - in) <= 1e-8 * scale, "a sliver");
+    expect(length(bvh::closestOnTriangle(in, a, b, thin) - in) <= 1e-8 * scale,
+           "a sliver");
     const double3 s = bvh::closestOnSegment(p, a, b);
     expect(dot(p - s, a - s) <= tol && dot(p - s, b - s) <= tol, "closestOnSegment");
 
@@ -581,14 +614,15 @@ void testClosest()
     const double radius = r.unit() * scale;
     const double3 y = bvh::closestOnSphere(p, a, radius);
     const double d = length(p - a);
-    expect(std::fabs(length(p - y) - (std::max)(0.0, d - radius)) <= 1e-12 * scale, "sphere");
+    expect(std::fabs(length(p - y) - (std::max)(0.0, d - radius)) <= 1e-12 * scale,
+           "sphere");
   }
 }
 
 /* ---- boxes ---- */
 
-/* The sign of `k[0] + k[1] x[0] + k[2] x[1] + k[3] x[2] - bound`, in twice the precision of
- * double (two-sums and two-products). */
+/* The sign of `k[0] + k[1] x[0] + k[2] x[1] + k[3] x[2] - bound`, in twice the precision
+ * of double (two-sums and two-products). */
 int sumSign(const double *k, const double *x, double bound)
 {
   double hi = k[0], lo = 0.0;
@@ -644,8 +678,10 @@ void testBoxes()
   const double inf = std::numeric_limits<double>::infinity();
   const float finf = std::numeric_limits<float>::infinity();
   const float fmax = (std::numeric_limits<float>::max)();
-  expect(bvh::roundDown<float>(1e300) == fmax && bvh::roundUp<float>(1e300) == finf, "over");
-  expect(bvh::roundDown<float>(-1e300) == -finf && bvh::roundUp<float>(-1e300) == -fmax, "under");
+  expect(bvh::roundDown<float>(1e300) == fmax && bvh::roundUp<float>(1e300) == finf,
+         "over");
+  expect(bvh::roundDown<float>(-1e300) == -finf && bvh::roundUp<float>(-1e300) == -fmax,
+         "under");
   expect(!bvh::finite(inf) && !bvh::finite(finf) && bvh::finite(fmax) &&
              !bvh::finite(std::numeric_limits<double>::quiet_NaN()),
          "finite");

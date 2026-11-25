@@ -112,7 +112,8 @@ const Datablock *Library::strongUserOf(BlockId id) const
   return found;
 }
 
-Map<BlockIdKey, const Datablock *> Library::strongUsersOf(std::span<const BlockHandle> blocks) const
+Map<BlockIdKey, const Datablock *>
+Library::strongUsersOf(std::span<const BlockHandle> blocks) const
 {
   Map<BlockIdKey, const Datablock *> users;
   for (BlockHandle h : blocks) {
@@ -161,16 +162,16 @@ Status Library::destroyFromHistory(std::span<const BlockHandle> blocks)
     }
     if (b->state_ != BlockState::InHistory) {
       refuse(StatusCode::FailedPrecondition,
-             std::string("block '") + b->name_.c_str() + "' is " + blockStateName(b->state_) +
-                 ", not InHistory");
+             std::string("block '") + b->name_.c_str() + "' is " +
+                 blockStateName(b->state_) + ", not InHistory");
       continue;
     }
-    /* Its Strong ref would dangle: the delete should have taken that user too. Refuse; the
-     * block stays InHistory, which GC treats as a root. */
+    /* Its Strong ref would dangle: the delete should have taken that user too. Refuse;
+     * the block stays InHistory, which GC treats as a root. */
     if (const Datablock *u = *users.lookup_ptr(keyOf(b->id_))) {
-      refuse(StatusCode::FailedPrecondition, "'" + std::string(u->name_.c_str()) +
-                                                 "' still holds a Strong ref to '" +
-                                                 b->name_.c_str() + "'");
+      refuse(StatusCode::FailedPrecondition,
+             "'" + std::string(u->name_.c_str()) + "' still holds a Strong ref to '" +
+                 b->name_.c_str() + "'");
       continue;
     }
     if (!seen.lookup_ptr(h)) {
@@ -232,8 +233,7 @@ void Library::releaseOneDoomed(BlockHandle h)
     byId_.add(keyOf(id), h);
     doomedCount_--;
     setState(*b, BlockState::InHistory);
-  }
-  else {
+  } else {
     Vector<BlockHandle> one;
     one.append(h);
     destroyBlocks(one);
@@ -254,7 +254,8 @@ Status Library::takeDeferredErrors()
   if (deferredErrorCount_ == 0) {
     return Status();
   }
-  std::string msg = "destroying a block that was pinned when the history dropped it failed: ";
+  std::string msg =
+      "destroying a block that was pinned when the history dropped it failed: ";
   msg += deferredErrors_[0].message();
   if (deferredErrorCount_ > 1) {
     msg += " (and " + std::to_string(deferredErrorCount_ - 1) + " more)";

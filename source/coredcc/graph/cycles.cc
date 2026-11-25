@@ -1,5 +1,5 @@
-/* What edits are refused for: cycles of links (GraphDef::link, linkAll) and defs that contain
- * themselves (setGroup). Nothing here recurses natively: defs may nest deeply. */
+/* What edits are refused for: cycles of links (GraphDef::link, linkAll) and defs that
+ * contain themselves (setGroup). Nothing here recurses natively: defs may nest deeply. */
 #include "coredcc/base/text.h"
 #include "coredcc/graph/interior.h"
 #include "coredcc/graph/provider.h"
@@ -22,10 +22,10 @@ using litestl::util::Vector;
 namespace {
 
 /* One direction of the cycle check: a walk over sockets, one step at a time. Forward, the
- * sockets are inputs and the walk follows what depends on them; backward, they are outputs
- * and it follows what they depend on. */
+ * sockets are inputs and the walk follows what depends on them; backward, they are
+ * outputs and it follows what they depend on. */
 class CycleWalk {
- public:
+public:
   struct Socket {
     const GraphNode *node;
     string key;
@@ -61,9 +61,9 @@ class CycleWalk {
     return false;
   }
 
- private:
-  /* A group node. The sockets of its near side, where the walk comes in, and of its far side
-   * go by their index in its def's table. */
+private:
+  /* A group node. The sockets of its near side, where the walk comes in, and of its far
+   * side go by their index in its def's table. */
   struct Group {
     Map<detail::SocketKey, int> near;
     /* What each near socket leads to. */
@@ -227,7 +227,7 @@ namespace {
 /* The sockets of a def and what they depend on, as arrays: its inputs, then its nodes (a
  * node stands for a kernel's outputs). */
 class Dependencies {
- public:
+public:
   explicit Dependencies(const GraphDef &def) : topo_(def.topology())
   {
     const GraphTopology &t = *topo_;
@@ -285,8 +285,7 @@ class Dependencies {
           const int to = edges_[next[v]++];
           if (number[to] < 0) {
             enter(to);
-          }
-          else if (onStack[to]) {
+          } else if (onStack[to]) {
             low[v] = std::min(low[v], number[to]);
             out[v] = out[v] || to == v;
           }
@@ -311,7 +310,7 @@ class Dependencies {
     return out;
   }
 
- private:
+private:
   struct Group {
     std::shared_ptr<const GraphReach> reach;
     /* The rows of the node's interior outputs, and its inputs for the columns of keys. */
@@ -326,7 +325,8 @@ class Dependencies {
       edges_.append(int(topo_->inputs.size()) + node);
       return;
     }
-    const GraphDef *target = n.role == NodeRole::Group ? def.groupTarget(*n.node) : nullptr;
+    const GraphDef *target =
+        n.role == NodeRole::Group ? def.groupTarget(*n.node) : nullptr;
     if (!target) {
       return;
     }
@@ -340,7 +340,8 @@ class Dependencies {
     }
   }
 
-  std::shared_ptr<Group> makeGroup(const GraphDef &target, const GraphTopology::Node &n) const
+  std::shared_ptr<Group> makeGroup(const GraphDef &target,
+                                   const GraphTopology::Node &n) const
   {
     std::shared_ptr<Group> g = std::make_shared<Group>();
     ReachKeys keys;
@@ -352,8 +353,7 @@ class Dependencies {
       }
       if (i.side == SocketSide::Output) {
         g->rows.append(outs + int(keys.outs.size()));
-      }
-      else {
+      } else {
         g->columns.append(n.inBegin + i.index);
       }
       keys.add(i.side, i.key);

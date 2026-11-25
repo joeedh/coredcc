@@ -65,12 +65,13 @@ struct BlockRead {
   bool seesSame(const BlockRead &b) const
   {
     return asked == b.asked && bool(handle) == bool(b.handle) &&
-           (state == BlockState::Live) == (b.state == BlockState::Live) && value == b.value;
+           (state == BlockState::Live) == (b.state == BlockState::Live) &&
+           value == b.value;
   }
   bool operator==(const BlockRead &b) const
   {
-    return asked == b.asked && id == b.id && handle == b.handle && state == b.state && stateChanges == b.stateChanges && value == b.value &&
-           notified == b.notified;
+    return asked == b.asked && id == b.id && handle == b.handle && state == b.state &&
+           stateChanges == b.stateChanges && value == b.value && notified == b.notified;
   }
 };
 
@@ -85,7 +86,8 @@ struct Environment {
                                           std::vector<Value> &out)>;
   std::map<std::string, Kernel> kernels;
   /* Conversions by (from, to). */
-  std::map<std::pair<std::string, std::string>, std::function<StatusCode(const Value &, Value &)>>
+  std::map<std::pair<std::string, std::string>,
+           std::function<StatusCode(const Value &, Value &)>>
       conversions;
   /* Socket types, with their defaults. */
   std::map<std::string, Value> types;
@@ -136,7 +138,7 @@ struct KernelVisit {
 };
 
 class Evaluation {
- public:
+public:
   Evaluation(const Environment &env,
              GraphDef *root,
              const std::map<int64_t, std::pair<Value, int>> &external)
@@ -180,8 +182,7 @@ class Evaluation {
         if (!k.failed) {
           requests[i].outcome.value = k.outputs[targets[i].output];
         }
-      }
-      else {
+      } else {
         requests[i].outcome = input(v);
       }
       requests[i].found = true;
@@ -189,8 +190,7 @@ class Evaluation {
     for (const auto &[v, next] : edges_) {
       if (v.key.empty()) {
         kernel(v); /* everything that was reached */
-      }
-      else {
+      } else {
         input(v);
       }
     }
@@ -205,7 +205,7 @@ class Evaluation {
     return frames_;
   }
 
- private:
+private:
   struct Target {
     bool hasVertex = false;
     Vertex vertex;
@@ -228,8 +228,8 @@ class Evaluation {
   GraphDef *target(const GraphNode &n) const
   {
     const Datablock *b = env_.lib->get(env_.lib->find(n.group().target));
-    return b && b->state() == BlockState::Live ? static_cast<GraphDef *>(b->clientData()) :
-                                                 nullptr;
+    return b && b->state() == BlockState::Live ? static_cast<GraphDef *>(b->clientData())
+                                               : nullptr;
   }
   static std::string typeName(const GraphNode &n)
   {
@@ -244,30 +244,29 @@ class Evaluation {
     const std::string t = typeName(n);
     return t != "graph.input" && t != "graph.output" && t != "graph.group";
   }
-  std::vector<Socket> sockets(const GraphDef &def, const GraphNode &n, SocketSide side) const
+  std::vector<Socket>
+  sockets(const GraphDef &def, const GraphNode &n, SocketSide side) const
   {
     const std::string t = typeName(n);
     if (t == "graph.input") {
-      return side == SocketSide::Output ? interfaceList(def, SocketSide::Input) :
-                                          std::vector<Socket>();
+      return side == SocketSide::Output ? interfaceList(def, SocketSide::Input)
+                                        : std::vector<Socket>();
     }
     if (t == "graph.output") {
-      return side == SocketSide::Input ? interfaceList(def, SocketSide::Output) :
-                                         std::vector<Socket>();
+      return side == SocketSide::Input ? interfaceList(def, SocketSide::Output)
+                                       : std::vector<Socket>();
     }
     std::vector<Socket> out;
     if (t == "graph.group") {
       if (const GraphDef *d = target(n)) {
         return interfaceList(*d, side);
       }
-    }
-    else if (const NodeType *type = env_.rt->ext<NodeTypeRegistry>().find(t)) {
+    } else if (const NodeType *type = env_.rt->ext<NodeTypeRegistry>().find(t)) {
       if (side == SocketSide::Input) {
         for (const NodeInputDef &d : type->inputs) {
           out.push_back({d.name.c_str(), d.type->name.c_str()});
         }
-      }
-      else {
+      } else {
         for (const NodeOutputDef &d : type->outputs) {
           out.push_back({d.name.c_str(), d.type->name.c_str()});
         }
@@ -320,8 +319,7 @@ class Evaluation {
     };
     if (!def) {
       fail(StatusCode::NotFound);
-    }
-    else {
+    } else {
       for (int f = frame; f >= 0; f = frames_[f].parent) {
         if (frames_[f].def == def) {
           fail(StatusCode::FailedPrecondition);
@@ -362,28 +360,23 @@ class Evaluation {
     if (isKernel(n)) {
       feed.kind = Feed::FromVertex;
       feed.from = Vertex{frame, n.id().value, ""};
-    }
-    else if (typeName(n) == "graph.input") {
+    } else if (typeName(n) == "graph.input") {
       if (frames_[frame].parent >= 0) {
         feed.kind = Feed::FromVertex;
         feed.from = Vertex{frames_[frame].parent, frames_[frame].groupNode, key};
-      }
-      else {
+      } else {
         feed.kind = Feed::External;
         feed.interfaceIndex = o;
       }
-    }
-    else {
+    } else {
       const Child c = child(frame, n);
       if (c.failed) {
         feed.kind = Feed::Failed;
         feed.error = c.error;
-      }
-      else if (const GraphNode *out = outputNode(*frames_[c.frame].def)) {
+      } else if (const GraphNode *out = outputNode(*frames_[c.frame].def)) {
         feed.kind = Feed::FromVertex;
         feed.from = Vertex{c.frame, out->id().value, key};
-      }
-      else {
+      } else {
         feed.kind = Feed::TypeDefault;
       }
     }
@@ -419,12 +412,10 @@ class Evaluation {
         t.hasVertex = true;
         t.vertex = feed.from;
         t.output = feed.output;
-      }
-      else if (feed.kind == Feed::Failed) {
+      } else if (feed.kind == Feed::Failed) {
         r.outcome.failed = true;
         r.outcome.error = feed.error;
-      }
-      else {
+      } else {
         r.outcome = constant(feed, 0, r.path.node.node.value);
       }
       return t;
@@ -433,7 +424,9 @@ class Evaluation {
       const std::vector<Socket> outs = interfaceList(*def, SocketSide::Output);
       for (size_t i = 0; i < outs.size(); i++) {
         const InterfaceSocket &s = def->interfaceSockets(SocketSide::Output)[int(i)];
-        if (outs[i].key == r.path.key.c_str() || std::string(s.name.c_str()) == r.path.key.c_str()) {
+        if (outs[i].key == r.path.key.c_str() ||
+            std::string(s.name.c_str()) == r.path.key.c_str())
+        {
           Feed feed;
           feed.type = outs[i].type;
           feed.kind = Feed::TypeDefault;
@@ -493,8 +486,7 @@ class Evaluation {
         if (feed.kind == Feed::FromVertex) {
           next.push_back(feed.from);
         }
-      }
-      else if (registered(n)) {
+      } else if (registered(n)) {
         for (const Socket &s : sockets(def, n, SocketSide::Input)) {
           next.push_back(Vertex{v.frame, v.node, s.key});
         }
@@ -553,7 +545,8 @@ class Evaluation {
         if (v.key.empty()) {
           continue;
         }
-        const Error at{StatusCode::FailedPrecondition, frames_[v.frame].path, v.node, v.key};
+        const Error at{
+            StatusCode::FailedPrecondition, frames_[v.frame].path, v.node, v.key};
         if (first || before(at, e)) {
           e = at;
           first = false;
@@ -579,23 +572,23 @@ class Evaluation {
   {
     Value v;
     switch (p.type()) {
-      case PropValue::Type::Bool:
-        v = Value{"bool", {p.asBool() ? 1.0 : 0.0}, ""};
-        break;
-      case PropValue::Type::Int:
-        v = Value{"int", {double(p.asInt())}, ""};
-        break;
-      case PropValue::Type::Float:
-        v = Value{"float", {p.asFloat()}, ""};
-        break;
-      case PropValue::Type::Vec3:
-        v = Value{"vec3", {p.component(0), p.component(1), p.component(2)}, ""};
-        break;
-      case PropValue::Type::String:
-        v = Value{"string", {}, p.asString().c_str()};
-        break;
-      default:
-        break;
+    case PropValue::Type::Bool:
+      v = Value{"bool", {p.asBool() ? 1.0 : 0.0}, ""};
+      break;
+    case PropValue::Type::Int:
+      v = Value{"int", {double(p.asInt())}, ""};
+      break;
+    case PropValue::Type::Float:
+      v = Value{"float", {p.asFloat()}, ""};
+      break;
+    case PropValue::Type::Vec3:
+      v = Value{"vec3", {p.component(0), p.component(1), p.component(2)}, ""};
+      break;
+    case PropValue::Type::String:
+      v = Value{"string", {}, p.asString().c_str()};
+      break;
+    default:
+      break;
     }
     return v;
   }
@@ -644,8 +637,8 @@ class Evaluation {
     for (const NodeValue &l : n.literals()) {
       if (v.key == l.name.c_str() && !l.off && fromProp(l.value).type == type) {
         o.value = fromProp(l.value);
-        o.source.text = "literal " + pathText(v.frame) + std::to_string(v.node) + "." + v.key +
-                        " v" + std::to_string(l.version);
+        o.source.text = "literal " + pathText(v.frame) + std::to_string(v.node) + "." +
+                        v.key + " v" + std::to_string(l.version);
         return o;
       }
     }
@@ -656,8 +649,7 @@ class Evaluation {
         o.value = fromProp(t->literal(i)->defaultValue());
       }
       o.source.text = "default of " + typeName(n) + "." + v.key;
-    }
-    else if (typeName(n) == "graph.group") {
+    } else if (typeName(n) == "graph.group") {
       if (const GraphDef *d = target(n)) {
         const int i = indexOf(interfaceList(*d, SocketSide::Input), v.key);
         interfaceDefault(d->interfaceSockets(SocketSide::Input)[i], type, *d, o);
@@ -698,32 +690,27 @@ class Evaluation {
     if (feed.kind == Feed::Failed) {
       o.failed = true;
       o.error = feed.error;
-    }
-    else if (feed.kind == Feed::FromVertex && feed.from.key.empty()) {
+    } else if (feed.kind == Feed::FromVertex && feed.from.key.empty()) {
       const int k = kernel(feed.from);
       if (kernels_[k].failed) {
         o.failed = true;
         o.error = kernels_[k].error;
-      }
-      else {
+      } else {
         o.value = kernels_[k].outputs[feed.output];
-        o.source.text = "kernel " + pathText(feed.from.frame) + std::to_string(feed.from.node) +
-                        " " + std::to_string(feed.output);
+        o.source.text = "kernel " + pathText(feed.from.frame) +
+                        std::to_string(feed.from.node) + " " +
+                        std::to_string(feed.output);
         o.source.kernel = k;
         o.source.output = feed.output;
         o.source.chain = feed.type;
       }
-    }
-    else if (feed.kind == Feed::FromVertex) {
+    } else if (feed.kind == Feed::FromVertex) {
       o = input(feed.from);
-    }
-    else if (!env_.types.count(feed.type)) {
+    } else if (!env_.types.count(feed.type)) {
       fail(StatusCode::NotFound);
-    }
-    else if (feed.kind == Feed::Literal) {
+    } else if (feed.kind == Feed::Literal) {
       o = literal(v, type);
-    }
-    else {
+    } else {
       o = constant(feed, v.frame, v.node);
     }
     if (!o.failed && (!env_.types.count(feed.type) || !env_.types.count(type))) {
@@ -732,12 +719,11 @@ class Evaluation {
     if (!o.failed && feed.type != type) {
       auto it = env_.conversions.find({feed.type, type});
       Value out;
-      const StatusCode code =
-          it == env_.conversions.end() ? StatusCode::TypeMismatch : it->second(o.value, out);
+      const StatusCode code = it == env_.conversions.end() ? StatusCode::TypeMismatch
+                                                           : it->second(o.value, out);
       if (code != StatusCode::Ok) {
         fail(code);
-      }
-      else {
+      } else {
         o.value = out;
         o.source.chain += ">" + type;
       }
@@ -760,12 +746,10 @@ class Evaluation {
     if (auto it = cycles_.find(v); it != cycles_.end()) {
       k.cycle = k.failed = true;
       k.error = it->second;
-    }
-    else if (!registered(n)) {
+    } else if (!registered(n)) {
       k.unregistered = k.failed = true;
       k.error = Error{StatusCode::NotFound, k.path, k.node, ""};
-    }
-    else {
+    } else {
       std::vector<Value> in;
       for (const Socket &s : sockets(def, n, SocketSide::Input)) {
         k.inputs.push_back(input(Vertex{v.frame, v.node, s.key}));
@@ -811,7 +795,8 @@ class Evaluation {
     if (const Datablock *b = env_.lib->get(r.handle)) {
       r.state = b->state();
       r.stateChanges = b->stateChanges();
-      r.value = r.state == BlockState::Live ? static_cast<Thing *>(b->clientData())->value : 0;
+      r.value =
+          r.state == BlockState::Live ? static_cast<Thing *>(b->clientData())->value : 0;
     }
     auto it = env_.notified.find(id);
     r.notified = it == env_.notified.end() ? 0 : it->second;

@@ -414,7 +414,8 @@ struct Stealer {
 struct FakeHost : ForeignDispatcher {
   bool failNext = false;
   std::string log;
-  Status call(const IfaceTable &table, void *self, int slot, void **args, void *ret) override
+  Status
+  call(const IfaceTable &table, void *self, int slot, void **args, void *ret) override
   {
     const lbt::Method *m = table.ifaceDesc->methods[slot];
     log += std::string(m->name.c_str()) + ";";
@@ -432,7 +433,8 @@ struct FakeHost : ForeignDispatcher {
       new (ret) int(base);
     } else if (strcmp(n, "cost") == 0) {
       new (ret) double(base * 10.0);
-    } else if (strcmp(n, "b") == 0 || strcmp(n, "c") == 0 || strcmp(n, "nameLength") == 0) {
+    } else if (strcmp(n, "b") == 0 || strcmp(n, "c") == 0 || strcmp(n, "nameLength") == 0)
+    {
       new (ret) int(base + 1);
     }
     return Status();
@@ -445,7 +447,8 @@ static void test_declaration_rules()
 {
   Runtime rt;
   test_assert(contains(registerInterface<Overloaded>(rt), "slot 'f' is overloaded"));
-  test_assert(contains(registerInterface<RefReturn>(rt), "slot 'ray' returns a reference"));
+  test_assert(
+      contains(registerInterface<RefReturn>(rt), "slot 'ray' returns a reference"));
   test_assert(contains(registerInterface<OutParam>(rt), "primitive out-parameter 'out'"));
   test_assert(contains(registerInterface<Reserved>(rt), "reserved by IfaceRef"));
   test_assert(contains(registerInterface<StaticSlot>(rt), "slot 'make' is static"));
@@ -549,12 +552,14 @@ static void test_optional_slots()
 
   FakeHost host;
   const char *withCost[] = {"count", "cost", "bump"};
-  test_assert(registerForeign<Counter>(rt, "rules.JsCostly", &host, nullptr, withCost).ok());
+  test_assert(
+      registerForeign<Counter>(rt, "rules.JsCostly", &host, nullptr, withCost).ok());
   int handle = 2;
   Counter c = query<Counter>(rt, TypeId::of("rules.JsCostly"), &handle);
   test_assert(c.cost() == 20.0);
   const char *withoutCost[] = {"count", "bump"};
-  test_assert(registerForeign<Counter>(rt, "rules.JsCheap", &host, nullptr, withoutCost).ok());
+  test_assert(
+      registerForeign<Counter>(rt, "rules.JsCheap", &host, nullptr, withoutCost).ok());
   Counter cheap = query<Counter>(rt, TypeId::of("rules.JsCheap"), &handle);
   host.log.clear();
   test_assert(cheap.cost() == 1.0);
@@ -578,7 +583,8 @@ static void test_rollback()
   test_assert(rt.ifaces().tableCount() == 4);
   Leveled lev;
   LevelC c = query<LevelC>(rt, TypeId::of("rules.Leveled"), &lev);
-  test_assert(upcast<Named>(c).table() == query<Named>(rt, TypeId::of("rules.Leveled"), &lev).table());
+  test_assert(upcast<Named>(c).table() ==
+              query<Named>(rt, TypeId::of("rules.Leveled"), &lev).table());
   expectValid(rt);
 }
 
@@ -600,7 +606,10 @@ static void test_foreign_family()
   const char *countSlots[] = {"count", "bump"};
   test_assert(registerInterface<Counter>(rt).ok());
   test_assert(rt.ifaces()
-                  .addForeign(InterfaceId::of("rules.Counter"), "rules.Direct", &host, nullptr,
+                  .addForeign(InterfaceId::of("rules.Counter"),
+                              "rules.Direct",
+                              &host,
+                              nullptr,
                               countSlots)
                   .ok());
   test_assert(rt.nameOf(TypeId::of("rules.Direct")) != nullptr);
@@ -632,8 +641,8 @@ struct CountedTally : Tally {
 
 static Owned<Counter> makeOwned(const Runtime &rt)
 {
-  Result<Owned<Counter>> r =
-      own<Counter>(rt, "rules.CountedTally", litestl::alloc::New<CountedTally>("counted"));
+  Result<Owned<Counter>> r = own<Counter>(
+      rt, "rules.CountedTally", litestl::alloc::New<CountedTally>("counted"));
   test_assert(r.ok());
   return std::move(r).value();
 }
@@ -667,7 +676,8 @@ static void test_two_runtimes()
   {
     Runtime one;
     Runtime two;
-    test_assert((registerImpl<Counter, Tally>(one, "rules.Tally", IfaceFlags::ThreadAffine).ok()));
+    test_assert((
+        registerImpl<Counter, Tally>(one, "rules.Tally", IfaceFlags::ThreadAffine).ok()));
     test_assert((registerImpl<Counter, Tally>(two, "rules.Tally").ok()));
     Counter c1 = query<Counter>(one, TypeId::of("rules.Tally"), &t);
     Counter c2 = query<Counter>(two, TypeId::of("rules.Tally"), &t);

@@ -23,20 +23,21 @@ class SceneEvaluator;
 }
 
 /**
- * The data of a `coredcc.Scene`: which objects are in it, in order, which one is active, which
- * are selected, and the time.
+ * The data of a `coredcc.Scene`: which objects are in it, in order, which one is active,
+ * which are selected, and the time.
  *
- * - A block is a member once. Cells that were written behind the scene's back may name one twice: it
- *   counts once, and is listed where it is first.
- * - Objects are referenced with OptStrong cells. One that isn't Live (deleted, or its host
- *   took it away) stays in its place and isn't listed. A cell whose object has no record
- *   any more goes with the next call of `prune`, which the membership commands make when records went.
+ * - A block is a member once. Cells that were written behind the scene's back may name
+ * one twice: it counts once, and is listed where it is first.
+ * - Objects are referenced with OptStrong cells. One that isn't Live (deleted, or its
+ * host took it away) stays in its place and isn't listed. A cell whose object has no
+ * record any more goes with the next call of `prune`, which the membership commands make
+ * when records went.
  * - A scene is a GC root (newScene sets BlockFlags::Root).
- * - The objects of a scene, not their parents, are what is evaluated for it. A parent that isn't
- *   in the scene is evaluated too.
+ * - The objects of a scene, not their parents, are what is evaluated for it. A parent
+ * that isn't in the scene is evaluated too.
  */
 class Scene {
- public:
+public:
   Scene();
   ~Scene();
   Scene(const Scene &) = delete;
@@ -57,9 +58,10 @@ class Scene {
   /** Its place among all members, or -1. */
   int indexOf(const Library &lib, BlockHandle h) const;
   int indexOf(const Library &lib, const BlockId &id) const;
-  /** Adds a block; at the end for `index` -1. Not checked to be Transformable: what isn't is at the
-   * origin. AlreadyExists for a member. (One that cells written behind the scene's back name is found
-   * out after `contains`, or the like, was asked since: it is in two cells then, which is the same.) */
+  /** Adds a block; at the end for `index` -1. Not checked to be Transformable: what isn't
+   * is at the origin. AlreadyExists for a member. (One that cells written behind the
+   * scene's back name is found out after `contains`, or the like, was asked since: it is
+   * in two cells then, which is the same.) */
   Status add(Library &lib, BlockHandle h, int index = -1);
   /** Removes a member: the place it had. NotFound otherwise. */
   Result<int> remove(Library &lib, const BlockId &id);
@@ -70,18 +72,20 @@ class Scene {
     BlockId previous;
     int index = 0;
   };
-  /** Removes several in one pass: where they were, in order. All or none; NotFound if one isn't a
-   * member. An id may be there twice. */
-  Result<litestl::util::Vector<Place>> removeMany(Library &lib, std::span<const BlockId> ids);
-  /** The other way: each behind the member that was before it, or where that is no member any more, at
-   * its place. Those without a record and those that are members are left out; the first one is the
-   * error. */
+  /** Removes several in one pass: where they were, in order. All or none; NotFound if one
+   * isn't a member. An id may be there twice. */
+  Result<litestl::util::Vector<Place>> removeMany(Library &lib,
+                                                  std::span<const BlockId> ids);
+  /** The other way: each behind the member that was before it, or where that is no member
+   * any more, at its place. Those without a record and those that are members are left
+   * out; the first one is the error. */
   Status putBack(Library &lib, std::span<const Place> places);
-  /** Adds several at the end, in one pass. All or none; fails as `add`, and for one that is there
-   * twice. */
+  /** Adds several at the end, in one pass. All or none; fails as `add`, and for one that
+   * is there twice. */
   Status addMany(Library &lib, std::span<const BlockHandle> blocks);
 
-  /** Drops cells that are null or double, or whose block has no record. Returns how many. */
+  /** Drops cells that are null or double, or whose block has no record. Returns how many.
+   */
   int prune(Library &lib);
   /** The same, unless no record went since the last time. */
   void pruneRemoved(Library &lib);
@@ -103,8 +107,8 @@ class Scene {
   {
     return active_.cell();
   }
-  /** The selected Live objects that are members, in the order they were selected. Valid until something
-   * changes. */
+  /** The selected Live objects that are members, in the order they were selected. Valid
+   * until something changes. */
   const litestl::util::Vector<BlockHandle> &selected(const Library &lib) const;
   /** The cells, with those that aren't Live. */
   const litestl::util::Vector<RefCell> &selection() const
@@ -127,8 +131,8 @@ class Scene {
 
   /* ---- evaluation ---- */
 
-  /** What the last evaluateScene found for an object of this scene, or a parent of one. False,
-   * with `out` unchanged, if it wasn't there. */
+  /** What the last evaluateScene found for an object of this scene, or a parent of one.
+   * False, with `out` unchanged, if it wasn't there. */
   bool evaluated(BlockHandle h, ObjectEval &out) const;
   /** Objects evaluated last time, in order: the members that were Live, then parents that
    * aren't members. Valid until the next evaluation. */
@@ -137,12 +141,13 @@ class Scene {
   const litestl::util::Vector<BlockHandle> &recordedObjects(const Library &lib) const;
   /** The results themselves, in that order. Valid until the next evaluation. */
   std::span<const ObjectEval> results() const;
-  /** The children of an object in the last evaluation, in that order; for a null handle those that have no
-   * parent there, or are on a cycle. Valid until the next evaluation. */
+  /** The children of an object in the last evaluation, in that order; for a null handle
+   * those that have no parent there, or are on a cycle. Valid until the next evaluation.
+   */
   std::span<const BlockHandle> children(BlockHandle h) const;
 
-  /** How often evaluateScene ran, how often it made its lookups again, and how often they had
-   * changed. */
+  /** How often evaluateScene ran, how often it made its lookups again, and how often they
+   * had changed. */
   struct Counters {
     int evaluations = 0;
     int revalidations = 0;
@@ -152,8 +157,8 @@ class Scene {
 
   /** What the last evaluateScene that changed a result changed. */
   struct Changes {
-    /** Moves by one with each evaluation that changes a result. Who has seen the version before this
-     * one needs only the places. */
+    /** Moves by one with each evaluation that changes a result. Who has seen the version
+     * before this one needs only the places. */
     uint64_t version = 0;
     /** The objects are others, or in another order, than before: all may be different. */
     bool all = false;
@@ -194,7 +199,7 @@ class Scene {
     }
   }
 
- private:
+private:
   friend class detail::SceneEvaluator;
   friend Status evaluateScene(Context &ctx, BlockHandle scene, EvaluateResult *result);
   void ensureIndex(const Library &lib) const;
@@ -208,9 +213,10 @@ class Scene {
   WeakRef<Object> active_;
   litestl::util::Vector<BlockEntry> fields_;
 
-  /* Canonical id to its first place. Remapping, sweeps, a host's undo and whoever calls writeRef write
-   * cells behind its back. So it is made again when the number of cells is another one, when a place
-   * isn't of the id it is for, and when an id isn't there and the Library's epoch moved. */
+  /* Canonical id to its first place. Remapping, sweeps, a host's undo and whoever calls
+   * writeRef write cells behind its back. So it is made again when the number of cells is
+   * another one, when a place isn't of the id it is for, and when an id isn't there and
+   * the Library's epoch moved. */
   mutable litestl::util::Map<BlockId, int> index_;
   mutable bool indexValid_ = false;
   mutable bool indexDoubles_ = false;
@@ -236,9 +242,9 @@ Result<BlockHandle> newScene(Library &lib, std::string_view name);
 
 /** What evaluateScene did, besides its Status. */
 struct EvaluateResult {
-  /** It ran to the end: the results are new, or the same. With `done`, its error is an exception of a
-   * foreign capability, model or driver, and everything else was computed. Without, the results are the
-   * last ones. */
+  /** It ran to the end: the results are new, or the same. With `done`, its error is an
+   * exception of a foreign capability, model or driver, and everything else was computed.
+   * Without, the results are the last ones. */
   bool done = false;
   /** A result differs: Scene::lastChanges says which. */
   bool changed = false;
@@ -248,19 +254,21 @@ struct EvaluateResult {
 Scene *activeScene(const Context &ctx);
 
 /**
- * Computes the states and bounds of a scene's objects, from scratch; Scene::evaluated gives
- * them. Hosts call it once a frame, before drawing.
+ * Computes the states and bounds of a scene's objects, from scratch; Scene::evaluated
+ * gives them. Hosts call it once a frame, before drawing.
  *
- * - Nothing in the document changes. setValue, commands, graph edits, computeState and this
- *   are Busy until it ends; capabilities that read results see the previous ones, complete.
- * - A transform that fails has a status (ObjectEval), and its parent's state stands in. An
- *   exception of a foreign capability or model is returned, the first one, with everything
- *   else computed.
- * - FailedPrecondition, with the last results kept, when a sticky error is pending, or when an
- *   object's `read` answers otherwise each time it is asked.
+ * - Nothing in the document changes. setValue, commands, graph edits, computeState and
+ * this are Busy until it ends; capabilities that read results see the previous ones,
+ * complete.
+ * - A transform that fails has a status (ObjectEval), and its parent's state stands in.
+ * An exception of a foreign capability or model is returned, the first one, with
+ * everything else computed.
+ * - FailedPrecondition, with the last results kept, when a sticky error is pending, or
+ * when an object's `read` answers otherwise each time it is asked.
  * - After it, watchers of `evaluated` hear of it if any result differs.
- * - The bounds of a block whose type implements Invalidation are asked for again after a change of its
- *   positions or its topology (invalidateData), or when the Library's epoch moved, and not otherwise.
+ * - The bounds of a block whose type implements Invalidation are asked for again after a
+ * change of its positions or its topology (invalidateData), or when the Library's epoch
+ * moved, and not otherwise.
  */
 Status evaluateScene(Context &ctx, BlockHandle scene, EvaluateResult *result = nullptr);
 /** The Context's scene. */

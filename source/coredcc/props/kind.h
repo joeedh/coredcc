@@ -47,25 +47,25 @@ constexpr bool isVector(PropKind k)
 constexpr int componentCount(PropKind k)
 {
   switch (k) {
-    case PropKind::Bool:
-    case PropKind::Int:
-    case PropKind::Float:
-    case PropKind::Enum:
-    case PropKind::Flags:
-      return 1;
-    case PropKind::Vec2:
-      return 2;
-    case PropKind::Vec3:
-      return 3;
-    case PropKind::Vec4:
-    case PropKind::Quat:
-      return 4;
-    case PropKind::Mat4:
-      return 16;
-    case PropKind::String:
-    case PropKind::Pointer:
-    case PropKind::Collection:
-      return 0;
+  case PropKind::Bool:
+  case PropKind::Int:
+  case PropKind::Float:
+  case PropKind::Enum:
+  case PropKind::Flags:
+    return 1;
+  case PropKind::Vec2:
+    return 2;
+  case PropKind::Vec3:
+    return 3;
+  case PropKind::Vec4:
+  case PropKind::Quat:
+    return 4;
+  case PropKind::Mat4:
+    return 16;
+  case PropKind::String:
+  case PropKind::Pointer:
+  case PropKind::Collection:
+    return 0;
   }
   return 0;
 }
@@ -101,8 +101,8 @@ enum class PropAccess : uint16_t {
   /** A command input remembered between runs (LastUsedStore). */
   SaveLastValue = 1 << 4,
   Animatable = 1 << 5,
-  /** A command input LastUsedStore doesn't keep, such as block ids as text: a later run without
-   * it must not get the old value. */
+  /** A command input LastUsedStore doesn't keep, such as block ids as text: a later run
+   * without it must not get the old value. */
   NotRemembered = 1 << 6,
 };
 CDCC_FLAG_OPERATORS(PropAccess)

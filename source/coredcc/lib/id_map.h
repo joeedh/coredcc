@@ -8,7 +8,7 @@ namespace coredcc {
 
 /** Which block each source block became, in an append or a duplicate. */
 class IdMap {
- public:
+public:
   void add(BlockId from, BlockId to)
   {
     ids_.emplace(from, to);
@@ -31,7 +31,7 @@ class IdMap {
     }
   }
 
- private:
+private:
   /* Not hashed: the ids come from files. */
   std::map<BlockId, BlockId> ids_;
 };

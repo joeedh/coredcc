@@ -1,5 +1,5 @@
-/* Objects and scenes in files: saving and loading, transform types that aren't there or have other
- * channels, duplicating, appending, and payloads that are wrong. */
+/* Objects and scenes in files: saving and loading, transform types that aren't there or
+ * have other channels, duplicating, appending, and payloads that are wrong. */
 #include "fuzz.h"
 #include "io_doc.h"
 
@@ -17,8 +17,15 @@ namespace {
 
 double oddNumber(coredcc_test::SplitMix64 &r)
 {
-  const double odd[] = {0.0, -0.0, 1.0, 1e300, 5e-324, std::numeric_limits<double>::infinity(),
-                        -std::numeric_limits<double>::infinity(), 0.1, -1.0 / 3.0};
+  const double odd[] = {0.0,
+                        -0.0,
+                        1.0,
+                        1e300,
+                        5e-324,
+                        std::numeric_limits<double>::infinity(),
+                        -std::numeric_limits<double>::infinity(),
+                        0.1,
+                        -1.0 / 3.0};
   return r.below(3) ? double(int64_t(r.next())) * 0x1p-40 : odd[r.below(9)];
 }
 
@@ -31,7 +38,8 @@ void testRoundTrip()
   for (int k = 0; k < 40 * coredcc_test::testScale(); k++) {
     IoDoc d;
     d.addEveryKind();
-    const char *const types[] = {kTrsTransform, kFbxTransform, kMatrixTransform, "io.type"};
+    const char *const types[] = {
+        kTrsTransform, kFbxTransform, kMatrixTransform, "io.type"};
     std::vector<BlockHandle> objects;
     const int n = int(r.below(12));
     for (int i = 0; i < n; i++) {
@@ -39,18 +47,22 @@ void testRoundTrip()
       Result<BlockHandle> h = newObject(*d.lib, name, types[r.below(4)]);
       must(h.status());
       Object &o = d.obj(*h);
-      const TransformType &type = *d.rt.ext<TransformRegistry>().find(o.transformTypeId());
+      const TransformType &type =
+          *d.rt.ext<TransformRegistry>().find(o.transformTypeId());
       if (r.below(4)) {
         int32_t first = 0;
         for (const PropertyDef &def : type.channelDefs()) {
           for (int c = 0; c < detail::channelsOf(def.kind()); c++) {
             const bool integer = def.kind() == PropKind::Int;
-            const double v = def.kind() == PropKind::Enum ?
-                                 double(def.enumMeta()->items[int(r.below(uint32_t(
-                                     def.enumMeta()->items.size())))].value) :
-                             def.kind() == PropKind::Bool ? double(r.below(2)) :
-                             integer ? double(int64_t(r.next() >> 11) - (int64_t(1) << 52)) :
-                                       oddNumber(r);
+            const double v =
+                def.kind() == PropKind::Enum
+                    ? double(def.enumMeta()
+                                 ->items[int(
+                                     r.below(uint32_t(def.enumMeta()->items.size())))]
+                                 .value)
+                : def.kind() == PropKind::Bool ? double(r.below(2))
+                : integer ? double(int64_t(r.next() >> 11) - (int64_t(1) << 52))
+                          : oddNumber(r);
             o.channels.set(first + c, v);
           }
           first += detail::channelsOf(def.kind());
@@ -65,8 +77,7 @@ void testRoundTrip()
       }
       if (r.below(5)) {
         must(d.sc().add(*d.lib, *h, int(r.below(uint32_t(d.sc().cells().size() + 1)))));
-      }
-      else {
+      } else {
         d.lib->setFlag(*h, BlockFlags::FakeUser, true);
       }
       objects.push_back(*h);
@@ -84,10 +95,14 @@ void testRoundTrip()
     d.sc().frame = double(int64_t(r.next())) * 0x1p-50;
     d.sc().units.rate = *FrameRate::of(1 + r.below(100000), 1 + r.below(1001));
     d.sc().units.startFrame = double(int64_t(r.next())) * 0x1p-40;
-    for (UnitFamily f : {UnitFamily::Length, UnitFamily::Angle, UnitFamily::Time, UnitFamily::Mass,
+    for (UnitFamily f : {UnitFamily::Length,
+                         UnitFamily::Angle,
+                         UnitFamily::Time,
+                         UnitFamily::Mass,
                          UnitFamily::Factor})
     {
-      must(d.sc().units.setDisplayIndex(f, int(r.below(uint32_t(UnitSettings::unitCount(f))))));
+      must(d.sc().units.setDisplayIndex(
+          f, int(r.below(uint32_t(UnitSettings::unitCount(f))))));
     }
 
     const Bytes bytes = save(*d.lib);
@@ -98,13 +113,16 @@ void testRoundTrip()
     for (int i = 0; i < n; i++) {
       const Object &x = d.obj(objects[i]), &y = b.obj(("o" + std::to_string(i)).c_str());
       test_assert(x.transformType() == y.transformType() && x.flags == y.flags);
-      test_assert(x.parent.target() == y.parent.target() && x.data.target() == y.data.target());
-      test_assert(y.data.cell().kind == RefKind::OptStrong && y.parent.cell().kind == RefKind::OptStrong);
+      test_assert(x.parent.target() == y.parent.target() &&
+                  x.data.target() == y.data.target());
+      test_assert(y.data.cell().kind == RefKind::OptStrong &&
+                  y.parent.cell().kind == RefKind::OptStrong);
       test_assert(y.unreadFields().empty());
       test_assert(sameChannels(x.channels, y.channels) && y.unread().empty());
     }
     Scene &x = d.sc(), &y = b.sc();
-    test_assert(x.cells().size() == y.cells().size() && x.selection().size() == y.selection().size());
+    test_assert(x.cells().size() == y.cells().size() &&
+                x.selection().size() == y.selection().size());
     for (int i = 0; i < int(y.cells().size()); i++) {
       test_assert(x.cells()[i].target == y.cells()[i].target);
       test_assert(y.cells()[i].kind == RefKind::OptStrong);
@@ -146,7 +164,8 @@ void testGone()
   must(d.lib->writeRef(d.sc().activeCell(), d.idOf(b)));
   must(d.lib->markDeleted(b));
   Loaded l(d, save(*d.lib));
-  test_assert(!l.byName("b") && l.sc().cells().size() == 2 && l.sc().objects(l.lib).size() == 2);
+  test_assert(!l.byName("b") && l.sc().cells().size() == 2 &&
+              l.sc().objects(l.lib).size() == 2);
   /* Weak references keep their ids, others go. */
   test_assert(l.sc().selection().size() == 3 && l.sc().selected(l.lib).size() == 2);
   test_assert(!l.sc().active(l.lib) && !l.lib.resolveRef(l.obj("a").parent.cell()));
@@ -161,7 +180,8 @@ void testGone()
     r.target = cell++ == 0 || r.kind == RefKind::Weak ? BlockId() : r.target;
   });
   Loaded nulls(d, save(*d.lib));
-  test_assert(nulls.sc().cells().size() == 1 && nulls.sc().objects(nulls.lib)[0] == nulls.byName("c"));
+  test_assert(nulls.sc().cells().size() == 1 &&
+              nulls.sc().objects(nulls.lib)[0] == nulls.byName("c"));
   test_assert(nulls.sc().selection().size() == 0);
   /* A host's number that isn't one doesn't make a file that can't be read. */
   d.sc().frame = std::numeric_limits<double>::quiet_NaN();
@@ -177,13 +197,17 @@ void testNoData()
   const BlockId id{ClientId::of(kCoredccClient), d.rt.newLocalId()};
   const BlockId id2{ClientId::of(kCoredccClient), d.rt.newLocalId()};
   d.lib->setAuditRelations(false);
-  const BlockHandle o = *d.lib->createWithId(TypeId::of(kObjectType), id, "none", nullptr);
-  const BlockHandle s = *d.lib->createWithId(TypeId::of(kSceneType), id2, "none", nullptr);
+  const BlockHandle o =
+      *d.lib->createWithId(TypeId::of(kObjectType), id, "none", nullptr);
+  const BlockHandle s =
+      *d.lib->createWithId(TypeId::of(kSceneType), id2, "none", nullptr);
   for (BlockHandle h : {o, s}) {
-    test_assert(isError(writePayload(*d.lib, h).status(), StatusCode::FailedPrecondition, "data"));
+    test_assert(isError(
+        writePayload(*d.lib, h).status(), StatusCode::FailedPrecondition, "data"));
     test_assert(!duplicateBlocks(*d.lib, std::span<const BlockHandle>(&h, 1)).ok());
-    test_assert(d.rt.ext<BlockTypeRegistry>().find(d.lib->get(h)->type())->provider->memSize(
-                    *d.lib->get(h)) == 0);
+    test_assert(d.rt.ext<BlockTypeRegistry>()
+                    .find(d.lib->get(h)->type())
+                    ->provider->memSize(*d.lib->get(h)) == 0);
   }
 }
 
@@ -196,7 +220,8 @@ BlockHandle addOfType(IoDoc &d, const char *name)
   o.setTransformType("io.type");
   o.channels = d.rt.ext<TransformRegistry>().find("io.type")->defaults();
   /* on, size, count, mode, extra, at, four, turn */
-  const double v[] = {1, 2.5, 7, 3, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0.5, -0.5, 0.5, 2.0};
+  const double v[] = {
+      1, 2.5, 7, 3, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0.5, -0.5, 0.5, 2.0};
   for (int i = 0; i < int(std::size(v)); i++) {
     o.channels.set(i, v[i]);
   }
@@ -222,13 +247,15 @@ void testMissingType()
   test_assert(same(save(l.lib), bytes));
   must(evaluateScene(l.ctx));
   ObjectEval e;
-  test_assert(l.sc().evaluated(l.byName("odd"), e) && e.status == EvalStatus::MissingModel);
+  test_assert(l.sc().evaluated(l.byName("odd"), e) &&
+              e.status == EvalStatus::MissingModel);
   test_assert(l.sc().evaluated(l.byName("child"), e) && e.status == EvalStatus::Ok);
   /* A copy has them too. */
   const BlockHandle odd = l.byName("odd");
   Result<IdMap> ids = duplicateBlocks(l.lib, std::span<const BlockHandle>(&odd, 1));
   must(ids.status());
-  Object &copy = *static_cast<Object *>(l.lib.get(l.lib.find(ids->find(a.idOf(h))))->clientData());
+  Object &copy =
+      *static_cast<Object *>(l.lib.get(l.lib.find(ids->find(a.idOf(h))))->clientData());
   test_assert(copy.unread().size() == 8 && copy.memSize() > sizeof(Object));
   /* Changing the type, and back as an undo does. */
   ObjectInfo info;
@@ -265,7 +292,8 @@ void testMissingType()
   test_assert(same(save(later.lib), bytes));
 }
 
-/* Channels that are written while the type isn't there replace the file's; they have no names. */
+/* Channels that are written while the type isn't there replace the file's; they have no
+ * names. */
 void testNumbers()
 {
   IoDoc a, b;
@@ -279,7 +307,8 @@ void testNumbers()
   must(writeTransform(l.ctx, l.byName("odd"), three));
   test_assert(l.obj("odd").unread().empty());
   Loaded again(b, save(l.lib));
-  test_assert(sameChannels(again.obj("odd").channels, three) && again.obj("odd").unread().empty());
+  test_assert(sameChannels(again.obj("odd").channels, three) &&
+              again.obj("odd").unread().empty());
   test_assert(same(save(again.lib), save(l.lib)));
   b.addEveryKind();
   ObjectInfo info;
@@ -307,37 +336,46 @@ void testOtherVersion()
   const auto is = [&](const char *channel, double v) {
     const Result<PropValue> r = getValue(
         l.ctx, ("scene.objects[\"odd\"].transform." + std::string(channel)).c_str());
-    return r.ok() && (r->type() == PropValue::Type::Int ? double(r->asInt()) :
-                      r->type() == PropValue::Type::Enum ? double(r->asEnum()) :
-                                                           r->asFloat()) == v;
+    return r.ok() && (r->type() == PropValue::Type::Int    ? double(r->asInt())
+                      : r->type() == PropValue::Type::Enum ? double(r->asEnum())
+                                                           : r->asFloat()) == v;
   };
   /* 2.5 isn't an Int, THREE isn't there, nor is `extra`. */
-  test_assert(is("size", 0.0) && is("count", 7.0) && is("mode", 22.0) && o.unread().size() == 3);
-  test_assert(o.channels.get(4) == 11.0 && o.channels.get(5) == 12.0 && o.channels.get(13) == 2.0);
+  test_assert(is("size", 0.0) && is("count", 7.0) && is("mode", 22.0) &&
+              o.unread().size() == 3);
+  test_assert(o.channels.get(4) == 11.0 && o.channels.get(5) == 12.0 &&
+              o.channels.get(13) == 2.0);
   test_assert(l.lib.validate().ok());
   /* The old build gets them back, and those that were set here. */
   {
     Loaded back(a, save(l.lib));
     Object &x = back.obj("odd");
-    test_assert(x.channels.get(0) == 1.0 && x.channels.get(2) == 7.0 && x.unread().size() <= 2);
-    test_assert(x.channels.get(4) == 8.0 && x.channels.get(5) == 9.0 && x.channels.get(6) == 10.0);
+    test_assert(x.channels.get(0) == 1.0 && x.channels.get(2) == 7.0 &&
+                x.unread().size() <= 2);
+    test_assert(x.channels.get(4) == 8.0 && x.channels.get(5) == 9.0 &&
+                x.channels.get(6) == 10.0);
   }
-  must(setValue(l.ctx, "scene.objects[\"odd\"].transform.mode", PropValue::ofString("ONE")));
+  must(setValue(
+      l.ctx, "scene.objects[\"odd\"].transform.mode", PropValue::ofString("ONE")));
   must(setValue(l.ctx, "scene.objects[\"odd\"].transform.size", PropValue::ofInt(4)));
-  must(setValue(l.ctx, "scene.objects[\"odd\"].transform.count", PropValue::ofFloat(7.5)));
+  must(
+      setValue(l.ctx, "scene.objects[\"odd\"].transform.count", PropValue::ofFloat(7.5)));
   Loaded back(a, save(l.lib));
   Object &x = back.obj("odd");
   test_assert(x.channels.get(1) == 4.0 && x.channels.get(3) == 1.0);
-  test_assert(x.channels.get(2) == 0.0 && x.unread().size() == 1); /* the count isn't an Int now */
+  test_assert(x.channels.get(2) == 0.0 &&
+              x.unread().size() == 1); /* the count isn't an Int now */
   test_assert(x.channels.get(4) == 8.0);
   /* Whole numbers become Ints. */
   a.obj(h).channels.set(1, -3.0);
   a.obj(h).channels.set(3, 2.0);
   Loaded whole(b, save(*a.lib));
-  test_assert(whole.obj("odd").channels.get(1) == -3.0 && whole.obj("odd").channels.get(3) == 22.0);
+  test_assert(whole.obj("odd").channels.get(1) == -3.0 &&
+              whole.obj("odd").channels.get(3) == 22.0);
   a.obj(h).channels.set(1, 1e18);
   Loaded large(b, save(*a.lib));
-  test_assert(large.obj("odd").channels.get(1) == 0.0 && large.obj("odd").unread().size() == 2);
+  test_assert(large.obj("odd").channels.get(1) == 0.0 &&
+              large.obj("odd").unread().size() == 2);
   /* Numbers that a channel can't hold, and a zero that isn't one of an Int. */
   Fields f(b);
   f.entry("size", PropValue::ofFloat(-0.0));
@@ -346,7 +384,8 @@ void testOtherVersion()
   b.lib->setAuditRelations(false);
   BlockHandle read;
   must(readInto(b, kObjectType, f.payload("io.type"), &read));
-  test_assert(sameBits(b.obj(read).channels.get(1), 0.0) && b.obj(read).channels.get(2) == 0.0);
+  test_assert(sameBits(b.obj(read).channels.get(1), 0.0) &&
+              b.obj(read).channels.get(2) == 0.0);
   test_assert(b.obj(read).unread().size() == 2);
 }
 
@@ -401,7 +440,8 @@ void testUnread()
 void testDuplicate()
 {
   IoDoc d;
-  const BlockHandle a = d.object("a", 1.0), b = d.object("b", 2.0), data = d.shapeBlock("data", 1.0);
+  const BlockHandle a = d.object("a", 1.0), b = d.object("b", 2.0),
+                    data = d.shapeBlock("data", 1.0);
   d.setParent(b, a);
   d.setData(b, data);
   d.setData(a, data);
@@ -420,9 +460,11 @@ void testDuplicate()
   test_assert(copy.objects(*d.lib).size() == 2 && copy.objects(*d.lib)[0] == a);
   test_assert(copy.objects(*d.lib)[1] == b2 && copy.indexOf(*d.lib, b2) == 1);
   test_assert(copy.indexOf(*d.lib, b) == -1 && copy.selected(*d.lib).size() == 1);
-  test_assert(copy.selected(*d.lib)[0] == b2 && copy.active(*d.lib) == a && copy.frame == 7.0);
+  test_assert(copy.selected(*d.lib)[0] == b2 && copy.active(*d.lib) == a &&
+              copy.frame == 7.0);
   test_assert(copy.units == d.sc().units && copy.evaluatedObjects().size() == 0);
-  test_assert(d.obj(b2).parent.target() == d.idOf(a) && d.obj(b2).data.target() == d.idOf(data));
+  test_assert(d.obj(b2).parent.target() == d.idOf(a) &&
+              d.obj(b2).data.target() == d.idOf(data));
   test_assert(sameChannels(d.obj(b2).channels, d.obj(b).channels));
   /* They are each on their own. */
   d.obj(b2).channels.set(0, 50.0);
@@ -488,7 +530,8 @@ void testAliases()
   must(readInto(d, kSceneType, *PayloadAccess::take(out, 1), &h));
   const Scene &s = *Scene::of(*d.lib, h);
   test_assert(s.cells().size() == 1 && s.selection().size() == 1);
-  test_assert(s.cells()[0].kind == RefKind::OptStrong && s.selection()[0].kind == RefKind::Weak);
+  test_assert(s.cells()[0].kind == RefKind::OptStrong &&
+              s.selection()[0].kind == RefKind::Weak);
   test_assert(s.objects(*d.lib).size() == 1 && s.selected(*d.lib).size() == 1);
 }
 
@@ -503,9 +546,8 @@ void testHostile()
   d.setParent(a, b);
   d.setData(a, b);
   d.select({a, b});
-  const BlockPayload payloads[] = {*writePayload(*d.lib, a),
-                                   *writePayload(*d.lib, b),
-                                   *writePayload(*d.lib, d.scene)};
+  const BlockPayload payloads[] = {
+      *writePayload(*d.lib, a), *writePayload(*d.lib, b), *writePayload(*d.lib, d.scene)};
   coredcc_test::SplitMix64 r(9);
   int refused = 0, read = 0;
   for (int k = 0; k < 3; k++) {

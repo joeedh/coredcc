@@ -11,7 +11,8 @@ namespace {
 
 constexpr double kZeroColumn = 1e-12;
 constexpr double kSameResidual = 1e-9;
-/* A world vector of length 1 may be one of this length in the space of a parent of size 1. */
+/* A world vector of length 1 may be one of this length in the space of a parent of
+ * size 1. */
 constexpr double kLargestCondition = 1e12;
 
 double lengthOf(const double3 &v)
@@ -24,16 +25,18 @@ bool finite3(const double3 &v)
   return bvh::finite(v[0]) && bvh::finite(v[1]) && bvh::finite(v[2]);
 }
 
-/* Scaled by the largest component first, so that no square leaves the range. `v` isn't 0. */
+/* Scaled by the largest component first, so that no square leaves the range. `v` isn't 0.
+ */
 double3 unit(const double3 &v)
 {
-  const double big = std::fmax(std::fmax(std::fabs(v[0]), std::fabs(v[1])), std::fabs(v[2]));
+  const double big =
+      std::fmax(std::fmax(std::fabs(v[0]), std::fabs(v[1])), std::fabs(v[2]));
   const double3 s = v / big;
   return s / lengthOf(s);
 }
 
-/* A rotation with its x axis along `u` and its y axis in the plane of `u` and `v`; not finite
- * when they are parallel. */
+/* A rotation with its x axis along `u` and its y axis in the plane of `u` and `v`; not
+ * finite when they are parallel. */
 Linear frame(const double3 &u, const double3 &v)
 {
   Linear f;
@@ -68,23 +71,28 @@ quatd quatOf(const Linear &m)
 
 struct Columns {
   double3 unitX[3], unitA[3];
-  double3 scale; /* |X| / |A| */
+  double3 scale;                     /* |X| / |A| */
   bool zero[3] = {true, true, true}; /* a zero column of X */
   int nonzero[3];
   int count = 0;
 };
 
 /* The rotation for one sign pattern. */
-quatd fitRotation(const Columns &c, const double *sign, const int *pair, const quatd &current)
+quatd fitRotation(const Columns &c,
+                  const double *sign,
+                  const int *pair,
+                  const quatd &current)
 {
   if (c.count >= 2 && pair[0] >= 0) {
-    const Linear to = frame(c.unitX[pair[0]] * sign[pair[0]], c.unitX[pair[1]] * sign[pair[1]]);
+    const Linear to =
+        frame(c.unitX[pair[0]] * sign[pair[0]], c.unitX[pair[1]] * sign[pair[1]]);
     const Linear from = frame(c.unitA[pair[0]], c.unitA[pair[1]]);
     return quatOf(to * from.transposed());
   }
   if (c.count >= 1) {
     const int k = c.nonzero[0];
-    return (turn(current.rotate(c.unitA[k]), c.unitX[k] * sign[k]) * current).normalized();
+    return (turn(current.rotate(c.unitA[k]), c.unitX[k] * sign[k]) * current)
+        .normalized();
   }
   return current;
 }
@@ -253,7 +261,9 @@ bool rotationScale(const Linear &x,
     if (!(k.residual <= smallest + kSameResidual)) {
       continue;
     }
-    const auto nearness = [&](const Candidate &q) { return std::fabs(q.rotation.dot(current)); };
+    const auto nearness = [&](const Candidate &q) {
+      return std::fabs(q.rotation.dot(current));
+    };
     if (!best || k.changes < best->changes ||
         (k.changes == best->changes && nearness(k) > nearness(*best) + kSameNearness))
     {
@@ -313,8 +323,8 @@ bool sameLinear(const mat4d &world, const mat4d &target)
   }
   for (int i = 0; i < 3; i++) {
     const double e = lengthOf(w.col[i] - t.col[i]);
-    const double limit = len[i] > kZeroColumn * longest ? kSameResidual * len[i] :
-                                                          kZeroColumn * longest;
+    const double limit =
+        len[i] > kZeroColumn * longest ? kSameResidual * len[i] : kZeroColumn * longest;
     if (!(e <= limit)) {
       return false;
     }

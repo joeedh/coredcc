@@ -60,13 +60,15 @@ static void test_copies()
     const Datablock &r = *w.lib.get(ca);
     test_assert(r.state() == BlockState::Live && r.type() == type);
     test_assert(strcmp(r.name().c_str(), "a") == 0 && r.flags() == BlockFlags::None);
-    test_assert(w.lib.get(cb)->flags() == BlockFlags::FakeUser && w.lib.get(cb)->pins() == 0);
+    test_assert(w.lib.get(cb)->flags() == BlockFlags::FakeUser &&
+                w.lib.get(cb)->pins() == 0);
     const Doc &d = *w.data(ca);
     test_assert(d.number == 10 && w.data(ca) != w.data(a));
     test_assert(d.mesh.target == nb && w.lib.resolveRef(d.mesh) == cb);
     test_assert(d.parent.target == w.id(shared)); /* not in the set */
     test_assert(w.data(cb)->mesh.target == na && w.data(cb)->parent.target == nb);
-    test_assert(d.entries[0].refs[0].target == nb && d.entries[1].refs[0].target == w.id(gone));
+    test_assert(d.entries[0].refs[0].target == nb &&
+                d.entries[1].refs[0].target == w.id(gone));
     if (type == kPlain) {
       test_assert(d.entries[0].value.tryPointer()->owner.block == nb);
     }
@@ -74,10 +76,12 @@ static void test_copies()
     test_assert(w.lib.slot(ca, kDoc, 1)->kind == RefKind::OptStrong);
     test_assert(w.lib.slot(ca, kDoc, 2)->target == w.id(shared));
     const Note *n = static_cast<const Note *>(w.lib.attachment(ca, kNote));
-    test_assert(n && n != w.lib.attachment(a, kNote) && n->value == 5 && n->about.target == nb);
+    test_assert(n && n != w.lib.attachment(a, kNote) && n->value == 5 &&
+                n->about.target == nb);
     test_assert(!w.lib.attachment(ca, kBare));
     /* The sources are as they were. */
-    test_assert(w.data(a)->mesh.target == w.id(b) && w.lib.slot(a, kDoc, 1)->target == w.id(b));
+    test_assert(w.data(a)->mesh.target == w.id(b) &&
+                w.lib.slot(a, kDoc, 1)->target == w.id(b));
     test_assert(static_cast<Note *>(w.lib.attachment(a, kNote))->about.target == w.id(b));
     test_assert(w.lib.usersOf(cb).size() == 2 && w.valid());
     w.lib.unpin(b);
@@ -107,13 +111,17 @@ static void test_unread()
   const BlockHandle ca = w.lib.find(ids->find(w.id(a)));
   const BlockId nb = ids->find(w.id(b));
   const Datablock &r = *w.lib.get(ca);
-  test_assert(r.state() == BlockState::Placeholder && r.placeholderReason() == PlaceholderReason::MissingType);
+  test_assert(r.state() == BlockState::Placeholder &&
+              r.placeholderReason() == PlaceholderReason::MissingType);
   test_assert(sameBytes(r.placeholderPayload(), w.lib.get(a)->placeholderPayload()));
   int toB = 0;
-  test_assert(w.lib.foreachRef(ca, [&](RefCell &c) {
-    toB += c.target == nb ? 1 : 0;
-    test_assert(c.target != w.id(b));
-  }).ok());
+  test_assert(w.lib
+                  .foreachRef(ca,
+                              [&](RefCell &c) {
+                                toB += c.target == nb ? 1 : 0;
+                                test_assert(c.target != w.id(b));
+                              })
+                  .ok());
   test_assert(toB == 2);
   registerDoc(w.rt, w.docs);
   registerNote(w.rt, w.notes);
@@ -131,43 +139,56 @@ static void test_refused()
       fprintf(stderr, "no error, wanted %s\n", what);
       return false;
     }
-    return r.status().code() == code && hasMsg(r.status(), what) && w.lib.size() == 2 && w.valid();
+    return r.status().code() == code && hasMsg(r.status(), what) && w.lib.size() == 2 &&
+           w.valid();
   };
-  test_assert(unchanged(duplicate(w, {a, BlockHandle()}), StatusCode::NotFound, "no such block"));
+  test_assert(
+      unchanged(duplicate(w, {a, BlockHandle()}), StatusCode::NotFound, "no such block"));
   w.docs.fault = DocFault::Error;
-  test_assert(unchanged(duplicate(w, {a}), StatusCode::Unsupported, "duplicating 'a': no copies"));
-  test_assert(unchanged(duplicate(w, {p}), StatusCode::Unsupported, "duplicating 'p': not today"));
+  test_assert(unchanged(
+      duplicate(w, {a}), StatusCode::Unsupported, "duplicating 'a': no copies"));
+  test_assert(unchanged(
+      duplicate(w, {p}), StatusCode::Unsupported, "duplicating 'p': not today"));
   w.docs.fault = DocFault::Sticky;
   test_assert(unchanged(duplicate(w, {a}), StatusCode::Internal, "duplicate threw"));
   test_assert(unchanged(duplicate(w, {p}), StatusCode::Internal, "serialize threw"));
   w.docs.fault = DocFault::NoData;
-  test_assert(unchanged(duplicate(w, {a}), StatusCode::Internal, "without calling setData"));
-  test_assert(unchanged(duplicate(w, {p}), StatusCode::Internal, "without calling setData"));
+  test_assert(
+      unchanged(duplicate(w, {a}), StatusCode::Internal, "without calling setData"));
+  test_assert(
+      unchanged(duplicate(w, {p}), StatusCode::Internal, "without calling setData"));
   w.docs.fault = DocFault::LeaveBytes;
   test_assert(unchanged(duplicate(w, {p}), StatusCode::InvalidArgument, "left over"));
   /* A later failure destroys what came before it. */
   const int destroyed = w.docs.destroyed;
-  test_assert(unchanged(duplicate(w, {a, p}), StatusCode::InvalidArgument, "duplicating 'p'"));
-  test_assert(w.docs.destroyed == destroyed + 2); /* p's data in the read, and the copy of a */
+  test_assert(
+      unchanged(duplicate(w, {a, p}), StatusCode::InvalidArgument, "duplicating 'p'"));
+  test_assert(w.docs.destroyed ==
+              destroyed + 2); /* p's data in the read, and the copy of a */
   w.docs.fault = DocFault::None;
 
   Note *n = w.note(a, 1, w.id(p));
   for (DocFault fault : {DocFault::NoData, DocFault::Sticky}) {
     w.notes.fault = fault;
-    test_assert(unchanged(duplicate(w, {a}), StatusCode::Internal,
-                          fault == DocFault::NoData ? "copy gave no data" : "copy threw"));
+    test_assert(
+        unchanged(duplicate(w, {a}),
+                  StatusCode::Internal,
+                  fault == DocFault::NoData ? "copy gave no data" : "copy threw"));
     test_assert(w.notes.alive == 1);
   }
   w.notes.fault = DocFault::None;
   w.notes.failForeach = true;
-  test_assert(unchanged(duplicate(w, {a}), StatusCode::Internal, "note foreachRef threw"));
+  test_assert(
+      unchanged(duplicate(w, {a}), StatusCode::Internal, "note foreachRef threw"));
   w.notes.failForeach = false;
   test_assert(n->about.target == w.id(p) && w.notes.alive == 1);
 
   /* The library is busy to duplicate and to copy; a repeated GUID fails. */
   bool busy = false;
   w.docs.onDestroy = nullptr;
-  w.notes.onCopy = [&]() { busy = w.lib.create(kDoc, "x", nullptr).status().code() == StatusCode::Busy; };
+  w.notes.onCopy = [&]() {
+    busy = w.lib.create(kDoc, "x", nullptr).status().code() == StatusCode::Busy;
+  };
   w.docs.onDuplicate = [&]() {
     test_assert(duplicate(w, {a}).status().code() == StatusCode::Busy);
   };
@@ -179,7 +200,8 @@ static void test_refused()
   IoWorld w2;
   const BlockHandle h = w2.doc(1, "x");
   w2.rt.setGuidSource([]() { return LocalId{7, 1}; });
-  test_assert(duplicate(w2, {h}).status().code() == StatusCode::Internal && w2.lib.size() == 1);
+  test_assert(duplicate(w2, {h}).status().code() == StatusCode::Internal &&
+              w2.lib.size() == 1);
   w2.rt.setGuidSource({});
   {
     EvaluationScope scope(w2.rt);
@@ -201,7 +223,8 @@ static void test_refused()
   Result<BlockHandle> m = w2.lib.addPlaceholder(cid(50), std::move(info));
   test_assert(m.ok() && hasMsg(duplicate(w2, {*m}).status(), "it is Placeholder"));
   const std::vector<BlockHandle> none;
-  Result<IdMap> nothing = duplicateBlocks(w2.lib, std::span<const BlockHandle>(none.data(), 0));
+  Result<IdMap> nothing =
+      duplicateBlocks(w2.lib, std::span<const BlockHandle>(none.data(), 0));
   test_assert(nothing.ok() && nothing->size() == 0);
 }
 

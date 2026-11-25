@@ -28,7 +28,8 @@ constexpr size_t kIndexBytes = 256;
 
 bool hasGroupRef(const string &type)
 {
-  return strcmp(type.c_str(), kGraphGroupType) == 0 || strcmp(type.c_str(), kGraphForeachType) == 0;
+  return strcmp(type.c_str(), kGraphGroupType) == 0 ||
+         strcmp(type.c_str(), kGraphForeachType) == 0;
 }
 
 /* ---- writing ---- */
@@ -87,7 +88,8 @@ void writeNode(const GraphDef &def, const GraphNode &n, BlockWriter &out)
   b.f64(n.x());
   b.f64(n.y());
   Vector<BlockEntry> params, literals;
-  const Vector<const NodeValue *> setParams = sorted(n.params()), setLiterals = sorted(n.literals());
+  const Vector<const NodeValue *> setParams = sorted(n.params()),
+                                  setLiterals = sorted(n.literals());
   for (const NodeValue *v : setParams) {
     params.append(entryOf(v->name, storedParam(n, *v)));
   }
@@ -144,8 +146,9 @@ void writeGraphDef(const GraphDef &def, BlockWriter &out)
     for (const GraphLink *l : n.linksIn()) {
       links.append(l);
     }
-    std::sort(links.begin(), links.end(),
-              [](const GraphLink *a, const GraphLink *c) { return a->id < c->id; });
+    std::sort(links.begin(), links.end(), [](const GraphLink *a, const GraphLink *c) {
+      return a->id < c->id;
+    });
     for (const GraphLink *l : links) {
       b.i64(l->id.value);
       b.i64(l->from->id().value);
@@ -159,7 +162,7 @@ void writeGraphDef(const GraphDef &def, BlockWriter &out)
 /* ---- reading ---- */
 
 class GraphDefReader {
- public:
+public:
   GraphDefReader(BlockReader &in, GraphDef &def)
       : in_(in), b_(in.bytes()), def_(def), version_(def.contentVersion_)
   {
@@ -181,7 +184,7 @@ class GraphDefReader {
     }
   }
 
- private:
+private:
   void check(bool ok, const char *what)
   {
     if (!ok) {
@@ -200,8 +203,8 @@ class GraphDefReader {
     check(ids_.insert(id).second, "a graph: an id that is there twice");
     return id;
   }
-  /* The name of a node or socket type. Ids are name hashes, so a file can have a name with
-   * the id of another, which would be taken for it. */
+  /* The name of a node or socket type. Ids are name hashes, so a file can have a name
+   * with the id of another, which would be taken for it. */
   string typeName(const char *kind)
   {
     const string name = text();
@@ -238,7 +241,8 @@ class GraphDefReader {
       v.version = version_;
       const PropValue::Type type = byType ? v.value.type() : PropValue::Type::None;
       check(!v.value.isNone(), "a graph: a value that isn't set");
-      check(seen.insert({v.name.c_str(), type}).second, "a graph: a value that is there twice");
+      check(seen.insert({v.name.c_str(), type}).second,
+            "a graph: a value that is there twice");
       out.append(std::move(v));
     }
   }
@@ -274,7 +278,8 @@ class GraphDefReader {
 
   void readInterface(SocketSide side)
   {
-    Vector<InterfaceSocket> &list = side == SocketSide::Input ? def_.ifaceIn_ : def_.ifaceOut_;
+    Vector<InterfaceSocket> &list =
+        side == SocketSide::Input ? def_.ifaceIn_ : def_.ifaceOut_;
     std::set<std::string> names;
     const uint32_t n = b_.count(kMinInterface);
     in_.charge(uint64_t(n) * sizeof(InterfaceSocket) * 2);
@@ -286,8 +291,10 @@ class GraphDefReader {
       s.name = text();
       s.typeName = typeName("socket");
       s.defaultVersion = version_;
-      check(names.insert(s.name.c_str()).second, "a graph: an interface name that is there twice");
-      check(isInterfaceName(s.name.c_str()), "a graph: a name interface sockets can't have");
+      check(names.insert(s.name.c_str()).second,
+            "a graph: an interface name that is there twice");
+      check(isInterfaceName(s.name.c_str()),
+            "a graph: a name interface sockets can't have");
       if (side == SocketSide::Input) {
         Vector<BlockEntry> entry;
         in_.entries(entry);
@@ -329,7 +336,8 @@ class GraphDefReader {
       r.name = text();
       r.cell.kind = b_.boolean() ? RefKind::Weak : RefKind::OptStrong;
       in_.ref(r.cell);
-      check(names.insert(r.name.c_str()).second, "a graph: a reference that is there twice");
+      check(names.insert(r.name.c_str()).second,
+            "a graph: a reference that is there twice");
       n->refs_.append(r);
     }
     readExtras(n->extras_);
@@ -357,8 +365,9 @@ class GraphDefReader {
     check(linked_.insert({s.to.value, s.toKey.c_str()}).second,
           "a graph: an input with two links");
     if (b_.ok()) {
-      check(GraphDef::checkInterior(**from, s.fromKey.c_str(), **to, s.toKey.c_str()).ok(),
-            "a graph: too many links to sockets inside a group");
+      check(
+          GraphDef::checkInterior(**from, s.fromKey.c_str(), **to, s.toKey.c_str()).ok(),
+          "a graph: too many links to sockets inside a group");
     }
     if (b_.ok()) {
       def_.attachLink(s, *from, *to);

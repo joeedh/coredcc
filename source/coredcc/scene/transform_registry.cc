@@ -18,8 +18,9 @@ namespace {
 
 Status bad(const litestl::util::string &type, const std::string &why)
 {
-  return Status::error(StatusCode::InvalidArgument,
-                       ("transform type '" + std::string(type.c_str()) + "': " + why).c_str());
+  return Status::error(
+      StatusCode::InvalidArgument,
+      ("transform type '" + std::string(type.c_str()) + "': " + why).c_str());
 }
 
 Status checkDef(const litestl::util::string &type, const PropertyDef &def)
@@ -27,7 +28,8 @@ Status checkDef(const litestl::util::string &type, const PropertyDef &def)
   const std::string name = def.apiName().c_str();
   CDCC_TRY(def.validate());
   if (channelsOf(def.kind()) == 0) {
-    return bad(type, "'" + name + "': a " + propKindName(def.kind()) + " can't be a channel");
+    return bad(type,
+               "'" + name + "': a " + propKindName(def.kind()) + " can't be a channel");
   }
   if (def.isDynamic()) {
     return bad(type, "'" + name + "': a channel can't be dynamic");
@@ -62,11 +64,12 @@ ValueAccessor accessorFor(const PropertyDef &def, int32_t first)
       return Status();
     }
     Library *lib = ctx.library();
-    Transformable t = lib && self.owner.kind == OwnerKey::Kind::Block ?
-                          lib->query<Transformable>(lib->find(self.owner.block)) :
-                          Transformable();
-    return t ? t.writeChannels(block) :
-               Status::error(StatusCode::FailedPrecondition, "the block isn't Transformable");
+    Transformable t = lib && self.owner.kind == OwnerKey::Kind::Block
+                          ? lib->query<Transformable>(lib->find(self.owner.block))
+                          : Transformable();
+    return t ? t.writeChannels(block)
+             : Status::error(StatusCode::FailedPrecondition,
+                             "the block isn't Transformable");
   };
   return a;
 }

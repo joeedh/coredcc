@@ -40,8 +40,8 @@ Result<ChannelBlock> solveKeeping(const TransformType &type,
 namespace {
 
 using detail::ChangesCommand;
-using detail::SceneOf;
 using detail::HandleSet;
+using detail::SceneOf;
 
 Status failed(const std::string &what)
 {
@@ -64,7 +64,8 @@ Result<BlockHandle> parentOf(const Library &lib, BlockHandle h)
   if (!r.ok()) {
     return r.status();
   }
-  const BlockHandle p = r->info.parent.isNull() ? BlockHandle() : lib.find(r->info.parent);
+  const BlockHandle p =
+      r->info.parent.isNull() ? BlockHandle() : lib.find(r->info.parent);
   const Datablock *b = lib.get(p);
   return b && b->state() == BlockState::Live ? p : BlockHandle();
 }
@@ -92,7 +93,8 @@ template <class Stop> Result<Walk> walkUp(const Library &lib, BlockHandle h, Sto
     if (!w.found && stop(*p)) {
       w.found = *p;
     }
-    p = lib.query<Transformable>(*p) ? parentOf(lib, *p) : Result<BlockHandle>(BlockHandle());
+    p = lib.query<Transformable>(*p) ? parentOf(lib, *p)
+                                     : Result<BlockHandle>(BlockHandle());
   }
   return p.ok() ? Result<Walk>(w) : Result<Walk>(p.status());
 }
@@ -102,7 +104,8 @@ void setApproximate(Context &ctx, int n)
   ctx.outputs()->set("approximate", PropValue::ofInt(n)).ignore();
 }
 
-/* Channels that keep an object at `state`; `otherwise` is set if what is below it may move. */
+/* Channels that keep an object at `state`; `otherwise` is set if what is below it may
+ * move. */
 Result<ChannelBlock> solveKeeping(const TransformType &type,
                                   const EvalCtx &current,
                                   const TransformState &state,
@@ -115,7 +118,8 @@ Result<ChannelBlock> solveKeeping(const TransformType &type,
       detail::solveKeeping(type, current, state.world, parent, approximate);
   otherwise = otherwise || approximate > before;
   if (c.ok()) {
-    Result<TransformState> now = evaluateTransform(type, current.withChannels(*c), parent);
+    Result<TransformState> now =
+        evaluateTransform(type, current.withChannels(*c), parent);
     otherwise = otherwise || !now.ok() || detail::inheritsOtherwise(state, *now);
   }
   return c;
@@ -142,11 +146,13 @@ struct SetParent : ChangesCommand {
     if (selected.lookup_ptr(*parent)) {
       return detail::about(*s.lib, *parent, failed("can't be its own parent"));
     }
-    Result<Walk> up =
-        walkUp(*s.lib, *parent, [&](BlockHandle p) { return selected.lookup_ptr(p) != nullptr; });
-    return !up.ok()  ? up.status() :
-           up->found ? detail::about(*s.lib, *parent, failed("is below one of the objects")) :
-                       Status();
+    Result<Walk> up = walkUp(*s.lib, *parent, [&](BlockHandle p) {
+      return selected.lookup_ptr(p) != nullptr;
+    });
+    return !up.ok() ? up.status()
+           : up->found
+               ? detail::about(*s.lib, *parent, failed("is below one of the objects"))
+               : Status();
   }
   Status exec(Context &ctx)
   {
@@ -196,7 +202,8 @@ struct SetParent : ChangesCommand {
     skips.output(ctx);
     return skips.outcome(int(usable.size()));
   }
-  /* An object's channels under another parent, if its place is kept; an error if it can't have one. */
+  /* An object's channels under another parent, if its place is kept; an error if it can't
+   * have one. */
   static Result<ChannelBlock> kept(const Library &lib,
                                    detail::StateCache &states,
                                    BlockHandle h,
@@ -211,7 +218,8 @@ struct SetParent : ChangesCommand {
       return r.status();
     }
     if (!r->iface.hasSetParentId()) {
-      return Status::error(StatusCode::Unsupported, "this object's parent can't be changed");
+      return Status::error(StatusCode::Unsupported,
+                           "this object's parent can't be changed");
     }
     if (!keep) {
       return ChannelBlock();
@@ -224,8 +232,7 @@ struct SetParent : ChangesCommand {
     if (!r->type) {
       return failed("its transform type isn't registered");
     }
-    return solveKeeping(
-        *r->type, r->ctx(), *world, parent, approximate, otherwise);
+    return solveKeeping(*r->type, r->ctx(), *world, parent, approximate, otherwise);
   }
   static lbt::Struct<SetParent> *defineBindings()
   {
@@ -246,12 +253,13 @@ struct SetTransformType : ChangesCommand {
   Status canRun(Context &ctx) const
   {
     CDCC_TRY(detail::targetObjects(ctx).status());
-    return typeInput(ctx) ?
-               Status() :
-               Status::error(StatusCode::NotFound,
-                             ("no transform type is named '" +
-                              std::string(ctx.inputs()->get("type")->asString().c_str()) + "'")
-                                 .c_str());
+    return typeInput(ctx)
+               ? Status()
+               : Status::error(
+                     StatusCode::NotFound,
+                     ("no transform type is named '" +
+                      std::string(ctx.inputs()->get("type")->asString().c_str()) + "'")
+                         .c_str());
   }
   Status exec(Context &ctx)
   {
@@ -270,12 +278,15 @@ struct SetTransformType : ChangesCommand {
     detail::StateCache states(*s.lib, time);
     for (BlockHandle h : objects) {
       Result<ObjectRead> r = readObjectAt(*s.lib, h, time);
-      if (r.ok() && r->info.transformType == id && r->channels.size() == type.channelCount()) {
+      if (r.ok() && r->info.transformType == id &&
+          r->channels.size() == type.channelCount())
+      {
         done++; /* it has the type */
         continue;
       }
       Result<ChannelBlock> c =
-          r.ok() ? converted(states, *r, h, type, keep, time, approximate, otherwise) : r.status();
+          r.ok() ? converted(states, *r, h, type, keep, time, approximate, otherwise)
+                 : r.status();
       if (!c.ok()) {
         CDCC_TRY(skips.add(*s.lib, h, c.status()));
         continue;
@@ -307,7 +318,8 @@ struct SetTransformType : ChangesCommand {
                                         bool &otherwise)
   {
     if (!r.iface.hasSetTransformTypeId()) {
-      return Status::error(StatusCode::Unsupported, "this object's transform type can't be changed");
+      return Status::error(StatusCode::Unsupported,
+                           "this object's transform type can't be changed");
     }
     if (!keep) {
       return type.defaults();
@@ -352,11 +364,11 @@ struct SetRotationMode : ChangesCommand {
   }
   static Status usableFor(const Result<ObjectRead> &r)
   {
-    return !r.ok() ? r.status() :
-           r->info.transformType == TypeId::of(kTrsTransform) &&
-                   r->channels.size() == trs::kCount ?
-                     Status() :
-                     failed("has no rotation mode");
+    return !r.ok() ? r.status()
+           : r->info.transformType == TypeId::of(kTrsTransform) &&
+                   r->channels.size() == trs::kCount
+               ? Status()
+               : failed("has no rotation mode");
   }
   Status exec(Context &ctx)
   {
@@ -402,10 +414,8 @@ struct DeleteObjects : ChangesCommand {
     return detail::targetObjects(ctx).status();
   }
   /* Children of the blocks in `gone` that aren't in it, parents first. */
-  static Status children(const Library &lib,
-                         const HandleSet &gone,
-                         double time,
-                         Vector<Child> &out)
+  static Status
+  children(const Library &lib, const HandleSet &gone, double time, Vector<Child> &out)
   {
     Vector<BlockHandle> all;
     lib.forEach([&](BlockHandle h, const Datablock &b) {
@@ -431,7 +441,9 @@ struct DeleteObjects : ChangesCommand {
       Result<detail::Ancestry::Place> above = ancestry.place(*p);
       Result<TransformState> world = states.state(h);
       if (!place.ok() || !above.ok() || !world.ok()) {
-        return !place.ok() ? place.status() : !above.ok() ? above.status() : world.status();
+        return !place.ok()   ? place.status()
+               : !above.ok() ? above.status()
+                             : world.status();
       }
       Child c;
       c.object = h;
@@ -440,9 +452,9 @@ struct DeleteObjects : ChangesCommand {
       c.depth = place->depth;
       out.append(c);
     }
-    std::stable_sort(out.data(), out.data() + out.size(), [](const Child &a, const Child &b) {
-      return a.depth < b.depth;
-    });
+    std::stable_sort(out.data(),
+                     out.data() + out.size(),
+                     [](const Child &a, const Child &b) { return a.depth < b.depth; });
     return Status();
   }
   Status exec(Context &ctx)
@@ -466,24 +478,26 @@ struct DeleteObjects : ChangesCommand {
       if (found.size() > 0) {
         CDCC_TRY(below.remember(*s.lib, moving, time));
       }
-      /* Parents first, so the state of a parent is final when it is asked for. Those on cycles come
-       * before all others, and get no parent. */
+      /* Parents first, so the state of a parent is final when it is asked for. Those on
+       * cycles come before all others, and get no parent. */
       detail::StateCache parents(*s.lib, time);
       for (const Child &c : found) {
         CDCC_TRY(reparent(ctx, c, parents, time, approximate));
       }
     }
-    const CommandDef *del = ctx.runtime().ext<CommandRegistry>().find(kDeleteBlockCommand);
+    const CommandDef *del =
+        ctx.runtime().ext<CommandRegistry>().find(kDeleteBlockCommand);
     Vector<BlockId> ids;
     for (BlockHandle h : objects) {
       ids.append(s.lib->get(h)->id());
     }
     PropertyBag in = del->newInputs();
-    Status set = in.set(
-        "blocks",
-        PropValue::ofString(formatBlockIds(ctx.runtime(), {ids.data(), ids.size()}).c_str()));
-    Result<PropertyBag> out =
-        set.ok() ? ctx.executor()->runSub(ctx, *del, std::move(in)) : Result<PropertyBag>(set);
+    Status set =
+        in.set("blocks",
+               PropValue::ofString(
+                   formatBlockIds(ctx.runtime(), {ids.data(), ids.size()}).c_str()));
+    Result<PropertyBag> out = set.ok() ? ctx.executor()->runSub(ctx, *del, std::move(in))
+                                       : Result<PropertyBag>(set);
     if (!out.ok()) {
       changes.undo(ctx); /* the executor undoes the deletion, not this */
       return out.status();
@@ -502,8 +516,8 @@ struct DeleteObjects : ChangesCommand {
   {
     const Library &lib = *ctx.library();
     Result<ObjectRead> r = readObjectAt(lib, c.object, time);
-    Result<TransformState> parent =
-        c.parent ? parents.parentState(c.parent) : Result<TransformState>(TransformState());
+    Result<TransformState> parent = c.parent ? parents.parentState(c.parent)
+                                             : Result<TransformState>(TransformState());
     const Status failure = r.ok() ? parent.status() : r.status();
     if (!failure.ok()) {
       changes.undo(ctx);
@@ -514,18 +528,16 @@ struct DeleteObjects : ChangesCommand {
     v.parent = &id;
     ChannelBlock channels;
     if (r->type) {
-      Result<ChannelBlock> solved = detail::solveKeeping(
-          *r->type, r->ctx(), c.world.world, *parent, approximate);
+      Result<ChannelBlock> solved =
+          detail::solveKeeping(*r->type, r->ctx(), c.world.world, *parent, approximate);
       if (solved.ok()) {
         channels = std::move(*solved);
         v.channels = &channels;
-      }
-      else if (solved.status().code() == StatusCode::FailedPrecondition ||
-               solved.status().code() == StatusCode::Unsupported)
+      } else if (solved.status().code() == StatusCode::FailedPrecondition ||
+                 solved.status().code() == StatusCode::Unsupported)
       {
         approximate++; /* a degenerate child doesn't stop the deletion */
-      }
-      else {
+      } else {
         changes.undo(ctx);
         return detail::about(lib, c.object, solved.status());
       }
@@ -562,7 +574,8 @@ Status detail::registerTransformCommands(Runtime &rt)
 
   CommandDef type(kSetTransformTypeCommand);
   type.uiName("Set Transform Type")
-      .input(PropertyDef::stringProp("type").defaultValue(PropValue::ofString(kTrsTransform)))
+      .input(PropertyDef::stringProp("type").defaultValue(
+          PropValue::ofString(kTrsTransform)))
       .input(keepWorld())
       .input(detail::objectsInput())
       .output(approximate())
@@ -581,7 +594,8 @@ Status detail::registerTransformCommands(Runtime &rt)
 
   CommandDef del(kDeleteObjectsCommand);
   del.uiName("Delete Objects")
-      .input(PropertyDef::boolProp("keepChildrenWorld").defaultValue(PropValue::ofBool(true)))
+      .input(PropertyDef::boolProp("keepChildrenWorld")
+                 .defaultValue(PropValue::ofBool(true)))
       .input(detail::objectsInput())
       .output(PropertyDef::intProp("count"))
       .output(approximate());

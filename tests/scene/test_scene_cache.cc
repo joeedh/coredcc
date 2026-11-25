@@ -1,5 +1,5 @@
-/* What evaluateScene caches: changes that don't move the Library's epoch, and what it keeps when
- * nothing differs. */
+/* What evaluateScene caches: changes that don't move the Library's epoch, and what it
+ * keeps when nothing differs. */
 #include "scene_doc.h"
 
 test_init;
@@ -23,7 +23,9 @@ void testQueryInterface()
   Shape *answer = nullptr;
   d.query = [&](const Datablock &b, InterfaceId iface) {
     QueryAnswer q;
-    if (!strcmp(b.name().c_str(), "a") && iface == InterfaceId::of(Spatial::ifaceName) && answer) {
+    if (!strcmp(b.name().c_str(), "a") && iface == InterfaceId::of(Spatial::ifaceName) &&
+        answer)
+    {
       q.implType = TypeId::of("test.Shape");
       q.self = answer;
     }
@@ -130,7 +132,8 @@ void testAlias()
   const char *aliases[] = {"old.client"};
   test_assert(d.sc().selected(*d.lib).size() == 0);
   must(clients.registerClient(kCoredccClient, aliases).status());
-  test_assert(d.sc().selected(*d.lib).size() == 1 && d.sc().selected(*d.lib)[0] == parent);
+  test_assert(d.sc().selected(*d.lib).size() == 1 &&
+              d.sc().selected(*d.lib)[0] == parent);
   d.evaluate();
   test_assert(d.lib->epoch() == epoch);
   test_assert(d.isAt(a, 101) && d.isAt(parent, 100) && d.result(parent).member);
@@ -176,7 +179,8 @@ void testOverride()
 void testKeeps()
 {
   Doc d;
-  const BlockHandle a = d.object("a", 1.0), b = d.object("b", 2.0), c = d.object("c", 3.0);
+  const BlockHandle a = d.object("a", 1.0), b = d.object("b", 2.0),
+                    c = d.object("c", 3.0);
   d.setParent(a, b);
   d.evaluate();
   /* Selecting, and other blocks, move the epoch; nothing is sorted again. */
@@ -269,15 +273,20 @@ void testKeeps()
 void testUnstable()
 {
   Doc d;
-  const BlockHandle a = d.object("a", 1.0), b = d.object("b", 2.0), h = d.hostObject("h", 5.0);
+  const BlockHandle a = d.object("a", 1.0), b = d.object("b", 2.0),
+                    h = d.hostObject("h", 5.0);
   d.evaluate();
   d.host(h).channels.set(trs::kLocation, 6.0);
   int calls = 0;
   d.host(h).onRead = [&](ObjectInfo &info) { info.parent = d.idOf(calls++ % 2 ? a : b); };
-  test_assert(isError(evaluateScene(*d.ctx), StatusCode::FailedPrecondition, "each time"));
+  test_assert(
+      isError(evaluateScene(*d.ctx), StatusCode::FailedPrecondition, "each time"));
   test_assert(d.isAt(h, 5) && !d.rt.evaluating() && d.lib->collect().ok());
-  d.host(h).onRead = [&](ObjectInfo &info) { info.data = calls++ % 2 ? d.idOf(a) : BlockId(); };
-  test_assert(isError(evaluateScene(*d.ctx), StatusCode::FailedPrecondition, "each time"));
+  d.host(h).onRead = [&](ObjectInfo &info) {
+    info.data = calls++ % 2 ? d.idOf(a) : BlockId();
+  };
+  test_assert(
+      isError(evaluateScene(*d.ctx), StatusCode::FailedPrecondition, "each time"));
   d.host(h).onRead = nullptr;
   d.evaluate();
   test_assert(d.isAt(h, 6));

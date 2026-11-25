@@ -12,7 +12,8 @@ namespace {
 const StableRef *blockPointer(const PropValue &v)
 {
   const StableRef *ref = v.tryPointer();
-  return ref && !ref->isNull() && ref->owner.kind == OwnerKey::Kind::Block ? ref : nullptr;
+  return ref && !ref->isNull() && ref->owner.kind == OwnerKey::Kind::Block ? ref
+                                                                           : nullptr;
 }
 
 } // namespace
@@ -80,8 +81,7 @@ PropValue BagRefs::value(const PropertyBag &bag, int index) const
   StableRef out;
   if (ref) {
     out = *ref;
-  }
-  else if (const TargetMeta *meta = bag.def(index).target()) {
+  } else if (const TargetMeta *meta = bag.def(index).target()) {
     out.type = meta->target;
   }
   out.owner = OwnerKey::ofBlock(c->target);

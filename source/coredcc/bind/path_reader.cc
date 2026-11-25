@@ -24,7 +24,8 @@ struct PathReader::Core {
   struct Entry {
     Path path;
     PropValue value;
-    Status status = Status::error(StatusCode::FailedPrecondition, "the path wasn't read yet");
+    Status status =
+        Status::error(StatusCode::FailedPrecondition, "the path wasn't read yet");
     ScopedConnection watch;
   };
   /** By index: a callback finds its entry again, since adding moves them. */
@@ -57,7 +58,9 @@ struct PathReader::Core {
   }
 };
 
-PathReader::PathReader() : core_(std::make_shared<Core>()) {}
+PathReader::PathReader() : core_(std::make_shared<Core>())
+{
+}
 
 const litestl::binding::types::Struct<PathReader> *PathReader::defineBindings()
 {
@@ -124,21 +127,22 @@ Status readerWatch(Context &ctx, const PathReader &reader)
   for (int i = 0; i < readerCount(reader); i++) {
     ChangeBus::Start start;
     std::weak_ptr<PathReader::Core> weak = reader.core();
-    Result<ScopedConnection> c =
-        bus.watch(ctx, core.entries[size_t(i)].path,
-                  [weak, i](const PropValue &value, const Status &status) {
-                    if (std::shared_ptr<PathReader::Core> core = weak.lock()) {
-                      core->entries[size_t(i)].value = value;
-                      core->entries[size_t(i)].status = status;
-                      core->changed.insert(i);
-                    }
-                  },
-                  [weak, i]() {
-                    if (std::shared_ptr<PathReader::Core> core = weak.lock()) {
-                      core->changedMeta.insert(i);
-                    }
-                  },
-                  &start);
+    Result<ScopedConnection> c = bus.watch(
+        ctx,
+        core.entries[size_t(i)].path,
+        [weak, i](const PropValue &value, const Status &status) {
+          if (std::shared_ptr<PathReader::Core> core = weak.lock()) {
+            core->entries[size_t(i)].value = value;
+            core->entries[size_t(i)].status = status;
+            core->changed.insert(i);
+          }
+        },
+        [weak, i]() {
+          if (std::shared_ptr<PathReader::Core> core = weak.lock()) {
+            core->changedMeta.insert(i);
+          }
+        },
+        &start);
     if (!c.ok()) {
       core.unwatch();
       return c.status();
@@ -166,7 +170,8 @@ int32_t readerTakeChangedMeta(const PathReader &reader)
   return PathReader::Core::take(reader.core()->changedMeta);
 }
 
-/* An enum's or flags' keys, if items have all of it. Only they need the path read again. */
+/* An enum's or flags' keys, if items have all of it. Only they need the path read again.
+ */
 static void writeKeys(JsonWriter &out, Context &ctx, const Path &path, const PropValue &v)
 {
   Result<ResolvedPath> rp = resolve(ctx, path);
@@ -189,47 +194,47 @@ static void writeKeys(JsonWriter &out, Context &ctx, const Path &path, const Pro
   out.endArray();
 }
 
-static void writeEntry(JsonWriter &out, Context &ctx, const Path &path, const PropValue &v)
+static void
+writeEntry(JsonWriter &out, Context &ctx, const Path &path, const PropValue &v)
 {
   switch (v.type()) {
-    case PropValue::Type::None:
-      out.string("n");
-      return;
-    case PropValue::Type::Bool:
-      out.string("b").boolean(v.asBool());
-      return;
-    case PropValue::Type::Int:
-      out.string("i").integer(v.asInt());
-      return;
-    case PropValue::Type::Float:
-      out.string("f").number(v.asFloat());
-      return;
-    case PropValue::Type::String:
-      out.string("s").string(v.asString().c_str());
-      return;
-    case PropValue::Type::Enum:
-      out.string("e").integer(v.asEnum());
-      writeKeys(out, ctx, path, v);
-      return;
-    case PropValue::Type::Flags:
-      out.string("g").unsignedInteger(v.asFlags());
-      writeKeys(out, ctx, path, v);
-      return;
-    case PropValue::Type::Pointer:
-      out.string("p");
-      if (v.asPointer().isNull()) {
-        out.null();
-      }
-      else {
-        out.string(formatRef(ctx.runtime(), v.asPointer()));
-      }
-      return;
-    default:
-      out.string("v").beginArray();
-      for (int i = 0; i < v.componentCount(); i++) {
-        out.number(v.component(i));
-      }
-      out.endArray();
+  case PropValue::Type::None:
+    out.string("n");
+    return;
+  case PropValue::Type::Bool:
+    out.string("b").boolean(v.asBool());
+    return;
+  case PropValue::Type::Int:
+    out.string("i").integer(v.asInt());
+    return;
+  case PropValue::Type::Float:
+    out.string("f").number(v.asFloat());
+    return;
+  case PropValue::Type::String:
+    out.string("s").string(v.asString().c_str());
+    return;
+  case PropValue::Type::Enum:
+    out.string("e").integer(v.asEnum());
+    writeKeys(out, ctx, path, v);
+    return;
+  case PropValue::Type::Flags:
+    out.string("g").unsignedInteger(v.asFlags());
+    writeKeys(out, ctx, path, v);
+    return;
+  case PropValue::Type::Pointer:
+    out.string("p");
+    if (v.asPointer().isNull()) {
+      out.null();
+    } else {
+      out.string(formatRef(ctx.runtime(), v.asPointer()));
+    }
+    return;
+  default:
+    out.string("v").beginArray();
+    for (int i = 0; i < v.componentCount(); i++) {
+      out.number(v.component(i));
+    }
+    out.endArray();
   }
 }
 
@@ -254,11 +259,11 @@ StringResult readerTake(Context &ctx, const PathReader &reader, bool all)
     const PropValue value = e.value;
     const Path path = e.path;
     const Status status = e.status;
-    out.beginArray().integer(i).integer(int(changed.contains(i)) + 2 * int(changedMeta.contains(i)));
+    out.beginArray().integer(i).integer(int(changed.contains(i)) +
+                                        2 * int(changedMeta.contains(i)));
     if (status.ok()) {
       writeEntry(out, ctx, path, value);
-    }
-    else {
+    } else {
       out.string("!").integer(int(status.code())).string(status.message());
       out.string(status.toString().c_str());
     }

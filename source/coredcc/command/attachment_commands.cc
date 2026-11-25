@@ -32,7 +32,8 @@ Status noType(std::string_view name)
       ("type: no attachment type '" + std::string(name) + "' is registered").c_str());
 }
 
-/* Data that belongs to a command or to the caller of attachUndo while it isn't attached. */
+/* Data that belongs to a command or to the caller of attachUndo while it isn't attached.
+ */
 struct DetachedData {
   Runtime *rt = nullptr;
   TypeId type;
@@ -71,8 +72,7 @@ struct AttachmentEdit {
     if (held->opaque) {
       CDCC_TRY((*lib)->attachOpaque(block.get(), *held->opaque));
       held->opaque.reset();
-    }
-    else {
+    } else {
       CDCC_TRY((*lib)->attach(block.get(), held->type, held->data));
       held->data = nullptr;
     }
@@ -201,11 +201,11 @@ template <bool Attach> struct EditCommand {
         return ctx.runtime().takeStickyError(); /* the discard destroys the data */
       }
       if (!edit.held->data) {
-        return Status::error(StatusCode::Internal, "the attachment type's create gave no data");
+        return Status::error(StatusCode::Internal,
+                             "the attachment type's create gave no data");
       }
       return edit.attach(ctx);
-    }
-    else {
+    } else {
       return edit.detach(ctx);
     }
   }
@@ -233,8 +233,9 @@ template <bool Attach> struct EditCommand {
   }
   static lbt::Struct<EditCommand> *defineBindings()
   {
-    auto *st = new lbt::Struct<EditCommand>(
-        Attach ? "coredcc::AttachCommand" : "coredcc::DetachCommand", sizeof(EditCommand));
+    auto *st = new lbt::Struct<EditCommand>(Attach ? "coredcc::AttachCommand"
+                                                   : "coredcc::DetachCommand",
+                                            sizeof(EditCommand));
     BIND_ATTACHMENT_COMMAND(st);
     return st;
   }
@@ -280,7 +281,8 @@ struct AttachData {
   }
   static lbt::Struct<AttachData> *defineBindings()
   {
-    auto *st = new lbt::Struct<AttachData>("coredcc::AttachDataCommand", sizeof(AttachData));
+    auto *st =
+        new lbt::Struct<AttachData>("coredcc::AttachDataCommand", sizeof(AttachData));
     BIND_ATTACHMENT_COMMAND(st);
     return st;
   }
@@ -293,10 +295,10 @@ Status attachUndo(Context &ctx, BlockHandle h, TypeId type, void *data)
   Runtime &rt = ctx.runtime();
   if (!findType(rt, type)) {
     const char *name = rt.nameOf(type);
-    return Status::error(
-        StatusCode::InvalidArgument,
-        ("attachUndo: no attachment type '" + std::string(name ? name : "?") + "' is registered")
-            .c_str());
+    return Status::error(StatusCode::InvalidArgument,
+                         ("attachUndo: no attachment type '" +
+                          std::string(name ? name : "?") + "' is registered")
+                             .c_str());
   }
   if (!data) {
     return Status::error(StatusCode::InvalidArgument, "attachUndo: the data is null");
@@ -322,9 +324,9 @@ Status attachUndo(Context &ctx, BlockHandle h, TypeId type, void *data)
       return cmd.status();
     }
     Result<PropertyBag> out =
-        ex->running() ?
-            ex->runSub(ctx, std::move(cmd).value(), *def) :
-            ex->runInstance(ctx, *def, std::move(cmd).value(), def->newInputs());
+        ex->running()
+            ? ex->runSub(ctx, std::move(cmd).value(), *def)
+            : ex->runInstance(ctx, *def, std::move(cmd).value(), def->newInputs());
     return out.status();
   };
   Status s = run();

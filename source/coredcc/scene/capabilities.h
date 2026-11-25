@@ -1,8 +1,8 @@
 #pragma once
 
 /** \file
- * What blocks can do in a scene. Any block type may implement these, natively or in a script
- * (architecture, "Capabilities"); coredcc's own Object implements Transformable.
+ * What blocks can do in a scene. Any block type may implement these, natively or in a
+ * script (architecture, "Capabilities"); coredcc's own Object implements Transformable.
  */
 
 #include "coredcc/base/flags.h"
@@ -39,8 +39,9 @@ struct ObjectInfo {
   BlockId data;
   /** ObjectFlags. */
   uint32_t flags = 0;
-  /** Bit i: channel i is locked. A lock keeps tools from changing it (applyDelta, setWorld); commands
-   * that keep an object where it is (keepWorld), the datapath and scripts still change it. */
+  /** Bit i: channel i is locked. A lock keeps tools from changing it (applyDelta,
+   * setWorld); commands that keep an object where it is (keepWorld), the datapath and
+   * scripts still change it. */
   uint64_t locks = 0;
 
   static litestl::binding::types::Struct<ObjectInfo> *defineBindings();
@@ -49,12 +50,15 @@ struct ObjectInfo {
 /**
  * A block that is placed in the world.
  *
- * - `read` gives everything at once; `info` and `channels` hold other objects' values before.
- * - `writeChannels` stores channels. Callers use writeTransform, which also tells watchers.
- * - `setParentId` (optional) and `setTransformTypeId` (optional) store an id; the caller does
- *   the rest (writeParent, and writeTransform with the type's channels). Another transform type has no
- *   locks.
- * - `setFlags` (optional) and `setLocks` (optional) store what ObjectInfo has (writeFlags, writeLocks).
+ * - `read` gives everything at once; `info` and `channels` hold other objects' values
+ * before.
+ * - `writeChannels` stores channels. Callers use writeTransform, which also tells
+ * watchers.
+ * - `setParentId` (optional) and `setTransformTypeId` (optional) store an id; the caller
+ * does the rest (writeParent, and writeTransform with the type's channels). Another
+ * transform type has no locks.
+ * - `setFlags` (optional) and `setLocks` (optional) store what ObjectInfo has
+ * (writeFlags, writeLocks).
  */
 struct Transformable : IfaceRef {
   void read(ObjectInfo &info, ChannelBlock &channels) const
@@ -118,12 +122,13 @@ enum class ElementDomain : int32_t { Point = 0, Edge = 1, Face = 2 };
  *
  * - `localBounds`: a box around the geometry; empty for none.
  * - `domains`: bit d is set for each ElementDomain d it has.
- * - `closestElements`: gives the sink the elements of `query.domain()` within `query.radius()` of
- *   `query.point()`, or at least those that are nearest in the world. Others may be given too.
- * - `pick` (optional): gives the sink the shapes that may be near a pixel. Without it, the bounds
- *   are what can be picked.
- * - `elementsInRegion` (optional): the elements of a domain that may be in a region. Without it, a
- *   region selects the object, by its bounds.
+ * - `closestElements`: gives the sink the elements of `query.domain()` within
+ * `query.radius()` of `query.point()`, or at least those that are nearest in the world.
+ * Others may be given too.
+ * - `pick` (optional): gives the sink the shapes that may be near a pixel. Without it,
+ * the bounds are what can be picked.
+ * - `elementsInRegion` (optional): the elements of a domain that may be in a region.
+ * Without it, a region selects the object, by its bounds.
  *
  * None of them may change anything.
  */
@@ -152,7 +157,8 @@ struct Spatial : IfaceRef {
   {
     return CDCC_HAS(elementsInRegion);
   }
-  litestl::util::Vector<int32_t> elementsInRegion(const RegionQuery &query, int32_t domain) const
+  litestl::util::Vector<int32_t> elementsInRegion(const RegionQuery &query,
+                                                  int32_t domain) const
   {
     return CDCC_CALL(elementsInRegion, query, domain);
   }
@@ -167,8 +173,8 @@ struct Spatial : IfaceRef {
   }
 };
 
-/** A block that keeps something made from its data, and has to hear of changes made by others.
- * Called by invalidateData only. */
+/** A block that keeps something made from its data, and has to hear of changes made by
+ * others. Called by invalidateData only. */
 struct Invalidation : IfaceRef {
   /** `kinds` are InvalidateKinds. */
   void invalidate(uint32_t kinds)
@@ -183,7 +189,8 @@ struct Invalidation : IfaceRef {
 };
 
 /**
- * Elements by handle. (Elements in the architecture, which is a graph's table in the code.)
+ * Elements by handle. (Elements in the architecture, which is a graph's table in the
+ * code.)
  *
  * - `topoStamp` changes whenever handles may mean other elements.
  * - `positions`: three numbers per handle, in the block's own space.
@@ -226,9 +233,9 @@ template <class I> I objectQuery(const Library &lib, BlockHandle object)
 }
 
 /** Tells everyone that a block's own data changed, other than through the datapath: its
- * Invalidation, if it has one, then the ChangeBus, where `kinds` are the change's aspects: a graph
- * kernel that uses others doesn't run. What isn't in a kind that a kernel asked for isn't seen by it,
- * so name all that changed. */
+ * Invalidation, if it has one, then the ChangeBus, where `kinds` are the change's
+ * aspects: a graph kernel that uses others doesn't run. What isn't in a kind that a
+ * kernel asked for isn't seen by it, so name all that changed. */
 Status invalidateData(Context &ctx, BlockHandle block, InvalidateKinds kinds);
 
 } // namespace coredcc

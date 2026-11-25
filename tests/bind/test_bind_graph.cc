@@ -55,8 +55,12 @@ Obj kernelObj(Kernel fn)
 }
 
 /* Input a (Float 2), param k (Float 3), output value (float). */
-Status registerScale(Doc &d, Host &host, const char *id, Kernel fn,
-                     fakehost::lf::Handle *handle = nullptr, const char *slots = "evaluate")
+Status registerScale(Doc &d,
+                     Host &host,
+                     const char *id,
+                     Kernel fn,
+                     fakehost::lf::Handle *handle = nullptr,
+                     const char *slots = "evaluate")
 {
   NodeTypeDef *def = sc::newNodeType(id);
   test_assert(sc::nodeTypeUiName(*def, "Scale").ok());
@@ -84,13 +88,16 @@ Status scale(NodeExecContext &n)
 int64_t makeGraph(Doc &d, const char *type)
 {
   test_assert(sc::graphCreate(d.ctx, "g").status.ok());
-  const int64_t out = sc::graphAddInterface(d.ctx, "graphs[\"g\"]", true, "out", "float").value;
-  const int64_t in = sc::graphAddInterface(d.ctx, "graphs[\"g\"]", false, "in", "float").value;
+  const int64_t out =
+      sc::graphAddInterface(d.ctx, "graphs[\"g\"]", true, "out", "float").value;
+  const int64_t in =
+      sc::graphAddInterface(d.ctx, "graphs[\"g\"]", false, "in", "float").value;
   const int64_t node = sc::graphAddNode(d.ctx, "graphs[\"g\"]", type, 1, 2).value;
   const int64_t o = sc::graphAddNode(d.ctx, "graphs[\"g\"]", "graph.output", 0, 0).value;
   const int64_t i = sc::graphAddNode(d.ctx, "graphs[\"g\"]", "graph.input", 0, 0).value;
   test_assert(in && out && node && o && i);
-  test_assert(sc::graphLink(d.ctx, "graphs[\"g\"]", node, "value", o, key(out).c_str()).status.ok());
+  test_assert(sc::graphLink(d.ctx, "graphs[\"g\"]", node, "value", o, key(out).c_str())
+                  .status.ok());
   return node;
 }
 
@@ -135,8 +142,10 @@ void testRegistration()
     litestl::alloc::Delete(def);
     def = sc::newNodeType("js.b");
     test_assert(sc::nodeTypeOutput(*def, "o", "float").ok());
-    test_assert(hasCode(sc::nodeTypeInput(*def, "no name", sc::makeInt(1)), StatusCode::InvalidArgument));
-    test_assert(hasCode(sc::nodeTypeParam(*def, "m", PropValue::ofEnum(1)), StatusCode::InvalidArgument));
+    test_assert(hasCode(sc::nodeTypeInput(*def, "no name", sc::makeInt(1)),
+                        StatusCode::InvalidArgument));
+    test_assert(hasCode(sc::nodeTypeParam(*def, "m", PropValue::ofEnum(1)),
+                        StatusCode::InvalidArgument));
     test_assert(sc::nodeTypeInput(*def, "x", sc::makeInt(1)).ok());
     test_assert(sc::nodeTypeInput(*def, "x", sc::makeInt(1)).ok());
     refused(StatusCode::InvalidArgument); /* two inputs */
@@ -144,8 +153,10 @@ void testRegistration()
 
     /* The corrected retry; a second one is refused, and the def can be used again. */
     fakehost::lf::Handle h = 0, again = 0;
-    test_assert(registerScale(d, host, "js.a", scale, &h).ok() && host.releasesOf(h) == 0);
-    test_assert(hasCode(registerScale(d, host, "js.a", scale, &again), StatusCode::AlreadyExists));
+    test_assert(registerScale(d, host, "js.a", scale, &h).ok() &&
+                host.releasesOf(h) == 0);
+    test_assert(hasCode(registerScale(d, host, "js.a", scale, &again),
+                        StatusCode::AlreadyExists));
     test_assert(host.releasesOf(again) == 1);
     def = sc::newNodeType("js.c");
     test_assert(sc::nodeTypeOutput(*def, "o", "float").ok());
@@ -166,7 +177,8 @@ void testKernel()
     Doc d;
     test_assert(d.rt.ext<SocketTypeRegistry>().addPayloadType<Mesh>().ok());
     test_assert(registerScale(d, host, "js.scale", scale).ok());
-    test_assert(strcmp(d.rt.ext<NodeTypeRegistry>().find("js.scale")->uiName.c_str(), "Scale") == 0);
+    test_assert(strcmp(d.rt.ext<NodeTypeRegistry>().find("js.scale")->uiName.c_str(),
+                       "Scale") == 0);
     const int64_t n = makeGraph(d, "js.scale");
     sc::GraphResult g = sc::graphInstance(d.ctx, "graphs[\"g\"]");
     test_assert(g.status.ok());
@@ -179,7 +191,8 @@ void testKernel()
     test_assert(sc::graphEvaluate(g.value, "out").value == sc::makeFloat(20));
     test_assert(host.calls == calls + 1);
     test_assert(sc::graphEvaluate(g.value, "out").value == sc::makeFloat(20));
-    test_assert(host.calls == calls + 1 && sc::graphErrorText(g.value, "out").size() == 0);
+    test_assert(host.calls == calls + 1 &&
+                sc::graphErrorText(g.value, "out").size() == 0);
 
     /* What a kernel is told of its mistakes. */
     Status in, out, param, wrong, passIn, passOut, payload, make, pass;
@@ -204,7 +217,9 @@ void testKernel()
       /* An Int, converted. */
       return sc::nodeOutput(c, "value", sc::nodeInput(c, "i").value);
     };
-    test_assert(sc::registerForeignNodeType(d.ctx, *def, host.add(kernelObj(odd)), "evaluate").ok());
+    test_assert(
+        sc::registerForeignNodeType(d.ctx, *def, host.add(kernelObj(odd)), "evaluate")
+            .ok());
     litestl::alloc::Delete(def);
     const Graph other = newGraph(d.lib, "other");
     const NodeId m = add(*other.def, "js.odd");
@@ -215,9 +230,12 @@ void testKernel()
     test_assert(*inst.value(SocketPath::of(m, "copy")) == GraphValue::ofString("x"));
     test_assert(hasCode(in, StatusCode::NotFound) && in.suggestions().size() == 1);
     test_assert(hasCode(out, StatusCode::NotFound) && out.suggestions().size() == 1);
-    test_assert(hasCode(param, StatusCode::NotFound) && hasCode(passIn, StatusCode::NotFound));
-    test_assert(hasCode(passOut, StatusCode::NotFound) && hasCode(wrong, StatusCode::TypeMismatch));
-    test_assert(hasCode(payload, StatusCode::Unsupported) && hasCode(make, StatusCode::Unsupported));
+    test_assert(hasCode(param, StatusCode::NotFound) &&
+                hasCode(passIn, StatusCode::NotFound));
+    test_assert(hasCode(passOut, StatusCode::NotFound) &&
+                hasCode(wrong, StatusCode::TypeMismatch));
+    test_assert(hasCode(payload, StatusCode::Unsupported) &&
+                hasCode(make, StatusCode::Unsupported));
     test_assert(pass.ok());
 
     /* A failing one, a throwing one, one that forgets its output, and nodePass of another
@@ -245,24 +263,32 @@ void testKernel()
     gd->forEachNode([&](const GraphNode &x) {
       outNode = strcmp(x.typeName().c_str(), "graph.output") == 0 ? x.id() : outNode;
     });
-    test_assert(sc::graphLink(d.ctx, "graphs[\"g\"]", f, "value", outNode.value, key(outId).c_str())
+    test_assert(sc::graphLink(
+                    d.ctx, "graphs[\"g\"]", f, "value", outNode.value, key(outId).c_str())
                     .status.ok());
     r = sc::graphEvaluate(bad.value, "out");
-    test_assert(hasCode(r.status, StatusCode::Internal) && strstr(r.status.message(), "set output"));
+    test_assert(hasCode(r.status, StatusCode::Internal) &&
+                strstr(r.status.message(), "set output"));
     code = StatusCode::OutOfRange;
     d.rt.touch();
-    test_assert(hasCode(sc::graphEvaluate(bad.value, "out").status, StatusCode::Internal)); /* cached */
-    test_assert(sc::setValue(d.ctx, ("graphs[\"g\"].nodes[#" + std::to_string(f) + "].inputs.a").c_str(),
-                             sc::makeFloat(1)).ok());
+    test_assert(hasCode(sc::graphEvaluate(bad.value, "out").status,
+                        StatusCode::Internal)); /* cached */
+    test_assert(
+        sc::setValue(d.ctx,
+                     ("graphs[\"g\"].nodes[#" + std::to_string(f) + "].inputs.a").c_str(),
+                     sc::makeFloat(1))
+            .ok());
     r = sc::graphEvaluate(bad.value, "out");
-    test_assert(hasCode(r.status, StatusCode::OutOfRange) && strstr(r.status.message(), "boom"));
+    test_assert(hasCode(r.status, StatusCode::OutOfRange) &&
+                strstr(r.status.message(), "boom"));
     const std::string text = sc::graphErrorText(bad.value, "out").c_str();
     test_assert(text.find("boom") != std::string::npos);
     test_assert(text.find("(node " + std::to_string(f) + ")") != std::string::npos);
     code = StatusCode::Cancelled; /* it throws */
     test_assert(sc::undo(d.ctx).ok());
     r = sc::graphEvaluate(bad.value, "out");
-    test_assert(hasCode(r.status, StatusCode::Internal) && strstr(r.status.message(), "boom"));
+    test_assert(hasCode(r.status, StatusCode::Internal) &&
+                strstr(r.status.message(), "boom"));
     test_assert(!d.rt.hasStickyError() && !sc::inForeignCall(d.rt));
     code = StatusCode::Internal;
     test_assert(sc::redo(d.ctx).ok());
@@ -306,8 +332,12 @@ void testGates()
     const int64_t n = makeGraph(d, "js.scale");
     sc::GraphResult g = sc::graphInstance(d.ctx, "graphs[\"g\"]");
     auto evaluate = [&](double want) {
-      test_assert(sc::setValue(d.ctx, ("graphs[\"g\"].nodes[#" + std::to_string(n) + "].params.k").c_str(),
-                               sc::makeFloat(want / 2)).ok());
+      test_assert(
+          sc::setValue(
+              d.ctx,
+              ("graphs[\"g\"].nodes[#" + std::to_string(n) + "].params.k").c_str(),
+              sc::makeFloat(want / 2))
+              .ok());
       return sc::graphEvaluate(g.value, "out").value == sc::makeFloat(want);
     };
     const string name = "graphs[\"g\"].name";
@@ -361,12 +391,15 @@ void testGates()
       }
     }
     /* The facades say so themselves where the engine would allow it. */
-    test_assert(strstr(seen[0].message(), "kernel") && strstr(seen[12].message(), "kernel"));
-    test_assert(d.history.size() == steps + 1 && d.rt.ext<NodeTypeRegistry>().find("js.inside") == nullptr);
+    test_assert(strstr(seen[0].message(), "kernel") &&
+                strstr(seen[12].message(), "kernel"));
+    test_assert(d.history.size() == steps + 1 &&
+                d.rt.ext<NodeTypeRegistry>().find("js.inside") == nullptr);
     inside = []() {};
 
     /* Outside, the same calls work. */
-    test_assert(sc::resolvePath(d.ctx, name).status.ok() && sc::getValue(d.ctx, name).status.ok());
+    test_assert(sc::resolvePath(d.ctx, name).status.ok() &&
+                sc::getValue(d.ctx, name).status.ok());
     test_assert(sc::canUndo(d.ctx).value);
 
     /* Another interface's frame: not a Command's, though its slot has the name of one. */
@@ -383,14 +416,21 @@ void testGates()
     };
     const fakehost::lf::Handle ph = host.add(probe);
     const char *slots[] = {"exec"};
-    test_assert(registerForeign<Probe>(d.rt, "test.probe", d.rt.ext<sc::ForeignBindings>().dispatcher(),
-                                       nullptr, slots).ok());
-    Probe p = query<Probe>(d.rt, TypeId::of("test.probe"), reinterpret_cast<void *>(uintptr_t(ph)));
+    test_assert(registerForeign<Probe>(d.rt,
+                                       "test.probe",
+                                       d.rt.ext<sc::ForeignBindings>().dispatcher(),
+                                       nullptr,
+                                       slots)
+                    .ok());
+    Probe p = query<Probe>(
+        d.rt, TypeId::of("test.probe"), reinterpret_cast<void *>(uintptr_t(ph)));
     test_assert(p.exec(d.ctx).ok());
-    test_assert(get.ok() && hasCode(set, StatusCode::Busy) && hasCode(write, StatusCode::Busy));
-    test_assert(hasCode(create, StatusCode::Busy) && d.is(name.c_str(), PropValue::ofString("g")));
-    /* Called from a native kernel, or from a script one, it is the innermost frame: it may
-     * read. */
+    test_assert(get.ok() && hasCode(set, StatusCode::Busy) &&
+                hasCode(write, StatusCode::Busy));
+    test_assert(hasCode(create, StatusCode::Busy) &&
+                d.is(name.c_str(), PropValue::ofString("g")));
+    /* Called from a native kernel, or from a script one, it is the innermost frame: it
+     * may read. */
     const Graph other = newGraph(d.lib, "other");
     NodeTypeDef native("t.native");
     native.output("value", "float");
@@ -447,8 +487,9 @@ void registerHooks(Doc &d, Host &host, Hooks *hooks)
     return true;
   };
   CommandDef *def = sc::newCommandDef("js.cmd");
-  test_assert(sc::registerForeignCommand(d.ctx, *def, host.add(factory),
-                                         "canRun exec undo memSize discard").ok());
+  test_assert(sc::registerForeignCommand(
+                  d.ctx, *def, host.add(factory), "canRun exec undo memSize discard")
+                  .ok());
   litestl::alloc::Delete(def);
 }
 
@@ -474,7 +515,8 @@ void testEditing()
     test_assert(sc::undo(d.ctx).ok() && sc::undo(d.ctx).ok() && def->linkCount() == 1);
 
     /* Paths: the graph's, or a pointer to it; anything else says so. */
-    test_assert(hasCode(sc::graphRemoveNode(d.ctx, "graphs[\"no\"]", n), StatusCode::NotFound));
+    test_assert(
+        hasCode(sc::graphRemoveNode(d.ctx, "graphs[\"no\"]", n), StatusCode::NotFound));
     for (const char *no : {"graphs[\"g\"].name", "graphs[\"g\"].nodes[0]", "graphs"}) {
       test_assert(!sc::graphRemoveNode(d.ctx, no, n).ok());
       test_assert(!sc::graphInstance(d.ctx, no).status.ok());
@@ -484,9 +526,11 @@ void testEditing()
     sc::ValueResult made = sc::graphCreate(d.ctx, "h");
     test_assert(made.status.ok() && made.value.tryPointer());
     const int64_t group = sc::graphAddNode(d.ctx, gp, "graph.group", 0, 0).value;
-    const std::string member = "graphs[\"g\"].nodes[#" + std::to_string(group) + "].group";
-    test_assert(hasCode(sc::graphAddNode(d.ctx, member.c_str(), "math.float", 0, 0).status,
-                        StatusCode::InvalidArgument)); /* null */
+    const std::string member =
+        "graphs[\"g\"].nodes[#" + std::to_string(group) + "].group";
+    test_assert(
+        hasCode(sc::graphAddNode(d.ctx, member.c_str(), "math.float", 0, 0).status,
+                StatusCode::InvalidArgument)); /* null */
     test_assert(sc::setValue(d.ctx, member.c_str(), made.value).ok());
     test_assert(sc::graphAddNode(d.ctx, member.c_str(), "math.float", 0, 0).status.ok());
     test_assert(d.is("graphs[\"h\"].nodes.length", PropValue::ofInt(1)));
@@ -507,12 +551,15 @@ void testEditing()
     test_assert(sc::invoke(d.ctx, "js.cmd").status.ok());
     test_assert(def->nodeCount() == nodes + 1 && d.history.size() == steps + 1);
     test_assert(sc::undo(d.ctx).ok() && def->nodeCount() == nodes);
-    test_assert(hasCode(inUndo, StatusCode::Busy) && !d.get("graphs[\"inner\"].name").ok());
+    test_assert(hasCode(inUndo, StatusCode::Busy) &&
+                !d.get("graphs[\"inner\"].name").ok());
 
     /* Without an executor, or the commands. */
     Context bare(&d.rt, &d.lib, d.rt.ext<ApiRegistry>().runtimeOwner("doc"));
-    test_assert(hasCode(sc::graphCreate(bare, "x").status, StatusCode::FailedPrecondition));
-    test_assert(hasCode(sc::graphRemoveNode(bare, gp, n), StatusCode::FailedPrecondition));
+    test_assert(
+        hasCode(sc::graphCreate(bare, "x").status, StatusCode::FailedPrecondition));
+    test_assert(
+        hasCode(sc::graphRemoveNode(bare, gp, n), StatusCode::FailedPrecondition));
     Runtime empty;
     Library lib(&empty);
     LinearHistory history;
@@ -556,8 +603,10 @@ void testInstances()
       return r.status.ok() && r.value == sc::makeFloat(want);
     };
     test_assert(sc::graphInstanceCount(d.ctx) == 1 && is(0));
-    test_assert(sc::graphSetInput(*g, "in", sc::makeInt(4)).ok() && is(12)); /* converted */
-    test_assert(hasCode(sc::graphSetInput(*g, "in", sc::makeString("x").value), StatusCode::TypeMismatch));
+    test_assert(sc::graphSetInput(*g, "in", sc::makeInt(4)).ok() &&
+                is(12)); /* converted */
+    test_assert(hasCode(sc::graphSetInput(*g, "in", sc::makeString("x").value),
+                        StatusCode::TypeMismatch));
     Status no = sc::graphSetInput(*g, "inn", sc::makeInt(4));
     test_assert(hasCode(no, StatusCode::NotFound) && no.suggestions().size() == 1);
     test_assert(is(12) && sc::graphClearInput(*g, "in").ok() && is(0));
@@ -568,12 +617,14 @@ void testInstances()
     addSocket(*def, SocketSide::Output, "mesh", "t.Mesh");
     addSocket(*def, SocketSide::Input, "meshIn", "t.Mesh");
     test_assert(hasCode(sc::graphEvaluate(*g, "mesh").status, StatusCode::Unsupported));
-    test_assert(hasCode(sc::graphSetInput(*g, "meshIn", sc::makeInt(1)), StatusCode::Unsupported));
+    test_assert(hasCode(sc::graphSetInput(*g, "meshIn", sc::makeInt(1)),
+                        StatusCode::Unsupported));
 
     /* The graph goes away, and comes back. */
     test_assert(d.lib.markDeleted(block).ok());
     test_assert(hasCode(sc::graphEvaluate(*g, "out").status, StatusCode::NotFound));
-    test_assert(hasCode(sc::graphSetInput(*g, "in", sc::makeInt(1)), StatusCode::NotFound));
+    test_assert(
+        hasCode(sc::graphSetInput(*g, "in", sc::makeInt(1)), StatusCode::NotFound));
     test_assert(d.lib.restoreFromHistory(block).ok() && is(0));
 
     /* Copies share it. Dropping the last one in its own kernel, or closing it there, lets
@@ -589,13 +640,17 @@ void testInstances()
     copy = *g;
     inside = [&]() { sc::graphClose(copy); };
     test_assert(is(0));
-    test_assert(hasCode(sc::graphEvaluate(*g, "out").status, StatusCode::FailedPrecondition));
-    test_assert(hasCode(sc::graphSetInput(*g, "in", sc::makeInt(1)), StatusCode::FailedPrecondition));
+    test_assert(
+        hasCode(sc::graphEvaluate(*g, "out").status, StatusCode::FailedPrecondition));
+    test_assert(hasCode(sc::graphSetInput(*g, "in", sc::makeInt(1)),
+                        StatusCode::FailedPrecondition));
     test_assert(hasCode(sc::graphClearInput(*g, "in"), StatusCode::FailedPrecondition));
-    test_assert(sc::graphErrorText(*g, "out").size() > 0 && sc::graphInstanceCount(d.ctx) == 0);
+    test_assert(sc::graphErrorText(*g, "out").size() > 0 &&
+                sc::graphInstanceCount(d.ctx) == 0);
     sc::graphClose(*g);
     sc::graphClose(sc::ScriptGraph());
-    test_assert(hasCode(sc::graphEvaluate(sc::ScriptGraph(), "x").status, StatusCode::FailedPrecondition));
+    test_assert(hasCode(sc::graphEvaluate(sc::ScriptGraph(), "x").status,
+                        StatusCode::FailedPrecondition));
     inside = []() {};
     d.rt.touch();
 
@@ -604,8 +659,10 @@ void testInstances()
     test_assert(sc::graphEvaluate(late, "out").status.ok());
     g.reset();
   }
-  test_assert(hasCode(sc::graphEvaluate(late, "out").status, StatusCode::FailedPrecondition));
-  test_assert(hasCode(sc::graphSetInput(late, "in", sc::makeInt(1)), StatusCode::FailedPrecondition));
+  test_assert(
+      hasCode(sc::graphEvaluate(late, "out").status, StatusCode::FailedPrecondition));
+  test_assert(hasCode(sc::graphSetInput(late, "in", sc::makeInt(1)),
+                      StatusCode::FailedPrecondition));
   late = sc::ScriptGraph();
   test_assert(host.live() == 0 && host.allReleasedOnce());
 }

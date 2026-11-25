@@ -11,7 +11,9 @@ namespace {
 /* By Library. A Runtime extension. */
 struct OverrideProviders {
   static constexpr const char *kExtName = "coredcc.OverrideProviders";
-  explicit OverrideProviders(Runtime *) {}
+  explicit OverrideProviders(Runtime *)
+  {
+  }
 
   struct Entry {
     LibraryRef lib;
@@ -24,7 +26,8 @@ struct OverrideProviders {
 
 OverrideProvider *detail::overrideProvider(const Library &lib)
 {
-  for (const OverrideProviders::Entry &e : lib.runtime().ext<OverrideProviders>().entries) {
+  for (const OverrideProviders::Entry &e : lib.runtime().ext<OverrideProviders>().entries)
+  {
     if (e.lib.get() == &lib) {
       return e.provider;
     }
@@ -40,7 +43,8 @@ Status setOverrideProvider(Library &lib, OverrideProvider &provider)
     return Status::error(StatusCode::AlreadyExists,
                          "setOverrideProvider: the Library has a provider");
   }
-  litestl::util::Vector<OverrideProviders::Entry> &entries = rt.ext<OverrideProviders>().entries;
+  litestl::util::Vector<OverrideProviders::Entry> &entries =
+      rt.ext<OverrideProviders>().entries;
   for (int i = int(entries.size()) - 1; i >= 0; i--) {
     if (!entries[i].lib.get()) {
       entries.remove_at(i); /* its Library is gone */
@@ -54,7 +58,8 @@ Status setOverrideProvider(Library &lib, OverrideProvider &provider)
 void clearOverrideProvider(Library &lib, OverrideProvider &provider)
 {
   Runtime &rt = lib.runtime();
-  litestl::util::Vector<OverrideProviders::Entry> &entries = rt.ext<OverrideProviders>().entries;
+  litestl::util::Vector<OverrideProviders::Entry> &entries =
+      rt.ext<OverrideProviders>().entries;
   for (int i = int(entries.size()) - 1; i >= 0; i--) {
     if (entries[i].lib.get() == &lib && entries[i].provider == &provider) {
       entries.remove_at(i);

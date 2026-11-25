@@ -16,16 +16,16 @@ using litestl::util::Vector;
 const char *blockStateName(BlockState state)
 {
   switch (state) {
-    case BlockState::Live:
-      return "Live";
-    case BlockState::InHistory:
-      return "InHistory";
-    case BlockState::Detached:
-      return "Detached";
-    case BlockState::Placeholder:
-      return "Placeholder";
-    case BlockState::Doomed:
-      return "Doomed";
+  case BlockState::Live:
+    return "Live";
+  case BlockState::InHistory:
+    return "InHistory";
+  case BlockState::Detached:
+    return "Detached";
+  case BlockState::Placeholder:
+    return "Placeholder";
+  case BlockState::Doomed:
+    return "Doomed";
   }
   return "?";
 }
@@ -47,7 +47,8 @@ Status wrongState(const Datablock &b, const char *op, BlockState want)
 
 Status noBlock(const char *op)
 {
-  return Status::error(StatusCode::NotFound, (std::string(op) + ": no such block").c_str());
+  return Status::error(StatusCode::NotFound,
+                       (std::string(op) + ": no such block").c_str());
 }
 
 } // namespace
@@ -79,8 +80,9 @@ Status Library::busyIfSweeping(const char *what) const
     return Status();
   }
   return Status::error(StatusCode::Busy,
-                       (std::string(what) + ": the library is busy (called from a provider "
-                                            "during a sweep, a load or a save)")
+                       (std::string(what) +
+                        ": the library is busy (called from a provider "
+                        "during a sweep, a load or a save)")
                            .c_str());
 }
 
@@ -88,18 +90,15 @@ void Library::runOrDefer(litestl::util::function<void()> fn)
 {
   if (sweeping_ || loading_) {
     deferred_.append(std::move(fn));
-  }
-  else {
+  } else {
     fn();
   }
 }
 
 /* ---- creating ---- */
 
-Result<BlockHandle> Library::addRecord(TypeId type,
-                                       BlockId id,
-                                       std::string_view name,
-                                       void *clientData)
+Result<BlockHandle>
+Library::addRecord(TypeId type, BlockId id, std::string_view name, void *clientData)
 {
   const BlockHandle h = pool_.create();
   Datablock *b = rec(h);
@@ -118,7 +117,8 @@ Result<BlockHandle> Library::create(TypeId type, std::string_view name, void *cl
   CDCC_TRY(busyIfSweeping("create"));
   const BlockTypeRegistry::Entry *entry = types_.find(type);
   if (!entry) {
-    return Status::error(StatusCode::NotFound, "create: the block type is not registered");
+    return Status::error(StatusCode::NotFound,
+                         "create: the block type is not registered");
   }
   /* A repeated id from the GUID source would corrupt the index; retry, then fail. */
   for (int attempt = 0; attempt < 4; attempt++) {
@@ -131,10 +131,8 @@ Result<BlockHandle> Library::create(TypeId type, std::string_view name, void *cl
                        "create: the GUID source keeps returning ids that are in use");
 }
 
-Result<BlockHandle> Library::createWithId(TypeId type,
-                                          BlockId id,
-                                          std::string_view name,
-                                          void *clientData)
+Result<BlockHandle>
+Library::createWithId(TypeId type, BlockId id, std::string_view name, void *clientData)
 {
   CDCC_TRY(busyIfSweeping("createWithId"));
   const BlockTypeRegistry::Entry *entry = types_.find(type);
@@ -144,7 +142,8 @@ Result<BlockHandle> Library::createWithId(TypeId type,
   }
   id = clients_.canonical(id);
   if (id.local.isNull()) {
-    return Status::error(StatusCode::InvalidArgument, "createWithId: the LocalId is null");
+    return Status::error(StatusCode::InvalidArgument,
+                         "createWithId: the LocalId is null");
   }
   if (id.client != entry->info.client) {
     return Status::error(StatusCode::InvalidArgument,
@@ -165,19 +164,17 @@ Result<BlockHandle> Library::createWithId(TypeId type,
   return addRecord(type, id, name, clientData);
 }
 
-Result<BlockHandle> Library::reviveAs(TypeId type,
-                                      BlockId id,
-                                      std::string_view name,
-                                      void *clientData)
+Result<BlockHandle>
+Library::reviveAs(TypeId type, BlockId id, std::string_view name, void *clientData)
 {
   CDCC_TRY(busyIfSweeping("reviveAs"));
   if (const BlockHandle h = find(id)) {
     const Datablock &b = *rec(h);
     if (b.state_ == BlockState::Live) {
-      return Status::error(StatusCode::AlreadyExists,
-                           ("reviveAs: block '" + std::string(b.name_.c_str()) +
-                            "' is already Live")
-                               .c_str());
+      return Status::error(
+          StatusCode::AlreadyExists,
+          ("reviveAs: block '" + std::string(b.name_.c_str()) + "' is already Live")
+              .c_str());
     }
     if (b.state_ == BlockState::Placeholder &&
         b.placeholderReason_ == PlaceholderReason::MissingBlock)
@@ -298,8 +295,7 @@ Status Library::hostChanged(Datablock &b, const char *op, BlockState from, Block
   if (b.state_ == BlockState::InHistory) {
     b.deletedFrom_ = to;
     setState(b, BlockState::InHistory); /* a transition of its data */
-  }
-  else {
+  } else {
     setState(b, to);
   }
   return Status();
@@ -370,7 +366,8 @@ Status Library::writeRef(RefCell &cell, BlockId target)
 {
   CDCC_TRY(busyIfSweeping("writeRef"));
   if (cell.kind == RefKind::Strong && target.isNull()) {
-    return Status::error(StatusCode::InvalidArgument, "writeRef: a Strong ref can't be null");
+    return Status::error(StatusCode::InvalidArgument,
+                         "writeRef: a Strong ref can't be null");
   }
   cell.target = target.isNull() ? target : clients_.canonical(target);
   cell.cache = find(cell.target);
@@ -385,7 +382,8 @@ void Library::noteRefsChanged()
 
 /* ---- slots ---- */
 
-Status Library::setSlot(BlockHandle owner, TypeId ns, int64_t key, BlockId target, RefKind kind)
+Status
+Library::setSlot(BlockHandle owner, TypeId ns, int64_t key, BlockId target, RefKind kind)
 {
   CDCC_TRY(busyIfSweeping("setSlot"));
   Datablock *b = rec(owner);
@@ -393,7 +391,8 @@ Status Library::setSlot(BlockHandle owner, TypeId ns, int64_t key, BlockId targe
     return noBlock("setSlot");
   }
   if (kind == RefKind::Strong && target.isNull()) {
-    return Status::error(StatusCode::InvalidArgument, "setSlot: a Strong ref can't be null");
+    return Status::error(StatusCode::InvalidArgument,
+                         "setSlot: a Strong ref can't be null");
   }
   Datablock::Slot *slot = nullptr;
   for (Datablock::Slot &s : b->slots_) {
@@ -448,9 +447,11 @@ Status Library::visitRefs(const Datablock &b,
                           litestl::util::function<void(RefVisitor &)> visit) const
 {
   const bool stickyBefore = rt_.hasStickyError();
-  RefVisitor visitor([](void *ctx, RefCell &cell) {
-    (*static_cast<litestl::util::function<void(RefCell &)> *>(ctx))(cell);
-  }, &fn);
+  RefVisitor visitor(
+      [](void *ctx, RefCell &cell) {
+        (*static_cast<litestl::util::function<void(RefCell &)> *>(ctx))(cell);
+      },
+      &fn);
   visit(visitor);
   if (!stickyBefore && rt_.hasStickyError()) {
     return Status::error(StatusCode::Internal,
@@ -461,7 +462,8 @@ Status Library::visitRefs(const Datablock &b,
   return Status();
 }
 
-Status Library::foreachDataRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const
+Status Library::foreachDataRef(BlockHandle h,
+                               litestl::util::function<void(RefCell &)> fn) const
 {
   const Datablock *b = rec(h);
   if (!b) {
@@ -483,7 +485,8 @@ Status Library::foreachDataRef(BlockHandle h, litestl::util::function<void(RefCe
   return visitRefs(*b, fn, [&](RefVisitor &v) { p.foreachRef(*b, v); });
 }
 
-Status Library::foreachRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const
+Status Library::foreachRef(BlockHandle h,
+                           litestl::util::function<void(RefCell &)> fn) const
 {
   CDCC_TRY(foreachDataRef(h, fn));
   Datablock *b = const_cast<Library *>(this)->rec(h);
@@ -546,8 +549,9 @@ Status Library::setOverride(BlockHandle h, InterfaceId iface, IfaceRef ref)
     return noBlock("setOverride");
   }
   if (!ref || ref.table()->iface != iface) {
-    return Status::error(StatusCode::TypeMismatch,
-                         "setOverride: the interface value is null or of another interface");
+    return Status::error(
+        StatusCode::TypeMismatch,
+        "setOverride: the interface value is null or of another interface");
   }
   for (Datablock::Override &o : b->overrides_) {
     if (o.iface == iface) {
@@ -602,7 +606,8 @@ Status Library::attach(BlockHandle h, TypeId type, void *data)
     return Status::error(StatusCode::InvalidArgument, "attach: the data is null");
   }
   if (hasAttachment(h, type)) {
-    return Status::error(StatusCode::AlreadyExists, "attach: the block has this attachment");
+    return Status::error(StatusCode::AlreadyExists,
+                         "attach: the block has this attachment");
   }
   b->attachments_.append(Datablock::Attachment{type, data});
   epoch_++;
@@ -631,8 +636,9 @@ bool Library::hasAttachment(BlockHandle h, TypeId type) const
 {
   bool has = false;
   forEachAttachment(h, [&](TypeId t, void *) { has |= t == type; });
-  forEachOpaqueAttachment(
-      h, [&](const OpaqueAttachment &o) { has |= detail::typeNamed(o.typeName.c_str()) == type; });
+  forEachOpaqueAttachment(h, [&](const OpaqueAttachment &o) {
+    has |= detail::typeNamed(o.typeName.c_str()) == type;
+  });
   return has;
 }
 
@@ -669,7 +675,8 @@ Status Library::attachOpaque(BlockHandle h, OpaqueAttachment attachment)
     return Status::error(StatusCode::InvalidArgument, "attachOpaque: no type name");
   }
   if (hasAttachment(h, type)) {
-    return Status::error(StatusCode::AlreadyExists, "attachOpaque: the block has this attachment");
+    return Status::error(StatusCode::AlreadyExists,
+                         "attachOpaque: the block has this attachment");
   }
   b->addOpaque(std::move(attachment));
   epoch_++;
@@ -726,7 +733,8 @@ uint64_t Library::memSize(BlockHandle h) const
   uint64_t n = sizeof(Datablock) + uint64_t(b->placeholderData_.bytes.size()) +
                uint64_t(b->placeholderData_.refs.size()) * sizeof(RefCell);
   const BlockProvider p = types_.provider(b->type_);
-  return p && p.hasMemSize() && b->dataState() == BlockState::Live ? n + p.memSize(*b) : n;
+  return p && p.hasMemSize() && b->dataState() == BlockState::Live ? n + p.memSize(*b)
+                                                                   : n;
 }
 
 /* ---- validation ---- */
@@ -742,7 +750,8 @@ Status Library::validate() const
     doomed += b.state_ == BlockState::Doomed ? 1 : 0;
   });
   if (doomed != doomedCount_) {
-    return Status::error(StatusCode::Internal, "Library: the Doomed count is out of date");
+    return Status::error(StatusCode::Internal,
+                         "Library: the Doomed count is out of date");
   }
   renormalizeIds();
   Status status;
@@ -755,7 +764,8 @@ Status Library::validate() const
                                  .c_str());
     }
     if (status.ok() && b.hasFlag(BlockFlags::HasOverrides) != (b.overrides_.size() > 0)) {
-      status = Status::error(StatusCode::Internal, "Library: HasOverrides is out of date");
+      status =
+          Status::error(StatusCode::Internal, "Library: HasOverrides is out of date");
     }
   });
   return status;

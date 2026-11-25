@@ -16,21 +16,21 @@
 namespace coredcc {
 
 /**
- * What a client implements per attachment type. Only `destroy` is required. `block` is the block
- * the data is (or will be) attached to.
+ * What a client implements per attachment type. Only `destroy` is required. `block` is
+ * the block the data is (or will be) attached to.
  *
- * - `destroy` frees the data. It runs when the block is destroyed, under the same rules as
- *   BlockProvider::destroy. It gets no block: the history can hold detached data for longer than
- *   the block, and the Library, exist.
+ * - `destroy` frees the data. It runs when the block is destroyed, under the same rules
+ * as BlockProvider::destroy. It gets no block: the history can hold detached data for
+ * longer than the block, and the Library, exist.
  * - `create` makes empty data, for code that attaches by type name alone.
- * - `copy` makes a copy for a duplicate of `from` (DuplicatePolicy::Copy needs it). References
- *   are copied as they are; the library remaps them.
- * - `serialize` and `deserialize` come together, and work as BlockProvider's do. A type without
- *   them says in its info that it is Transient.
- * - `foreachRef` reports the data's references, as BlockProvider::foreachRef does. A save checks
- *   them against what `serialize` wrote.
- * - `onWeakTargetLost` is told when a block that the data weakly references (`foreachRef` says)
- *   is about to be destroyed. The block may be in any state.
+ * - `copy` makes a copy for a duplicate of `from` (DuplicatePolicy::Copy needs it).
+ * References are copied as they are; the library remaps them.
+ * - `serialize` and `deserialize` come together, and work as BlockProvider's do. A type
+ * without them says in its info that it is Transient.
+ * - `foreachRef` reports the data's references, as BlockProvider::foreachRef does. A save
+ * checks them against what `serialize` wrote.
+ * - `onWeakTargetLost` is told when a block that the data weakly references (`foreachRef`
+ * says) is about to be destroyed. The block may be in any state.
  */
 struct AttachmentProvider : IfaceRef {
   void destroy(void *data)
@@ -115,7 +115,7 @@ struct AttachmentTypeInfo {
 
 /** Attachment types and their providers. A Runtime extension. */
 class AttachmentTypeRegistry {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.AttachmentTypeRegistry";
 
   struct Entry {
@@ -124,20 +124,22 @@ class AttachmentTypeRegistry {
     Owned<AttachmentProvider> provider;
   };
 
-  explicit AttachmentTypeRegistry(Runtime *rt) : rt_(*rt) {}
+  explicit AttachmentTypeRegistry(Runtime *rt) : rt_(*rt)
+  {
+  }
   ~AttachmentTypeRegistry();
   AttachmentTypeRegistry(const AttachmentTypeRegistry &) = delete;
   AttachmentTypeRegistry &operator=(const AttachmentTypeRegistry &) = delete;
 
-  /** Registers a type. Takes the provider. Refuses one of serialize and deserialize without
-   * the other, a `storage` that contradicts them, DuplicatePolicy::Copy without `copy`, and a
-   * block type's name. */
+  /** Registers a type. Takes the provider. Refuses one of serialize and deserialize
+   * without the other, a `storage` that contradicts them, DuplicatePolicy::Copy without
+   * `copy`, and a block type's name. */
   Result<TypeId> add(AttachmentTypeInfo info, Owned<AttachmentProvider> provider);
   const Entry *find(TypeId type) const;
 
   Status validate() const;
 
- private:
+private:
   Runtime &rt_;
   litestl::util::Vector<Entry *> entries_;
   litestl::util::Map<uint64_t, Entry *> byId_;

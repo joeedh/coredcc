@@ -21,7 +21,8 @@ bool isSpace(char c)
 
 bool hasText(LayoutKind kind)
 {
-  return kind == LayoutKind::Label || kind == LayoutKind::Tool || kind == LayoutKind::Custom;
+  return kind == LayoutKind::Label || kind == LayoutKind::Tool ||
+         kind == LayoutKind::Custom;
 }
 
 std::string trimmed(const std::string &s)
@@ -42,8 +43,7 @@ std::string collapsed(const std::string &s)
   for (char c : trimmed(s)) {
     if (!isSpace(c)) {
       out += c;
-    }
-    else if (out.back() != ' ') {
+    } else if (out.back() != ' ') {
       out += ' ';
     }
   }
@@ -51,8 +51,10 @@ std::string collapsed(const std::string &s)
 }
 
 class Parser {
- public:
-  explicit Parser(std::string_view s) : s_(s) {}
+public:
+  explicit Parser(std::string_view s) : s_(s)
+  {
+  }
 
   size_t offset = 0;
   Status error;
@@ -60,7 +62,8 @@ class Parser {
   bool run(std::vector<DraftNode> &out)
   {
     if (s_.size() > LayoutLimits::kMaxBytes) {
-      return fail(LayoutLimits::kMaxBytes, "the text is longer than 1 MiB",
+      return fail(LayoutLimits::kMaxBytes,
+                  "the text is longer than 1 MiB",
                   StatusCode::OutOfRange);
     }
     const char *what = nullptr;
@@ -70,8 +73,8 @@ class Parser {
     if (starts(kBom)) {
       at_ += kBom.size();
     }
-    if (starts("<?xml") && at_ + 5 < s_.size() && (isSpace(s_[at_ + 5]) || s_[at_ + 5] == '?') &&
-        !declaration())
+    if (starts("<?xml") && at_ + 5 < s_.size() &&
+        (isSpace(s_[at_ + 5]) || s_[at_ + 5] == '?') && !declaration())
     {
       return false;
     }
@@ -82,8 +85,9 @@ class Parser {
     }
     if (!open_.empty()) {
       const LayoutPosition from = layoutPosition(s_, open_.back().offset);
-      return fail(at_, "the <" + std::string(open_.back().name) + "> in line " +
-                           std::to_string(from.line) + " isn't closed");
+      return fail(at_,
+                  "the <" + std::string(open_.back().name) + "> in line " +
+                      std::to_string(from.line) + " isn't closed");
     }
     if (nodes_.empty()) {
       return fail(at_, "there is no <layout>");
@@ -92,7 +96,7 @@ class Parser {
     return true;
   }
 
- private:
+private:
   struct Open {
     /** -1 for one that is skipped, as is what is in it. */
     int node;
@@ -111,7 +115,8 @@ class Parser {
     bool verbatim;
   };
 
-  bool fail(size_t at, const std::string &what, StatusCode code = StatusCode::InvalidArgument)
+  bool
+  fail(size_t at, const std::string &what, StatusCode code = StatusCode::InvalidArgument)
   {
     return fail(at, Status::error(code, what.c_str()));
   }
@@ -193,7 +198,8 @@ class Parser {
     }
     skipSpace();
     if (at_ >= s_.size() || s_[at_] != '=') {
-      return fail(at_, "expected '=' after '" + std::string(out.name) + "', not " + here());
+      return fail(at_,
+                  "expected '=' after '" + std::string(out.name) + "', not " + here());
     }
     at_++;
     skipSpace();
@@ -245,9 +251,9 @@ class Parser {
       const std::string &v = a.value;
       const bool utf8 = v.size() == 5 && (v[0] | 32) == 'u' && (v[1] | 32) == 't' &&
                         (v[2] | 32) == 'f' && v.substr(3) == "-8";
-      if (a.name == "version" ? v != "1.0" :
-          a.name == "encoding" ? !utf8 :
-                                 a.name != "standalone")
+      if (a.name == "version"    ? v != "1.0"
+          : a.name == "encoding" ? !utf8
+                                 : a.name != "standalone")
       {
         return fail(a.offset, "'" + std::string(a.name) + "=" + v + "' isn't supported");
       }
@@ -281,8 +287,9 @@ class Parser {
       return fail(at_, "DOCTYPE and other declarations aren't supported");
     }
     if (starts("<?")) {
-      return fail(at_, starts("<?xml") ? "an <?xml?> declaration must come first" :
-                                         "processing instructions aren't supported");
+      return fail(at_,
+                  starts("<?xml") ? "an <?xml?> declaration must come first"
+                                  : "processing instructions aren't supported");
     }
     return starts("</") ? endTag() : startTag();
   }
@@ -310,8 +317,8 @@ class Parser {
       if (!inCustom || reserved) {
         const std::string what = "<" + std::string(tag) + ">";
         Status s = Status::error(StatusCode::InvalidArgument,
-                                 (reserved ? what + " is reserved for a later version" :
-                                             "there is no element " + what)
+                                 (reserved ? what + " is reserved for a later version"
+                                           : "there is no element " + what)
                                      .c_str());
         if (newer_) {
           skipped(nodes_[n.parent], from, s.message());
@@ -404,8 +411,9 @@ class Parser {
         return root(n, unknownAt, unknown);
       }
       if (n.attrs.size() + n.skipped.size() == size_t(LayoutLimits::kMaxAttrs)) {
-        return fail(a.offset, "an element has more than " +
-                                  std::to_string(LayoutLimits::kMaxAttrs) + " attributes",
+        return fail(a.offset,
+                    "an element has more than " +
+                        std::to_string(LayoutLimits::kMaxAttrs) + " attributes",
                     StatusCode::OutOfRange);
       }
       if (a.name == "xmlns") {
@@ -470,8 +478,9 @@ class Parser {
       return fail(from, "there is nothing that </" + std::string(tag) + "> could close");
     }
     if (tag != open_.back().name) {
-      return fail(from, "</" + std::string(tag) + "> can't close <" +
-                            std::string(open_.back().name) + ">");
+      return fail(from,
+                  "</" + std::string(tag) + "> can't close <" +
+                      std::string(open_.back().name) + ">");
     }
     return close();
   }
@@ -506,8 +515,9 @@ class Parser {
           return fail(at_, "there is text outside of the <layout>");
         }
         if (o->node >= 0 && !hasText(nodes_[o->node].kind)) {
-          return fail(at_, "a <" + std::string(o->name) +
-                               "> can't hold text: write it in a <label>");
+          return fail(at_,
+                      "a <" + std::string(o->name) +
+                          "> can't hold text: write it in a <label>");
         }
         if (!o->hasText) {
           o->hasText = true;
@@ -519,11 +529,9 @@ class Parser {
         if (!entity(decoded)) {
           return false;
         }
-      }
-      else if (starts("]]>")) {
+      } else if (starts("]]>")) {
         return fail(at_, "']]>' in text is written ]]&gt;");
-      }
-      else {
+      } else {
         at_ += c == '\r' && at_ + 1 < s_.size() && s_[at_ + 1] == '\n' ? 2 : 1;
         decoded = c == '\r' ? '\n' : c;
       }
@@ -545,7 +553,8 @@ class Parser {
 
 } // namespace
 
-LayoutPosition layoutPosition(std::string_view xml, size_t offset, const LayoutPosition &from)
+LayoutPosition
+layoutPosition(std::string_view xml, size_t offset, const LayoutPosition &from)
 {
   LayoutPosition out = from;
   out.offset = offset < xml.size() ? offset : xml.size();
@@ -555,8 +564,7 @@ LayoutPosition layoutPosition(std::string_view xml, size_t offset, const LayoutP
     if (c == '\n' || (c == '\r' && !(i + 1 < xml.size() && xml[i + 1] == '\n'))) {
       out.line++;
       out.column = 1;
-    }
-    else if ((uint8_t(c) & 0xC0) != 0x80) {
+    } else if ((uint8_t(c) & 0xC0) != 0x80) {
       out.column++;
     }
   }
@@ -573,8 +581,7 @@ Result<Layout> parseLayout(std::string_view xml, LayoutPosition *where)
     if (out.ok()) {
       return out;
     }
-  }
-  else {
+  } else {
     fault.status = std::move(parser.error);
     fault.offset = parser.offset;
   }
@@ -583,8 +590,8 @@ Result<Layout> parseLayout(std::string_view xml, LayoutPosition *where)
     *where = p;
   }
   Status s = Status::error(fault.status.code(),
-                           ("layout " + std::to_string(p.line) + ":" + std::to_string(p.column) +
-                            ": " + fault.status.message())
+                           ("layout " + std::to_string(p.line) + ":" +
+                            std::to_string(p.column) + ": " + fault.status.message())
                                .c_str());
   for (const litestl::util::string &suggestion : fault.status.suggestions()) {
     s.suggest(suggestion);

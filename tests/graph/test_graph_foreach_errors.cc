@@ -1,4 +1,5 @@
-/* graph.foreach: failing elements, nesting, limits, and what the def and the datapath know. */
+/* graph.foreach: failing elements, nesting, limits, and what the def and the datapath
+ * know. */
 #include "edit_fixture.h"
 #include "foreach_fixture.h"
 
@@ -24,12 +25,14 @@ void testErrors()
   test_assert(l.inst.totalRuns() - runs == 2 && place(l.error()) == at({l.node}, l.add));
   test_assert(l.inst.report(self).state == NodeReport::State::Failed && l.ran() == 2);
   test_assert(l.inst.report(self).seconds > 0);
-  test_assert(l.inst.lastGood(l.path)->payload<Elements>()->columns[0].values[1].asFloat() == 2);
+  test_assert(
+      l.inst.lastGood(l.path)->payload<Elements>()->columns[0].values[1].asFloat() == 2);
   /* Nothing moved: it isn't run again, until retry, which runs what failed. */
   test_assert(l.fails(StatusCode::OutOfRange, {2}, "element 2: ") && l.ran() == 0);
   w.rt.touch();
   test_assert(l.fails(StatusCode::OutOfRange, {2}, "element 2: ") && l.ran() == 0);
-  test_assert(l.inst.retry().ok() && l.fails(StatusCode::OutOfRange, {2}, "") && l.ran() == 1);
+  test_assert(l.inst.retry().ok() && l.fails(StatusCode::OutOfRange, {2}, "") &&
+              l.ran() == 1);
   test_assert(l.inst.totalRuns() - runs == 3);
   /* Another row changes: the failing one is still failing. */
   l.set(table({1, 2, 3}, {{"a", {6, -100, 6}}}));
@@ -56,7 +59,8 @@ void testErrors()
   l.set(table({1, 2}, {{"a", {5, -100}}}));
   test_assert(!l.evaluate().ok() && l.inst.elementCount() == 3);
   l.set(table({3, 1}, {{"a", {6, 5}}}));
-  test_assert(l.is({3, 1}, {{"sum", {6, 5}}, {"c2", {9, 9}}}, 0) && l.inst.elementCount() == 2);
+  test_assert(l.is({3, 1}, {{"sum", {6, 5}}, {"c2", {9, 9}}}, 0) &&
+              l.inst.elementCount() == 2);
   /* Without limit, though: as many again as may be cached. */
   test_assert(l.root.def->setParam(l.node, kMaxCachedParam, PropValue::ofInt(2)).ok());
   test_assert(l.is({3, 1}, {{"sum", {6, 5}}, {"c2", {9, 9}}}, 0));
@@ -68,7 +72,8 @@ void testErrors()
   test_assert(l.evaluate().ok() && l.inst.elementCount() == 2);
   l.set(table({9, 10}, {{"a", {1, -100}}}));
   test_assert(!l.evaluate().ok() && l.inst.elementCount() == 4);
-  l.set(table({11, 10, 7}, {{"a", {1, -100, 3}}})); /* 7 is below the two that may be cached */
+  l.set(table({11, 10, 7},
+              {{"a", {1, -100, 3}}})); /* 7 is below the two that may be cached */
   test_assert(!l.evaluate().ok() && l.inst.elementCount() == 2);
 
   /* A failing input, and an error deeper down, are the node's. */
@@ -92,7 +97,8 @@ void testErrors()
   loop.toKey = "b";
   test_assert(l.inner.def->unlink(l.inner.def->node(l.square)->linkInto("b")->id).ok());
   test_assert(l.inner.def->insertLink(loop).ok());
-  test_assert(l.fails(StatusCode::FailedPrecondition, {1}, "element 1: a cycle through "));
+  test_assert(
+      l.fails(StatusCode::FailedPrecondition, {1}, "element 1: a cycle through "));
   test_assert(l.inner.def->unlink(loop.id).ok() && l.evaluate().ok());
   /* The sockets of a lost group in it, as last known, moved while nothing was pulled. */
   const Graph lost = newGraph(w.lib, "lost");
@@ -109,7 +115,8 @@ void testErrors()
   test_assert(w.lib.restoreFromHistory(lost.h).ok());
   test_assert(lost.def->addInterface(SocketSide::Output, "lo", "float", -1, lo).ok());
   test_assert(l.inner.def->sockets(groupNode, SocketSide::Output).size() == 1);
-  test_assert(w.lib.markDeleted(lost.h).ok() && hasCode(l.evaluate(), StatusCode::NotFound));
+  test_assert(w.lib.markDeleted(lost.h).ok() &&
+              hasCode(l.evaluate(), StatusCode::NotFound));
   test_assert(l.inner.def->removeNode(group).ok());
   if (was.id) {
     test_assert(l.inner.def->insertLink(was).ok());
@@ -126,7 +133,8 @@ void testErrors()
   loop.toKey = "a";
   test_assert(r.insertLink(loop).ok());
   l.set(table({1, 2}, {{"a", {1, 8}}}));
-  test_assert(hasCode(l.inst.evaluate(SocketPath::of(y, "value")), StatusCode::FailedPrecondition));
+  test_assert(hasCode(l.inst.evaluate(SocketPath::of(y, "value")),
+                      StatusCode::FailedPrecondition));
   test_assert(l.inst.report(at({}, x)).state == NodeReport::State::Failed);
   test_assert(l.inst.report(at({}, y)).state == NodeReport::State::Failed);
   test_assert(l.inst.report(at({}, total)).state == NodeReport::State::Ok);
@@ -139,7 +147,8 @@ void testSharedErrors()
   Loop l(w);
   test_assert(l.root.def->setParam(l.node, kMaxCachedParam, PropValue::ofInt(1)).ok());
   l.set(table({1, 2, 3, 4}, {{"a", {1, 2, -100, 4}}}));
-  test_assert(l.fails(StatusCode::OutOfRange, {3}, "element 3: a is -100") && l.ran() == 1);
+  test_assert(l.fails(StatusCode::OutOfRange, {3}, "element 3: a is -100") &&
+              l.ran() == 1);
   test_assert(place(l.error()) == at({l.node}, l.add));
   w.rt.touch();
   test_assert(!l.evaluate().ok() && l.ran() == 0);
@@ -224,19 +233,23 @@ void testNested()
   /* Both keys of a failing element. */
   w.thing(h).value = -100;
   w.notify(idOf(w.lib, h));
-  test_assert(l.fails(StatusCode::OutOfRange, {10, 0}, "element 10: element 0: a is -100"));
+  test_assert(
+      l.fails(StatusCode::OutOfRange, {10, 0}, "element 10: element 0: a is -100"));
   test_assert(place(l.error()) == at({l.node, n.inner}, n.leafSum));
   /* The same with shared states, at each level. */
   w.thing(h).value = 7;
   w.notify(idOf(w.lib, h));
   for (int mode = 0; mode < 4; mode++) {
     const PropValue none = PropValue::ofInt(0), some = PropValue::ofInt(16);
-    test_assert(l.root.def->setParam(l.node, kMaxCachedParam, mode & 1 ? none : some).ok());
-    test_assert(l.inner.def->setParam(n.inner, kMaxCachedParam, mode & 2 ? none : some).ok());
+    test_assert(
+        l.root.def->setParam(l.node, kMaxCachedParam, mode & 1 ? none : some).ok());
+    test_assert(
+        l.inner.def->setParam(n.inner, kMaxCachedParam, mode & 2 ? none : some).ok());
     l.set(table({10, 20, 30}, {{"a", {4, 1, 0}}, {"b", {1, 6, 2}}}));
     test_assert(l.evaluate().ok());
     const Elements::Column &c = *l.result()->column("sum");
-    test_assert(c.values[0].asFloat() == 34 && c.values[1].asFloat() == 7 && c.values[2].asFloat() == 0);
+    test_assert(c.values[0].asFloat() == 34 && c.values[1].asFloat() == 7 &&
+                c.values[2].asFloat() == 0);
   }
 }
 
@@ -248,9 +261,12 @@ void testGroups()
   l.set(table({1}, {{"a", {4}}}));
   /* Recursion through a foreach is refused, and found when it is written. */
   const NodeId back = add(*l.inner.def, kGraphForeachType);
-  test_assert(hasCode(l.inner.def->setGroup(back, l.root.id), StatusCode::InvalidArgument));
-  test_assert(hasCode(l.inner.def->setGroup(back, l.inner.id), StatusCode::InvalidArgument));
-  test_assert(l.inner.def->sockets(*l.inner.def->node(back), SocketSide::Input).size() == 1);
+  test_assert(
+      hasCode(l.inner.def->setGroup(back, l.root.id), StatusCode::InvalidArgument));
+  test_assert(
+      hasCode(l.inner.def->setGroup(back, l.inner.id), StatusCode::InvalidArgument));
+  test_assert(l.inner.def->sockets(*l.inner.def->node(back), SocketSide::Input).size() ==
+              1);
   test_assert(l.evaluate().ok() && l.inner.def->removeNode(back).ok());
   NodeState state;
   state.id = NodeId{50};
@@ -266,15 +282,18 @@ void testGroups()
   link.to = l.innerOut;
   link.toKey = interfaceKey(t);
   test_assert(l.inner.def->insertLink(link).ok());
-  test_assert(l.fails(StatusCode::FailedPrecondition, {1}, "element 1: the graph contains itself"));
+  test_assert(l.fails(
+      StatusCode::FailedPrecondition, {1}, "element 1: the graph contains itself"));
   test_assert(place(l.error()) == at({l.node}, state.id));
-  test_assert(l.inner.def->removeNode(state.id).ok() && l.inner.def->removeInterface(t).ok());
+  test_assert(l.inner.def->removeNode(state.id).ok() &&
+              l.inner.def->removeInterface(t).ok());
   test_assert(l.is({1}, {{"sum", {4}}, {"c2", {0}}}, 0));
 
   /* Links: its output depends on all its inputs. */
   const NodeId total = add(r, "t.total");
   connect(r, l.node, kElementsSocket, total, "elements");
-  test_assert(hasCode(r.link({total, "value"}, {l.node, key(l.c)}), StatusCode::InvalidArgument));
+  test_assert(
+      hasCode(r.link({total, "value"}, {l.node, key(l.c)}), StatusCode::InvalidArgument));
   test_assert(hasCode(r.link({l.node, kElementsSocket}, {l.node, kElementsSocket}),
                       StatusCode::InvalidArgument));
   test_assert(hasCode(r.setLiteral(l.node, kElementsSocket, PropValue::ofFloat(1)),
@@ -291,7 +310,8 @@ void testGroups()
   test_assert(l.is({1}, {{"sum", {4}}, {"c2", {0}}}, 0));
   test_assert(w.lib.markDeleted(l.inner.h).ok());
   test_assert(l.fails(StatusCode::NotFound, {}, "the group's graph isn't there"));
-  test_assert(r.sockets(*r.node(l.node), SocketSide::Input).size() == 4); /* as last seen */
+  test_assert(r.sockets(*r.node(l.node), SocketSide::Input).size() ==
+              4); /* as last seen */
   test_assert(w.lib.restoreFromHistory(l.inner.h).ok());
   test_assert(l.is({1}, {{"sum", {4}}, {"c2", {0}}}, 0));
   /* Another def: new states. */
@@ -304,15 +324,19 @@ void testGroups()
   test_assert(l.is({1}, {{"sum", {4}}, {"c2", {0}}}, 2));
   /* A new def under its id. */
   const uint64_t serial = l.inner.def->serial();
-  test_assert(w.lib.markDeleted(l.inner.h).ok() && w.lib.destroyFromHistory(l.inner.h).ok());
-  GraphDef *def = litestl::alloc::New<GraphDef>("coredcc::GraphDef", &w.rt, &w.lib, l.inner.id);
+  test_assert(w.lib.markDeleted(l.inner.h).ok() &&
+              w.lib.destroyFromHistory(l.inner.h).ok());
+  GraphDef *def =
+      litestl::alloc::New<GraphDef>("coredcc::GraphDef", &w.rt, &w.lib, l.inner.id);
   test_assert(def->addInterface(SocketSide::Output, "new", "int", -1, l.sum).ok());
   test_assert(w.lib.reviveAs(TypeId::of(kGraphDefType), l.inner.id, "inner", def).ok());
-  test_assert(def->serial() != serial && l.evaluate().ok() && l.result()->columns.size() == 1);
+  test_assert(def->serial() != serial && l.evaluate().ok() &&
+              l.result()->columns.size() == 1);
   test_assert(*l.column("new") == GraphValue::ofInt(0));
   /* The node is removed, or made another type's: so are the elements. */
   test_assert(l.inst.elementCount() == 1);
-  test_assert(r.removeNode(l.node).ok() && l.evaluate().ok() && l.inst.elementCount() == 0);
+  test_assert(r.removeNode(l.node).ok() && l.evaluate().ok() &&
+              l.inst.elementCount() == 0);
 }
 
 /* A node type, a socket type and a conversion that the elements wait for. */
@@ -353,7 +377,8 @@ void testLateTypes()
   l.set(t);
   test_assert(l.fails(StatusCode::TypeMismatch, {1}, "element 1: column 'a': "));
   test_assert(w.rt.ext<SocketTypeRegistry>()
-                  .addConversion("string", "float",
+                  .addConversion("string",
+                                 "float",
                                  [](const GraphValue &in, GraphValue &out) {
                                    out = GraphValue::ofFloat(atof(in.asString().c_str()));
                                    return Status();
@@ -382,7 +407,11 @@ void testLimits()
       const NodeId t = add(*up.def, "t.range");
       test_assert(up.def->setLiteral(t, "count", PropValue::ofFloat(1)).ok());
       if (depth == 1) {
-        connect(*up.def, t, "elements", group, up.def->sockets(*up.def->node(group), SocketSide::Input)[0].key.c_str());
+        connect(*up.def,
+                t,
+                "elements",
+                group,
+                up.def->sockets(*up.def->node(group), SocketSide::Input)[0].key.c_str());
       }
       GraphInstance inst(&w.rt, &w.lib, up.id);
       const Status s = inst.evaluate(SocketPath::output("out"));
@@ -400,8 +429,10 @@ void testLimits()
     Loop l(w);
     const Graph leaf = newGraph(w.lib, "leaf");
     const int64_t o = addSocket(*leaf.def, SocketSide::Output, "o", "float");
-    const NodeId g1 = add(*l.inner.def, "graph.group"), g2 = add(*l.inner.def, "graph.group");
-    test_assert(l.inner.def->setGroup(g1, leaf.id).ok() && l.inner.def->setGroup(g2, leaf.id).ok());
+    const NodeId g1 = add(*l.inner.def, "graph.group"),
+                 g2 = add(*l.inner.def, "graph.group");
+    test_assert(l.inner.def->setGroup(g1, leaf.id).ok() &&
+                l.inner.def->setGroup(g2, leaf.id).ok());
     connect(*l.inner.def, g1, key(o), l.add, "a");
     connect(*l.inner.def, g2, key(o), l.add, "b");
     l.inst.setMaxFrames(2);
@@ -417,7 +448,8 @@ void testLimits()
     l.set(text);
     test_assert(!l.evaluate().ok() && l.inst.elementCount() == 0);
     l.set(table({1, 2, 3}, {}));
-    test_assert(l.evaluate().ok() && l.inst.elementCount() == 1); /* 1 and 2 needn't run */
+    test_assert(l.evaluate().ok() &&
+                l.inst.elementCount() == 1); /* 1 and 2 needn't run */
     l.inst.setMaxFrames(1);
     l.set(table({1, 2, 3, 4}, {}));
     test_assert(l.evaluate().ok()); /* they have their groups */
@@ -456,11 +488,14 @@ void testPaths()
   test_assert(l.evaluate().ok());
   const SocketPath inside = SocketPath::of(at({l.node}, l.add), "value");
   test_assert(hasCode(l.inst.evaluate(inside), StatusCode::NotFound));
-  test_assert(l.inst.report(at({l.node}, l.add)).state == NodeReport::State::NotEvaluated);
+  test_assert(l.inst.report(at({l.node}, l.add)).state ==
+              NodeReport::State::NotEvaluated);
   const SocketPath out = SocketPath::of(l.node, kElementsSocket);
-  test_assert(l.inst.evaluate(out).ok() && l.inst.value(out)->payload<Elements>()->size() == 1);
+  test_assert(l.inst.evaluate(out).ok() &&
+              l.inst.value(out)->payload<Elements>()->size() == 1);
   const SocketPath in = SocketPath::of(l.node, kElementsSocket, SocketSide::Input);
-  test_assert(l.inst.evaluate(in).ok() && l.inst.value(in)->payload<Elements>()->size() == 1);
+  test_assert(l.inst.evaluate(in).ok() &&
+              l.inst.value(in)->payload<Elements>()->size() == 1);
   test_assert(l.inst.report(at({}, l.node)).state == NodeReport::State::Ok);
 }
 
@@ -474,8 +509,9 @@ void testDocument()
   StableRef ref;
   ref.owner = OwnerKey::ofBlock(g.id);
   ref.type = StructId::of(kGraphDefType);
-  test_assert(d.run(kGraphNodeAddCommand, {{"graph", PropValue::ofPointer(ref)},
-                                           {"type", PropValue::ofString(kGraphForeachType)}})
+  test_assert(d.run(kGraphNodeAddCommand,
+                    {{"graph", PropValue::ofPointer(ref)},
+                     {"type", PropValue::ofString(kGraphForeachType)}})
                   .ok());
   const NodeId n = g.def->nodeAt(0)->id();
   const std::string path = "graphs[\"g\"].nodes[#" + std::to_string(n.value) + "]";

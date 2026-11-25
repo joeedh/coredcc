@@ -27,7 +27,8 @@ Status SceneBvh::update(const detail::EvaluatedStore &results, const BvhOptions 
   return Status();
 }
 
-Status SceneBvh::objectsInRegion(std::span<const BvhPlane> planes, Vector<BlockHandle> &out) const
+Status SceneBvh::objectsInRegion(std::span<const BvhPlane> planes,
+                                 Vector<BlockHandle> &out) const
 {
   out.clear();
   Vector<int> places;
@@ -51,9 +52,10 @@ struct Found {
 
 void inOrder(const SceneBvh &bvh, Vector<Found> &found, Vector<BlockHandle> &out)
 {
-  std::sort(found.data(), found.data() + found.size(), [](const Found &a, const Found &b) {
-    return a.key != b.key ? a.key < b.key : a.place < b.place;
-  });
+  std::sort(
+      found.data(), found.data() + found.size(), [](const Found &a, const Found &b) {
+        return a.key != b.key ? a.key < b.key : a.place < b.place;
+      });
   for (const Found &f : found) {
     out.append(bvh.object(f.place));
   }
@@ -73,7 +75,8 @@ Status SceneBvh::objectsOnRay(const Ray &ray, Vector<BlockHandle> &out) const
   return Status();
 }
 
-Status SceneBvh::objectsNear(const double3 &point, double radius, Vector<BlockHandle> &out) const
+Status
+SceneBvh::objectsNear(const double3 &point, double radius, Vector<BlockHandle> &out) const
 {
   out.clear();
   Vector<Found> found;

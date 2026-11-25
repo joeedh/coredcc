@@ -30,9 +30,12 @@ void writeAccess(JsonWriter &out, PropAccess access)
     PropAccess flag;
     const char *name;
   } kNames[] = {
-      {PropAccess::ReadOnly, "ReadOnly"},           {PropAccess::Private, "Private"},
-      {PropAccess::NoUndo, "NoUndo"},               {PropAccess::Optional, "Optional"},
-      {PropAccess::SaveLastValue, "SaveLastValue"}, {PropAccess::Animatable, "Animatable"},
+      {PropAccess::ReadOnly, "ReadOnly"},
+      {PropAccess::Private, "Private"},
+      {PropAccess::NoUndo, "NoUndo"},
+      {PropAccess::Optional, "Optional"},
+      {PropAccess::SaveLastValue, "SaveLastValue"},
+      {PropAccess::Animatable, "Animatable"},
       {PropAccess::NotRemembered, "NotRemembered"},
   };
   out.key("access").beginArray();
@@ -79,51 +82,53 @@ void writeFlags(JsonWriter &out, const EnumMeta &meta, uint64_t bits)
   out.endArray();
 }
 
-void writeValue(JsonWriter &out, const Runtime &rt, const PropertyDef &def, const PropValue &v)
+void writeValue(JsonWriter &out,
+                const Runtime &rt,
+                const PropertyDef &def,
+                const PropValue &v)
 {
   switch (v.type()) {
-    case PropValue::Type::None:
-      out.null();
-      return;
-    case PropValue::Type::Bool:
-      out.boolean(v.asBool());
-      return;
-    case PropValue::Type::Int:
-      out.integer(v.asInt());
-      return;
-    case PropValue::Type::Float:
-      out.number(v.asFloat());
-      return;
-    case PropValue::Type::String:
-      out.string(v.asString().c_str());
-      return;
-    case PropValue::Type::Enum: {
-      const EnumItem *item = def.enumMeta() ? def.enumMeta()->findValue(v.asEnum()) : nullptr;
-      if (item) {
-        out.string(item->key.c_str());
-      }
-      else {
-        out.integer(v.asEnum());
-      }
-      return;
+  case PropValue::Type::None:
+    out.null();
+    return;
+  case PropValue::Type::Bool:
+    out.boolean(v.asBool());
+    return;
+  case PropValue::Type::Int:
+    out.integer(v.asInt());
+    return;
+  case PropValue::Type::Float:
+    out.number(v.asFloat());
+    return;
+  case PropValue::Type::String:
+    out.string(v.asString().c_str());
+    return;
+  case PropValue::Type::Enum: {
+    const EnumItem *item =
+        def.enumMeta() ? def.enumMeta()->findValue(v.asEnum()) : nullptr;
+    if (item) {
+      out.string(item->key.c_str());
+    } else {
+      out.integer(v.asEnum());
     }
-    case PropValue::Type::Flags:
-      writeFlags(out, def.enumMeta() ? *def.enumMeta() : EnumMeta(), v.asFlags());
-      return;
-    case PropValue::Type::Pointer:
-      if (v.asPointer().isNull()) {
-        out.null();
-      }
-      else {
-        out.string(formatRef(rt, v.asPointer()));
-      }
-      return;
-    default:
-      out.beginArray();
-      for (int i = 0; i < v.componentCount(); i++) {
-        out.number(v.component(i));
-      }
-      out.endArray();
+    return;
+  }
+  case PropValue::Type::Flags:
+    writeFlags(out, def.enumMeta() ? *def.enumMeta() : EnumMeta(), v.asFlags());
+    return;
+  case PropValue::Type::Pointer:
+    if (v.asPointer().isNull()) {
+      out.null();
+    } else {
+      out.string(formatRef(rt, v.asPointer()));
+    }
+    return;
+  default:
+    out.beginArray();
+    for (int i = 0; i < v.componentCount(); i++) {
+      out.number(v.component(i));
+    }
+    out.endArray();
   }
 }
 
@@ -196,16 +201,16 @@ static void writeProperty(JsonWriter &out,
 const char *pathKindName(const ResolvedPath &rp)
 {
   switch (rp.kind) {
-    case ResolvedPath::Kind::Struct:
-      return "Struct";
-    case ResolvedPath::Kind::Member:
-      return propKindName(rp.member->def().kind());
-    case ResolvedPath::Kind::Component:
-      return "Component";
-    case ResolvedPath::Kind::EnumKey:
-      return "EnumKey";
-    case ResolvedPath::Kind::Length:
-      return "Length";
+  case ResolvedPath::Kind::Struct:
+    return "Struct";
+  case ResolvedPath::Kind::Member:
+    return propKindName(rp.member->def().kind());
+  case ResolvedPath::Kind::Component:
+    return "Component";
+  case ResolvedPath::Kind::EnumKey:
+    return "EnumKey";
+  case ResolvedPath::Kind::Length:
+    return "Length";
   }
   return "";
 }
@@ -279,8 +284,7 @@ Result<std::string> pathMeta(Context &ctx, std::string_view path)
     if (rp->component < def->defaultValue().componentCount()) {
       fallback = PropValue::ofFloat(def->defaultValue().component(rp->component));
     }
-  }
-  else if (rp->kind == ResolvedPath::Kind::EnumKey) {
+  } else if (rp->kind == ResolvedPath::Kind::EnumKey) {
     out.key("key").string(rp->enumKey.c_str());
     out.key("of").string(propKindName(rp->member->def().kind()));
     Result<PropertyDef> whole = getMemberMeta(ctx, *rp);
@@ -289,8 +293,7 @@ Result<std::string> pathMeta(Context &ctx, std::string_view path)
       def->uiName(item->uiName.c_str()).description(item->description.c_str());
       def->icon(item->icon.c_str());
     }
-  }
-  else if (rp->kind == ResolvedPath::Kind::Length) {
+  } else if (rp->kind == ResolvedPath::Kind::Length) {
     writeStructName(out, rt, "target", rp->member->collection().itemStruct);
   }
   out.key("readOnly").boolean(def->hasAccess(PropAccess::ReadOnly));

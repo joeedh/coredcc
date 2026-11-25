@@ -53,13 +53,16 @@ NearQuery::NearQuery(const double3 &point,
   const double *m = inverse;
   double sum = 0.0;
   for (int c = 0; c < 3; c++) {
-    sum += m[c * 4] * m[c * 4] + m[c * 4 + 1] * m[c * 4 + 1] + m[c * 4 + 2] * m[c * 4 + 2];
+    sum +=
+        m[c * 4] * m[c * 4] + m[c * 4 + 1] * m[c * 4 + 1] + m[c * 4 + 2] * m[c * 4 + 2];
   }
   stretch_ = std::sqrt(sum) * (1.0 + 1e-9);
   /* The inverse's rounding, and the point's. */
   double size = 0.0;
   for (int i = 0; i < 3; i++) {
-    size = std::fmax(size, std::fabs(point[i]) + std::fabs(static_cast<const double *>(world)[12 + i]));
+    size = std::fmax(size,
+                     std::fabs(point[i]) +
+                         std::fabs(static_cast<const double *>(world)[12 + i]));
   }
   radius_ = (radius + size * 1e-12) * stretch_;
   if (!finite(point_) || !bvh::finite(stretch_)) {
@@ -98,7 +101,8 @@ Status NearSink::addAll(const Vector<int32_t> &elements, const Vector<double> &p
                          "NearSink: three numbers are needed for each element");
   }
   for (int i = 0; i < int(elements.size()); i++) {
-    add(elements[i], double3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]));
+    add(elements[i],
+        double3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]));
   }
   return Status();
 }
@@ -112,7 +116,8 @@ double NearSink::radius() const
   /* The query's radius has room for rounding. */
   const double room = query_.radius_ - query_.worldRadius_ * query_.stretch_;
   const double less = hits_[limit - 1].distance * query_.stretch_ * (1.0 + 1e-12);
-  return std::fmin(query_.radius_, bvh::finite(room) ? less + std::fmax(room, 0.0) : query_.radius_);
+  return std::fmin(query_.radius_,
+                   bvh::finite(room) ? less + std::fmax(room, 0.0) : query_.radius_);
 }
 
 Status nearestInScene(Context &ctx,
@@ -127,7 +132,8 @@ Status nearestInScene(Context &ctx,
   detail::SceneQuery scope(ctx, h, "nearestInScene");
   CDCC_TRY(scope.status());
   if (options.domain < 0 || options.domain > 31 || options.maxCount < 1) {
-    return Status::error(StatusCode::InvalidArgument, "nearestInScene: the options aren't valid");
+    return Status::error(StatusCode::InvalidArgument,
+                         "nearestInScene: the options aren't valid");
   }
   const Scene &scene = scope.scene();
   struct Candidate {
@@ -142,7 +148,8 @@ Status nearestInScene(Context &ctx,
   std::sort(candidates.data(),
             candidates.data() + candidates.size(),
             [](const Candidate &a, const Candidate &b) {
-              return a.distance != b.distance ? a.distance < b.distance : a.place < b.place;
+              return a.distance != b.distance ? a.distance < b.distance
+                                              : a.place < b.place;
             });
   Vector<Ranked> found;
   for (const Candidate &c : candidates) {
@@ -172,14 +179,16 @@ Status nearestInScene(Context &ctx,
       r.place = c.place;
       found.append(r);
     }
-    std::sort(found.data(), found.data() + found.size(), [](const Ranked &a, const Ranked &b) {
-      return a.hit.distance != b.hit.distance ? a.hit.distance < b.hit.distance :
-             a.place != b.place               ? a.place < b.place :
-                                                a.hit.element < b.hit.element;
-    });
+    std::sort(
+        found.data(), found.data() + found.size(), [](const Ranked &a, const Ranked &b) {
+          return a.hit.distance != b.hit.distance ? a.hit.distance < b.hit.distance
+                 : a.place != b.place             ? a.place < b.place
+                                                  : a.hit.element < b.hit.element;
+        });
     if (int(found.size()) >= options.maxCount) {
       found.resize(size_t(options.maxCount));
-      radius = found[options.maxCount - 1].hit.distance; /* equal ones may still come first */
+      radius =
+          found[options.maxCount - 1].hit.distance; /* equal ones may still come first */
     }
   }
   for (const Ranked &r : found) {

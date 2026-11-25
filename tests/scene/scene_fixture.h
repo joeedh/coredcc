@@ -44,7 +44,8 @@ struct Rand : coredcc_test::SplitMix64 {
   {
     double3 s;
     for (int i = 0; i < 3; i++) {
-      s[i] = std::exp(range(-std::log(span), std::log(span))) * (signs && coin() ? -1.0 : 1.0);
+      s[i] = std::exp(range(-std::log(span), std::log(span))) *
+             (signs && coin() ? -1.0 : 1.0);
     }
     return s;
   }
@@ -88,7 +89,8 @@ inline double3 get(const ChannelBlock &b, int first)
   return double3(b.get(first), b.get(first + 1), b.get(first + 2));
 }
 
-inline TransformState eval(const TransformType &t, const ChannelBlock &c, const TransformState &p)
+inline TransformState
+eval(const TransformType &t, const ChannelBlock &c, const TransformState &p)
 {
   return *evaluateTransform(t, EvalCtx(c), p);
 }
@@ -110,7 +112,8 @@ inline double difference(const mat4d &a, const mat4d &b)
   return e;
 }
 
-inline ChannelBlock trsChannels(Rand &r, const TransformType &t, const double3 &scale, double size)
+inline ChannelBlock
+trsChannels(Rand &r, const TransformType &t, const double3 &scale, double size)
 {
   ChannelBlock c = t.defaults();
   put(c, trs::kLocation, r.vec(size));
@@ -150,18 +153,19 @@ inline TransformState chain(Rand &r, const Types &t, int depth, double span, boo
   TransformState p;
   for (int i = 0; i < depth; i++) {
     const double3 s = r.scale(span, signs);
-    p = r.coin() ? eval(*t.trs, trsChannels(r, *t.trs, s, 3.0), p) :
-                   eval(*t.fbx, fbxChannels(r, *t.fbx, int(r.below(3)), s, 0.0), p);
+    p = r.coin() ? eval(*t.trs, trsChannels(r, *t.trs, s, 3.0), p)
+                 : eval(*t.fbx, fbxChannels(r, *t.fbx, int(r.below(3)), s, 0.0), p);
   }
   return p;
 }
 
 inline bool sameBits(const TransformState &a, const TransformState &b)
 {
-  bool same =
-      !memcmp(static_cast<const double *>(a.world), static_cast<const double *>(b.world), 128);
+  bool same = !memcmp(
+      static_cast<const double *>(a.world), static_cast<const double *>(b.world), 128);
   for (int i = 0; i < 4; i++) {
-    same &= a.rotation[i] == b.rotation[i] && (i == 3 || a.localScale[i] == b.localScale[i]);
+    same &=
+        a.rotation[i] == b.rotation[i] && (i == 3 || a.localScale[i] == b.localScale[i]);
   }
   return same;
 }

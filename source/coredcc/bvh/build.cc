@@ -131,7 +131,7 @@ struct Range {
 };
 
 template <class S> class Builder {
- public:
+public:
   Builder(Vector<PrimBox<S>> &prims, const BvhOptions &opts, bool parallel)
       : prims_(prims), opts_(opts), parallel_(parallel)
   {
@@ -187,7 +187,7 @@ template <class S> class Builder {
     return n;
   }
 
- private:
+private:
   bool scanParallel(const Range &r) const
   {
     return parallel_ && r.count > kScanChunk;
@@ -315,10 +315,14 @@ template <class S> class Builder {
     /* Not std::partition: its order isn't the same in every standard library. */
     int lo = r.first, hi = r.first + r.count - 1;
     while (true) {
-      while (lo <= hi && binning.of(bestAxis, centroid(prims_[lo].box, bestAxis)) <= bestBin) {
+      while (lo <= hi &&
+             binning.of(bestAxis, centroid(prims_[lo].box, bestAxis)) <= bestBin)
+      {
         lo++;
       }
-      while (lo <= hi && binning.of(bestAxis, centroid(prims_[hi].box, bestAxis)) > bestBin) {
+      while (lo <= hi &&
+             binning.of(bestAxis, centroid(prims_[hi].box, bestAxis)) > bestBin)
+      {
         hi--;
       }
       if (lo >= hi) {
@@ -440,7 +444,8 @@ void buildParallel(Builder<S> &builder,
 } // namespace
 
 template <class S>
-Status buildTree(Vector<PrimBox<S>> &prims, const BvhOptions &opts, Vector<BvhNode<S>> &nodes)
+Status
+buildTree(Vector<PrimBox<S>> &prims, const BvhOptions &opts, Vector<BvhNode<S>> &nodes)
 {
   if (opts.leafSize < 1) {
     return Status::error(StatusCode::InvalidArgument, "Bvh: leafSize must be at least 1");
@@ -453,8 +458,7 @@ Status buildTree(Vector<PrimBox<S>> &prims, const BvhOptions &opts, Vector<BvhNo
   if (count == 0) {
     return Status();
   }
-  const bool parallel =
-      opts.parallel && poolUsable() && !litestl::task::in_pool_worker();
+  const bool parallel = opts.parallel && poolUsable() && !litestl::task::in_pool_worker();
   Builder<S> builder(prims, opts, parallel);
   if (parallel && count > (std::max)(kSubtreeSize, opts.leafSize)) {
     buildParallel(builder, opts, count, nodes);
@@ -495,10 +499,11 @@ template <class S> double sizeOf(const BvhNode<S> &n)
   return big * std::sqrt(d[0] * d[1] + d[1] * d[2] + d[2] * d[0]);
 }
 
-/* A node counts as at most this much larger: one that covers the scene now is bad, but how far
- * away the thing is that made it so doesn't matter. */
+/* A node counts as at most this much larger: one that covers the scene now is bad, but
+ * how far away the thing is that made it so doesn't matter. */
 constexpr double kMaxGrowth = 8.0;
-/* Nodes smaller than this, relative to their parents, count as this large: points and flat boxes. */
+/* Nodes smaller than this, relative to their parents, count as this large: points and
+ * flat boxes. */
 constexpr double kSmallNode = 1e-6;
 
 } // namespace
@@ -520,7 +525,8 @@ double treeGrowth(const Vector<BvhNode<S>> &nodes, const Vector<double> &built)
     return 1.0;
   }
   const auto term = [&](int i, int parent) {
-    const double was = (std::max)(built[i], built[parent] * kSmallNode), now = sizeOf(nodes[i]);
+    const double was = (std::max)(built[i], built[parent] * kSmallNode),
+                 now = sizeOf(nodes[i]);
     const double grown = now <= was ? 1.0 : was > 0.0 ? now / was : kMaxGrowth;
     return (std::min)(grown * grown, kMaxGrowth);
   };
@@ -551,13 +557,15 @@ template <class S> double treeCost(const Vector<BvhNode<S>> &nodes)
 
 template Status
 buildTree<float>(Vector<PrimBox<float>> &, const BvhOptions &, Vector<BvhNode<float>> &);
-template Status
-buildTree<double>(Vector<PrimBox<double>> &, const BvhOptions &, Vector<BvhNode<double>> &);
+template Status buildTree<double>(Vector<PrimBox<double>> &,
+                                  const BvhOptions &,
+                                  Vector<BvhNode<double>> &);
 template double treeCost<float>(const Vector<BvhNode<float>> &);
 template double treeCost<double>(const Vector<BvhNode<double>> &);
 template Vector<double> nodeSizes<float>(const Vector<BvhNode<float>> &);
 template Vector<double> nodeSizes<double>(const Vector<BvhNode<double>> &);
 template double treeGrowth<float>(const Vector<BvhNode<float>> &, const Vector<double> &);
-template double treeGrowth<double>(const Vector<BvhNode<double>> &, const Vector<double> &);
+template double treeGrowth<double>(const Vector<BvhNode<double>> &,
+                                   const Vector<double> &);
 
 } // namespace coredcc::bvh

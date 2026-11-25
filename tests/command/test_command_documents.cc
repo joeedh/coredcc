@@ -1,5 +1,6 @@
-/* Several Libraries with one executor: a command that was done in one is refused through another
- * one's Context, and when its own is gone (finding 16 of the review of library IO). */
+/* Several Libraries with one executor: a command that was done in one is refused through
+ * another one's Context, and when its own is gone (finding 16 of the review of library
+ * IO). */
 #include "command_fixture.h"
 
 #include "coredcc/api/ref_text.h"
@@ -61,7 +62,9 @@ struct NumberProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &, RefVisitor &) const {}
+  void foreachRef(const Datablock &, RefVisitor &) const
+  {
+  }
   void destroy(const Datablock &b)
   {
     litestl::alloc::Delete(static_cast<int *>(b.clientData()));
@@ -78,7 +81,8 @@ struct NumberProvider {
   }
   static lbt::Struct<NumberProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<NumberProvider>("test::NumberProvider", sizeof(NumberProvider));
+    auto *st =
+        new lbt::Struct<NumberProvider>("test::NumberProvider", sizeof(NumberProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
@@ -104,7 +108,8 @@ struct NumberSnapshot {
   }
   static lbt::Struct<NumberSnapshot> *defineBindings()
   {
-    auto *st = new lbt::Struct<NumberSnapshot>("test::NumberSnapshot", sizeof(NumberSnapshot));
+    auto *st =
+        new lbt::Struct<NumberSnapshot>("test::NumberSnapshot", sizeof(NumberSnapshot));
     BIND_STRUCT_METHOD(st, capture, MARGS("ctx", "blob"));
     BIND_STRUCT_METHOD(st, restore, MARGS("ctx", "blob"));
     return st;
@@ -156,8 +161,8 @@ struct Documents {
   Context in1, in2;
 
   Documents()
-      : one(litestl::alloc::New<Library>("Library", &s.w.rt)), in1(&s.w.rt, one, s.ctx.root()),
-        in2(&s.w.rt, &two, s.ctx.root())
+      : one(litestl::alloc::New<Library>("Library", &s.w.rt)),
+        in1(&s.w.rt, one, s.ctx.root()), in2(&s.w.rt, &two, s.ctx.root())
   {
     Runtime &rt = s.w.rt;
     in1.setExecutor(&s.ex);
@@ -168,26 +173,32 @@ struct Documents {
     AttachmentTypeInfo tag;
     tag.name = "test.Tag";
     tag.storage = BlockStorage::Transient;
-    test_assert(rt.ext<AttachmentTypeRegistry>()
-                    .add(tag, std::move(own<AttachmentProvider>(rt, "test.Tag#p", p)).value())
-                    .ok());
+    test_assert(
+        rt.ext<AttachmentTypeRegistry>()
+            .add(tag, std::move(own<AttachmentProvider>(rt, "test.Tag#p", p)).value())
+            .ok());
     test_assert((registerImpl<BlockProvider, NumberProvider>(rt, "test.Number#p").ok()));
     BlockTypeInfo number;
     number.name = "test.Number";
     number.client = ClientId::of(kCoredccClient);
     test_assert(rt.ext<BlockTypeRegistry>()
-                    .add(number, std::move(own<BlockProvider>(
-                                               rt, "test.Number#p",
-                                               litestl::alloc::New<NumberProvider>("provider")))
-                                     .value())
+                    .add(number,
+                         std::move(own<BlockProvider>(
+                                       rt,
+                                       "test.Number#p",
+                                       litestl::alloc::New<NumberProvider>("provider")))
+                             .value())
                     .ok());
-    test_assert((registerImpl<SnapshotProvider, NumberSnapshot>(rt, "test.Snapshot").ok()));
+    test_assert(
+        (registerImpl<SnapshotProvider, NumberSnapshot>(rt, "test.Snapshot").ok()));
     SnapshotRegistry &snapshots = rt.ext<SnapshotRegistry>();
     test_assert(snapshots
-                    .add("number", std::move(own<SnapshotProvider>(
-                                                 rt, "test.Snapshot",
-                                                 litestl::alloc::New<NumberSnapshot>("provider")))
-                                       .value())
+                    .add("number",
+                         std::move(own<SnapshotProvider>(
+                                       rt,
+                                       "test.Snapshot",
+                                       litestl::alloc::New<NumberSnapshot>("provider")))
+                             .value())
                     .ok());
     test_assert(snapshots.validate().ok());
     test_assert(addNativeCommand<SetState>(rt, CommandDef("test.state")).ok());
@@ -211,8 +222,10 @@ struct Documents {
   static void fill(Library &lib)
   {
     for (uint64_t n = 1; n <= 2; n++) {
-      test_assert(lib.createWithId(kNumber, idOf(n), "number", litestl::alloc::New<int>("n", int(n)))
-                      .ok());
+      test_assert(
+          lib.createWithId(
+                 kNumber, idOf(n), "number", litestl::alloc::New<int>("n", int(n)))
+              .ok());
       lib.setFlag(lib.find(idOf(n)), BlockFlags::Root, true);
     }
     PlaceholderInfo info;
@@ -221,7 +234,8 @@ struct Documents {
     row.target = idOf(1);
     info.payload.refs.append(row);
     test_assert(lib.addPlaceholder(idOf(3), info).ok());
-    test_assert(lib.attach(lib.find(idOf(2)), kTag, litestl::alloc::New<Tag>("Tag")).ok());
+    test_assert(
+        lib.attach(lib.find(idOf(2)), kTag, litestl::alloc::New<Tag>("Tag")).ok());
   }
   /* What a library says, with the parts a file doesn't have. */
   static std::string text(const Library &lib)
@@ -269,28 +283,36 @@ std::vector<Case> cases()
   return {
       {"rename",
        [](Documents &d) {
-         return d.run(d.in1, kRenameBlockCommand,
+         return d.run(d.in1,
+                      kRenameBlockCommand,
                       {{"block", block(1)}, {"name", PropValue::ofString("renamed")}});
        }},
       {"unlink",
        [](Documents &d) {
-         return d.run(d.in1, kUnlinkRefCommand,
+         return d.run(d.in1,
+                      kUnlinkRefCommand,
                       {{"block", block(3)}, {"index", PropValue::ofInt(0)}});
        }},
       {"attach",
        [](Documents &d) {
-         return d.run(d.in1, kAttachCommand,
+         return d.run(d.in1,
+                      kAttachCommand,
                       {{"block", block(1)}, {"type", PropValue::ofString("test.Tag")}});
        }},
       {"detach",
        [](Documents &d) {
-         return d.run(d.in1, kDetachCommand,
+         return d.run(d.in1,
+                      kDetachCommand,
                       {{"block", block(2)}, {"type", PropValue::ofString("test.Tag")}});
        }},
       {"delete",
-       [](Documents &d) { return d.run(d.in1, kDeleteBlockCommand, {{"block", block(1)}}); }},
+       [](Documents &d) {
+         return d.run(d.in1, kDeleteBlockCommand, {{"block", block(1)}});
+       }},
       {"duplicate",
-       [](Documents &d) { return d.run(d.in1, kDuplicateBlockCommand, {{"block", block(1)}}); }},
+       [](Documents &d) {
+         return d.run(d.in1, kDuplicateBlockCommand, {{"block", block(1)}});
+       }},
       {"append",
        [](Documents &d) {
          Runtime &rt = d.s.w.rt;
@@ -300,7 +322,8 @@ std::vector<Case> cases()
            from.setFlag(h, BlockFlags::Root, true);
          });
          Result<Vector<uint8_t>> file = saveLibrary(from);
-         return appendUndo(d.in1, std::span<const uint8_t>(file->data(), size_t(file->size())))
+         return appendUndo(d.in1,
+                           std::span<const uint8_t>(file->data(), size_t(file->size())))
              .status();
        }},
       {"property",
@@ -340,7 +363,8 @@ static void test_other()
       if (s.code() != StatusCode::FailedPrecondition || Documents::text(d.two) != other) {
         fprintf(stderr, "%s, redo %d: %s\n", c.name, int(redo), s.message());
       }
-      test_assert(s.code() == StatusCode::FailedPrecondition && hasMsg(s, "in another Library"));
+      test_assert(s.code() == StatusCode::FailedPrecondition &&
+                  hasMsg(s, "in another Library"));
       test_assert(Documents::text(d.two) == other && d.two.epoch() == epoch);
       test_assert(Documents::text(*d.one) == (redo ? before : after));
       test_assert(strength(d) == (redo ? undone : value) &&
@@ -368,7 +392,8 @@ static void test_gone()
         if (s.code() != StatusCode::FailedPrecondition) {
           fprintf(stderr, "%s, %d: %s\n", c.name, when, s.message());
         }
-        test_assert(s.code() == StatusCode::FailedPrecondition && hasMsg(s, "Library is gone"));
+        test_assert(s.code() == StatusCode::FailedPrecondition &&
+                    hasMsg(s, "Library is gone"));
       }
       test_assert(d.s.history.validate().ok() && !d.s.w.rt.hasStickyError());
       d.s.history.clear();

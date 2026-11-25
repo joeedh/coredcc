@@ -66,8 +66,7 @@ struct StaticResolver::Walk {
     if (segment > errorAt) {
       fail(segment, Status()); /* failure() makes it: suggestions take time */
       without.append(type);
-    }
-    else if (segment == errorAt && without.size() > 0) {
+    } else if (segment == errorAt && without.size() > 0) {
       without.append(type);
     }
   }
@@ -108,7 +107,8 @@ struct StaticResolver::Walk {
   {
     const PathSegment &seg = path[i];
     if (seg.kind != SegmentKind::Member) {
-      fail(i, err(StatusCode::InvalidArgument, "a subscript needs a collection or vector"));
+      fail(i,
+           err(StatusCode::InvalidArgument, "a subscript needs a collection or vector"));
       return;
     }
     Vector<const ApiMember *> seen; /* structs of one parent share its members */
@@ -116,8 +116,7 @@ struct StaticResolver::Walk {
       const ApiMember *m = r.reg_.findMember(type, seg.text.c_str());
       if (!m) {
         noMember(i, type);
-      }
-      else if (!seen.contains(m)) {
+      } else if (!seen.contains(m)) {
         seen.append(m);
         member(i, type, *m);
       }
@@ -128,30 +127,27 @@ struct StaticResolver::Walk {
   {
     const bool last = i + 1 == path.size();
     switch (m.kind()) {
-      case MemberKind::Value:
-        if (last) {
-          target(ResolvedPath::Kind::Member, type, m);
-        }
-        else {
-          part(i, type, m);
-        }
-        break;
-      case MemberKind::Pointer:
-        if (last && !through) {
-          target(ResolvedPath::Kind::Member, type, m);
-        }
-        else {
-          pointer(i + 1, m.pointer());
-        }
-        break;
-      case MemberKind::Collection:
-        if (last) {
-          target(ResolvedPath::Kind::Member, type, m);
-        }
-        else {
-          item(i, type, m);
-        }
-        break;
+    case MemberKind::Value:
+      if (last) {
+        target(ResolvedPath::Kind::Member, type, m);
+      } else {
+        part(i, type, m);
+      }
+      break;
+    case MemberKind::Pointer:
+      if (last && !through) {
+        target(ResolvedPath::Kind::Member, type, m);
+      } else {
+        pointer(i + 1, m.pointer());
+      }
+      break;
+    case MemberKind::Collection:
+      if (last) {
+        target(ResolvedPath::Kind::Member, type, m);
+      } else {
+        item(i, type, m);
+      }
+      break;
     }
   }
 
@@ -173,19 +169,19 @@ struct StaticResolver::Walk {
     const std::string name = std::string("'") + m.name() + "'";
     const PropKind kind = m.def().kind();
     if (i + 2 != path.size()) {
-      fail(i + 2, err(StatusCode::InvalidArgument,
-                      "nothing can follow '" + std::string(m.name()) + "[...]'"));
-    }
-    else if (sub.kind == SegmentKind::Index && componentCount(kind) > 1) {
+      fail(i + 2,
+           err(StatusCode::InvalidArgument,
+               "nothing can follow '" + std::string(m.name()) + "[...]'"));
+    } else if (sub.kind == SegmentKind::Index && componentCount(kind) > 1) {
       if (sub.index >= componentCount(kind)) {
-        fail(i + 1, err(StatusCode::OutOfRange,
-                        name + " has " + std::to_string(componentCount(kind)) + " components"));
+        fail(i + 1,
+             err(StatusCode::OutOfRange,
+                 name + " has " + std::to_string(componentCount(kind)) + " components"));
         return;
       }
       target(ResolvedPath::Kind::Component, type, m);
-    }
-    else if (sub.kind == SegmentKind::EnumKey &&
-             (kind == PropKind::Enum || kind == PropKind::Flags))
+    } else if (sub.kind == SegmentKind::EnumKey &&
+               (kind == PropKind::Enum || kind == PropKind::Flags))
     {
       const EnumMeta *items = m.def().enumMeta();
       if (!items || !items->findKey(sub.text.c_str())) {
@@ -193,14 +189,15 @@ struct StaticResolver::Walk {
           out.unknown = true; /* its hook may add the key */
           return;
         }
-        fail(i + 1, err(StatusCode::NotFound, name + " has no key '" + sub.text.c_str() + "'"));
+        fail(i + 1,
+             err(StatusCode::NotFound, name + " has no key '" + sub.text.c_str() + "'"));
         return;
       }
       target(ResolvedPath::Kind::EnumKey, type, m);
-    }
-    else {
-      fail(i + 1, err(StatusCode::InvalidArgument, name + " (" + propKindName(kind) +
-                                                       ") has no members or components"));
+    } else {
+      fail(i + 1,
+           err(StatusCode::InvalidArgument,
+               name + " (" + propKindName(kind) + ") has no members or components"));
     }
   }
 
@@ -211,8 +208,9 @@ struct StaticResolver::Walk {
     const CollectionAccessor &c = m.collection();
     const std::string name = std::string("'") + m.name() + "'";
     if (sub.kind == SegmentKind::EnumKey) {
-      fail(i + 1, err(StatusCode::InvalidArgument,
-                      name + " takes [index], [\"key\"], [#handle], .active or .length"));
+      fail(i + 1,
+           err(StatusCode::InvalidArgument,
+               name + " takes [index], [\"key\"], [#handle], .active or .length"));
       return;
     }
     if (sub.kind == SegmentKind::Member) {
@@ -225,9 +223,9 @@ struct StaticResolver::Walk {
         return;
       }
       if (strcmp(sub.text.c_str(), "active") != 0) {
-        Status s = err(StatusCode::NotFound, "collection " + name + " has no member '" +
-                                                 sub.text.c_str() +
-                                                 "' (only .active and .length)");
+        Status s = err(StatusCode::NotFound,
+                       "collection " + name + " has no member '" + sub.text.c_str() +
+                           "' (only .active and .length)");
         Suggester suggest(sub.text.c_str());
         suggest.consider("active");
         suggest.consider("length");
@@ -240,10 +238,12 @@ struct StaticResolver::Walk {
         return;
       }
     }
-    if (c.staticItem && (sub.kind == SegmentKind::StringKey || sub.kind == SegmentKind::HandleKey)) {
-      Result<StructId> st = c.staticItem(sub.kind == SegmentKind::StringKey ?
-                                             KeySegment::stringKey(sub.text.c_str()) :
-                                             KeySegment::ofHandle(sub.index));
+    if (c.staticItem &&
+        (sub.kind == SegmentKind::StringKey || sub.kind == SegmentKind::HandleKey))
+    {
+      Result<StructId> st = c.staticItem(sub.kind == SegmentKind::StringKey
+                                             ? KeySegment::stringKey(sub.text.c_str())
+                                             : KeySegment::ofHandle(sub.index));
       if (!st.ok()) {
         fail(i + 1, st.status());
         return;
@@ -259,8 +259,7 @@ struct StaticResolver::Walk {
     const char *name = without.size() > 0 ? path[errorAt].text.c_str() : "";
     if (without.size() == 1) {
       error = r.reg_.unknownMember(without[0], name);
-    }
-    else if (without.size() > 1) {
+    } else if (without.size() > 1) {
       std::string structs;
       Suggester suggest(name);
       for (int j = 0; j < int(without.size()); j++) {
@@ -320,7 +319,8 @@ const StaticStructs &StaticResolver::withSubtypes(StructId type)
   return subtypes_[type.value] = std::move(out);
 }
 
-Result<StaticResolution> StaticResolver::resolve(const StaticStructs &from, const Path &path)
+Result<StaticResolution> StaticResolver::resolve(const StaticStructs &from,
+                                                 const Path &path)
 {
   Walk w(*this, from, path, false);
   w.run();
@@ -339,7 +339,8 @@ Result<StaticResolution> StaticResolver::resolve(StructId from, std::string_view
   return resolve(only(from), *p);
 }
 
-Result<StaticStructs> StaticResolver::resolveStructs(const StaticStructs &from, const Path &path)
+Result<StaticStructs> StaticResolver::resolveStructs(const StaticStructs &from,
+                                                     const Path &path)
 {
   Walk w(*this, from, path, true);
   w.run();
@@ -351,9 +352,9 @@ Result<StaticStructs> StaticResolver::resolveStructs(const StaticStructs &from, 
     }
   }
   if (out.structs.size() == 0 && !out.unknown) {
-    return w.out.targets.size() > 0 ?
-               err(StatusCode::InvalidArgument, "'" + path.toString() + "' isn't a struct") :
-               w.failure();
+    return w.out.targets.size() > 0 ? err(StatusCode::InvalidArgument,
+                                          "'" + path.toString() + "' isn't a struct")
+                                    : w.failure();
   }
   return out;
 }

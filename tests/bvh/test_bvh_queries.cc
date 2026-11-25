@@ -15,7 +15,8 @@ int failures = 0;
 void expect(bool ok, const char *source, int layout, int leafSize, const char *what)
 {
   if (!ok && failures++ < 20) {
-    fprintf(stderr, "  %s, layout %d, leaf size %d: %s\n", source, layout, leafSize, what);
+    fprintf(
+        stderr, "  %s, layout %d, leaf size %d: %s\n", source, layout, leafSize, what);
   }
 }
 
@@ -43,7 +44,9 @@ template <class Accept> RayHit firstOf(const std::vector<RayHit> &hits, Accept a
 {
   RayHit want;
   for (const RayHit &h : hits) {
-    if (accept(h) && (!want || h.t < want.t || (h.t == want.t && h.primitive < want.primitive))) {
+    if (accept(h) &&
+        (!want || h.t < want.t || (h.t == want.t && h.primitive < want.primitive)))
+    {
       want = h;
     }
   }
@@ -58,12 +61,14 @@ bool sameHit(const RayHit &a, const RayHit &b)
 
 double3 farthest(const Box3d &b, Rand &r)
 {
-  return double3(r.range(b.min[0], b.max[0]), r.range(b.min[1], b.max[1]),
+  return double3(r.range(b.min[0], b.max[0]),
+                 r.range(b.min[1], b.max[1]),
                  r.range(b.min[2], b.max[2]));
 }
 
 template <class Src>
-void checkQueries(const char *name, const Src &src, int layout, int leafSize, Rand &r, int queries)
+void checkQueries(
+    const char *name, const Src &src, int layout, int leafSize, Rand &r, int queries)
 {
   GeometryBvh<Src> bvh;
   BvhOptions opts;
@@ -81,11 +86,14 @@ void checkQueries(const char *name, const Src &src, int layout, int leafSize, Ra
       all.include(b.max[0], b.max[1], b.max[2]);
     }
   }
-  const double diagonal =
-      all.empty() ? 1.0
-                  : length(double3(all.max[0] - all.min[0], all.max[1] - all.min[1],
-                                   all.max[2] - all.min[2])) + 1e-3;
-  const auto fail = [&](const char *what) { expect(false, name, layout, leafSize, what); };
+  const double diagonal = all.empty() ? 1.0
+                                      : length(double3(all.max[0] - all.min[0],
+                                                       all.max[1] - all.min[1],
+                                                       all.max[2] - all.min[2])) +
+                                            1e-3;
+  const auto fail = [&](const char *what) {
+    expect(false, name, layout, leafSize, what);
+  };
 
   for (int k = 0; k < queries; k++) {
     /* Aim at a primitive, or anywhere. */
@@ -151,10 +159,11 @@ void checkQueries(const char *name, const Src &src, int layout, int leafSize, Ra
       }
       a.clear();
       b.clear();
-      test_assert(bvh.rayAll(cut, [&](const RayHit &h) {
-                       a.push_back(h.primitive);
-                       return true;
-                     })
+      test_assert(bvh.rayAll(cut,
+                             [&](const RayHit &h) {
+                               a.push_back(h.primitive);
+                               return true;
+                             })
                       .ok());
       for (const RayHit &h : brute) {
         b.push_back(h.primitive);
@@ -164,16 +173,19 @@ void checkQueries(const char *name, const Src &src, int layout, int leafSize, Ra
         fail("rayAll");
       }
       int calls = 0;
-      test_assert(bvh.rayAll(cut, [&](const RayHit &) {
-                       calls++;
-                       return false;
-                     })
+      test_assert(bvh.rayAll(cut,
+                             [&](const RayHit &) {
+                               calls++;
+                               return false;
+                             })
                       .ok());
       if (calls != (b.empty() ? 0 : 1)) {
         fail("rayAll: stop");
       }
       /* Filtered. */
-      const auto odd = [](const RayHit &h) { return (h.primitive & 1) != 0 && !h.backFacing; };
+      const auto odd = [](const RayHit &h) {
+        return (h.primitive & 1) != 0 && !h.backFacing;
+      };
       const RayHit wantOdd = firstOf(brute, odd), gotOdd = bvh.rayClosest(cut, odd);
       if (bool(gotOdd) != bool(wantOdd) || (gotOdd && !sameHit(gotOdd, wantOdd))) {
         fail("rayClosest: filtered");
@@ -185,7 +197,8 @@ void checkQueries(const char *name, const Src &src, int layout, int leafSize, Ra
 
     /* Distances. */
     const double3 p = r.below(2) ? at : at + r.vec(0.3 * diagonal);
-    const double radius = r.below(4) == 0 ? 0.0 : r.unit() * (r.below(2) ? diagonal : 0.5);
+    const double radius =
+        r.below(4) == 0 ? 0.0 : r.unit() * (r.below(2) ? diagonal : 0.5);
     NearestHit near_, nearOdd;
     double best = 0.0, bestOdd = 0.0; /* squares: roots can be equal where they differ */
     std::vector<int> inside;
@@ -229,10 +242,12 @@ void checkQueries(const char *name, const Src &src, int layout, int leafSize, Ra
       }
     }
     a.clear();
-    test_assert(bvh.sphereOverlap(p, radius, [&](int i) {
-                     a.push_back(i);
-                     return true;
-                   })
+    test_assert(bvh.sphereOverlap(p,
+                                  radius,
+                                  [&](int i) {
+                                    a.push_back(i);
+                                    return true;
+                                  })
                     .ok());
     std::sort(a.begin(), a.end());
     if (a != inside) {
@@ -258,10 +273,11 @@ void checkQueries(const char *name, const Src &src, int layout, int leafSize, Ra
       }
     }
     a.clear();
-    test_assert(bvh.region({planes, size_t(count)}, [&](int i) {
-                     a.push_back(i);
-                     return true;
-                   })
+    test_assert(bvh.region({planes, size_t(count)},
+                           [&](int i) {
+                             a.push_back(i);
+                             return true;
+                           })
                     .ok());
     std::sort(a.begin(), a.end());
     if (a != b) {
@@ -300,8 +316,8 @@ template <class S> void allSources(const char *scalar, int queries)
   }
 }
 
-/* A source whose points are outside of their bounds, by rounding that isn't small compared to the
- * distance. */
+/* A source whose points are outside of their bounds, by rounding that isn't small
+ * compared to the distance. */
 struct RoundedSource : SphereSource<double> {
   double3 closest(int i, const double3 &p) const
   {
@@ -359,7 +375,8 @@ void testOddInput()
   src.append(double3(-1, -1, 5), double3(1, -1, 5), double3(0, 1, 5));
   src.append(double3(nan, -1, 4), double3(1, -1, 4), double3(0, 1, 4));
   src.append(double3(-1, -1, 3), double3(1, inf, 3), double3(0, 1, 3));
-  src.append(double3(-1, -1, 2), double3(1, -1, 2), double3(1e300, 1, 2)); /* inf as a float */
+  src.append(
+      double3(-1, -1, 2), double3(1, -1, 2), double3(1e300, 1, 2)); /* inf as a float */
   src.append(double3(0, 0, 1), double3(0, 0, 1), double3(0, 0, 1));
   test_assert(bvh.build(src).ok());
   test_assert(bvh.bvh().size() == 5 && bvh.bvh().skipped() == 3);
@@ -395,7 +412,8 @@ void testOddInput()
   test_assert(bvh.sphereOverlap(double3(nan, 0, 0), 1.0, none).code() ==
               StatusCode::InvalidArgument);
   for (double radius : {nan, -1.0}) {
-    test_assert(bvh.sphereOverlap(double3(), radius, none).code() == StatusCode::InvalidArgument);
+    test_assert(bvh.sphereOverlap(double3(), radius, none).code() ==
+                StatusCode::InvalidArgument);
   }
   for (int i = 0; i < 4; i++) {
     BvhPlane plane;

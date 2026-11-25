@@ -68,26 +68,26 @@ bool sameType(const BindingBase *a, const BindingBase *b)
     return false;
   }
   switch (a->type) {
-    case BindingType::Reference: {
-      auto *ra = static_cast<const lbt::Reference *>(a);
-      auto *rb = static_cast<const lbt::Reference *>(b);
-      return ra->isConst == rb->isConst && sameType(ra->refType, rb->refType);
+  case BindingType::Reference: {
+    auto *ra = static_cast<const lbt::Reference *>(a);
+    auto *rb = static_cast<const lbt::Reference *>(b);
+    return ra->isConst == rb->isConst && sameType(ra->refType, rb->refType);
+  }
+  case BindingType::Pointer: {
+    auto *pa = static_cast<const lbt::Pointer *>(a);
+    auto *pb = static_cast<const lbt::Pointer *>(b);
+    return pa->isConst == pb->isConst && sameType(pa->ptrType, pb->ptrType);
+  }
+  case BindingType::Struct: {
+    auto *sa = static_cast<const lbt::_StructBase *>(a);
+    auto *sb = static_cast<const lbt::_StructBase *>(b);
+    if (sa->typeKey && sb->typeKey && sa->typeKey != sb->typeKey) {
+      return false;
     }
-    case BindingType::Pointer: {
-      auto *pa = static_cast<const lbt::Pointer *>(a);
-      auto *pb = static_cast<const lbt::Pointer *>(b);
-      return pa->isConst == pb->isConst && sameType(pa->ptrType, pb->ptrType);
-    }
-    case BindingType::Struct: {
-      auto *sa = static_cast<const lbt::_StructBase *>(a);
-      auto *sb = static_cast<const lbt::_StructBase *>(b);
-      if (sa->typeKey && sb->typeKey && sa->typeKey != sb->typeKey) {
-        return false;
-      }
-      break;
-    }
-    default:
-      break;
+    break;
+  }
+  default:
+    break;
   }
   return a->buildFullName() == b->buildFullName();
 }
@@ -95,7 +95,8 @@ bool sameType(const BindingBase *a, const BindingBase *b)
 /* Explains two types that print the same but aren't sameType(). */
 std::string sameNameNote(const BindingBase *a, const BindingBase *b)
 {
-  return describeType(a) == describeType(b) ? " (different C++ types with the same name)" : "";
+  return describeType(a) == describeType(b) ? " (different C++ types with the same name)"
+                                            : "";
 }
 
 /* Why `impl` can't fill `slot`, or "" if it can. */
@@ -256,8 +257,8 @@ Result<IfaceTable *> buildForeign(const lbt::_StructBase *iface,
     }
     thunks.append(present ? &foreignSlotPresent : nullptr);
     if (!present && !slot->isOptional) {
-      errs += std::string("\n  slot ") + slot->name.c_str() + " [" + describeMethod(slot) +
-              "]: missing";
+      errs += std::string("\n  slot ") + slot->name.c_str() + " [" +
+              describeMethod(slot) + "]: missing";
     }
   }
   if (!errs.empty()) {
@@ -372,11 +373,12 @@ Status IfaceRegistry::addImpl(const lbt::_StructBase *iface,
                               std::string_view implName,
                               IfaceFlags flags)
 {
-  const InterfaceEntry *entry = interfaces_.lookup_ptr(InterfaceId::of(iface->name.c_str()).value);
+  const InterfaceEntry *entry =
+      interfaces_.lookup_ptr(InterfaceId::of(iface->name.c_str()).value);
   if (!entry || entry->desc != iface) {
-    return Status::error(StatusCode::NotFound,
-                         (std::string("interface ") + iface->name.c_str() + " is not registered")
-                             .c_str());
+    return Status::error(
+        StatusCode::NotFound,
+        (std::string("interface ") + iface->name.c_str() + " is not registered").c_str());
   }
   Result<TypeId> type = rt_.registerId<IdDomain::Type>(implName);
   if (!type.ok()) {

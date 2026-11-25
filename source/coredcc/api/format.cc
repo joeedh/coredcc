@@ -76,8 +76,8 @@ Result<PropValue> parseFlags(const PropertyDef &def, std::string_view text)
     const std::string_view part = trim(text.substr(0, end));
     const EnumItem *item = findItem(*def.enumMeta(), part);
     if (!item) {
-      return part.empty() ? Result<PropValue>(badText(def, "expected flags", text)) :
-                            coerce(def, PropValue::ofString(part));
+      return part.empty() ? Result<PropValue>(badText(def, "expected flags", text))
+                          : coerce(def, PropValue::ofString(part));
     }
     bits |= uint64_t(item->value);
     text = end == std::string_view::npos ? std::string_view() : text.substr(end + 1);
@@ -94,9 +94,8 @@ Result<PropValue> parseInt(const PropertyDef &def,
                            const UnitSettings &settings)
 {
   if (family == UnitFamily::None) {
-    const std::string_view digits = text.starts_with('+') && !text.starts_with("+-") ?
-                                        text.substr(1) :
-                                        text;
+    const std::string_view digits =
+        text.starts_with('+') && !text.starts_with("+-") ? text.substr(1) : text;
     int64_t v = 0;
     const char *end = digits.data() + digits.size();
     const std::from_chars_result r = std::from_chars(digits.data(), end, v);
@@ -109,8 +108,8 @@ Result<PropValue> parseInt(const PropertyDef &def,
     return d.status();
   }
   const double whole = std::round(*d);
-  const bool near = family != UnitFamily::None &&
-                    std::fabs(*d - whole) <= 1e-9 * std::fabs(whole);
+  const bool near =
+      family != UnitFamily::None && std::fabs(*d - whole) <= 1e-9 * std::fabs(whole);
   return coerce(def, PropValue::ofFloat(near ? whole : *d));
 }
 
@@ -157,7 +156,8 @@ PropertyDef componentDef(const PropertyDef &def)
 
 } // namespace
 
-std::string formatValue(const PropertyDef &def, const PropValue &value, const UnitSettings &settings)
+std::string
+formatValue(const PropertyDef &def, const PropValue &value, const UnitSettings &settings)
 {
   const NumericMeta *n = def.numeric();
   if (n && value.componentCount() > 0) {
@@ -170,9 +170,10 @@ std::string formatValue(const PropertyDef &def, const PropValue &value, const Un
     return out;
   }
   if (const std::optional<int64_t> i = value.tryInt()) {
-    return n && n->unit != UnitFamily::None ?
-               units::format(double(*i), n->unit, settingsFor(def, settings), n->precision) :
-               std::to_string(*i);
+    return n && n->unit != UnitFamily::None
+               ? units::format(
+                     double(*i), n->unit, settingsFor(def, settings), n->precision)
+               : std::to_string(*i);
   }
   if (const std::optional<bool> b = value.tryBool()) {
     return *b ? "true" : "false";
@@ -196,44 +197,43 @@ std::string formatValue(const PropertyDef &def, const PropValue &value, const Un
   return value.toString();
 }
 
-Result<PropValue> parseValue(const PropertyDef &def,
-                             std::string_view text,
-                             const UnitSettings &settings)
+Result<PropValue>
+parseValue(const PropertyDef &def, std::string_view text, const UnitSettings &settings)
 {
   const NumericMeta *n = def.numeric();
   const UnitFamily family = n ? n->unit : UnitFamily::None;
   const std::string_view s = trim(text);
   switch (def.kind()) {
-    case PropKind::Bool:
-      if (s == "true" || s == "on" || s == "yes" || s == "1") {
-        return PropValue::ofBool(true);
-      }
-      if (s == "false" || s == "off" || s == "no" || s == "0") {
-        return PropValue::ofBool(false);
-      }
-      return badText(def, "expected true or false", text);
-    case PropKind::Int:
-      return parseInt(def, s, family, settingsFor(def, settings));
-    case PropKind::Float:
-    case PropKind::Vec2:
-    case PropKind::Vec3:
-    case PropKind::Vec4:
-    case PropKind::Quat:
-    case PropKind::Mat4:
-      return parseComponents(def, s, family, settingsFor(def, settings));
-    case PropKind::String:
-      return coerce(def, PropValue::ofString(text));
-    case PropKind::Enum:
-      return parseEnum(def, s);
-    case PropKind::Flags:
-      return parseFlags(def, s);
-    case PropKind::Pointer:
-    case PropKind::Collection:
-      break;
+  case PropKind::Bool:
+    if (s == "true" || s == "on" || s == "yes" || s == "1") {
+      return PropValue::ofBool(true);
+    }
+    if (s == "false" || s == "off" || s == "no" || s == "0") {
+      return PropValue::ofBool(false);
+    }
+    return badText(def, "expected true or false", text);
+  case PropKind::Int:
+    return parseInt(def, s, family, settingsFor(def, settings));
+  case PropKind::Float:
+  case PropKind::Vec2:
+  case PropKind::Vec3:
+  case PropKind::Vec4:
+  case PropKind::Quat:
+  case PropKind::Mat4:
+    return parseComponents(def, s, family, settingsFor(def, settings));
+  case PropKind::String:
+    return coerce(def, PropValue::ofString(text));
+  case PropKind::Enum:
+    return parseEnum(def, s);
+  case PropKind::Flags:
+    return parseFlags(def, s);
+  case PropKind::Pointer:
+  case PropKind::Collection:
+    break;
   }
   return Status::error(StatusCode::Unsupported,
-                       (std::string(def.apiName().c_str()) + ": a " + propKindName(def.kind()) +
-                        " can't be read from text")
+                       (std::string(def.apiName().c_str()) + ": a " +
+                        propKindName(def.kind()) + " can't be read from text")
                            .c_str());
 }
 
@@ -314,7 +314,9 @@ Status registerUnitSettings(Runtime &rt)
   addUnit(st, "factorUnit", UnitFamily::Factor);
 
   ValueAccessor fps;
-  fps.get = [](const PointerRef &p, Context &) { return PropValue::ofFloat(self(p).rate.fps()); };
+  fps.get = [](const PointerRef &p, Context &) {
+    return PropValue::ofFloat(self(p).rate.fps());
+  };
   fps.set = [](const PointerRef &p, Context &, const PropValue &v) {
     self(p).rate = FrameRate::nearest(v.asFloat());
     return Status();
@@ -327,7 +329,9 @@ Status registerUnitSettings(Runtime &rt)
          std::move(fps));
 
   ValueAccessor start;
-  start.get = [](const PointerRef &p, Context &) { return PropValue::ofFloat(self(p).startFrame); };
+  start.get = [](const PointerRef &p, Context &) {
+    return PropValue::ofFloat(self(p).startFrame);
+  };
   start.set = [](const PointerRef &p, Context &, const PropValue &v) {
     self(p).startFrame = v.asFloat();
     return Status();

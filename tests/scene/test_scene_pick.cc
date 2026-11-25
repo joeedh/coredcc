@@ -24,7 +24,8 @@ bool expect(bool ok, const char *what)
 /* ---- against the loop ---- */
 
 /* One object's best: the distance in device pixels, and a depth if that is 0. */
-Expected expectObject(const ViewMath &view, const Geo &g, const mat4d &world, double x, double y)
+Expected
+expectObject(const ViewMath &view, const Geo &g, const mat4d &world, double x, double y)
 {
   Expected best;
   for (const Prim &p : g.prims) {
@@ -34,8 +35,7 @@ Expected expectObject(const ViewMath &view, const Geo &g, const mat4d &world, do
                             transformPoint(world, p.q[1]),
                             transformPoint(world, p.q[2])};
       e = expectTriangle(view, w, x, y);
-    }
-    else {
+    } else {
       ScreenPoint s;
       e.visible = detail::closestOnCapsule(
           mapOf(view, world, x, y), p.q[0], p.q[1], p.radius, 1e300, s);
@@ -48,8 +48,7 @@ Expected expectObject(const ViewMath &view, const Geo &g, const mat4d &world, do
     if (!best.visible || e.distance < best.distance) {
       const bool keep = best.visible && best.distance == 0.0;
       best = keep ? best : e;
-    }
-    else if (e.distance == 0.0 && best.distance == 0.0) {
+    } else if (e.distance == 0.0 && best.distance == 0.0) {
       best.depthKnown = best.depthKnown && e.depthKnown;
       best.depth = std::fmin(best.depth, e.depth);
     }
@@ -63,7 +62,8 @@ bool insideOf(const Geo &g, const Prim &p, const double3 &q)
   return lengthOf(q - bvh::closestOnSegment(q, p.q[0], p.q[1])) <= p.radius;
 }
 
-/* A hit that covers the cursor says where the ray enters. For a solid, a bit nearer is outside. */
+/* A hit that covers the cursor says where the ray enters. For a solid, a bit nearer is
+ * outside. */
 void checkEntry(const ViewMath &view,
                 const Geo &g,
                 const mat4d &world,
@@ -74,7 +74,8 @@ void checkEntry(const ViewMath &view,
   const ViewPoint at = view.project(hit.point);
   expect(hit.depth >= 0.0, "no depth is negative");
   expect(std::hypot(at.x - x, at.y - y) < 0.02, "the point of a hit is under the cursor");
-  expect(std::fabs(view.viewDistance(hit.point) - hit.depth) < 1e-6 * (1.0 + hit.depth), "depth");
+  expect(std::fabs(view.viewDistance(hit.point) - hit.depth) < 1e-6 * (1.0 + hit.depth),
+         "depth");
   const Prim &p = g.prims[size_t(hit.element)];
   mat4d inverse;
   if (p.kind == Kind::Triangle || !litestl::math::tryInverse(world, inverse)) {
@@ -106,13 +107,13 @@ void testLoop(bool ortho, bool behindEye)
         const double3 c = r.vec(0.5);
         if (triangles) {
           prims.push_back(face(c + r.vec(0.3), c + r.vec(0.3), c + r.vec(0.3)));
-        }
-        else {
+        } else {
           prims.push_back(curve(c, r.coin() ? c : c + r.vec(0.3), r.range(0.0, 0.1)));
         }
       }
       const BlockHandle data = d.geoBlock("geo", prims);
-      const mat4d world = solve::affine(randomLinear(r, int(r.below(kLinearKinds))), r.vec(3.0));
+      const mat4d world =
+          solve::affine(randomLinear(r, int(r.below(kLinearKinds))), r.vec(3.0));
       objects.push_back(d.placed("object", world, data));
     }
     d.evaluate();
@@ -144,7 +145,8 @@ void testLoop(bool ortho, bool behindEye)
         }
         for (size_t i = 1; i < hits[0].size(); i++) {
           const PickHit &a = hits[0][int(i) - 1], &b = hits[0][int(i)];
-          expect(a.distance < b.distance || (a.distance == b.distance && a.depth <= b.depth),
+          expect(a.distance < b.distance ||
+                     (a.distance == b.distance && a.depth <= b.depth),
                  "the order");
         }
         for (BlockHandle h : objects) {
@@ -169,21 +171,23 @@ void testLoop(bool ortho, bool behindEye)
             continue;
           }
           singular += !litestl::math::tryInverse(world, inverse);
-          expect(std::fabs(hit->distance * c.dpiScale - e.distance) < 1e-4, "the distance");
+          expect(std::fabs(hit->distance * c.dpiScale - e.distance) < 1e-4,
+                 "the distance");
           if (e.distance == 0.0) {
             covered++;
             expect(hit->covers(), "covered");
             checkEntry(view, g, world, *hit, x, y);
             if (e.depthKnown) {
               depths++;
-              expect(std::fabs(hit->depth - e.depth) < 1e-5 * (1.0 + e.depth), "the depth");
+              expect(std::fabs(hit->depth - e.depth) < 1e-5 * (1.0 + e.depth),
+                     "the depth");
             }
-          }
-          else {
+          } else {
             near++;
             expect(hit->depth >= 0.0, "no depth is negative");
             const ViewPoint at = view.project(hit->point);
-            expect(std::fabs(std::hypot(at.x - x, at.y - y) - e.distance) < 1e-3, "the point");
+            expect(std::fabs(std::hypot(at.x - x, at.y - y) - e.distance) < 1e-3,
+                   "the point");
           }
         }
       }
@@ -212,11 +216,13 @@ void testBounds()
   c.zNear = 0.5;
   const ViewMath view = viewOf(c);
   d.evaluate();
-  const ViewPoint mid = view.project(double3(0, 0, 0)), edge = view.project(double3(1, 0, 1));
+  const ViewPoint mid = view.project(double3(0, 0, 0)),
+                  edge = view.project(double3(1, 0, 1));
   Vector<PickHit> hits = d.picks(view, mid.x, mid.y, within(0.0));
   test_assert(hits.size() == 1 && hits[0].object == a && hits[0].covers());
   test_assert(hits[0].element == -1 && hits[0].domain == -1);
-  test_assert(std::fabs(hits[0].depth - 8.5) < 1e-9 && std::fabs(hits[0].point[2] - 1.0) < 1e-9);
+  test_assert(std::fabs(hits[0].depth - 8.5) < 1e-9 &&
+              std::fabs(hits[0].point[2] - 1.0) < 1e-9);
   /* In the object's space. */
   put(d.obj(a).channels, trs::kRotationEuler, double3(0.0, 0.0, 0.7));
   put(d.obj(a).channels, trs::kScale, double3(0.5, 2.0, 1.0));
@@ -262,8 +268,8 @@ void testBounds()
 
 /* ---- the order ---- */
 
-/* A curve a thousand times longer than it is wide, whose matrix is as uneven: its width on the
- * screen isn't its radius times the largest scale. */
+/* A curve a thousand times longer than it is wide, whose matrix is as uneven: its width
+ * on the screen isn't its radius times the largest scale. */
 void testThin()
 {
   PickDoc d;
@@ -277,12 +283,12 @@ void testThin()
   /* Before the other one, 8 pixels above the cursor. */
   const double3 x(1.0, 0.0, 0.0);
   const double pixel = view.pixelSizeAt(double3(0, 0, 1));
-  const BlockHandle thin = d.placed(
-      "thin",
-      solve::affine(wide, double3(0.0, 8.0 * pixel, 1.0)),
-      d.geoBlock("thin", {curve(x * -0.002, x * 0.002, pixel)}));
-  const BlockHandle thick = d.placed(
-      "thick", identity(), d.geoBlock("thick", {curve(x * -2.0, x * 2.0, 0.1)}));
+  const BlockHandle thin =
+      d.placed("thin",
+               solve::affine(wide, double3(0.0, 8.0 * pixel, 1.0)),
+               d.geoBlock("thin", {curve(x * -0.002, x * 0.002, pixel)}));
+  const BlockHandle thick =
+      d.placed("thick", identity(), d.geoBlock("thick", {curve(x * -2.0, x * 2.0, 0.1)}));
   d.evaluate();
   const ViewPoint at = view.project(double3(0.0, 0.0, 1.0));
   Vector<PickHit> hits = d.picks(view, at.x, at.y, within(10.0, false));
@@ -290,10 +296,12 @@ void testThin()
   test_assert(hits[0].covers() && std::fabs(hits[1].distance - 7.0) < 0.05);
   /* A curve that is thin comes first, if it is near enough. */
   const Vector<PickHit> asThin = d.picks(view, at.x, at.y, within(10.0));
-  test_assert(asThin.size() == 2 && asThin[0].object == thin && asThin[0].thin && !asThin[1].thin);
+  test_assert(asThin.size() == 2 && asThin[0].object == thin && asThin[0].thin &&
+              !asThin[1].thin);
   /* Covered by both, the nearer one wins. */
   hits = d.picks(view, at.x, at.y - 8.0, within(10.0, false));
-  test_assert(hits.size() == 2 && hits[0].object == thin && hits[0].covers() && hits[1].covers());
+  test_assert(hits.size() == 2 && hits[0].object == thin && hits[0].covers() &&
+              hits[1].covers());
   test_assert(hits[0].depth < hits[1].depth);
   /* Its end is where the matrix says: a ball a thousand pixels long. */
   const ViewPoint end = view.project(double3(2.0 + 1000.0 * pixel, 8.0 * pixel, 1.0));
@@ -314,8 +322,10 @@ void testOrder()
                     solve::affine(Linear::identity(), double3(x * pixel, 0.0, z)),
                     d.geoBlock(name, {ball(double3(), 2.0 * pixel)}));
   };
-  const BlockHandle missNear = at("missNear", 6.0, 0.0), missFar = at("missFar", -8.0, 0.0);
-  const BlockHandle hitBack = at("hitBack", 0.0, -1.0), hitFront = at("hitFront", 0.0, 1.0);
+  const BlockHandle missNear = at("missNear", 6.0, 0.0),
+                    missFar = at("missFar", -8.0, 0.0);
+  const BlockHandle hitBack = at("hitBack", 0.0, -1.0),
+                    hitFront = at("hitFront", 0.0, 1.0);
   const BlockHandle twin = at("twin", 0.0, 1.0);
   d.evaluate();
   const ViewPoint p = view.project(double3());
@@ -337,12 +347,13 @@ void testOrder()
   test_assert(dense.size() == 4 && std::fabs(dense[3].distance - 2.0) < 0.01);
 
   /* Of one object's shapes: what covers, then the front one. An element's domain. */
-  const BlockHandle many = d.placed("many",
-                                    identity(),
-                                    d.geoBlock("many",
-                                               {ball(double3(0, 0, -1), 0.1),
-                                                ball(double3(0, 0, 3), 0.1),
-                                                ball(double3(4.0 * pixel, 0, 4), 0.001)}));
+  const BlockHandle many =
+      d.placed("many",
+               identity(),
+               d.geoBlock("many",
+                          {ball(double3(0, 0, -1), 0.1),
+                           ball(double3(0, 0, 3), 0.1),
+                           ball(double3(4.0 * pixel, 0, 4), 0.001)}));
   d.evaluate();
   Vector<PickHit> best = d.picks(view, p.x, p.y, within(10.0));
   test_assert(best[0].object == many && best[0].element == 2);
@@ -362,8 +373,7 @@ void testFlattened()
     Linear flat = Linear::identity();
     if (i < 3) {
       flat.col[2] = double3(0.0, 0.0, i == 0 ? 0.0 : i == 1 ? 1e-13 : 1e-9);
-    }
-    else {
+    } else {
       /* Almost in the plane of the other two. */
       flat.col[0] = double3(1.0, 1.0 / 3.0, 0.0);
       flat.col[2] = double3(0.7, 0.3, std::pow(10.0, -3.0 - i));
@@ -415,7 +425,8 @@ void testSink()
   const double pixel = view.pixelSizeAt(at);
   s.element(0, 7);
   s.point(at + double3(0.0, 3.0 * pixel, 0.0));
-  test_assert(s.any() && std::fabs(s.best().distance - 3.0) < 0.01 && s.best().element == 7);
+  test_assert(s.any() && std::fabs(s.best().distance - 3.0) < 0.01 &&
+              s.best().element == 7);
   s.element(1, 8);
   s.segment(at + double3(-1.0, 2.0 * pixel, 0.0), at + double3(1.0, 2.0 * pixel, 0.0));
   test_assert(std::fabs(s.best().distance - 2.0) < 0.01 && s.best().element == 8);
@@ -438,7 +449,8 @@ void testSink()
   s.instance(5);
   s.box(box);
   test_assert(s.best().element == 12 && std::fabs(s.best().point[2] - 4.0) < 1e-9);
-  test_assert(s.best().instance == 5 && s.best().normal[2] == 1.0 && !s.best().backFacing);
+  test_assert(s.best().instance == 5 && s.best().normal[2] == 1.0 &&
+              !s.best().backFacing);
   /* The first of equals, and no empty box. */
   s.element(2, 13);
   s.instance(-1);
@@ -450,7 +462,8 @@ void testSink()
 
   /* For scripts. */
   test_assert(q.planeCount() == 6 && q.hasRay() && q.radiusDevicePixels() == 4.0);
-  test_assert(q.surfaceRadiusDevicePixels() == 4.0 && q.limitDepth() == inf && q.occlusion());
+  test_assert(q.surfaceRadiusDevicePixels() == 4.0 && q.limitDepth() == inf &&
+              q.occlusion());
   test_assert(q.domains() == ~0u && q.wants(-1) && q.wants(31) && q.wants(40));
   const Vector<double> values = q.planeValues();
   test_assert(values.size() == 24);
@@ -458,10 +471,13 @@ void testSink()
     test_assert(q.planeNormal(i)[0] == q.planes()[size_t(i)].n[0]);
     test_assert(q.planeOffset(i) == q.planes()[size_t(i)].w);
     test_assert(q.planeNormal(i).dot(at) + q.planeOffset(i) > 0.0);
-    test_assert(values[i * 4 + 1] == q.planeNormal(i)[1] && values[i * 4 + 3] == q.planeOffset(i));
+    test_assert(values[i * 4 + 1] == q.planeNormal(i)[1] &&
+                values[i * 4 + 3] == q.planeOffset(i));
   }
-  test_assert(q.planeOffset(6) == 0.0 && q.planeOffset(-1) == 0.0 && q.planeNormal(6)[0] == 0.0);
-  test_assert(q.rayOrigin()[2] == q.ray().origin[2] && q.rayDirection()[2] == q.ray().dir[2]);
+  test_assert(q.planeOffset(6) == 0.0 && q.planeOffset(-1) == 0.0 &&
+              q.planeNormal(6)[0] == 0.0);
+  test_assert(q.rayOrigin()[2] == q.ray().origin[2] &&
+              q.rayDirection()[2] == q.ray().dir[2]);
   test_assert(q.rayLimit() == q.ray().tMax && std::fabs(q.rayLimit() - 1000.0) < 10.0);
   test_assert(sc::foreignImplementable(detail::ifaceDesc<Spatial>()).ok());
   test_assert(PickOptions::defineBindings() == PickOptions::defineBindings());
@@ -492,22 +508,19 @@ void testBulk()
         one.element(kind, elements[i]);
         if (kind == 0) {
           one.point(at(0), 3.0);
-        }
-        else if (kind == 1) {
+        } else if (kind == 1) {
           one.segment(at(0), at(3), 2.0);
-        }
-        else if (kind == 2) {
+        } else if (kind == 2) {
           one.triangle(at(0), at(3), at(6));
-        }
-        else {
+        } else {
           one.capsule(at(0), at(3), v[6]);
         }
       }
       const auto give = [&](const Vector<double> &v) {
-        return kind == 0 ? many.points(kind, elements, v, 3.0) :
-               kind == 1 ? many.segments(kind, elements, v, 2.0) :
-               kind == 2 ? many.triangles(kind, elements, v) :
-                           many.capsules(kind, elements, v);
+        return kind == 0   ? many.points(kind, elements, v, 3.0)
+               : kind == 1 ? many.segments(kind, elements, v, 2.0)
+               : kind == 2 ? many.triangles(kind, elements, v)
+                           : many.capsules(kind, elements, v);
       };
       Vector<double> fewer = values;
       fewer.pop_back();
@@ -517,8 +530,9 @@ void testBulk()
     const auto &a = one.kept(), &b = many.kept();
     test_assert(a.size() == b.size() && a.size() >= 3);
     for (int i = 0; i < int((std::min)(a.size(), b.size())); i++) {
-      test_assert(a[i].hit.element == b[i].hit.element && a[i].hit.domain == b[i].hit.domain &&
-                  a[i].hit.distance == b[i].hit.distance && a[i].hit.depth == b[i].hit.depth);
+      test_assert(
+          a[i].hit.element == b[i].hit.element && a[i].hit.domain == b[i].hit.domain &&
+          a[i].hit.distance == b[i].hit.distance && a[i].hit.depth == b[i].hit.depth);
     }
   }
 }
@@ -536,19 +550,21 @@ void testQuery()
     const ViewMath view = viewOf(c);
     /* Half of them with a pivot that is far away, and the point at the border. */
     const double3 pivot = border ? r.vec(1e6) : double3();
-    const mat4d world = border ?
-                            solve::affine(Linear::identity(), double3() - pivot) :
-                            solve::affine(randomLinear(r, int(r.below(kLinearKinds))), r.vec(3.0));
+    const mat4d world =
+        border ? solve::affine(Linear::identity(), double3() - pivot)
+               : solve::affine(randomLinear(r, int(r.below(kLinearKinds))), r.vec(3.0));
     const double3 local = pivot + r.vec(1.0), at = transformPoint(world, local);
     const ViewPoint p = view.project(at);
     if (!p.visible || p.distance < 1e-9 || std::fabs(p.x) > 1e6 || std::fabs(p.y) > 1e6) {
       continue;
     }
-    const double x = p.x + (border ? 3.0 : r.range(-3.0, 3.0)), y = p.y + r.range(-3.0, 3.0);
+    const double x = p.x + (border ? 3.0 : r.range(-3.0, 3.0)),
+                 y = p.y + r.range(-3.0, 3.0);
     const PickCursor cursor(view, x, y, within(3.0));
     const PickQuery q(cursor, world);
     for (const BvhPlane &plane : q.planes()) {
-      expect(plane.n.dot(local) + plane.w >= 0.0, "a point within the radius is in the region");
+      expect(plane.n.dot(local) + plane.w >= 0.0,
+             "a point within the radius is in the region");
     }
     const PickCursor farCursor(view, x + 100.0, y, within(3.0));
     const PickQuery far(farCursor, world);
@@ -572,7 +588,8 @@ void testFilter()
   PickDoc d;
   const ViewMath view = viewOf(ViewCase());
   const BlockHandle data = d.geoBlock("ball", {ball(double3(), 0.5)});
-  const BlockHandle a = d.placed("a", identity(), data), b = d.placed("b", identity(), data);
+  const BlockHandle a = d.placed("a", identity(), data),
+                    b = d.placed("b", identity(), data);
   const BlockHandle c = d.placed("c", identity(), data);
   d.obj(a).flags = ObjectFlags::Hidden;
   d.obj(b).flags = ObjectFlags::Unselectable;
@@ -610,11 +627,14 @@ void testErrors()
   const ViewMath view = viewOf(ViewCase());
   const BlockHandle data = d.geoBlock("ball", {ball(double3(), 0.5)});
   const BlockHandle throwing = d.geoBlock("throwing", {ball(double3(), 0.5)});
-  const BlockHandle a = d.placed("a", identity(), throwing), b = d.placed("b", identity(), data);
+  const BlockHandle a = d.placed("a", identity(), throwing),
+                    b = d.placed("b", identity(), data);
   const ViewPoint p = view.project(double3());
   Vector<PickHit> hits;
   hits.append(PickHit());
-  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::FailedPrecondition, "evaluated"));
+  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits),
+                      StatusCode::FailedPrecondition,
+                      "evaluated"));
   test_assert(hits.size() == 0);
   d.evaluate();
   const double nan = std::numeric_limits<double>::quiet_NaN();
@@ -633,12 +653,15 @@ void testErrors()
                                   hits),
                         StatusCode::InvalidArgument));
   }
-  test_assert(isError(pickScene(*d.ctx, a, view, p.x, p.y, within(5.0), {}, hits), StatusCode::NotFound));
+  test_assert(isError(pickScene(*d.ctx, a, view, p.x, p.y, within(5.0), {}, hits),
+                      StatusCode::NotFound));
   Context none(&d.rt, nullptr, PointerRef());
   test_assert(isError(pickScene(none, d.scene, view, p.x, p.y, within(5.0), {}, hits),
                       StatusCode::FailedPrecondition));
   d.rt.setStickyError(boom("pending"));
-  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::FailedPrecondition, "pending"));
+  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits),
+                      StatusCode::FailedPrecondition,
+                      "pending"));
   d.rt.takeStickyError().ignore();
 
   /* Two that throw: the first is returned, the others' hits are there. */
@@ -649,8 +672,10 @@ void testErrors()
   };
   const BlockHandle c = d.placed("c", identity(), throwing);
   d.evaluate();
-  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::Internal, "first"));
-  test_assert(hits.size() == 1 && hits[0].object == b && calls == 2 && !d.rt.hasStickyError());
+  test_assert(isError(
+      d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::Internal, "first"));
+  test_assert(hits.size() == 1 && hits[0].object == b && calls == 2 &&
+              !d.rt.hasStickyError());
   (void)c;
   /* A read that throws, and a query. */
   d.geo(throwing).onPick = nullptr;
@@ -659,21 +684,26 @@ void testErrors()
   d.evaluate();
   test_assert(d.picks(view, p.x, p.y, within(5.0)).size() == 4);
   d.host(host).onRead = [&](ObjectInfo &) { d.rt.setStickyError(boom("read")); };
-  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::Internal, "read"));
+  test_assert(isError(
+      d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::Internal, "read"));
   test_assert(hits.size() == 3);
   d.host(host).onRead = nullptr;
   d.host(host).info.data = BlockId();
   d.query = [&](const Datablock &block, InterfaceId iface) {
-    if (!strcmp(block.name().c_str(), "host") && iface == InterfaceId::of(Spatial::ifaceName)) {
+    if (!strcmp(block.name().c_str(), "host") &&
+        iface == InterfaceId::of(Spatial::ifaceName))
+    {
       d.rt.setStickyError(boom("query"));
     }
     return QueryAnswer();
   };
-  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::Internal, "query"));
+  test_assert(isError(
+      d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::Internal, "query"));
   test_assert(hits.size() == 3 && !d.rt.hasStickyError());
   d.query = nullptr;
 
-  /* Nothing can be changed while it runs, and it can't run while something is evaluated. */
+  /* Nothing can be changed while it runs, and it can't run while something is evaluated.
+   */
   Status inside[3];
   d.geo(throwing).onPick = [&](const PickQuery &, PickSink &) {
     Vector<PickHit> more;
@@ -689,7 +719,9 @@ void testErrors()
   const BlockHandle shape = d.shapeBlock("shape", 1.0);
   d.setData(b, shape);
   Status during;
-  d.shape(shape).onBounds = [&] { during = d.tryPick(view, p.x, p.y, within(5.0), hits); };
+  d.shape(shape).onBounds = [&] {
+    during = d.tryPick(view, p.x, p.y, within(5.0), hits);
+  };
   d.evaluate();
   test_assert(during.code() == StatusCode::Busy);
   /* While blocks are destroyed. */

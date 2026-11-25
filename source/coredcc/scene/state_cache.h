@@ -14,10 +14,13 @@ using HandleSet = litestl::util::Map<BlockHandle, int>;
 /** The Live parent that was read, or null. */
 BlockHandle liveParent(const Library &lib, const BlockId &parent);
 
-/** The states of objects and their parents, each computed once. For as long as nothing changes. */
+/** The states of objects and their parents, each computed once. For as long as nothing
+ * changes. */
 class StateCache {
- public:
-  StateCache(const Library &lib, double time) : lib_(lib), time_(time) {}
+public:
+  StateCache(const Library &lib, double time) : lib_(lib), time_(time)
+  {
+  }
   /** As computeState. */
   Result<TransformState> state(BlockHandle object);
   /** Of a parent: the origin's, for one that isn't Transformable. */
@@ -27,9 +30,10 @@ class StateCache {
   /** Of the parent of an object, as computeParentState. */
   Result<TransformState> stateAbove(BlockHandle object, const ObjectRead &read);
   /** Of an object, under the state of its parent. */
-  Result<TransformState> stateUnder(const ObjectRead &read, const TransformState &parent) const;
+  Result<TransformState> stateUnder(const ObjectRead &read,
+                                    const TransformState &parent) const;
 
- private:
+private:
   /** `cycle` if one is above it: nothing is remembered then. */
   Status walk(BlockHandle object, bool &cycle, TransformState &out);
 
@@ -38,10 +42,13 @@ class StateCache {
   litestl::util::Map<BlockHandle, TransformState> states_;
 };
 
-/** Where objects are relative to a set of them. Each is read once: for as long as nothing changes. */
+/** Where objects are relative to a set of them. Each is read once: for as long as nothing
+ * changes. */
 class Ancestry {
- public:
-  Ancestry(const Library &lib, const HandleSet &set) : lib_(lib), set_(set) {}
+public:
+  Ancestry(const Library &lib, const HandleSet &set) : lib_(lib), set_(set)
+  {
+  }
 
   struct Place {
     BlockHandle parent;
@@ -58,7 +65,7 @@ class Ancestry {
   /** Whether an ancestor is in the set. False on a cycle. */
   Result<bool> below(BlockHandle object);
 
- private:
+private:
   Result<BlockHandle> parentOf(BlockHandle object);
   Place under(BlockHandle object, BlockHandle parent) const;
 

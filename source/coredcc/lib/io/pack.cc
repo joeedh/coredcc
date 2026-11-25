@@ -1,5 +1,5 @@
-#include "coredcc/lib/io/library_io.h"
 #include "coredcc/lib/io/pack.h"
+#include "coredcc/lib/io/library_io.h"
 
 #include "litestl/io/compress.h"
 #include "litestl/util/alloc.h"
@@ -45,8 +45,9 @@ Status probeMemory(uint64_t bytes)
   if (bytes < (uint64_t(1) << 20)) {
     return Status(); /* the budget bounds how many of these there are */
   }
-  void *p = bytes < SIZE_MAX / 2 ? litestl::alloc::alloc("coredcc load probe", size_t(bytes)) :
-                                   nullptr;
+  void *p = bytes < SIZE_MAX / 2
+                ? litestl::alloc::alloc("coredcc load probe", size_t(bytes))
+                : nullptr;
   if (!p) {
     return Status::error(StatusCode::OutOfRange, "not enough memory for the data");
   }
@@ -60,12 +61,16 @@ Stored pack(std::span<const uint8_t> bytes, bool fast)
   s.raw = uint64_t(bytes.size());
   if (s.raw >= kCompressFrom && s.raw <= kMaxRaw) {
     Vector<uint8_t> packed;
-    const size_t n = sculptcore::io::compressBlock(
-        bytes.data(), bytes.size(), packed,
-        fast ? sculptcore::io::kFastCompressLevel : sculptcore::io::kDefaultCompressLevel);
+    const size_t n =
+        sculptcore::io::compressBlock(bytes.data(),
+                                      bytes.size(),
+                                      packed,
+                                      fast ? sculptcore::io::kFastCompressLevel
+                                           : sculptcore::io::kDefaultCompressLevel);
     if (n > 0 && n < s.raw && plausibleLz4(s.raw, n)) {
       s.lz4 = true;
-      s.bytes = copyOf(std::span<const uint8_t>(packed.data(), n)); /* not its worst case */
+      s.bytes =
+          copyOf(std::span<const uint8_t>(packed.data(), n)); /* not its worst case */
       return s;
     }
   }
@@ -83,14 +88,16 @@ Status unpack(std::span<const uint8_t> stored,
     return Status::error(StatusCode::OutOfRange, "a block of data is too large");
   }
   const bool sizesFit = lz4 ? raw > 0 && !stored.empty() && stored.size() <= kMaxRaw &&
-                                  plausibleLz4(raw, stored.size()) :
-                              raw == stored.size();
+                                  plausibleLz4(raw, stored.size())
+                            : raw == stored.size();
   if (!sizesFit) {
-    return Status::error(StatusCode::InvalidArgument, "a block of data says the wrong size");
+    return Status::error(StatusCode::InvalidArgument,
+                         "a block of data says the wrong size");
   }
   const uint64_t cost = unpackCost(raw);
   if (!budget.take(cost)) {
-    return Status::error(StatusCode::OutOfRange, "the data needs more memory than allowed");
+    return Status::error(StatusCode::OutOfRange,
+                         "the data needs more memory than allowed");
   }
   CDCC_TRY(probeMemory(cost));
   if (!lz4) {

@@ -69,9 +69,11 @@ template <class S> struct Box3 {
   S max[3];
 
   constexpr Box3()
-      : min{(std::numeric_limits<S>::max)(), (std::numeric_limits<S>::max)(),
+      : min{(std::numeric_limits<S>::max)(),
+            (std::numeric_limits<S>::max)(),
             (std::numeric_limits<S>::max)()},
-        max{std::numeric_limits<S>::lowest(), std::numeric_limits<S>::lowest(),
+        max{std::numeric_limits<S>::lowest(),
+            std::numeric_limits<S>::lowest(),
             std::numeric_limits<S>::lowest()}
   {
   }

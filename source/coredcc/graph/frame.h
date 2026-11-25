@@ -31,8 +31,8 @@ struct WalkState {
   bool done = false;
 };
 
-/** An input socket: the value that reaches it, after conversion to its type. Valid in pass
- * `walk.pass` once done. */
+/** An input socket: the value that reaches it, after conversion to its type. Valid in
+ * pass `walk.pass` once done. */
 struct InputState {
   WalkState walk;
   /** What feeds it, and that vertex's output if it is a kernel. */
@@ -143,8 +143,8 @@ struct Foreach {
   uint64_t world = 0;
   /** What the table's check gave. */
   Status table;
-  /** The table that the node's output was made from, and the world it was made in: rows that
-   * are the same in both have the same output. */
+  /** The table that the node's output was made from, and the world it was made in: rows
+   * that are the same in both have the same output. */
   PayloadRef madeFrom;
   uint64_t madeIn = 0;
   /** Rows of the last run's table, and of those, how many had a state of their own. */
@@ -223,8 +223,9 @@ struct Frame {
   /** By index in topo->groups. */
   Array<Group> groups;
 
-  /** Interior inputs of frames around this one that concern groups in it: the key, how many
-   * of its groups lead here, and the input that replaces it. Valid in pass `pass`. */
+  /** Interior inputs of frames around this one that concern groups in it: the key, how
+   * many of its groups lead here, and the input that replaces it. Valid in pass `pass`.
+   */
   struct Replacing {
     const InteriorKey *key = nullptr;
     int depth = 0;

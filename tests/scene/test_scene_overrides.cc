@@ -1,5 +1,6 @@
-/* Channels that are driven from elsewhere (OverrideProvider): evaluation, computeState and the commands
- * against documents that store the driven values. Drags at a time that isn't 0. */
+/* Channels that are driven from elsewhere (OverrideProvider): evaluation, computeState
+ * and the commands against documents that store the driven values. Drags at a time that
+ * isn't 0. */
 #include "command_doc.h"
 
 #include "coredcc/api/ref_text.h"
@@ -60,7 +61,8 @@ TransformDelta translate(double x, double y, double z)
   return t;
 }
 
-/* A random document: TRS, FBX and matrix objects, a type that depends on the time, hosts, and cycles. */
+/* A random document: TRS, FBX and matrix objects, a type that depends on the time, hosts,
+ * and cycles. */
 struct Random : CommandDoc {
   Vector<BlockHandle> all;
 
@@ -85,13 +87,18 @@ struct Random : CommandDoc {
       }
       const BlockHandle h = object(name.c_str());
       all.append(h);
-      const char *const names[] = {kTrsTransform, kFbxTransform, kMatrixTransform, "test.slide"};
+      const char *const names[] = {
+          kTrsTransform, kFbxTransform, kMatrixTransform, "test.slide"};
       obj(h).setTransformType(names[kind]);
       const TransformType &t = *rt.ext<TransformRegistry>().find(TypeId::of(names[kind]));
-      obj(h).channels = kind == 0 ? trsChannels(r, t, r.scale(2, true), 3.0) :
-                        kind == 1 ? fbxChannels(r, t, int(r.below(3)), r.scale(2, false), 1.0) :
-                                    t.defaults();
-      for (int k = matrix_transform::kTranslation; kind == 2 && k < obj(h).channels.size(); k++) {
+      obj(h).channels = kind == 0 ? trsChannels(r, t, r.scale(2, true), 3.0)
+                        : kind == 1
+                            ? fbxChannels(r, t, int(r.below(3)), r.scale(2, false), 1.0)
+                            : t.defaults();
+      for (int k = matrix_transform::kTranslation;
+           kind == 2 && k < obj(h).channels.size();
+           k++)
+      {
         obj(h).channels.set(k, r.range(-3, 3));
       }
       if (kind == 3) {
@@ -108,7 +115,8 @@ struct Random : CommandDoc {
   }
   ChannelBlock &channels(BlockHandle h)
   {
-    return lib->get(h)->type() == TypeId::of(kObjectType) ? obj(h).channels : host(h).channels;
+    return lib->get(h)->type() == TypeId::of(kObjectType) ? obj(h).channels
+                                                          : host(h).channels;
   }
   const TransformType &typeOf(BlockHandle h)
   {
@@ -122,7 +130,8 @@ struct Random : CommandDoc {
         Curve c;
         c.object = h;
         /* Of a matrix only the translation, so that it keeps an inverse. */
-        c.channel = matrixType ? matrix_transform::kTranslation + int(r.below(3)) : int(r.below(uint32_t(channels(h).size())));
+        c.channel = matrixType ? matrix_transform::kTranslation + int(r.below(3))
+                               : int(r.below(uint32_t(channels(h).size())));
         c.base = r.range(0.5, 2.0);
         c.slope = r.range(-0.01, 0.01);
         out.curves.append(c);
@@ -215,14 +224,15 @@ void testProvider()
     return h == a ? Status::error(StatusCode::FailedPrecondition, "no value") : Status();
   };
   test_assert(isError(evaluateScene(*d.ctx), StatusCode::FailedPrecondition, "no value"));
-  test_assert(d.statusOf(a) == EvalStatus::ModelFailed && d.statusOf(b) == EvalStatus::Ok &&
-              d.isAt(a, 0) && d.isAt(b, 2));
-  test_assert(isError(computeState(*d.lib, b, 0.0).status(), StatusCode::FailedPrecondition));
-  test_assert(isError(d.fails(kApplyDeltaCommand,
-                              {{"objects", PropValue::ofString(
-                                               formatBlockId(d.rt, d.idOf(a)).c_str())}}),
-                      StatusCode::FailedPrecondition,
-                      "no value"));
+  test_assert(d.statusOf(a) == EvalStatus::ModelFailed &&
+              d.statusOf(b) == EvalStatus::Ok && d.isAt(a, 0) && d.isAt(b, 2));
+  test_assert(
+      isError(computeState(*d.lib, b, 0.0).status(), StatusCode::FailedPrecondition));
+  test_assert(isError(
+      d.fails(kApplyDeltaCommand,
+              {{"objects", PropValue::ofString(formatBlockId(d.rt, d.idOf(a)).c_str())}}),
+      StatusCode::FailedPrecondition,
+      "no value"));
   /* A script's exception. */
   curves.before = [&](BlockHandle h) {
     if (h == a) {
@@ -232,8 +242,10 @@ void testProvider()
   };
   test_assert(isError(evaluateScene(*d.ctx), StatusCode::Internal, "thrown"));
   test_assert(!d.rt.hasStickyError() && d.statusOf(a) == EvalStatus::ModelFailed);
-  test_assert(isError(computeState(*d.lib, b, 0.0).status(), StatusCode::Internal, "thrown"));
-  test_assert(isError(readObjectAt(*d.lib, a, 0.0).status(), StatusCode::Internal, "thrown"));
+  test_assert(
+      isError(computeState(*d.lib, b, 0.0).status(), StatusCode::Internal, "thrown"));
+  test_assert(
+      isError(readObjectAt(*d.lib, a, 0.0).status(), StatusCode::Internal, "thrown"));
   test_assert(!d.rt.hasStickyError());
   /* Nothing is edited while a scene evaluates, and no provider comes or goes. */
   Status busy, edit;
@@ -289,8 +301,9 @@ bool storedStay(Random &d, const Curves &curves, const Vector<double> &was)
   return same;
 }
 
-/* Drags against the document with the driven values in it: the driven channels are what they were, and
- * the others are what they are there. An object that has none of its own moves as far. */
+/* Drags against the document with the driven values in it: the driven channels are what
+ * they were, and the others are what they are there. An object that has none of its own
+ * moves as far. */
 void testDrag()
 {
   int full = 0, partly = 0, refused = 0;
@@ -357,8 +370,7 @@ void testDrag()
           curve = x.object == h && x.channel == c ? x : curve;
         }
         changed = changed || std::fabs(want - curve.at(time)) > 1e-6;
-      }
-      else {
+      } else {
         test_assert(d.channels(h).get(c) == baked.channels(b).get(c));
       }
     }
@@ -371,8 +383,7 @@ void testDrag()
                   (t.kind != DeltaKind::Translate ||
                    difference(to->world, t.matrix() * from->world) < 1e-6));
       full++;
-    }
-    else {
+    } else {
       partly++;
     }
     clearOverrideProvider(*d.lib, curves);
@@ -381,7 +392,8 @@ void testDrag()
   test_assert(full > 10 && partly > 5);
 }
 
-/* A drag's overrides are those of its start, also when the drivers move meanwhile; a lone scale too. */
+/* A drag's overrides are those of its start, also when the drivers move meanwhile; a lone
+ * scale too. */
 void testDragSteps()
 {
   CommandDoc d;
@@ -400,7 +412,8 @@ void testDragSteps()
   for (int i = 1; i < 5; i++) {
     must(drag->update(*d.ctx, translate(i, i, i)));
     test_assert(drag->driven() == 1 && drag->locked() == 0 && drag->skipped() == 0);
-    test_assert(lengthOf(get(d.obj(a).channels, trs::kLocation) - double3(1 + i, 2, 3 + i)) == 0.0);
+    test_assert(lengthOf(get(d.obj(a).channels, trs::kLocation) -
+                         double3(1 + i, 2, 3 + i)) == 0.0);
     d.evaluate();
     test_assert(d.isAt(a, 1 + i, 50, 3 + i));
   }
@@ -481,7 +494,8 @@ void testKeepWorld()
   const ObjectEval e = d.result(b);
   d.ok(kDeleteObjectsCommand);
   d.evaluate();
-  test_assert(difference(d.result(b).state.world, e.state.world) < 1e-12 && d.isAt(b, 12));
+  test_assert(difference(d.result(b).state.world, e.state.world) < 1e-12 &&
+              d.isAt(b, 12));
   d.undo();
   /* A driven child. */
   c.object = b;
@@ -531,8 +545,8 @@ void testTime()
   d.select({child});
   d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(10, 20, 30)}});
   d.evaluate();
-  test_assert(lengthOf(solve::translationOf(d.result(child).state.world) - double3(27, 19, 33)) <
-              1e-12);
+  test_assert(lengthOf(solve::translationOf(d.result(child).state.world) -
+                       double3(27, 19, 33)) < 1e-12);
   d.undo();
 
   const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
@@ -578,7 +592,8 @@ void testTime()
     {
       auto *st = new lbt::Struct<Timed>("test::Timed", sizeof(Timed));
       BIND_STRUCT_METHOD(st, evaluate, MARGS("ctx", "parent"));
-      BIND_STRUCT_METHOD(st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
+      BIND_STRUCT_METHOD(
+          st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
       return st;
     }
   };
@@ -589,7 +604,9 @@ void testTime()
   TransformTypeInfo info;
   info.name = "test.timed";
   info.channels.append(PropertyDef::floatProp("speed"));
-  must(d.rt.ext<TransformRegistry>().add(std::move(info), std::move(owned).value()).status());
+  must(d.rt.ext<TransformRegistry>()
+           .add(std::move(info), std::move(owned).value())
+           .status());
   const BlockHandle timed = d.object("timed");
   d.obj(timed).setTransformType("test.timed");
   d.obj(timed).channels = ChannelBlock(1);

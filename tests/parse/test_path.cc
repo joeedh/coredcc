@@ -43,8 +43,10 @@ static void test_forms()
 {
   Path p = ok("objects[\"Cube\"].modifiers[0].width");
   test_assert(p.size() == 5);
-  test_assert(p[0].kind == SegmentKind::Member && strcmp(p[0].text.c_str(), "objects") == 0);
-  test_assert(p[1].kind == SegmentKind::StringKey && strcmp(p[1].text.c_str(), "Cube") == 0);
+  test_assert(p[0].kind == SegmentKind::Member &&
+              strcmp(p[0].text.c_str(), "objects") == 0);
+  test_assert(p[1].kind == SegmentKind::StringKey &&
+              strcmp(p[1].text.c_str(), "Cube") == 0);
   test_assert(p[3].kind == SegmentKind::Index && p[3].index == 0);
   test_assert(p[4].kind == SegmentKind::Member);
 
@@ -58,7 +60,8 @@ static void test_forms()
   test_assert(p[3].offset == 22 && p[4].offset == 25);
 
   p = ok("tool.mode[SMOOTH]");
-  test_assert(p[2].kind == SegmentKind::EnumKey && strcmp(p[2].text.c_str(), "SMOOTH") == 0);
+  test_assert(p[2].kind == SegmentKind::EnumKey &&
+              strcmp(p[2].text.c_str(), "SMOOTH") == 0);
 }
 
 static void test_keys_and_escapes()
@@ -112,7 +115,8 @@ static void test_from_root()
   Path other = ok("a[0].b");
   test_assert(!other.fromRoot && !(other == p) && other.computeHash() != p.computeHash());
   Path root = ok("/");
-  test_assert(root.fromRoot && root.size() == 0 && root.toString() == "/" && root == Path::root());
+  test_assert(root.fromRoot && root.size() == 0 && root.toString() == "/" &&
+              root == Path::root());
   test_assert(!(root == Path()) && root.computeHash() != Path().computeHash());
   test_assert(failsAt("//a") == 1 && failsAt("/.a") == 1 && failsAt("/[0]") == 1);
   test_assert(failsAt("a/b") == 1 && failsAt("/a/b") == 2 && failsAt("/a.") == 3);
@@ -181,7 +185,8 @@ static void test_cache()
   const uint64_t missesBefore = cache.misses();
   test_assert(cache.get("a").ok() && cache.get("c").ok() && cache.get("d").ok());
   test_assert(cache.misses() == missesBefore); /* all still cached */
-  test_assert(cache.get("b").ok() && cache.misses() == missesBefore + 1); /* b was evicted */
+  test_assert(cache.get("b").ok() &&
+              cache.misses() == missesBefore + 1); /* b was evicted */
   test_assert(rt.validateAll().ok());
   cache.setCapacity(0); /* clamps to 1 */
   test_assert(cache.size() == 1 && cache.capacity() == 1 && rt.validateAll().ok());

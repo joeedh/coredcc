@@ -1,5 +1,5 @@
-#include "coredcc/lib/io/fill.h"
 #include "coredcc/lib/io/load.h"
+#include "coredcc/lib/io/fill.h"
 #include "coredcc/lib/io/parse.h"
 
 #include <algorithm>
@@ -48,8 +48,8 @@ BlockFlags flagsOf(uint32_t stored)
 
 PlaceholderReason reasonOf(const ParsedRecord &r)
 {
-  return r.storedAs == StoredAs::NoPayload ? PlaceholderReason::MissingBlock :
-                                             PlaceholderReason::MissingType;
+  return r.storedAs == StoredAs::NoPayload ? PlaceholderReason::MissingBlock
+                                           : PlaceholderReason::MissingType;
 }
 
 /* A load and an append. */
@@ -72,7 +72,8 @@ Status addRecord(LibraryFiller &filler,
   info.name = own(r.name);
   info.sourceName = own(r.source);
   info.payload = payloadOf(file, r.version, r.blob, r.rows);
-  Result<BlockHandle> h = filler.addRecord(r.id, std::move(info), flagsOf(r.flags), refill);
+  Result<BlockHandle> h =
+      filler.addRecord(r.id, std::move(info), flagsOf(r.flags), refill);
   if (!h.ok()) {
     return h.status();
   }
@@ -81,7 +82,8 @@ Status addRecord(LibraryFiller &filler,
     const ParsedSlot &s = file.slots[int(r.slots.begin + i)];
     filler.addSlot(*h, s.ns, s.key, s.cell);
     if (s.cell.kind == RefKind::Strong && s.cell.isNull()) {
-      report.issues.add(r.id, r.name,
+      report.issues.add(r.id,
+                        r.name,
                         Status::error(StatusCode::InvalidArgument,
                                       "a Strong slot that references nothing"));
     }
@@ -92,7 +94,8 @@ Status addRecord(LibraryFiller &filler,
     o.typeName = own(a.type);
     o.payload = payloadOf(file, a.version, a.blob, a.rows);
     if (!filler.addOpaque(*h, std::move(o))) {
-      report.issues.add(r.id, r.name,
+      report.issues.add(r.id,
+                        r.name,
                         Status::error(StatusCode::AlreadyExists,
                                       ("the missing block it fills has an attachment '" +
                                        std::string(a.type) + "': the file's is dropped")
@@ -108,18 +111,21 @@ void countPlaceholders(const Library &lib, LoadReport &report)
   for (BlockHandle h : report.blocks) {
     const Datablock *b = lib.get(h);
     if (b && b->state() == BlockState::Placeholder) {
-      (b->placeholderReason() == PlaceholderReason::MissingType ? report.missingType :
-                                                                  report.missingBlock)++;
+      (b->placeholderReason() == PlaceholderReason::MissingType ? report.missingType
+                                                                : report.missingBlock)++;
     }
   }
 }
 
 /* Every id is planned: from here on the load works. */
-void fillFile(Library &lib, ParsedFile &file, const FillOptions &options, LoadReport &report)
+void fillFile(Library &lib,
+              ParsedFile &file,
+              const FillOptions &options,
+              LoadReport &report)
 {
   const uint64_t maxBlocks = uint64_t(options.limits.maxBlocks) + uint64_t(lib.size());
-  LibraryFiller filler(lib, report, file.budget.left,
-                       uint32_t(std::min<uint64_t>(maxBlocks, UINT32_MAX)));
+  LibraryFiller filler(
+      lib, report, file.budget.left, uint32_t(std::min<uint64_t>(maxBlocks, UINT32_MAX)));
   for (const ParsedRecord &r : file.records) {
     if (Status s = addRecord(filler, file, r, options.refill, report); !s.ok()) {
       /* The plan gave every record its own id, so this doesn't happen. */
@@ -128,7 +134,8 @@ void fillFile(Library &lib, ParsedFile &file, const FillOptions &options, LoadRe
   }
   report.records = int64_t(report.blocks.size());
   for (int i = 0; i < int(report.records); i++) {
-    filler.setSource(report.blocks[i], options.source); /* cleared again when it is filled */
+    filler.setSource(report.blocks[i],
+                     options.source); /* cleared again when it is filled */
   }
   {
     LibraryFiller::Scope scope(lib);
@@ -148,7 +155,8 @@ void fillFile(Library &lib, ParsedFile &file, const FillOptions &options, LoadRe
   countPlaceholders(lib, report);
 }
 
-BlockId rekeyRecord(Library &lib, const ParsedRecord &r, BlockId id, const RekeyContext &context)
+BlockId
+rekeyRecord(Library &lib, const ParsedRecord &r, BlockId id, const RekeyContext &context)
 {
   PlaceholderInfo info;
   info.reason = reasonOf(r);
@@ -160,9 +168,8 @@ BlockId rekeyRecord(Library &lib, const ParsedRecord &r, BlockId id, const Rekey
 
 } // namespace
 
-Result<LoadReport> loadLibrary(Library &lib,
-                               std::span<const uint8_t> bytes,
-                               const LoadOptions &options)
+Result<LoadReport>
+loadLibrary(Library &lib, std::span<const uint8_t> bytes, const LoadOptions &options)
 {
   CDCC_TRY(LibraryFiller::ready(lib, "loadLibrary"));
   if (lib.size() > 0) {
@@ -170,21 +177,22 @@ Result<LoadReport> loadLibrary(Library &lib,
                          "loadLibrary: the library already has records");
   }
   LoadReport report;
-  Result<std::unique_ptr<ParsedFile>> file = parseLibrary(bytes, options.limits, report.issues);
+  Result<std::unique_ptr<ParsedFile>> file =
+      parseLibrary(bytes, options.limits, report.issues);
   if (!file.ok()) {
     return file.status();
   }
-  const auto rekey = [&lib](const ParsedRecord &r, BlockId id, const RekeyContext &context) {
-    return rekeyRecord(lib, r, id, context);
-  };
+  const auto rekey =
+      [&lib](const ParsedRecord &r, BlockId id, const RekeyContext &context) {
+        return rekeyRecord(lib, r, id, context);
+      };
   CDCC_TRY(planIds(**file, lib, options.limits, rekey, report.issues));
   fillFile(lib, **file, FillOptions{options.limits, options.sourceName}, report);
   return report;
 }
 
-Result<AppendResult> appendLibrary(Library &lib,
-                                   std::span<const uint8_t> bytes,
-                                   const AppendOptions &options)
+Result<AppendResult>
+appendLibrary(Library &lib, std::span<const uint8_t> bytes, const AppendOptions &options)
 {
   lib.find(BlockId()); /* takes in client aliases that are new */
   CDCC_TRY(LibraryFiller::ready(lib, "appendLibrary"));
@@ -194,15 +202,19 @@ Result<AppendResult> appendLibrary(Library &lib,
   if (!file.ok()) {
     return file.status();
   }
-  const auto rekey = [&lib](const ParsedRecord &r, BlockId id, const RekeyContext &context) {
-    return rekeyRecord(lib, r, id, context);
-  };
-  CDCC_TRY(planAppend(**file, lib, options.limits, rekey, result.ids, result.report.issues));
+  const auto rekey =
+      [&lib](const ParsedRecord &r, BlockId id, const RekeyContext &context) {
+        return rekeyRecord(lib, r, id, context);
+      };
+  CDCC_TRY(
+      planAppend(**file, lib, options.limits, rekey, result.ids, result.report.issues));
   for (ParsedRecord &r : (*file)->records) {
-    /* What was kept for itself there is kept here, but this document's roots are its own. */
+    /* What was kept for itself there is kept here, but this document's roots are its own.
+     */
     r.flags = r.flags & kFlagRoot ? (r.flags & ~kFlagRoot) | kFlagFakeUser : r.flags;
   }
-  fillFile(lib, **file, FillOptions{options.limits, options.sourceName, true}, result.report);
+  fillFile(
+      lib, **file, FillOptions{options.limits, options.sourceName, true}, result.report);
   return result;
 }
 

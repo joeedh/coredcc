@@ -1,6 +1,6 @@
 /* Random edits over several graphs that use each other, with long-lived instances checked
- * against a from-scratch evaluation (naive_eval.h) after each batch: the values, the errors
- * with their origins, and exactly which kernels ran. See the plan's "Tests". */
+ * against a from-scratch evaluation (naive_eval.h) after each batch: the values, the
+ * errors with their origins, and exactly which kernels ran. See the plan's "Tests". */
 #include "random_edits.h"
 
 #include "coredcc/graph/topology.h"
@@ -14,7 +14,8 @@ namespace {
 bool check(bool ok, const std::string &what)
 {
   if (!ok) {
-    printf("seed %llu, batch %d: %s\n", (unsigned long long)g_seed, g_batch, what.c_str());
+    printf(
+        "seed %llu, batch %d: %s\n", (unsigned long long)g_seed, g_batch, what.c_str());
   }
   return ok;
 }
@@ -29,7 +30,8 @@ std::string text(const GroupIds &p, int64_t node)
 }
 std::string text(const naive::Error &e)
 {
-  return std::string(statusCodeName(e.code)) + " at " + text(e.groups, e.node) + "." + e.socket;
+  return std::string(statusCodeName(e.code)) + " at " + text(e.groups, e.node) + "." +
+         e.socket;
 }
 std::string text(const Value &v)
 {
@@ -77,7 +79,9 @@ void enterFrames(Client &c, const naive::Evaluation &e)
     }
     std::vector<GroupIds> lost;
     for (const auto &[p, serial] : c.frameDefs) {
-      if (p.size() == f.path.size() + 1 && std::equal(f.path.begin(), f.path.end(), p.begin())) {
+      if (p.size() == f.path.size() + 1 &&
+          std::equal(f.path.begin(), f.path.end(), p.begin()))
+      {
         const GraphNode *g = f.def->node(NodeId{p.back()});
         if (!g || strcmp(g->typeName().c_str(), "graph.group") != 0) {
           lost.push_back(p);
@@ -116,11 +120,10 @@ void checkRuns(Client &c, const naive::Evaluation &e, uint64_t before)
     const bool blocked = k.cycle || k.unregistered || k.inputFailed;
     if (blocked) {
       test_assert(check(ran == 0, where + " ran, though it couldn't"));
-      test_assert(check(report.state == (k.inputFailed ? NodeReport::State::InputFailed :
-                                                         NodeReport::State::Failed),
+      test_assert(check(report.state == (k.inputFailed ? NodeReport::State::InputFailed
+                                                       : NodeReport::State::Failed),
                         where + " has the wrong state"));
-    }
-    else {
+    } else {
       Client::Run now;
       now.type = k.type;
       now.params = k.params;
@@ -132,13 +135,15 @@ void checkRuns(Client &c, const naive::Evaluation &e, uint64_t before)
         std::string s = in.source.text;
         if (in.source.kernel >= 0) {
           const naive::KernelVisit &from = e.kernels()[size_t(in.source.kernel)];
-          s += " v" + std::to_string(
-                          c.nodes[{from.path, from.node}].versions[size_t(in.source.output)]);
+          s += " v" +
+               std::to_string(
+                   c.nodes[{from.path, from.node}].versions[size_t(in.source.output)]);
         }
         now.sources.push_back(s + " as " + in.source.chain);
       }
-      const bool must = n.hasRun && (now.inputs != n.run.inputs || now.params != n.run.params ||
-                                     !now.block.seesSame(n.run.block));
+      const bool must =
+          n.hasRun && (now.inputs != n.run.inputs || now.params != n.run.params ||
+                       !now.block.seesSame(n.run.block));
       const bool may = !n.hasRun || must || now.paramVersion != n.run.paramVersion ||
                        now.sources != n.run.sources || !(now.block == n.run.block);
       g_counts.musts += must;
@@ -147,10 +152,11 @@ void checkRuns(Client &c, const naive::Evaluation &e, uint64_t before)
       test_assert(check(ran <= 1, where + " ran twice"));
       test_assert(check(!must || ran == 1, where + " had to run"));
       test_assert(check(may || ran == 0, where + " ran for nothing"));
-      test_assert(check(!may || ran == 1, where + " didn't run, though what it read moved"));
-      test_assert(check(report.state ==
-                            (k.failed ? NodeReport::State::Failed : NodeReport::State::Ok),
-                        where + " has the wrong state"));
+      test_assert(
+          check(!may || ran == 1, where + " didn't run, though what it read moved"));
+      test_assert(check(
+          report.state == (k.failed ? NodeReport::State::Failed : NodeReport::State::Ok),
+          where + " has the wrong state"));
       if (ran) {
         n.hasRun = true;
         n.run = now;
@@ -158,11 +164,13 @@ void checkRuns(Client &c, const naive::Evaluation &e, uint64_t before)
     }
 
     /* The versions of its outputs, by the plan's rule for changedAt. */
-    const bool flip = !n.visited || n.failed != k.failed || (k.failed && !(n.error == k.error));
+    const bool flip =
+        !n.visited || n.failed != k.failed || (k.failed && !(n.error == k.error));
     const NodeType *type = k.def->node(NodeId{k.node})->type();
     n.versions.resize(type ? size_t(type->outputs.size()) : 0, 0);
     for (size_t i = 0; i < n.versions.size(); i++) {
-      const bool newValue = !k.failed && (n.outputs.empty() || n.outputs[i] != k.outputs[i]);
+      const bool newValue =
+          !k.failed && (n.outputs.empty() || n.outputs[i] != k.outputs[i]);
       const bool newObject = !k.failed && ran && k.outputs[i].type.substr(0, 2) == "r.";
       if (flip || newValue || newObject) {
         n.versions[i] = ++c.versions; /* unique: a node may go and come back */
@@ -175,7 +183,8 @@ void checkRuns(Client &c, const naive::Evaluation &e, uint64_t before)
     n.failed = k.failed;
     n.error = k.error;
   }
-  test_assert(check(total == c.inst->totalRuns() - before, "kernels ran that weren't pulled"));
+  test_assert(
+      check(total == c.inst->totalRuns() - before, "kernels ran that weren't pulled"));
 }
 
 /* Pulls sockets of one instance, and checks everything about the answer. */
@@ -187,10 +196,12 @@ void pull(World &w, Client &c, const std::vector<SocketPath> &paths)
   const Status status = c.inst->evaluate({paths.data(), paths.size()}, results);
   const Graph &g = w.defs[size_t(c.def)];
   if (!w.live(g)) {
-    test_assert(check(status.code() == StatusCode::NotFound, "a deleted root was evaluated"));
+    test_assert(
+        check(status.code() == StatusCode::NotFound, "a deleted root was evaluated"));
     return;
   }
-  test_assert(check(status.ok(), "evaluate failed: " + std::string(status.toString().c_str())));
+  test_assert(
+      check(status.ok(), "evaluate failed: " + std::string(status.toString().c_str())));
 
   std::vector<naive::Evaluation::Request> requests;
   for (const SocketPath &p : paths) {
@@ -225,16 +236,18 @@ void pull(World &w, Client &c, const std::vector<SocketPath> &paths)
     if (r.outcome.failed) {
       const bool same = error && !value && toError(*error) == r.outcome.error &&
                         results[int(i)].code() == r.outcome.error.code;
-      test_assert(check(same, where + " should fail with " + text(r.outcome.error) + ", not " +
-                                  (error ? text(toError(*error)) : "succeed")));
-      g_counts.recursions += error && strcmp(error->status.message(),
-                                             "the graph contains itself") == 0;
-    }
-    else {
+      test_assert(check(same,
+                        where + " should fail with " + text(r.outcome.error) + ", not " +
+                            (error ? text(toError(*error)) : "succeed")));
+      g_counts.recursions +=
+          error && strcmp(error->status.message(), "the graph contains itself") == 0;
+    } else {
       const bool same = !error && value && sameValue(*value, r.outcome.value);
-      test_assert(check(same, where + " should be " + text(r.outcome.value) + ", not " +
-                                  (value ? text(toValue(*value)) :
-                                           error ? text(toError(*error)) : "nothing")));
+      test_assert(check(same,
+                        where + " should be " + text(r.outcome.value) + ", not " +
+                            (value   ? text(toValue(*value))
+                             : error ? text(toError(*error))
+                                     : "nothing")));
     }
     /* changedAt and lastGood. */
     Client::Last &l = c.last[where];
@@ -244,8 +257,8 @@ void pull(World &w, Client &c, const std::vector<SocketPath> &paths)
     const bool payload = !r.outcome.failed && r.outcome.value.type.substr(0, 2) == "r.";
     const bool changed =
         l.changedAt == 0 || l.failed != r.outcome.failed ||
-        (r.outcome.failed ? !(l.error == r.outcome.error) || l.message != message :
-                            !l.hasValue || !(l.good == r.outcome.value));
+        (r.outcome.failed ? !(l.error == r.outcome.error) || l.message != message
+                          : !l.hasValue || !(l.good == r.outcome.value));
     test_assert(check(!changed || at > l.changedAt, where + ": changedAt stood still"));
     test_assert(check(changed || payload || at == l.changedAt,
                       where + ": changedAt moved for nothing"));
@@ -266,19 +279,25 @@ void pull(World &w, Client &c, const std::vector<SocketPath> &paths)
   const uint64_t runs = c.inst->totalRuns();
   for (size_t i = 0; i < paths.size(); i++) {
     const Status again = c.inst->evaluate(paths[i]);
-    test_assert(check(again.code() == results[int(i)].code(), "another answer in one pass"));
+    test_assert(
+        check(again.code() == results[int(i)].code(), "another answer in one pass"));
   }
   test_assert(check(c.inst->totalRuns() == runs, "an unchanged pull ran kernels"));
 }
 
 /* Pulls some prepared sockets, right after some of their paths were pulled. */
-void pullPrepared(World &w, Client &c, SplitMix64 &rng, const std::vector<SocketPath> &paths)
+void pullPrepared(World &w,
+                  Client &c,
+                  SplitMix64 &rng,
+                  const std::vector<SocketPath> &paths)
 {
   if (rng.below(8) == 0 && !c.prepared.empty()) {
     const size_t at = rng.below(uint32_t(c.prepared.size()));
     const SocketHandle h = c.prepared[at].handle;
-    test_assert(c.batch->release(h).ok() && hasCode(c.batch->release(h), StatusCode::InvalidArgument));
-    test_assert(hasCode(c.batch->status(h), StatusCode::FailedPrecondition) && !c.batch->value(h));
+    test_assert(c.batch->release(h).ok() &&
+                hasCode(c.batch->release(h), StatusCode::InvalidArgument));
+    test_assert(hasCode(c.batch->status(h), StatusCode::FailedPrecondition) &&
+                !c.batch->value(h));
     c.prepared.erase(c.prepared.begin() + int(at));
   }
   if (c.prepared.size() < 12) {
@@ -323,24 +342,27 @@ void pullPrepared(World &w, Client &c, SplitMix64 &rng, const std::vector<Socket
     }
     const Status want = fresh.evaluate(p.path);
     const bool payload = value && value->type() == GraphValue::Type::Payload;
-    test_assert(check(want.code() == now.code(), where + ": " + now.toString().c_str() +
-                                                     " instead of " + want.toString().c_str()));
+    test_assert(check(want.code() == now.code(),
+                      where + ": " + now.toString().c_str() + " instead of " +
+                          want.toString().c_str()));
     test_assert(check(!value || payload || *value == *fresh.value(p.path),
                       where + ": the wrong value"));
     test_assert(check(!error || now.code() == StatusCode::NotFound ||
                           error->origin == fresh.error(p.path)->origin,
                       where + ": the wrong origin"));
     /* changedAt, and the list of those where it moved. */
-    const bool changed = !p.evaluated || p.code != now.code() || p.message != now.message() ||
-                         (value && *value != p.value);
+    const bool changed = !p.evaluated || p.code != now.code() ||
+                         p.message != now.message() || (value && *value != p.value);
     const uint64_t at = c.batch->changedAt(p.handle);
     bool listed = false;
     for (int m : moved) {
       listed |= m == int(i);
     }
     test_assert(check(!changed || at > p.changedAt, where + ": changedAt stood still"));
-    test_assert(check(listed == (at != p.changedAt), where + ": wrongly in the list, or not"));
-    test_assert(check(changed || payload || error || !listed, where + ": listed for nothing"));
+    test_assert(
+        check(listed == (at != p.changedAt), where + ": wrongly in the list, or not"));
+    test_assert(
+        check(changed || payload || error || !listed, where + ": listed for nothing"));
     g_counts.handles++;
     g_counts.moved += listed;
     p.evaluated = true;
@@ -352,7 +374,8 @@ void pullPrepared(World &w, Client &c, SplitMix64 &rng, const std::vector<Socket
   /* Nothing moves. */
   const uint64_t visits = c.batch->totalVisits();
   test_assert(c.batch->evaluate(handles, moved).ok() && moved.size() == 0);
-  test_assert(check(c.batch->totalVisits() == visits, "an unchanged batch visited something"));
+  test_assert(
+      check(c.batch->totalVisits() == visits, "an unchanged batch visited something"));
 }
 
 std::string storedText(const NodeValues &values)
@@ -413,8 +436,8 @@ std::string describe(World &w)
       parts[s.id.value] = t;
     });
     def.forEachLink([&](const GraphLink &l) {
-      parts[l.id.value] = std::to_string(l.from->id().value) + "." + l.fromKey.c_str() + ">" +
-                          std::to_string(l.to->id().value) + "." + l.toKey.c_str();
+      parts[l.id.value] = std::to_string(l.from->id().value) + "." + l.fromKey.c_str() +
+                          ">" + std::to_string(l.to->id().value) + "." + l.toKey.c_str();
     });
     out += w.live(g) ? "def\n" : "dead\n";
     for (const auto &[id, part] : parts) {
@@ -502,10 +525,12 @@ void runWorld(uint64_t seed, int batches)
   auto same = [&](const std::string &want, const char *what) {
     const std::string now = describe(w);
     if (!check(now == want, what)) {
-      const size_t at = size_t(
-          std::mismatch(want.begin(), want.end(), now.begin(), now.end()).first - want.begin());
+      const size_t at =
+          size_t(std::mismatch(want.begin(), want.end(), now.begin(), now.end()).first -
+                 want.begin());
       const size_t from = at < 100 ? 0 : at - 100;
-      printf("wanted: %s\ngot: %s\n", want.substr(from, 300).c_str(),
+      printf("wanted: %s\ngot: %s\n",
+             want.substr(from, 300).c_str(),
              now.substr(from, 300).c_str());
     }
     test_assert(now == want);
@@ -535,17 +560,28 @@ int main(int argc, char **argv)
   for (int i = 0; i < worlds && !retval; i++) {
     runWorld(first + uint64_t(i), batches);
   }
-  printf("seeds %llu to %llu: %llu edits, %llu pulls, %llu kernel visits, %llu runs (%llu had "
-         "to, %llu might), %llu failures, %llu on cycles, %llu recursions, %llu groups, %llu undos, %llu redos, "
+  printf("seeds %llu to %llu: %llu edits, %llu pulls, %llu kernel visits, %llu runs "
+         "(%llu had "
+         "to, %llu might), %llu failures, %llu on cycles, %llu recursions, %llu groups, "
+         "%llu undos, %llu redos, "
          "%llu full passes (and %llu forced), %llu handles (%llu moved)\n",
-         (unsigned long long)first, (unsigned long long)(first + uint64_t(worlds) - 1),
-         (unsigned long long)g_counts.ops, (unsigned long long)g_counts.pulls,
-         (unsigned long long)g_counts.visits, (unsigned long long)g_counts.runs,
-         (unsigned long long)g_counts.musts, (unsigned long long)g_counts.mays,
-         (unsigned long long)g_counts.errors, (unsigned long long)g_counts.cycles,
-         (unsigned long long)g_counts.recursions, (unsigned long long)g_counts.groups,
-         (unsigned long long)g_counts.undos, (unsigned long long)g_counts.redos,
-         (unsigned long long)g_counts.fullPasses, (unsigned long long)g_counts.forcedPasses,
-         (unsigned long long)g_counts.handles, (unsigned long long)g_counts.moved);
+         (unsigned long long)first,
+         (unsigned long long)(first + uint64_t(worlds) - 1),
+         (unsigned long long)g_counts.ops,
+         (unsigned long long)g_counts.pulls,
+         (unsigned long long)g_counts.visits,
+         (unsigned long long)g_counts.runs,
+         (unsigned long long)g_counts.musts,
+         (unsigned long long)g_counts.mays,
+         (unsigned long long)g_counts.errors,
+         (unsigned long long)g_counts.cycles,
+         (unsigned long long)g_counts.recursions,
+         (unsigned long long)g_counts.groups,
+         (unsigned long long)g_counts.undos,
+         (unsigned long long)g_counts.redos,
+         (unsigned long long)g_counts.fullPasses,
+         (unsigned long long)g_counts.forcedPasses,
+         (unsigned long long)g_counts.handles,
+         (unsigned long long)g_counts.moved);
   return test_end();
 }

@@ -40,12 +40,14 @@ bool isCondition(const StaticTarget &t)
 }
 
 class Validator {
- public:
+public:
   Validator(Runtime &rt, StructId root, const Layout &layout)
       : rt_(rt), layout_(layout), resolver_(rt), root_(resolver_.only(root))
   {
     if (root_.unknown) {
-      issue(0, nullptr, LayoutSeverity::Error,
+      issue(0,
+            nullptr,
+            LayoutSeverity::Error,
             Status::error(StatusCode::NotFound, "the root's struct isn't registered"));
     }
     prefixes_.resize(size_t(layout.nodeCount()));
@@ -54,8 +56,11 @@ class Validator {
   Vector<LayoutIssue> run()
   {
     for (const LayoutSkipped &s : layout_.skipped()) {
-      issue(s.node, nullptr, LayoutSeverity::Warning,
-            invalid(std::string("skipped, since it is of a newer version: ") + s.what.c_str()));
+      issue(s.node,
+            nullptr,
+            LayoutSeverity::Warning,
+            invalid(std::string("skipped, since it is of a newer version: ") +
+                    s.what.c_str()));
       issues_.last().offset = s.offset;
     }
     for (int i = 0; i < layout_.nodeCount() && !more_; i++) {
@@ -64,7 +69,7 @@ class Validator {
     return std::move(issues_);
   }
 
- private:
+private:
   void issue(int node, const LayoutAttr *a, LayoutSeverity severity, const Status &s)
   {
     if (int(issues_.size()) == kMaxLayoutIssues) {
@@ -97,10 +102,13 @@ class Validator {
   }
   void unknown(int node, const LayoutAttr *a)
   {
-    issue(node, a, LayoutSeverity::Warning,
-          Status::error(StatusCode::Unsupported,
-                        "it can't be checked: it goes through a struct that isn't registered, or "
-                        "names a key that only a dynamic def may have"));
+    issue(node,
+          a,
+          LayoutSeverity::Warning,
+          Status::error(
+              StatusCode::Unsupported,
+              "it can't be checked: it goes through a struct that isn't registered, or "
+              "names a key that only a dynamic def may have"));
   }
 
   /* Around a node's own paths. */
@@ -171,27 +179,29 @@ class Validator {
       const LayoutAttr &a = layout_.attrs()[n.attrBegin + j];
       const std::string_view value = a.value.c_str();
       switch (a.id) {
-        case Id::Path:
-          if (n.kind == LayoutKind::Prop) {
-            target(i, a, value, isProperty, "a property");
-          }
-          else {
-            prefix(i, a, value, n.kind == LayoutKind::Custom);
-          }
-          break;
-        case Id::VisibleIf:
-        case Id::EnabledIf:
-          target(i, a, value.substr(value[0] == '!' ? 1 : 0), isCondition,
-                 "a Bool, an enum's key, a pointer, a length or a String");
-          break;
-        case Id::Invocation:
-          tool(i, a);
-          break;
-        case Id::Target:
-          options(i, a, value);
-          break;
-        default:
-          break;
+      case Id::Path:
+        if (n.kind == LayoutKind::Prop) {
+          target(i, a, value, isProperty, "a property");
+        } else {
+          prefix(i, a, value, n.kind == LayoutKind::Custom);
+        }
+        break;
+      case Id::VisibleIf:
+      case Id::EnabledIf:
+        target(i,
+               a,
+               value.substr(value[0] == '!' ? 1 : 0),
+               isCondition,
+               "a Bool, an enum's key, a pointer, a length or a String");
+        break;
+      case Id::Invocation:
+        tool(i, a);
+        break;
+      case Id::Target:
+        options(i, a, value);
+        break;
+      default:
+        break;
       }
     }
   }
@@ -227,7 +237,8 @@ class Validator {
       warning(i, a, name + " is private: it isn't for users");
     }
     if (runs && def.has(CommandFlags::Interactive)) {
-      warning(i, a, name + " is interactive: it is begun with beginInteractive, not invoked");
+      warning(
+          i, a, name + " is interactive: it is begun with beginInteractive, not invoked");
     }
   }
 
@@ -242,8 +253,10 @@ class Validator {
     if (canStart(root_)) {
       Result<StaticStructs> r = resolver_.resolveStructs(root_, layout_.optionsPath(i));
       if (!r.ok()) {
-        error(i, &a, invalid(std::string("the root needs LastUsedStore::addCollectionTo: ") +
-                             r.status().message()));
+        error(i,
+              &a,
+              invalid(std::string("the root needs LastUsedStore::addCollectionTo: ") +
+                      r.status().message()));
       }
     }
   }
@@ -269,14 +282,14 @@ class Validator {
       const PropertyDef *in = def->findInput(arg.name.c_str());
       if (!in) {
         error(i, &a, detail::unknownInput(*def, arg));
-      }
-      else if (Status s = argument(i, a, *in, arg); !s.ok()) {
+      } else if (Status s = argument(i, a, *in, arg); !s.ok()) {
         error(i, &a, s);
       }
     }
   }
 
-  Status argument(int i, const LayoutAttr &a, const PropertyDef &in, const InvocationArg &arg)
+  Status
+  argument(int i, const LayoutAttr &a, const PropertyDef &in, const InvocationArg &arg)
   {
     const bool text = !arg.value.isTuple && arg.value.items.size() == 1 &&
                       arg.value.items[0].kind == RawScalar::Kind::String;
@@ -313,17 +326,18 @@ class Validator {
       return Status();
     }
     const ApiStruct *st = rt_.ext<ApiRegistry>().find(want);
-    return fits ? Status() :
-                  invalid(std::string(arg.name.c_str()) + ": '" + std::string(s) + "' isn't a " +
-                          (st ? st->name().c_str() : "struct of its type"));
+    return fits
+               ? Status()
+               : invalid(std::string(arg.name.c_str()) + ": '" + std::string(s) +
+                         "' isn't a " + (st ? st->name().c_str() : "struct of its type"));
   }
 
   Runtime &rt_;
   const Layout &layout_;
   StaticResolver resolver_;
   StaticStructs root_;
-  /** Of a container, for the paths in it, and of a Tool, for its command's. Nothing, and not
-   * unknown, if it was wrong. */
+  /** Of a container, for the paths in it, and of a Tool, for its command's. Nothing, and
+   * not unknown, if it was wrong. */
   std::vector<StaticStructs> prefixes_;
   Vector<LayoutIssue> issues_;
   /** There are more than that: it stops. */

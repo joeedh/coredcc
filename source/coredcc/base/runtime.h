@@ -25,7 +25,7 @@ class IfaceRegistry;
  * extensions: see ext().
  */
 class Runtime {
- public:
+public:
   Runtime();
   ~Runtime();
   Runtime(const Runtime &) = delete;
@@ -164,7 +164,8 @@ class Runtime {
   }
 
   /** Test hook: register `name` under a forced id, to exercise collision handling. */
-  Result<uint64_t> debugRegisterNameAs(IdDomain domain, uint64_t id, std::string_view name);
+  Result<uint64_t>
+  debugRegisterNameAs(IdDomain domain, uint64_t id, std::string_view name);
 
   /** The registered name for an id, or nullptr. */
   const char *nameOf(IdDomain domain, uint64_t id) const;
@@ -173,7 +174,7 @@ class Runtime {
     return nameOf(D, id.value);
   }
 
- private:
+private:
   friend class EvaluationScope;
   template <class T> static void destroyExt(void *p)
   {
@@ -208,7 +209,7 @@ class Runtime {
 /** Makes `rt` evaluating() while it lives. Opened by the graph evaluator, around a whole
  * evaluation; scopes nest. The Runtime must outlive it. */
 class EvaluationScope {
- public:
+public:
   explicit EvaluationScope(Runtime &rt) : rt_(rt)
   {
     rt_.evaluating_++;
@@ -220,7 +221,7 @@ class EvaluationScope {
   EvaluationScope(const EvaluationScope &) = delete;
   EvaluationScope &operator=(const EvaluationScope &) = delete;
 
- private:
+private:
   Runtime &rt_;
 };
 

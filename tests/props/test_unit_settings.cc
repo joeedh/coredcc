@@ -1,4 +1,5 @@
-/* FrameRate and UnitSettings: rates as fractions, frames as a unit, display units, files. */
+/* FrameRate and UnitSettings: rates as fractions, frames as a unit, display units, files.
+ */
 #include "coredcc/props/unit_settings.h"
 
 #include "fuzz.h"
@@ -37,7 +38,8 @@ void testRates()
   test_assert(is(FrameRate(), 24, 1));
   test_assert(is(FrameRate::of(25), 25, 1) && is(FrameRate::of(50, 4), 25, 2));
   test_assert(is(FrameRate::of(60000, 2002), 30000, 1001));
-  test_assert(is(FrameRate::of(1, 1000), 1, 1000) && is(FrameRate::of(1000000), 1000000, 1));
+  test_assert(is(FrameRate::of(1, 1000), 1, 1000) &&
+              is(FrameRate::of(1000000), 1000000, 1));
   for (int64_t bad : {int64_t(0), int64_t(-24), std::numeric_limits<int64_t>::min()}) {
     test_assert(FrameRate::of(bad).status().code() == StatusCode::InvalidArgument);
     test_assert(FrameRate::of(24, bad).status().code() == StatusCode::InvalidArgument);
@@ -56,25 +58,42 @@ void testRates()
     double fps;
     int num;
   };
-  const Name names[] = {{23.976, 24000},  {23.98, 24000},  {29.97, 30000},   {47.952, 48000},
-                        {47.95, 48000},   {59.94, 60000},  {89.91, 90000},   {95.904, 96000},
-                        {95.9, 96000},    {119.88, 120000}, {143.856, 144000}, {239.76, 240000}};
+  const Name names[] = {{23.976, 24000},
+                        {23.98, 24000},
+                        {29.97, 30000},
+                        {47.952, 48000},
+                        {47.95, 48000},
+                        {59.94, 60000},
+                        {89.91, 90000},
+                        {95.904, 96000},
+                        {95.9, 96000},
+                        {119.88, 120000},
+                        {143.856, 144000},
+                        {239.76, 240000}};
   for (const Name &n : names) {
     if (!is(FrameRate::nearest(n.fps), n.num, 1001)) {
-      fprintf(stderr, "%g is %d/%d\n", n.fps, FrameRate::nearest(n.fps).num(),
+      fprintf(stderr,
+              "%g is %d/%d\n",
+              n.fps,
+              FrameRate::nearest(n.fps).num(),
               FrameRate::nearest(n.fps).den());
       test_assert(false);
     }
   }
-  test_assert(is(FrameRate::of(2997, 100), 30000, 1001) && is(FrameRate::of(23976, 1000), 24000, 1001));
+  test_assert(is(FrameRate::of(2997, 100), 30000, 1001) &&
+              is(FrameRate::of(23976, 1000), 24000, 1001));
   test_assert(is(FrameRate::nearest(23.976023976023978), 24000, 1001));
   test_assert(is(FrameRate::nearest(167.83), 24000, 143)); /* 168000/1001 */
   /* And what they aren't. */
   test_assert(is(FrameRate::nearest(24.0), 24, 1) && is(FrameRate::nearest(30.0), 30, 1));
-  test_assert(is(FrameRate::nearest(23.9), 239, 10) && is(FrameRate::nearest(29.9), 299, 10));
-  test_assert(is(FrameRate::nearest(29.96), 749, 25) && is(FrameRate::nearest(29.98), 1499, 50));
-  test_assert(is(FrameRate::nearest(23.977), 23977, 1000) && is(FrameRate::nearest(12.5), 25, 2));
-  test_assert(is(FrameRate::nearest(24.975), 999, 40) && is(FrameRate::nearest(269.73), 26973, 100));
+  test_assert(is(FrameRate::nearest(23.9), 239, 10) &&
+              is(FrameRate::nearest(29.9), 299, 10));
+  test_assert(is(FrameRate::nearest(29.96), 749, 25) &&
+              is(FrameRate::nearest(29.98), 1499, 50));
+  test_assert(is(FrameRate::nearest(23.977), 23977, 1000) &&
+              is(FrameRate::nearest(12.5), 25, 2));
+  test_assert(is(FrameRate::nearest(24.975), 999, 40) &&
+              is(FrameRate::nearest(269.73), 26973, 100));
 }
 
 void testNearest()
@@ -109,9 +128,12 @@ void testNearest()
     }
   }
   const double inf = std::numeric_limits<double>::infinity();
-  test_assert(is(FrameRate::nearest(0.0), 1, 1000) && is(FrameRate::nearest(-inf), 1, 1000));
-  test_assert(is(FrameRate::nearest(5e-324), 1, 1000) && is(FrameRate::nearest(0.001), 1, 1000));
-  test_assert(is(FrameRate::nearest(inf), 1000000, 1) && is(FrameRate::nearest(1e300), 1000000, 1));
+  test_assert(is(FrameRate::nearest(0.0), 1, 1000) &&
+              is(FrameRate::nearest(-inf), 1, 1000));
+  test_assert(is(FrameRate::nearest(5e-324), 1, 1000) &&
+              is(FrameRate::nearest(0.001), 1, 1000));
+  test_assert(is(FrameRate::nearest(inf), 1000000, 1) &&
+              is(FrameRate::nearest(1e300), 1000000, 1));
   test_assert(is(FrameRate::nearest(std::nan("")), 24, 1));
 }
 
@@ -120,7 +142,8 @@ void testFrames()
   UnitSettings s;
   test_assert(s.timeOf(36.0) == 1.5 && s.frameAt(1.5) == 36.0);
   s.startFrame = 1001.0;
-  test_assert(s.timeOf(1001.0) == 0.0 && s.timeOf(1025.0) == 1.0 && s.frameAt(-1.0) == 977.0);
+  test_assert(s.timeOf(1001.0) == 0.0 && s.timeOf(1025.0) == 1.0 &&
+              s.frameAt(-1.0) == 977.0);
   s.rate = *FrameRate::of(30000, 1001);
   s.startFrame = 0.0;
   test_assert(s.timeOf(30000.0) == 1001.0 && s.frameAt(1001.0) == 30000.0);
@@ -133,12 +156,14 @@ void testFrames()
     return v.ok() ? *v : std::nan("");
   };
   test_assert(parsed("30000 f") == 1001.0 && parsed("30000frames") == 1001.0);
-  test_assert(parsed("-1 frame") == -1001.0 / 30000.0 && parsed("1fr") == 1001.0 / 30000.0);
+  test_assert(parsed("-1 frame") == -1001.0 / 30000.0 &&
+              parsed("1fr") == 1001.0 / 30000.0);
   test_assert(parsed("2") == 2.0 && parsed("2 min") == 120.0);
   test_assert(units::format(1.0, UnitFamily::Time, s, 3) == "1 s");
   test_assert(s.setDisplayUnit(UnitFamily::Time, "frames").ok());
   test_assert(!strcmp(s.displayUnit(UnitFamily::Time).name, "frame"));
-  test_assert(std::fabs(s.displayUnit(UnitFamily::Time).scale - 1001.0 / 30000.0) < 1e-17);
+  test_assert(std::fabs(s.displayUnit(UnitFamily::Time).scale - 1001.0 / 30000.0) <
+              1e-17);
   test_assert(units::format(1001.0, UnitFamily::Time, s, 3) == "30000 f");
   test_assert(units::format(1.0, UnitFamily::Time, s, 3) == "29.97 f");
   test_assert(parsed("15") == 15.0 * 1001.0 / 30000.0 && parsed("15 s") == 15.0);
@@ -176,15 +201,19 @@ void testDisplay()
       if (!UnitSettings::isFrame(f, u)) {
         test_assert(units::format(1234.5678, f, s, 3) ==
                     units::format(1234.5678, f, unit.name, 3));
-        for (const char *text : {"12.5", "12.5 cm", "90deg", "3 h", "2 lb", "50%", "x", ""}) {
-          const Result<double> a = units::parse(text, f, s), b = units::parse(text, f, unit.name);
+        for (const char *text :
+             {"12.5", "12.5 cm", "90deg", "3 h", "2 lb", "50%", "x", ""})
+        {
+          const Result<double> a = units::parse(text, f, s),
+                               b = units::parse(text, f, unit.name);
           test_assert(a.ok() == b.ok() && a.status().code() == b.status().code());
           test_assert(!a.ok() || *a == *b);
         }
       }
     }
     test_assert(s.setDisplayIndex(f, -1).code() == StatusCode::OutOfRange);
-    test_assert(s.setDisplayIndex(f, UnitSettings::unitCount(f)).code() == StatusCode::OutOfRange);
+    test_assert(s.setDisplayIndex(f, UnitSettings::unitCount(f)).code() ==
+                StatusCode::OutOfRange);
     test_assert(s.displayIndex(f) == UnitSettings::unitCount(f) - 1);
     test_assert(!strcmp(s.unitAt(f, 99).name, units::unitsOf(f)[0].name));
     test_assert(!strcmp(s.unitAt(f, -1).name, units::unitsOf(f)[0].name));

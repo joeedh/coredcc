@@ -7,13 +7,15 @@
 
 namespace coredcc::detail {
 
-/** Copies of the channels of blocks other than coredcc.Object, for paths through their `transform`: a
- * Transformable gives values, and a path needs an instance. Writing one writes the block's channels.
- * A Runtime extension. */
+/** Copies of the channels of blocks other than coredcc.Object, for paths through their
+ * `transform`: a Transformable gives values, and a path needs an instance. Writing one
+ * writes the block's channels. A Runtime extension. */
 class HostChannels {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.HostChannels";
-  explicit HostChannels(Runtime *) {}
+  explicit HostChannels(Runtime *)
+  {
+  }
   ~HostChannels();
   HostChannels(const HostChannels &) = delete;
   HostChannels &operator=(const HostChannels &) = delete;
@@ -26,7 +28,7 @@ class HostChannels {
     return copies_.lookup_ptr(channels) != nullptr;
   }
 
- private:
+private:
   struct Key {
     const Library *lib = nullptr;
     BlockId id;

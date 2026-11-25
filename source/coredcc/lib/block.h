@@ -99,7 +99,9 @@ struct RefCell {
   RefKind kind = RefKind::Strong;
 
   RefCell() = default;
-  explicit RefCell(RefKind k) : kind(k) {}
+  explicit RefCell(RefKind k) : kind(k)
+  {
+  }
 
   bool isNull() const
   {
@@ -113,12 +115,13 @@ struct BlockPayload {
   /** The block type's payloadVersion when it was written. */
   uint32_t version = 1;
   litestl::util::Vector<uint8_t> bytes;
-  /** The ref table: rows in the order they were written, null ones and repeats included. */
+  /** The ref table: rows in the order they were written, null ones and repeats included.
+   */
   litestl::util::Vector<RefCell> refs;
 };
 
-/** An attachment from a file that this build can't read. It is kept, its references count,
- * and a save writes it back. */
+/** An attachment from a file that this build can't read. It is kept, its references
+ * count, and a save writes it back. */
 struct OpaqueAttachment {
   litestl::util::string typeName;
   /** `version` is the attachment type's. */
@@ -127,12 +130,12 @@ struct OpaqueAttachment {
 
 /** Why a record is a placeholder. */
 enum class PlaceholderReason : uint8_t {
-  /** A record from a file whose type or payload this build can't read. It keeps the payload
-   * and is a GC root, so a save writes it back. */
+  /** A record from a file whose type or payload this build can't read. It keeps the
+   * payload and is a GC root, so a save writes it back. */
   MissingType,
   /** A block that isn't here: the target of a strong reference that has no record, or a
-   * record saved without its data (host-owned). Library::createWithId fills it in place. A
-   * GC root only with a type name (it was a record). */
+   * record saved without its data (host-owned). Library::createWithId fills it in place.
+   * A GC root only with a type name (it was a record). */
   MissingBlock,
 };
 
@@ -144,16 +147,18 @@ struct PlaceholderInfo {
   litestl::util::string name;
   /** Where it came from (a file's name), for messages. A save writes it. */
   litestl::util::string sourceName;
-  /** MissingType: the stored payload. MissingBlock: only the ref table, the references the
-   * block had. */
+  /** MissingType: the stored payload. MissingBlock: only the ref table, the references
+   * the block had. */
   BlockPayload payload;
 };
 
 /** A typed reference. The library resolves it to the target's data, so `T` is the
  * target block type's data type; it isn't checked. */
 template <class T, RefKind K> class TypedRef {
- public:
-  TypedRef() : cell_(K) {}
+public:
+  TypedRef() : cell_(K)
+  {
+  }
   RefCell &cell()
   {
     return cell_;
@@ -169,7 +174,7 @@ template <class T, RefKind K> class TypedRef {
   /** The target's data, or null while the target isn't Live. */
   T *get(const Library &lib) const;
 
- private:
+private:
   RefCell cell_;
 };
 
@@ -183,9 +188,11 @@ template <class T> using WeakRef = TypedRef<T, RefKind::Weak>;
  * may be rewritten in place (remap, sweep).
  */
 class RefVisitor {
- public:
+public:
   using Fn = void (*)(void *ctx, RefCell &cell);
-  RefVisitor(Fn fn, void *ctx) : fn_(fn), ctx_(ctx) {}
+  RefVisitor(Fn fn, void *ctx) : fn_(fn), ctx_(ctx)
+  {
+  }
 
   void visit(RefCell &cell)
   {
@@ -193,7 +200,7 @@ class RefVisitor {
   }
   static const litestl::binding::types::Struct<RefVisitor> *defineBindings();
 
- private:
+private:
   Fn fn_;
   void *ctx_;
 };
@@ -212,7 +219,7 @@ struct QueryAnswer {
  * and changes records; everyone else reads them.
  */
 class Datablock {
- public:
+public:
   /** The Library it is in. In a provider's slots the Library's busy rules apply. */
   Library &library() const
   {
@@ -235,12 +242,12 @@ class Datablock {
   {
     return state_;
   }
-  /** What became of the data: state(), or for an InHistory or Doomed block the state it was
-   * deleted in (Live, Detached or Placeholder), which restoring goes back to. */
+  /** What became of the data: state(), or for an InHistory or Doomed block the state it
+   * was deleted in (Live, Detached or Placeholder), which restoring goes back to. */
   BlockState dataState() const
   {
-    return state_ == BlockState::InHistory || state_ == BlockState::Doomed ? deletedFrom_ :
-                                                                            state_;
+    return state_ == BlockState::InHistory || state_ == BlockState::Doomed ? deletedFrom_
+                                                                           : state_;
   }
   BlockFlags flags() const
   {
@@ -295,8 +302,8 @@ class Datablock {
   {
     return placeholderReason_;
   }
-  /** Where a placeholder came from, for messages: what its file stored, or what the load said.
-   * A save writes only the former. Cleared when the placeholder is filled. */
+  /** Where a placeholder came from, for messages: what its file stored, or what the load
+   * said. A save writes only the former. Cleared when the placeholder is filled. */
   const litestl::util::string &sourceName() const
   {
     return sourceName_;
@@ -306,17 +313,18 @@ class Datablock {
     return sourceStored_;
   }
 
-  /** Fields of its file record that a newer build wrote, as stored: a save writes them back. */
+  /** Fields of its file record that a newer build wrote, as stored: a save writes them
+   * back. */
   std::span<const uint8_t> fileExtension() const
   {
     return fileExtension_ ? std::span<const uint8_t>(fileExtension_->data(),
-                                                     size_t(fileExtension_->size())) :
-                            std::span<const uint8_t>();
+                                                     size_t(fileExtension_->size()))
+                          : std::span<const uint8_t>();
   }
 
   static const litestl::binding::types::Struct<Datablock> *defineBindings();
 
- private:
+private:
   friend class Library;
   friend class detail::LibraryFiller;
 
@@ -354,7 +362,8 @@ class Datablock {
     litestl::util::Vector<Missing> was;
     /** What the last unadopt gave. It may be gone. */
     BlockHandle kept;
-    /** Data that the Host pins on this record hold, through a pin each. Empty without them. */
+    /** Data that the Host pins on this record hold, through a pin each. Empty without
+     * them. */
     litestl::util::Vector<BlockHandle> lent;
 
     void dropLent(BlockHandle h)

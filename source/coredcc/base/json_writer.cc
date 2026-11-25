@@ -100,13 +100,11 @@ void JsonWriter::quoted(std::string_view s)
     if (c == '"' || c == '\\') {
       out_ += '\\';
       out_ += c;
-    }
-    else if (uint8_t(c) < 0x20) {
+    } else if (uint8_t(c) < 0x20) {
       char buf[8];
       snprintf(buf, sizeof(buf), "\\u%04x", unsigned(uint8_t(c)));
       out_ += buf;
-    }
-    else {
+    } else {
       out_.append(s.substr(i, n));
     }
     i += n;

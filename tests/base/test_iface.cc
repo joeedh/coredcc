@@ -302,7 +302,8 @@ struct TrackedMesh : MeshImpl {
 /* Records calls and answers through the slot descriptors, as a real backend would. */
 struct FakeDispatcher : ForeignDispatcher {
   std::string log;
-  Status call(const IfaceTable &table, void *self, int slot, void **args, void *ret) override
+  Status
+  call(const IfaceTable &table, void *self, int slot, void **args, void *ret) override
   {
     const lbt::Method *m = table.ifaceDesc->methods[slot];
     log += std::string(m->name.c_str()) + "(";
@@ -402,9 +403,11 @@ static void test_foreign()
   test_assert(sp.as<MeshImpl>() == nullptr);
 
   const char *missingRequired[] = {"rayCast"};
-  Status bad = registerForeign<Spatial>(rt, "test.JsHalf", &host, nullptr, missingRequired);
+  Status bad =
+      registerForeign<Spatial>(rt, "test.JsHalf", &host, nullptr, missingRequired);
   test_assert(bad.code() == StatusCode::TypeMismatch);
-  test_assert(strstr(bad.message(), "slot count [int32 count() const]: missing") != nullptr);
+  test_assert(strstr(bad.message(), "slot count [int32 count() const]: missing") !=
+              nullptr);
 
   const char *unknown[] = {"rayCast", "count", "fly"};
   Status bad2 = registerForeign<Spatial>(rt, "test.JsOdd", &host, nullptr, unknown);
@@ -419,16 +422,20 @@ static void test_mismatch_messages()
   test_assert(s.code() == StatusCode::TypeMismatch);
   const char *msg = s.message();
   test_assert(strstr(msg, "test.BadMesh does not implement test.Spatial:") != nullptr);
-  test_assert(strstr(msg,
-                     "slot rayCast [boolean rayCast(const test::Ray&, test::Hit&) const]: no "
-                     "matching signature") != nullptr);
-  test_assert(strstr(msg, "argument 1 ('ray') is test::Ray&, slot wants const test::Ray&") !=
-              nullptr);
-  test_assert(strstr(msg,
-                     "slot count [int32 count() const]: no matching signature\n    candidate "
-                     "int64 count() const: return type int64 != int32") != nullptr);
-  test_assert(strstr(msg, "candidate double cost(): slot is const but the method is not") !=
-              nullptr);
+  test_assert(
+      strstr(msg,
+             "slot rayCast [boolean rayCast(const test::Ray&, test::Hit&) const]: no "
+             "matching signature") != nullptr);
+  test_assert(
+      strstr(msg, "argument 1 ('ray') is test::Ray&, slot wants const test::Ray&") !=
+      nullptr);
+  test_assert(
+      strstr(msg,
+             "slot count [int32 count() const]: no matching signature\n    candidate "
+             "int64 count() const: return type int64 != int32") != nullptr);
+  test_assert(
+      strstr(msg, "candidate double cost(): slot is const but the method is not") !=
+      nullptr);
   test_assert(!query<Spatial>(rt, TypeId::of("test.BadMesh"), nullptr));
   test_assert(rt.ifaces().tableCount() == 0);
   test_assert(rt.validateAll().ok());
@@ -439,9 +446,9 @@ static void test_impostor_type()
   Runtime rt;
   Status s = registerImpl<Spatial, ImpostorMesh>(rt, "test.ImpostorMesh");
   test_assert(s.code() == StatusCode::TypeMismatch);
-  test_assert(strstr(s.message(), "argument 1 ('ray') is const test::Ray&, slot wants const "
-                                   "test::Ray& (different C++ types with the same name)") !=
-              nullptr);
+  test_assert(strstr(s.message(),
+                     "argument 1 ('ray') is const test::Ray&, slot wants const "
+                     "test::Ray& (different C++ types with the same name)") != nullptr);
   test_assert(rt.validateAll().ok());
 }
 

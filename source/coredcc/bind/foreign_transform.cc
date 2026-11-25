@@ -17,7 +17,8 @@ namespace lf = litestl::binding::foreign;
 
 TransformTypeInfo *newTransformType(const string &id)
 {
-  TransformTypeInfo *type = litestl::alloc::New<TransformTypeInfo>("coredcc::TransformTypeInfo");
+  TransformTypeInfo *type =
+      litestl::alloc::New<TransformTypeInfo>("coredcc::TransformTypeInfo");
   type->name = id;
   return type;
 }
@@ -103,7 +104,9 @@ Status transformChannelItem(TransformTypeInfo &type,
   if (!def || def->kind() != PropKind::Enum) {
     return invalid(name, "it isn't an Enum channel");
   }
-  if (!(value >= -channels::kMaxInt && value <= channels::kMaxInt) || std::floor(value) != value) {
+  if (!(value >= -channels::kMaxInt && value <= channels::kMaxInt) ||
+      std::floor(value) != value)
+  {
     return invalid(name, "an item's value must be a whole number within +-2^53");
   }
   def->item(view(key), int64_t(value), view(uiName), view(description));
@@ -122,14 +125,11 @@ Status transformChannelText(TransformTypeInfo &type,
   const std::string_view w = view(what);
   if (w == "uiName") {
     def->uiName(view(text));
-  }
-  else if (w == "description") {
+  } else if (w == "description") {
     def->description(view(text));
-  }
-  else if (w == "icon") {
+  } else if (w == "icon") {
     def->icon(view(text));
-  }
-  else if (w == "subtype") {
+  } else if (w == "subtype") {
     for (int i = 0; i <= int(PropSubtype::Password); i++) {
       if (view(text) == propSubtypeName(PropSubtype(i))) {
         def->subtype(PropSubtype(i));
@@ -137,39 +137,33 @@ Status transformChannelText(TransformTypeInfo &type,
       }
     }
     return invalid(name, std::string("no subtype '") + text.c_str() + "'");
-  }
-  else if (w == "unit") {
+  } else if (w == "unit") {
     const std::optional<UnitFamily> family = unitFamilyOfName(view(text));
     if (!family) {
       return invalid(name, std::string("no unit family '") + text.c_str() + "'");
     }
     def->unit(*family);
-  }
-  else if (w == "displayUnit") {
+  } else if (w == "displayUnit") {
     const NumericMeta *n = def->numeric();
     if (!n || n->unit == UnitFamily::None) {
       return invalid(name, "a display unit needs a unit family");
     }
     def->unit(n->unit, view(text));
-  }
-  else if (w == "default") {
-    const EnumItem *item = def->enumMeta() ? def->enumMeta()->findKey(view(text)) : nullptr;
+  } else if (w == "default") {
+    const EnumItem *item =
+        def->enumMeta() ? def->enumMeta()->findKey(view(text)) : nullptr;
     if (!item) {
       return invalid(name, std::string("no item '") + text.c_str() + "'");
     }
     def->defaultValue(PropValue::ofEnum(item->value));
-  }
-  else {
+  } else {
     return invalid(name, std::string("nothing is named '") + what.c_str() + "'");
   }
   return Status();
 }
 
-Status transformChannelNumbers(TransformTypeInfo &type,
-                               const string &name,
-                               const string &what,
-                               double a,
-                               double b)
+Status transformChannelNumbers(
+    TransformTypeInfo &type, const string &name, const string &what, double a, double b)
 {
   PropertyDef *def = channelOf(type, name);
   if (!def) {
@@ -178,20 +172,16 @@ Status transformChannelNumbers(TransformTypeInfo &type,
   const std::string_view w = view(what);
   if (w == "range") {
     def->range(a, b);
-  }
-  else if (w == "softRange") {
+  } else if (w == "softRange") {
     def->softRange(a, b);
-  }
-  else if (w == "step") {
+  } else if (w == "step") {
     def->step(a);
-  }
-  else if (w == "precision") {
+  } else if (w == "precision") {
     if (!(a >= 0.0 && a <= 100.0)) {
       return invalid(name, "a precision is a number of digits");
     }
     def->precision(int(a));
-  }
-  else {
+  } else {
     return invalid(name, std::string("nothing is named '") + what.c_str() + "'");
   }
   return Status();
@@ -226,7 +216,8 @@ static Status registerWith(Runtime &rt,
                  where + "the 'core.' namespace is reserved for coredcc");
   }
   if (!isDotted(view(type.name))) {
-    return error(StatusCode::InvalidArgument, where + "the name must be dotted identifiers");
+    return error(StatusCode::InvalidArgument,
+                 where + "the name must be dotted identifiers");
   }
   TransformRegistry &types = rt.ext<TransformRegistry>();
   CDCC_TRY(types.canAdd(type));
@@ -249,7 +240,10 @@ static Status registerWith(Runtime &rt,
     return error(StatusCode::Internal, where + "its model's table is gone");
   }
   /* ForeignBindings owns the handle, so this and the registry may go in either order. */
-  return types.add(type, Owned<TransformModel>(m, [](void *, void *) {}, nullptr)).status();
+  return types.add(type,
+                   Owned<TransformModel>(
+                       m, [](void *, void *) {}, nullptr))
+      .status();
 }
 
 Status registerForeignTransformType(Context &ctx,
@@ -258,14 +252,14 @@ Status registerForeignTransformType(Context &ctx,
                                     const string &slots)
 {
   if (model == 0) {
-    return error(StatusCode::InvalidArgument, "registerForeignTransformType: no model handle");
+    return error(StatusCode::InvalidArgument,
+                 "registerForeignTransformType: no model handle");
   }
   Runtime &rt = ctx.runtime();
   Status s = registerWith(rt, type, model, slots);
   if (s.ok()) {
     rt.ext<ForeignBindings>().keepHandle(model);
-  }
-  else {
+  } else {
     lf::release(model);
   }
   return s;

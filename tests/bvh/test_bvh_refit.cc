@@ -36,7 +36,8 @@ struct Boxes {
 };
 
 /* Every ray and distance from the tree is what a loop over the source gives. */
-template <class Src> void checkQueries(const GeometryBvh<Src> &bvh, const Src &src, Rand &r, int n)
+template <class Src>
+void checkQueries(const GeometryBvh<Src> &bvh, const Src &src, Rand &r, int n)
 {
   for (int k = 0; k < n; k++) {
     Ray ray;
@@ -73,10 +74,12 @@ template <class Src> void checkQueries(const GeometryBvh<Src> &bvh, const Src &s
     const RayHit hit = bvh.rayClosest(ray);
     test_assert(hit.primitive == want.primitive && (!hit || hit.t == want.t));
     test_assert(bvh.nearest(ray.origin, radius).primitive == near_.primitive);
-    test_assert(bvh.sphereOverlap(ray.origin, radius, [&](int) {
-                     within--;
-                     return true;
-                   })
+    test_assert(bvh.sphereOverlap(ray.origin,
+                                  radius,
+                                  [&](int) {
+                                    within--;
+                                    return true;
+                                  })
                     .ok());
     test_assert(within == 0);
   }
@@ -135,7 +138,8 @@ void testFull(bool parallel)
   TriangleSource<float> moved = triangles<float>(r, Layout::Uniform, n);
   test_assert(bvh.onInvalidate(InvalidateKinds::Positions, moved).ok());
   test_assert(treeProblem(bvh.bvh(), moved, 8) == nullptr && tight(bvh.bvh(), moved));
-  test_assert(memcmp(order.data(), bvh.bvh().order().data(), order.size() * sizeof(int)) == 0);
+  test_assert(
+      memcmp(order.data(), bvh.bvh().order().data(), order.size() * sizeof(int)) == 0);
   test_assert(bvh.bvh().cost() > before * 2 && bvh.bvh().growth() > 2.0);
   Box3f all;
   for (int i = 0; i < n; i++) {
@@ -155,7 +159,8 @@ void testFull(bool parallel)
   }
   /* Topology: a new tree. */
   test_assert(
-      bvh.onInvalidate(InvalidateKinds::Topology | InvalidateKinds::Positions, moved).ok());
+      bvh.onInvalidate(InvalidateKinds::Topology | InvalidateKinds::Positions, moved)
+          .ok());
   test_assert(bvh.bvh().cost() < before * 1.5 && bvh.bvh().growth() == 1.0);
   test_assert(treeProblem(bvh.bvh(), moved, 8) == nullptr);
 
@@ -179,7 +184,8 @@ void testMoved()
     BvhOptions bad;
     bad.leafSize = 0;
     test_assert(!taken.build(std::move(given), bad).ok() && given.size() == 70001);
-    test_assert(taken.build(std::move(given)).ok() && sameTree(taken.bvh(), copied.bvh()));
+    test_assert(taken.build(std::move(given)).ok() &&
+                sameTree(taken.bvh(), copied.bvh()));
     test_assert(taken.source().size() == 70000 && copied.source().size() == 70000);
     for (int i = 0; i < 70000; i++) {
       const int id = taken.bvh().order()[i];
@@ -199,7 +205,8 @@ void testAreas()
   Boxes some;
   for (int i = 0; i < 4000; i++) {
     const double3 p = r.vec(10.0);
-    some.add(float(p[0]), float(p[1]), float(p[2]), float(p[0]), float(p[1]), float(p[2]));
+    some.add(
+        float(p[0]), float(p[1]), float(p[2]), float(p[0]), float(p[1]), float(p[2]));
   }
   for (int i = 0; i < 1000; i++) {
     some.add(1, 2, 3, 1, 2, 3);
@@ -316,10 +323,11 @@ void testAbsent()
       test_assert(bvh.build(all, opts).ok() && bvh.refit(some).ok());
       checkQueries(bvh, some, r, 100);
       int found = 0;
-      test_assert(bvh.region({}, [&](int i) {
-                       test_assert(i % 3 != 0);
-                       return ++found > 0;
-                     })
+      test_assert(bvh.region({},
+                             [&](int i) {
+                               test_assert(i % 3 != 0);
+                               return ++found > 0;
+                             })
                       .ok());
       test_assert(found == 266);
     }
@@ -366,7 +374,8 @@ void testSome()
     /* A whole refit after that, and a build. */
     src = spheres<float>(r, Layout::Uniform, 4000);
     src.append(double3(), -1.0);
-    test_assert(some.refit(src).ok() && full.refit(src).ok() && sameTree(some.bvh(), full.bvh()));
+    test_assert(some.refit(src).ok() && full.refit(src).ok() &&
+                sameTree(some.bvh(), full.bvh()));
     test_assert(some.build(src, opts).ok());
     SphereSource<float> one;
     one.append(double3(1, 2, 3), 0.5);
@@ -428,11 +437,16 @@ void testGrowth()
     Boxes src;
     for (int i = 0; i < 1000; i++) {
       const double3 p = r.vec(10.0);
-      src.add(float(p[0]), float(p[1]), float(p[2]), float(p[0]) + 0.2f, float(p[1]) + 0.2f,
+      src.add(float(p[0]),
+              float(p[1]),
+              float(p[2]),
+              float(p[0]) + 0.2f,
+              float(p[1]) + 0.2f,
               float(p[2]) + 0.2f);
     }
     if (outlier > 0.0f) {
-      src.add(outlier, outlier, outlier, outlier * 1.01f, outlier * 1.01f, outlier * 1.01f);
+      src.add(
+          outlier, outlier, outlier, outlier * 1.01f, outlier * 1.01f, outlier * 1.01f);
     }
     Bvh<float> bvh;
     BvhOptions opts;

@@ -1,5 +1,5 @@
-/* Object, Scene and evaluateScene. test_scene_cache.cc has what the lookup cache must notice;
- * test_scene_paths.cc has the datapath. */
+/* Object, Scene and evaluateScene. test_scene_cache.cc has what the lookup cache must
+ * notice; test_scene_paths.cc has the datapath. */
 #include "scene_doc.h"
 
 #include <algorithm>
@@ -40,7 +40,8 @@ void testMembers()
 
   /* Deleted members keep their place. */
   must(d.lib->markDeleted(a));
-  test_assert(sc.objects(*d.lib).size() == 2 && sc.contains(*d.lib, a) && sc.cells().size() == 3);
+  test_assert(sc.objects(*d.lib).size() == 2 && sc.contains(*d.lib, a) &&
+              sc.cells().size() == 3);
   test_assert(sc.prune(*d.lib) == 0);
   must(d.lib->restoreFromHistory(a));
   test_assert(sc.objects(*d.lib).size() == 3 && sc.objects(*d.lib)[0] == a);
@@ -93,11 +94,13 @@ void testSelection()
   test_assert(!sc.active(*d.lib) && !sc.activeCell().isNull());
 }
 
-/* A scene is a root, its members live through it, and their parents; the selection is weak. */
+/* A scene is a root, its members live through it, and their parents; the selection is
+ * weak. */
 void testCollect()
 {
   Doc d;
-  const BlockHandle a = d.object("a"), parent = d.loose("parent"), picked = d.loose("picked");
+  const BlockHandle a = d.object("a"), parent = d.loose("parent"),
+                    picked = d.loose("picked");
   const BlockHandle data = d.shapeBlock("data", 1.0);
   d.setParent(a, parent);
   d.setData(a, data);
@@ -108,7 +111,8 @@ void testCollect()
   test_assert(d.lib->usersOf(parent).size() == 1 && d.lib->usersOf(data).size() == 1);
   Result<int> n = d.lib->collect();
   test_assert(n.ok() && *n == 1);
-  test_assert(d.lib->get(a) && d.lib->get(data) && d.lib->get(parent) && !d.lib->get(picked));
+  test_assert(d.lib->get(a) && d.lib->get(data) && d.lib->get(parent) &&
+              !d.lib->get(picked));
   test_assert(d.lib->get(d.scene));
   d.evaluate();
   test_assert(closeTo(d.result(a).bounds.max[0], 1.0));
@@ -132,7 +136,8 @@ void testHierarchy()
   test_assert(d.isAt(a, 100) && d.isAt(b, 110) && d.isAt(c, 111));
   test_assert(d.statusOf(c) == EvalStatus::Ok && d.result(c).member);
   e = d.result(c);
-  test_assert(e.localBounds.min[0] == -2.0 && closeTo(e.bounds.min[0], 109.0) && closeTo(e.bounds.max[2], 2.0));
+  test_assert(e.localBounds.min[0] == -2.0 && closeTo(e.bounds.min[0], 109.0) &&
+              closeTo(e.bounds.max[2], 2.0));
   test_assert(d.result(a).bounds.empty() && d.result(a).localBounds.empty());
 
   put(d.obj(a).channels, trs::kLocation, double3(200, 0, 0));
@@ -228,7 +233,8 @@ void testCycles()
   }
   Result<TransformState> none = computeParentState(*d.lib, a, 0.0);
   test_assert(none.ok() && difference(none->world, TransformState().world) == 0.0);
-  test_assert(solve::translationOf(computeParentState(*d.lib, tail, 0.0)->world)[0] == 10.0);
+  test_assert(solve::translationOf(computeParentState(*d.lib, tail, 0.0)->world)[0] ==
+              10.0);
   test_assert(isSelfOrAncestor(*d.lib, a, a) && isSelfOrAncestor(*d.lib, c, a) &&
               isSelfOrAncestor(*d.lib, a, tail) && !isSelfOrAncestor(*d.lib, tail, a) &&
               !isSelfOrAncestor(*d.lib, self, a));
@@ -295,11 +301,13 @@ void testFailures()
     d.obj(h).setTransformType("test.throws");
     d.obj(h).channels = ChannelBlock(1);
   }
-  test_assert(isError(evaluateScene(*d.ctx), StatusCode::Internal, "first") && throws == 2);
+  test_assert(isError(evaluateScene(*d.ctx), StatusCode::Internal, "first") &&
+              throws == 2);
   test_assert(!d.rt.hasStickyError());
   test_assert(d.statusOf(a) == EvalStatus::ModelFailed &&
               d.statusOf(b) == EvalStatus::ModelFailed && d.isAt(c, 100));
-  test_assert(isError(computeState(*d.lib, c, 0.0).status(), StatusCode::Internal, "later"));
+  test_assert(
+      isError(computeState(*d.lib, c, 0.0).status(), StatusCode::Internal, "later"));
   test_assert(!d.rt.hasStickyError());
 
   /* So is a throwing read, and bounds. */
@@ -312,7 +320,8 @@ void testFailures()
   d.host(h).onRead = [&](ObjectInfo &) { d.rt.setStickyError(boom("read")); };
   test_assert(isError(evaluateScene(*d.ctx), StatusCode::Internal, "read"));
   test_assert(d.statusOf(h) == EvalStatus::ModelFailed && d.isAt(h, 0) && d.isAt(c, 100));
-  test_assert(isError(computeState(*d.lib, h, 0.0).status(), StatusCode::Internal, "read"));
+  test_assert(
+      isError(computeState(*d.lib, h, 0.0).status(), StatusCode::Internal, "read"));
   test_assert(isError(readObject(*d.lib, h).status(), StatusCode::Internal, "read"));
   /* What a throwing read answered doesn't count. */
   const BlockHandle h2 = d.hostObject("host2", 7.0);
@@ -337,10 +346,12 @@ void testFailures()
   /* Refusals keep the results. */
   d.rt.setStickyError(boom("pending"));
   test_assert(isError(evaluateScene(*d.ctx), StatusCode::FailedPrecondition, "pending"));
-  test_assert(isError(computeState(*d.lib, a, 0.0).status(), StatusCode::FailedPrecondition));
+  test_assert(
+      isError(computeState(*d.lib, a, 0.0).status(), StatusCode::FailedPrecondition));
   test_assert(isError(readObject(*d.lib, a).status(), StatusCode::FailedPrecondition));
   test_assert(isError(writeTransform(*d.ctx, a, good), StatusCode::FailedPrecondition));
-  test_assert(d.rt.hasStickyError() && d.rt.takeStickyError().code() == StatusCode::Internal);
+  test_assert(d.rt.hasStickyError() &&
+              d.rt.takeStickyError().code() == StatusCode::Internal);
   test_assert(isError(evaluateScene(*d.ctx, a), StatusCode::NotFound));
   Context none(&d.rt, nullptr, PointerRef());
   test_assert(isError(evaluateScene(none), StatusCode::FailedPrecondition));
@@ -373,8 +384,8 @@ void testReentry()
     test_assert(isError(evaluateScene(*d.ctx), StatusCode::Busy));
     test_assert(isError(computeState(*d.lib, b, 0.0).status(), StatusCode::Busy));
     test_assert(isError(computeParentState(*d.lib, b, 0.0).status(), StatusCode::Busy));
-    test_assert(isError(
-        setWorldOf(*d.lib, b, mat4d(), SetWorldMode::Exact, 0.0).status(), StatusCode::Busy));
+    test_assert(isError(setWorldOf(*d.lib, b, mat4d(), SetWorldMode::Exact, 0.0).status(),
+                        StatusCode::Busy));
     test_assert(isError(writeTransform(*d.ctx, b, ChannelBlock()), StatusCode::Busy));
     test_assert(isError(writeParent(*d.ctx, b, BlockId()), StatusCode::Busy));
     test_assert(isError(setValue(*d.ctx, "scene.frame", PropValue::ofFloat(3.0)),
@@ -385,7 +396,8 @@ void testReentry()
   test_assert(calls == 1 && d.isAt(a, 2) && d.isAt(b, 20));
   test_assert(d.lib->collect().ok() && !d.rt.evaluating());
 
-  /* One that deletes the scene and drops it from the history, or adds and removes members. */
+  /* One that deletes the scene and drops it from the history, or adds and removes
+   * members. */
   BlockHandle added;
   d.host(a).onRead = [&](ObjectInfo &) {
     if (!added) {
@@ -452,19 +464,21 @@ void testCapabilities()
   const Spatial sp = objectQuery<Spatial>(*d.lib, a);
   test_assert(sp && sp.localBounds().max[0] == 1.0);
   test_assert(bool(objectQuery<Transformable>(*d.lib, a)));
-  test_assert(bool(objectQuery<Spatial>(*d.lib, data)) && !objectQuery<ElementAccess>(*d.lib, a));
+  test_assert(bool(objectQuery<Spatial>(*d.lib, data)) &&
+              !objectQuery<ElementAccess>(*d.lib, a));
 
   ChangeBus &bus = d.rt.ext<ChangeBus>();
   Vector<OwnerKey> heard;
   ScopedConnection c = bus.addListener([&](const OwnerKey *k) { heard.append(*k); });
-  must(invalidateData(*d.ctx, data, InvalidateKinds::Positions | InvalidateKinds::Selection));
+  must(invalidateData(
+      *d.ctx, data, InvalidateKinds::Positions | InvalidateKinds::Selection));
   test_assert(d.shapeRaw(data).invalidated ==
               uint32_t(InvalidateKinds::Positions | InvalidateKinds::Selection));
   test_assert(heard.size() == 1 && heard[0] == OwnerKey::ofBlock(d.idOf(data)));
   must(invalidateData(*d.ctx, a, InvalidateKinds::Topology)); /* has no Invalidation */
   test_assert(heard.size() == 2 && heard[1] == OwnerKey::ofBlock(d.idOf(a)));
-  test_assert(
-      isError(invalidateData(*d.ctx, BlockHandle(), InvalidateKinds::None), StatusCode::NotFound));
+  test_assert(isError(invalidateData(*d.ctx, BlockHandle(), InvalidateKinds::None),
+                      StatusCode::NotFound));
 
   /* Writing. */
   ChannelBlock ch = d.trs->defaults();
@@ -481,7 +495,8 @@ void testCapabilities()
   test_assert(isError(writeTransformType(*d.ctx, a, TypeId::of("test.unknown"), ch),
                       StatusCode::NotFound));
   const BlockHandle h = d.hostObject("host");
-  test_assert(isError(writeTransformType(*d.ctx, h, d.matrix->id(), ch), StatusCode::Unsupported));
+  test_assert(isError(writeTransformType(*d.ctx, h, d.matrix->id(), ch),
+                      StatusCode::Unsupported));
   test_assert(isError(writeParent(*d.ctx, h, d.idOf(a)), StatusCode::Unsupported));
   d.host(h).onWrite = [] { return boom("refused"); };
   heard.clear();
@@ -498,7 +513,8 @@ void testCapabilities()
   test_assert(d.lib->resolveRef(d.obj(a).parent.cell()) == h);
   must(writeParent(*d.ctx, a, BlockId()));
   test_assert(d.obj(a).parent.cell().isNull());
-  test_assert(isError(newObject(*d.lib, "x", "test.unknown").status(), StatusCode::NotFound));
+  test_assert(
+      isError(newObject(*d.lib, "x", "test.unknown").status(), StatusCode::NotFound));
 }
 
 /* setWorldOf puts an object where it is asked to, under its parents as they are now. */
@@ -541,9 +557,9 @@ struct Oracle {
   }
   BlockHandle parentOf(BlockHandle h)
   {
-    const BlockId id = d.lib->get(h)->type() == TypeId::of(kObjectType) ?
-                           d.obj(h).parent.target() :
-                           d.host(h).info.parent;
+    const BlockId id = d.lib->get(h)->type() == TypeId::of(kObjectType)
+                           ? d.obj(h).parent.target()
+                           : d.host(h).info.parent;
     const BlockHandle p = id.isNull() ? BlockHandle() : d.lib->find(id);
     return live(p) ? p : BlockHandle();
   }
@@ -574,8 +590,8 @@ struct Oracle {
       status = EvalStatus::MissingModel;
       return parent;
     }
-    Result<TransformState> s =
-        evaluateTransform(*t, EvalCtx(own ? d.obj(h).channels : d.host(h).channels), parent);
+    Result<TransformState> s = evaluateTransform(
+        *t, EvalCtx(own ? d.obj(h).channels : d.host(h).channels), parent);
     if (!s.ok() || !s->finite()) {
       status = EvalStatus::Invalid;
       return parent;
@@ -596,7 +612,8 @@ void testRandom()
     d.lib->setFlag(shapes[i], BlockFlags::FakeUser, true);
   }
   for (int i = 0; i < 30; i++) {
-    const BlockHandle h = r.below(4) == 0 ? d.hostObject("h", r.range(-5, 5)) : d.object("o");
+    const BlockHandle h =
+        r.below(4) == 0 ? d.hostObject("h", r.range(-5, 5)) : d.object("o");
     d.lib->setFlag(h, BlockFlags::FakeUser, true);
     all.append(h);
   }
@@ -610,61 +627,57 @@ void testRandom()
       const BlockHandle other = r.below(4) == 0 ? BlockHandle() : all[r.below(30)];
       const BlockState state = d.lib->get(h)->state();
       switch (r.below(8)) {
-        case 0:
-        case 1: /* a host's parent changes without anyone hearing of it */
-          if (own) {
-            d.setParent(h, other);
-          }
-          else {
-            d.host(h).info.parent = other ? d.idOf(other) : BlockId();
-          }
-          break;
-        case 2:
-          if (d.sc().contains(*d.lib, h)) {
-            must(d.sc().remove(*d.lib, d.idOf(h)).status());
-          }
-          else {
-            must(d.sc().add(*d.lib, h, int(r.below(40)) - 1));
-          }
-          break;
-        case 3:
-          if (state == BlockState::Live) {
-            must(r.coin() ? d.lib->markDeleted(h) : d.lib->onHostDestroyed(d.idOf(h)));
-          }
-          else if (state == BlockState::InHistory) {
-            must(d.lib->restoreFromHistory(h));
-          }
-          else {
-            must(d.lib->onHostRestored(d.idOf(h)));
-          }
-          break;
-        case 4:
-          if (own) {
-            const bool fbx = r.coin();
-            d.obj(h).setTransformType(fbx ? kFbxTransform : kTrsTransform);
-            d.obj(h).channels = fbx ? fbxChannels(r, *d.fbx, int(r.below(3)), r.scale(2, true), 2.0) :
-                                      trsChannels(r, *d.trs, r.scale(2, true), 5.0);
-            if (r.below(10) == 0) {
-              d.obj(h).channels.set(0, std::numeric_limits<double>::infinity());
-            }
-          }
-          break;
-        case 5:
-          if (own) {
-            d.setData(h, r.coin() ? shapes[r.below(4)] : BlockHandle());
-          }
-          else {
-            d.host(h).info.data = r.coin() ? d.idOf(shapes[r.below(4)]) : BlockId();
-          }
-          break;
-        case 6:
-          d.shape(shapes[r.below(4)]).box.max[r.below(3)] = r.range(0, 9);
-          break;
-        default: {
-          Vector<BlockId> ids;
-          ids.append(d.idOf(h));
-          d.sc().setSelection(*d.lib, ids);
+      case 0:
+      case 1: /* a host's parent changes without anyone hearing of it */
+        if (own) {
+          d.setParent(h, other);
+        } else {
+          d.host(h).info.parent = other ? d.idOf(other) : BlockId();
         }
+        break;
+      case 2:
+        if (d.sc().contains(*d.lib, h)) {
+          must(d.sc().remove(*d.lib, d.idOf(h)).status());
+        } else {
+          must(d.sc().add(*d.lib, h, int(r.below(40)) - 1));
+        }
+        break;
+      case 3:
+        if (state == BlockState::Live) {
+          must(r.coin() ? d.lib->markDeleted(h) : d.lib->onHostDestroyed(d.idOf(h)));
+        } else if (state == BlockState::InHistory) {
+          must(d.lib->restoreFromHistory(h));
+        } else {
+          must(d.lib->onHostRestored(d.idOf(h)));
+        }
+        break;
+      case 4:
+        if (own) {
+          const bool fbx = r.coin();
+          d.obj(h).setTransformType(fbx ? kFbxTransform : kTrsTransform);
+          d.obj(h).channels =
+              fbx ? fbxChannels(r, *d.fbx, int(r.below(3)), r.scale(2, true), 2.0)
+                  : trsChannels(r, *d.trs, r.scale(2, true), 5.0);
+          if (r.below(10) == 0) {
+            d.obj(h).channels.set(0, std::numeric_limits<double>::infinity());
+          }
+        }
+        break;
+      case 5:
+        if (own) {
+          d.setData(h, r.coin() ? shapes[r.below(4)] : BlockHandle());
+        } else {
+          d.host(h).info.data = r.coin() ? d.idOf(shapes[r.below(4)]) : BlockId();
+        }
+        break;
+      case 6:
+        d.shape(shapes[r.below(4)]).box.max[r.below(3)] = r.range(0, 9);
+        break;
+      default: {
+        Vector<BlockId> ids;
+        ids.append(d.idOf(h));
+        d.sc().setSelection(*d.lib, ids);
+      }
       }
     }
     const Vector<BlockHandle> wasThere = d.sc().evaluatedObjects();
@@ -685,8 +698,7 @@ void testRandom()
     if (others) {
       test_assert(last.version == version + 1 && last.all && last.places.size() == 0);
       every++;
-    }
-    else {
+    } else {
       Vector<int32_t> differ;
       for (int i = 0; i < int(isThere.size()); i++) {
         if (!d.result(isThere[i]).same(was[i])) {
@@ -697,8 +709,9 @@ void testRandom()
       if (differ.size()) {
         Vector<int32_t> places = last.places;
         std::sort(places.data(), places.data() + places.size());
-        test_assert(!last.all && places.size() == differ.size() &&
-                    std::equal(places.data(), places.data() + places.size(), differ.data()));
+        test_assert(
+            !last.all && places.size() == differ.size() &&
+            std::equal(places.data(), places.data() + places.size(), differ.data()));
         /* Parents before children. */
         for (int i = 0; i < int(last.places.size()); i++) {
           const BlockHandle h = isThere[last.places[i]];
@@ -745,7 +758,8 @@ void testRandom()
       EvalStatus status;
       const TransformState s = oracle.state(h, status);
       const ObjectEval e = d.result(h);
-      test_assert(e.status == status && e.member == (i < members) && sameBits(e.state, s));
+      test_assert(e.status == status && e.member == (i < members) &&
+                  sameBits(e.state, s));
       cycles += status == EvalStatus::Cycle;
       invalid += status == EvalStatus::Invalid;
       const bool own = d.lib->get(h)->type() == TypeId::of(kObjectType);
@@ -768,7 +782,8 @@ void testRandom()
           n.rebuilds);
   fprintf(stderr, "changes: %d times all, %d some, %d none\n", every, some, none);
   test_assert(every > 50 && some > 20 && none > 20);
-  test_assert(cycles > 50 && outsiders > 50 && invalid > 50 && n.revalidations > n.rebuilds);
+  test_assert(cycles > 50 && outsiders > 50 && invalid > 50 &&
+              n.revalidations > n.rebuilds);
 }
 
 } // namespace

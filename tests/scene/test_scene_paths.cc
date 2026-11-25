@@ -79,8 +79,9 @@ void testObject()
   test_assert(isError(write(d, "scene.objects[\"b\"].parent", blockValue(d, a)),
                       StatusCode::FailedPrecondition,
                       "ancestor"));
-  test_assert(
-      isError(write(d, p + "parent", blockValue(d, a)), StatusCode::FailedPrecondition, "ancestor"));
+  test_assert(isError(write(d, p + "parent", blockValue(d, a)),
+                      StatusCode::FailedPrecondition,
+                      "ancestor"));
   must(write(d, p + "parent", blockValue(d, h))); /* a host's kind of object */
   test_assert(d.lib->resolveRef(d.obj(a).parent.cell()) == h);
   test_assert(!write(d, p + "parent", blockValue(d, shape)).ok());
@@ -130,8 +131,8 @@ void testScene()
   test_assert(read(d, "scene.activeObject") == PropValue::nullPointer());
   test_assert(readError(d, "scene.objects.active") == StatusCode::NotFound);
   must(write(d, "scene.objects.active", blockValue(d, b)));
-  test_assert(d.sc().active(*d.lib) == b && read(d, "scene.objects.active.name") ==
-                                                PropValue::ofString("twin"));
+  test_assert(d.sc().active(*d.lib) == b &&
+              read(d, "scene.objects.active.name") == PropValue::ofString("twin"));
   must(write(d, "scene.activeObject", blockValue(d, h)));
   test_assert(d.sc().active(*d.lib) == h);
   test_assert(isError(write(d, "scene.activeObject", blockValue(d, out)),
@@ -155,7 +156,8 @@ void testScene()
   test_assert(readError(d, "scene.selectedObjects[\"out\"]") == StatusCode::NotFound);
   test_assert(readError(d, "scene.selectedObjects[2]") == StatusCode::OutOfRange);
   test_assert(read(d, "scene.selectedObjects[#" + key(c) + "]") == blockValue(d, c));
-  test_assert(readError(d, "scene.selectedObjects[#" + key(b) + "]") == StatusCode::NotFound);
+  test_assert(readError(d, "scene.selectedObjects[#" + key(b) + "]") ==
+              StatusCode::NotFound);
 
   /* Without a Library. */
   Context none(&d.rt, nullptr, d.ctx->root());
@@ -191,9 +193,11 @@ void testEvaluated()
   test_assert(read(d, "evaluated.objects.length") == PropValue::ofInt(2));
   test_assert(readError(d, "evaluated.objects[2]") == StatusCode::OutOfRange);
   test_assert(readError(d, "evaluated.objects[\"a\"]") == StatusCode::NotFound);
-  const std::string two = formatBlockId(d.rt, d.idOf(a)) + ";" + formatBlockId(d.rt, d.idOf(b));
+  const std::string two =
+      formatBlockId(d.rt, d.idOf(a)) + ";" + formatBlockId(d.rt, d.idOf(b));
   for (const std::string &key : {std::string(), two, two + "0"}) {
-    test_assert(readError(d, "evaluated.objects[\"" + key + "\"].world") == StatusCode::NotFound);
+    test_assert(readError(d, "evaluated.objects[\"" + key + "\"].world") ==
+                StatusCode::NotFound);
   }
   test_assert(readError(d, path(shape, "world")) == StatusCode::NotFound);
 

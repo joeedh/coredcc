@@ -13,18 +13,19 @@ bool ApiMember::readOnly() const
     return true;
   }
   switch (kind()) {
-    case MemberKind::Value:
-      return !value_.set;
-    case MemberKind::Pointer:
-      return !pointer_.set;
-    case MemberKind::Collection:
-      return true;
+  case MemberKind::Value:
+    return !value_.set;
+  case MemberKind::Pointer:
+    return !pointer_.set;
+  case MemberKind::Collection:
+    return true;
   }
   return true;
 }
 
 ApiStruct::ApiStruct(std::string_view name)
-    : id_(StructId::of(name)), name_(lsString(name)), uiName_(lsString(uiNameFromApiName(name)))
+    : id_(StructId::of(name)), name_(lsString(name)),
+      uiName_(lsString(uiNameFromApiName(name)))
 {
 }
 
@@ -70,7 +71,8 @@ ApiMember &ApiStruct::addPointer(PropertyDef def, PointerAccessor accessor)
 
 ApiMember &ApiStruct::addCollection(PropertyDef def, CollectionAccessor accessor)
 {
-  CDCC_CHECK(def.kind() == PropKind::Collection, "addCollection takes a collectionProp def");
+  CDCC_CHECK(def.kind() == PropKind::Collection,
+             "addCollection takes a collectionProp def");
   if (!accessor.itemStruct) {
     accessor.itemStruct = def.target()->target;
   }
@@ -103,7 +105,8 @@ Result<const ApiStruct *> ApiRegistry::add(ApiStruct st)
 {
   const std::string sname = st.name().c_str();
   auto fail = [&sname](const std::string &why) {
-    return Status::error(StatusCode::InvalidArgument, ("struct '" + sname + "': " + why).c_str());
+    return Status::error(StatusCode::InvalidArgument,
+                         ("struct '" + sname + "': " + why).c_str());
   };
   Result<StructId> id = rt_.registerId<IdDomain::Struct>(sname);
   if (!id.ok()) {
@@ -127,30 +130,32 @@ Result<const ApiStruct *> ApiRegistry::add(ApiStruct st)
       return fail("'" + mname + "' is reserved for collections");
     }
     switch (m.kind()) {
-      case MemberKind::Value:
-        if (!m.value().get) {
-          return fail("member '" + mname + "' has no getter");
-        }
-        break;
-      case MemberKind::Pointer:
-        if (!m.pointer().get) {
-          return fail("pointer '" + mname + "' has no getter");
-        }
-        if (!m.pointer().target && (!m.pointer().refine || m.pointer().candidates.size() == 0)) {
-          return fail("pointer '" + mname +
-                      "' needs a static target, or a refine with declared candidates");
-        }
-        break;
-      case MemberKind::Collection: {
-        const CollectionAccessor &c = m.collection();
-        if (!c.length || !c.at || !c.lookup || !c.keyOf) {
-          return fail("collection '" + mname + "' needs length, at, lookup and keyOf");
-        }
-        if (!c.itemStruct) {
-          return fail("collection '" + mname + "' has no item struct");
-        }
-        break;
+    case MemberKind::Value:
+      if (!m.value().get) {
+        return fail("member '" + mname + "' has no getter");
       }
+      break;
+    case MemberKind::Pointer:
+      if (!m.pointer().get) {
+        return fail("pointer '" + mname + "' has no getter");
+      }
+      if (!m.pointer().target &&
+          (!m.pointer().refine || m.pointer().candidates.size() == 0))
+      {
+        return fail("pointer '" + mname +
+                    "' needs a static target, or a refine with declared candidates");
+      }
+      break;
+    case MemberKind::Collection: {
+      const CollectionAccessor &c = m.collection();
+      if (!c.length || !c.at || !c.lookup || !c.keyOf) {
+        return fail("collection '" + mname + "' needs length, at, lookup and keyOf");
+      }
+      if (!c.itemStruct) {
+        return fail("collection '" + mname + "' has no item struct");
+      }
+      break;
+    }
     }
   }
   ApiStruct *stored = litestl::alloc::New<ApiStruct>("coredcc::ApiStruct", std::move(st));
@@ -215,13 +220,15 @@ Result<OwnerKey> ApiRegistry::addRuntimeOwner(std::string_view name,
                                               StructId type,
                                               litestl::util::function<void *()> data)
 {
-  Result<TypeId> id = rt_.registerId<IdDomain::Type>(kOwnerNamePrefix + std::string(name));
+  Result<TypeId> id =
+      rt_.registerId<IdDomain::Type>(kOwnerNamePrefix + std::string(name));
   if (!id.ok()) {
     return id.status();
   }
   if (owners_.lookup_ptr(id->value)) {
-    return Status::error(StatusCode::AlreadyExists,
-                         ("runtime owner '" + std::string(name) + "' is registered").c_str());
+    return Status::error(
+        StatusCode::AlreadyExists,
+        ("runtime owner '" + std::string(name) + "' is registered").c_str());
   }
   owners_.add(id->value, Owner{type, std::move(data)});
   return OwnerKey::ofRuntime(id->value);
@@ -241,12 +248,14 @@ PointerRef ApiRegistry::runtimeOwner(const OwnerKey &owner) const
 
 PointerRef ApiRegistry::runtimeOwner(std::string_view name) const
 {
-  return runtimeOwner(OwnerKey::ofRuntime(TypeId::of(kOwnerNamePrefix + std::string(name)).value));
+  return runtimeOwner(
+      OwnerKey::ofRuntime(TypeId::of(kOwnerNamePrefix + std::string(name)).value));
 }
 
 namespace {
 
-/* A collection's activeMember must be a settable pointer to its items, in the same struct. */
+/* A collection's activeMember must be a settable pointer to its items, in the same
+ * struct. */
 Status validateActive(const ApiRegistry &reg, const ApiStruct &st, const ApiMember &list)
 {
   const CollectionAccessor &c = list.collection();
@@ -257,24 +266,24 @@ Status validateActive(const ApiRegistry &reg, const ApiStruct &st, const ApiMemb
   const char *why = nullptr;
   if (!c.active) {
     why = "without `active`";
-  }
-  else if (!m || !m->pointer().set) {
+  } else if (!m || !m->pointer().set) {
     why = "which isn't a settable pointer of the struct";
-  }
-  else {
+  } else {
     const StructId target = m->pointer().target;
-    bool fits = target && (reg.isA(c.itemStruct, target) || reg.isA(target, c.itemStruct));
+    bool fits =
+        target && (reg.isA(c.itemStruct, target) || reg.isA(target, c.itemStruct));
     for (StructId t : m->pointer().candidates) {
       fits = fits || reg.isA(t, c.itemStruct);
     }
     why = fits ? nullptr : "which points to another struct";
   }
   return why ? Status::error(StatusCode::InvalidArgument,
-                             ("struct '" + std::string(st.name().c_str()) + "': collection '" +
-                              list.name() + "' has the activeMember '" +
-                              c.activeMember.c_str() + "', " + why)
-                                 .c_str()) :
-               Status();
+                             ("struct '" + std::string(st.name().c_str()) +
+                              "': collection '" + list.name() +
+                              "' has the activeMember '" + c.activeMember.c_str() +
+                              "', " + why)
+                                 .c_str())
+             : Status();
 }
 
 } // namespace

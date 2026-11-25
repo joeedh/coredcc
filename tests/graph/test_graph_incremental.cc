@@ -21,10 +21,12 @@ template <class Pull> Cost costOf(GraphInstance &i, const Pull &pull)
 {
   const Cost c{i.totalRuns(), i.totalVisits(), i.totalFullPasses()};
   pull();
-  return Cost{i.totalRuns() - c.runs, i.totalVisits() - c.visits, i.totalFullPasses() - c.full};
+  return Cost{
+      i.totalRuns() - c.runs, i.totalVisits() - c.visits, i.totalFullPasses() - c.full};
 }
 
-/* A row of 100 sums with a read at its start, and a group with a chain of 10 at its end. */
+/* A row of 100 sums with a read at its start, and a group with a chain of 10 at its end.
+ */
 struct Scene {
   World w;
   Graph g, in;
@@ -82,8 +84,11 @@ struct Scene {
     const bool ok = c.runs == runs && c.visits <= mostVisits && c.full == full &&
                     inst->value(end())->asFloat() == before + by;
     if (!ok) {
-      printf("%d runs, %d visits, %d full passes, moved by %g\n", int(c.runs), int(c.visits),
-             int(c.full), inst->value(end())->asFloat() - before);
+      printf("%d runs, %d visits, %d full passes, moved by %g\n",
+             int(c.runs),
+             int(c.visits),
+             int(c.full),
+             inst->value(end())->asFloat() - before);
     }
     return ok && inst->isCurrent(end());
   }
@@ -122,7 +127,8 @@ void testElsewhere()
   test_assert(other.def->removeNode(n).ok() && s.free());
   /* A block that another instance uses. */
   const NodeId reads = add(*other.def, "t.read");
-  test_assert(other.def->setParam(reads, "thing", toThing(idOf(w.lib, s.elsewhere))).ok());
+  test_assert(
+      other.def->setParam(reads, "thing", toThing(idOf(w.lib, s.elsewhere))).ok());
   GraphInstance second(&w.rt, &w.lib, other.id);
   test_assert(s.pull().ok() && second.evaluate(out(reads)).ok());
   w.notify(idOf(w.lib, s.elsewhere));
@@ -156,14 +162,17 @@ void testDirtyCone()
   test_assert(s.costs(60, 200, 5));
   test_assert(s.literal(*s.in.def, s.inside[9], "b", 2).ok());
   test_assert(s.costs(1, 8, 2));
-  /* Several at once, one behind another, and one that is undone before it is looked at. */
-  test_assert(s.literal(d, s.row[98], "b", 5).ok() && s.literal(d, s.row[99], "b", 6).ok() &&
+  /* Several at once, one behind another, and one that is undone before it is looked at.
+   */
+  test_assert(s.literal(d, s.row[98], "b", 5).ok() &&
+              s.literal(d, s.row[99], "b", 6).ok() &&
               s.literal(*s.in.def, s.inside[9], "b", 4).ok());
   test_assert(s.costs(12, 60, 5 + 1 + 2));
   test_assert(s.literal(d, s.row[0], "b", 9).ok() && s.literal(d, s.row[0], "b", 0).ok());
   test_assert(s.costs(s.inst->report(NodePath{{}, s.row[0]}).runs ? 1 : 0, 400, 0));
   /* Nothing past a value that is the same. */
-  test_assert(s.literal(d, s.row[97], "b", 1).ok() && s.literal(d, s.row[98], "b", 4).ok());
+  test_assert(s.literal(d, s.row[97], "b", 1).ok() &&
+              s.literal(d, s.row[98], "b", 4).ok());
   test_assert(s.costs(2, 60, 0));
   /* Links of a def: its frames are looked at, others aren't. */
   const LinkId old = d.node(s.row[99])->linkInto("a")->id;
@@ -237,7 +246,8 @@ void testForeachs()
 {
   World w;
   const BlockHandle thing = newThing(w.lib, "thing", 1);
-  const Graph in = newGraph(w.lib, "in"), g = newGraph(w.lib, "g"), deep = newGraph(w.lib, "deep");
+  const Graph in = newGraph(w.lib, "in"), g = newGraph(w.lib, "g"),
+              deep = newGraph(w.lib, "deep");
   const int64_t dout = addSocket(*deep.def, SocketSide::Output, "o", "float");
   const NodeId read = add(*deep.def, "t.read");
   test_assert(deep.def->setParam(read, "thing", toThing(idOf(w.lib, thing))).ok());
@@ -248,7 +258,8 @@ void testForeachs()
   connect(*in.def, group, key(dout), sum, "a");
   connect(*in.def, sum, "value", add(*in.def, "graph.output"), key(o));
   GraphDef &d = *g.def;
-  const NodeId range = add(d, "t.range"), each = add(d, "graph.foreach"), apart = add(d, "t.sum");
+  const NodeId range = add(d, "t.range"), each = add(d, "graph.foreach"),
+               apart = add(d, "t.sum");
   test_assert(d.setLiteral(range, "count", PropValue::ofFloat(5)).ok());
   test_assert(d.setGroup(each, in.id).ok());
   connect(d, range, "elements", each, kElementsSocket);
@@ -362,7 +373,8 @@ void testLeftBehind()
   test_assert(!s.inst->isCurrent(middle) && s.inst->evaluate(middle).ok());
   test_assert(s.inst->value(middle)->asFloat() == before + 5);
   /* Nor does one that lost what it reads, and has it back. */
-  test_assert(s.g.def->unlink(s.g.def->node(s.row[60])->linkInto("a")->id).ok() && s.pull().ok());
+  test_assert(s.g.def->unlink(s.g.def->node(s.row[60])->linkInto("a")->id).ok() &&
+              s.pull().ok());
   test_assert(s.literal(*s.g.def, s.row[20], "b", 3).ok());
   Cost c = costOf(*s.inst, [&]() { test_assert(s.pull().ok()); });
   test_assert(c.runs == 0 && c.visits <= 1);
@@ -379,12 +391,14 @@ void testHandles()
   GraphInstance i(&s.w.rt, &s.w.lib, s.g.id);
   const SocketHandle end = *i.prepare(s.end()), again = *i.prepare(s.end());
   const SocketHandle middle = *i.prepare(out(s.row[50]));
-  const SocketHandle input = *i.prepare(SocketPath::of(s.row[99], "b", SocketSide::Input));
+  const SocketHandle input =
+      *i.prepare(SocketPath::of(s.row[99], "b", SocketSide::Input));
   const SocketHandle none = *i.prepare(SocketPath::of(NodeId{77777}, "value"));
   test_assert(!(end == again) && end.generation > 0);
   /* Before they are evaluated. */
   test_assert(hasCode(i.status(end), StatusCode::FailedPrecondition) && !i.value(end) &&
-              !i.lastGood(end) && !i.error(end) && i.changedAt(end) == 0 && !i.isCurrent(end));
+              !i.lastGood(end) && !i.error(end) && i.changedAt(end) == 0 &&
+              !i.isCurrent(end));
   const std::vector<SocketHandle> all = {end, middle, input, none, again};
   litestl::util::Vector<int> moved;
   auto pull = [&](std::vector<int> want) {
@@ -407,9 +421,11 @@ void testHandles()
   test_assert(pull({}));
   /* They aren't results of paths, and those aren't theirs. */
   test_assert(!i.value(s.end()) && i.changedAt(s.end()) == 0);
-  test_assert(i.evaluate(s.end()).ok() && i.forget(s.end()).ok() && i.value(end) && pull({}));
+  test_assert(i.evaluate(s.end()).ok() && i.forget(s.end()).ok() && i.value(end) &&
+              pull({}));
 
-  test_assert(s.literal(d, s.row[99], "b", 2).ok() && !i.isCurrent(end) && i.isCurrent(none) == false);
+  test_assert(s.literal(d, s.row[99], "b", 2).ok() && !i.isCurrent(end) &&
+              i.isCurrent(none) == false);
   test_assert(pull({0, 2, 4}) && i.value(end)->asFloat() == 3);
   /* What moved while only some were asked for is listed when it is asked for. */
   test_assert(s.literal(d, s.row[10], "b", 2).ok());
@@ -424,7 +440,8 @@ void testHandles()
   test_assert(s.literal(d, s.row[60], "a", 0).ok());
   test_assert(d.unlink(d.node(s.row[60])->linkInto("a")->id).ok());
   test_assert(s.literal(d, s.row[60], "a", -100).ok());
-  test_assert(pull({0, 4}) && hasCode(i.status(end), StatusCode::OutOfRange) && !i.value(end));
+  test_assert(pull({0, 4}) && hasCode(i.status(end), StatusCode::OutOfRange) &&
+              !i.value(end));
   test_assert(i.error(end)->origin.node == s.row[60] && i.lastGood(end)->asFloat() == 5);
   test_assert(s.literal(d, s.row[60], "b", 1).ok() && pull({}));
   test_assert(s.literal(d, s.row[60], "a", -101).ok() && pull({0, 4}));
@@ -441,14 +458,18 @@ void testHandles()
   test_assert(!i.lastGood(middle) && i.error(middle));
   test_assert(pull({}));
   test_assert(d.insertNode(state).ok() && pull({1}) && i.value(middle)->asFloat() == 0);
-  test_assert(d.insertLink(links[0]).ok() && pull({1}) && i.value(middle)->asFloat() == 3);
+  test_assert(d.insertLink(links[0]).ok() && pull({1}) &&
+              i.value(middle)->asFloat() == 3);
 
   /* Released ones, and those of another. */
-  test_assert(i.release(again).ok() && hasCode(i.release(again), StatusCode::InvalidArgument));
-  test_assert(hasCode(i.status(again), StatusCode::FailedPrecondition) && !i.value(again) &&
-              !i.error(again) && i.changedAt(again) == 0 && !i.isCurrent(again));
+  test_assert(i.release(again).ok() &&
+              hasCode(i.release(again), StatusCode::InvalidArgument));
+  test_assert(hasCode(i.status(again), StatusCode::FailedPrecondition) &&
+              !i.value(again) && !i.error(again) && i.changedAt(again) == 0 &&
+              !i.isCurrent(again));
   moved.append(5);
-  test_assert(hasCode(i.evaluate(all, moved), StatusCode::InvalidArgument) && moved.size() == 0);
+  test_assert(hasCode(i.evaluate(all, moved), StatusCode::InvalidArgument) &&
+              moved.size() == 0);
   const SocketHandle next = *i.prepare(out(s.row[3]));
   test_assert(next.index == again.index && next.generation != again.generation);
   test_assert(hasCode(i.evaluate({&again, 1}, moved), StatusCode::InvalidArgument));
@@ -484,19 +505,24 @@ void testHandlesOfOutputs()
   const std::vector<SocketHandle> all = {*i.prepare(SocketPath::output("x")),
                                          *i.prepare(SocketPath::output(key(x)))};
   litestl::util::Vector<int> moved;
-  test_assert(i.evaluate(all, moved).ok() && moved.size() == 2 && i.value(all[0])->asFloat() == 4);
+  test_assert(i.evaluate(all, moved).ok() && moved.size() == 2 &&
+              i.value(all[0])->asFloat() == 4);
   test_assert(d.setInterfaceName(x, "z").ok());
   test_assert(i.evaluate(all, moved).ok() && moved.size() == 1 && moved[0] == 0);
-  test_assert(hasCode(i.status(all[0]), StatusCode::NotFound) && i.value(all[1])->asFloat() == 4);
+  test_assert(hasCode(i.status(all[0]), StatusCode::NotFound) &&
+              i.value(all[1])->asFloat() == 4);
   test_assert(d.setInterfaceName(y, "x").ok());
-  test_assert(i.evaluate(all, moved).ok() && moved.size() == 1 && i.value(all[0])->asFloat() == 0);
+  test_assert(i.evaluate(all, moved).ok() && moved.size() == 1 &&
+              i.value(all[0])->asFloat() == 0);
   /* An output node more: it is the first that counts. */
-  test_assert(d.removeNode(output).ok() && i.evaluate(all, moved).ok() && moved.size() == 1);
+  test_assert(d.removeNode(output).ok() && i.evaluate(all, moved).ok() &&
+              moved.size() == 1);
   test_assert(moved[0] == 1);
   const NodeId again = add(d, "graph.output");
   test_assert(i.evaluate(all, moved).ok() && i.value(all[1])->asFloat() == 0);
   connect(d, s, "value", again, key(x));
-  test_assert(i.evaluate(all, moved).ok() && moved.size() == 1 && i.value(all[1])->asFloat() == 4);
+  test_assert(i.evaluate(all, moved).ok() && moved.size() == 1 &&
+              i.value(all[1])->asFloat() == 4);
 }
 
 /* Groups inside groups, over the budget: what was listed as moved is listed again. */
@@ -510,17 +536,20 @@ void testHandlesOverBudget()
   const std::vector<SocketHandle> all = {*i.prepare(s.end()), *i.prepare(far)};
   litestl::util::Vector<int> moved;
   i.setMaxFrames(1);
-  test_assert(hasCode(i.evaluate(all, moved), StatusCode::OutOfRange) && moved.size() == 0);
+  test_assert(hasCode(i.evaluate(all, moved), StatusCode::OutOfRange) &&
+              moved.size() == 0);
   test_assert(i.evaluate({&all[0], 1}, moved).ok() && moved.size() == 1);
   /* Remembered, for a batch that has them all, in order. */
   Status failed;
   Cost c = costOf(i, [&]() { failed = i.evaluate(all, moved); });
   test_assert(hasCode(failed, StatusCode::OutOfRange));
   c = costOf(i, [&]() { failed = i.evaluate(all, moved); });
-  test_assert(hasCode(failed, StatusCode::OutOfRange) && c.visits == 0 && moved.size() == 0);
+  test_assert(hasCode(failed, StatusCode::OutOfRange) && c.visits == 0 &&
+              moved.size() == 0);
   test_assert(i.evaluate({&all[0], 1}, moved).ok() && moved.size() <= 1);
   i.setMaxFrames(2);
-  test_assert(i.evaluate(all, moved).ok() && i.status(all[1]).ok() && i.frameCount() == 2);
+  test_assert(i.evaluate(all, moved).ok() && i.status(all[1]).ok() &&
+              i.frameCount() == 2);
 
   /* A failure after an edit that it had said was no concern: that isn't so any more. */
   const Graph other = newGraph(s.w.lib, "other");
@@ -551,7 +580,8 @@ void testRemembered()
     g.push_back(newGraph(w.lib, "g"));
     outs.push_back(addSocket(*g.back().def, SocketSide::Output, "o", "float"));
     const NodeId s = add(*g.back().def, "t.sum");
-    connect(*g.back().def, s, "value", add(*g.back().def, "graph.output"), key(outs.back()));
+    connect(
+        *g.back().def, s, "value", add(*g.back().def, "graph.output"), key(outs.back()));
     for (int c = 0; k > 0 && c < 2; c++) {
       groups.push_back(add(*g.back().def, "graph.group"));
       test_assert(g.back().def->setGroup(groups.back(), g[size_t(k - 1)].id).ok());
@@ -598,7 +628,8 @@ void testMemory()
 {
   Scene s;
   GraphMemory m = s.inst->memory();
-  test_assert(m.frames == 2 && m.kernels == 111 && m.elements == 0 && m.payloadBytes == 0);
+  test_assert(m.frames == 2 && m.kernels == 111 && m.elements == 0 &&
+              m.payloadBytes == 0);
   test_assert(m.inputs == 2 * 110 + 1 + 1);
   /* Around a kB each. */
   test_assert(m.bytes > 111 * 300 && m.bytes < 111 * 1500);
@@ -642,26 +673,35 @@ void testMaxCachedKernels()
   };
   l.inst.setMaxCachedKernels(6);
   l.set(table({1, 2, 3, 4, 5}, c));
-  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 4, 5}}, {"c2", {}}}, 3 * 2 + 2 + 1) && kept() == 3);
+  test_assert(
+      l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 4, 5}}, {"c2", {}}}, 3 * 2 + 2 + 1) &&
+      kept() == 3);
   /* More room, less room. */
   l.inst.setMaxCachedKernels(100);
   l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 2, 3, 4, 6}}}));
-  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 4, 6}}, {"c2", {}}}, 2) && kept() == 4);
+  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 4, 6}}, {"c2", {}}}, 2) &&
+              kept() == 4);
   l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 2, 3, 7, 6}}}));
-  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 6}}, {"c2", {}}}, 2) && kept() == 5);
-  /* A failed run makes room for another, and what it made goes with the next that doesn't. */
+  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 6}}, {"c2", {}}}, 2) &&
+              kept() == 5);
+  /* A failed run makes room for another, and what it made goes with the next that
+   * doesn't. */
   l.set(table({1, 2, 3, 4, 5, 9}, {{"a", {1, 2, 3, 7, 6, -100}}}));
   test_assert(!l.evaluate().ok() && l.inst.elementCount() == 6);
   l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 2, 3, 7, 5}}}));
-  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 5}}, {"c2", {}}}, 1) && kept() == 5);
+  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 5}}, {"c2", {}}}, 1) &&
+              kept() == 5);
   l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 2, 3, 7, 6}}}));
-  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 6}}, {"c2", {}}}, 1) && kept() == 5);
+  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 6}}, {"c2", {}}}, 1) &&
+              kept() == 5);
   l.inst.setMaxCachedKernels(0);
   l.set(table({1, 6, 3, 4, 5}, {{"a", {1, 2, 3, 7, 6}}}));
-  test_assert(l.is({1, 6, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 6}}, {"c2", {}}}, 1) && kept() == 4);
+  test_assert(l.is({1, 6, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 6}}, {"c2", {}}}, 1) &&
+              kept() == 4);
   /* What has a state keeps it. */
   l.set(table({1, 6, 3, 4, 5}, {{"a", {1, 2, 3, 8, 6}}}));
-  test_assert(l.is({1, 6, 3, 4, 5}, {{"sum", {1, 2, 3, 8, 6}}, {"c2", {}}}, 1) && kept() == 4);
+  test_assert(l.is({1, 6, 3, 4, 5}, {{"sum", {1, 2, 3, 8, 6}}, {"c2", {}}}, 1) &&
+              kept() == 4);
 
   /* States that go make room. */
   World w2;

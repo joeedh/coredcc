@@ -1,8 +1,8 @@
 #pragma once
 
 /** \file
- * What in an instance depends on what, backwards: which vertices an edit touches. Internal
- * to graph/.
+ * What in an instance depends on what, backwards: which vertices an edit touches.
+ * Internal to graph/.
  */
 
 #include "coredcc/base/block_id.h"
@@ -60,10 +60,10 @@ struct BlockLink {
   BlockLink *prev = nullptr;
 };
 
-/** The frames by their def, the kernels by the blocks they used, and the foreach nodes. Of
- * the frames outside of elements. */
+/** The frames by their def, the kernels by the blocks they used, and the foreach nodes.
+ * Of the frames outside of elements. */
 class Dependents {
- public:
+public:
   void addFrame(Frame &f);
   void removeFrame(Frame &f);
   /** Notes what an input reads. */
@@ -87,7 +87,7 @@ class Dependents {
 
   litestl::util::Map<KernelState *, bool> foreachs;
 
- private:
+private:
   void unlink(BlockLink &l);
 
   litestl::util::Map<uint64_t, Frame *> frames_;

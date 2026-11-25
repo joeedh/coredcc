@@ -75,9 +75,10 @@ inline void addDocument(Runtime &rt)
                     blocksByName(kThing, kThingStruct));
   test_assert(reg.add(std::move(doc)).ok());
   static int root = 0;
-  test_assert(
-      reg.addRuntimeOwner("doc", StructId::of("Doc"), []() { return static_cast<void *>(&root); })
-          .ok());
+  test_assert(reg.addRuntimeOwner("doc",
+                                  StructId::of("Doc"),
+                                  []() { return static_cast<void *>(&root); })
+                  .ok());
 }
 
 /* Types, blocks, commands and the document. */

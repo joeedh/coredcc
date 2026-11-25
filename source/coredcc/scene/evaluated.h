@@ -27,8 +27,9 @@ struct ObjectEval {
   /** Whether it is a member of the scene, not only a parent of one. */
   bool member = false;
 
-  /** From the data's space to the world: what to draw and to find its geometry with. The same as
-   * `state.world` for now; objects will have an offset of the data that children don't have. */
+  /** From the data's space to the world: what to draw and to find its geometry with. The
+   * same as `state.world` for now; objects will have an offset of the data that children
+   * don't have. */
   const mat4d &dataWorld() const
   {
     return state.world;
@@ -42,7 +43,7 @@ namespace detail {
 
 /** A list of handles, and the place of each in it. */
 class HandleIndex {
- public:
+public:
   /** Appends a handle that isn't in the list. Returns its place. */
   int add(BlockHandle h)
   {
@@ -66,13 +67,14 @@ class HandleIndex {
   }
   bool same(const HandleIndex &b) const;
 
- private:
+private:
   litestl::util::Vector<BlockHandle> handles_;
   /* By the handle's index. */
   litestl::util::Vector<int> places_;
 };
 
-/** One evaluation's results. Two of them take turns: a reader sees the last complete one. */
+/** One evaluation's results. Two of them take turns: a reader sees the last complete one.
+ */
 struct EvaluatedStore {
   litestl::util::Vector<ObjectEval> objects;
   /** Shared by the two stores while the objects are the same. */
@@ -89,9 +91,9 @@ struct EvaluatedStore {
 
 /* Results by path: the runtime owner `coredcc.evaluated`, for the Context's scene.
  *
- *     evaluated.objects["coredcc,0123456789abcdef0123456789abcdef"].world     (formatBlockId)
+ *     evaluated.objects["coredcc,0123456789abcdef0123456789abcdef"].world (formatBlockId)
  *
- * NotFound without a scene, before its first evaluation, and for objects that weren't in it. */
+ * NotFound without a scene, before its first evaluation, and for objects not in it. */
 
 inline constexpr const char *kEvaluatedOwner = "coredcc.evaluated";
 

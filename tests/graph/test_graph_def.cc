@@ -39,9 +39,11 @@ void testNodes()
   test_assert(def.setParam(a, "count", PropValue::ofFloat(20)).ok());
   test_assert(def.paramValue(*n, "count") == PropValue::ofInt(8)); /* clamped */
   test_assert(n->paramVersion() > before && n->paramVersion() == def.contentVersion());
-  test_assert(def.contentVersion() == w.rt.lastEdit() && def.structureVersion() == structure);
+  test_assert(def.contentVersion() == w.rt.lastEdit() &&
+              def.structureVersion() == structure);
   test_assert(def.setParam(a, "count", PropValue()).ok());
-  test_assert(def.paramValue(*n, "count") == PropValue::ofInt(2) && n->params().size() == 0);
+  test_assert(def.paramValue(*n, "count") == PropValue::ofInt(2) &&
+              n->params().size() == 0);
   test_assert(def.paramValue(*n, "maybe").isNone());
   test_assert(def.setParam(a, "maybe", PropValue::ofFloat(1)).ok());
   test_assert(def.paramValue(*n, "maybe") == PropValue::ofFloat(1));
@@ -49,8 +51,10 @@ void testNodes()
   const Status noParam = def.setParam(a, "cuont", PropValue::ofInt(1));
   test_assert(hasCode(noParam, StatusCode::NotFound) && noParam.suggestions().size() > 0);
   const uint64_t failed = w.rt.lastEdit();
-  test_assert(hasCode(def.setParam(a, "count", PropValue::ofString("x")), StatusCode::TypeMismatch));
-  test_assert(hasCode(def.setParam(NodeId{5}, "count", PropValue()), StatusCode::NotFound));
+  test_assert(hasCode(def.setParam(a, "count", PropValue::ofString("x")),
+                      StatusCode::TypeMismatch));
+  test_assert(
+      hasCode(def.setParam(NodeId{5}, "count", PropValue()), StatusCode::NotFound));
   test_assert(w.rt.lastEdit() == failed);
 
   /* Literals: coerced to the input's def. */
@@ -65,11 +69,15 @@ void testNodes()
   test_assert(literal("a")->version == version && literal("b")->version > version);
   test_assert(n->paramVersion() == paramVersion);
   test_assert(def.setLiteral(a, "a", PropValue::ofFloat(5)).ok());
-  test_assert(literal("a")->value == PropValue::ofFloat(5) && literal("a")->version > version);
+  test_assert(literal("a")->value == PropValue::ofFloat(5) &&
+              literal("a")->version > version);
   test_assert(def.setLiteral(a, "a", PropValue()).ok() && !literal("a") && literal("b"));
-  test_assert(hasCode(def.setLiteral(a, "mesh", PropValue::ofFloat(1)), StatusCode::Unsupported));
-  test_assert(hasCode(def.setLiteral(a, "x", PropValue::ofFloat(1)), StatusCode::NotFound));
-  test_assert(hasCode(def.setLiteral(a, "a", PropValue::ofString("")), StatusCode::TypeMismatch));
+  test_assert(
+      hasCode(def.setLiteral(a, "mesh", PropValue::ofFloat(1)), StatusCode::Unsupported));
+  test_assert(
+      hasCode(def.setLiteral(a, "x", PropValue::ofFloat(1)), StatusCode::NotFound));
+  test_assert(
+      hasCode(def.setLiteral(a, "a", PropValue::ofString("")), StatusCode::TypeMismatch));
 
   /* Removing and bringing back, with its id and content. */
   const LinkId l = connect(def, b, "value", a, "a");
@@ -78,7 +86,8 @@ void testNodes()
   test_assert(def.removeNode(a).ok() && def.linkCount() == 0 && !def.node(a));
   test_assert(hasCode(def.removeNode(a), StatusCode::NotFound));
   test_assert(def.node(b)->linksOut().size() == 0 && def.validate().ok());
-  test_assert(def.insertNode(state).ok() && def.insertLink(link).ok() && def.validate().ok());
+  test_assert(def.insertNode(state).ok() && def.insertLink(link).ok() &&
+              def.validate().ok());
   n = def.node(a);
   test_assert(isText(n->label(), "First") && n->x() == 3);
   test_assert(def.paramValue(*n, "maybe") == PropValue::ofFloat(1));
@@ -91,7 +100,8 @@ void testNodes()
   test_assert(hasCode(def.insertLink(taken), StatusCode::AlreadyExists)); /* the input */
   taken.toKey = "b";
   taken.id = LinkId{a.value};
-  test_assert(hasCode(def.insertLink(taken), StatusCode::AlreadyExists)); /* a node's id */
+  test_assert(
+      hasCode(def.insertLink(taken), StatusCode::AlreadyExists)); /* a node's id */
   taken.id = LinkId{int64_t(1) << 52};
   test_assert(hasCode(def.insertLink(taken), StatusCode::InvalidArgument));
   taken.id = LinkId{78};
@@ -188,19 +198,27 @@ void testInterface()
   const int64_t a = addSocket(def, SocketSide::Input, "a", "float");
   const int64_t b = addSocket(def, SocketSide::Input, "b", "int");
   const int64_t c = addSocket(def, SocketSide::Input, "c", "test.Mesh");
-  const int64_t out = addSocket(def, SocketSide::Output, "a", "float"); /* names are per side */
+  const int64_t out =
+      addSocket(def, SocketSide::Output, "a", "float"); /* names are per side */
   test_assert(def.interfaceSockets(SocketSide::Input).size() == 3);
-  test_assert(def.interfaceSocket(a) && def.interfaceSocket(SocketSide::Output, "a")->id == out);
+  test_assert(def.interfaceSocket(a) &&
+              def.interfaceSocket(SocketSide::Output, "a")->id == out);
   test_assert(!def.interfaceSocket(SocketSide::Output, "b") && !def.interfaceSocket(999));
-  test_assert(hasCode(def.addInterface(SocketSide::Input, "a", "int"), StatusCode::AlreadyExists));
-  test_assert(hasCode(def.addInterface(SocketSide::Input, "", "int"), StatusCode::InvalidArgument));
-  test_assert(hasCode(def.addInterface(SocketSide::Input, "x", "flaot"), StatusCode::NotFound));
-  test_assert(hasCode(def.addInterface(SocketSide::Input, "x", "int", 4), StatusCode::OutOfRange));
-  test_assert(hasCode(def.addInterface(SocketSide::Input, "x", "int", -2), StatusCode::OutOfRange));
+  test_assert(hasCode(def.addInterface(SocketSide::Input, "a", "int"),
+                      StatusCode::AlreadyExists));
+  test_assert(hasCode(def.addInterface(SocketSide::Input, "", "int"),
+                      StatusCode::InvalidArgument));
+  test_assert(
+      hasCode(def.addInterface(SocketSide::Input, "x", "flaot"), StatusCode::NotFound));
+  test_assert(hasCode(def.addInterface(SocketSide::Input, "x", "int", 4),
+                      StatusCode::OutOfRange));
+  test_assert(hasCode(def.addInterface(SocketSide::Input, "x", "int", -2),
+                      StatusCode::OutOfRange));
   test_assert(hasCode(def.addInterface(SocketSide::Input, "x", "int", 0, a),
                       StatusCode::AlreadyExists));
-  test_assert(hasCode(def.addInterface(SocketSide::Input, "x", "int", 0, int64_t(1) << 52),
-                      StatusCode::InvalidArgument));
+  test_assert(
+      hasCode(def.addInterface(SocketSide::Input, "x", "int", 0, int64_t(1) << 52),
+              StatusCode::InvalidArgument));
 
   const NodeId in = add(def, "graph.input");
   const NodeId o = add(def, "graph.output");
@@ -217,7 +235,8 @@ void testInterface()
     return s;
   };
   test_assert(names(in, SocketSide::Output) == "a:float b:int c:test.Mesh ");
-  test_assert(names(in, SocketSide::Input).empty() && names(o, SocketSide::Output).empty());
+  test_assert(names(in, SocketSide::Input).empty() &&
+              names(o, SocketSide::Output).empty());
   test_assert(names(o, SocketSide::Input) == "a:float ");
 
   /* Moving, inserting, retyping and renaming, all seen by the nodes. */
@@ -246,9 +265,12 @@ void testInterface()
   test_assert(def.setInterfaceDefault(a, PropValue()).ok());
   test_assert(def.interfaceSocket(a)->defaultValue.isNone());
   test_assert(def.interfaceSocket(a)->defaultVersion > version);
-  test_assert(hasCode(def.setInterfaceDefault(a, PropValue::ofString("")), StatusCode::TypeMismatch));
-  test_assert(hasCode(def.setInterfaceDefault(out, PropValue::ofFloat(1)), StatusCode::InvalidArgument));
-  test_assert(hasCode(def.setInterfaceDefault(c, PropValue::ofFloat(1)), StatusCode::Unsupported));
+  test_assert(hasCode(def.setInterfaceDefault(a, PropValue::ofString("")),
+                      StatusCode::TypeMismatch));
+  test_assert(hasCode(def.setInterfaceDefault(out, PropValue::ofFloat(1)),
+                      StatusCode::InvalidArgument));
+  test_assert(hasCode(def.setInterfaceDefault(c, PropValue::ofFloat(1)),
+                      StatusCode::Unsupported));
   test_assert(hasCode(def.setInterfaceDefault(99, PropValue()), StatusCode::NotFound));
 
   /* A removed socket's links stay, and are diagnosed; bringing it back revives them. */
@@ -257,7 +279,8 @@ void testInterface()
   connect(def, n, "value", o, key(out));
   test_assert(def.setLiteral(o, key(out), PropValue::ofFloat(1)).ok());
   test_assert(def.diagnostics().size() == 0);
-  test_assert(def.removeInterface(a).ok() && hasCode(def.removeInterface(a), StatusCode::NotFound));
+  test_assert(def.removeInterface(a).ok() &&
+              hasCode(def.removeInterface(a), StatusCode::NotFound));
   test_assert(def.linkCount() == 2 && def.diagnostics().size() == 1);
   test_assert(def.diagnostics()[0].link == l);
   test_assert(hasCode(def.diagnostics()[0].status, StatusCode::NotFound));
@@ -321,14 +344,16 @@ void testHome()
   test_assert(def.setInterfaceType(s, "int").ok() && count.take() == 2);
   test_assert(def.moveInterface(s, 0).ok() && count.take() == 2);
   test_assert(def.removeInterface(s).ok() && count.take() == 2);
-  test_assert(!def.setParam(a, "count", PropValue::ofString("")).ok() && count.take() == 0);
+  test_assert(!def.setParam(a, "count", PropValue::ofString("")).ok() &&
+              count.take() == 0);
   test_assert(def.removeNode(b).ok() && count.take() == 2);
 
   /* A listener sees the data already changed. */
   int seen = 0;
   ScopedConnection look = w.rt.ext<ChangeBus>().addListener([&](const OwnerKey *) {
     const GraphNode *n = def.node(a);
-    seen += def.paramValue(*n, "count") == PropValue::ofInt(5) && n->literal("b", *w.rt.ext<SocketTypeRegistry>().find("float")) &&
+    seen += def.paramValue(*n, "count") == PropValue::ofInt(5) &&
+            n->literal("b", *w.rt.ext<SocketTypeRegistry>().find("float")) &&
             n->paramVersion() == def.contentVersion();
   });
   test_assert(def.setLiteral(a, "b", PropValue::ofInt(1)).ok());
@@ -360,7 +385,8 @@ void testHome()
     test_assert(hasCode(def.link({a, "x"}, {a, "a"}), StatusCode::Busy));
     test_assert(hasCode(def.insertLink(LinkState()), StatusCode::Busy));
     test_assert(hasCode(def.unlink(l), StatusCode::Busy));
-    test_assert(hasCode(def.addInterface(SocketSide::Input, "x", "int"), StatusCode::Busy));
+    test_assert(
+        hasCode(def.addInterface(SocketSide::Input, "x", "int"), StatusCode::Busy));
     test_assert(hasCode(def.removeInterface(s), StatusCode::Busy));
     test_assert(hasCode(def.moveInterface(s, 0), StatusCode::Busy));
     test_assert(hasCode(def.setInterfaceType(s, "int"), StatusCode::Busy));
@@ -379,7 +405,8 @@ void testInterfaceNames()
   const int64_t a = addSocket(def, SocketSide::Output, "a#1", "float");
   for (const char *name : {"", "#", "#12", "@", "@12.a"}) {
     for (SocketSide side : {SocketSide::Input, SocketSide::Output}) {
-      test_assert(hasCode(def.addInterface(side, name, "float"), StatusCode::InvalidArgument));
+      test_assert(
+          hasCode(def.addInterface(side, name, "float"), StatusCode::InvalidArgument));
     }
     test_assert(hasCode(def.setInterfaceName(a, name), StatusCode::InvalidArgument));
   }
@@ -402,11 +429,14 @@ void testLateTypes()
   const GraphNode *n = def.node(s.id);
   test_assert(n && !n->type() && def.sockets(*n, SocketSide::Output).size() == 1);
   test_assert(def.paramValue(*n, "count").isNone());
-  test_assert(hasCode(def.setParam(s.id, "count", PropValue::ofInt(1)), StatusCode::NotFound));
-  test_assert(def.setLiteral(s.id, "a", PropValue::ofInt(4)).ok()); /* from the snapshot */
+  test_assert(
+      hasCode(def.setParam(s.id, "count", PropValue::ofInt(1)), StatusCode::NotFound));
+  test_assert(
+      def.setLiteral(s.id, "a", PropValue::ofInt(4)).ok()); /* from the snapshot */
   const NodeId f = add(def, "math.float");
   connect(def, f, "value", s.id, "a");
-  test_assert(hasCode(def.link({s.id, "x"}, {f, "a"}), StatusCode::NotFound)); /* no such type */
+  test_assert(
+      hasCode(def.link({s.id, "x"}, {f, "a"}), StatusCode::NotFound)); /* no such type */
   const auto topo = def.topology();
   test_assert(topo->nodes[topo->find(s.id)].type == nullptr);
   test_assert(topo->outputs[topo->nodes[topo->find(s.id)].outBegin].type == nullptr);
@@ -428,7 +458,8 @@ void testLateTypes()
   const BlockHandle t = newThing(w.lib, "t", 0);
   test_assert(n->blockRefs().size() == 1 && n->blockRefs()[0].cell.isNull());
   test_assert(def.setParam(s.id, "thing", pointerTo(idOf(w.lib, t), kThingStruct)).ok());
-  test_assert(n->blockRefs().size() == 1 && n->blockRefs()[0].cell.target == idOf(w.lib, t));
+  test_assert(n->blockRefs().size() == 1 &&
+              n->blockRefs()[0].cell.target == idOf(w.lib, t));
   test_assert(def.validate().ok());
 }
 

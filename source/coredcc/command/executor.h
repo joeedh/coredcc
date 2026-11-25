@@ -28,7 +28,7 @@ class LastUsedStore;
  * that work in a sub-command too.
  */
 class CommandRecord {
- public:
+public:
   CommandRecord(const CommandDef *def, Owned<Command> cmd, PropertyBag inputs);
   ~CommandRecord();
   CommandRecord(const CommandRecord &) = delete;
@@ -78,8 +78,8 @@ class CommandRecord {
   {
     return fromFactory_;
   }
-  /** The address of the struct that its path prefix named when it started, which is the prefix
-   * of every slot, undo and redo too; null if it had none. */
+  /** The address of the struct that its path prefix named when it started, which is the
+   * prefix of every slot, undo and redo too; null if it had none. */
   const StableRef *prefix() const
   {
     return prefix_ ? &*prefix_ : nullptr;
@@ -87,7 +87,7 @@ class CommandRecord {
   /** After a fold: the head shows the folded run's inputs and outputs. */
   void adoptBags(CommandRecord &from);
 
- private:
+private:
   friend class CommandExecutor;
   friend class LinearHistory;
   const CommandDef *def_;
@@ -116,7 +116,7 @@ using RecordPtr = std::unique_ptr<CommandRecord, RecordDeleter>;
  * pointer to it: destroy (or clear) the history before the Library.
  */
 class UndoHistory {
- public:
+public:
   virtual ~UndoHistory() = default;
   /** Takes a finished command, folding it into the head when they agree to. */
   virtual void push(RecordPtr rec) = 0;
@@ -129,8 +129,8 @@ class UndoHistory {
   /** The command an undo would undo, if nothing has been undone since it was pushed
    * (the last-command panel's target); else null. */
   virtual CommandRecord *head() = 0;
-  /** Removes head() without undoing or discarding it. The one before it is then head(), but
-   * nothing folds into it. */
+  /** Removes head() without undoing or discarding it. The one before it is then head(),
+   * but nothing folds into it. */
   virtual RecordPtr popHead() = 0;
   virtual void clear() = 0;
 };
@@ -139,11 +139,11 @@ class UndoHistory {
  * A cursor over a list of commands.
  * - Pushing truncates the redo side, discarding it.
  * - A push folds into the head only when the head is at the cursor, nothing has been
- *   undone or redone since it was pushed, neither record has sub-commands, and both ran with
- *   the same path prefix.
+ *   undone or redone since it was pushed, neither record has sub-commands, and both ran
+ * with the same path prefix.
  * - Past the memory budget the oldest commands are discarded; the newest always stays.
- *   A record's memSize is read when it is pushed or folded into, and after its undo and redo
- *   (what it holds changes); the budget is applied at the next push.
+ *   A record's memSize is read when it is pushed or folded into, and after its undo and
+ * redo (what it holds changes); the budget is applied at the next push.
  * - Barriers stop undo.
  * - A failed redo has undone its own partial work; that command and everything after it
  *   are dropped.
@@ -152,7 +152,7 @@ class UndoHistory {
  * - Not reentrant: a slot that calls back into the history is refused (Busy) or aborts.
  */
 class LinearHistory final : public UndoHistory {
- public:
+public:
   LinearHistory() = default;
   ~LinearHistory() override;
 
@@ -182,7 +182,7 @@ class LinearHistory final : public UndoHistory {
   }
   Status validate() const;
 
- private:
+private:
   void truncateRedo();
   void enforceBudget();
   /** An undone command may hold more, or less. */
@@ -227,7 +227,7 @@ class LinearHistory final : public UndoHistory {
  *   `setValueUndo` need `ctx.setExecutor` first.
  */
 class CommandExecutor {
- public:
+public:
   CommandExecutor(Runtime *rt, UndoHistory *history);
   ~CommandExecutor();
   CommandExecutor(const CommandExecutor &) = delete;
@@ -242,10 +242,10 @@ class CommandExecutor {
                                   Owned<Command> cmd,
                                   PropertyBag inputs);
   /**
-   * Why `run`, or `beginInteractive` of an Interactive command, would refuse it now: its canRun's
-   * answer, or what is wrong with its inputs or the prefix. An instance is made and discarded, and
-   * nothing else changes: a stray sticky error stays. For greying out a button: canRun slots
-   * should be cheap.
+   * Why `run`, or `beginInteractive` of an Interactive command, would refuse it now: its
+   * canRun's answer, or what is wrong with its inputs or the prefix. An instance is made
+   * and discarded, and nothing else changes: a stray sticky error stays. For greying out
+   * a button: canRun slots should be cheap.
    */
   Status canRun(Context &ctx, const CommandDef &def, PropertyBag inputs);
   /** From inside exec: runs a command into the running command's group. */
@@ -268,11 +268,12 @@ class CommandExecutor {
   Status rerunHead(Context &ctx, PropertyBag newInputs);
 
   /**
-   * Undoes and drops the commands at the history's head that `which` is true for, the newest
-   * first, until one isn't: a drag that is cancelled. They can't be redone. If undoing one leaves
-   * an error, it is dropped, and that is the end.
+   * Undoes and drops the commands at the history's head that `which` is true for, the
+   * newest first, until one isn't: a drag that is cancelled. They can't be redone. If
+   * undoing one leaves an error, it is dropped, and that is the end.
    */
-  Status revertHead(Context &ctx, litestl::util::function_ref<bool(CommandRecord &rec)> which);
+  Status revertHead(Context &ctx,
+                    litestl::util::function_ref<bool(CommandRecord &rec)> which);
 
   /** Starts an Interactive command: exec captures state, then the tool edits live.
    * `ctx` must outlive the open command: destroying the executor cancels through it. */
@@ -285,11 +286,12 @@ class CommandExecutor {
   Command *interactiveCommand();
   /** Its def. */
   const CommandDef *interactiveDef() const;
-  /** Runs `fn` on the open command with its bags and its path prefix in `ctx`, as in its slots,
-   * and returns what it returns. For live edits; commands can't be run from it. A sticky error
-   * that it leaves stays for commit. */
-  Status updateInteractive(Context &ctx,
-                           litestl::util::function_ref<Status(Context &ctx, Command &cmd)> fn);
+  /** Runs `fn` on the open command with its bags and its path prefix in `ctx`, as in its
+   * slots, and returns what it returns. For live edits; commands can't be run from it. A
+   * sticky error that it leaves stays for commit. */
+  Status
+  updateInteractive(Context &ctx,
+                    litestl::util::function_ref<Status(Context &ctx, Command &cmd)> fn);
   /** Records the open command. A sticky error left by the live phase cancels it
    * instead, and is returned. */
   Status commit(Context &ctx);
@@ -309,9 +311,9 @@ class CommandExecutor {
    * builds on Windows' 1 MB main-thread stack overflowed at 52 levels (2026-11-23). */
   static constexpr int kMaxNesting = 32;
 
- private:
-  Result<RecordPtr> start(Context &ctx, const CommandDef &def, Owned<Command> cmd,
-                          PropertyBag inputs);
+private:
+  Result<RecordPtr>
+  start(Context &ctx, const CommandDef &def, Owned<Command> cmd, PropertyBag inputs);
   Status execRecord(Context &ctx, CommandRecord &rec);
   /** exec with `rec` on the sub-command stack, where runSub is allowed. */
   Status execFrame(Context &ctx, CommandRecord &rec);
@@ -322,8 +324,8 @@ class CommandExecutor {
   /** `s`, with a pending sticky error taken and folded in. */
   Status collect(Status s);
   void discardRecord(CommandRecord &rec);
-  Result<PropertyBag> subRun(Context &ctx, const CommandDef &def, Owned<Command> cmd,
-                             PropertyBag inputs);
+  Result<PropertyBag>
+  subRun(Context &ctx, const CommandDef &def, Owned<Command> cmd, PropertyBag inputs);
 
   /* A record's redo-by-exec pushes itself so the exec's runSub calls land in it. */
   friend class CommandRecord;
@@ -346,16 +348,17 @@ class CommandExecutor {
 Result<PropertyBag> invoke(Context &ctx, std::string_view invocation);
 /** As invoke, with `prefix` as the Context's path prefix: a Layout's Tool runs with its
  * effectivePath. An empty one is none. */
-Result<PropertyBag> invokeAt(Context &ctx, const Path &prefix, std::string_view invocation);
-/** Why invoke (or beginInteractive) would refuse it: CommandExecutor::canRun's answer, or what is
- * wrong with the invocation. */
+Result<PropertyBag>
+invokeAt(Context &ctx, const Path &prefix, std::string_view invocation);
+/** Why invoke (or beginInteractive) would refuse it: CommandExecutor::canRun's answer, or
+ * what is wrong with the invocation. */
 Status canInvoke(Context &ctx, std::string_view invocation);
 Status canInvoke(Context &ctx, const struct Invocation &invocation);
 Status canInvokeAt(Context &ctx, const Path &prefix, std::string_view invocation);
 
 /** Builds the input bag for `def` from an invocation's arguments (unknown names are
  * NotFound with suggestions). A Pointer's datapath is resolved now, in `ctx`. */
-Result<PropertyBag> inputsFromInvocation(Context &ctx, const CommandDef &def,
-                                         const struct Invocation &inv);
+Result<PropertyBag>
+inputsFromInvocation(Context &ctx, const CommandDef &def, const struct Invocation &inv);
 
 } // namespace coredcc

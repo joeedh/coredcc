@@ -12,7 +12,10 @@
 namespace coredcc::detail {
 
 template <Status (*Fn)(NodeExecContext &)>
-void addBuiltin(Runtime &rt, NodeTypeRegistry &reg, NodeTypeDef &def, const std::string &name)
+void addBuiltin(Runtime &rt,
+                NodeTypeRegistry &reg,
+                NodeTypeDef &def,
+                const std::string &name)
 {
   Result<Owned<GraphKernel>> k = makeKernel<FnKernel<Fn>>(rt, name + "#kernel");
   CDCC_CHECK(k.ok(), "making a built-in kernel");

@@ -152,23 +152,27 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
                            },
                            {}});
   object.addField(PropertyDef::vecProp("location", 3), &Object::location);
-  object.addField(PropertyDef::enumProp("mode").item("OBJECT", 0).item("EDIT", 1), &Object::mode);
+  object.addField(PropertyDef::enumProp("mode").item("OBJECT", 0).item("EDIT", 1),
+                  &Object::mode);
   object.addField(PropertyDef::flagsProp("flags").item("SELECT", 1).item("HIDE", 2),
                   &Object::flags);
   PointerAccessor data;
   data.get = [](const PointerRef &self, Context &ctx) {
     Library &lib = *ctx.library();
-    return blockRef(lib, lib.resolveRef(static_cast<Object *>(self.data)->mesh), StructId());
+    return blockRef(
+        lib, lib.resolveRef(static_cast<Object *>(self.data)->mesh), StructId());
   };
   data.set = [](const PointerRef &self, Context &ctx, const PointerRef &target) {
-    return ctx.library()->writeRef(static_cast<Object *>(self.data)->mesh, target.owner.block);
+    return ctx.library()->writeRef(static_cast<Object *>(self.data)->mesh,
+                                   target.owner.block);
   };
   PointerAccessor plain = data;
   data.cell = [](const PointerRef &self, Context &) {
     return &static_cast<Object *>(self.data)->mesh;
   };
   const auto onUpdate = [](const PointerRef &, Context &) { g_dataUpdates++; };
-  object.addPointer(PropertyDef::pointerProp("data", kMesh), std::move(data)).update(onUpdate);
+  object.addPointer(PropertyDef::pointerProp("data", kMesh), std::move(data))
+      .update(onUpdate);
   /* The same without a cell. */
   object.addPointer(PropertyDef::pointerProp("plainData", kMesh), std::move(plain))
       .update(onUpdate);
@@ -176,7 +180,8 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
   PointerAccessor anyData;
   anyData.get = [](const PointerRef &self, Context &ctx) {
     Library &lib = *ctx.library();
-    return blockRef(lib, lib.resolveRef(static_cast<Object *>(self.data)->mesh), StructId());
+    return blockRef(
+        lib, lib.resolveRef(static_cast<Object *>(self.data)->mesh), StructId());
   };
   object.addPointer(PropertyDef::pointerProp("anyData", kIdBase), std::move(anyData));
   /* A fixed nested struct: no owner, no setter, so the hop is stable. */
@@ -191,7 +196,8 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
   ApiStruct t("Tool");
   t.addField(PropertyDef::floatProp("strength").range(0, 1), &Tool::strength);
   t.addField(PropertyDef::floatProp("free"), &Tool::free);
-  t.addField(PropertyDef::intProp("version").access(PropAccess::ReadOnly), &Tool::version);
+  t.addField(PropertyDef::intProp("version").access(PropAccess::ReadOnly),
+             &Tool::version);
   t.addField(PropertyDef::intProp("count"), &Tool::count);
   t.addField(PropertyDef::intProp("pick"), &Tool::pick)
       .dynamic([](PropertyDef &def, const PointerRef &self, Context &) {
@@ -206,8 +212,9 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
       });
   /* A getter that returns the wrong type, as a failed foreign getter would. */
   t.add(PropertyDef::vecProp("broken", 3),
-        ValueAccessor{[](const PointerRef &, Context &) { return PropValue(); },
-                      [](const PointerRef &, Context &, const PropValue &) { return Status(); }});
+        ValueAccessor{
+            [](const PointerRef &, Context &) { return PropValue(); },
+            [](const PointerRef &, Context &, const PropValue &) { return Status(); }});
   CollectionAccessor brushes;
   brushes.length = [](const PointerRef &, Context &) { return int64_t(2); };
   brushes.at = [](const PointerRef &self, Context &, int64_t i) {
@@ -216,7 +223,9 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
   brushes.lookup = [](const PointerRef &self, Context &, const KeySegment &key) {
     Tool *tl = static_cast<Tool *>(self.data);
     const char *k = key.text.c_str();
-    if (key.kind == KeySegment::Kind::StringKey && (strcmp(k, "A") == 0 || strcmp(k, "B") == 0)) {
+    if (key.kind == KeySegment::Kind::StringKey &&
+        (strcmp(k, "A") == 0 || strcmp(k, "B") == 0))
+    {
       return PointerRef{&tl->brushes[k[0] == 'A' ? 0 : 1], kBrush, OwnerKey()};
     }
     return PointerRef();
@@ -253,9 +262,11 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
   PointerAccessor unaddressed;
   unaddressed.get = activeGet;
   unaddressed.set = activeSet;
-  t.addPointer(PropertyDef::pointerProp("activeBrushNoAddress", kBrush), std::move(unaddressed));
+  t.addPointer(PropertyDef::pointerProp("activeBrushNoAddress", kBrush),
+               std::move(unaddressed));
   test_assert(reg.add(std::move(t)).ok());
-  Result<OwnerKey> toolOwner = reg.addRuntimeOwner("tool", kTool, [&tool]() { return (void *)&tool; });
+  Result<OwnerKey> toolOwner =
+      reg.addRuntimeOwner("tool", kTool, [&tool]() { return (void *)&tool; });
   test_assert(toolOwner.ok());
 
   ApiStruct s("Scene");
@@ -264,7 +275,8 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
     return int64_t(static_cast<Scene *>(self.data)->objects.size());
   };
   objects.at = [](const PointerRef &self, Context &ctx, int64_t i) {
-    return blockRef(*ctx.library(), static_cast<Scene *>(self.data)->objects[int(i)], kObject);
+    return blockRef(
+        *ctx.library(), static_cast<Scene *>(self.data)->objects[int(i)], kObject);
   };
   objects.lookup = [](const PointerRef &self, Context &ctx, const KeySegment &key) {
     Library &lib = *ctx.library();
@@ -305,7 +317,8 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
   };
   s.addPointer(PropertyDef::pointerProp("firstMod", kMod), std::move(firstMod));
   test_assert(reg.add(std::move(s)).ok());
-  test_assert(reg.addRuntimeOwner("scene", kScene, [&scene]() { return (void *)&scene; }).ok());
+  test_assert(
+      reg.addRuntimeOwner("scene", kScene, [&scene]() { return (void *)&scene; }).ok());
 }
 
 /* Everything a test needs, built in order and destroyed in reverse. */
@@ -322,8 +335,8 @@ struct World {
     addBlockType<Mesh>(rt, "test.Mesh", kMesh);
     registerStructs(rt, scene, tool);
     for (const char *name : {"Cube", "Sphere"}) {
-      Result<BlockHandle> m =
-          lib.create(kMeshType, std::string(name) + "Mesh", litestl::alloc::New<Mesh>("Mesh"));
+      Result<BlockHandle> m = lib.create(
+          kMeshType, std::string(name) + "Mesh", litestl::alloc::New<Mesh>("Mesh"));
       Object *o = litestl::alloc::New<Object>("Object");
       Result<BlockHandle> ob = lib.create(kObjectType, name, o);
       test_assert(m.ok() && ob.ok());

@@ -105,8 +105,7 @@ void ObjectChanges::undo(Context &ctx)
   }
   if (!pending.ok()) {
     rt.setStickyError(std::move(pending));
-  }
-  else if (!s.ok()) {
+  } else if (!s.ok()) {
     rt.setStickyError(std::move(s));
   }
 }
@@ -142,9 +141,10 @@ bool ObjectChanges::foldFrom(const ObjectChanges &next)
   bool same = changes_.size() == next.changes_.size() && lib_.get() == next.lib_.get();
   for (int i = 0; same && i < int(changes_.size()); i++) {
     const Change &a = changes_[i], &b = next.changes_[i];
-    same = a.object == b.object && a.fields == b.fields && a.after.type == b.before.type &&
-           a.after.parent == b.before.parent && a.after.flags == b.before.flags &&
-           a.after.locks == b.before.locks && sameChannels(a.after.channels, b.before.channels);
+    same = a.object == b.object && a.fields == b.fields &&
+           a.after.type == b.before.type && a.after.parent == b.before.parent &&
+           a.after.flags == b.before.flags && a.after.locks == b.before.locks &&
+           sameChannels(a.after.channels, b.before.channels);
   }
   for (int i = 0; same && i < int(changes_.size()); i++) {
     changes_[i].after = next.changes_[i].after;

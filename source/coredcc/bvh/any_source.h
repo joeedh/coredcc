@@ -34,7 +34,7 @@ struct AnyBvhSource : IfaceRef {
  * the caller to test.
  */
 class AnyBvh {
- public:
+public:
   /**
    * Asks `src` for all bounds on the calling thread, in chunks, then builds. The source
    * isn't called or kept after that, and never from a worker.
@@ -45,10 +45,11 @@ class AnyBvh {
   Status build(Runtime &rt, AnyBvhSource src, BvhOptions opts = {});
   /** Asks for all bounds in the same way, and refits (GeometryBvh::refit). */
   Status refit(Runtime &rt, AnyBvhSource src);
-  /** The same, but only asks for `count` primitives, from `first`. OutOfRange past the end of the
-   * tree. */
+  /** The same, but only asks for `count` primitives, from `first`. OutOfRange past the
+   * end of the tree. */
   Status refit(Runtime &rt, AnyBvhSource src, int first, int count);
-  /** GeometryBvh::onInvalidate. The source is asked once, or not at all if nothing has to be done. */
+  /** GeometryBvh::onInvalidate. The source is asked once, or not at all if nothing has to
+   * be done. */
   Status onInvalidate(Runtime &rt, AnyBvhSource src, InvalidateKinds kinds);
 
   const GeometryBvh<BoxSource> &boxes() const
@@ -56,8 +57,8 @@ class AnyBvh {
     return boxes_;
   }
 
-  /* For scripts. Six numbers for each primitive, as AnyBvhSource::bounds gives; InvalidArgument for
-   * another length. */
+  /* For scripts. Six numbers for each primitive, as AnyBvhSource::bounds gives;
+   * InvalidArgument for another length. */
   Status buildFrom(const litestl::util::Vector<double> &bounds);
   Status refitFrom(const litestl::util::Vector<double> &bounds);
   /** `bounds` has those of `primitives`, in that order. */
@@ -72,19 +73,19 @@ class AnyBvh {
   {
     return boxes_.bvh().growth();
   }
-  RayHit rayClosest(const double3 &origin, const double3 &dir, double tMin, double tMax) const;
+  RayHit
+  rayClosest(const double3 &origin, const double3 &dir, double tMin, double tMax) const;
   NearestHit nearest(const double3 &p, double radius) const;
-  /* What a ray, a sphere or half-spaces (four numbers each: a normal, then `w`) meet, in ascending
-   * order. None for input that isn't valid. */
-  litestl::util::Vector<int32_t> rayAll(const double3 &origin,
-                                        const double3 &dir,
-                                        double tMin,
-                                        double tMax) const;
+  /* What a ray, a sphere or half-spaces (four numbers each: a normal, then `w`) meet, in
+   * ascending order. None for input that isn't valid. */
+  litestl::util::Vector<int32_t>
+  rayAll(const double3 &origin, const double3 &dir, double tMin, double tMax) const;
   litestl::util::Vector<int32_t> sphereOverlap(const double3 &p, double radius) const;
-  litestl::util::Vector<int32_t> region(const litestl::util::Vector<double> &planes) const;
+  litestl::util::Vector<int32_t>
+  region(const litestl::util::Vector<double> &planes) const;
   static litestl::binding::types::Struct<AnyBvh> *defineBindings();
 
- private:
+private:
   GeometryBvh<BoxSource> boxes_;
 };
 

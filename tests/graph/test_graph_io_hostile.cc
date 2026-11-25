@@ -1,5 +1,5 @@
-/* Payloads of graphs that are wrong: refused, without leaks or crashes. And random graphs, saved
- * and loaded. */
+/* Payloads of graphs that are wrong: refused, without leaks or crashes. And random
+ * graphs, saved and loaded. */
 #include "edit_fixture.h"
 #include "foreach_fixture.h"
 #include "fuzz.h"
@@ -24,7 +24,9 @@ namespace {
 struct Fields {
   Library *lib;
   BlockWriter out;
-  explicit Fields(Library &l) : lib(&l), out(l) {}
+  explicit Fields(Library &l) : lib(&l), out(l)
+  {
+  }
   BytesWriter &b()
   {
     return out.bytes();
@@ -91,7 +93,8 @@ struct Fields {
   static Status readInto(Library &lib, const BlockPayload &p)
   {
     const BlockId id{ClientId::of(kCoredccClient), lib.runtime().newLocalId()};
-    Result<BlockHandle> h = lib.createWithId(TypeId::of(kGraphDefType), id, "read", nullptr);
+    Result<BlockHandle> h =
+        lib.createWithId(TypeId::of(kGraphDefType), id, "read", nullptr);
     test_assert(h.ok());
     const Status s = readPayload(lib, *h, p);
     GraphDef *def = graphDefOf(lib, *h);
@@ -107,7 +110,9 @@ struct HostileDoc : Doc {
   HostileDoc()
   {
     NodeTypeDef t("t.sum");
-    t.input(PropertyDef::floatProp("a")).input(PropertyDef::floatProp("b")).output("value", "float");
+    t.input(PropertyDef::floatProp("a"))
+        .input(PropertyDef::floatProp("b"))
+        .output("value", "float");
     addType<sumKernel>(rt, t, "t.sum");
     lib.setQuarantine(false);
     /* Blocks without data are what this test makes. */
@@ -115,7 +120,9 @@ struct HostileDoc : Doc {
   }
 };
 
-bool refused(const Status &s, const char *why, StatusCode code = StatusCode::InvalidArgument)
+bool refused(const Status &s,
+             const char *why,
+             StatusCode code = StatusCode::InvalidArgument)
 {
   if (s.code() != code || !strstr(s.message(), why)) {
     printf("expected '%s', got %s\n", why, s.toString().c_str());
@@ -151,9 +158,11 @@ void testRules()
 
   /* ids */
   for (const int64_t id : {int64_t(0), int64_t(-1), int64_t(1) << 52}) {
-    test_assert(refused(nodes(1, 0, [&](Fields &f) { f.node(id, "t.sum"); }), "isn't in 1 to"));
+    test_assert(
+        refused(nodes(1, 0, [&](Fields &f) { f.node(id, "t.sum"); }), "isn't in 1 to"));
   }
-  test_assert(nodes(1, 0, [&](Fields &f) { f.node((int64_t(1) << 52) - 1, "t.sum"); }).ok());
+  test_assert(
+      nodes(1, 0, [&](Fields &f) { f.node((int64_t(1) << 52) - 1, "t.sum"); }).ok());
   auto two = [&](int64_t a, int64_t b) {
     return nodes(2, 0, [&](Fields &f) {
       f.node(a, "t.sum");
@@ -179,34 +188,37 @@ void testRules()
   test_assert(refused(linked(5, 1, 2, "a"), "an input with two links"));
 
   /* the interface */
-  auto interface2 = [&](int64_t id, const char *name, int64_t id2, const char *name2, bool out) {
-    return with([&](Fields &f) {
-      f.count(out ? 1 : 2);
-      f.iface(id, name, "float");
-      f.entry("", PropValue::ofFloat(1));
-      if (out) {
-        f.count(1);
-      }
-      f.iface(id2, name2, "float");
-      if (!out) {
-        f.entry("", PropValue());
-        f.count(0);
-      }
-      f.count(1);
-      f.node(90, "graph.input");
-      f.count(0);
-    });
-  };
+  auto interface2 =
+      [&](int64_t id, const char *name, int64_t id2, const char *name2, bool out) {
+        return with([&](Fields &f) {
+          f.count(out ? 1 : 2);
+          f.iface(id, name, "float");
+          f.entry("", PropValue::ofFloat(1));
+          if (out) {
+            f.count(1);
+          }
+          f.iface(id2, name2, "float");
+          if (!out) {
+            f.entry("", PropValue());
+            f.count(0);
+          }
+          f.count(1);
+          f.node(90, "graph.input");
+          f.count(0);
+        });
+      };
   for (const bool out : {false, true}) {
     test_assert(interface2(1, "a", 2, "b", out).ok());
     test_assert(refused(interface2(1, "a", 1, "b", out), "an id that is there twice"));
     test_assert(refused(interface2(1, "a", 90, "b", out), "an id that is there twice"));
     for (const char *name : {"", "#1", "@1.a", "#"}) {
-      test_assert(refused(interface2(1, "a", 2, name, out), "a name interface sockets can't have"));
+      test_assert(refused(interface2(1, "a", 2, name, out),
+                          "a name interface sockets can't have"));
     }
     test_assert(interface2(1, "a", 2, "a#1@", out).ok());
   }
-  test_assert(refused(interface2(1, "a", 2, "a", false), "an interface name that is there twice"));
+  test_assert(refused(interface2(1, "a", 2, "a", false),
+                      "an interface name that is there twice"));
   test_assert(interface2(1, "a", 2, "a", true).ok());
   test_assert(refused(with([](Fields &f) {
                         f.count(1);
@@ -217,10 +229,12 @@ void testRules()
                         f.count(0);
                       }),
                       "without its default"));
-  test_assert(refused(nodes(2, 0, [](Fields &f) {
-                        f.node(1, "graph.output");
-                        f.node(2, "graph.output");
-                      }),
+  test_assert(refused(nodes(2,
+                            0,
+                            [](Fields &f) {
+                              f.node(1, "graph.output");
+                              f.node(2, "graph.output");
+                            }),
                       "a second graph.output"));
 
   /* values */
@@ -248,50 +262,59 @@ void testRules()
     return out;
   };
   for (const bool literals : {false, true}) {
-    test_assert(values(literals, {e("a", PropValue::ofInt(1)), e("b", PropValue::ofInt(1))}).ok());
-    test_assert(refused(values(literals, {e("a", PropValue::ofInt(1)), e("a", PropValue::ofInt(2))}),
-                        "a value that is there twice"));
-    test_assert(refused(values(literals, {e("a", PropValue())}), "a value that isn't set"));
+    test_assert(
+        values(literals, {e("a", PropValue::ofInt(1)), e("b", PropValue::ofInt(1))})
+            .ok());
+    test_assert(refused(
+        values(literals, {e("a", PropValue::ofInt(1)), e("a", PropValue::ofInt(2))}),
+        "a value that is there twice"));
+    test_assert(
+        refused(values(literals, {e("a", PropValue())}), "a value that isn't set"));
     BlockEntry unknown;
     unknown.name = "new";
     unknown.unknownTag = 200;
     unknown.raw.append(1);
-    test_assert(refused(values(literals, {unknown}), "isn't known", StatusCode::Unsupported));
+    test_assert(
+        refused(values(literals, {unknown}), "isn't known", StatusCode::Unsupported));
     StableRef runtimeRef;
     runtimeRef.owner = OwnerKey::ofRuntime(1);
     runtimeRef.type = StructId::of("X");
-    test_assert(refused(values(literals, {e("a", PropValue::ofPointer(runtimeRef))}), "a pointer among"));
+    test_assert(refused(values(literals, {e("a", PropValue::ofPointer(runtimeRef))}),
+                        "a pointer among"));
     BlockEntry cell = e("a", PropValue::ofInt(1));
     cell.refs.append(RefCell(RefKind::OptStrong));
     test_assert(refused(values(literals, {cell}), "a pointer among"));
   }
-  const std::vector<BlockEntry> types = {e("a", PropValue::ofInt(1)), e("a", PropValue::ofFloat(2))};
-  test_assert(values(true, types).ok() && refused(values(false, types), "a value that is there twice"));
+  const std::vector<BlockEntry> types = {e("a", PropValue::ofInt(1)),
+                                         e("a", PropValue::ofFloat(2))};
+  test_assert(values(true, types).ok() &&
+              refused(values(false, types), "a value that is there twice"));
 
   /* references */
-  auto references = [&](std::initializer_list<const char *> names, uint32_t row, bool add) {
-    return nodes(1, 0, [&](Fields &f) {
-      f.head(1, "t.unknown");
-      f.count(0);
-      f.count(0);
-      f.count(uint32_t(names.size()));
-      for (const char *name : names) {
-        f.b().str(name);
-        f.b().boolean(false);
-        if (add) {
-          f.out.ref(RefCell(RefKind::OptStrong));
-        }
-        else {
-          f.b().u32(row);
-        }
-      }
-      for (int i = 0; i < 3; i++) {
-        f.count(0);
-      }
-    });
-  };
+  auto references =
+      [&](std::initializer_list<const char *> names, uint32_t row, bool add) {
+        return nodes(1, 0, [&](Fields &f) {
+          f.head(1, "t.unknown");
+          f.count(0);
+          f.count(0);
+          f.count(uint32_t(names.size()));
+          for (const char *name : names) {
+            f.b().str(name);
+            f.b().boolean(false);
+            if (add) {
+              f.out.ref(RefCell(RefKind::OptStrong));
+            } else {
+              f.b().u32(row);
+            }
+          }
+          for (int i = 0; i < 3; i++) {
+            f.count(0);
+          }
+        });
+      };
   test_assert(references({"a", "b"}, 0, true).ok());
-  test_assert(refused(references({"a", "a"}, 0, true), "a reference that is there twice"));
+  test_assert(
+      refused(references({"a", "a"}, 0, true), "a reference that is there twice"));
   test_assert(refused(references({"a"}, 0, false), "outside the block's ref table"));
 
   /* extras: anything, once */
@@ -310,14 +333,16 @@ void testRules()
   unknown.unknownTag = 200;
   unknown.raw.append(1);
   cell.refs.append(RefCell(RefKind::OptStrong));
-  test_assert(extras({e("a", PropValue::ofInt(1)), unknown, cell, e("none", PropValue())}).ok());
+  test_assert(
+      extras({e("a", PropValue::ofInt(1)), unknown, cell, e("none", PropValue())}).ok());
   test_assert(refused(extras({unknown, cell, unknown}), "an extra that is there twice"));
   test_assert(refused(extras({e("", PropValue::ofInt(1))}), "an extra without a name"));
 
   /* versions */
   for (const char *type : {"t.unknown", "t.sum"}) {
     test_assert(nodes(1, 0, [&](Fields &f) { f.node(1, type, 0xffffffff); }).ok());
-    test_assert(refused(nodes(1, 0, [&](Fields &f) { f.node(1, type, 0); }), "version 0"));
+    test_assert(
+        refused(nodes(1, 0, [&](Fields &f) { f.node(1, type, 0); }), "version 0"));
   }
 
   /* sockets last seen */
@@ -353,8 +378,7 @@ void testRules()
       f.b().boolean(false);
       if (i == 0) {
         f.out.ref(RefCell(RefKind::OptStrong));
-      }
-      else {
+      } else {
         f.b().u32(0);
       }
     }
@@ -366,7 +390,8 @@ void testRules()
     uint64_t budget = enough ? 1 << 20 : 4000 * 2 * sizeof(NodeBlockRef) - 1;
     BlockReader in(d.lib, *p);
     detail::PayloadAccess::setBudget(in, &budget);
-    GraphDef *def = readGraphDef(in, BlockId{ClientId::of(kCoredccClient), d.rt.newLocalId()});
+    GraphDef *def =
+        readGraphDef(in, BlockId{ClientId::of(kCoredccClient), d.rt.newLocalId()});
     test_assert((def != nullptr) == enough);
     test_assert(enough || hasCode(in.bytes().status(), StatusCode::OutOfRange));
     if (def) {
@@ -376,7 +401,8 @@ void testRules()
 
   /* a block without data */
   Result<BlockHandle> empty = d.lib.create(TypeId::of(kGraphDefType), "empty", nullptr);
-  test_assert(empty.ok() && hasCode(writePayload(d.lib, *empty), StatusCode::FailedPrecondition));
+  test_assert(empty.ok() &&
+              hasCode(writePayload(d.lib, *empty), StatusCode::FailedPrecondition));
   BlockPayload newer;
   newer.version = kGraphDefPayload + 1;
   test_assert(hasCode(readPayload(d.lib, *empty, newer), StatusCode::Unsupported));
@@ -447,9 +473,12 @@ void testNames()
     if (!registered) { /* the first one is kept, also from another block */
       test_assert(nodeNamed(node[0]).ok() && ifaceOf(socket[0]).ok());
     }
-    test_assert(refused(nodeNamed(node[1]), "the id of another") && nodeNamed(node[0]).ok());
-    test_assert(refused(ifaceOf(socket[1]), "the id of another") && ifaceOf(socket[0]).ok());
-    test_assert(refused(snapshotOf(socket[1]), "the id of another") && snapshotOf(socket[0]).ok());
+    test_assert(refused(nodeNamed(node[1]), "the id of another") &&
+                nodeNamed(node[0]).ok());
+    test_assert(refused(ifaceOf(socket[1]), "the id of another") &&
+                ifaceOf(socket[0]).ok());
+    test_assert(refused(snapshotOf(socket[1]), "the id of another") &&
+                snapshotOf(socket[0]).ok());
     /* A node's name isn't a socket's. */
     test_assert(nodeNamed(socket[1]).ok() && ifaceOf(node[1]).ok());
     /* A full table refuses nothing. */
@@ -479,77 +508,85 @@ struct RandomDoc : HostileDoc {
       g[i] = newGraph(lib, names[i]);
       lib.setFlag(g[i].h, BlockFlags::Root, true);
     }
-    const char *types[] = {"t.sum", "value.int", "value.float", "graph.group", "graph.foreach",
-                           "graph.input", "graph.output", "math.float"};
+    const char *types[] = {"t.sum",
+                           "value.int",
+                           "value.float",
+                           "graph.group",
+                           "graph.foreach",
+                           "graph.input",
+                           "graph.output",
+                           "math.float"};
     const char *sockets[] = {"float", "int", "elements", "string"};
     for (int i = 0; i < 250; i++) {
       const int at = below(3);
       GraphDef &d = *g[at].def;
       switch (below(8)) {
-        case 0: {
-          const SocketSide side = below(2) ? SocketSide::Input : SocketSide::Output;
-          d.addInterface(side, std::to_string(below(6)), sockets[below(4)]).status().ignore();
+      case 0: {
+        const SocketSide side = below(2) ? SocketSide::Input : SocketSide::Output;
+        d.addInterface(side, std::to_string(below(6)), sockets[below(4)])
+            .status()
+            .ignore();
+        break;
+      }
+      case 1:
+      case 2:
+        d.addNode(types[below(8)]).status().ignore();
+        break;
+      case 3: {
+        NodeState s;
+        s.id = NodeId{int64_t(gen() >> 13) + 1};
+        s.typeName = below(2) ? "t.unknown" : "t.sum";
+        s.inputs.append(SocketInfo{"a", "a", "float"});
+        if (below(2)) {
+          s.params.append(NodeValue{"p", PropValue::ofString("x")});
+        }
+        s.refs.append(
+            NodeState::Ref{"r", below(2) ? g[below(3)].id : BlockId(), below(2) == 0});
+        d.insertNode(s).ignore();
+        break;
+      }
+      default: {
+        if (d.nodeCount() == 0) {
           break;
         }
-        case 1:
-        case 2:
-          d.addNode(types[below(8)]).status().ignore();
-          break;
-        case 3: {
-          NodeState s;
-          s.id = NodeId{int64_t(gen() >> 13) + 1};
-          s.typeName = below(2) ? "t.unknown" : "t.sum";
-          s.inputs.append(SocketInfo{"a", "a", "float"});
-          if (below(2)) {
-            s.params.append(NodeValue{"p", PropValue::ofString("x")});
+        const GraphNode &n = *d.nodeAt(below(d.nodeCount())),
+                        &m = *d.nodeAt(below(d.nodeCount()));
+        const SocketInfos ins = d.sockets(n, SocketSide::Input);
+        const SocketInfos outs = d.sockets(m, SocketSide::Output);
+        if (n.type() && hasGroup(n.type()->role) && below(2) && at < 2) {
+          d.setGroup(n.id(), g[at + 1 + below(2 - at)].id).ignore();
+        } else if (ins.size() && below(2)) {
+          const std::string k = ins[below(int(ins.size()))].key.c_str();
+          d.setLiteral(
+               n.id(), k, below(2) ? PropValue::ofFloat(below(9)) : PropValue::ofInt(1))
+              .ignore();
+          if (below(3) == 0) {
+            d.useLiteral(n.id(), k, below(2) == 0).ignore();
           }
-          s.refs.append(NodeState::Ref{"r", below(2) ? g[below(3)].id : BlockId(), below(2) == 0});
-          d.insertNode(s).ignore();
-          break;
+        } else if (ins.size() && outs.size()) {
+          d.link({m.id(), outs[below(int(outs.size()))].key.c_str()},
+                 {n.id(), ins[below(int(ins.size()))].key.c_str()})
+              .status()
+              .ignore();
+        } else if (below(12) == 0) {
+          d.removeNode(n.id()).ignore();
+        } else {
+          d.setPosition(n.id(), below(9), -below(9)).ignore();
         }
-        default: {
-          if (d.nodeCount() == 0) {
-            break;
-          }
-          const GraphNode &n = *d.nodeAt(below(d.nodeCount())), &m = *d.nodeAt(below(d.nodeCount()));
-          const SocketInfos ins = d.sockets(n, SocketSide::Input);
-          const SocketInfos outs = d.sockets(m, SocketSide::Output);
-          if (n.type() && hasGroup(n.type()->role) && below(2) && at < 2) {
-            d.setGroup(n.id(), g[at + 1 + below(2 - at)].id).ignore();
-          }
-          else if (ins.size() && below(2)) {
-            const std::string k = ins[below(int(ins.size()))].key.c_str();
-            d.setLiteral(n.id(), k, below(2) ? PropValue::ofFloat(below(9)) : PropValue::ofInt(1)).ignore();
-            if (below(3) == 0) {
-              d.useLiteral(n.id(), k, below(2) == 0).ignore();
-            }
-          }
-          else if (ins.size() && outs.size()) {
-            d.link({m.id(), outs[below(int(outs.size()))].key.c_str()},
-                   {n.id(), ins[below(int(ins.size()))].key.c_str()})
-                .status()
-                .ignore();
-          }
-          else if (below(12) == 0) {
-            d.removeNode(n.id()).ignore();
-          }
-          else {
-            d.setPosition(n.id(), below(9), -below(9)).ignore();
-          }
-        }
+      }
       }
     }
   }
 };
 
-/* As large as a file may make them. They are refused, or loaded, checked and evaluated, in about
- * the time their size takes. */
+/* As large as a file may make them. They are refused, or loaded, checked and evaluated,
+ * in about the time their size takes. */
 void testLarge()
 {
   const auto start = std::chrono::steady_clock::now();
   HostileDoc d;
-  /* A def with `n` sums, and a graph with a group of it and `links` links: in pairs, to an
-   * input inside and from an output inside. */
+  /* A def with `n` sums, and a graph with a group of it and `links` links: in pairs, to
+   * an input inside and from an output inside. */
   auto interior = [&](int links) {
     const int n = links / 2;
     const Graph inner = newGraph(d.lib, "inner");
@@ -588,7 +625,8 @@ void testLarge()
     Result<BlockPayload> p = detail::PayloadAccess::take(f.out, kGraphDefPayload);
     test_assert(p.ok());
     const BlockId id{ClientId::of(kCoredccClient), d.rt.newLocalId()};
-    Result<BlockHandle> h = d.lib.createWithId(TypeId::of(kGraphDefType), id, "read", nullptr);
+    Result<BlockHandle> h =
+        d.lib.createWithId(TypeId::of(kGraphDefType), id, "read", nullptr);
     test_assert(h.ok());
     const Status s = readPayload(d.lib, *h, *p);
     if (!s.ok()) {
@@ -602,12 +640,14 @@ void testLarge()
     GraphInstance i(&d.rt, &d.lib, id);
     for (int k = 0; k < n; k += 100) {
       test_assert(i.evaluate(SocketPath::of(NodeId{3 + k}, "value")).ok());
-      test_assert(*i.value(SocketPath::of(NodeId{3 + k}, "value")) == GraphValue::ofFloat(3));
+      test_assert(*i.value(SocketPath::of(NodeId{3 + k}, "value")) ==
+                  GraphValue::ofFloat(3));
     }
     return s;
   };
   test_assert(interior(GraphDef::kMaxInteriorLinks).ok());
-  test_assert(refused(interior(GraphDef::kMaxInteriorLinks + 2), "too many links to sockets"));
+  test_assert(
+      refused(interior(GraphDef::kMaxInteriorLinks + 2), "too many links to sockets"));
   test_assert(refused(interior(80000), "too many links to sockets"));
 
   auto interface = [&](int inputs, int outputs) {
@@ -704,8 +744,7 @@ void testRandom(int seeds)
         q.bytes.resize(size_t(keep));
         const Status s = Fields::readInto(b.lib, q);
         test_assert(s.ok() == (keep == int(p->bytes.size())));
-      }
-      else {
+      } else {
         for (int n = a.below(3); n >= 0; n--) {
           q.bytes[a.below(int(q.bytes.size()))] ^= uint8_t(1 << a.below(8));
         }
@@ -736,8 +775,13 @@ void testRandom(int seeds)
       test_assert(d.validate().ok() && writePayload(b.lib, b.lib.find(id)).ok());
     }
   }
-  printf("%d seeds: %d nodes, %d links, %d pulls, %d damaged payloads (%d accepted)\n", seeds, nodes,
-         links, pulls, damaged, accepted);
+  printf("%d seeds: %d nodes, %d links, %d pulls, %d damaged payloads (%d accepted)\n",
+         seeds,
+         nodes,
+         links,
+         pulls,
+         damaged,
+         accepted);
 }
 
 } // namespace

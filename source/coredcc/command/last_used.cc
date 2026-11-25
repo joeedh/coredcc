@@ -75,17 +75,20 @@ const PropValue *LastUsedStore::get(const CommandDef &def, std::string_view inpu
   return e && e->isSet(input) ? e->PropertyBag::get(input) : nullptr;
 }
 
-Status LastUsedStore::set(const CommandDef &def, std::string_view input, const PropValue &value)
+Status
+LastUsedStore::set(const CommandDef &def, std::string_view input, const PropValue &value)
 {
   const PropertyDef *in = def.findInput(input);
   if (!in) {
-    return Status::error(StatusCode::NotFound, (std::string(def.name().c_str()) +
-                                                " has no input '" + std::string(input) + "'")
-                                                   .c_str());
+    return Status::error(
+        StatusCode::NotFound,
+        (std::string(def.name().c_str()) + " has no input '" + std::string(input) + "'")
+            .c_str());
   }
   if (!storable(*in)) {
     return Status::error(StatusCode::Unsupported,
-                         (std::string(input) + ": Pointer, Collection and NotRemembered inputs aren't kept")
+                         (std::string(input) +
+                          ": Pointer, Collection and NotRemembered inputs aren't kept")
                              .c_str());
   }
   Entry &e = entry(def);
@@ -139,7 +142,8 @@ std::string LastUsedStore::serialize() const
       }
       Result<std::string> lit = formatLiteral(rt_, e->resolvedDef(i), e->value(i));
       if (lit.ok()) {
-        args += (args.empty() ? "" : " ") + std::string(e->def(i).apiName().c_str()) + "=" + *lit;
+        args += (args.empty() ? "" : " ") + std::string(e->def(i).apiName().c_str()) +
+                "=" + *lit;
       }
     }
     if (!args.empty()) {
@@ -171,10 +175,10 @@ Status LastUsedStore::load(std::string_view text)
     Result<Invocation> inv = parseInvocation(ln);
     if (!inv.ok()) {
       if (first.ok()) {
-        first = Status::error(StatusCode::InvalidArgument,
-                              ("LastUsed line " + std::to_string(line) + ": " +
-                               inv.status().message())
-                                  .c_str());
+        first = Status::error(
+            StatusCode::InvalidArgument,
+            ("LastUsed line " + std::to_string(line) + ": " + inv.status().message())
+                .c_str());
       }
       continue;
     }
@@ -255,28 +259,31 @@ void LastUsedStore::addCollectionTo(ApiStruct &root, std::string_view memberName
   };
   c.at = [this](const PointerRef &, Context &, int64_t i) {
     const CommandDef &def = rt_.ext<CommandRegistry>().at(int(i));
-    return PointerRef{static_cast<PropertyBag *>(&entry(def)), itemStruct(def), OwnerKey()};
+    return PointerRef{
+        static_cast<PropertyBag *>(&entry(def)), itemStruct(def), OwnerKey()};
   };
   c.lookup = [this](const PointerRef &, Context &, const KeySegment &key) {
-    const CommandDef *def = key.kind == KeySegment::Kind::StringKey ?
-                                rt_.ext<CommandRegistry>().find(key.text.c_str()) :
-                                nullptr;
+    const CommandDef *def = key.kind == KeySegment::Kind::StringKey
+                                ? rt_.ext<CommandRegistry>().find(key.text.c_str())
+                                : nullptr;
     PropertyBag *bag = def ? &entry(*def) : nullptr;
     return bag ? PointerRef{bag, itemStruct(*def), OwnerKey()} : PointerRef();
   };
   c.staticItem = [this](const KeySegment &key) -> Result<StructId> {
     const CommandRegistry &commands = rt_.ext<CommandRegistry>();
-    const CommandDef *def =
-        key.kind == KeySegment::Kind::StringKey ? commands.find(key.text.c_str()) : nullptr;
+    const CommandDef *def = key.kind == KeySegment::Kind::StringKey
+                                ? commands.find(key.text.c_str())
+                                : nullptr;
     return def ? Result<StructId>(itemStruct(*def)) : commands.unknown(key.text.c_str());
   };
   c.keyOf = [](const PointerRef &, Context &, const PointerRef &item) {
-    const auto *e = static_cast<const Entry *>(static_cast<const PropertyBag *>(item.data));
+    const auto *e =
+        static_cast<const Entry *>(static_cast<const PropertyBag *>(item.data));
     return KeySegment::stringKey(e->command->name().c_str());
   };
-  root.addCollection(PropertyDef::collectionProp(memberName, baseStruct())
-                         .access(PropAccess::NoUndo),
-                     std::move(c));
+  root.addCollection(
+      PropertyDef::collectionProp(memberName, baseStruct()).access(PropAccess::NoUndo),
+      std::move(c));
 }
 
 Status LastUsedStore::validate() const

@@ -43,7 +43,8 @@ Vector<RefCell> withoutNulls(const Vector<RefCell> &cells)
 BlockEntry cellsField(const char *name, const Vector<RefCell> &cells)
 {
   const Vector<RefCell> some = withoutNulls(cells);
-  return detail::refField(name, std::span<const RefCell>(some.data(), size_t(some.size())));
+  return detail::refField(name,
+                          std::span<const RefCell>(some.data(), size_t(some.size())));
 }
 
 /* Those that aren't null, once each. A save writes null for a deleted block. */
@@ -86,9 +87,10 @@ bool takeRate(const BlockEntry &e, const char *name, FrameRate &out)
   }
   const double num = e.value.component(0), den = e.value.component(1);
   const auto inRange = [](double v) { return v >= 1.0 && v <= FrameRate::kMax; };
-  const Result<FrameRate> r = inRange(num) && inRange(den) ?
-                                  FrameRate::of(int64_t(num), int64_t(den)) :
-                                  Result<FrameRate>(Status::error(StatusCode::OutOfRange, ""));
+  const Result<FrameRate> r =
+      inRange(num) && inRange(den)
+          ? FrameRate::of(int64_t(num), int64_t(den))
+          : Result<FrameRate>(Status::error(StatusCode::OutOfRange, ""));
   if (!r.ok() || r->num() != num || r->den() != den) {
     return false;
   }
@@ -112,7 +114,8 @@ void Scene::write(BlockWriter &out) const
 {
   const UnitSettings defaults;
   Vector<BlockEntry> fields = fields_;
-  /* A setting whose value this build couldn't read is as it was, until it is set to another. */
+  /* A setting whose value this build couldn't read is as it was, until it is set to
+   * another. */
   const auto setting = [&](const char *name, PropValue v, bool isDefault) {
     if (!isDefault || !detail::hasField(fields_, name)) {
       fields.append(detail::valueField(name, std::move(v)));
@@ -142,8 +145,8 @@ void Scene::readFrom(BlockReader &in)
     return takeCells(lib, e, kObjects, RefKind::OptStrong, cells_) ||
            takeCells(lib, e, kSelected, RefKind::Weak, selection_) ||
            detail::takeRef(e, kActive, active_.cell()) || takeNumber(e, kFrame, frame) ||
-           takeNumber(e, kStartFrame, units.startFrame) || takeRate(e, kFrameRate, units.rate) ||
-           takeUnit(e, units);
+           takeNumber(e, kStartFrame, units.startFrame) ||
+           takeRate(e, kFrameRate, units.rate) || takeUnit(e, units);
   });
 }
 

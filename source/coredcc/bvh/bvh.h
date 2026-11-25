@@ -31,8 +31,8 @@ static_assert(sizeof(BvhNode<float>) == 32);
 
 /**
  * What a Bvh is built over: primitives with bounds. An empty or non-finite box leaves the
- * primitive out. bounds() is called from worker threads when the build is parallel. At most
- * 2^31 - 1 primitives.
+ * primitive out. bounds() is called from worker threads when the build is parallel. At
+ * most 2^31 - 1 primitives.
  */
 template <class T>
 concept BvhSource = requires(const T &s, int i) {
@@ -42,7 +42,8 @@ concept BvhSource = requires(const T &s, int i) {
 };
 
 struct BvhOptions {
-  /** The most primitives in a leaf, at least 1. The default is measured: docs/bvh-leafsize.md. */
+  /** The most primitives in a leaf, at least 1. The default is measured:
+   * docs/bvh-leafsize.md. */
   int leafSize = 8;
   /** Candidate split planes per axis, 2 to 64. */
   int bins = 16;
@@ -70,13 +71,16 @@ template <class S> struct PrimBox {
  * index the result. Checks `opts`.
  */
 template <class S>
-Status buildTree(litestl::util::Vector<PrimBox<S>> &prims, const BvhOptions &opts, litestl::util::Vector<BvhNode<S>> &nodes);
+Status buildTree(litestl::util::Vector<PrimBox<S>> &prims,
+                 const BvhOptions &opts,
+                 litestl::util::Vector<BvhNode<S>> &nodes);
 
 /** The expected cost of a ray, relative to one box test (a primitive costs 1 too). */
 template <class S> double treeCost(const litestl::util::Vector<BvhNode<S>> &nodes);
 
 /** The square root of an eighth of each node's surface area. */
-template <class S> litestl::util::Vector<double> nodeSizes(const litestl::util::Vector<BvhNode<S>> &nodes);
+template <class S>
+litestl::util::Vector<double> nodeSizes(const litestl::util::Vector<BvhNode<S>> &nodes);
 /** See Bvh::growth(). `built` is nodeSizes() of when they were built. */
 template <class S>
 double treeGrowth(const litestl::util::Vector<BvhNode<S>> &nodes,
@@ -90,7 +94,7 @@ double treeGrowth(const litestl::util::Vector<BvhNode<S>> &nodes,
  * queries. Queries may run on several threads, but not during build() or a refit.
  */
 template <class S> class Bvh {
- public:
+public:
   using Scalar = S;
   using Node = BvhNode<S>;
 
@@ -152,8 +156,8 @@ template <class S> class Bvh {
    *
    * - A primitive whose box is empty or not finite now stays in the tree without bounds
    *   (present()), and can come back.
-   * - FailedPrecondition, and nothing changes: for another number of primitives, or when one
-   *   that the build left out is usable now.
+   * - FailedPrecondition, and nothing changes: for another number of primitives, or when
+   * one that the build left out is usable now.
    * - The tree gets slower as primitives move apart: see growth().
    */
   template <BvhSource Src>
@@ -172,16 +176,20 @@ template <class S> class Bvh {
     const int count = int(order_.size());
     std::atomic<bool> anyAbsent{false};
     const int perNode = nodes_.size() > 0 ? count / int(nodes_.size()) + 1 : 1;
-    bvh::forChunks(
-        int(nodes_.size()), kChunk / perNode + 1, parallel_, [&](litestl::util::IndexRange r) {
-          bool absent = false;
-          for (int i : r) {
-            absent = fitLeaf(nodes_[i], [&](int k) { return src.bounds(order_[k]); }) || absent;
-          }
-          if (absent) {
-            anyAbsent = true;
-          }
-        });
+    bvh::forChunks(int(nodes_.size()),
+                   kChunk / perNode + 1,
+                   parallel_,
+                   [&](litestl::util::IndexRange r) {
+                     bool absent = false;
+                     for (int i : r) {
+                       absent = fitLeaf(nodes_[i],
+                                        [&](int k) { return src.bounds(order_[k]); }) ||
+                                absent;
+                     }
+                     if (absent) {
+                       anyAbsent = true;
+                     }
+                   });
     /* Children come after their parent, so backwards is bottom up. */
     for (int i = int(nodes_.size()) - 1; i >= 0; i--) {
       fitInner(i);
@@ -199,11 +207,13 @@ template <class S> class Bvh {
   }
 
   /**
-   * Takes new bounds of a few primitives, given by their positions in order(). `bounds(int) ->
-   * Box3<S>` gives those of any position, and is called from workers. The time and the memory are
-   * those of the leaves concerned. The first call also makes a table of parents.
+   * Takes new bounds of a few primitives, given by their positions in order().
+   * `bounds(int) -> Box3<S>` gives those of any position, and is called from workers. The
+   * time and the memory are those of the leaves concerned. The first call also makes a
+   * table of parents.
    */
-  template <class Bounds> void refitPositions(std::span<const int> positions, Bounds &&bounds)
+  template <class Bounds>
+  void refitPositions(std::span<const int> positions, Bounds &&bounds)
   {
     if (positions.empty()) {
       return;
@@ -258,8 +268,8 @@ template <class S> class Bvh {
     }
   }
 
-  /** A primitive's position in order(), or -1 if the build left it out. The first call makes a
-   * table. */
+  /** A primitive's position in order(), or -1 if the build left it out. The first call
+   * makes a table. */
   int position(int primitive)
   {
     if (positions_.size() == 0 && size_ > 0) {
@@ -289,8 +299,8 @@ template <class S> class Bvh {
   {
     return order_;
   }
-  /** Whether the primitive at a leaf position has bounds. One that hasn't, since a refit, must be
-   * ignored by whoever traverses the tree. */
+  /** Whether the primitive at a leaf position has bounds. One that hasn't, since a refit,
+   * must be ignored by whoever traverses the tree. */
   bool present(int position) const
   {
     return absent_.size() == 0 || absent_[position] == 0;
@@ -303,16 +313,16 @@ template <class S> class Bvh {
   {
     return nodes_.size() == 0 ? Box3<S>() : boxOf(nodes_[0]);
   }
-  /** The SAH cost of the tree, for a ray anywhere. 0 when empty. For comparing trees over the same
-   * boxes: when one box is huge, everything else hardly counts. */
+  /** The SAH cost of the tree, for a ray anywhere. 0 when empty. For comparing trees over
+   * the same boxes: when one box is huge, everything else hardly counts. */
   double cost() const
   {
     return bvh::treeCost(nodes_);
   }
   /**
-   * How much looser refits have made the tree: the mean over its nodes of their surface area
-   * divided by what it was when the tree was built, each counted as 1 to 8. 1 after a build.
-   * Rebuild when it is about 2. It takes a pass over the nodes.
+   * How much looser refits have made the tree: the mean over its nodes of their surface
+   * area divided by what it was when the tree was built, each counted as 1 to 8. 1 after
+   * a build. Rebuild when it is about 2. It takes a pass over the nodes.
    */
   double growth() const
   {
@@ -388,7 +398,7 @@ template <class S> class Bvh {
     }
   }
 
- private:
+private:
   static constexpr int kChunk = 1 << 14;
 
   static bool usable(const Box3<S> &b)

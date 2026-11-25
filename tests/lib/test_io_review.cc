@@ -1,5 +1,5 @@
-/* Regressions from the review of library IO (docs/reports/feature-report-library-io-2026-11-24.md),
- * by the report's numbers. */
+/* Regressions from the review of library IO
+ * (docs/reports/feature-report-library-io-2026-11-24.md), by the report's numbers. */
 #include "coredcc/lib/attachment.h"
 #include "coredcc/lib/duplicate.h"
 
@@ -29,7 +29,9 @@ std::vector<BlockId> cellsOf(BagRefs &refs)
 {
   std::vector<BlockId> out;
   RefVisitor v(
-      [](void *to, RefCell &c) { static_cast<std::vector<BlockId> *>(to)->push_back(c.target); },
+      [](void *to, RefCell &c) {
+        static_cast<std::vector<BlockId> *>(to)->push_back(c.target);
+      },
       &out);
   refs.visit(v);
   return out;
@@ -53,7 +55,8 @@ std::string textOf(const Bytes &b)
 
 bool sameSpan(std::span<const uint8_t> a, const Bytes &b)
 {
-  return a.size() == size_t(b.size()) && (a.empty() || memcmp(a.data(), b.data(), a.size()) == 0);
+  return a.size() == size_t(b.size()) &&
+         (a.empty() || memcmp(a.data(), b.data(), a.size()) == 0);
 }
 
 } // namespace
@@ -66,7 +69,8 @@ static void test_bag_refs()
   test_assert(bag.add(PropertyDef::floatProp("size")).ok());
   test_assert(bag.add(PropertyDef::pointerProp("p", StructId::of("acme.Mesh"))).ok());
   BagRefs refs(RefKind::Weak);
-  test_assert(refs.kind() == RefKind::Weak && !refs.find("p") && refs.value(bag, 1) == bag.value(1));
+  test_assert(refs.kind() == RefKind::Weak && !refs.find("p") &&
+              refs.value(bag, 1) == bag.value(1));
   test_assert(refs.set(bag, "nope", PropValue()).code() == StatusCode::NotFound);
   test_assert(refs.set(bag, "size", PropValue::ofFloat(2)).ok() && !refs.find("size"));
   test_assert(refs.value(bag, 0) == PropValue::ofFloat(2));
@@ -84,15 +88,19 @@ static void test_bag_refs()
   /* An unlink too. */
   refs.cell("p").target = BlockId();
   test_assert(refs.value(bag, 1) == PropValue::nullPointer() && refs.isSet(bag, 1));
-  test_assert(refs.set(bag, "p", pointerTo(cid(3))).ok() && refs.find("p")->target == cid(3));
-  test_assert(refs.reset(bag, "p").ok() && refs.find("p")->isNull() && !refs.isSet(bag, 1));
-  test_assert(refs.reset(bag, "size").ok() && refs.reset(bag, "nope").code() == StatusCode::NotFound);
+  test_assert(refs.set(bag, "p", pointerTo(cid(3))).ok() &&
+              refs.find("p")->target == cid(3));
+  test_assert(refs.reset(bag, "p").ok() && refs.find("p")->isNull() &&
+              !refs.isSet(bag, 1));
+  test_assert(refs.reset(bag, "size").ok() &&
+              refs.reset(bag, "nope").code() == StatusCode::NotFound);
 
   /* A cell written before the bag: the block itself. */
   BagRefs cold(RefKind::Strong);
   PropertyBag empty = bag;
   cold.cell("p").target = cid(4);
-  test_assert(cold.isSet(empty, 1) && cold.value(empty, 1).asPointer().type == StructId::of("acme.Mesh"));
+  test_assert(cold.isSet(empty, 1) &&
+              cold.value(empty, 1).asPointer().type == StructId::of("acme.Mesh"));
   test_assert(cold.value(empty, 1).asPointer().owner == OwnerKey::ofBlock(cid(4)) &&
               cold.value(empty, 1).asPointer().key.size() == 0);
   /* A pointer into a runtime owner has no block. */
@@ -160,7 +168,8 @@ static void test_duplicated_bag()
       IoWorld w;
       const BlockHandle a = w.doc(1, "a", type);
       w.root(a);
-      test_assert(w.data(a)->bagRefs.set(w.data(a)->bag, "target", pointerTo(w.id(a))).ok());
+      test_assert(
+          w.data(a)->bagRefs.set(w.data(a)->bag, "target", pointerTo(w.id(a))).ok());
       w.lib.noteRefsChanged();
       w.lib.setAuditRelations(audit);
       const BlockHandle set[] = {a};
@@ -371,7 +380,8 @@ static void test_rekey_context()
     test_assert(&b.library() == &w.lib && &context.library() == &w.lib);
     test_assert(!context.isFree(BlockId()) && !context.isFree(cid(5, kAcme)));
     test_assert(context.isFree(cid(7, kAcme)));
-    test_assert(context.isFree(cid(6, kAcme)) == (calls == 1)); /* the first block got it */
+    test_assert(context.isFree(cid(6, kAcme)) ==
+                (calls == 1)); /* the first block got it */
     return cid(calls == 1 ? 6 : 7, kAcme);
   };
   test_assert(w.append(bytes).ok() && calls == 2 && w.lib.size() == 3);
@@ -382,7 +392,8 @@ static void test_rekey_context()
 
 static void test_newer_codes()
 {
-  const auto with = [](uint32_t version, litestl::util::function<void(RawFile &)> change) {
+  const auto with = [](uint32_t version,
+                       litestl::util::function<void(RawFile &)> change) {
     RawFile f;
     f.version = version;
     f.records.push_back(RawRecord());
@@ -393,13 +404,16 @@ static void test_newer_codes()
   const auto refused = [](const RawFile &f, const char *what) {
     IoWorld w;
     Status s = w.load(f.build());
-    const StatusCode want = f.version > 1 ? StatusCode::Unsupported : StatusCode::InvalidArgument;
+    const StatusCode want =
+        f.version > 1 ? StatusCode::Unsupported : StatusCode::InvalidArgument;
     return s.code() == want && hasMsg(s, what) && w.lib.size() == 0;
   };
   for (uint32_t version : {1u, 2u}) {
-    test_assert(refused(with(version, [](RawFile &f) { f.records[0].rows = {{9, LocalId{7, 2}}}; }),
-                        "unknown kind of reference"));
-    test_assert(refused(with(version, [](RawFile &f) { f.records[0].as = 9; }), "unknown way"));
+    test_assert(refused(
+        with(version, [](RawFile &f) { f.records[0].rows = {{9, LocalId{7, 2}}}; }),
+        "unknown kind of reference"));
+    test_assert(
+        refused(with(version, [](RawFile &f) { f.records[0].as = 9; }), "unknown way"));
     RawFile blob = with(version, [](RawFile &f) {
       f.records[0].blob = 1;
       f.blobs.push_back(bytesOf({1}));
@@ -424,7 +438,8 @@ static void test_extension()
     f.records.push_back(r);
     return f.file();
   };
-  /* A file of an older build's is read, kept and written again, whatever the record is. */
+  /* A file of an older build's is read, kept and written again, whatever the record is.
+   */
   IoWorld w;
   test_assert(w.load(file(kept)).ok());
   const BlockHandle h = w.at(1);
@@ -463,9 +478,11 @@ static void test_extension()
   test_assert(c.load(f.file(), &report).ok() && report.missingType == 1);
   test_assert(has(issueText(report.issues), "newer build") && c.docs.lastVersion == 0);
   Result<LoadReport> resolved = detail::resolvePlaceholders(c.lib);
-  test_assert(resolved.ok() && resolved->blocks.size() == 0 && resolved->missingType == 1);
+  test_assert(resolved.ok() && resolved->blocks.size() == 0 &&
+              resolved->missingType == 1);
   IoWorld c2;
-  test_assert(c2.load(c.save()).ok() && c2.lib.get(c2.at(1))->placeholderPayload().size() == 3);
+  test_assert(c2.load(c.save()).ok() &&
+              c2.lib.get(c2.at(1))->placeholderPayload().size() == 3);
   test_assert(sameSpan(c2.lib.get(c2.at(1))->fileExtension(), critical));
   IoWorld host;
   test_assert(host.load(file(critical)).ok());
@@ -478,7 +495,8 @@ static void test_extension()
   const auto damaged = [&](const Bytes &ext, const char *what) {
     IoWorld bad;
     Status st = bad.load(file(ext));
-    return st.code() == StatusCode::InvalidArgument && hasMsg(st, what) && bad.lib.size() == 0;
+    return st.code() == StatusCode::InvalidArgument && hasMsg(st, what) &&
+           bad.lib.size() == 0;
   };
   test_assert(damaged(extension({{5, 1}, {1, 1}}), "out of order"));
   test_assert(damaged(extension({{5, 1}, {5, 1}}), "out of order"));
@@ -530,8 +548,8 @@ static void test_key_budget()
     const size_t took = litestl::alloc::getMemorySize() - before;
     test_assert(took <= limit - left + 4096);
     test_assert(in.bytes().ok() == (limit > (uint64_t(4) << 20)));
-    test_assert(in.bytes().ok() ? back.size() == 100 :
-                                  in.bytes().status().code() == StatusCode::OutOfRange);
+    test_assert(in.bytes().ok() ? back.size() == 100
+                                : in.bytes().status().code() == StatusCode::OutOfRange);
   }
 }
 

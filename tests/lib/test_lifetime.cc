@@ -47,7 +47,8 @@ static void test_pin_kinds()
               w.lib.get(a)->pins(PinKind::History) == 1);
   w.lib.unpin(a);
   w.lib.unpin(a);
-  test_assert(w.lib.get(a)->pins() == 1 && *w.lib.collect() == 0); /* a History pin is a root */
+  test_assert(w.lib.get(a)->pins() == 1 &&
+              *w.lib.collect() == 0); /* a History pin is a root */
   w.lib.unpin(a, PinKind::History);
   test_assert(*w.lib.collect() == 1 && !w.lib.get(a));
   w.lib.unpin(a); /* a stale handle: ignored */
@@ -78,7 +79,8 @@ static void test_doomed_block()
 
   /* Another block takes the id; refs find it, also through a cached handle. */
   thing(w.lib, user)->parent.cache = a;
-  Result<BlockHandle> b = w.lib.reviveAs(kThing, id, "b", litestl::alloc::New<Thing>("Thing"));
+  Result<BlockHandle> b =
+      w.lib.reviveAs(kThing, id, "b", litestl::alloc::New<Thing>("Thing"));
   test_assert(b.ok() && w.lib.find(id) == *b);
   test_assert(w.lib.resolveRef(thing(w.lib, user)->parent) == *b);
   test_assert(w.valid());
@@ -172,7 +174,8 @@ static void test_release_waits()
   test_assert(w.host.log == "destroy garbage;destroy c;" && !w.lib.get(c));
   w.host.onDestroy = {};
 
-  /* While marking: after the collection. A failing destroy then is that collect's error. */
+  /* While marking: after the collection. A failing destroy then is that collect's error.
+   */
   for (int fail = 0; fail < 3; fail++) {
     const BlockHandle m = makeThing(w.lib, "m");
     w.lib.pin(m);
@@ -237,14 +240,16 @@ static void test_release_rechecks_users()
     w.lib.unpin(a);
     if (taken) {
       /* The ref means the new block: the old one goes. */
-      test_assert(!w.lib.get(a) && w.lib.resolveRef(thing(w.lib, user)->owner) == w.lib.find(id));
-    }
-    else {
+      test_assert(!w.lib.get(a) &&
+                  w.lib.resolveRef(thing(w.lib, user)->owner) == w.lib.find(id));
+    } else {
       /* As if destroyFromHistory had been refused. */
-      test_assert(w.lib.get(a) && w.state(a) == BlockState::InHistory && w.lib.find(id) == a);
+      test_assert(w.lib.get(a) && w.state(a) == BlockState::InHistory &&
+                  w.lib.find(id) == a);
       test_assert(w.lib.destroyFromHistory(a).code() == StatusCode::FailedPrecondition);
       test_assert(w.lib.restoreFromHistory(a).ok());
-      test_assert(static_cast<Thing *>(w.lib.resolveData(thing(w.lib, user)->owner))->value == 9);
+      test_assert(
+          static_cast<Thing *>(w.lib.resolveData(thing(w.lib, user)->owner))->value == 9);
     }
     test_assert(w.valid());
   }
@@ -268,8 +273,9 @@ static void test_deferred_errors()
   makeThing(w.lib, "garbage");
   w.host.log.clear();
   Result<int> n = w.lib.collect();
-  test_assert(!n.ok() && hasMsg(n.status(), "destroy threw") && hasMsg(n.status(), "19 more"));
-  test_assert(w.host.log == "destroy garbage;"); /* it did its own work first */
+  test_assert(!n.ok() && hasMsg(n.status(), "destroy threw") &&
+              hasMsg(n.status(), "19 more"));
+  test_assert(w.host.log == "destroy garbage;");   /* it did its own work first */
   test_assert(*w.lib.collect() == 0 && w.valid()); /* reported once */
 
   /* A sticky error that was pending stays. */
@@ -302,7 +308,8 @@ static void test_library_gone()
   registerThing(rt, host);
   LibraryRef ref;
   LibraryPin outer;
-  test_assert(!ref.get() && !outer.library() && !outer.dataAlive() && !outer.copy().library());
+  test_assert(!ref.get() && !outer.library() && !outer.dataAlive() &&
+              !outer.copy().library());
   bool sawNull = false;
   {
     Library lib(&rt);
@@ -350,11 +357,12 @@ static void test_library_pin()
   LibraryPin p(w.lib, a);
   const BlockId id = w.lib.get(a)->id();
   test_assert(p.dataAlive());
-  test_assert(w.lib.onHostDestroyed(id).ok() && !p.dataAlive()); /* pins don't stop a host */
+  test_assert(w.lib.onHostDestroyed(id).ok() &&
+              !p.dataAlive()); /* pins don't stop a host */
   test_assert(w.lib.onHostRestored(id).ok() && p.dataAlive());
   test_assert(w.drop(a).ok() && w.state(a) == BlockState::Doomed && p.dataAlive());
-  Result<BlockHandle> ph = w.lib.addPlaceholder(BlockId{ClientId::of(kCoredccClient), {1, 2}},
-                                                "gone.T", "ph", {});
+  Result<BlockHandle> ph = w.lib.addPlaceholder(
+      BlockId{ClientId::of(kCoredccClient), {1, 2}}, "gone.T", "ph", {});
   test_assert(ph.ok() && !LibraryPin(w.lib, *ph).dataAlive());
   p.reset();
   test_assert(!w.lib.get(a) && w.valid());

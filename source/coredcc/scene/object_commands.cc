@@ -60,7 +60,8 @@ struct SetFlags : MaskCommand {
     ObjectFlags out = ObjectFlags::None;
     return run(ctx, [&](const ObjectRead &r, ObjectChanges::Values &v) {
       if (!r.iface.hasSetFlags()) {
-        return Status::error(StatusCode::Unsupported, "this object's flags can't be changed");
+        return Status::error(StatusCode::Unsupported,
+                             "this object's flags can't be changed");
       }
       out = ObjectFlags(on ? r.info.flags | flags : r.info.flags & ~flags);
       v.flags = uint32_t(out) == r.info.flags ? nullptr : &out;
@@ -85,7 +86,8 @@ struct SetLocks : MaskCommand {
     uint64_t out = 0;
     return run(ctx, [&](const ObjectRead &r, ObjectChanges::Values &v) {
       if (!r.iface.hasSetLocks()) {
-        return Status::error(StatusCode::Unsupported, "this object's channels can't be locked");
+        return Status::error(StatusCode::Unsupported,
+                             "this object's channels can't be locked");
       }
       if (!r.type) {
         return Status::error(StatusCode::FailedPrecondition,
@@ -119,7 +121,9 @@ struct SetLocks : MaskCommand {
 /* The numbers of a text, with spaces, commas or semicolons between them. */
 bool parseNumbers(const char *text, Vector<double> &out)
 {
-  const auto between = [](char c) { return c == ' ' || c == ',' || c == ';' || c == '\n'; };
+  const auto between = [](char c) {
+    return c == ' ' || c == ',' || c == ';' || c == '\n';
+  };
   while (*text) {
     if (between(*text)) {
       text++;
@@ -191,9 +195,9 @@ struct SetWorld : ChangesCommand {
       t.depth = place->depth;
       out.append(t);
     }
-    std::stable_sort(out.data(), out.data() + out.size(), [](const Target &a, const Target &b) {
-      return a.depth < b.depth;
-    });
+    std::stable_sort(out.data(),
+                     out.data() + out.size(),
+                     [](const Target &a, const Target &b) { return a.depth < b.depth; });
     return out;
   }
   Status exec(Context &ctx)
@@ -203,7 +207,8 @@ struct SetWorld : ChangesCommand {
     if (!list.ok()) {
       return list.status();
     }
-    const bool closest = ctx.inputs()->get("mode")->asEnum() == int64_t(SetWorldMode::Closest);
+    const bool closest =
+        ctx.inputs()->get("mode")->asEnum() == int64_t(SetWorldMode::Closest);
     const double time = s.scene->time();
     detail::Skips skips;
     int done = 0, approximate = 0;
@@ -235,12 +240,14 @@ struct SetWorld : ChangesCommand {
                                      int &approximate)
   {
     Result<ObjectRead> r = readObjectAt(lib, t.object, time);
-    Result<TransformState> parent = r.ok() ? parents.stateAbove(t.object, *r) : r.status();
+    Result<TransformState> parent =
+        r.ok() ? parents.stateAbove(t.object, *r) : r.status();
     if (!parent.ok()) {
       return parent.status();
     }
     if (!r->type) {
-      return Status::error(StatusCode::FailedPrecondition, "its transform type isn't registered");
+      return Status::error(StatusCode::FailedPrecondition,
+                           "its transform type isn't registered");
     }
     Result<ChannelBlock> c =
         solveWorld(*r->type, r->solveCtx(), t.matrix, *parent, SetWorldMode::Exact);

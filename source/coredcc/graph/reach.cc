@@ -47,7 +47,7 @@ std::string ReachKeys::toString() const
 
 /** Computes tables for the defs below one def, each once per set of interior keys. */
 class GraphReachBuilder {
- public:
+public:
   explicit GraphReachBuilder(const GraphDef &root)
       : key_(GraphPassKey::of(root.runtime(), root.library()))
   {
@@ -76,11 +76,9 @@ class GraphReachBuilder {
         const SlotKey slot{target, text};
         if (const Slot *s = slots_.lookup_ptr(slot)) {
           recursive_ |= !s->done;
-        }
-        else if (std::shared_ptr<const GraphReach> r = cached(*target, text)) {
+        } else if (std::shared_ptr<const GraphReach> r = cached(*target, text)) {
           slots_.add(slot, Slot{true, r});
-        }
-        else {
+        } else {
           push(*target, inner, text);
         }
         continue;
@@ -95,9 +93,9 @@ class GraphReachBuilder {
     return nullptr;
   }
 
- private:
-  /* Cached tables of one def, and what they hold. Those of keys that aren't used any more go
-   * with the others. */
+private:
+  /* Cached tables of one def, and what they hold. Those of keys that aren't used any more
+   * go with the others. */
   static constexpr int kMaxTables = 256;
   static constexpr size_t kMaxCells = size_t(1) << 20;
 
@@ -110,7 +108,8 @@ class GraphReachBuilder {
     std::string name;
     uint64_t computeHash() const
     {
-      return detail::fnv1a64(name.c_str(), uint64_t(uintptr_t(def)) * 0x9E3779B97F4A7C15ull);
+      return detail::fnv1a64(name.c_str(),
+                             uint64_t(uintptr_t(def)) * 0x9E3779B97F4A7C15ull);
     }
     bool operator==(const SlotKey &) const = default;
   };
@@ -133,7 +132,8 @@ class GraphReachBuilder {
     Vector<GroupEntry> groups;
   };
 
-  std::shared_ptr<const GraphReach> cached(const GraphDef &def, const std::string &name) const
+  std::shared_ptr<const GraphReach> cached(const GraphDef &def,
+                                           const std::string &name) const
   {
     const GraphDef::CachedReach *c = def.reach_.lookup_ptr(name.c_str());
     return c && c->key == key_ ? c->reach : nullptr;
@@ -150,8 +150,8 @@ class GraphReachBuilder {
     stack_.append(std::move(e));
   }
 
-  /* The keys that matter inside a group: those its node uses, and the rest of the outer ones
-   * that lead into it. */
+  /* The keys that matter inside a group: those its node uses, and the rest of the outer
+   * ones that lead into it. */
   static ReachKeys keysInside(const Entry &e, const GraphTopology::Group &g)
   {
     ReachKeys out;
@@ -236,8 +236,10 @@ class GraphReachBuilder {
   }
 
   /* Walks up from each interface output and each interior output. `seen` holds, per input
-   * socket, the last of them whose walk visited it; `reached` the same for the columns. */
-  static void compute(const Entry &e, const Vector<const GraphReach *> &groups, GraphReach &out)
+   * socket, the last of them whose walk visited it; `reached` the same for the columns.
+   */
+  static void
+  compute(const Entry &e, const Vector<const GraphReach *> &groups, GraphReach &out)
   {
     const GraphTopology &t = *e.topo;
     const int nIns = int(e.def->interfaceSockets(SocketSide::Input).size());
@@ -285,8 +287,7 @@ class GraphReachBuilder {
         const int at = i < ge.interfaceIns ? n.inBegin + i : ge.ins[i - ge.interfaceIns];
         if (at >= 0) {
           visit(at);
-        }
-        else {
+        } else {
           reach(nIns + ~at);
         }
       }
@@ -299,14 +300,11 @@ class GraphReachBuilder {
     auto fromOutput = [&](const GraphTopology::Node &n, int output) {
       if (n.role == NodeRole::Input) {
         reach(output);
-      }
-      else if (n.role == NodeRole::Group && output < n.interfaceOuts) {
+      } else if (n.role == NodeRole::Group && output < n.interfaceOuts) {
         throughGroup(n, output);
-      }
-      else if (n.role == NodeRole::Group) {
+      } else if (n.role == NodeRole::Group) {
         throughGroup(n, interiorRow(n, t.groups[n.group].interiorOutput(n, output).key));
-      }
-      else if (isOneStep(n.role)) {
+      } else if (isOneStep(n.role)) {
         for (int i = 0; i < n.inCount; i++) {
           visit(n.inBegin + i);
         }
@@ -319,8 +317,7 @@ class GraphReachBuilder {
         if (t.outputNode >= 0) {
           visit(t.nodes[t.outputNode].inBegin + row);
         }
-      }
-      else {
+      } else {
         const InteriorKey &k = e.keys.outs[row - nOuts];
         const bool here = k.groups.size() == 0;
         const int at = t.find(here ? k.node : k.groups[0]);
@@ -329,8 +326,7 @@ class GraphReachBuilder {
           if (o >= 0) {
             fromOutput(t.nodes[at], o);
           }
-        }
-        else if (at >= 0 && t.nodes[at].role == NodeRole::Group) {
+        } else if (at >= 0 && t.nodes[at].role == NodeRole::Group) {
           throughGroup(t.nodes[at], interiorRow(t.nodes[at], k.inner()));
         }
       }
@@ -339,8 +335,7 @@ class GraphReachBuilder {
         const GraphTopology::Input &in = t.inputs[input];
         if (const int *k = replaced.lookup_ptr(input)) {
           reach(nIns + *k);
-        }
-        else if (in.fromNode >= 0) {
+        } else if (in.fromNode >= 0) {
           fromOutput(t.nodes[in.fromNode], in.fromOutput);
         }
       }

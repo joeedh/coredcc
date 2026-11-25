@@ -26,7 +26,8 @@ struct Recorder {
   }
 };
 
-static ScopedConnection watchOk(ChangeBus &bus, Context &ctx, const char *path, Recorder &r)
+static ScopedConnection
+watchOk(ChangeBus &bus, Context &ctx, const char *path, Recorder &r)
 {
   Result<ScopedConnection> c = bus.watch(ctx, path, r.fn());
   test_assert(c.ok());
@@ -47,7 +48,8 @@ static void test_aliases()
 
   test_assert(setValue(ctx, "objects.active.location[0]", PropValue::ofFloat(5)).ok());
   test_assert(bus.flush() == 2);
-  test_assert(byName.calls == 1 && byActive.calls == 1 && other.calls == 0 && unrelated.calls == 0);
+  test_assert(byName.calls == 1 && byActive.calls == 1 && other.calls == 0 &&
+              unrelated.calls == 0);
   test_assert(byName.last == PropValue::ofVec3(5, 0, 0));
 
   /* No change, no call: flushing again, or writing the same value. */
@@ -55,10 +57,12 @@ static void test_aliases()
   test_assert(setValue(ctx, "objects[0].location", PropValue::ofVec3(5, 0, 0)).ok());
   test_assert(bus.flush() == 0 && byName.calls == 1);
 
-  /* `active` moves: only the epoch says so, and only the active watcher's value changes. */
+  /* `active` moves: only the epoch says so, and only the active watcher's value changes.
+   */
   w.scene.active = 1;
   bus.bumpEpoch();
-  test_assert(bus.flush() == 1 && byActive.calls == 2 && byActive.last == PropValue::ofVec3(0, 0, 0));
+  test_assert(bus.flush() == 1 && byActive.calls == 2 &&
+              byActive.last == PropValue::ofVec3(0, 0, 0));
   test_assert(byName.calls == 1);
 
   /* Direct C++ mutation plus notify. */
@@ -115,12 +119,14 @@ static void test_failures_and_reentrancy()
   ScopedConnection a = watchOk(bus, ctx, "objects.active.name", r);
   w.scene.active = -1;
   bus.bumpEpoch();
-  test_assert(bus.flush() == 1 && r.last.isNone() && r.lastStatus.code() == StatusCode::NotFound);
+  test_assert(bus.flush() == 1 && r.last.isNone() &&
+              r.lastStatus.code() == StatusCode::NotFound);
   bus.bumpEpoch();
   test_assert(bus.flush() == 0);
   w.scene.active = 1;
   bus.bumpEpoch();
-  test_assert(bus.flush() == 1 && r.last == PropValue::ofString("Sphere") && r.lastStatus.ok());
+  test_assert(bus.flush() == 1 && r.last == PropValue::ofString("Sphere") &&
+              r.lastStatus.ok());
 
   /* A watch on a malformed path fails at once. */
   test_assert(!bus.watch(ctx, "objects[", r.fn()).ok());
@@ -131,17 +137,19 @@ static void test_failures_and_reentrancy()
   Recorder late;
   int selfCalls = 0;
   const OwnerKey tool = w.rt.ext<ApiRegistry>().runtimeOwner("tool").owner;
-  Result<ScopedConnection> s = bus.watch(ctx, "tool.count", [&](const PropValue &, const Status &) {
-    selfCalls++;
-    self.disconnect();
-    added = watchOk(bus, ctx, "tool.pick", late);
-    bus.notify(tool, "pick");
-  });
+  Result<ScopedConnection> s =
+      bus.watch(ctx, "tool.count", [&](const PropValue &, const Status &) {
+        selfCalls++;
+        self.disconnect();
+        added = watchOk(bus, ctx, "tool.pick", late);
+        bus.notify(tool, "pick");
+      });
   test_assert(s.ok());
   self = std::move(s).value();
   test_assert(setValue(ctx, "tool.count", PropValue::ofInt(9)).ok());
   test_assert(bus.flush() == 1 && selfCalls == 1 && !self.connected());
-  test_assert(bus.pendingCount() == 1 && late.calls == 0); /* delivered by the next flush */
+  test_assert(bus.pendingCount() == 1 &&
+              late.calls == 0); /* delivered by the next flush */
   w.tool.pick = 2;
   test_assert(bus.flush() == 1 && late.calls == 1);
   test_assert(bus.watcherCount() == 2 && bus.validate().ok());
@@ -313,7 +321,8 @@ static void test_change_listeners()
   test_assert(setValue(ctx, "tool.strength", PropValue::ofFloat(0.5)).ok());
   test_assert(calls == 3 && member == "strength" && aspects == kAllAspects);
   bus.notifyAll();
-  test_assert(calls == 4 && owner == OwnerKey() && member.empty() && aspects == kAllAspects);
+  test_assert(calls == 4 && owner == OwnerKey() && member.empty() &&
+              aspects == kAllAspects);
   bus.bumpEpoch();
   l.disconnect();
   bus.notifyAll();
@@ -326,7 +335,8 @@ static void test_notify_all()
   Context ctx = w.context();
   ChangeBus &bus = w.rt.ext<ChangeBus>();
   int alls = 0, owners = 0;
-  ScopedConnection l = bus.addListener([&](const OwnerKey *owner) { (owner ? owners : alls)++; });
+  ScopedConnection l =
+      bus.addListener([&](const OwnerKey *owner) { (owner ? owners : alls)++; });
   Recorder strength, radius;
   ScopedConnection a = watchOk(bus, ctx, "tool.strength", strength);
   ScopedConnection b = watchOk(bus, ctx, "objects[0].data.radius", radius);
@@ -373,8 +383,10 @@ static void test_busy_while_evaluating()
     /* Reads still work. */
     test_assert(getValue(ctx, "objects[0].data.radius").ok());
   }
-  test_assert(w.mesh(0).radius == 1 && w.object(0).location[1] == 0 && g_radiusUpdates == 0);
-  test_assert(w.object(0).mesh.target == w.meshId(0) && calls == 0 && bus.pendingCount() == 0);
+  test_assert(w.mesh(0).radius == 1 && w.object(0).location[1] == 0 &&
+              g_radiusUpdates == 0);
+  test_assert(w.object(0).mesh.target == w.meshId(0) && calls == 0 &&
+              bus.pendingCount() == 0);
   test_assert(setValue(ctx, "objects[0].data.radius", PropValue::ofFloat(5)).ok());
 }
 
@@ -387,22 +399,27 @@ static void test_unwatching()
   std::vector<ScopedConnection> all(4);
   std::string log;
   for (int i = 0; i < 4; i++) {
-    all[size_t(i)] = bus.watch(ctx, "tool.count", [&, i](const PropValue &, const Status &) {
-      log += std::to_string(i);
-      if (i == 0) {
-        all[0].disconnect();
-        all[1].disconnect();
-        all[2].disconnect();
-      }
-    }).value();
+    all[size_t(i)] = bus.watch(ctx,
+                               "tool.count",
+                               [&, i](const PropValue &, const Status &) {
+                                 log += std::to_string(i);
+                                 if (i == 0) {
+                                   all[0].disconnect();
+                                   all[1].disconnect();
+                                   all[2].disconnect();
+                                 }
+                               })
+                         .value();
   }
   test_assert(setValue(ctx, "tool.count", PropValue::ofInt(77)).ok());
-  test_assert(bus.flush() == 2 && log == "03" && bus.watcherCount() == 1 && bus.validate().ok());
+  test_assert(bus.flush() == 2 && log == "03" && bus.watcherCount() == 1 &&
+              bus.validate().ok());
   test_assert(setValue(ctx, "tool.count", PropValue::ofInt(78)).ok());
   test_assert(bus.flush() == 1 && log == "033");
   /* What a callback holds goes with it at once. */
   auto held = std::make_shared<int>(1);
-  all[0] = bus.watch(ctx, "tool.count", [held](const PropValue &, const Status &) {}).value();
+  all[0] =
+      bus.watch(ctx, "tool.count", [held](const PropValue &, const Status &) {}).value();
   all[1] = bus.watch(ctx, "tool.count", [](const PropValue &, const Status &) {}).value();
   test_assert(held.use_count() == 2);
   all[0].disconnect();
@@ -410,7 +427,8 @@ static void test_unwatching()
   /* Those that are gone take no time. */
   const auto start = std::chrono::steady_clock::now();
   for (int i = 0; i < 100000; i++) {
-    all[0] = bus.watch(ctx, "tool.count", [](const PropValue &, const Status &) {}).value();
+    all[0] =
+        bus.watch(ctx, "tool.count", [](const PropValue &, const Status &) {}).value();
   }
   test_assert(std::chrono::steady_clock::now() - start < std::chrono::seconds(10));
   test_assert(bus.watcherCount() == 3);
@@ -457,13 +475,15 @@ static void test_pending()
     bus.notify(tool, "m" + std::to_string(n - 1));
     test_assert(bus.epoch() == epoch + past && bus.pendingCount() == (past ? 1 : n));
     w.tool.strength += 0.125f;
-    test_assert(bus.flush() == (past ? 1 : 0) && bus.pendingCount() == 0 && bus.flush() == 0);
+    test_assert(bus.flush() == (past ? 1 : 0) && bus.pendingCount() == 0 &&
+                bus.flush() == 0);
   }
   heard = 0;
   for (int i = 0; i < 100000; i++) {
     bus.notify(tool, "m" + std::to_string(i));
   }
-  test_assert(heard == 100000 && bus.pendingCount() <= ChangeBus::kMaxPending && bus.validate().ok());
+  test_assert(heard == 100000 && bus.pendingCount() <= ChangeBus::kMaxPending &&
+              bus.validate().ok());
   bus.flush();
 }
 

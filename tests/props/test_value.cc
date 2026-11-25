@@ -40,23 +40,28 @@ static void test_equality_and_hash()
   const double nan = std::numeric_limits<double>::quiet_NaN();
   /* NaN equals itself, so a NaN-valued watcher doesn't refire. */
   test_assert(PropValue::ofFloat(nan) == PropValue::ofFloat(nan));
-  test_assert(PropValue::ofFloat(nan).computeHash() == PropValue::ofFloat(nan).computeHash());
+  test_assert(PropValue::ofFloat(nan).computeHash() ==
+              PropValue::ofFloat(nan).computeHash());
   /* -0 and 0 differ, matching their hashes. */
   test_assert(PropValue::ofFloat(-0.0) != PropValue::ofFloat(0.0));
-  test_assert(PropValue::ofFloat(-0.0).computeHash() != PropValue::ofFloat(0.0).computeHash());
+  test_assert(PropValue::ofFloat(-0.0).computeHash() !=
+              PropValue::ofFloat(0.0).computeHash());
   test_assert(PropValue::ofFloat(-0.0).approxEqual(PropValue::ofFloat(0.0), 0.0));
 
   test_assert(PropValue::ofInt(1) != PropValue::ofFloat(1.0));
   test_assert(PropValue::ofInt(1) != PropValue::ofEnum(1));
   test_assert(PropValue::ofVec2(1, 2) == PropValue::ofVec2(1, 2));
-  test_assert(PropValue::ofVec2(1, 2).computeHash() == PropValue::ofVec2(1, 2).computeHash());
+  test_assert(PropValue::ofVec2(1, 2).computeHash() ==
+              PropValue::ofVec2(1, 2).computeHash());
   test_assert(PropValue::ofVec2(1, 2) != PropValue::ofVec3(1, 2, 0));
   test_assert(PropValue::ofString("a") == PropValue::ofString("a"));
-  test_assert(PropValue::ofString("a").computeHash() != PropValue::ofString("b").computeHash());
+  test_assert(PropValue::ofString("a").computeHash() !=
+              PropValue::ofString("b").computeHash());
 
   test_assert(PropValue::ofVec2(1, 2).approxEqual(PropValue::ofVec2(1.0001, 2), 1e-3));
   test_assert(!PropValue::ofVec2(1, 2).approxEqual(PropValue::ofVec2(1.1, 2), 1e-3));
-  test_assert(PropValue::ofFloat(nan).approxEqual(PropValue::ofFloat(nan), 1e-3)); /* reflexive */
+  test_assert(
+      PropValue::ofFloat(nan).approxEqual(PropValue::ofFloat(nan), 1e-3)); /* reflexive */
 
   StableRef a;
   a.owner = OwnerKey::ofBlock(BlockId{ClientId::of("c"), LocalId{1, 2}});
@@ -64,7 +69,8 @@ static void test_equality_and_hash()
   a.key.append(KeySegment::stringKey("Bevel"));
   StableRef b = a;
   test_assert(PropValue::ofPointer(a) == PropValue::ofPointer(b));
-  test_assert(PropValue::ofPointer(a).computeHash() == PropValue::ofPointer(b).computeHash());
+  test_assert(PropValue::ofPointer(a).computeHash() ==
+              PropValue::ofPointer(b).computeHash());
   b.key.append(KeySegment::ofHandle(4));
   test_assert(PropValue::ofPointer(a) != PropValue::ofPointer(b));
   test_assert(PropValue::ofPointer(a) != PropValue::nullPointer());
@@ -80,7 +86,8 @@ static void test_to_string()
   test_assert(PropValue::ofEnum(2).toString() == "#2");
   test_assert(PropValue::ofFlags(10).toString() == "0xa");
   test_assert(PropValue::nullPointer().toString() == "{null}");
-  test_assert(PropValue::ofFloat(std::nan("")).toString() == "nan"); /* on every platform */
+  test_assert(PropValue::ofFloat(std::nan("")).toString() ==
+              "nan"); /* on every platform */
   test_assert(PropValue::ofVec2(INFINITY, -INFINITY).toString() == "(inf, -inf)");
 
   StableRef r;
@@ -139,7 +146,8 @@ static void test_null_pointers()
 
   /* Segment kinds and boundaries hash apart (lengths are hashed). */
   StableRef one = r;
-  one.key.append(KeySegment::member("a\x01" "b"));
+  one.key.append(KeySegment::member("a\x01"
+                                    "b"));
   StableRef two = r;
   two.key.append(KeySegment::member("a"));
   two.key.append(KeySegment::stringKey("b"));

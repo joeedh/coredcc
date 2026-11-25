@@ -97,7 +97,8 @@ static void test_evaluation_scope()
     EvaluationScope outer(rt);
     {
       EvaluationScope inner(rt);
-      test_assert(rt.evaluating() && !other.evaluating() && other.busyIfEvaluating("x").ok());
+      test_assert(rt.evaluating() && !other.evaluating() &&
+                  other.busyIfEvaluating("x").ok());
     }
     const Status s = rt.busyIfEvaluating("doing this");
     test_assert(rt.evaluating() && s.code() == StatusCode::Busy);
@@ -134,7 +135,8 @@ int main()
     test_assert(!rt.debugRegisterNameAs(IdDomain::Type, 0, "zero").ok());
 
     // Long names (beyond the string's inline capacity) round-trip.
-    const char *longName = "a.very.long.client.name.that.exceeds.the.inline.string.capacity";
+    const char *longName =
+        "a.very.long.client.name.that.exceeds.the.inline.string.capacity";
     Result<ClientId> c = rt.registerId<IdDomain::Client>(longName);
     test_assert(c.ok() && strcmp(rt.nameOf(*c), longName) == 0);
   }

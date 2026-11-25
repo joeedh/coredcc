@@ -1,5 +1,5 @@
-/* Commands on several blocks, what the history counts for them, and the undo of commands that
- * fill missing blocks or touch data this build can't read. */
+/* Commands on several blocks, what the history counts for them, and the undo of commands
+ * that fill missing blocks or touch data this build can't read. */
 #include "coredcc/api/change_bus.h"
 #include "coredcc/api/library_io.h"
 #include "coredcc/api/ref_text.h"
@@ -45,10 +45,8 @@ struct CommandWorld {
     test_assert(registerBlockCommands(w.rt).ok());
   }
   /* `block` is null for none. */
-  Result<PropertyBag> run(const char *command,
-                          BlockId block,
-                          const std::string &blocks,
-                          bool cascade = true)
+  Result<PropertyBag>
+  run(const char *command, BlockId block, const std::string &blocks, bool cascade = true)
   {
     PropertyBag in = w.rt.ext<CommandRegistry>().find(command)->newInputs();
     if (!block.isNull()) {
@@ -79,7 +77,8 @@ struct CommandWorld {
 
 bool refusedWith(const Result<PropertyBag> &r, const char *what)
 {
-  return !r.ok() && r.status().code() == StatusCode::FailedPrecondition && hasMsg(r.status(), what);
+  return !r.ok() && r.status().code() == StatusCode::FailedPrecondition &&
+         hasMsg(r.status(), what);
 }
 
 } // namespace
@@ -108,7 +107,8 @@ static void test_delete()
   test_assert(c.isLive(1) && c.isLive(2) && c.history.size() == 0);
   Result<PropertyBag> r = c.run(kDeleteBlockCommand, cid(1), c.list({2, 1, 2}));
   test_assert(r.ok() && r->get("count")->asInt() == 4 && c.history.size() == 1);
-  test_assert(!c.isLive(1) && !c.isLive(2) && !c.isLive(4) && !c.isLive(5) && c.isLive(6));
+  test_assert(!c.isLive(1) && !c.isLive(2) && !c.isLive(4) && !c.isLive(5) &&
+              c.isLive(6));
   test_assert(w.lib.get(w.at(4))->pins(PinKind::History) == 1);
   test_assert(c.ex.undo(c.ctx).ok());
   test_assert(c.isLive(1) && c.isLive(2) && c.isLive(4) && c.isLive(5));
@@ -133,25 +133,30 @@ static void test_delete()
   /* What isn't a block, or the text of one. */
   w.doc(7, "d7");
   test_assert(refusedWith(c.run(kDeleteBlockCommand, BlockId(), ""), "no such block"));
-  test_assert(refusedWith(c.run(kDeleteBlockCommand, cid(99), c.list({7})), "no such block"));
+  test_assert(
+      refusedWith(c.run(kDeleteBlockCommand, cid(99), c.list({7})), "no such block"));
   test_assert(refusedWith(c.run(kDeleteBlockCommand, BlockId(), c.list({7, 99})),
                           "no such block coredcc,00000000000000070000000000000063"));
   r = c.run(kDeleteBlockCommand, BlockId(), "nonsense");
-  test_assert(r.status().code() == StatusCode::InvalidArgument && hasMsg(r.status(), "blocks: "));
+  test_assert(r.status().code() == StatusCode::InvalidArgument &&
+              hasMsg(r.status(), "blocks: "));
   test_assert(refusedWith(c.run(kDeleteBlockCommand, BlockId(), ";"), "") ||
               !c.run(kDeleteBlockCommand, BlockId(), ";").ok());
-  test_assert(refusedWith(c.run(kDeleteBlockCommand, BlockId(), " "), "no block is named"));
+  test_assert(
+      refusedWith(c.run(kDeleteBlockCommand, BlockId(), " "), "no block is named"));
   Context noLib(&w.rt, nullptr, PointerRef());
   noLib.setExecutor(&c.ex);
   PropertyBag in = w.rt.ext<CommandRegistry>().find(kDeleteBlockCommand)->newInputs();
   test_assert(in.set("blocks", PropValue::ofString(c.list({7}).c_str())).ok());
-  test_assert(refusedWith(c.ex.run(noLib, kDeleteBlockCommand, std::move(in)), "no Library"));
+  test_assert(
+      refusedWith(c.ex.run(noLib, kDeleteBlockCommand, std::move(in)), "no Library"));
   test_assert(c.isLive(7) && c.history.size() == 0);
 
   /* One that can't be deleted: the others come back. */
   w.doc(8, "d8");
   test_assert(w.lib.markDeleted(w.at(8)).ok());
-  test_assert(refusedWith(c.run(kDeleteBlockCommand, BlockId(), c.list({7, 8})), "is InHistory"));
+  test_assert(
+      refusedWith(c.run(kDeleteBlockCommand, BlockId(), c.list({7, 8})), "is InHistory"));
   test_assert(c.isLive(7) && w.lib.get(w.at(8))->state() == BlockState::InHistory);
 }
 
@@ -167,7 +172,9 @@ static void test_preview_random()
     }
     for (uint64_t n = 1; n <= 16; n++) {
       const auto any = [&]() { return w.at(1 + r.below(16)); };
-      w.link(w.at(n), r.below(3) ? any() : BlockHandle(), r.below(3) ? any() : BlockHandle());
+      w.link(w.at(n),
+             r.below(3) ? any() : BlockHandle(),
+             r.below(3) ? any() : BlockHandle());
       for (int i = int(r.below(3)); i > 0; i--) {
         const RefKind kind = r.below(2) ? RefKind::Strong : RefKind::OptStrong;
         test_assert(w.lib.setSlot(w.at(n), kNote, i, w.id(any()), kind).ok());
@@ -213,11 +220,12 @@ static void test_delete_names()
   for (uint64_t n = 2; n <= 31; n++) {
     c.w.link(c.w.doc(n, "user"), c.w.at(1));
   }
-  test_assert(refusedWith(c.run(kDeleteBlockCommand, cid(1), "", false), "user and 10 more"));
+  test_assert(
+      refusedWith(c.run(kDeleteBlockCommand, cid(1), "", false), "user and 10 more"));
 }
 
-/* Deleting, undoing, redoing and dropping many blocks takes time by their number. Everything here
- * was quadratic: at this size it took minutes. */
+/* Deleting, undoing, redoing and dropping many blocks takes time by their number.
+ * Everything here was quadratic: at this size it took minutes. */
 static void test_delete_time()
 {
 #ifdef NDEBUG
@@ -265,13 +273,15 @@ static void test_duplicate()
   w.link(w.at(2), w.at(1));
   Result<PropertyBag> r = c.run(kDuplicateBlockCommand, cid(2), c.list({1, 2}));
   test_assert(r.ok() && w.lib.size() == 5 && c.history.size() == 1);
-  Result<Vector<BlockId>> copies = parseBlockIds(w.rt, r->get("blocks")->asString().c_str());
+  Result<Vector<BlockId>> copies =
+      parseBlockIds(w.rt, r->get("blocks")->asString().c_str());
   test_assert(copies.ok() && copies->size() == 2);
   test_assert(r->get("block")->asPointer().owner.block == (*copies)[0]);
   /* In the order they were given, and they point at each other. */
   const BlockHandle two = w.lib.find((*copies)[0]), one = w.lib.find((*copies)[1]);
   test_assert(w.data(two)->number == 20 && w.data(one)->number == 10);
-  test_assert(w.data(one)->mesh.target == (*copies)[0] && w.data(two)->mesh.target == (*copies)[1]);
+  test_assert(w.data(one)->mesh.target == (*copies)[0] &&
+              w.data(two)->mesh.target == (*copies)[1]);
   test_assert(w.data(one)->parent.target == cid(3));
   test_assert(c.ex.undo(c.ctx).ok() && w.lib.get(one)->state() == BlockState::InHistory &&
               w.lib.get(two)->state() == BlockState::InHistory);
@@ -283,7 +293,8 @@ static void test_duplicate()
   /* All or none. */
   w.lib.onHostDestroyed(cid(3)).ignore();
   const int size = w.lib.size();
-  test_assert(!c.run(kDuplicateBlockCommand, BlockId(), c.list({1, 3})).ok() && w.lib.size() == size);
+  test_assert(!c.run(kDuplicateBlockCommand, BlockId(), c.list({1, 3})).ok() &&
+              w.lib.size() == size);
 }
 
 /* ---- 27: what the history holds ---- */
@@ -302,7 +313,8 @@ static void test_memory()
   test_assert(c.ex.undo(c.ctx).ok() && used() == 0 && c.history.validate().ok());
   test_assert(c.ex.redo(c.ctx).ok() && used() == 2);
   test_assert(c.ex.undo(c.ctx).ok());
-  test_assert(c.run(kDuplicateBlockCommand, BlockId(), c.list({1, 2})).ok() && used() == 0);
+  test_assert(c.run(kDuplicateBlockCommand, BlockId(), c.list({1, 2})).ok() &&
+              used() == 0);
   test_assert(c.ex.undo(c.ctx).ok() && used() == 2);
   test_assert(c.ex.redo(c.ctx).ok() && used() == 0 && c.history.validate().ok());
   /* Over the budget, the oldest go. */
@@ -359,7 +371,9 @@ struct Adopt {
     });
     created.add(*lib, *lib->create(kDoc, "new", litestl::alloc::New<Doc>("Doc")));
     for (const BlockId &id : missing) {
-      created.add(*lib, *lib->createWithId(kAcmeDoc, id, "mine", litestl::alloc::New<Doc>("Doc")));
+      created.add(
+          *lib,
+          *lib->createWithId(kAcmeDoc, id, "mine", litestl::alloc::New<Doc>("Doc")));
     }
     if (g_fail) {
       created.undo(*lib);
@@ -410,7 +424,8 @@ Bytes hosted()
 
 } // namespace
 
-/* Commands that leave the history together, in two Libraries, one with a block that can't go. */
+/* Commands that leave the history together, in two Libraries, one with a block that can't
+ * go. */
 static void test_dropped_together()
 {
   CommandWorld c;
@@ -437,7 +452,8 @@ static void test_dropped_together()
     test_assert(c.ex.run(there, "test.adopt", PropertyBag()).ok());
   }
   c.history.clear();
-  test_assert(w.lib.size() == 1 && other.size() == 2); /* they were done: the documents' */
+  test_assert(w.lib.size() == 1 &&
+              other.size() == 2); /* they were done: the documents' */
   const auto all = [](Library &lib) {
     Vector<BlockHandle> out;
     lib.forEach([&](BlockHandle h, const Datablock &) { out.append(h); });
@@ -519,18 +535,22 @@ static void test_adopt()
               w.lib.get(h)->state() == BlockState::Live);
   /* A command that fails, after another was undone. */
   CommandWorld d;
-  test_assert(addNativeCommand<Adopt>(d.w.rt, CommandDef("test.adopt")).ok() && d.w.load(bytes).ok());
+  test_assert(addNativeCommand<Adopt>(d.w.rt, CommandDef("test.adopt")).ok() &&
+              d.w.load(bytes).ok());
   test_assert(d.ex.run(d.ctx, "test.adopt", PropertyBag()).ok() && d.ex.undo(d.ctx).ok());
   g_fail = true;
   test_assert(!d.ex.run(d.ctx, "test.adopt", PropertyBag()).ok());
   g_fail = false;
   test_assert(sameBytes(d.w.save(), bytes) && d.ex.redo(d.ctx).ok());
   test_assert(d.w.lib.get(d.w.at(5, kAcme))->state() == BlockState::Live);
-  /* Somebody else fills it while it is undone: the redo says so, and nothing is half done. */
+  /* Somebody else fills it while it is undone: the redo says so, and nothing is half
+   * done. */
   test_assert(d.ex.undo(d.ctx).ok());
   const int size = d.w.lib.size();
-  test_assert(d.w.lib.createWithId(kAcmeDoc, cid(5, kAcme), "host's",
-                                   litestl::alloc::New<Doc>("Doc")).ok());
+  test_assert(d.w.lib
+                  .createWithId(
+                      kAcmeDoc, cid(5, kAcme), "host's", litestl::alloc::New<Doc>("Doc"))
+                  .ok());
   test_assert(hasMsg(d.ex.redo(d.ctx), "isn't missing any more"));
   test_assert(strcmp(d.w.lib.get(d.w.at(5, kAcme))->name().c_str(), "host's") == 0);
   test_assert(d.w.lib.size() == size - 1 && d.w.valid());
@@ -553,7 +573,8 @@ static void test_append_fills()
   w.docs.onRekey = [](const Datablock &, const RekeyContext &) { return cid(5, kAcme); };
   const BlockHandle h = w.at(5, kAcme);
   Result<AppendResult> r = appendUndo(c.ctx, view(library));
-  test_assert(r.ok() && r->report.blocks[0] == h && w.lib.get(h)->state() == BlockState::Live);
+  test_assert(r.ok() && r->report.blocks[0] == h &&
+              w.lib.get(h)->state() == BlockState::Live);
   const Bytes done = w.save();
   test_assert(c.ex.undo(c.ctx).ok() && sameBytes(w.save(), bytes) && w.valid());
   test_assert(c.ex.redo(c.ctx).ok() && sameBytes(w.save(), done));
@@ -592,7 +613,8 @@ static void test_detach_opaque()
   ScopedConnection l = w.rt.ext<ChangeBus>().addListener([&](const OwnerKey *owner) {
     heard += owner && *owner == OwnerKey::ofBlock(cid(1)) ? 1 : 0;
   });
-  test_assert(detach("test.Note").ok() && !w.lib.hasAttachment(w.at(1), kNote) && heard == 1);
+  test_assert(detach("test.Note").ok() && !w.lib.hasAttachment(w.at(1), kNote) &&
+              heard == 1);
   test_assert(w.lib.get(w.at(2))->pins(PinKind::History) == 1 && *w.lib.collect() == 0);
   test_assert(detach("test.Note").code() == StatusCode::NotFound);
   test_assert(c.ex.undo(c.ctx).ok() && sameBytes(w.save(), bytes));
@@ -604,7 +626,8 @@ static void test_detach_opaque()
               w.lib.hasAttachment(w.at(1), kNote));
   test_assert(resolvePlaceholders(c.ctx).ok() && w.lib.attachment(w.at(1), kNote));
   /* The redo takes the real one. */
-  test_assert(c.ex.redo(c.ctx).ok() && !w.lib.hasAttachment(w.at(1), kNote) && w.notes.alive == 1);
+  test_assert(c.ex.redo(c.ctx).ok() && !w.lib.hasAttachment(w.at(1), kNote) &&
+              w.notes.alive == 1);
   test_assert(c.ex.undo(c.ctx).ok() && w.lib.attachment(w.at(1), kNote));
   test_assert(sameBytes(w.save(), bytes));
   test_assert(c.ex.redo(c.ctx).ok());
@@ -628,7 +651,8 @@ static void test_unlink_after_resolve()
   IoWorld &w = c.w;
   test_assert(w.load(bytes).ok());
   PropertyBag in = w.rt.ext<CommandRegistry>().find(kUnlinkRefCommand)->newInputs();
-  test_assert(in.set("block", pointer(cid(1))).ok() && in.set("index", PropValue::ofInt(1)).ok());
+  test_assert(in.set("block", pointer(cid(1))).ok() &&
+              in.set("index", PropValue::ofInt(1)).ok());
   int heard = 0;
   ScopedConnection l = w.rt.ext<ChangeBus>().addListener([&](const OwnerKey *owner) {
     heard += owner && *owner == OwnerKey::ofBlock(cid(1)) ? 1 : 0;
@@ -636,7 +660,8 @@ static void test_unlink_after_resolve()
   test_assert(c.ex.run(c.ctx, kUnlinkRefCommand, std::move(in)).ok() && heard == 1);
   test_assert(c.ex.undo(c.ctx).ok() && heard == 2 && c.ex.redo(c.ctx).ok() && heard == 3);
   registerDoc(w.rt, w.docs);
-  test_assert(resolvePlaceholders(c.ctx).ok() && w.lib.get(w.at(1))->state() == BlockState::Live);
+  test_assert(resolvePlaceholders(c.ctx).ok() &&
+              w.lib.get(w.at(1))->state() == BlockState::Live);
   Status s = c.ex.undo(c.ctx);
   test_assert(s.code() == StatusCode::FailedPrecondition &&
               hasMsg(s, "'a' has been read since its reference was cut"));

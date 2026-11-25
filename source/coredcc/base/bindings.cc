@@ -30,16 +30,16 @@ namespace {
 constexpr const char *idStructName(IdDomain d)
 {
   switch (d) {
-    case IdDomain::Type:
-      return "coredcc::TypeId";
-    case IdDomain::Interface:
-      return "coredcc::InterfaceId";
-    case IdDomain::Client:
-      return "coredcc::ClientId";
-    case IdDomain::Struct:
-      return "coredcc::StructId";
-    case IdDomain::Command:
-      return "coredcc::CommandId";
+  case IdDomain::Type:
+    return "coredcc::TypeId";
+  case IdDomain::Interface:
+    return "coredcc::InterfaceId";
+  case IdDomain::Client:
+    return "coredcc::ClientId";
+  case IdDomain::Struct:
+    return "coredcc::StructId";
+  case IdDomain::Command:
+    return "coredcc::CommandId";
   }
   return "coredcc::Id";
 }

@@ -25,7 +25,7 @@ namespace coredcc {
  * discard slots to it. `release` runs once, at discard or destruction.
  */
 class DelegatedUndo {
- public:
+public:
   using UndoFn = litestl::util::function<void()>;
   using RedoFn = litestl::util::function<Status()>;
   using ReleaseFn = litestl::util::function<void()>;
@@ -84,7 +84,7 @@ class DelegatedUndo {
     return memSize_;
   }
 
- private:
+private:
   UndoFn undo_;
   RedoFn redo_;
   ReleaseFn release_;
@@ -95,8 +95,8 @@ class DelegatedUndo {
  * Snapshot undo: a host-registered provider that captures and restores state as bytes.
  * Synchronous. SnapshotUndo (snapshot_undo.h) is the command's side.
  *
- * - `ctx` says which document. When a failed command is rolled back it has only the Runtime, the
- *   Library and the root.
+ * - `ctx` says which document. When a failed command is rolled back it has only the
+ * Runtime, the Library and the root.
  * - `capture` appends the state's bytes to `blob`, which is empty.
  * - `foreachRef` (optional): visits a cell for each block that `blob` references, so undo
  *   keeps those blocks. The cells are the provider's own; writes to them are ignored.
@@ -114,7 +114,9 @@ struct SnapshotProvider : IfaceRef {
   {
     return CDCC_HAS(foreachRef);
   }
-  void foreachRef(Context &ctx, const litestl::util::Vector<uint8_t> &blob, RefVisitor &v) const
+  void foreachRef(Context &ctx,
+                  const litestl::util::Vector<uint8_t> &blob,
+                  RefVisitor &v) const
   {
     CDCC_CALL(foreachRef, ctx, blob, v);
   }

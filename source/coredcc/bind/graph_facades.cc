@@ -38,20 +38,21 @@ Status nodeTypeUiName(NodeTypeDef &def, const string &s)
 }
 
 /* As detail::scriptProp, also of a Quat or Mat4. */
-static Result<PropertyDef> graphProp(const char *what,
-                                     const string &name,
-                                     const PropValue &defaultValue)
+static Result<PropertyDef>
+graphProp(const char *what, const string &name, const PropValue &defaultValue)
 {
   const PropValue::Type type = defaultValue.type();
   const bool quat = type == PropValue::Type::Quat;
   if (!quat && type != PropValue::Type::Mat4) {
     return detail::scriptProp(what, name, defaultValue, false);
   }
-  Result<PropertyDef> named = detail::scriptProp(what, name, PropValue::ofBool(false), false);
+  Result<PropertyDef> named =
+      detail::scriptProp(what, name, PropValue::ofBool(false), false);
   if (!named.ok()) {
     return named;
   }
-  PropertyDef p = quat ? PropertyDef::quatProp(view(name)) : PropertyDef::mat4Prop(view(name));
+  PropertyDef p =
+      quat ? PropertyDef::quatProp(view(name)) : PropertyDef::mat4Prop(view(name));
   p.defaultValue(defaultValue);
   return p;
 }
@@ -66,7 +67,8 @@ Status nodeTypeInput(NodeTypeDef &def, const string &name, const PropValue &defa
   return Status();
 }
 
-Status nodeTypePayloadInput(NodeTypeDef &def, const string &name, const string &socketType)
+Status
+nodeTypePayloadInput(NodeTypeDef &def, const string &name, const string &socketType)
 {
   def.payloadInput(view(name), view(socketType));
   return Status();
@@ -94,16 +96,18 @@ static Status notThere(const char *what, const string &name)
                std::string(what) + ": the def has no '" + name.c_str() + "'");
 }
 
-Status nodeTypeItemParam(NodeTypeDef &def, const string &name, bool flags, int64_t defaultValue)
+Status
+nodeTypeItemParam(NodeTypeDef &def, const string &name, bool flags, int64_t defaultValue)
 {
   Result<PropertyDef> named =
       detail::scriptProp("nodeTypeItemParam", name, PropValue::ofBool(false), false);
   if (!named.ok()) {
     return named.status();
   }
-  PropertyDef p = flags ? PropertyDef::flagsProp(view(name)) : PropertyDef::enumProp(view(name));
-  p.defaultValue(flags ? PropValue::ofFlags(uint64_t(defaultValue)) :
-                         PropValue::ofEnum(defaultValue));
+  PropertyDef p =
+      flags ? PropertyDef::flagsProp(view(name)) : PropertyDef::enumProp(view(name));
+  p.defaultValue(flags ? PropValue::ofFlags(uint64_t(defaultValue))
+                       : PropValue::ofEnum(defaultValue));
   def.param(std::move(p));
   return Status();
 }
@@ -126,7 +130,10 @@ Status nodeTypeItem(NodeTypeDef &def,
   return Status();
 }
 
-Status nodeTypePointerParam(NodeTypeDef &def, const string &name, const string &target, bool weak)
+Status nodeTypePointerParam(NodeTypeDef &def,
+                            const string &name,
+                            const string &target,
+                            bool weak)
 {
   Result<PropertyDef> named =
       detail::scriptProp("nodeTypePointerParam", name, PropValue::ofBool(false), false);
@@ -134,17 +141,21 @@ Status nodeTypePointerParam(NodeTypeDef &def, const string &name, const string &
     return named.status();
   }
   if (target.size() == 0) {
-    return error(StatusCode::InvalidArgument, "nodeTypePointerParam: there is no struct ''");
+    return error(StatusCode::InvalidArgument,
+                 "nodeTypePointerParam: there is no struct ''");
   }
   def.param(PropertyDef::pointerProp(view(name), StructId::of(view(target))), weak);
   return Status();
 }
 
-Status nodeTypeSocketName(NodeTypeDef &def, bool output, const string &name, const string &uiName)
+Status nodeTypeSocketName(NodeTypeDef &def,
+                          bool output,
+                          const string &name,
+                          const string &uiName)
 {
-  return def.setSocketUiName(output, view(name), view(uiName)) ?
-             Status() :
-             notThere("nodeTypeSocketName", name);
+  return def.setSocketUiName(output, view(name), view(uiName))
+             ? Status()
+             : notThere("nodeTypeSocketName", name);
 }
 
 Status nodeTypeRange(NodeTypeDef &def, const string &name, double min, double max)
@@ -168,16 +179,15 @@ Status nodeTypeOutputAdapter(NodeTypeDef &def)
   return Status();
 }
 
-static Status registerWith(Runtime &rt,
-                           const NodeTypeDef &def,
-                           lf::Handle kernel,
-                           const string &slots)
+static Status
+registerWith(Runtime &rt, const NodeTypeDef &def, lf::Handle kernel, const string &slots)
 {
   const std::string name = def.name().c_str();
   if (name.rfind("core.", 0) == 0 || name.rfind("graph.", 0) == 0) {
     return error(StatusCode::InvalidArgument,
-                 "node type '" + name + "': the 'core.' and 'graph.' namespaces are reserved "
-                                        "for coredcc");
+                 "node type '" + name +
+                     "': the 'core.' and 'graph.' namespaces are reserved "
+                     "for coredcc");
   }
   NodeTypeRegistry &types = rt.ext<NodeTypeRegistry>();
   CDCC_TRY(types.checkDef(def));
@@ -188,16 +198,17 @@ static Status registerWith(Runtime &rt,
     present.push_back(n.c_str());
   }
   const std::string impl = name + "#kernel";
-  CDCC_TRY(registerForeign<GraphKernel>(rt,
-                                        impl,
-                                        rt.ext<ForeignBindings>().dispatcher(),
-                                        nullptr,
-                                        std::span<const char *const>(present.data(),
-                                                                     present.size())));
+  CDCC_TRY(registerForeign<GraphKernel>(
+      rt,
+      impl,
+      rt.ext<ForeignBindings>().dispatcher(),
+      nullptr,
+      std::span<const char *const>(present.data(), present.size())));
   GraphKernel k = query<GraphKernel>(
       rt, TypeId::of(impl), reinterpret_cast<void *>(uintptr_t(kernel)));
   if (!k) {
-    return error(StatusCode::Internal, "node type '" + name + "': its kernel's table is gone");
+    return error(StatusCode::Internal,
+                 "node type '" + name + "': its kernel's table is gone");
   }
   NodeTypeDef copy = def.copy();
   /* ForeignBindings owns the handle, so this and the registry may go in either order. */
@@ -211,14 +222,14 @@ Status registerForeignNodeType(Context &ctx,
                                const string &slots)
 {
   if (kernel == 0) {
-    return error(StatusCode::InvalidArgument, "registerForeignNodeType: no kernel handle");
+    return error(StatusCode::InvalidArgument,
+                 "registerForeignNodeType: no kernel handle");
   }
   Runtime &rt = ctx.runtime();
   Status s = registerWith(rt, def, kernel, slots);
   if (s.ok()) {
     rt.ext<ForeignBindings>().keepHandle(kernel);
-  }
-  else {
+  } else {
     lf::release(kernel);
   }
   return s;
@@ -247,11 +258,12 @@ static Status replaceWith(Runtime &rt,
   }
   old = lf::Handle(reinterpret_cast<uintptr_t>(type->kernel.get().self()));
   const std::string impl = std::string(def.name().c_str()) + "#kernel";
-  GraphKernel k =
-      query<GraphKernel>(rt, TypeId::of(impl), reinterpret_cast<void *>(uintptr_t(kernel)));
+  GraphKernel k = query<GraphKernel>(
+      rt, TypeId::of(impl), reinterpret_cast<void *>(uintptr_t(kernel)));
   if (!k) {
     return error(StatusCode::Internal,
-                 std::string("node type '") + def.name().c_str() + "': its kernel's table is gone");
+                 std::string("node type '") + def.name().c_str() +
+                     "': its kernel's table is gone");
   }
   NodeTypeDef copy = def.copy();
   copy.kernel(Owned<GraphKernel>(k, [](void *, void *) {}, nullptr));
@@ -272,8 +284,7 @@ Status replaceForeignNodeType(Context &ctx,
   if (s.ok()) {
     rt.ext<ForeignBindings>().keepHandle(kernel);
     rt.ext<ForeignBindings>().dropHandle(old);
-  }
-  else {
+  } else {
     lf::release(kernel);
   }
   return s;
@@ -281,10 +292,11 @@ Status replaceForeignNodeType(Context &ctx,
 
 /* ---- in a kernel ---- */
 
-template <class List> static Status noSuch(const char *what, const string &name, const List &list)
+template <class List>
+static Status noSuch(const char *what, const string &name, const List &list)
 {
-  Status s = error(StatusCode::NotFound, std::string("the node has no ") + what + " '" +
-                                             name.c_str() + "'");
+  Status s = error(StatusCode::NotFound,
+                   std::string("the node has no ") + what + " '" + name.c_str() + "'");
   Suggester sg(view(name));
   for (const auto &item : list) {
     sg.consider(item.name.c_str());
@@ -296,14 +308,14 @@ template <class List> static Status noSuch(const char *what, const string &name,
 ValueResult nodeInput(NodeExecContext &node, const string &name)
 {
   const GraphValue *v = node.input(view(name));
-  return v ? detail::toScript("input", name, *v) :
-             failed<ValueResult>(noSuch("input", name, node.type().inputs));
+  return v ? detail::toScript("input", name, *v)
+           : failed<ValueResult>(noSuch("input", name, node.type().inputs));
 }
 
 static Status noParam(const NodeExecContext &node, const string &name)
 {
-  Status s = error(StatusCode::NotFound, std::string("the node has no param '") + name.c_str() +
-                                             "'");
+  Status s = error(StatusCode::NotFound,
+                   std::string("the node has no param '") + name.c_str() + "'");
   Suggester sg(view(name));
   for (const NodeParamDef &p : node.type().params) {
     sg.consider(p.def.apiName().c_str());
@@ -340,9 +352,9 @@ Status nodePass(NodeExecContext &node, const string &input, const string &output
 
 BoolResult nodeIsLinked(NodeExecContext &node, const string &name)
 {
-  return node.input(view(name)) ?
-             ok<BoolResult>(node.isLinked(view(name))) :
-             failed<BoolResult>(noSuch("input", name, node.type().inputs));
+  return node.input(view(name))
+             ? ok<BoolResult>(node.isLinked(view(name)))
+             : failed<BoolResult>(noSuch("input", name, node.type().inputs));
 }
 
 StringResult nodeUseBlock(NodeExecContext &node, const string &param, uint32_t aspects)
@@ -352,7 +364,8 @@ StringResult nodeUseBlock(NodeExecContext &node, const string &param, uint32_t a
   }
   const BlockUse use =
       node.paramBlock(view(param), aspects ? ChangeAspects(aspects) : kAllAspects);
-  const Datablock *b = use.handle && node.library() ? node.library()->get(use.handle) : nullptr;
+  const Datablock *b =
+      use.handle && node.library() ? node.library()->get(use.handle) : nullptr;
   return ok<StringResult>(
       string(b && use.data ? formatBlockId(node.runtime(), b->id()).c_str() : ""));
 }
@@ -375,13 +388,15 @@ TableResult nodeInputTable(NodeExecContext &node, const string &name)
     return failed<TableResult>(noSuch("input", name, node.type().inputs));
   }
   if (node.type().inputs[i].type->payload != payloadTypeId<Elements>()) {
-    return failed<TableResult>(error(
-        StatusCode::TypeMismatch, std::string("input '") + name.c_str() + "' isn't a table"));
+    return failed<TableResult>(
+        error(StatusCode::TypeMismatch,
+              std::string("input '") + name.c_str() + "' isn't a table"));
   }
   return ok<TableResult>(ScriptTable(node.input(i).asPayload()));
 }
 
-Status nodeOutputTable(NodeExecContext &node, const string &name, const ScriptTable &table)
+Status
+nodeOutputTable(NodeExecContext &node, const string &name, const ScriptTable &table)
 {
   const int i = node.type().outputIndex(view(name));
   if (i < 0) {
@@ -439,30 +454,39 @@ static Result<PropertyBag> runGraph(Context &ctx,
 
 static IntResult intOutput(const Result<PropertyBag> &out, const char *name)
 {
-  return out.ok() ? ok<IntResult>(out->get(name)->asInt()) : failed<IntResult>(out.status());
+  return out.ok() ? ok<IntResult>(out->get(name)->asInt())
+                  : failed<IntResult>(out.status());
 }
 
 ValueResult graphCreate(Context &ctx, const string &name)
 {
-  Result<PropertyBag> out = runGraph(
-      ctx, "graphCreate", kGraphCreateCommand, nullptr, {{"name", PropValue::ofString(view(name))}});
-  return out.ok() ? ok<ValueResult>(*out->get("graph")) : failed<ValueResult>(out.status());
+  Result<PropertyBag> out = runGraph(ctx,
+                                     "graphCreate",
+                                     kGraphCreateCommand,
+                                     nullptr,
+                                     {{"name", PropValue::ofString(view(name))}});
+  return out.ok() ? ok<ValueResult>(*out->get("graph"))
+                  : failed<ValueResult>(out.status());
 }
 
-IntResult graphAddNode(Context &ctx,
-                       const string &graphPath,
-                       const string &type,
-                       double x,
-                       double y)
+IntResult graphAddNode(
+    Context &ctx, const string &graphPath, const string &type, double x, double y)
 {
-  return intOutput(runGraph(ctx, "graphAddNode", kGraphNodeAddCommand, &graphPath,
-                            {{"type", PropValue::ofString(view(type))}, {"position", makeVec2(x, y)}}),
-                   "node");
+  return intOutput(
+      runGraph(ctx,
+               "graphAddNode",
+               kGraphNodeAddCommand,
+               &graphPath,
+               {{"type", PropValue::ofString(view(type))}, {"position", makeVec2(x, y)}}),
+      "node");
 }
 
 Status graphRemoveNode(Context &ctx, const string &graphPath, int64_t node)
 {
-  return runGraph(ctx, "graphRemoveNode", kGraphNodeRemoveCommand, &graphPath,
+  return runGraph(ctx,
+                  "graphRemoveNode",
+                  kGraphNodeRemoveCommand,
+                  &graphPath,
                   {{"node", makeInt(node)}})
       .status();
 }
@@ -474,7 +498,10 @@ IntResult graphLink(Context &ctx,
                     int64_t to,
                     const string &toSocket)
 {
-  return intOutput(runGraph(ctx, "graphLink", kGraphLinkCommand, &graphPath,
+  return intOutput(runGraph(ctx,
+                            "graphLink",
+                            kGraphLinkCommand,
+                            &graphPath,
                             {{"from", makeInt(from)},
                              {"fromSocket", PropValue::ofString(view(fromSocket))},
                              {"to", makeInt(to)},
@@ -484,7 +511,11 @@ IntResult graphLink(Context &ctx,
 
 Status graphUnlink(Context &ctx, const string &graphPath, int64_t link)
 {
-  return runGraph(ctx, "graphUnlink", kGraphUnlinkCommand, &graphPath, {{"link", makeInt(link)}})
+  return runGraph(ctx,
+                  "graphUnlink",
+                  kGraphUnlinkCommand,
+                  &graphPath,
+                  {{"link", makeInt(link)}})
       .status();
 }
 
@@ -494,7 +525,10 @@ IntResult graphAddInterface(Context &ctx,
                             const string &name,
                             const string &type)
 {
-  return intOutput(runGraph(ctx, "graphAddInterface", kGraphInterfaceAddCommand, &graphPath,
+  return intOutput(runGraph(ctx,
+                            "graphAddInterface",
+                            kGraphInterfaceAddCommand,
+                            &graphPath,
                             {{"side", PropValue::ofEnum(output ? 1 : 0)},
                              {"name", PropValue::ofString(view(name))},
                              {"type", PropValue::ofString(view(type))}}),

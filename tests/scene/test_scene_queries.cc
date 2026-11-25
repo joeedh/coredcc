@@ -1,4 +1,5 @@
-/* nearestInScene, pickRegion and SceneBvh's object queries, against loops over every shape. */
+/* nearestInScene, pickRegion and SceneBvh's object queries, against loops over every
+ * shape. */
 #include "pick_doc.h"
 
 #include "coredcc/bind/foreign_command.h"
@@ -26,9 +27,9 @@ double3 closestOn(const Prim &p, const mat4d &world, const double3 &to)
     return a;
   }
   const double3 b = transformPoint(world, p.q[1]);
-  return p.kind == Kind::Triangle ?
-             bvh::closestOnTriangle(to, a, b, transformPoint(world, p.q[2])) :
-             bvh::closestOnSegment(to, a, b);
+  return p.kind == Kind::Triangle
+             ? bvh::closestOnTriangle(to, a, b, transformPoint(world, p.q[2]))
+             : bvh::closestOnSegment(to, a, b);
 }
 
 std::vector<Prim> randomPrims(Rand &r, int count)
@@ -59,7 +60,8 @@ void testNearest()
     /* Edges and faces are exact only in objects that aren't stretched. */
     const bool any = r.coin();
     for (int i = 0; i < 30; i++) {
-      mat4d world = solve::affine(randomLinear(r, int(r.below(kLinearKinds))), r.vec(3.0));
+      mat4d world =
+          solve::affine(randomLinear(r, int(r.below(kLinearKinds))), r.vec(3.0));
       if (!any) {
         Linear m;
         const quatd q = r.rotation();
@@ -77,7 +79,9 @@ void testNearest()
     for (int k = 0; k < 60; k++) {
       const double3 p = r.vec(4.0);
       const double infinity = std::numeric_limits<double>::infinity();
-      const double radius = r.below(5) == 0 ? infinity : r.below(5) == 0 ? 0.0 : r.range(0.1, 3.0);
+      const double radius = r.below(5) == 0   ? infinity
+                            : r.below(5) == 0 ? 0.0
+                                              : r.range(0.1, 3.0);
       NearestOptions o;
       o.domain = any ? int32_t(ElementDomain::Point) : int32_t(r.below(3));
       o.maxCount = 1 + int32_t(r.below(r.coin() ? 3 : 600));
@@ -136,14 +140,16 @@ void testNearest()
       }
     }
   }
-  printf("nearest: %d hits, %d with more than wanted, %d without, %d singular, %d and %d given\n",
+  printf("nearest: %d hits, %d with more than wanted, %d without, %d singular, %d and %d "
+         "given\n",
          found,
          full,
          none,
          singular,
          given[0],
          given[1]);
-  test_assert(found > 5000 && full > 50 && none > 10 && singular > 100 && given[1] * 3 < given[0] * 2);
+  test_assert(found > 5000 && full > 50 && none > 10 && singular > 100 &&
+              given[1] * 3 < given[0] * 2);
 }
 
 void testNearestCases()
@@ -155,7 +161,8 @@ void testNearestCases()
   p.kind = Kind::Point;
   p.q[0] = double3(1.0, 0.0, 0.0);
   const BlockHandle data = d.geoBlock("point", {p, p});
-  const BlockHandle a = d.placed("a", identity(), data), b = d.placed("b", identity(), data);
+  const BlockHandle a = d.placed("a", identity(), data),
+                    b = d.placed("b", identity(), data);
   const BlockHandle hidden = d.placed("hidden", identity(), data);
   d.obj(hidden).flags = ObjectFlags::Hidden;
   NearestOptions o;
@@ -193,7 +200,9 @@ void testNearestCases()
     test_assert(isError(nearestInScene(*d.ctx,
                                        d.scene,
                                        i == 5 ? double3(0.0, infinity, 0.0) : zero,
-                                       i == 0 ? nan : i == 1 ? -1.0 : 1.0,
+                                       i == 0   ? nan
+                                       : i == 1 ? -1.0
+                                                : 1.0,
                                        bad,
                                        {},
                                        hits),
@@ -207,13 +216,15 @@ void testNearestCases()
   sink.add(0, double3(nan, 0, 0));
   sink.add(1, double3(0, infinity, 0));
   sink.add(2, double3(2.1, 0, 0));
-  test_assert(sink.hits().size() == 0 && sink.radius() == q.radius() && q.radius() >= 2.0);
+  test_assert(sink.hits().size() == 0 && sink.radius() == q.radius() &&
+              q.radius() >= 2.0);
   sink.add(3, double3(2.0, 0, 0));
   test_assert(sink.radius() == q.radius());
   sink.add(4, double3(0.5, 0, 0));
   sink.add(5, double3(1.0, 0, 0));
   sink.add(6, double3(1.5, 0, 0));
-  test_assert(sink.hits().size() == 2 && sink.hits()[0].element == 4 && sink.hits()[1].element == 5);
+  test_assert(sink.hits().size() == 2 && sink.hits()[0].element == 4 &&
+              sink.hits()[1].element == 5);
   test_assert(sink.radius() >= 1.0 && sink.radius() < 2.0);
   /* Equally far. */
   sink.add(3, double3(0, 1.0, 0));
@@ -229,23 +240,26 @@ void testNearestCases()
   must(sink.addAll(elements, positions));
   test_assert(sink.hits()[0].element == 9);
   elements.append(10);
-  test_assert(isError(sink.addAll(elements, positions), StatusCode::InvalidArgument, "three"));
+  test_assert(
+      isError(sink.addAll(elements, positions), StatusCode::InvalidArgument, "three"));
   test_assert(NearSink::defineBindings() == NearSink::defineBindings());
   test_assert(NearQuery::defineBindings() == NearQuery::defineBindings());
   /* One that throws. */
   d.evaluate();
   d.geo(data).onNear = [&] { d.rt.setStickyError(boom("near")); };
-  test_assert(isError(nearestInScene(*d.ctx, d.scene, zero, 2.0, NearestOptions(), {}, hits),
-                      StatusCode::Internal,
-                      "near"));
+  test_assert(
+      isError(nearestInScene(*d.ctx, d.scene, zero, 2.0, NearestOptions(), {}, hits),
+              StatusCode::Internal,
+              "near"));
   test_assert(hits.size() == 0 && !d.rt.hasStickyError());
   /* If it already throws when it is asked for its domains, it isn't asked for more. */
   int asked = 0;
   d.geo(data).onNear = [&] { asked++; };
   d.geo(data).onDomains = [&] { d.rt.setStickyError(boom("domains")); };
-  test_assert(isError(nearestInScene(*d.ctx, d.scene, zero, 2.0, NearestOptions(), {}, hits),
-                      StatusCode::Internal,
-                      "domains"));
+  test_assert(
+      isError(nearestInScene(*d.ctx, d.scene, zero, 2.0, NearestOptions(), {}, hits),
+              StatusCode::Internal,
+              "domains"));
   test_assert(hits.size() == 0 && asked == 0);
   Vector<RegionHit> region;
   ViewRegion everywhere;
@@ -285,8 +299,8 @@ void testNearestOrder()
   test_assert(d.geo(d.lib->find(d.obj(far).data.target())).given == 0);
 }
 
-/* Far from the origin, with small radii: what is near enough in the world is within the radius in the
- * object, also when the sink has what it needs. */
+/* Far from the origin, with small radii: what is near enough in the world is within the
+ * radius in the object, also when the sink has what it needs. */
 void testNearRounding()
 {
   Rand r(64);
@@ -310,7 +324,8 @@ void testNearRounding()
     const NearQuery wide(from, 1e6, o, world);
     NearSink second(wide);
     second.add(1, local);
-    expect(second.radius() < wide.radius() && reach <= second.radius(), "a smaller radius");
+    expect(second.radius() < wide.radius() && reach <= second.radius(),
+           "a smaller radius");
   }
   test_assert(beyond > 100);
 }
@@ -325,12 +340,13 @@ void testRegion()
     PickDoc d;
     std::vector<BlockHandle> objects;
     for (int i = 0; i < 30; i++) {
-      const mat4d world = solve::affine(randomLinear(r, int(r.below(kLinearKinds))), r.vec(3.0));
+      const mat4d world =
+          solve::affine(randomLinear(r, int(r.below(kLinearKinds))), r.vec(3.0));
       if (i % 5 == 4) {
         objects.push_back(d.placed("box", world, d.shapeBlock("shape", 0.2)));
-      }
-      else {
-        objects.push_back(d.placed("object", world, d.geoBlock("geo", randomPrims(r, 10))));
+      } else {
+        objects.push_back(
+            d.placed("object", world, d.geoBlock("geo", randomPrims(r, 10))));
       }
     }
     d.evaluate();
@@ -349,7 +365,8 @@ void testRegion()
       must(pickRegion(*d.ctx, d.scene, region, domain, {}, hits));
       int last = -1;
       for (const RegionHit &h : hits) {
-        const int place = int(std::find(objects.begin(), objects.end(), h.object) - objects.begin());
+        const int place =
+            int(std::find(objects.begin(), objects.end(), h.object) - objects.begin());
         expect(place > last, "the order");
         last = place;
         expect((domain < 0) == (h.elements.size() == 0), "elements only if asked for");
@@ -362,29 +379,32 @@ void testRegion()
           hit = candidate.object == h ? &candidate : hit;
         }
         const mat4d world = d.result(h).state.world;
-        /* Points of the shapes: surely in the rectangle, and all of them surely on one side. */
-        const auto judge = [&](const std::vector<double3> &points, bool &inside, bool &outside) {
-          inside = false;
-          bool sides[6] = {true, true, true, true, true, true};
-          const double4 &far = view.farPlane();
-          const double farLength = std::hypot(far[0], far[1], far[2]);
-          for (const double3 &q : points) {
-            const double3 w = transformPoint(world, q);
-            const ViewPoint v = view.project(w);
-            const double past = farLength > 0.0 ? dotPoint(far, w) / farLength : 1.0;
-            inside = inside || (v.visible && v.x > left && v.x < right && v.y > top && v.y < bottom);
-            sides[0] = sides[0] && v.visible && v.x < left - 1.0;
-            sides[1] = sides[1] && v.visible && v.x > right + 1.0;
-            sides[2] = sides[2] && v.visible && v.y < top - 1.0;
-            sides[3] = sides[3] && v.visible && v.y > bottom + 1.0;
-            sides[4] = sides[4] && v.distance < -1e-6;
-            sides[5] = sides[5] && past < -1e-6;
-          }
-          outside = false;
-          for (bool side : sides) {
-            outside = outside || side;
-          }
-        };
+        /* Points of the shapes: surely in the rectangle, and all of them surely on one
+         * side. */
+        const auto judge =
+            [&](const std::vector<double3> &points, bool &inside, bool &outside) {
+              inside = false;
+              bool sides[6] = {true, true, true, true, true, true};
+              const double4 &far = view.farPlane();
+              const double farLength = std::hypot(far[0], far[1], far[2]);
+              for (const double3 &q : points) {
+                const double3 w = transformPoint(world, q);
+                const ViewPoint v = view.project(w);
+                const double past = farLength > 0.0 ? dotPoint(far, w) / farLength : 1.0;
+                inside = inside || (v.visible && v.x > left && v.x < right && v.y > top &&
+                                    v.y < bottom);
+                sides[0] = sides[0] && v.visible && v.x < left - 1.0;
+                sides[1] = sides[1] && v.visible && v.x > right + 1.0;
+                sides[2] = sides[2] && v.visible && v.y < top - 1.0;
+                sides[3] = sides[3] && v.visible && v.y > bottom + 1.0;
+                sides[4] = sides[4] && v.distance < -1e-6;
+                sides[5] = sides[5] && past < -1e-6;
+              }
+              outside = false;
+              for (bool side : sides) {
+                outside = outside || side;
+              }
+            };
         std::vector<std::vector<double3>> shapes;
         if (place % 5 == 4) {
           if (domain >= 0) {
@@ -392,11 +412,11 @@ void testRegion()
           }
           std::vector<double3> corners;
           for (int i = 0; i < 8; i++) {
-            corners.push_back(double3(i & 1 ? 0.2 : -0.2, i & 2 ? 0.2 : -0.2, i & 4 ? 0.2 : -0.2));
+            corners.push_back(
+                double3(i & 1 ? 0.2 : -0.2, i & 2 ? 0.2 : -0.2, i & 4 ? 0.2 : -0.2));
           }
           shapes.push_back(corners);
-        }
-        else {
+        } else {
           for (const Prim &p : d.geo(d.lib->find(d.obj(h).data.target())).prims) {
             shapes.push_back(std::vector<double3>(p.q, p.q + p.corners()));
             if (domain >= 0 && int32_t(p.domain()) != domain) {
@@ -440,10 +460,12 @@ void testRegion()
                       StatusCode::FailedPrecondition,
                       "pickRegion"));
   d.evaluate();
-  test_assert(isError(pickRegion(*d.ctx, d.scene, all, 32, {}, hits), StatusCode::InvalidArgument));
+  test_assert(isError(pickRegion(*d.ctx, d.scene, all, 32, {}, hits),
+                      StatusCode::InvalidArgument));
   ViewRegion bad = all;
   bad.planes[2].w = std::numeric_limits<double>::quiet_NaN();
-  test_assert(isError(pickRegion(*d.ctx, d.scene, bad, -1, {}, hits), StatusCode::InvalidArgument));
+  test_assert(isError(pickRegion(*d.ctx, d.scene, bad, -1, {}, hits),
+                      StatusCode::InvalidArgument));
   must(pickRegion(*d.ctx, d.scene, all, -1, {}, hits));
   test_assert(hits.size() == 1 && hits[0].object == a);
   PickFilter none;
@@ -452,8 +474,9 @@ void testRegion()
   test_assert(hits.size() == 0);
   d.geo(data).onNear = [&] { d.rt.setStickyError(boom("region")); };
   for (int32_t domain : {-1, 0}) {
-    test_assert(
-        isError(pickRegion(*d.ctx, d.scene, all, domain, {}, hits), StatusCode::Internal, "region"));
+    test_assert(isError(pickRegion(*d.ctx, d.scene, all, domain, {}, hits),
+                        StatusCode::Internal,
+                        "region"));
     test_assert(hits.size() == 0 && !d.rt.hasStickyError());
   }
 }
@@ -469,7 +492,9 @@ void testObjects()
   for (int i = 0; i < 200; i++) {
     const mat4d world = solve::affine(Linear::identity(), r.vec(5.0));
     objects.push_back(
-        d.placed("box", world, i % 10 == 0 ? BlockHandle() : d.shapeBlock("shape", r.range(0.1, 0.6))));
+        d.placed("box",
+                 world,
+                 i % 10 == 0 ? BlockHandle() : d.shapeBlock("shape", r.range(0.1, 0.6))));
   }
   d.evaluate();
   const SceneBvh &scene = d.sc().bvh();
@@ -504,7 +529,8 @@ void testObjects()
         const double b = (box.max[axis] - ray.origin[axis]) / ray.dir[axis];
         enter = std::fmax(enter, std::fmin(a, b));
         leave = std::fmin(leave, std::fmax(a, b));
-        const double off = std::fmax(0.0, std::fmax(box.min[axis] - p[axis], p[axis] - box.max[axis]));
+        const double off =
+            std::fmax(0.0, std::fmax(box.min[axis] - p[axis], p[axis] - box.max[axis]));
         dd += off * off;
       }
       for (const BvhPlane &plane : planes) {
@@ -553,16 +579,19 @@ void testObjects()
   Vector<BlockHandle> got;
   got.append(BlockHandle());
   const double nan = std::numeric_limits<double>::quiet_NaN();
-  test_assert(scene.objectsNear(double3(), nan, got).code() == StatusCode::InvalidArgument);
+  test_assert(scene.objectsNear(double3(), nan, got).code() ==
+              StatusCode::InvalidArgument);
   test_assert(got.size() == 0);
   Ray bad;
   bad.dir = double3(0, 0, nan);
   got.append(BlockHandle());
-  test_assert(scene.objectsOnRay(bad, got).code() == StatusCode::InvalidArgument && got.size() == 0);
+  test_assert(scene.objectsOnRay(bad, got).code() == StatusCode::InvalidArgument &&
+              got.size() == 0);
   BvhPlane plane;
   plane.w = nan;
   got.append(BlockHandle());
-  test_assert(scene.objectsInRegion({&plane, 1}, got).code() == StatusCode::InvalidArgument);
+  test_assert(scene.objectsInRegion({&plane, 1}, got).code() ==
+              StatusCode::InvalidArgument);
   test_assert(got.size() == 0);
 }
 
@@ -583,7 +612,8 @@ void testSettings()
   d.rt.ext<SceneSettings>().bvh.leafSize = 0;
   d.setData(d.object("one more"), shape);
   test_assert(isError(evaluateScene(*d.ctx), StatusCode::InvalidArgument));
-  test_assert(isError(evaluateScene(*d.ctx), StatusCode::InvalidArgument) && !d.sc().bvh().valid());
+  test_assert(isError(evaluateScene(*d.ctx), StatusCode::InvalidArgument) &&
+              !d.sc().bvh().valid());
   d.rt.ext<SceneSettings>().bvh.leafSize = 4;
   d.evaluate();
   test_assert(d.sc().bvh().valid() && d.sc().bvh().boxes().bvh().size() == 101);

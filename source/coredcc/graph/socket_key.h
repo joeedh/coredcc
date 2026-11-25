@@ -13,8 +13,9 @@
 
 namespace coredcc::detail {
 
-/** With FNV-1a as its hash: litestl's own of a string has 19 bits, and loses some of those to
- * even characters, so it gives the same for many keys that differ in their digits. */
+/** With FNV-1a as its hash: litestl's own of a string has 19 bits, and loses some of
+ * those to even characters, so it gives the same for many keys that differ in their
+ * digits. */
 struct SocketKey {
   litestl::util::string text;
 

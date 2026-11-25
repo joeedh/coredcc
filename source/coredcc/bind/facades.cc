@@ -51,7 +51,8 @@ ValueResult lookup(const PropertyBag &bag, const string &name)
   if (v) {
     return ok<ValueResult>(*v);
   }
-  Status err = error(StatusCode::NotFound, std::string("no property '") + name.c_str() + "'");
+  Status err =
+      error(StatusCode::NotFound, std::string("no property '") + name.c_str() + "'");
   Suggester sg(view(name));
   for (int i = 0; i < bag.size(); i++) {
     sg.consider(bag.def(i).apiName().c_str());
@@ -67,12 +68,14 @@ ValueResult lookup(const PropertyBag &bag, const string &name)
 Status detail::kernelGate(Context &ctx, const char *what)
 {
   if (inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<GraphKernel>())) {
-    return error(StatusCode::Busy, std::string(what) + ": not from a script kernel (only its "
-                                                       "node's inputs, params and outputs)");
+    return error(StatusCode::Busy,
+                 std::string(what) + ": not from a script kernel (only its "
+                                     "node's inputs, params and outputs)");
   }
   if (inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<TransformModel>())) {
-    return error(StatusCode::Busy, std::string(what) + ": not from a script's transform model "
-                                                       "(only what its slot is given)");
+    return error(StatusCode::Busy,
+                 std::string(what) + ": not from a script's transform model "
+                                     "(only what its slot is given)");
   }
   return Status();
 }
@@ -84,8 +87,9 @@ Status detail::slotGate(Context &ctx,
   CDCC_TRY(kernelGate(ctx, what));
   const ForeignBindings *fb = ctx.runtime().findExt<ForeignBindings>();
   const ForeignBindings::Frame *frame = fb ? fb->currentFrame() : nullptr;
-  if (!frame || (allowed.size() > 0 &&
-                 inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<Command>(), allowed)))
+  if (!frame ||
+      (allowed.size() > 0 &&
+       inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<Command>(), allowed)))
   {
     return Status();
   }
@@ -94,24 +98,26 @@ Status detail::slotGate(Context &ctx,
     where += std::string(where.empty() ? "" : ", ") + a;
   }
   return error(StatusCode::Busy,
-               std::string(what) + ": not from a script's " + frame->iface->name.c_str() + "." +
-                   frame->method->name.c_str() +
+               std::string(what) + ": not from a script's " + frame->iface->name.c_str() +
+                   "." + frame->method->name.c_str() +
                    (where.empty() ? std::string(" (only outside script slots)")
                                   : " (only from a command's " + where + ")"));
 }
 
-Result<PropertyBag> detail::runCommand(Context &ctx, const CommandDef &def, PropertyBag inputs)
+Result<PropertyBag>
+detail::runCommand(Context &ctx, const CommandDef &def, PropertyBag inputs)
 {
   CommandExecutor *ex = ctx.executor();
-  return inForeignCall(ctx.runtime()) ? ex->runSub(ctx, def, std::move(inputs)) :
-                                        ex->run(ctx, def, std::move(inputs));
+  return inForeignCall(ctx.runtime()) ? ex->runSub(ctx, def, std::move(inputs))
+                                      : ex->run(ctx, def, std::move(inputs));
 }
 
 /* ---- Status ---- */
 
 Status statusError(StatusCode code, const string &message)
 {
-  const bool valid = code != StatusCode::Ok && uint32_t(code) <= uint32_t(StatusCode::Internal);
+  const bool valid =
+      code != StatusCode::Ok && uint32_t(code) <= uint32_t(StatusCode::Internal);
   return Status::error(valid ? code : StatusCode::InvalidArgument, message.c_str());
 }
 
@@ -154,10 +160,8 @@ PropValue makeQuat(double x, double y, double z, double w)
 {
   return PropValue::ofQuat(x, y, z, w);
 }
-ValueResult makeMat4(const PropValue &a,
-                     const PropValue &b,
-                     const PropValue &c,
-                     const PropValue &d)
+ValueResult
+makeMat4(const PropValue &a, const PropValue &b, const PropValue &c, const PropValue &d)
 {
   double m[16];
   int n = 0;
@@ -182,8 +186,8 @@ PropValue makeNullPointer()
 ValueResult makePointer(Context &ctx, const string &text)
 {
   Result<StableRef> ref = parseRef(ctx.runtime(), view(text));
-  return ref.ok() ? ok<ValueResult>(PropValue::ofPointer(std::move(ref).value())) :
-                    failed<ValueResult>(ref.status());
+  return ref.ok() ? ok<ValueResult>(PropValue::ofPointer(std::move(ref).value()))
+                  : failed<ValueResult>(ref.status());
 }
 
 BoolResult readBool(const PropValue &v)
@@ -212,8 +216,8 @@ FloatResult readComponent(const PropValue &v, int32_t i)
   if (i < 0 || i >= n) {
     return failed<FloatResult>(error(StatusCode::OutOfRange,
                                      "component " + std::to_string(i) + " of a " +
-                                         propValueTypeName(v.type()) + " value, which has " +
-                                         std::to_string(n)));
+                                         propValueTypeName(v.type()) +
+                                         " value, which has " + std::to_string(n)));
   }
   return ok<FloatResult>(v.component(i));
 }
@@ -230,21 +234,24 @@ IntResult readFlags(const PropValue &v)
 StringResult pointerText(Context &ctx, const PropValue &v)
 {
   const StableRef *ref = v.tryPointer();
-  return ref ? ok<StringResult>(string(formatRef(ctx.runtime(), *ref).c_str())) :
-               failed<StringResult>(wrongType(v, "Pointer"));
+  return ref ? ok<StringResult>(string(formatRef(ctx.runtime(), *ref).c_str()))
+             : failed<StringResult>(wrongType(v, "Pointer"));
 }
 static Result<UnitFamily> familyOf(const string &name)
 {
-  const std::optional<UnitFamily> f = unitFamilyOfName(name.size() > 0 ? view(name) : "None");
-  return f ? Result<UnitFamily>(*f) :
-             error(StatusCode::InvalidArgument,
+  const std::optional<UnitFamily> f =
+      unitFamilyOfName(name.size() > 0 ? view(name) : "None");
+  return f ? Result<UnitFamily>(*f)
+           : error(StatusCode::InvalidArgument,
                    std::string("'") + name.c_str() + "' is no unit family");
 }
-StringResult formatUnit(double value, const string &family, const string &unit, int32_t precision)
+StringResult
+formatUnit(double value, const string &family, const string &unit, int32_t precision)
 {
   Result<UnitFamily> f = familyOf(family);
-  return f.ok() ? ok<StringResult>(string(units::format(value, *f, view(unit), precision).c_str())) :
-                  failed<StringResult>(f.status());
+  return f.ok() ? ok<StringResult>(
+                      string(units::format(value, *f, view(unit), precision).c_str()))
+                : failed<StringResult>(f.status());
 }
 FloatResult parseUnit(const string &text, const string &family, const string &unit)
 {
@@ -316,7 +323,8 @@ StringResult resolvePath(Context &ctx, const string &path)
     return failed<StringResult>(std::move(s));
   }
   Result<ResolvedPath> r = resolve(ctx, view(path));
-  return r.ok() ? ok<StringResult>(string(pathKindName(*r))) : failed<StringResult>(r.status());
+  return r.ok() ? ok<StringResult>(string(pathKindName(*r)))
+                : failed<StringResult>(r.status());
 }
 StringResult pathMeta(Context &ctx, const string &path)
 {
@@ -334,8 +342,8 @@ Result<std::string> detail::keysOf(const PropertyDef &def, const PropValue &v)
   }
   if (const std::optional<int64_t> number = v.tryEnum()) {
     const EnumItem *item = meta->findValue(*number);
-    return item ? Result<std::string>(std::string(item->key.c_str())) :
-                  error(StatusCode::NotFound, "no item is " + std::to_string(*number));
+    return item ? Result<std::string>(std::string(item->key.c_str()))
+                : error(StatusCode::NotFound, "no item is " + std::to_string(*number));
   }
   uint64_t bits = v.tryFlags().value_or(0);
   std::string keys;
@@ -346,8 +354,8 @@ Result<std::string> detail::keysOf(const PropertyDef &def, const PropValue &v)
       bits &= ~bit;
     }
   }
-  return bits == 0 ? Result<std::string>(keys) :
-                     error(StatusCode::NotFound, "a flag bit has no item");
+  return bits == 0 ? Result<std::string>(keys)
+                   : error(StatusCode::NotFound, "a flag bit has no item");
 }
 StringResult valueKeys(Context &ctx, const string &path, const PropValue &v)
 {
@@ -362,11 +370,12 @@ StringResult valueKeys(Context &ctx, const string &path, const PropValue &v)
     return failed<StringResult>(def.status());
   }
   if (!def->enumMeta()) {
-    return failed<StringResult>(error(StatusCode::InvalidArgument,
-                                      std::string("'") + path.c_str() + "' has no items"));
+    return failed<StringResult>(error(
+        StatusCode::InvalidArgument, std::string("'") + path.c_str() + "' has no items"));
   }
   Result<std::string> keys = detail::keysOf(*def, v);
-  return keys.ok() ? ok<StringResult>(string(keys->c_str())) : failed<StringResult>(keys.status());
+  return keys.ok() ? ok<StringResult>(string(keys->c_str()))
+                   : failed<StringResult>(keys.status());
 }
 ValueResult getValue(Context &ctx, const string &path)
 {
@@ -423,11 +432,13 @@ Status cancelGesture(Context &ctx, int64_t gesture)
 {
   return coredcc::cancelGesture(ctx, uint64_t(gesture));
 }
-Status setValueGesture(Context &ctx, const string &path, const PropValue &value, int64_t gesture)
+Status
+setValueGesture(Context &ctx, const string &path, const PropValue &value, int64_t gesture)
 {
   if (!isGesture(ctx.runtime(), uint64_t(gesture))) {
     return error(StatusCode::InvalidArgument,
-                 "setValueGesture: " + std::to_string(gesture) + " isn't from beginGesture");
+                 "setValueGesture: " + std::to_string(gesture) +
+                     " isn't from beginGesture");
   }
   return setUndo(ctx, "setValueGesture", path, value, uint64_t(gesture));
 }
@@ -487,8 +498,8 @@ static BoolResult historyCan(Context &ctx, const char *what, bool undo)
   }
   CommandExecutor *ex = ctx.executor();
   if (!ex) {
-    return failed<BoolResult>(
-        error(StatusCode::FailedPrecondition, std::string(what) + ": the context has no executor"));
+    return failed<BoolResult>(error(StatusCode::FailedPrecondition,
+                                    std::string(what) + ": the context has no executor"));
   }
   UndoHistory *h = ex->history();
   return ok<BoolResult>(h && (undo ? h->canUndo() : h->canRedo()));

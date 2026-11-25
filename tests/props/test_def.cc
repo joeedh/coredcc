@@ -43,8 +43,8 @@ static void test_ui_names()
   test_assert(uiNameFromApiName("layer2Name") == "Layer2 Name");
   test_assert(uiNameFromApiName("_private") == "Private");
   test_assert(uiNameFromApiName("x") == "X");
-  test_assert(strcmp(PropertyDef::floatProp("edgeCrease").uiName().c_str(), "Edge Crease") ==
-              0);
+  test_assert(
+      strcmp(PropertyDef::floatProp("edgeCrease").uiName().c_str(), "Edge Crease") == 0);
   test_assert(strcmp(modeDef().enumMeta()->items[1].uiName.c_str(), "Sharp Edges") == 0);
   test_assert(strcmp(modeDef().enumMeta()->items[2].uiName.c_str(), "ROOT") == 0);
 }
@@ -61,8 +61,9 @@ static void test_defaults_and_meta()
               StructId::of("Mesh"));
   /* An Enum defaults to its first item. */
   test_assert(modeDef().defaultValue() == PropValue::ofEnum(0));
-  test_assert(PropertyDef::floatProp("f").access(PropAccess::ReadOnly).hasAccess(
-      PropAccess::ReadOnly));
+  test_assert(PropertyDef::floatProp("f")
+                  .access(PropAccess::ReadOnly)
+                  .hasAccess(PropAccess::ReadOnly));
 }
 
 /* Which unit a subtype can have. No unit always can be. */
@@ -87,16 +88,22 @@ static void test_units_agree()
                       {PropSubtype::FilePath, bad},
                       {PropSubtype::Password, bad}};
   for (const Row &row : rows) {
-    for (UnitFamily u : {none, UnitFamily::Length, UnitFamily::Angle, UnitFamily::Time,
-                         UnitFamily::Mass, UnitFamily::Factor})
+    for (UnitFamily u : {none,
+                         UnitFamily::Length,
+                         UnitFamily::Angle,
+                         UnitFamily::Time,
+                         UnitFamily::Mass,
+                         UnitFamily::Factor})
     {
       const PropertyDef def = PropertyDef::vecProp("v", 3).subtype(row.subtype).unit(u);
       test_assert(def.validate().ok() == (u == none || row.unit == any || row.unit == u));
     }
   }
-  test_assert(hasMsg(
-      PropertyDef::floatProp("a").subtype(PropSubtype::Angle).unit(UnitFamily::Mass).validate(),
-      "the subtype Angle and the unit Mass"));
+  test_assert(hasMsg(PropertyDef::floatProp("a")
+                         .subtype(PropSubtype::Angle)
+                         .unit(UnitFamily::Mass)
+                         .validate(),
+                     "the subtype Angle and the unit Mass"));
 }
 
 static void test_validate()
@@ -108,8 +115,9 @@ static void test_validate()
   test_assert(hasMsg(PropertyDef::floatProp("r").range(5, 1).validate(), "hard range"));
   test_assert(hasMsg(PropertyDef::floatProp("r").range(0, 1).softRange(0, 2).validate(),
                      "inside the hard range"));
-  test_assert(hasMsg(PropertyDef::floatProp("r").unit(UnitFamily::Length, "kg").validate(),
-                     "'kg' is no unit of Length"));
+  test_assert(
+      hasMsg(PropertyDef::floatProp("r").unit(UnitFamily::Length, "kg").validate(),
+             "'kg' is no unit of Length"));
   test_assert(PropertyDef::floatProp("r").unit(UnitFamily::Length, "mm").validate().ok());
   test_assert(hasMsg(PropertyDef::floatProp("r").precision(16).validate(), "precision"));
   test_assert(hasMsg(PropertyDef::enumProp("e").validate(), "at least one item"));
@@ -120,12 +128,14 @@ static void test_validate()
   test_assert(hasMsg(PropertyDef::enumProp("e").item("a-b", 0).validate(), "identifier"));
   test_assert(hasMsg(PropertyDef::flagsProp("f").item("A", 3).validate(), "single bit"));
   /* A default the clamp would change is out of range. */
-  test_assert(hasMsg(
-      PropertyDef::floatProp("r").range(0, 1).defaultValue(PropValue::ofFloat(2)).validate(),
-      "out of range"));
-  test_assert(hasMsg(
-      PropertyDef::intProp("n").defaultValue(PropValue::ofString("x")).validate(),
-      "is a String, not a Int"));
+  test_assert(hasMsg(PropertyDef::floatProp("r")
+                         .range(0, 1)
+                         .defaultValue(PropValue::ofFloat(2))
+                         .validate(),
+                     "out of range"));
+  test_assert(
+      hasMsg(PropertyDef::intProp("n").defaultValue(PropValue::ofString("x")).validate(),
+             "is a String, not a Int"));
 }
 
 static void test_display()
@@ -134,10 +144,12 @@ static void test_display()
     const PropertyDef d = PropertyDef::floatProp("r").unit(f, unit);
     return strcmp(d.numeric()->displaySymbol(), want) == 0;
   };
-  test_assert(shows(UnitFamily::Length, "", "m") && shows(UnitFamily::Length, "millimeters", "mm"));
+  test_assert(shows(UnitFamily::Length, "", "m") &&
+              shows(UnitFamily::Length, "millimeters", "mm"));
   test_assert(shows(UnitFamily::None, "", "") && shows(UnitFamily::Length, "kg", "m"));
   for (const char *name : {"None", "Length", "Angle", "Time", "Mass", "Factor"}) {
-    test_assert(unitFamilyOfName(name) && strcmp(unitFamilyName(*unitFamilyOfName(name)), name) == 0);
+    test_assert(unitFamilyOfName(name) &&
+                strcmp(unitFamilyName(*unitFamilyOfName(name)), name) == 0);
   }
   test_assert(!unitFamilyOfName("length") && !unitFamilyOfName(""));
 
@@ -145,10 +157,14 @@ static void test_display()
     const char *got = componentName(k, s, i);
     return want ? got && strcmp(got, want) == 0 : got == nullptr;
   };
-  test_assert(name(PropKind::Vec2, PropSubtype::None, 0, "X") && name(PropKind::Vec2, PropSubtype::None, 2, nullptr));
-  test_assert(name(PropKind::Vec3, PropSubtype::Euler, 2, "Z") && name(PropKind::Quat, PropSubtype::None, 3, "W"));
-  test_assert(name(PropKind::Vec4, PropSubtype::Color, 3, "A") && name(PropKind::Vec3, PropSubtype::ColorGamma, 0, "R"));
-  test_assert(name(PropKind::Mat4, PropSubtype::None, 0, nullptr) && name(PropKind::Float, PropSubtype::None, 0, nullptr));
+  test_assert(name(PropKind::Vec2, PropSubtype::None, 0, "X") &&
+              name(PropKind::Vec2, PropSubtype::None, 2, nullptr));
+  test_assert(name(PropKind::Vec3, PropSubtype::Euler, 2, "Z") &&
+              name(PropKind::Quat, PropSubtype::None, 3, "W"));
+  test_assert(name(PropKind::Vec4, PropSubtype::Color, 3, "A") &&
+              name(PropKind::Vec3, PropSubtype::ColorGamma, 0, "R"));
+  test_assert(name(PropKind::Mat4, PropSubtype::None, 0, nullptr) &&
+              name(PropKind::Float, PropSubtype::None, 0, nullptr));
   test_assert(name(PropKind::Vec3, PropSubtype::None, -1, nullptr));
 }
 
@@ -160,7 +176,8 @@ static void test_coerce_numbers()
   test_assert(*coerce(i, PropValue::ofFloat(-4.0)) == PropValue::ofInt(-4));
   test_assert(!coerce(i, PropValue::ofFloat(1.5)).ok());
   test_assert(!coerce(i, PropValue::ofString("1")).ok());
-  test_assert(coerce(i, PropValue::ofBool(true)).status().code() == StatusCode::TypeMismatch);
+  test_assert(coerce(i, PropValue::ofBool(true)).status().code() ==
+              StatusCode::TypeMismatch);
 
   /* Float -> Int range: 2^63 itself overflows, the largest double below it doesn't. */
   const PropertyDef wide = PropertyDef::intProp("w");
@@ -190,7 +207,8 @@ static void test_coerce_vectors()
 {
   const PropertyDef v = PropertyDef::vecProp("loc", 3).range(-1, 1);
   test_assert(*coerce(v, PropValue::ofVec3(0.5, 2, -3)) == PropValue::ofVec3(0.5, 1, -1));
-  test_assert(*coerce(v, PropValue::ofFloat(0.25)) == PropValue::ofVec3(0.25, 0.25, 0.25));
+  test_assert(*coerce(v, PropValue::ofFloat(0.25)) ==
+              PropValue::ofVec3(0.25, 0.25, 0.25));
   test_assert(*coerce(v, PropValue::ofInt(7)) == PropValue::ofVec3(1, 1, 1));
   test_assert(!coerce(v, PropValue::ofVec2(0, 0)).ok());
 
@@ -249,8 +267,8 @@ struct Limits {
 
 static void test_dynamic()
 {
-  const PropertyDef d =
-      PropertyDef::floatProp("r").range(0, 100).dynamic([](PropertyDef &def, const void *o) {
+  const PropertyDef d = PropertyDef::floatProp("r").range(0, 100).dynamic(
+      [](PropertyDef &def, const void *o) {
         def.range(0, static_cast<const Limits *>(o)->max);
       });
   test_assert(d.isDynamic());
@@ -273,7 +291,8 @@ static void test_bag()
   test_assert(bag.add(PropertyDef::pointerProp("target", StructId::of("Object"))
                           .access(PropAccess::Optional))
                   .ok());
-  test_assert(bag.add(PropertyDef::floatProp("dist")).code() == StatusCode::AlreadyExists);
+  test_assert(bag.add(PropertyDef::floatProp("dist")).code() ==
+              StatusCode::AlreadyExists);
   test_assert(!bag.add(PropertyDef::floatProp("bad name")).ok());
   test_assert(bag.size() == 3);
 
@@ -287,7 +306,8 @@ static void test_bag()
   test_assert(bag.set("mode", PropValue::ofString("ROOT")).ok());
   test_assert(*bag.get("mode") == PropValue::ofEnum(5));
   test_assert(!bag.set("mode", PropValue::ofString("NOPE")).ok());
-  test_assert(*bag.get("mode") == PropValue::ofEnum(5)); /* a failed set changes nothing */
+  test_assert(*bag.get("mode") ==
+              PropValue::ofEnum(5)); /* a failed set changes nothing */
 
   Status miss = bag.set("dsit", PropValue::ofFloat(1));
   test_assert(miss.code() == StatusCode::NotFound);
@@ -307,22 +327,27 @@ static void test_review_fixes()
   test_assert(coerce(PropertyDef::floatProp("r").range(0, 1), PropValue::ofFloat(nan))
                   .status()
                   .code() == StatusCode::OutOfRange);
-  test_assert(!coerce(PropertyDef::vecProp("v", 3).range(0, 1), PropValue::ofVec3(nan, .5, 2))
-                   .ok());
+  test_assert(
+      !coerce(PropertyDef::vecProp("v", 3).range(0, 1), PropValue::ofVec3(nan, .5, 2))
+           .ok());
   test_assert(!coerce(PropertyDef::intProp("n"), PropValue::ofFloat(nan)).ok());
-  test_assert(!PropertyDef::floatProp("r").defaultValue(PropValue::ofFloat(nan)).validate().ok());
+  test_assert(
+      !PropertyDef::floatProp("r").defaultValue(PropValue::ofFloat(nan)).validate().ok());
   /* Infinity clamps to a finite bound. */
-  test_assert(*coerce(PropertyDef::floatProp("r").range(0, 1), PropValue::ofFloat(INFINITY)) ==
-              PropValue::ofFloat(1));
+  test_assert(*coerce(PropertyDef::floatProp("r").range(0, 1),
+                      PropValue::ofFloat(INFINITY)) == PropValue::ofFloat(1));
 
   /* An explicit default survives later item() calls. */
-  PropertyDef e =
-      PropertyDef::enumProp("m").defaultValue(PropValue::ofEnum(5)).item("A", 0).item("B", 5);
+  PropertyDef e = PropertyDef::enumProp("m")
+                      .defaultValue(PropValue::ofEnum(5))
+                      .item("A", 0)
+                      .item("B", 5);
   test_assert(e.defaultValue() == PropValue::ofEnum(5) && e.validate().ok());
 
   /* Wrong-type defaults say so. */
-  test_assert(hasMsg(PropertyDef::floatProp("f").defaultValue(PropValue::ofInt(1)).validate(),
-                     "is a Int, not a Float"));
+  test_assert(
+      hasMsg(PropertyDef::floatProp("f").defaultValue(PropValue::ofInt(1)).validate(),
+             "is a Int, not a Float"));
 
   /* Int clamping compares in int64, above 2^53 too. */
   const PropertyDef big = PropertyDef::intProp("n").range(0, 9007199254740992.0);
@@ -340,7 +365,8 @@ static void test_review_fixes()
               PropValue::ofBool(true));
 
   /* Flag bit 63. */
-  const PropertyDef top = PropertyDef::flagsProp("f").item("TOP", INT64_MIN).item("LOW", 1);
+  const PropertyDef top =
+      PropertyDef::flagsProp("f").item("TOP", INT64_MIN).item("LOW", 1);
   test_assert(top.validate().ok());
   test_assert(*coerce(top, PropValue::ofString("TOP|LOW")) ==
               PropValue::ofFlags(0x8000000000000001ull));
@@ -350,34 +376,39 @@ static void test_review_fixes()
   StableRef mesh;
   mesh.owner = OwnerKey::ofRuntime(1);
   mesh.type = StructId::of("Mesh");
-  test_assert(coerce(p, PropValue::ofPointer(mesh)).status().code() == StatusCode::TypeMismatch);
+  test_assert(coerce(p, PropValue::ofPointer(mesh)).status().code() ==
+              StatusCode::TypeMismatch);
   mesh.type = StructId::of("Object");
   test_assert(coerce(p, PropValue::ofPointer(mesh)).ok());
   mesh.type = StructId();
   test_assert(coerce(p, PropValue::ofPointer(mesh)).ok()); /* unknown type: accepted */
 
   /* A dynamic def must be resolved before coerce. */
-  const PropertyDef dyn =
-      PropertyDef::floatProp("d").dynamic([](PropertyDef &def, const void *) { def.range(0, 1); });
+  const PropertyDef dyn = PropertyDef::floatProp("d").dynamic(
+      [](PropertyDef &def, const void *) { def.range(0, 1); });
   test_assert(coerce(dyn, PropValue::ofFloat(5)).status().code() ==
               StatusCode::FailedPrecondition);
-  test_assert(*coerce(dyn.resolved(nullptr), PropValue::ofFloat(5)) == PropValue::ofFloat(1));
+  test_assert(*coerce(dyn.resolved(nullptr), PropValue::ofFloat(5)) ==
+              PropValue::ofFloat(1));
 
   /* uiName("") re-derives. */
-  test_assert(strcmp(PropertyDef::floatProp("edgeLoop").uiName("X").uiName("").uiName().c_str(),
-                     "Edge Loop") == 0);
+  test_assert(
+      strcmp(PropertyDef::floatProp("edgeLoop").uiName("X").uiName("").uiName().c_str(),
+             "Edge Loop") == 0);
 }
 
 /* A bag resolves dynamic defs with itself as the owner. */
 static void test_bag_review_fixes()
 {
   PropertyBag bag;
-  test_assert(bag.add(PropertyDef::intProp("count").defaultValue(PropValue::ofInt(4))).ok());
-  test_assert(bag.add(PropertyDef::intProp("pick").dynamic([](PropertyDef &def, const void *o) {
-                   const PropertyBag *b = static_cast<const PropertyBag *>(o);
-                   def.range(0, double(b->get("count")->asInt() - 1));
-                 }))
-                  .ok());
+  test_assert(
+      bag.add(PropertyDef::intProp("count").defaultValue(PropValue::ofInt(4))).ok());
+  test_assert(
+      bag.add(PropertyDef::intProp("pick").dynamic([](PropertyDef &def, const void *o) {
+           const PropertyBag *b = static_cast<const PropertyBag *>(o);
+           def.range(0, double(b->get("count")->asInt() - 1));
+         }))
+          .ok());
   test_assert(bag.set("pick", PropValue::ofInt(10)).ok());
   test_assert(*bag.get("pick") == PropValue::ofInt(3));
   test_assert(bag.setAt(0, PropValue::ofInt(2)).ok());

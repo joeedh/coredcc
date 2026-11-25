@@ -15,7 +15,8 @@ using parse_detail::Lexer;
 
 bool RawScalar::operator==(const RawScalar &b) const
 {
-  return kind == b.kind && isInteger == b.isInteger && strcmp(text.c_str(), b.text.c_str()) == 0;
+  return kind == b.kind && isInteger == b.isInteger &&
+         strcmp(text.c_str(), b.text.c_str()) == 0;
 }
 
 bool RawValue::operator==(const RawValue &b) const
@@ -62,8 +63,7 @@ void appendScalar(std::string &out, const RawScalar &s)
 {
   if (s.kind == RawScalar::Kind::String) {
     appendQuoted(out, s.text.c_str());
-  }
-  else {
+  } else {
     out += s.text.c_str();
   }
 }
@@ -247,8 +247,8 @@ bool parseInto(Lexer &lx, Invocation &out, Failure &fail)
   lx.skipSpace();
   std::string_view part;
   if (!lx.identifier(part)) {
-    fail = lx.failHere(lx.atEnd() ? std::string("empty invocation") :
-                                    "expected a command id, got " + lx.describeHere());
+    fail = lx.failHere(lx.atEnd() ? std::string("empty invocation")
+                                  : "expected a command id, got " + lx.describeHere());
     return false;
   }
   std::string id(part);
@@ -281,7 +281,8 @@ Result<Invocation> parseInvocation(std::string_view text, size_t *errorOffset)
   Invocation inv;
   Failure fail;
   if (text.size() > kMaxPathLength) {
-    fail = Failure{0, "invocation longer than " + std::to_string(kMaxPathLength) + " bytes"};
+    fail =
+        Failure{0, "invocation longer than " + std::to_string(kMaxPathLength) + " bytes"};
   }
   if (!fail.what.empty() || !parseInto(lx, inv, fail)) {
     if (errorOffset) {

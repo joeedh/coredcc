@@ -20,8 +20,9 @@ void testSetParent()
 {
   CommandDoc d;
   Rand r(3);
-  const BlockHandle a = d.object("a"), b = d.object("b"), c = d.object("c"), p = d.object("p"),
-                    q = d.object("q"), h = d.hostObject("h"), out = d.loose("out");
+  const BlockHandle a = d.object("a"), b = d.object("b"), c = d.object("c"),
+                    p = d.object("p"), q = d.object("q"), h = d.hostObject("h"),
+                    out = d.loose("out");
   for (BlockHandle x : {a, b, c, p, q}) {
     const double s = r.range(0.5, 2.0);
     d.obj(x).channels = trsChannels(r, *d.trs, double3(s, s, s), 5.0);
@@ -67,14 +68,17 @@ void testSetParent()
   for (bool keep : {true, false}) {
     d.select({a, b, h});
     PropertyBag some =
-        d.cycle(kSetParentCommand, {{"parent", d.ptr(p)}, {"keepWorld", PropValue::ofBool(keep)}});
-    test_assert(some.get("skipped")->asInt() == 1 && d.obj(b).parent.target() == d.idOf(p));
+        d.cycle(kSetParentCommand,
+                {{"parent", d.ptr(p)}, {"keepWorld", PropValue::ofBool(keep)}});
+    test_assert(some.get("skipped")->asInt() == 1 &&
+                d.obj(b).parent.target() == d.idOf(p));
     d.undo();
     d.select({h});
-    test_assert(isError(
-        d.fails(kSetParentCommand, {{"parent", d.ptr(p)}, {"keepWorld", PropValue::ofBool(keep)}}),
-        StatusCode::Unsupported,
-        "'h'"));
+    test_assert(
+        isError(d.fails(kSetParentCommand,
+                        {{"parent", d.ptr(p)}, {"keepWorld", PropValue::ofBool(keep)}}),
+                StatusCode::Unsupported,
+                "'h'"));
   }
   d.obj(b).setTransformType("test.missing");
   d.select({b});
@@ -82,7 +86,8 @@ void testSetParent()
                       StatusCode::FailedPrecondition,
                       "'b': its transform type"));
   d.select({b, a});
-  test_assert(d.cycle(kSetParentCommand, {{"parent", d.ptr(p)}}).get("skipped")->asInt() == 1);
+  test_assert(
+      d.cycle(kSetParentCommand, {{"parent", d.ptr(p)}}).get("skipped")->asInt() == 1);
   test_assert(d.obj(a).parent.target() == d.idOf(p) && d.obj(b).parent.target().isNull());
   d.undo();
   d.cycle(kSetParentCommand,
@@ -113,7 +118,8 @@ void testSetParent()
 void testFailingWrites()
 {
   CommandDoc d;
-  const BlockHandle a = d.object("a", 1.0), h = d.hostObject("h", 2.0), b = d.object("b", 3.0);
+  const BlockHandle a = d.object("a", 1.0), h = d.hostObject("h", 2.0),
+                    b = d.object("b", 3.0);
   const PropValue move = PropValue::ofVec3(10, 0, 0);
   d.select({a, h, b});
   d.ok(kApplyDeltaCommand, {{"vector", move}});
@@ -132,13 +138,14 @@ void testFailingWrites()
   d.host(h).onWrite = [] { return boom("no"); };
   test_assert(isError(d.ex->redo(*d.ctx), StatusCode::Internal, "no"));
   test_assert(d.describe() == before);
-  test_assert(isError(d.fails(kApplyDeltaCommand, {{"vector", move}}), StatusCode::Internal, "no"));
+  test_assert(isError(
+      d.fails(kApplyDeltaCommand, {{"vector", move}}), StatusCode::Internal, "no"));
   d.host(h).onWrite = [&] {
     d.rt.setStickyError(boom("threw"));
     return Status();
   };
-  test_assert(
-      isError(d.fails(kApplyDeltaCommand, {{"vector", move}}), StatusCode::Internal, "threw"));
+  test_assert(isError(
+      d.fails(kApplyDeltaCommand, {{"vector", move}}), StatusCode::Internal, "threw"));
   d.host(h).onWrite = nullptr;
 
   /* One that its host took away in between isn't a failure. */
@@ -162,13 +169,15 @@ void testTransformType()
   const mat4d wa = d.stateOf(a).world, wb = d.stateOf(b).world;
   d.select({a, b});
   for (const char *type : {kFbxTransform, kMatrixTransform, kTrsTransform}) {
-    PropertyBag out = d.cycle(kSetTransformTypeCommand, {{"type", PropValue::ofString(type)}});
+    PropertyBag out =
+        d.cycle(kSetTransformTypeCommand, {{"type", PropValue::ofString(type)}});
     test_assert(out.get("approximate")->asInt() == 0);
     test_assert(d.obj(a).transformTypeId() == TypeId::of(type));
     test_assert(closeTo(d.stateOf(a).world, wa) && closeTo(d.stateOf(b).world, wb));
   }
   d.cycle(kSetTransformTypeCommand,
-          {{"type", PropValue::ofString(kFbxTransform)}, {"keepWorld", PropValue::ofBool(false)}});
+          {{"type", PropValue::ofString(kFbxTransform)},
+           {"keepWorld", PropValue::ofBool(false)}});
   test_assert(d.obj(a).channels == d.fbx->defaults());
   test_assert(closeTo(d.stateOf(b).world, mat4d().identity()));
   d.undo();
@@ -181,17 +190,19 @@ void testTransformType()
   d.select({a});
   d.ok(kSetParentCommand, {{"keepWorld", PropValue::ofBool(true)}});
   d.undo();
-  PropertyBag out =
-      d.cycle(kSetTransformTypeCommand, {{"type", PropValue::ofString(kMatrixTransform)}});
-  test_assert(out.get("approximate")->asInt() == 0 && closeTo(d.stateOf(a).world, sheared));
+  PropertyBag out = d.cycle(kSetTransformTypeCommand,
+                            {{"type", PropValue::ofString(kMatrixTransform)}});
+  test_assert(out.get("approximate")->asInt() == 0 &&
+              closeTo(d.stateOf(a).world, sheared));
   d.ok(kSetParentCommand);
   test_assert(closeTo(d.stateOf(a).world, sheared));
   out = d.cycle(kSetTransformTypeCommand);
   test_assert(out.get("approximate")->asInt() == 1);
 
-  test_assert(isError(d.fails(kSetTransformTypeCommand, {{"type", PropValue::ofString("x.y")}}),
-                      StatusCode::NotFound,
-                      "'x.y'"));
+  test_assert(
+      isError(d.fails(kSetTransformTypeCommand, {{"type", PropValue::ofString("x.y")}}),
+              StatusCode::NotFound,
+              "'x.y'"));
   /* From a type that isn't registered, and back. */
   d.obj(a).setTransformType("test.missing");
   d.cycle(kSetTransformTypeCommand);
@@ -215,9 +226,10 @@ void testTransformType()
     test_assert(d.obj(b).transformTypeId() == d.trs->id());
     d.undo();
     d.select({h});
-    test_assert(isError(d.fails(kSetTransformTypeCommand, {{"keepWorld", PropValue::ofBool(keep)}}),
-                        StatusCode::Unsupported,
-                        "'h'"));
+    test_assert(isError(
+        d.fails(kSetTransformTypeCommand, {{"keepWorld", PropValue::ofBool(keep)}}),
+        StatusCode::Unsupported,
+        "'h'"));
     d.select({odd, h});
     out = d.ok(kSetTransformTypeCommand, {{"keepWorld", PropValue::ofBool(keep)}});
     test_assert(out.get("skipped")->asInt() == 1 && d.obj(odd).channels == was);
@@ -243,7 +255,9 @@ void testRotationMode()
       d.obj(x).channels = trsChannels(r, *d.trs, r.scale(2, true), 5.0);
     }
     if (i % 5 == 0) {
-      put(d.obj(a).channels, trs::kScale, double3(0, 1, 0)); /* the rotation stays here too */
+      put(d.obj(a).channels,
+          trs::kScale,
+          double3(0, 1, 0)); /* the rotation stays here too */
     }
     const ChannelBlock before = d.obj(a).channels;
     const TransformState sa = d.stateOf(a), sb = d.stateOf(b);
@@ -251,29 +265,31 @@ void testRotationMode()
     const PropValue m = PropValue::ofEnum(mode);
     d.cycle(kSetRotationModeCommand, {{"mode", m}});
     test_assert(d.obj(a).channels.get(trs::kRotationMode) == mode);
-    test_assert(closeTo(d.stateOf(a).world, sa.world) && closeTo(d.stateOf(b).world, sb.world));
+    test_assert(closeTo(d.stateOf(a).world, sa.world) &&
+                closeTo(d.stateOf(b).world, sb.world));
     const TransformState after = d.stateOf(a);
     double dot = 0.0;
     for (int k = 0; k < 4; k++) {
       dot += after.rotation[k] * sa.rotation[k];
     }
     test_assert(std::fabs(std::fabs(dot) - 1.0) < 1e-12);
-    const double3 l0 = get(before, trs::kLocation), l1 = get(d.obj(a).channels, trs::kLocation);
+    const double3 l0 = get(before, trs::kLocation),
+                  l1 = get(d.obj(a).channels, trs::kLocation);
     test_assert(l0[0] == l1[0] && l0[1] == l1[1] && l0[2] == l1[2]);
   }
   d.select({b});
   d.obj(b).setTransformType(kFbxTransform);
   d.obj(b).channels = d.fbx->defaults();
-  test_assert(
-      isError(d.fails(kSetRotationModeCommand), StatusCode::FailedPrecondition, "'b': has no"));
+  test_assert(isError(
+      d.fails(kSetRotationModeCommand), StatusCode::FailedPrecondition, "'b': has no"));
   d.obj(b).setTransformType("test.missing"); /* with as many channels */
   d.obj(b).channels = d.trs->defaults();
-  test_assert(
-      isError(d.fails(kSetRotationModeCommand), StatusCode::FailedPrecondition, "'b': has no"));
+  test_assert(isError(
+      d.fails(kSetRotationModeCommand), StatusCode::FailedPrecondition, "'b': has no"));
   d.obj(b).setTransformType(kTrsTransform);
   d.obj(b).channels = ChannelBlock(2);
-  test_assert(
-      isError(d.fails(kSetRotationModeCommand), StatusCode::FailedPrecondition, "'b': has no"));
+  test_assert(isError(
+      d.fails(kSetRotationModeCommand), StatusCode::FailedPrecondition, "'b': has no"));
 }
 
 void testApplyDelta()
@@ -344,13 +360,15 @@ void testApplyDelta()
 
   d.obj(other).setTransformType("test.missing");
   d.select({other});
-  test_assert(isError(d.fails(kApplyDeltaCommand), StatusCode::FailedPrecondition, "'other'"));
+  test_assert(
+      isError(d.fails(kApplyDeltaCommand), StatusCode::FailedPrecondition, "'other'"));
 }
 
 void testDrag()
 {
   CommandDoc d;
-  const BlockHandle a = d.object("a", 1.0), h = d.hostObject("h", 5.0), b = d.object("b", 2.0);
+  const BlockHandle a = d.object("a", 1.0), h = d.hostObject("h", 5.0),
+                    b = d.object("b", 2.0);
   d.setParent(b, a);
   const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
   test_assert(!d.run(kDragDeltaCommand).ok()); /* interactive only */
@@ -373,8 +391,8 @@ void testDrag()
       return drag->update(c, t);
     }));
   }
-  test_assert(std::fabs(d.obj(a).channels.get(trs::kRotationEuler + 2) - 4 * 3.14159265358979) <
-              1e-9);
+  test_assert(std::fabs(d.obj(a).channels.get(trs::kRotationEuler + 2) -
+                        4 * 3.14159265358979) < 1e-9);
   test_assert(d.obj(b).channels.get(trs::kRotationEuler + 2) == 0.0);
   t = TransformDelta();
   t.vector = double3(0, 7, 0);
@@ -425,8 +443,8 @@ void testDelete()
   CommandDoc d;
   Rand r(31);
   const BlockHandle top = d.object("top"), mid = d.object("mid"), low = d.object("low"),
-                    leaf = d.object("leaf"), side = d.object("side"), out = d.loose("out"),
-                    h = d.hostObject("h", 1.0);
+                    leaf = d.object("leaf"), side = d.object("side"),
+                    out = d.loose("out"), h = d.hostObject("h", 1.0);
   d.lib->setFlag(out, BlockFlags::FakeUser, true);
   d.setParent(mid, top);
   d.setParent(low, mid);
@@ -441,7 +459,9 @@ void testDelete()
     }
   };
   scramble();
-  const auto parent = [&](BlockHandle x) { return d.lib->resolveRef(d.obj(x).parent.cell()); };
+  const auto parent = [&](BlockHandle x) {
+    return d.lib->resolveRef(d.obj(x).parent.cell());
+  };
   const auto worlds = [&] {
     std::vector<mat4d> w;
     for (BlockHandle x : {leaf, side, out, low}) {
@@ -470,11 +490,12 @@ void testDelete()
   res = d.cycle(kDeleteObjectsCommand);
   test_assert(res.get("count")->asInt() == 3);
   test_assert(!parent(leaf) && d.obj(leaf).parent.cell().isNull() && !parent(side));
-  test_assert(closeTo(d.stateOf(leaf).world, w[0]) && closeTo(d.stateOf(side).world, w[1]));
+  test_assert(closeTo(d.stateOf(leaf).world, w[0]) &&
+              closeTo(d.stateOf(side).world, w[1]));
   d.undo();
 
-  /* Every other one of a chain: a child's new parent is one that is moved itself, and that only
-   * approximately. The deeper one comes first in the Library. */
+  /* Every other one of a chain: a child's new parent is one that is moved itself, and
+   * that only approximately. The deeper one comes first in the Library. */
   CommandDoc e;
   const BlockHandle e4 = e.object("e4"), e2 = e.object("e2"), e1 = e.object("e1"),
                     e3 = e.object("e3"), e0 = e.object("e0");
@@ -555,7 +576,9 @@ void testDelete()
   refusing.channels = d.host(h).channels;
   d.setParent(mid, BlockHandle());
   must(d.lib->setOverride(
-      h, iface, IfaceRef(d.rt.ifaces().find(TypeId::of("test.Parented"), iface), &refusing)));
+      h,
+      iface,
+      IfaceRef(d.rt.ifaces().find(TypeId::of("test.Parented"), iface), &refusing)));
   test_assert(isError(d.fails(kDeleteObjectsCommand), StatusCode::Internal, "'h': no"));
   d.lib->clearOverride(h, iface);
 
@@ -566,7 +589,8 @@ void testDelete()
   f.select({up});
   bool armed = true;
   ScopedConnection l = f.rt.ext<ChangeBus>().addListener([&](const OwnerKey *k) {
-    if (armed && *k == OwnerKey::ofBlock(f.idOf(down)) && f.obj(down).parent.cell().isNull() &&
+    if (armed && *k == OwnerKey::ofBlock(f.idOf(down)) &&
+        f.obj(down).parent.cell().isNull() &&
         f.obj(down).channels.get(trs::kLocation) == 3.0)
     {
       armed = false;
@@ -627,7 +651,8 @@ void testDelete()
   CommandDoc m;
   const BlockHandle target = m.object("target", 1.0), user = m.object("user", 10.0),
                     child = m.object("child", 100.0);
-  must(m.lib->setSlot(user, TypeId::of("test.Shape"), 1, m.idOf(target), RefKind::Strong));
+  must(
+      m.lib->setSlot(user, TypeId::of("test.Shape"), 1, m.idOf(target), RefKind::Strong));
   m.setParent(child, user);
   m.select({target});
   PropertyBag two = m.cycle(kDeleteObjectsCommand);

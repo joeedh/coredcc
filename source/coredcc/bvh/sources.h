@@ -14,10 +14,11 @@
 #include <utility>
 
 /*
- * The built-in primitive sources: triangles, capsules, spheres and boxes, each a structure
- * of arrays. They are GeometrySources, which is what GeometryBvh stores in leaf order.
- * Coordinates are object space, radii object units. A primitive whose bounds aren't
- * finite, or whose radius is negative or NaN, has an unusable box, so it is left out.
+ * The built-in primitive sources: triangles, capsules, spheres and boxes, each a
+ * structure of arrays. They are GeometrySources, which is what GeometryBvh stores in leaf
+ * order. Coordinates are object space, radii object units. A primitive whose bounds
+ * aren't finite, or whose radius is negative or NaN, has an unusable box, so it is left
+ * out.
  */
 namespace coredcc {
 
@@ -142,15 +143,16 @@ inline bool ballOutside(const double3 &p, double r, const BvhPlane &plane)
 /**
  * What GeometryBvh is built over, and keeps a copy of in leaf order. Besides bounds:
  *
- * - `gather(from, order, parallel)`: become `order.size()` elements, with element k equal to
- *   `from`'s `order[k]`. `reorder(order, parallel)`: the same from itself. `set(i, from, j)`: take
- *   `from`'s element j as element i.
- * - `rayRange(q, first, count, limit, hit)`: for each of those elements that the ray meets with
- *   `q.tMin <= t <= limit`, call `hit(i, PrimHit) -> bool`; on false, return false at once. `limit`
- *   is a reference that `hit` may lower.
- * - `closest(i, p)`: the point of element i nearest to p, in the element's bounds up to rounding.
- * - `outside(i, plane)`: the element is certainly outside the half-space. May be false for one that
- *   is.
+ * - `gather(from, order, parallel)`: become `order.size()` elements, with element k equal
+ * to `from`'s `order[k]`. `reorder(order, parallel)`: the same from itself. `set(i, from,
+ * j)`: take `from`'s element j as element i.
+ * - `rayRange(q, first, count, limit, hit)`: for each of those elements that the ray
+ * meets with `q.tMin <= t <= limit`, call `hit(i, PrimHit) -> bool`; on false, return
+ * false at once. `limit` is a reference that `hit` may lower.
+ * - `closest(i, p)`: the point of element i nearest to p, in the element's bounds up to
+ * rounding.
+ * - `outside(i, plane)`: the element is certainly outside the half-space. May be false
+ * for one that is.
  */
 template <class T>
 concept GeometrySource =
@@ -174,7 +176,7 @@ concept GeometrySource =
 /** Triangles. One with no area can't be hit by a ray; to closest() it is a segment or a
  * point. */
 template <class S> class TriangleSource {
- public:
+public:
   using Scalar = S;
 
   void append(const double3 &a, const double3 &b, const double3 &c)
@@ -207,8 +209,9 @@ template <class S> class TriangleSource {
     }
     return b;
   }
-  void
-  gather(const TriangleSource &from, const litestl::util::Vector<int> &order, bool parallel)
+  void gather(const TriangleSource &from,
+              const litestl::util::Vector<int> &order,
+              bool parallel)
   {
     c_.gather(from.c_, order, parallel);
   }
@@ -222,7 +225,8 @@ template <class S> class TriangleSource {
   }
 
   template <class Hit>
-  bool rayRange(const bvh::RayQuery &q, int first, int count, double &limit, Hit &&hit) const
+  bool
+  rayRange(const bvh::RayQuery &q, int first, int count, double &limit, Hit &&hit) const
   {
     const S *coords[9];
     for (int k = 0; k < 9; k++) {
@@ -230,7 +234,8 @@ template <class S> class TriangleSource {
     }
     bvh::TriangleBlockHits block;
     for (int done = 0; done < count; done += bvh::kTriangleBlock) {
-      const int n = count - done < bvh::kTriangleBlock ? count - done : bvh::kTriangleBlock;
+      const int n =
+          count - done < bvh::kTriangleBlock ? count - done : bvh::kTriangleBlock;
       uint32_t mask = bvh::rayTriangles(q, coords, first + done, n, limit, block);
       for (int k = 0; mask != 0; k++, mask >>= 1) {
         if ((mask & 1) && block.t[k] <= limit &&
@@ -254,13 +259,14 @@ template <class S> class TriangleSource {
            bvh::ballOutside(corner(i, 2), 0.0, plane);
   }
 
- private:
+private:
   bvh::Columns<S, 9> c_;
 };
 
-/** Solid capsules: the points within `radius` of a segment. A zero-length one is a sphere. */
+/** Solid capsules: the points within `radius` of a segment. A zero-length one is a
+ * sphere. */
 template <class S> class CapsuleSource {
- public:
+public:
   using Scalar = S;
 
   void append(const double3 &a, const double3 &b, double radius)
@@ -288,8 +294,9 @@ template <class S> class CapsuleSource {
   {
     return bvh::boxAround<S>(end(i, 0), end(i, 1), radius(i));
   }
-  void
-  gather(const CapsuleSource &from, const litestl::util::Vector<int> &order, bool parallel)
+  void gather(const CapsuleSource &from,
+              const litestl::util::Vector<int> &order,
+              bool parallel)
   {
     c_.gather(from.c_, order, parallel);
   }
@@ -303,7 +310,8 @@ template <class S> class CapsuleSource {
   }
 
   template <class Hit>
-  bool rayRange(const bvh::RayQuery &q, int first, int count, double &limit, Hit &&hit) const
+  bool
+  rayRange(const bvh::RayQuery &q, int first, int count, double &limit, Hit &&hit) const
   {
     for (int i = first; i < first + count; i++) {
       double t;
@@ -327,13 +335,13 @@ template <class S> class CapsuleSource {
            bvh::ballOutside(end(i, 1), radius(i), plane);
   }
 
- private:
+private:
   bvh::Columns<S, 7> c_;
 };
 
 /** Solid spheres. */
 template <class S> class SphereSource {
- public:
+public:
   using Scalar = S;
 
   void append(const double3 &center, double radius)
@@ -376,7 +384,8 @@ template <class S> class SphereSource {
   }
 
   template <class Hit>
-  bool rayRange(const bvh::RayQuery &q, int first, int count, double &limit, Hit &&hit) const
+  bool
+  rayRange(const bvh::RayQuery &q, int first, int count, double &limit, Hit &&hit) const
   {
     for (int i = first; i < first + count; i++) {
       double t;
@@ -398,13 +407,13 @@ template <class S> class SphereSource {
     return bvh::ballOutside(center(i), radius(i), plane);
   }
 
- private:
+private:
   bvh::Columns<S, 4> c_;
 };
 
 /** Solid boxes, in double. */
 class BoxSource {
- public:
+public:
   using Scalar = double;
 
   void append(const Box3d &box)
@@ -428,7 +437,8 @@ class BoxSource {
   {
     return boxes_[i];
   }
-  void gather(const BoxSource &from, const litestl::util::Vector<int> &order, bool parallel)
+  void
+  gather(const BoxSource &from, const litestl::util::Vector<int> &order, bool parallel)
   {
     bvh::gatherColumn(from.boxes_, order, parallel, boxes_);
   }
@@ -442,12 +452,15 @@ class BoxSource {
   }
 
   template <class Hit>
-  bool rayRange(const bvh::RayQuery &q, int first, int count, double &limit, Hit &&hit) const
+  bool
+  rayRange(const bvh::RayQuery &q, int first, int count, double &limit, Hit &&hit) const
   {
     for (int i = first; i < first + count; i++) {
       double t;
       bool inside;
-      if (bvh::rayBox(q, boxes_[i], limit, t, inside) && !hit(i, bvh::PrimHit{t, 0.0, 0.0, inside, false})) {
+      if (bvh::rayBox(q, boxes_[i], limit, t, inside) &&
+          !hit(i, bvh::PrimHit{t, 0.0, 0.0, inside, false}))
+      {
         return false;
       }
     }
@@ -462,7 +475,7 @@ class BoxSource {
     return bvh::boxOutside(boxes_[i].min, boxes_[i].max, plane);
   }
 
- private:
+private:
   litestl::util::Vector<Box3d> boxes_;
 };
 

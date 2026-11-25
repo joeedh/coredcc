@@ -1,5 +1,5 @@
-/* The scene's commands on many native objects. Not a test: run it on an idle machine, with
- * the tool, which builds it first.
+/* The scene's commands on many native objects. Not a test: run it on an idle machine,
+ * with the tool, which builds it first.
  *
  *   node tools/bench.mjs scene_commands [-- [--count N] [--only PART]]
  *
@@ -36,7 +36,9 @@ template <class Fn> double timeOf(Fn &&fn)
 {
   const auto from = std::chrono::steady_clock::now();
   fn();
-  return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - from).count();
+  return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+                                                   from)
+      .count();
 }
 
 template <class Fn> void timed(const std::string &name, Fn &&fn)
@@ -94,7 +96,8 @@ struct Doc {
     for (int i = 0; i < n; i++) {
       out.append(lib->get(objects[size_t(i * step)])->id());
     }
-    return PropValue::ofString(formatBlockIds(rt, {out.data(), size_t(out.size())}).c_str());
+    return PropValue::ofString(
+        formatBlockIds(rt, {out.data(), size_t(out.size())}).c_str());
   }
   using In = std::vector<std::pair<const char *, PropValue>>;
   void run(const char *command, const In &in = {})
@@ -158,7 +161,8 @@ void members(int count)
       d.redo();
     }
   });
-  timed("select all", [&] { d.run(kSelectCommand, {{"mode", PropValue::ofEnum(kAll)}}); });
+  timed("select all",
+        [&] { d.run(kSelectCommand, {{"mode", PropValue::ofEnum(kAll)}}); });
 }
 
 void history(int count)
@@ -198,7 +202,8 @@ void transforms(int count)
   d.evaluate();
   cycle(d, "applyDelta, all", kApplyDeltaCommand, {{"vector", kStep}});
   const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
-  timed("drag of all: begin", [&] { must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs())); });
+  timed("drag of all: begin",
+        [&] { must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs())); });
   TransformDelta t;
   for (int i = 1; i <= 2; i++) {
     t.vector = double3(i, 2, 3);
@@ -221,7 +226,10 @@ void transforms(int count)
         "setTransformType, all",
         kSetTransformTypeCommand,
         {{"type", PropValue::ofString(kMatrixTransform)}});
-  cycle(d, "setRotationMode, all", kSetRotationModeCommand, {{"mode", PropValue::ofEnum(2)}});
+  cycle(d,
+        "setRotationMode, all",
+        kSetRotationModeCommand,
+        {{"mode", PropValue::ofEnum(2)}});
 }
 
 void chains(int longest)
@@ -260,7 +268,8 @@ void types(int count)
       ms.push_back(timeOf([&] { d.evaluate(); }));
     }
     std::sort(ms.begin(), ms.end());
-    printf("  evaluate, unchanged, %-20s best %7.2f  median %7.2f\n", type, ms[0], ms[10]);
+    printf(
+        "  evaluate, unchanged, %-20s best %7.2f  median %7.2f\n", type, ms[0], ms[10]);
   }
 }
 
@@ -273,8 +282,7 @@ int main(int argc, char **argv)
   for (int i = 1; i + 1 < argc; i += 2) {
     if (!strcmp(argv[i], "--count")) {
       count = std::max(atoi(argv[i + 1]), 400);
-    }
-    else if (!strcmp(argv[i], "--only")) {
+    } else if (!strcmp(argv[i], "--only")) {
       only = argv[i + 1];
     }
   }

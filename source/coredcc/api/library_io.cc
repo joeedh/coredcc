@@ -34,9 +34,8 @@ Result<LoadReport> notified(Context &ctx, Result<LoadReport> report)
 
 } // namespace
 
-Result<LoadReport> loadLibrary(Context &ctx,
-                               std::span<const uint8_t> bytes,
-                               const LoadOptions &options)
+Result<LoadReport>
+loadLibrary(Context &ctx, std::span<const uint8_t> bytes, const LoadOptions &options)
 {
   if (!ctx.library()) {
     return noLibrary("loadLibrary");
@@ -44,9 +43,8 @@ Result<LoadReport> loadLibrary(Context &ctx,
   return notified(ctx, detail::loadLibrary(*ctx.library(), bytes, options));
 }
 
-Result<AppendResult> appendLibrary(Context &ctx,
-                                   std::span<const uint8_t> bytes,
-                                   const AppendOptions &options)
+Result<AppendResult>
+appendLibrary(Context &ctx, std::span<const uint8_t> bytes, const AppendOptions &options)
 {
   if (!ctx.library()) {
     return noLibrary("appendLibrary");

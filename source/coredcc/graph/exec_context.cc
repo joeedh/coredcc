@@ -65,15 +65,13 @@ Status NodeExecContext::setOutput(int i, GraphValue v)
   Status s;
   if (i < 0 || i >= int(outputs_.size())) {
     s = Status::error(StatusCode::NotFound, "setOutput: there is no such output");
-  }
-  else if (const NodeOutputDef &def = s_.type->outputs[i]; !def.type->holds(v)) {
+  } else if (const NodeOutputDef &def = s_.type->outputs[i]; !def.type->holds(v)) {
     s = Status::error(StatusCode::TypeMismatch,
                       (std::string("output '") + def.name.c_str() + "' is a " +
                        def.type->name.c_str() + ", but was set to a " +
                        graphValueTypeName(v.type()) + " value")
                           .c_str());
-  }
-  else {
+  } else {
     outputs_[i] = std::move(v);
     return s;
   }

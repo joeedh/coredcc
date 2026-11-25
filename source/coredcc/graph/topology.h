@@ -37,8 +37,8 @@ struct GraphTopology {
     /** Null while its type isn't registered; then the role is Kernel. */
     const NodeType *type = nullptr;
     NodeRole role = NodeRole::Kernel;
-    /** Ranges in `inputs` and `outputs`. For the sockets of an interface, the index in the
-     * range is the index in the interface. */
+    /** Ranges in `inputs` and `outputs`. For the sockets of an interface, the index in
+     * the range is the index in the interface. */
     int inBegin = 0, inCount = 0;
     int outBegin = 0, outCount = 0;
     /** How many of them are of the node itself. Interior ones that links use follow. */
@@ -53,8 +53,8 @@ struct GraphTopology {
     /** Whether its socket is there, and the socket's type name. */
     bool found = false;
     litestl::util::string typeName;
-    /** Index in the node's inputs or outputs. -1 if it isn't there; and for an input whose
-     * link has no output, which replaces nothing. */
+    /** Index in the node's inputs or outputs. -1 if it isn't there; and for an input
+     * whose link has no output, which replaces nothing. */
     int index = -1;
   };
   struct Group {
@@ -104,7 +104,7 @@ struct GraphTopology {
 
   static std::shared_ptr<const GraphTopology> build(const GraphDef &def);
 
- private:
+private:
   /** Nodes with more sockets on a side than this are looked up in `wide_`. */
   static constexpr int kScan = 16;
   struct SocketAt {
@@ -123,8 +123,8 @@ struct GraphTopology {
   litestl::util::Map<SocketAt, int> wide_;
 };
 
-/** Interior keys that a reach table has, after the interface's sockets. An `in` replaces the
- * interior input's link, as it does in the group the table is for. */
+/** Interior keys that a reach table has, after the interface's sockets. An `in` replaces
+ * the interior input's link, as it does in the group the table is for. */
 struct ReachKeys {
   litestl::util::Vector<InteriorKey> outs;
   litestl::util::Vector<InteriorKey> ins;
@@ -133,7 +133,7 @@ struct ReachKeys {
   int find(SocketSide side, const InteriorKey &key) const;
   std::string toString() const;
 
- private:
+private:
   litestl::util::Map<InteriorKey, int> outAt_;
   litestl::util::Map<InteriorKey, int> inAt_;
 };
@@ -153,6 +153,7 @@ struct GraphReach {
 
 /** A reach table of `def`, computed or cached. Defs that (through a reference written
  * directly) reach themselves are handled by leaving out the recursive group. */
-std::shared_ptr<const GraphReach> graphReach(const GraphDef &def, const ReachKeys &keys = {});
+std::shared_ptr<const GraphReach> graphReach(const GraphDef &def,
+                                             const ReachKeys &keys = {});
 
 } // namespace coredcc

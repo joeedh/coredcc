@@ -1,5 +1,5 @@
-/* Scenes for scripts, through a fake foreign host: results as flat arrays, and what transform types
- * can be beyond what test_bind_scene.cc has. */
+/* Scenes for scripts, through a fake foreign host: results as flat arrays, and what
+ * transform types can be beyond what test_bind_scene.cc has. */
 #include "../scene/io_doc.h"
 #include "fake_host.h"
 
@@ -64,10 +64,12 @@ void testResults()
       test_assert(matrices[i * 16 + k] == m[k]);
     }
     for (int k = 0; k < 3; k++) {
-      test_assert(bounds[i * 6 + k] == e.bounds.min[k] && bounds[i * 6 + 3 + k] == e.bounds.max[k]);
+      test_assert(bounds[i * 6 + k] == e.bounds.min[k] &&
+                  bounds[i * 6 + 3 + k] == e.bounds.max[k]);
     }
     test_assert(t.value.status()[i] == 0 && t.value.parents()[i] == e.parent);
-    test_assert(t.value.flags()[i] == (h == a ? 1 : 0) && t.value.members()[i] == (h == out ? 0 : 1));
+    test_assert(t.value.flags()[i] == (h == a ? 1 : 0) &&
+                t.value.members()[i] == (h == out ? 0 : 1));
     test_assert(textOf(d, h) == refs.value.at(i).c_str());
   }
   test_assert(refs.value.at(-1).size() == 0 && refs.value.at(3).size() == 0);
@@ -76,20 +78,25 @@ void testResults()
   d.obj(b).channels.set(0, 7.0);
   d.evaluate();
   t = sc::sceneResults(ctx, {}, false);
-  test_assert(t.value.places() == 3 && t.value.matrices().size() == 0 && !t.value.allChanged());
+  test_assert(t.value.places() == 3 && t.value.matrices().size() == 0 &&
+              !t.value.allChanged());
   test_assert(t.value.version() == 2.0 && t.value.changed().size() == 1);
   t = sc::sceneResults(ctx, t.value.changed(), false);
   test_assert(t.value.matrices().size() == 16 && t.value.matrices()[12] == 10.0);
-  test_assert(sc::sceneResults(ctx, {0, 3}, false).status.code() == StatusCode::OutOfRange);
+  test_assert(sc::sceneResults(ctx, {0, 3}, false).status.code() ==
+              StatusCode::OutOfRange);
   test_assert(sc::sceneResults(ctx, {-1}, false).status.code() == StatusCode::OutOfRange);
   test_assert(sc::sceneRefs(ctx, {3}, false).status.code() == StatusCode::OutOfRange);
-  test_assert(sc::sceneResults(ctx, {0}, true).status.code() == StatusCode::InvalidArgument);
+  test_assert(sc::sceneResults(ctx, {0}, true).status.code() ==
+              StatusCode::InvalidArgument);
 
   sc::RefListResult kids = sc::sceneChildren(ctx, str(textOf(d, out)));
-  test_assert(kids.status.ok() && kids.value.size() == 1 && textOf(d, b) == kids.value.at(0).c_str());
+  test_assert(kids.status.ok() && kids.value.size() == 1 &&
+              textOf(d, b) == kids.value.at(0).c_str());
   kids = sc::sceneChildren(ctx, "");
   test_assert(kids.value.size() == 2);
-  test_assert(sc::sceneChildren(ctx, "nonsense").status.code() == StatusCode::InvalidArgument);
+  test_assert(sc::sceneChildren(ctx, "nonsense").status.code() ==
+              StatusCode::InvalidArgument);
 
   /* One that has no record any more. */
   must(d.sc().remove(*d.lib, d.idOf(a)).status());
@@ -97,8 +104,10 @@ void testResults()
   test_assert(sc::sceneRefs(ctx, {0}, false).value.at(0).size() == 0);
 
   ctx.setScene(BlockHandle());
-  test_assert(sc::sceneResults(ctx, {}, true).status.code() == StatusCode::FailedPrecondition);
-  test_assert(sc::sceneRefs(ctx, {}, true).status.code() == StatusCode::FailedPrecondition);
+  test_assert(sc::sceneResults(ctx, {}, true).status.code() ==
+              StatusCode::FailedPrecondition);
+  test_assert(sc::sceneRefs(ctx, {}, true).status.code() ==
+              StatusCode::FailedPrecondition);
   test_assert(sc::sceneChildren(ctx, "").status.code() == StatusCode::FailedPrecondition);
   ctx.setScene(d.scene);
 }
@@ -187,11 +196,13 @@ void testChannels()
     Doc d;
     TransformTypeInfo *type = sc::newTransformType("js.full");
     must(sc::transformTypeVersion(*type, 3));
-    test_assert(isError(sc::transformTypeVersion(*type, -1), StatusCode::InvalidArgument, "negative"));
+    test_assert(isError(
+        sc::transformTypeVersion(*type, -1), StatusCode::InvalidArgument, "negative"));
     must(sc::transformChannel(*type, "q", PropValue::ofQuat(0, 0, 1, 0), false));
-    test_assert(isError(sc::transformChannel(*type, "r", PropValue::ofQuat(0, 0, 0, 1), true),
-                        StatusCode::InvalidArgument,
-                        "distance"));
+    test_assert(
+        isError(sc::transformChannel(*type, "r", PropValue::ofQuat(0, 0, 0, 1), true),
+                StatusCode::InvalidArgument,
+                "distance"));
     must(sc::transformChannel(*type, "len", sc::makeFloat(2), true));
     must(sc::transformEnumChannel(*type, "mode"));
     must(sc::transformChannelItem(*type, "mode", "SLOW", 1, "Slow", "Less"));
@@ -211,22 +222,35 @@ void testChannels()
 
     const StatusCode bad = StatusCode::InvalidArgument;
     const double nan = std::numeric_limits<double>::quiet_NaN();
-    test_assert(isError(sc::transformChannelItem(*type, "len", "X", 1, "", ""), bad, "Enum"));
-    test_assert(isError(sc::transformChannelItem(*type, "none", "X", 1, "", ""), bad, "Enum"));
+    test_assert(
+        isError(sc::transformChannelItem(*type, "len", "X", 1, "", ""), bad, "Enum"));
+    test_assert(
+        isError(sc::transformChannelItem(*type, "none", "X", 1, "", ""), bad, "Enum"));
     for (double v : {0.5, nan, 1e17}) {
-      test_assert(isError(sc::transformChannelItem(*type, "mode", "X", v, "", ""), bad, "whole"));
+      test_assert(
+          isError(sc::transformChannelItem(*type, "mode", "X", v, "", ""), bad, "whole"));
     }
-    test_assert(isError(sc::transformChannelText(*type, "none", "uiName", "x"), bad, "no such channel"));
-    test_assert(isError(sc::transformChannelText(*type, "len", "bogus", "x"), bad, "bogus"));
-    test_assert(isError(sc::transformChannelText(*type, "len", "subtype", "x"), bad, "subtype 'x'"));
-    test_assert(isError(sc::transformChannelText(*type, "len", "unit", "x"), bad, "unit family 'x'"));
-    test_assert(isError(sc::transformChannelText(*type, "q", "displayUnit", "cm"), bad, "needs a unit"));
-    test_assert(isError(sc::transformChannelText(*type, "mode", "default", "x"), bad, "item 'x'"));
-    test_assert(isError(sc::transformChannelText(*type, "len", "default", "x"), bad, "item 'x'"));
-    test_assert(isError(sc::transformChannelNumbers(*type, "none", "step", 1, 0), bad, "no such"));
-    test_assert(isError(sc::transformChannelNumbers(*type, "len", "bogus", 1, 0), bad, "bogus"));
+    test_assert(isError(
+        sc::transformChannelText(*type, "none", "uiName", "x"), bad, "no such channel"));
+    test_assert(
+        isError(sc::transformChannelText(*type, "len", "bogus", "x"), bad, "bogus"));
+    test_assert(isError(
+        sc::transformChannelText(*type, "len", "subtype", "x"), bad, "subtype 'x'"));
+    test_assert(isError(
+        sc::transformChannelText(*type, "len", "unit", "x"), bad, "unit family 'x'"));
+    test_assert(isError(
+        sc::transformChannelText(*type, "q", "displayUnit", "cm"), bad, "needs a unit"));
+    test_assert(isError(
+        sc::transformChannelText(*type, "mode", "default", "x"), bad, "item 'x'"));
+    test_assert(
+        isError(sc::transformChannelText(*type, "len", "default", "x"), bad, "item 'x'"));
+    test_assert(isError(
+        sc::transformChannelNumbers(*type, "none", "step", 1, 0), bad, "no such"));
+    test_assert(
+        isError(sc::transformChannelNumbers(*type, "len", "bogus", 1, 0), bad, "bogus"));
     for (double v : {-1.0, nan, 1e9}) {
-      test_assert(isError(sc::transformChannelNumbers(*type, "len", "precision", v, 0), bad, "digits"));
+      test_assert(isError(
+          sc::transformChannelNumbers(*type, "len", "precision", v, 0), bad, "digits"));
     }
     must(sc::registerForeignTransformType(
         *d.ctx, *type, host.add(plane.make()), "evaluate setWorld upgrade"));
@@ -251,7 +275,8 @@ void testChannels()
                   !strcmp(n.displayUnit.c_str(), "cm"));
       const EnumMeta &e = *mode->def().enumMeta();
       test_assert(e.items.size() == 2 && !strcmp(e.items[0].uiName.c_str(), "Slow") &&
-                  !strcmp(e.items[0].description.c_str(), "Less") && e.items[1].value == -5);
+                  !strcmp(e.items[0].description.c_str(), "Less") &&
+                  e.items[1].value == -5);
     }
     litestl::alloc::Delete(type);
 
@@ -261,11 +286,13 @@ void testChannels()
       must(sc::transformChannel(*info, "x", sc::makeFloat(1), false));
       fill(*info);
       const fakehost::lf::Handle h = host.add(plane.make());
-      test_assert(!sc::registerForeignTransformType(*d.ctx, *info, h, "evaluate setWorld").ok());
+      test_assert(
+          !sc::registerForeignTransformType(*d.ctx, *info, h, "evaluate setWorld").ok());
       test_assert(host.releasesOf(h) == 1);
       litestl::alloc::Delete(info);
     };
-    refused([](TransformTypeInfo &info) { must(sc::transformEnumChannel(info, "mode")); });
+    refused(
+        [](TransformTypeInfo &info) { must(sc::transformEnumChannel(info, "mode")); });
     refused([](TransformTypeInfo &info) {
       must(sc::transformChannelNumbers(info, "x", "range", 2, 1));
     });
@@ -336,11 +363,13 @@ void testSlots()
     {
       Loaded l(now, bytes);
       Result<TransformState> s = computeState(l.lib, l.byName("v"), 0.0);
-      test_assert(s.ok() && solve::translationOf(s->world)[0] == 3.0 && second.upgrades == 1);
+      test_assert(s.ok() && solve::translationOf(s->world)[0] == 3.0 &&
+                  second.upgrades == 1);
     }
     second.fail = true;
     Loaded l(now, bytes);
-    test_assert(!computeState(l.lib, l.byName("v"), 0.0).ok() && !now.rt.hasStickyError());
+    test_assert(!computeState(l.lib, l.byName("v"), 0.0).ok() &&
+                !now.rt.hasStickyError());
     second.fail = false;
   }
   test_assert(host.live() == 0 && host.allReleasedOnce());

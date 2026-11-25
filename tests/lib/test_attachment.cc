@@ -59,7 +59,8 @@ struct NoteProvider {
   void foreachRef(const Datablock &, const void *data, RefVisitor &v) const
   {
     if (host->failForeach) {
-      host->rt->setStickyError(Status::error(StatusCode::Internal, "note foreachRef threw"));
+      host->rt->setStickyError(
+          Status::error(StatusCode::Internal, "note foreachRef threw"));
       return;
     }
     v.visit(const_cast<Note *>(static_cast<const Note *>(data))->about);
@@ -80,7 +81,9 @@ struct NoteProvider {
 /* The least a provider can be, or with one optional slot. */
 enum class Part { None, Serialize, Deserialize, Copy };
 template <Part P> struct PartProvider {
-  void destroy(void *) {}
+  void destroy(void *)
+  {
+  }
   Status serialize(const Datablock &, const void *, BlockWriter &) const
   {
     return Status();
@@ -154,17 +157,21 @@ struct World {
 static void test_registry_rules()
 {
   Runtime rt;
-  const auto add = [&](auto *p, const char *name, DuplicatePolicy policy = DuplicatePolicy::Drop) {
-    return addAttachment(rt, name, p, policy).status();
-  };
+  const auto add =
+      [&](auto *p, const char *name, DuplicatePolicy policy = DuplicatePolicy::Drop) {
+        return addAttachment(rt, name, p, policy).status();
+      };
   test_assert(hasMsg(add(litestl::alloc::New<PartProvider<Part::Serialize>>("p"), "t.1"),
                      "both or neither"));
-  test_assert(hasMsg(add(litestl::alloc::New<PartProvider<Part::Deserialize>>("p"), "t.2"),
-                     "both or neither"));
-  test_assert(hasMsg(add(litestl::alloc::New<PartProvider<Part::None>>("p"), "t.3",
+  test_assert(
+      hasMsg(add(litestl::alloc::New<PartProvider<Part::Deserialize>>("p"), "t.2"),
+             "both or neither"));
+  test_assert(hasMsg(add(litestl::alloc::New<PartProvider<Part::None>>("p"),
+                         "t.3",
                          DuplicatePolicy::Copy),
                      "no copy"));
-  test_assert(add(litestl::alloc::New<PartProvider<Part::Copy>>("p"), "t.4",
+  test_assert(add(litestl::alloc::New<PartProvider<Part::Copy>>("p"),
+                  "t.4",
                   DuplicatePolicy::Copy)
                   .ok());
   test_assert(add(litestl::alloc::New<PartProvider<Part::None>>("p"), "t.5").ok());
@@ -190,8 +197,10 @@ static void test_registry_rules()
   block.client = ClientId::of(kCoredccClient);
   Result<Owned<BlockProvider>> bp = own<BlockProvider>(
       rt, "test.Thing#provider", litestl::alloc::New<ThingProvider>("provider"));
-  test_assert(bp.ok() && hasMsg(rt.ext<BlockTypeRegistry>().add(block, std::move(bp).value()).status(),
-                                "an attachment type has this name"));
+  test_assert(
+      bp.ok() &&
+      hasMsg(rt.ext<BlockTypeRegistry>().add(block, std::move(bp).value()).status(),
+             "an attachment type has this name"));
   test_assert(!reg.find(TypeId::of("t.1")) && reg.find(TypeId::of("t.5")) != nullptr);
   const AttachmentProvider part = reg.find(TypeId::of("t.5"))->provider.get();
   test_assert(!part.hasCreate() && !part.hasCopy() && !part.hasSerialize() &&
@@ -210,7 +219,8 @@ static void test_attach()
   test_assert(w.lib.attach(BlockHandle(), kNote, n).code() == StatusCode::NotFound);
   test_assert(w.lib.attach(a, kNote, n).ok() && w.lib.attachment(a, kNote) == n);
   int listed = 0;
-  w.lib.forEachAttachment(a, [&](TypeId t, void *d) { listed += t == kNote && d == n ? 1 : 10; });
+  w.lib.forEachAttachment(
+      a, [&](TypeId t, void *d) { listed += t == kNote && d == n ? 1 : 10; });
   test_assert(listed == 1);
   test_assert(w.lib.attach(a, kNote, n).code() == StatusCode::AlreadyExists);
 
@@ -218,7 +228,8 @@ static void test_attach()
   test_assert(w.lib.writeRef(n->about, w.lib.get(target)->id()).ok());
   test_assert(w.lib.usersOf(target).size() == 1);
   int visited = 0, data = 0;
-  test_assert(w.lib.foreachRef(a, [&](RefCell &c) { visited += &c == &n->about ? 1 : 0; }).ok());
+  test_assert(
+      w.lib.foreachRef(a, [&](RefCell &c) { visited += &c == &n->about ? 1 : 0; }).ok());
   test_assert(w.lib.foreachDataRef(a, [&](RefCell &) { data++; }).ok());
   test_assert(visited == 1 && data == 3);
   w.lib.setFlag(a, BlockFlags::Root, true);
@@ -292,29 +303,24 @@ struct FakeHost : ForeignDispatcher {
     const auto pointer = [&](int i) { return *static_cast<Note **>(args[i]); };
     if (strcmp(name, "create") == 0) {
       new (ret) void *(litestl::alloc::New<Note>("Note"));
-    }
-    else if (strcmp(name, "copy") == 0) {
+    } else if (strcmp(name, "copy") == 0) {
       new (ret) void *(litestl::alloc::New<Note>("Note", *pointer(1)));
-    }
-    else if (strcmp(name, "destroy") == 0) {
+    } else if (strcmp(name, "destroy") == 0) {
       litestl::alloc::Delete(pointer(0));
-    }
-    else if (strcmp(name, "serialize") == 0) {
+    } else if (strcmp(name, "serialize") == 0) {
       static_cast<BlockWriter *>(args[2])->bytes().u32(uint32_t(pointer(1)->value));
       new (ret) Status();
-    }
-    else if (strcmp(name, "deserialize") == 0) {
+    } else if (strcmp(name, "deserialize") == 0) {
       BlockReader &in = *static_cast<BlockReader *>(args[1]);
       Note *n = litestl::alloc::New<Note>("Note");
       n->value = int(in.bytes().u32());
       in.setData(n);
       new (ret) Status();
-    }
-    else if (strcmp(name, "onWeakTargetLost") == 0) {
-      test_assert(pointer(1)->about.target == static_cast<const Datablock *>(args[2])->id());
+    } else if (strcmp(name, "onWeakTargetLost") == 0) {
+      test_assert(pointer(1)->about.target ==
+                  static_cast<const Datablock *>(args[2])->id());
       log += static_cast<const Datablock *>(args[0])->name().c_str();
-    }
-    else if (strcmp(name, "foreachRef") == 0) {
+    } else if (strcmp(name, "foreachRef") == 0) {
       static_cast<RefVisitor *>(args[2])->visit(pointer(1)->about);
     }
     return Status();
@@ -327,10 +333,19 @@ static void test_foreign()
   Runtime rt;
   registerThing(rt, things);
   FakeHost host;
-  const char *slots[] = {"destroy", "create", "copy", "serialize", "deserialize", "foreachRef", "onWeakTargetLost"};
-  test_assert(registerForeign<AttachmentProvider>(rt, "test.Js#provider", &host, nullptr, slots).ok());
+  const char *slots[] = {"destroy",
+                         "create",
+                         "copy",
+                         "serialize",
+                         "deserialize",
+                         "foreachRef",
+                         "onWeakTargetLost"};
+  test_assert(
+      registerForeign<AttachmentProvider>(rt, "test.Js#provider", &host, nullptr, slots)
+          .ok());
   int jsObject = 1;
-  AttachmentProvider p = query<AttachmentProvider>(rt, TypeId::of("test.Js#provider"), &jsObject);
+  AttachmentProvider p =
+      query<AttachmentProvider>(rt, TypeId::of("test.Js#provider"), &jsObject);
   AttachmentTypeInfo info;
   info.name = "test.Js";
   info.onDuplicate = DuplicatePolicy::Copy;
@@ -350,7 +365,8 @@ static void test_foreign()
   Result<BlockPayload> payload = detail::PayloadAccess::take(out, 1);
   test_assert(payload.ok());
   BlockReader in(lib, *payload);
-  test_assert(p.deserialize(*lib.get(a), in).ok() && static_cast<Note *>(detail::PayloadAccess::data(in))->value == 9);
+  test_assert(p.deserialize(*lib.get(a), in).ok() &&
+              static_cast<Note *>(detail::PayloadAccess::data(in))->value == 9);
   p.destroy(detail::PayloadAccess::data(in));
   Note *copy = static_cast<Note *>(p.copy(*lib.get(a), n, *lib.get(a)));
   test_assert(copy && copy->value == 9);
@@ -359,7 +375,8 @@ static void test_foreign()
   n->about.target = lib.get(makeThing(lib, "lost"))->id();
   lib.noteRefsChanged();
   lib.setFlag(a, BlockFlags::Root, true);
-  test_assert(*lib.collect() == 1 && host.log.find("onWeakTargetLost;a") != std::string::npos);
+  test_assert(*lib.collect() == 1 &&
+              host.log.find("onWeakTargetLost;a") != std::string::npos);
   lib.setFlag(a, BlockFlags::Root, false);
   host.log.clear();
   test_assert(*lib.collect() == 1);

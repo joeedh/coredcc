@@ -1,4 +1,5 @@
-/* The script facades on the api fixture: values, bags, paths and commands (P1f step 4). */
+/* The script facades on the api fixture: values, bags, paths and commands (P1f step 4).
+ */
 #include "../command/command_fixture.h"
 
 #include "coredcc/bind/checked.h"
@@ -28,7 +29,8 @@ static void test_values()
   test_assert(sc::readBool(sc::makeBool(true)).value);
   test_assert(sc::readInt(sc::makeInt(-3)).value == -3);
   test_assert(sc::readFloat(sc::makeFloat(0.25)).value == 0.25);
-  test_assert(strcmp(sc::readString(sc::makeString("hi").value).value.c_str(), "hi") == 0);
+  test_assert(strcmp(sc::readString(sc::makeString("hi").value).value.c_str(), "hi") ==
+              0);
   test_assert(sc::makeVec2(1, 2) == PropValue::ofVec2(1, 2));
   test_assert(sc::makeVec4(1, 2, 3, 4) == PropValue::ofVec4(1, 2, 3, 4));
 
@@ -38,7 +40,8 @@ static void test_values()
   test_assert(strstr(wrong.status.message(), "String") != nullptr);
   test_assert(sc::readBool(sc::makeInt(1)).status.code() == StatusCode::InvalidArgument);
   test_assert(sc::readFloat(PropValue()).status.code() == StatusCode::InvalidArgument);
-  test_assert(sc::readString(sc::makeFloat(1)).status.code() == StatusCode::InvalidArgument);
+  test_assert(sc::readString(sc::makeFloat(1)).status.code() ==
+              StatusCode::InvalidArgument);
 
   /* Components: in range, out of range, and of a value without any. */
   const PropValue v = sc::makeVec3(1, 2, 3);
@@ -46,13 +49,15 @@ static void test_values()
   test_assert(sc::readComponent(v, 3).status.code() == StatusCode::OutOfRange);
   test_assert(sc::readComponent(v, -1).status.code() == StatusCode::OutOfRange);
   test_assert(sc::readComponent(sc::makeFloat(5), 0).value == 5);
-  test_assert(sc::readComponent(sc::makeInt(5), 0).status.code() == StatusCode::OutOfRange);
+  test_assert(sc::readComponent(sc::makeInt(5), 0).status.code() ==
+              StatusCode::OutOfRange);
 }
 
 static void test_bags()
 {
   PropertyBag bag;
-  test_assert(bag.add(PropertyDef::intProp("amount").defaultValue(PropValue::ofInt(2))).ok());
+  test_assert(
+      bag.add(PropertyDef::intProp("amount").defaultValue(PropValue::ofInt(2))).ok());
   test_assert(bag.add(PropertyDef::stringProp("label")).ok());
   test_assert(sc::bagSize(bag) == 2);
   test_assert(strcmp(sc::bagName(bag, 1).value.c_str(), "label") == 0);
@@ -78,15 +83,20 @@ struct Doubler {
     test_assert(sc::inputGet(ctx, "nope").status.code() == StatusCode::NotFound);
     test_assert(sc::outputSet(ctx, "nope", in.value).code() == StatusCode::NotFound);
     CDCC_TRY(sc::outputSet(ctx, "result", sc::makeInt(2 * *in.value.tryInt())));
-    test_assert(sc::outputGet(ctx, "result").value == sc::makeInt(2 * *in.value.tryInt()));
+    test_assert(sc::outputGet(ctx, "result").value ==
+                sc::makeInt(2 * *in.value.tryInt()));
     return Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<Doubler> *defineBindings()
   {
     auto *st = new lbt::Struct<Doubler>("test::Doubler", sizeof(Doubler));
@@ -98,18 +108,21 @@ struct Doubler {
 static void test_command_bags()
 {
   Setup s;
-  test_assert(addNativeCommand<Doubler>(
-                  s.w.rt, CommandDef("test.double")
-                              .input(PropertyDef::intProp("amount"))
-                              .output(PropertyDef::intProp("result")))
+  test_assert(addNativeCommand<Doubler>(s.w.rt,
+                                        CommandDef("test.double")
+                                            .input(PropertyDef::intProp("amount"))
+                                            .output(PropertyDef::intProp("result")))
                   .ok());
   /* Outside a slot there are no bags. */
-  test_assert(sc::inputGet(s.ctx, "amount").status.code() == StatusCode::FailedPrecondition);
+  test_assert(sc::inputGet(s.ctx, "amount").status.code() ==
+              StatusCode::FailedPrecondition);
   test_assert(sc::outputSet(s.ctx, "result", sc::makeInt(1)).code() ==
               StatusCode::FailedPrecondition);
-  test_assert(sc::outputGet(s.ctx, "result").status.code() == StatusCode::FailedPrecondition);
+  test_assert(sc::outputGet(s.ctx, "result").status.code() ==
+              StatusCode::FailedPrecondition);
   sc::BagResult out = sc::invoke(s.ctx, "test.double(amount=21)");
-  test_assert(out.status.ok() && sc::bagGet(out.value, "result").value == sc::makeInt(42));
+  test_assert(out.status.ok() &&
+              sc::bagGet(out.value, "result").value == sc::makeInt(42));
 }
 
 static void test_paths()
@@ -129,12 +142,14 @@ static void test_paths()
   test_assert(sc::redo(ctx).ok() && s.w.tool.strength == 0.75);
   test_assert(sc::writeValue(ctx, "tool.strength", sc::makeFloat(0.25)).ok());
   test_assert(s.w.tool.strength == 0.25 && s.history.size() == 1);
-  test_assert(sc::writeValue(ctx, "tool.version", sc::makeInt(9)).code() != StatusCode::Ok);
+  test_assert(sc::writeValue(ctx, "tool.version", sc::makeInt(9)).code() !=
+              StatusCode::Ok);
 
   /* invoke: outputs, and the parser's errors. */
   const int64_t c0 = s.w.tool.count;
   sc::BagResult r = sc::invoke(ctx, "test.add(amount=3)");
-  test_assert(r.status.ok() && sc::bagGet(r.value, "result").value == sc::makeInt(c0 + 3));
+  test_assert(r.status.ok() &&
+              sc::bagGet(r.value, "result").value == sc::makeInt(c0 + 3));
   test_assert(!sc::invoke(ctx, "test.add(amount=").status.ok());
   test_assert(sc::invoke(ctx, "test.nope()").status.code() == StatusCode::NotFound);
   test_assert(s.history.validate().ok() && !s.w.rt.hasStickyError());
@@ -157,8 +172,11 @@ static void test_manager()
   test_assert(mgr == sc::bindings());
   int found = 0;
   for (const litestl::binding::types::Method *m : mgr->getFunctions()) {
-    for (const char *name : {"coredcc::registerForeignCommand", "coredcc::invoke",
-                             "coredcc::newCommandDef", "coredcc::readComponent"}) {
+    for (const char *name : {"coredcc::registerForeignCommand",
+                             "coredcc::invoke",
+                             "coredcc::newCommandDef",
+                             "coredcc::readComponent"})
+    {
       found += strcmp(m->name.c_str(), name) == 0;
     }
   }
@@ -175,12 +193,14 @@ static void test_nul()
   nul += "b";
   test_assert(nul.size() == 3);
   const sc::string fine("label");
-  test_assert(Checked<&sc::makeString>::call(nul).status.code() == StatusCode::InvalidArgument);
+  test_assert(Checked<&sc::makeString>::call(nul).status.code() ==
+              StatusCode::InvalidArgument);
   test_assert(Checked<&sc::makeString>::call(fine).value.asString() == fine);
   const Status second = Checked<&sc::setValue>::call(s.ctx, nul, sc::makeInt(1));
   test_assert(second.code() == StatusCode::InvalidArgument &&
               strstr(second.message(), "argument 2: a string can't hold a NUL"));
-  test_assert(strstr(Checked<&sc::invokeAt>::call(s.ctx, fine, nul).status.message(), "argument 3"));
+  test_assert(strstr(Checked<&sc::invokeAt>::call(s.ctx, fine, nul).status.message(),
+                     "argument 3"));
   test_assert(Checked<&sc::setValue>::call(s.ctx, "tool.count", sc::makeInt(1)).ok());
   test_assert(Checked<&sc::canUndo>::call(s.ctx).value);
   test_assert(sc::detail::nulArgument(1, fine, nul) == 3);

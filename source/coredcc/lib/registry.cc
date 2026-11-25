@@ -19,20 +19,23 @@ Result<ClientId> ClientRegistry::registerClient(std::string_view name,
     return id.status();
   }
   if (aliases_.lookup_ptr(id->value)) {
-    return Status::error(StatusCode::AlreadyExists,
-                         ("client '" + std::string(name) + "' is already an alias").c_str());
+    return Status::error(
+        StatusCode::AlreadyExists,
+        ("client '" + std::string(name) + "' is already an alias").c_str());
   }
   /* Check every alias before adding any, so a failure changes nothing. */
   for (const char *alias : aliases) {
     const ClientId a = ClientId::of(alias);
     const uint64_t *target = aliases_.lookup_ptr(a.value);
     if ((target && *target != id->value) || clients_.contains(a)) {
-      return Status::error(StatusCode::AlreadyExists,
-                           ("alias '" + std::string(alias) + "' is already in use").c_str());
+      return Status::error(
+          StatusCode::AlreadyExists,
+          ("alias '" + std::string(alias) + "' is already in use").c_str());
     }
     if (a == *id) {
-      return Status::error(StatusCode::InvalidArgument,
-                           ("client '" + std::string(name) + "' can't alias itself").c_str());
+      return Status::error(
+          StatusCode::InvalidArgument,
+          ("client '" + std::string(name) + "' can't alias itself").c_str());
     }
   }
   for (const char *alias : aliases) {
@@ -89,23 +92,25 @@ Result<TypeId> BlockTypeRegistry::add(BlockTypeInfo info, Owned<BlockProvider> p
   if (canSave != provider->hasDeserialize()) {
     return Status::error(
         StatusCode::InvalidArgument,
-        ("block type '" + name + "' has one of serialize and deserialize: it needs both or neither")
+        ("block type '" + name +
+         "' has one of serialize and deserialize: it needs both or neither")
             .c_str());
   }
   if (info.storage == (canSave ? BlockStorage::Transient : BlockStorage::Payload)) {
-    return Status::error(
-        StatusCode::InvalidArgument,
-        ("block type '" + name +
-         (canSave ? "' is Transient, but has serialize" : "' is Payload, but has no serialize"))
-            .c_str());
+    return Status::error(StatusCode::InvalidArgument,
+                         ("block type '" + name +
+                          (canSave ? "' is Transient, but has serialize"
+                                   : "' is Payload, but has no serialize"))
+                             .c_str());
   }
   if (canSave) {
     info.storage = BlockStorage::Payload;
   }
   ClientRegistry &clients = rt_.ext<ClientRegistry>();
   if (!clients.isRegistered(info.client)) {
-    return Status::error(StatusCode::NotFound,
-                         ("block type '" + name + "': its client is not registered").c_str());
+    return Status::error(
+        StatusCode::NotFound,
+        ("block type '" + name + "': its client is not registered").c_str());
   }
   info.client = clients.canonical(info.client);
   Result<TypeId> id = rt_.registerId<IdDomain::Type>(name);
@@ -118,8 +123,9 @@ Result<TypeId> BlockTypeRegistry::add(BlockTypeInfo info, Owned<BlockProvider> p
   }
   const AttachmentTypeRegistry *attachments = rt_.findExt<AttachmentTypeRegistry>();
   if (attachments && attachments->find(*id)) {
-    return Status::error(StatusCode::AlreadyExists,
-                         ("block type '" + name + "': an attachment type has this name").c_str());
+    return Status::error(
+        StatusCode::AlreadyExists,
+        ("block type '" + name + "': an attachment type has this name").c_str());
   }
   Entry *e = litestl::alloc::New<Entry>("coredcc::BlockTypeRegistry::Entry");
   e->info = std::move(info);
@@ -145,7 +151,8 @@ BlockProvider BlockTypeRegistry::provider(TypeId type) const
 Status BlockTypeRegistry::validate() const
 {
   if (int(byId_.size()) != int(entries_.size())) {
-    return Status::error(StatusCode::Internal, "BlockTypeRegistry: index and list differ");
+    return Status::error(StatusCode::Internal,
+                         "BlockTypeRegistry: index and list differ");
   }
   for (const Entry *e : entries_) {
     if (find(e->id) != e || !e->provider || !rt_.nameOf(e->id)) {

@@ -13,7 +13,7 @@ namespace coredcc {
 /** The channels of one transform: a flat array of doubles, in the order of its type's
  * channel defs. */
 class ChannelBlock {
- public:
+public:
   ChannelBlock() = default;
   explicit ChannelBlock(int size)
   {
@@ -54,29 +54,30 @@ class ChannelBlock {
 
   static litestl::binding::types::Struct<ChannelBlock> *defineBindings();
 
- private:
+private:
   litestl::util::Vector<double, 16> values_;
 };
 
 /**
- * Everything a transform model may read besides its parent's state: channel values and the
- * time. It has no Library, Runtime or Context, so an evaluation is a pure function and the
- * graph can cache it.
+ * Everything a transform model may read besides its parent's state: channel values and
+ * the time. It has no Library, Runtime or Context, so an evaluation is a pure function
+ * and the graph can cache it.
  */
 class EvalCtx {
- public:
+public:
   /** `channels` must outlive the EvalCtx. `time` is in seconds. */
   explicit EvalCtx(const ChannelBlock &channels, double time = 0.0)
       : channels_(&channels), time_(time)
   {
   }
-  /** The same with overrides: channel i is `overrides[i]` where `overridden[i]` isn't 0. Both
-   * have an entry for each channel and must outlive the EvalCtx. */
+  /** The same with overrides: channel i is `overrides[i]` where `overridden[i]` isn't 0.
+   * Both have an entry for each channel and must outlive the EvalCtx. */
   EvalCtx(const ChannelBlock &channels,
           double time,
           const ChannelBlock &overrides,
           const litestl::util::Vector<uint8_t> &overridden)
-      : channels_(&channels), overrides_(&overrides), overridden_(&overridden), time_(time)
+      : channels_(&channels), overrides_(&overrides), overridden_(&overridden),
+        time_(time)
   {
   }
 
@@ -96,7 +97,8 @@ class EvalCtx {
   }
   bool isOverridden(int32_t i) const
   {
-    return overridden_ && i >= 0 && i < int32_t(overridden_->size()) && (*overridden_)[i] != 0;
+    return overridden_ && i >= 0 && i < int32_t(overridden_->size()) &&
+           (*overridden_)[i] != 0;
   }
   bool isLocked(int32_t i) const
   {
@@ -111,7 +113,8 @@ class EvalCtx {
   {
     return locks_ != 0 || overridden_ != nullptr;
   }
-  /** The same with locks: bit i is channel i's. Those after the first 64 can't be locked. */
+  /** The same with locks: bit i is channel i's. Those after the first 64 can't be locked.
+   */
   EvalCtx withLocks(uint64_t locks) const
   {
     EvalCtx c = *this;
@@ -133,7 +136,8 @@ class EvalCtx {
   }
   /** Rounded to nearest, halves away from zero, within +-2^53. NaN is 0. */
   int64_t intChannel(int32_t i) const;
-  /** For an enum whose values are 0 to count - 1: any other value is 0, its first item. */
+  /** For an enum whose values are 0 to count - 1: any other value is 0, its first item.
+   */
   int32_t enumChannel(int32_t i, int32_t count) const
   {
     const int64_t v = intChannel(i);
@@ -148,7 +152,7 @@ class EvalCtx {
 
   static litestl::binding::types::Struct<EvalCtx> *defineBindings();
 
- private:
+private:
   const ChannelBlock *channels_;
   const ChannelBlock *overrides_ = nullptr;
   const litestl::util::Vector<uint8_t> *overridden_ = nullptr;

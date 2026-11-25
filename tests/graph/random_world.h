@@ -1,7 +1,8 @@
 #pragma once
 
-/* The Runtime, defs, kernels and late registrations of test_graph_random.cc, with what the
- * oracle (naive_eval.h) computes for each kernel, and what the test keeps of an instance. */
+/* The Runtime, defs, kernels and late registrations of test_graph_random.cc, with what
+ * the oracle (naive_eval.h) computes for each kernel, and what the test keeps of an
+ * instance. */
 #include "edit_fixture.h"
 #include "naive_eval.h"
 
@@ -64,8 +65,9 @@ inline Status blockKernel(NodeExecContext &ctx)
 {
   const BlockUse u = ctx.paramBlock("thing");
   const Thing *t = static_cast<const Thing *>(u.data);
-  return ctx.setOutput(0, GraphValue::ofFloat(t ? wrap(ctx.input(0).asFloat() + t->value) :
-                                                  (u.handle ? 14 : 15)));
+  return ctx.setOutput(0,
+                       GraphValue::ofFloat(t ? wrap(ctx.input(0).asFloat() + t->value)
+                                             : (u.handle ? 14 : 15)));
 }
 inline Status vecKernel(NodeExecContext &ctx)
 {
@@ -83,7 +85,8 @@ inline Status textKernel(NodeExecContext &ctx)
 }
 inline Status payKernel(NodeExecContext &ctx)
 {
-  return ctx.setOutput(0, GraphValue::ofPayload(makePayload(P{int(ctx.input(0).asInt())})));
+  return ctx.setOutput(0,
+                       GraphValue::ofPayload(makePayload(P{int(ctx.input(0).asInt())})));
 }
 inline Status countKernel(NodeExecContext &ctx)
 {
@@ -133,26 +136,26 @@ inline Value nullOf(const char *type)
 inline Value toValue(const GraphValue &v)
 {
   switch (v.type()) {
-    case GraphValue::Type::Bool:
-      return num("bool", v.asBool());
-    case GraphValue::Type::Int:
-      return num("int", double(v.asInt()));
-    case GraphValue::Type::Float:
-      return num("float", v.asFloat());
-    case GraphValue::Type::Vec3:
-      return Value{"vec3", {v.components()[0], v.components()[1], v.components()[2]}, ""};
-    case GraphValue::Type::String:
-      return Value{"string", {}, v.asString().c_str()};
-    case GraphValue::Type::Payload:
-      if (const P *p = v.payload<P>()) {
-        return num("r.P", p->n);
-      }
-      if (const Q *q = v.payload<Q>()) {
-        return num("r.Q", q->n);
-      }
-      return nullOf("r.?");
-    default:
-      return Value();
+  case GraphValue::Type::Bool:
+    return num("bool", v.asBool());
+  case GraphValue::Type::Int:
+    return num("int", double(v.asInt()));
+  case GraphValue::Type::Float:
+    return num("float", v.asFloat());
+  case GraphValue::Type::Vec3:
+    return Value{"vec3", {v.components()[0], v.components()[1], v.components()[2]}, ""};
+  case GraphValue::Type::String:
+    return Value{"string", {}, v.asString().c_str()};
+  case GraphValue::Type::Payload:
+    if (const P *p = v.payload<P>()) {
+      return num("r.P", p->n);
+    }
+    if (const Q *q = v.payload<Q>()) {
+      return num("r.Q", q->n);
+    }
+    return nullOf("r.?");
+  default:
+    return Value();
   }
 }
 
@@ -204,20 +207,24 @@ struct World {
     test_assert(sockets.addPayloadType<P>().ok());
     env.rt = &rt;
     env.lib = &lib;
-    env.types = {{"bool", num("bool", 0)},   {"int", num("int", 0)},
-                 {"float", num("float", 0)}, {"vec3", Value{"vec3", {0, 0, 0}, ""}},
-                 {"string", Value{"string", {}, ""}}, {"r.P", nullOf("r.P")}};
+    env.types = {{"bool", num("bool", 0)},
+                 {"int", num("int", 0)},
+                 {"float", num("float", 0)},
+                 {"vec3", Value{"vec3", {0, 0, 0}, ""}},
+                 {"string", Value{"string", {}, ""}},
+                 {"r.P", nullOf("r.P")}};
     builtinConversions();
 
     NodeTypeDef s("r.sum");
     s.input(PropertyDef::floatProp("a"))
         .input(PropertyDef::floatProp("b").defaultValue(PropValue::ofFloat(2)))
-        .param(PropertyDef::intProp("gain").range(-2, 3).defaultValue(PropValue::ofInt(1)))
+        .param(
+            PropertyDef::intProp("gain").range(-2, 3).defaultValue(PropValue::ofInt(1)))
         .output("value", "float");
     addType<sumKernel>(rt, s, "r.sum");
     env.kernels["r.sum"] = [](auto &in, auto &params, auto &, std::vector<Value> &out) {
-      const double r = wrap(in[0].numbers[0] +
-                            in[1].numbers[0] * double(params.at("gain").asInt()));
+      const double r =
+          wrap(in[0].numbers[0] + in[1].numbers[0] * double(params.at("gain").asInt()));
       out = {num("float", r)};
       return r == 7 ? StatusCode::OutOfRange : StatusCode::Ok;
     };
@@ -234,11 +241,13 @@ struct World {
         .param(PropertyDef::pointerProp("thing", kThingStruct))
         .output("value", "float");
     addType<blockKernel>(rt, b, "r.block");
-    env.kernels["r.block"] = [](auto &in, auto &, const BlockRead &r, std::vector<Value> &out) {
-      const bool live = r.handle && r.state == BlockState::Live;
-      out = {num("float", live ? wrap(in[0].numbers[0] + r.value) : (r.handle ? 14 : 15))};
-      return StatusCode::Ok;
-    };
+    env.kernels["r.block"] =
+        [](auto &in, auto &, const BlockRead &r, std::vector<Value> &out) {
+          const bool live = r.handle && r.state == BlockState::Live;
+          out = {num("float",
+                     live ? wrap(in[0].numbers[0] + r.value) : (r.handle ? 14 : 15))};
+          return StatusCode::Ok;
+        };
     NodeTypeDef v("r.vec");
     v.input(PropertyDef::vecProp("v", 3)).output("value", "float");
     addType<vecKernel>(rt, v, "r.vec");
@@ -295,7 +304,10 @@ struct World {
           const std::string t = to;
           env.conversions[{from, to}] = [t](const Value &in, Value &out) {
             const double x = in.numbers[0];
-            out = num(t.c_str(), t == "bool" ? double(x != 0) : t == "int" ? std::trunc(x) : x);
+            out = num(t.c_str(),
+                      t == "bool"  ? double(x != 0)
+                      : t == "int" ? std::trunc(x)
+                                   : x);
             return StatusCode::Ok;
           };
         }
@@ -316,9 +328,9 @@ struct World {
     const auto c = lateConversions.back();
     lateConversions.pop_back();
     SocketTypeRegistry &sockets = rt.ext<SocketTypeRegistry>();
-    const SocketConvertFn fn = c.first == "vec3" ? vecToFloat :
-                               c.first == "string" ? textToFloat :
-                                                     payToInt;
+    const SocketConvertFn fn = c.first == "vec3"     ? vecToFloat
+                               : c.first == "string" ? textToFloat
+                                                     : payToInt;
     test_assert(sockets.addConversion(c.first, c.second, fn).ok());
     env.conversions[c] = [c](const Value &in, Value &out) {
       if (c.first == "string") {
@@ -411,7 +423,8 @@ struct Client {
 
   int def;
   std::unique_ptr<GraphInstance> inst;
-  /* Of the prepared sockets: an instance of its own, as the runs of `inst` are counted. */
+  /* Of the prepared sockets: an instance of its own, as the runs of `inst` are counted.
+   */
   std::unique_ptr<GraphInstance> batch;
   std::vector<Prepared> prepared;
   std::map<int64_t, std::pair<Value, int>> external;
@@ -438,9 +451,9 @@ struct Client {
 };
 
 struct Counts {
-  uint64_t ops = 0, pulls = 0, runs = 0, musts = 0, mays = 0, visits = 0, errors = 0, cycles = 0,
-           groups = 0, recursions = 0, undos = 0, redos = 0, fullPasses = 0, forcedPasses = 0,
-           handles = 0, moved = 0;
+  uint64_t ops = 0, pulls = 0, runs = 0, musts = 0, mays = 0, visits = 0, errors = 0,
+           cycles = 0, groups = 0, recursions = 0, undos = 0, redos = 0, fullPasses = 0,
+           forcedPasses = 0, handles = 0, moved = 0;
 };
 inline Counts g_counts;
 inline uint64_t g_seed = 0;

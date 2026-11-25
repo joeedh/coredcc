@@ -70,7 +70,9 @@ Nearest nearestOnTriangle(const Corner *c, int a, int b, int d)
   }
   const double u = cross(c[b], c[d]), v = cross(c[d], c[a]), w = cross(c[a], c[b]);
   const double sum = u + v + w;
-  if (sum != 0.0 && ((u >= 0.0 && v >= 0.0 && w >= 0.0) || (u <= 0.0 && v <= 0.0 && w <= 0.0))) {
+  if (sum != 0.0 &&
+      ((u >= 0.0 && v >= 0.0 && w >= 0.0) || (u <= 0.0 && v <= 0.0 && w <= 0.0)))
+  {
     Nearest r;
     r.count = 3;
     r.at[0] = a;
@@ -130,9 +132,9 @@ struct CutCapsule {
     return m.dot(q) + d;
   }
 
-  /* The point with the largest `g.q`: the best of each end's ball cut by the plane, and of where
-   * the plane crosses between them. There, the normal is `g + k m` with k >= 0, across the axis.
-   * False if nothing of the capsule is left. */
+  /* The point with the largest `g.q`: the best of each end's ball cut by the plane, and
+   * of where the plane crosses between them. There, the normal is `g + k m` with k >= 0,
+   * across the axis. False if nothing of the capsule is left. */
   bool support(const double3 &g, double3 &best) const
   {
     bool any = false;
@@ -146,7 +148,8 @@ struct CutCapsule {
       }
     };
     const double mm = m.dot(m), length = std::sqrt(mm);
-    /* Along the plane. What is left of a g across it is noise, which may point anywhere. */
+    /* Along the plane. What is left of a g across it is noise, which may point anywhere.
+     */
     double3 along = g - m * (g.dot(m) / mm);
     along = along - m * (along.dot(m) / mm);
     if (!(along.dot(along) > 1e-24 * g.dot(g))) {
@@ -188,13 +191,14 @@ struct ClippedCapsule {
   CutCapsule front, back;
 
   ClippedCapsule(const ScreenMap &map, const double3 &a, const double3 &b, double r)
-      : front{a, b, r, xyz(map.front), map.front[3]}, back{a, b, r, xyz(map.back), map.back[3]}
+      : front{a, b, r, xyz(map.front), map.front[3]},
+        back{a, b, r, xyz(map.back), map.back[3]}
   {
   }
 
-  /* The largest point before one of the planes is the answer if it is also before the other. If
-   * neither is, both values are the same, since the planes are parallel and something is between
-   * them: so is anything on the line between the two points. */
+  /* The largest point before one of the planes is the answer if it is also before the
+   * other. If neither is, both values are the same, since the planes are parallel and
+   * something is between them: so is anything on the line between the two points. */
   bool support(const double3 &g, double3 &best) const
   {
     if (!front.support(g, best)) {
@@ -233,14 +237,11 @@ bool project(const ScreenMap &map, const double3 &q, Corner &out)
   return bvh::finite(out.x) && bvh::finite(out.y);
 }
 
-/* The point of the solid that is farthest in the direction (nx, ny) on the screen. `at` is any
- * of its points, and becomes that one. For the value h of a point, the one with the largest
- * `n.(x, y) - h w` has a larger value, until there is none. */
-bool screenSupport(const ScreenMap &map,
-                   const ClippedCapsule &solid,
-                   double nx,
-                   double ny,
-                   Corner &at)
+/* The point of the solid that is farthest in the direction (nx, ny) on the screen. `at`
+ * is any of its points, and becomes that one. For the value h of a point, the one with
+ * the largest `n.(x, y) - h w` has a larger value, until there is none. */
+bool screenSupport(
+    const ScreenMap &map, const ClippedCapsule &solid, double nx, double ny, Corner &at)
 {
   double h = nx * at.x + ny * at.y;
   const double3 across = xyz(map.x) * nx + xyz(map.y) * ny, w = xyz(map.w);
@@ -297,8 +298,8 @@ bool closestOnCapsule(const ScreenMap &map,
       kept[k] = c[n.at[k]];
     }
     kept[n.count] = at;
-    const Nearest next = n.count == 1 ? nearestOnSegment(kept, 0, 1) :
-                                        nearestOnTriangle(kept, 0, 1, 2);
+    const Nearest next =
+        n.count == 1 ? nearestOnSegment(kept, 0, 1) : nearestOnTriangle(kept, 0, 1, 2);
     if (!(next.distance < n.distance)) {
       break;
     }
@@ -323,7 +324,8 @@ struct Homogeneous {
   double3 q;
 };
 
-/* From the visible end, whichever triangle the edge is of, so that shared edges stay shared. */
+/* From the visible end, whichever triangle the edge is of, so that shared edges stay
+ * shared. */
 Homogeneous onPlane(const Homogeneous &in, const Homogeneous &outside, int plane)
 {
   const double t = in.side[plane] / (in.side[plane] - outside.side[plane]);
@@ -357,7 +359,10 @@ int cut(const Homogeneous *from, int count, int plane, Homogeneous *to)
 
 } // namespace
 
-bool closestOnCorners(const ScreenMap &map, const double3 *corners, int count, ScreenPoint &out)
+bool closestOnCorners(const ScreenMap &map,
+                      const double3 *corners,
+                      int count,
+                      ScreenPoint &out)
 {
   Homogeneous h[5], cutOnce[5];
   for (int i = 0; i < count; i++) {

@@ -47,7 +47,8 @@ void testNew()
   test_assert(Scene::of(*d.lib, s) && d.ctx->scene() == first);
   test_assert(!strcmp(d.lib->get(s)->name().c_str(), "Second"));
   test_assert(d.lib->get(s)->hasFlag(BlockFlags::Root));
-  /* Purging keeps it, with its members, and an undone one until the history lets go of it. */
+  /* Purging keeps it, with its members, and an undone one until the history lets go of
+   * it. */
   d.ctx->setScene(s);
   const BlockHandle o = d.object("o");
   d.ctx->setScene(first);
@@ -76,8 +77,8 @@ void testLink()
   test_assert(members(d) == "ab");
   test_assert(isError(
       d.fails(kLinkCommand, {{"object", d.ptr(b)}}), StatusCode::AlreadyExists, "'b'"));
-  test_assert(
-      isError(d.fails(kLinkCommand, {{"object", d.ptr(shape)}}), StatusCode::FailedPrecondition));
+  test_assert(isError(d.fails(kLinkCommand, {{"object", d.ptr(shape)}}),
+                      StatusCode::FailedPrecondition));
   test_assert(isError(d.fails(kLinkCommand), StatusCode::FailedPrecondition, "object"));
   must(d.lib->markDeleted(shape));
   test_assert(isError(d.fails(kLinkCommand, {{"object", d.ptr(shape)}}),
@@ -98,9 +99,16 @@ void testLink()
 
   /* Without a scene. */
   d.ctx->setScene(BlockHandle());
-  for (const char *c : {kLinkCommand, kUnlinkCommand, kSetActiveCommand, kSelectCommand,
-                        kAddObjectCommand, kSetParentCommand, kSetTransformTypeCommand,
-                        kSetRotationModeCommand, kApplyDeltaCommand, kDeleteObjectsCommand})
+  for (const char *c : {kLinkCommand,
+                        kUnlinkCommand,
+                        kSetActiveCommand,
+                        kSelectCommand,
+                        kAddObjectCommand,
+                        kSetParentCommand,
+                        kSetTransformTypeCommand,
+                        kSetRotationModeCommand,
+                        kApplyDeltaCommand,
+                        kDeleteObjectsCommand})
   {
     Result<PropertyBag> r = d.run(c);
     test_assert(isError(r.status(), StatusCode::FailedPrecondition, "no scene"));
@@ -110,9 +118,10 @@ void testLink()
 void testUnlink()
 {
   CommandDoc d;
-  const BlockHandle a = d.object("a"), b = d.object("b"), c = d.object("c"), e = d.object("e"),
-                    f = d.object("f");
-  test_assert(isError(d.fails(kUnlinkCommand), StatusCode::FailedPrecondition, "selected"));
+  const BlockHandle a = d.object("a"), b = d.object("b"), c = d.object("c"),
+                    e = d.object("e"), f = d.object("f");
+  test_assert(
+      isError(d.fails(kUnlinkCommand), StatusCode::FailedPrecondition, "selected"));
   for (std::initializer_list<BlockHandle> set : {std::initializer_list<BlockHandle>{a},
                                                  {f},
                                                  {c},
@@ -214,8 +223,7 @@ void testActive()
     test_assert(!d.sc().active(*d.lib));
     if (path) {
       must(setValueUndo(*d.ctx, "scene.objects.active", d.ptr(a)));
-    }
-    else {
+    } else {
       d.ok(kSetActiveCommand, {{"object", d.ptr(a)}});
     }
     test_assert(d.sc().active(*d.lib) == a);
@@ -227,8 +235,7 @@ void testActive()
     must(d.lib->onHostDestroyed(d.idOf(b)));
     if (path) {
       must(setValueUndo(*d.ctx, "scene.activeObject", d.ptr(a)));
-    }
-    else {
+    } else {
       d.ok(kSetActiveCommand, {{"object", d.ptr(a)}});
     }
     d.undo();
@@ -253,7 +260,8 @@ void testActive()
 void testSelect()
 {
   CommandDoc d;
-  const BlockHandle a = d.object("a"), b = d.object("b"), c = d.object("c"), out = d.loose("out");
+  const BlockHandle a = d.object("a"), b = d.object("b"), c = d.object("c"),
+                    out = d.loose("out");
   const auto select = [&](int m, BlockHandle h = BlockHandle()) {
     d.cycle(kSelectCommand, {{"mode", mode(m)}, {"object", d.ptr(h)}});
     return selected(d);
@@ -270,12 +278,15 @@ void testSelect()
   d.obj(b).flags = ObjectFlags::Unselectable;
   test_assert(select(kAll) == "c" && select(kAdd, a) == "ca");
   for (int m : {int(kSet), int(kAdd), int(kToggle)}) {
-    test_assert(isError(d.fails(kSelectCommand, {{"mode", mode(m)}, {"object", d.ptr(out)}}),
-                        StatusCode::FailedPrecondition,
-                        "'out': isn't in the scene"));
+    test_assert(
+        isError(d.fails(kSelectCommand, {{"mode", mode(m)}, {"object", d.ptr(out)}}),
+                StatusCode::FailedPrecondition,
+                "'out': isn't in the scene"));
   }
-  test_assert(select(kRemove, b) == "ca" && select(kAdd, b) == "ca" && select(kToggle, b) == "ca");
-  test_assert(select(kSet, b).empty() && select(kSet, c) == "c" && select(kAdd, a) == "ca");
+  test_assert(select(kRemove, b) == "ca" && select(kAdd, b) == "ca" &&
+              select(kToggle, b) == "ca");
+  test_assert(select(kSet, b).empty() && select(kSet, c) == "c" &&
+              select(kAdd, a) == "ca");
   /* One that becomes unselectable later can be taken out. */
   d.obj(a).flags = ObjectFlags::Unselectable;
   test_assert(select(kRemove, a) == "c" && select(kSet, a).empty());
@@ -284,7 +295,8 @@ void testSelect()
   test_assert(isError(d.fails(kSelectCommand, {{"mode", mode(kAdd)}}),
                       StatusCode::FailedPrecondition));
 
-  /* What was selected and is deleted comes back with undo, also after another selection. */
+  /* What was selected and is deleted comes back with undo, also after another selection.
+   */
   d.ok(kDeleteBlockCommand, {{"block", d.ptr(c)}});
   test_assert(selected(d) == "a");
   d.obj(b).flags = ObjectFlags::None;
@@ -297,8 +309,8 @@ void testSelect()
 void testAdd()
 {
   CommandDoc d;
-  PropertyBag out = d.cycle(kAddObjectCommand,
-                            {{"name", text("a")}, {"location", PropValue::ofVec3(1, 2, 3)}});
+  PropertyBag out = d.cycle(
+      kAddObjectCommand, {{"name", text("a")}, {"location", PropValue::ofVec3(1, 2, 3)}});
   const BlockHandle a = d.blockOut(out, "object");
   d.evaluate();
   test_assert(members(d) == "a" && d.isAt(a, 1, 2, 3));
@@ -335,9 +347,10 @@ void testAdd()
   /* Make a parent and parent to it, and take both back; then discard them. */
   CommandDoc e;
   const BlockHandle child = e.object("child", 4.0);
-  const BlockHandle p = e.blockOut(
-      e.ok(kAddObjectCommand, {{"name", text("p")}, {"location", PropValue::ofVec3(1, 0, 0)}}),
-      "object");
+  const BlockHandle p =
+      e.blockOut(e.ok(kAddObjectCommand,
+                      {{"name", text("p")}, {"location", PropValue::ofVec3(1, 0, 0)}}),
+                 "object");
   e.select({child});
   e.ok(kSetParentCommand, {{"parent", e.ptr(p)}});
   e.evaluate();

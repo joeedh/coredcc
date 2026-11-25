@@ -41,7 +41,7 @@ struct BlockEntry {
 namespace detail {
 /** Writes a block id as an index into the entry's own refs. */
 class EntryCodec : public ValueCodec {
- public:
+public:
   using ValueCodec::ValueCodec;
   void writeBlockId(BytesWriter &out, const BlockId &id) override;
   void readBlockId(BytesReader &in, BlockId &id) override;
@@ -55,7 +55,7 @@ struct PayloadAccess;
 
 /** What BlockProvider::serialize and AttachmentProvider::serialize write to. */
 class BlockWriter {
- public:
+public:
   explicit BlockWriter(const Library &lib);
 
   /** The payload's own bytes, for anything but references. */
@@ -76,16 +76,18 @@ class BlockWriter {
     entries(std::span<const BlockEntry>(&e, 1));
   }
   /**
-   * The bag's set entries, with `unread` (what BlockReader::bag gave) before them. Which block a
-   * pointer is into comes from `refs`, which foreachRef reports. A pointer into a block that has
-   * no cell there is Internal.
+   * The bag's set entries, with `unread` (what BlockReader::bag gave) before them. Which
+   * block a pointer is into comes from `refs`, which foreachRef reports. A pointer into a
+   * block that has no cell there is Internal.
    */
-  void bag(const PropertyBag &bag, const BagRefs &refs, std::span<const BlockEntry> unread = {});
+  void bag(const PropertyBag &bag,
+           const BagRefs &refs,
+           std::span<const BlockEntry> unread = {});
 
   /** Opaque. */
   static const litestl::binding::types::Struct<BlockWriter> *defineBindings();
 
- private:
+private:
   friend struct detail::PayloadAccess;
   Result<BlockPayload> take(uint32_t version);
   void writeEntry(const BlockEntry &e);
@@ -97,7 +99,7 @@ class BlockWriter {
 
 /** What BlockProvider::deserialize and AttachmentProvider::deserialize read from. */
 class BlockReader {
- public:
+public:
   /** Reads `payload`, which must outlive the reader. */
   BlockReader(Library &lib, const BlockPayload &payload);
 
@@ -114,13 +116,13 @@ class BlockReader {
   void ref(RefCell &cell);
   /** Appends the entries one BlockWriter::entries() call wrote. */
   void entries(litestl::util::Vector<BlockEntry> &out);
-  /** The same, one at a time. `fn` says whether it kept the entry: one that it only read doesn't
-   * count toward the LoadLimits. */
+  /** The same, one at a time. `fn` says whether it kept the entry: one that it only read
+   * doesn't count toward the LoadLimits. */
   void entries(litestl::util::function<bool(BlockEntry &)> fn);
-  /** Sets the entries into the bag, and the cells of its pointers into blocks. Those no def
-   * takes, or whose value it would change (a number out of its range), land in `unread`: keep
-   * them, report their refs from foreachRef, and write them again, so a file survives a build
-   * that doesn't know them. */
+  /** Sets the entries into the bag, and the cells of its pointers into blocks. Those no
+   * def takes, or whose value it would change (a number out of its range), land in
+   * `unread`: keep them, report their refs from foreachRef, and write them again, so a
+   * file survives a build that doesn't know them. */
   void bag(PropertyBag &bag, BagRefs &refs, litestl::util::Vector<BlockEntry> &unread);
   /** Counts memory that is about to be allocated, so that the load's LoadLimits bound it.
    * False, and a failure, when there isn't that much left. */
@@ -139,7 +141,7 @@ class BlockReader {
   /** Opaque. */
   static const litestl::binding::types::Struct<BlockReader> *defineBindings();
 
- private:
+private:
   friend struct detail::PayloadAccess;
   /** A row of the table by a stored index; null (and a failure) for a bad index. */
   const RefCell *row();
@@ -155,7 +157,7 @@ class BlockReader {
 
 /** What BlockProvider::duplicate gives its copy to. */
 class BlockCopy {
- public:
+public:
   /** The new data, on success. Not null. */
   void setData(void *data)
   {
@@ -165,7 +167,7 @@ class BlockCopy {
   /** Opaque. */
   static const litestl::binding::types::Struct<BlockCopy> *defineBindings();
 
- private:
+private:
   friend struct detail::PayloadAccess;
   void *data_ = nullptr;
 };
@@ -187,9 +189,9 @@ Status checkPayloadRefs(const Library &lib, BlockHandle h, const BlockPayload &p
  * Gives a Live block that has no data yet (a null clientData) the data in `payload`.
  * Unsupported for a payload newer than the registered type.
  *
- * On an error the block still has no data. A provider that returns an error has freed what it
- * made. One that returns ok after the reader failed, or without reading to the end (the next
- * save would lose the rest), gets its data back through `destroy`.
+ * On an error the block still has no data. A provider that returns an error has freed
+ * what it made. One that returns ok after the reader failed, or without reading to the
+ * end (the next save would lose the rest), gets its data back through `destroy`.
  */
 Status readPayload(Library &lib, BlockHandle h, const BlockPayload &payload);
 

@@ -38,7 +38,7 @@ namespace coredcc {
  * return nothing instead.
  */
 class PropValue {
- public:
+public:
   enum class Type : uint8_t {
     None,
     Bool,
@@ -133,7 +133,7 @@ class PropValue {
   PropValue &operator=(PropValue &&b) noexcept;
   ~PropValue();
 
- private:
+private:
   /* String, Pointer and Mat4 payloads, out of line so a scalar or vector value stays
    * small (48 bytes) and allocation-free. */
   struct Heap {

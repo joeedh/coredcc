@@ -33,8 +33,8 @@ Result<SceneOf> sceneOf(Context &ctx)
 
 PropertyDef objectsInput()
 {
-  return PropertyDef::stringProp("objects")
-      .access(PropAccess::Optional | PropAccess::NotRemembered);
+  return PropertyDef::stringProp("objects").access(PropAccess::Optional |
+                                                   PropAccess::NotRemembered);
 }
 
 Result<Vector<BlockHandle>> blocksNamed(Context &ctx)
@@ -76,7 +76,9 @@ Result<Vector<BlockHandle>> objectsOf(Context &ctx)
   }
   for (BlockHandle h : *named) {
     if (!s->scene->contains(*s->lib, h)) {
-      return about(*s->lib, h, Status::error(StatusCode::FailedPrecondition, "isn't in the scene"));
+      return about(*s->lib,
+                   h,
+                   Status::error(StatusCode::FailedPrecondition, "isn't in the scene"));
     }
   }
   return named;
@@ -105,8 +107,9 @@ Result<Vector<BlockHandle>> targetObjects(Context &ctx)
   }
   if (out.size() == 0) {
     return Status::error(StatusCode::FailedPrecondition,
-                         selected.size() == 0 ? "no object is selected" :
-                                                "what is selected is hidden or unselectable");
+                         selected.size() == 0
+                             ? "no object is selected"
+                             : "what is selected is hidden or unselectable");
   }
   return out;
 }
@@ -120,7 +123,9 @@ ObjectFlags flagsOf(const Library &lib, BlockHandle h)
 Status Skips::add(const Library &lib, BlockHandle h, const Status &why)
 {
   Status s = about(lib, h, why);
-  if (why.code() != StatusCode::FailedPrecondition && why.code() != StatusCode::Unsupported) {
+  if (why.code() != StatusCode::FailedPrecondition &&
+      why.code() != StatusCode::Unsupported)
+  {
     return s;
   }
   if (count_++ == 0) {
@@ -141,9 +146,9 @@ Result<BlockHandle> blockOf(Context &ctx, const char *input)
     return BlockHandle();
   }
   const Library *lib = ctx.library();
-  const BlockHandle h = lib && ref->owner.kind == OwnerKey::Kind::Block ?
-                            lib->find(ref->owner.block) :
-                            BlockHandle();
+  const BlockHandle h = lib && ref->owner.kind == OwnerKey::Kind::Block
+                            ? lib->find(ref->owner.block)
+                            : BlockHandle();
   const Datablock *b = lib ? lib->get(h) : nullptr;
   if (!b || b->state() != BlockState::Live) {
     return Status::error(StatusCode::FailedPrecondition,
@@ -155,7 +160,8 @@ Result<BlockHandle> blockOf(Context &ctx, const char *input)
 PropValue pointerTo(const Library &lib, BlockHandle h)
 {
   const Datablock *b = lib.get(h);
-  const BlockTypeRegistry::Entry *e = lib.runtime().ext<BlockTypeRegistry>().find(b->type());
+  const BlockTypeRegistry::Entry *e =
+      lib.runtime().ext<BlockTypeRegistry>().find(b->type());
   StableRef ref;
   ref.owner = OwnerKey::ofBlock(b->id());
   ref.type = e ? e->info.dataStruct : StructId();
@@ -168,7 +174,7 @@ Status about(const Library &lib, BlockHandle h, const Status &s)
   const std::string name = "'" + std::string(b ? b->name().c_str() : "?") + "'";
   const std::string message = s.message();
   return message.rfind(name, 0) == 0 ? s : /* readObject's have it */
-                                       Status::error(s.code(), (name + ": " + message).c_str());
+             Status::error(s.code(), (name + ": " + message).c_str());
 }
 
 } // namespace detail
@@ -328,10 +334,12 @@ struct Link {
       return out;
     }
     if (*h) {
-      return Status::error(StatusCode::InvalidArgument, "both object and objects are given");
+      return Status::error(StatusCode::InvalidArgument,
+                           "both object and objects are given");
     }
     Result<Vector<BlockHandle>> named = detail::blocksNamed(ctx);
-    return named.ok() && named->size() == 0 ? failed("objects: no object is named") : named;
+    return named.ok() && named->size() == 0 ? failed("objects: no object is named")
+                                            : named;
   }
   Status exec(Context &ctx)
   {
@@ -354,8 +362,9 @@ struct Link {
       ids.append(o.id());
     }
     report(ctx,
-           s.ok() ? s->scene->removeMany(*s->lib, {ids.data(), size_t(ids.size())}).status() :
-                    s.status());
+           s.ok()
+               ? s->scene->removeMany(*s->lib, {ids.data(), size_t(ids.size())}).status()
+               : s.status());
     if (s.ok()) {
       scene.changed(ctx, kObjects);
     }
@@ -440,7 +449,8 @@ struct Unlink {
   {
     Result<SceneOf> s = scene.get(ctx);
     report(ctx,
-           s.ok() ? s->scene->putBack(*s->lib, {places.data(), size_t(places.size())}) : s.status());
+           s.ok() ? s->scene->putBack(*s->lib, {places.data(), size_t(places.size())})
+                  : s.status());
     if (s.ok()) {
       scene.changed(ctx, kObjects);
     }
@@ -553,15 +563,15 @@ struct Select {
     }
     if (!ctx.inputs()->get("objects")->isNone()) {
       if (*h) {
-        return Status::error(StatusCode::InvalidArgument, "both object and objects are given");
+        return Status::error(StatusCode::InvalidArgument,
+                             "both object and objects are given");
       }
       return detail::objectsOf(ctx);
     }
     Vector<BlockHandle> out;
     if (*h) {
       out.append(*h);
-    }
-    else if (mode(ctx) != SelectMode::Set) {
+    } else if (mode(ctx) != SelectMode::Set) {
       return failed("object: no such block");
     }
     return out;
@@ -583,8 +593,7 @@ struct Select {
           after.append(lib.get(h)->id());
         }
       }
-    }
-    else if (m != SelectMode::None) {
+    } else if (m != SelectMode::None) {
       Vector<BlockHandle> named;
       const Vector<BlockHandle> all = *namedObjects(ctx);
       for (BlockHandle h : all) {
@@ -671,9 +680,10 @@ struct AddObject {
     const BlockTypeRegistry::Entry *e =
         ctx.runtime().ext<BlockTypeRegistry>().find(b->type());
     return e && ctx.runtime().ext<ApiRegistry>().isA(e->info.dataStruct,
-                                                     StructId::of(kObjectDataStruct)) ?
-               Status() :
-               detail::about(*ctx.library(), *data, failed("can't be an object's data"));
+                                                     StructId::of(kObjectDataStruct))
+               ? Status()
+               : detail::about(
+                     *ctx.library(), *data, failed("can't be an object's data"));
   }
   /* Where it is to be, in the world. */
   static mat4d targetOf(Context &ctx)
@@ -709,8 +719,8 @@ struct AddObject {
     if (!r.ok()) {
       return r.status();
     }
-    Result<ChannelBlock> c = solveWorld(
-        *r->type, r->ctx(), targetOf(ctx), parentState, SetWorldMode::Closest);
+    Result<ChannelBlock> c =
+        solveWorld(*r->type, r->ctx(), targetOf(ctx), parentState, SetWorldMode::Closest);
     return c.ok() ? writeTransform(ctx, h, *c) : c.status();
   }
   Status exec(Context &ctx)
@@ -754,7 +764,10 @@ struct AddObject {
     }
     return ctx.outputs()->set("object", detail::pointerTo(*l, *h));
   }
-  void chosen(Context &ctx, const SceneOf &s, const Vector<BlockId> &ids, const BlockId &id) const
+  void chosen(Context &ctx,
+              const SceneOf &s,
+              const Vector<BlockId> &ids,
+              const BlockId &id) const
   {
     s.scene->setSelection(*s.lib, ids);
     report(ctx, s.lib->writeRef(s.scene->activeCell(), id));
@@ -801,7 +814,8 @@ struct AddObject {
   }
   uint64_t memSize() const
   {
-    return sizeof(*this) + created.memSize() + uint64_t(selected.size()) * sizeof(BlockId);
+    return sizeof(*this) + created.memSize() +
+           uint64_t(selected.size()) * sizeof(BlockId);
   }
   void discard()
   {
@@ -833,11 +847,15 @@ PropertyDef stringInput(const char *name, const char *value)
 Status detail::registerMembershipCommands(Runtime &rt)
 {
   CommandDef scene(kNewSceneCommand);
-  scene.uiName("New Scene").input(stringInput("name", "Scene")).output(blockInputDef("scene"));
+  scene.uiName("New Scene")
+      .input(stringInput("name", "Scene"))
+      .output(blockInputDef("scene"));
   CDCC_TRY(addCommandOnce<NewScene>(rt, std::move(scene)));
 
   CommandDef link(kLinkCommand);
-  link.uiName("Link to Scene").input(blockInputDef("object")).input(detail::objectsInput());
+  link.uiName("Link to Scene")
+      .input(blockInputDef("object"))
+      .input(detail::objectsInput());
   CDCC_TRY(addCommandOnce<Link>(rt, std::move(link)));
 
   CommandDef unlink(kUnlinkCommand);
@@ -871,7 +889,8 @@ Status detail::registerMembershipCommands(Runtime &rt)
       .input(PropertyDef::vecProp("location", 3)
                  .subtype(PropSubtype::Distance)
                  .unit(UnitFamily::Length))
-      .input(PropertyDef::quatProp("rotation").defaultValue(PropValue::ofQuat(0, 0, 0, 1)))
+      .input(
+          PropertyDef::quatProp("rotation").defaultValue(PropValue::ofQuat(0, 0, 0, 1)))
       .input(PropertyDef::vecProp("scale", 3).defaultValue(PropValue::ofVec3(1, 1, 1)))
       .input(blockInputDef("parent"))
       .input(blockInputDef("data"))

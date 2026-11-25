@@ -1,5 +1,6 @@
-/* What an instance keeps: results of sockets that are gone, inputs of removed interface sockets,
- * and instances made with the wrong Library. And kernels that use a block's name. */
+/* What an instance keeps: results of sockets that are gone, inputs of removed interface
+ * sockets, and instances made with the wrong Library. And kernels that use a block's
+ * name. */
 #include "graph_fixture.h"
 
 #include "coredcc/graph/instance.h"
@@ -90,8 +91,10 @@ void testRemovedNodes()
   /* Asked for again: NotFound, and nothing is left. */
   NodeId n = add(*g.def, "t.make");
   test_assert(inst.evaluate(out(n)).ok() && g_alive == 2);
-  test_assert(g.def->removeNode(n).ok() && known(inst, out(n))); /* the last evaluation's */
-  test_assert(hasCode(inst.evaluate(out(n)), StatusCode::NotFound) && !known(inst, out(n)));
+  test_assert(g.def->removeNode(n).ok() &&
+              known(inst, out(n))); /* the last evaluation's */
+  test_assert(hasCode(inst.evaluate(out(n)), StatusCode::NotFound) &&
+              !known(inst, out(n)));
   test_assert(g_alive == 1 && !inst.isCurrent(out(n)));
   /* Not asked for: dropped by the next evaluation. */
   for (int i = 0; i < 100; i++) {
@@ -219,7 +222,8 @@ void testInputs()
     return g.def->removeInterface(a).ok();
   };
   InterfaceSocket was;
-  test_assert(set() && g_alive == 1 && inst.setInput(key(b), GraphValue::ofFloat(2)).ok());
+  test_assert(set() && g_alive == 1 &&
+              inst.setInput(key(b), GraphValue::ofFloat(2)).ok());
   /* Undo may bring the input back, so its value stays. */
   test_assert(remove(was) && inst.evaluate(SocketPath::output("o")).ok() && g_alive == 1);
   test_assert(g.def->restoreInterface(SocketSide::Input, was, 0).ok());
@@ -227,10 +231,12 @@ void testInputs()
   test_assert(inst.value(out(in, key(a).c_str()))->payload<Counted>());
   test_assert(inst.forget(out(in, key(a).c_str())).ok());
   /* None by its key drops it, and only it. */
-  test_assert(remove(was) && hasCode(inst.setInput("a", GraphValue()), StatusCode::NotFound));
+  test_assert(remove(was) &&
+              hasCode(inst.setInput("a", GraphValue()), StatusCode::NotFound));
   test_assert(g_alive == 1 && inst.setInput(key(a), GraphValue()).ok() && g_alive == 0);
   test_assert(hasCode(inst.setInput(key(a), GraphValue()), StatusCode::NotFound));
-  test_assert(hasCode(inst.setInput(key(a), GraphValue::ofFloat(1)), StatusCode::NotFound));
+  test_assert(
+      hasCode(inst.setInput(key(a), GraphValue::ofFloat(1)), StatusCode::NotFound));
   /* So does clear, which keeps the others. */
   test_assert(g.def->restoreInterface(SocketSide::Input, was, 0).ok() && set());
   test_assert(inst.clear().ok() && g_alive == 1 && remove(was));
@@ -240,8 +246,10 @@ void testInputs()
   /* Without its graph, an instance can't tell. */
   test_assert(g.def->restoreInterface(SocketSide::Input, was, 0).ok() && set());
   test_assert(w.lib.markDeleted(g.h).ok() && inst.clear().ok() && g_alive == 1);
-  test_assert(hasCode(inst.setInput(key(b), GraphValue::ofFloat(2)), StatusCode::NotFound));
-  test_assert(w.lib.restoreFromHistory(g.h).ok() && inst.setInput(key(a), GraphValue()).ok());
+  test_assert(
+      hasCode(inst.setInput(key(b), GraphValue::ofFloat(2)), StatusCode::NotFound));
+  test_assert(w.lib.restoreFromHistory(g.h).ok() &&
+              inst.setInput(key(a), GraphValue()).ok());
   test_assert(g_alive == 0);
 }
 
@@ -257,7 +265,8 @@ void testLibraries()
   const NodeId group = add(def, "graph.group");
   test_assert(def.setGroup(group, inner.id).ok());
   const SocketPath p = out(group, key(o).c_str());
-  GraphInstance right(&w.rt, &w.lib, &def), none(&w.rt, nullptr, &def), wrong(&w.rt, &other, &def);
+  GraphInstance right(&w.rt, &w.lib, &def), none(&w.rt, nullptr, &def),
+      wrong(&w.rt, &other, &def);
   test_assert(right.evaluate(p).ok() && none.evaluate(p).ok());
   test_assert(hasCode(wrong.evaluate(p), StatusCode::InvalidArgument) && !wrong.value(p));
   test_assert(hasCode(wrong.setInput("x", GraphValue()), StatusCode::InvalidArgument));
@@ -281,7 +290,8 @@ void testLibraries()
   test_assert(hasCode(d.evaluate(p), StatusCode::NotFound));
   GraphDef far(&v.rt), farToo(&v.rt, &v.lib);
   const NodeId n = add(far, "t.make"), n2 = add(farToo, "t.make");
-  GraphInstance e(&w.rt, nullptr, &far), f(&w.rt, &v.lib, &farToo), g(&w.rt, nullptr, &farToo);
+  GraphInstance e(&w.rt, nullptr, &far), f(&w.rt, &v.lib, &farToo),
+      g(&w.rt, nullptr, &farToo);
   test_assert(hasCode(e.evaluate(out(n)), StatusCode::InvalidArgument));
   test_assert(hasCode(f.evaluate(out(n2)), StatusCode::InvalidArgument));
   test_assert(hasCode(g.evaluate(out(n2)), StatusCode::InvalidArgument));
@@ -301,7 +311,8 @@ void testNames()
   GraphInstance inst(&w.rt, &w.lib, &def);
   auto is = [&](const char *name, uint64_t runs) {
     const uint64_t before = inst.totalRuns();
-    return inst.evaluate(out(n)).ok() && *inst.value(out(n)) == GraphValue::ofString(name) &&
+    return inst.evaluate(out(n)).ok() &&
+           *inst.value(out(n)) == GraphValue::ofString(name) &&
            inst.totalRuns() - before == runs;
   };
   test_assert(is("before", 1) && is("before", 0) && w.lib.get(t)->renames() == 0);

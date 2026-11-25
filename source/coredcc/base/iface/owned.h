@@ -15,12 +15,15 @@ namespace coredcc {
  * destruction. Move-only. Never bound to TS or Python: scripts see plain interfaces.
  */
 template <class I> class Owned {
- public:
+public:
   /** Destroys `self`; `ctx` is whatever the creator passed (e.g. a foreign handle). */
   using Deleter = void (*)(void *self, void *ctx);
 
   Owned() = default;
-  Owned(I ref, Deleter deleter, void *ctx = nullptr) : ref_(ref), deleter_(deleter), ctx_(ctx) {}
+  Owned(I ref, Deleter deleter, void *ctx = nullptr)
+      : ref_(ref), deleter_(deleter), ctx_(ctx)
+  {
+  }
   Owned(Owned &&b) noexcept
       : ref_(std::exchange(b.ref_, I())), deleter_(std::exchange(b.deleter_, nullptr)),
         ctx_(std::exchange(b.ctx_, nullptr))
@@ -76,7 +79,7 @@ template <class I> class Owned {
     ctx_ = nullptr;
   }
 
- private:
+private:
   I ref_;
   Deleter deleter_ = nullptr;
   void *ctx_ = nullptr;
@@ -92,8 +95,9 @@ Result<Owned<I>> own(const Runtime &rt, std::string_view implName, Impl *obj)
   I ref = query<I>(rt, TypeId::of(implName), static_cast<void *>(obj));
   if (!ref) {
     litestl::alloc::Delete(obj);
-    return Status::error(StatusCode::NotFound,
-                         (std::string(implName) + " does not implement " + I::ifaceName).c_str());
+    return Status::error(
+        StatusCode::NotFound,
+        (std::string(implName) + " does not implement " + I::ifaceName).c_str());
   }
   if (ref.template as<Impl>() != obj) {
     litestl::alloc::Delete(obj);
@@ -101,7 +105,8 @@ Result<Owned<I>> own(const Runtime &rt, std::string_view implName, Impl *obj)
         StatusCode::TypeMismatch,
         (std::string(implName) + " is not registered for this C++ type").c_str());
   }
-  return Owned<I>(ref, [](void *self, void *) { litestl::alloc::Delete(static_cast<Impl *>(self)); });
+  return Owned<I>(
+      ref, [](void *self, void *) { litestl::alloc::Delete(static_cast<Impl *>(self)); });
 }
 
 } // namespace coredcc

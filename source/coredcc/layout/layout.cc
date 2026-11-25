@@ -13,16 +13,16 @@ namespace coredcc {
 bool valueHolds(const PropValue &value)
 {
   switch (value.type()) {
-    case PropValue::Type::Bool:
-      return value.asBool();
-    case PropValue::Type::Int:
-      return value.asInt() != 0;
-    case PropValue::Type::String:
-      return value.asString().size() > 0;
-    case PropValue::Type::Pointer:
-      return !value.asPointer().isNull();
-    default:
-      return false;
+  case PropValue::Type::Bool:
+    return value.asBool();
+  case PropValue::Type::Int:
+    return value.asInt() != 0;
+  case PropValue::Type::String:
+    return value.asString().size() > 0;
+  case PropValue::Type::Pointer:
+    return !value.asPointer().isNull();
+  default:
+    return false;
   }
 }
 
@@ -84,9 +84,10 @@ const LayoutAttr *Layout::freeAttr(int node, std::string_view name) const
 int Layout::findId(std::string_view id) const
 {
   const int32_t *end = byId_.data() + byId_.size();
-  const int32_t *at = std::lower_bound(byId_.data(), end, id, [this](int32_t i, std::string_view id) {
-    return text(i, LayoutAttrId::Id) < id;
-  });
+  const int32_t *at =
+      std::lower_bound(byId_.data(), end, id, [this](int32_t i, std::string_view id) {
+        return text(i, LayoutAttrId::Id) < id;
+      });
   return at != end && text(*at, LayoutAttrId::Id) == id ? *at : -1;
 }
 
@@ -152,7 +153,8 @@ bool Layout::operator==(const Layout &b) const
   return true;
 }
 
-Result<Path> joinLayoutPath(const Path &prefix, std::string_view path, size_t *errorOffset)
+Result<Path>
+joinLayoutPath(const Path &prefix, std::string_view path, size_t *errorOffset)
 {
   Result<Path> own = parsePath(path, errorOffset);
   if (!own.ok() || own->fromRoot) {

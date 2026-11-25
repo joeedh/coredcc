@@ -7,7 +7,7 @@ namespace coredcc {
 
 /** What BlockProvider::rekey may ask about the append. */
 class RekeyContext {
- public:
+public:
   using IsFree = bool (*)(const void *self, const BlockId &id);
   RekeyContext(Library &lib, const void *self, IsFree isFree)
       : lib_(lib), self_(self), isFree_(isFree)
@@ -18,8 +18,8 @@ class RekeyContext {
   {
     return lib_;
   }
-  /** Whether the imported block may get `id`: it isn't null, no block of the append has it, and
-   * none here, except a MissingBlock that the import can fill. */
+  /** Whether the imported block may get `id`: it isn't null, no block of the append has
+   * it, and none here, except a MissingBlock that the import can fill. */
   bool isFree(const BlockId &id) const
   {
     return isFree_(self_, id);
@@ -27,7 +27,7 @@ class RekeyContext {
 
   static const litestl::binding::types::Struct<RekeyContext> *defineBindings();
 
- private:
+private:
   Library &lib_;
   const void *self_;
   IsFree isFree_;
@@ -35,36 +35,37 @@ class RekeyContext {
 
 /**
  * What a client implements per block type (architecture §8a). Native or foreign (TS),
- * like any interface (§2a). A provider serves every Library of its Runtime: the block says
- * which one it is in.
+ * like any interface (§2a). A provider serves every Library of its Runtime: the block
+ * says which one it is in.
  *
  * - `data` resolves the block's data on every use; it may return null (a Detached
  *   block, a host object that went away).
- * - `foreachRef` is the single source of truth for the block's references. It is called for
- *   Live, InHistory, Detached and Doomed blocks (a Detached block's targets must survive GC until
- *   the host restores it, and a Doomed one's while something pins its data); report nothing if
- *   the data is gone. Report every RefCell in the block's data, strong and weak.
+ * - `foreachRef` is the single source of truth for the block's references. It is called
+ * for Live, InHistory, Detached and Doomed blocks (a Detached block's targets must
+ * survive GC until the host restores it, and a Doomed one's while something pins its
+ * data); report nothing if the data is gone. Report every RefCell in the block's data,
+ * strong and weak.
  * - `destroy` frees the data (for a host-owned block, only the wrapper). It runs during
  *   a sweep: library reads are allowed, void mutations are deferred, creates fail.
  * - `queryInterface` (optional) answers interfaces the block type doesn't implement
  *   itself, the last step of Library::query. Its answer may change only with a ChangeBus
  *   notification of the block or a move of the Library's epoch (see Library::query).
- * - `onWeakTargetLost` (optional) is told when a block that `user`'s data weakly references is
- *   about to be destroyed, so a child can keep its world transform. `user` has its data: it is
- *   Live, or InHistory from Live.
+ * - `onWeakTargetLost` (optional) is told when a block that `user`'s data weakly
+ * references is about to be destroyed, so a child can keep its world transform. `user`
+ * has its data: it is Live, or InHistory from Live.
  *
- * - `serialize` and `deserialize` (optional, together) write the block's data to a payload
- *   and make it again: what saving needs. `deserialize` makes new data and gives it to
- *   `in.setData`; on an error it has freed what it made. The record exists then (id, name,
- *   slots), but other blocks may not have their data yet.
- * - `duplicate` (optional) copies the data, references as they are; the library then remaps
- *   them through foreachRef.
- * - `rekey` (optional) gives an imported block an id the client can resolve (a UUID in host
- *   data), one that `context.isFree`. A null id refuses the import. `imported` isn't a record
- *   yet; it has the id the file has, the type and the name. The id of a MissingBlock is free: the
- *   import then fills it.
- * - `memSize` (optional) is about what the block's data takes in memory, in bytes. The undo
- *   history counts it for blocks that only the history holds.
+ * - `serialize` and `deserialize` (optional, together) write the block's data to a
+ * payload and make it again: what saving needs. `deserialize` makes new data and gives it
+ * to `in.setData`; on an error it has freed what it made. The record exists then (id,
+ * name, slots), but other blocks may not have their data yet.
+ * - `duplicate` (optional) copies the data, references as they are; the library then
+ * remaps them through foreachRef.
+ * - `rekey` (optional) gives an imported block an id the client can resolve (a UUID in
+ * host data), one that `context.isFree`. A null id refuses the import. `imported` isn't a
+ * record yet; it has the id the file has, the type and the name. The id of a MissingBlock
+ * is free: the import then fills it.
+ * - `memSize` (optional) is about what the block's data takes in memory, in bytes. The
+ * undo history counts it for blocks that only the history holds.
  */
 struct BlockProvider : IfaceRef {
   void *data(const Datablock &block) const

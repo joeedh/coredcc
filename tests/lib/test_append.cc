@@ -1,4 +1,5 @@
-/* Appending a file to a library: new ids, references, refusals, and what it leaves alone. */
+/* Appending a file to a library: new ids, references, refusals, and what it leaves alone.
+ */
 #include "io_fixture.h"
 
 #include "fuzz.h"
@@ -19,7 +20,8 @@ BlockId cid(uint64_t n, ClientId client = ClientId::of(kCoredccClient))
   return BlockId{client, LocalId{7, n}};
 }
 
-/* a -> b -> a, b has a weak ref to c, a has an entry, a slot and a note to c. a is a root. */
+/* a -> b -> a, b has a weak ref to c, a has an entry, a slot and a note to c. a is a
+ * root. */
 Bytes sample()
 {
   IoWorld w;
@@ -40,13 +42,17 @@ std::string snapshotOf(const IoWorld &w)
 {
   std::string s;
   w.lib.forEach([&](BlockHandle h, const Datablock &b) {
-    s += std::to_string(h.index) + b.name().c_str() + std::to_string(int(b.state())) + ";";
+    s +=
+        std::to_string(h.index) + b.name().c_str() + std::to_string(int(b.state())) + ";";
   });
   return s + std::to_string(w.lib.epoch());
 }
 
 /* Refused, with nothing changed. */
-bool refused(IoWorld &w, const Bytes &file, StatusCode code, const char *what,
+bool refused(IoWorld &w,
+             const Bytes &file,
+             StatusCode code,
+             const char *what,
              const AppendOptions &options = {})
 {
   const std::string before = snapshotOf(w);
@@ -67,7 +73,8 @@ static void test_twice()
   int rekeys = 0;
   w.docs.onRekey = [&](const Datablock &b, const RekeyContext &) {
     test_assert(w.lib.busy() && b.id() == cid(2, kAcme) && b.type() == kAcmeDoc);
-    test_assert(strcmp(b.name().c_str(), "b") == 0 && b.state() == BlockState::Placeholder);
+    test_assert(strcmp(b.name().c_str(), "b") == 0 &&
+                b.state() == BlockState::Placeholder);
     test_assert(!b.clientData());
     return cid(100 + uint64_t(rekeys++), kAcme);
   };
@@ -77,7 +84,8 @@ static void test_twice()
     Result<AppendResult> r = w.append(bytes);
     test_assert(r.ok() && r->ids.size() == 3 && r->report.blocks.size() == 3);
     test_assert(r->report.records == 3 && r->report.issues.total == 0);
-    const BlockId a = r->ids.find(cid(1)), b = r->ids.find(cid(2, kAcme)), c = r->ids.find(cid(3));
+    const BlockId a = r->ids.find(cid(1)), b = r->ids.find(cid(2, kAcme)),
+                  c = r->ids.find(cid(3));
     test_assert(b == cid(100 + uint64_t(i), kAcme));
     test_assert(a.client == ClientId::of(kCoredccClient) && a != cid(1) && c != cid(3));
     test_assert(r->ids.find(cid(4)).isNull());
@@ -126,7 +134,8 @@ static void test_outside_refs()
   const BlockHandle ha = r->report.blocks[0];
   test_assert(w.lib.resolveRef(w.data(ha)->mesh) == here);
   test_assert(w.data(ha)->parent.target == cid(51));
-  test_assert(w.lib.get(w.at(52))->placeholderReason() == PlaceholderReason::MissingBlock);
+  test_assert(w.lib.get(w.at(52))->placeholderReason() ==
+              PlaceholderReason::MissingBlock);
   /* Again: the missing block is there by now. */
   r = w.append(bytes);
   test_assert(r.ok() && r->report.blocks.size() == 1 && w.lib.size() == 4);
@@ -164,11 +173,15 @@ static void test_placeholders()
   const BlockHandle a = w.lib.find(r->ids.find(cid(1)));
   const BlockId b = r->ids.find(cid(2, kAcme)), c = r->ids.find(cid(3));
   int toB = 0, toC = 0;
-  test_assert(w.lib.foreachRef(a, [&](RefCell &cell) {
-    toB += cell.target == b ? 1 : 0;
-    toC += cell.target == c ? 1 : 0;
-    test_assert(cell.target != cid(3) && cell.target != cid(2, kAcme));
-  }).ok());
+  test_assert(w.lib
+                  .foreachRef(a,
+                              [&](RefCell &cell) {
+                                toB += cell.target == b ? 1 : 0;
+                                toC += cell.target == c ? 1 : 0;
+                                test_assert(cell.target != cid(3) &&
+                                            cell.target != cid(2, kAcme));
+                              })
+                  .ok());
   test_assert(toB == 2 && toC >= 3); /* tables, slot and opaque attachment */
   test_assert(strcmp(w.lib.get(a)->sourceName().c_str(), "lib.cdcc") == 0);
   registerDoc(w.rt, w.docs);
@@ -185,7 +198,8 @@ static void test_refused()
     k.acme = false;
     IoWorld w(k);
     w.doc(9, "x");
-    test_assert(refused(w, bytes, StatusCode::FailedPrecondition, "can't get ids here: acme.Doc"));
+    test_assert(refused(
+        w, bytes, StatusCode::FailedPrecondition, "can't get ids here: acme.Doc"));
     test_assert(!w.lib.fileNames().nameOf(IdDomain::Type, kAcmeDoc.value));
   }
   IoWorld w;
@@ -195,8 +209,8 @@ static void test_refused()
     return refused(w, bytes, StatusCode::FailedPrecondition, "acme.Doc");
   };
   test_assert(answering(BlockId()));
-  test_assert(answering(cid(9, kAcme)));  /* in use */
-  test_assert(answering(cid(10)));        /* another client's */
+  test_assert(answering(cid(9, kAcme))); /* in use */
+  test_assert(answering(cid(10)));       /* another client's */
   test_assert(answering(BlockId{kAcme, LocalId()}));
   w.docs.onRekey = [&](const Datablock &, const RekeyContext &) {
     w.rt.setStickyError(Status::error(StatusCode::Internal, "rekey threw"));
@@ -229,7 +243,9 @@ static void test_refused()
     test_assert(h.ok());
     from.root(*h);
     IoWorld into;
-    test_assert(refused(into, from.save(), StatusCode::FailedPrecondition,
+    test_assert(refused(into,
+                        from.save(),
+                        StatusCode::FailedPrecondition,
                         "here: (no type), acme.Lost, acme.Plain"));
   }
   /* Two answers that are the same. */
@@ -238,7 +254,9 @@ static void test_refused()
     from.root(from.doc(1, "one", kAcmeDoc));
     from.root(from.doc(2, "two", kAcmeDoc));
     IoWorld into;
-    into.docs.onRekey = [](const Datablock &, const RekeyContext &) { return cid(1, kAcme); };
+    into.docs.onRekey = [](const Datablock &, const RekeyContext &) {
+      return cid(1, kAcme);
+    };
     test_assert(refused(into, from.save(), StatusCode::FailedPrecondition, "acme.Doc"));
     into.docs.onRekey = nullptr;
   }
@@ -254,10 +272,12 @@ static void test_refused()
   test_assert(w.append(bytes).status().code() == StatusCode::FailedPrecondition);
   w.rt.takeStickyError().ignore();
   IoWorld clash;
-  test_assert(clash.lib.fileNames().debugAddAs(IdDomain::Type, TypeId::of("x.Type").value, "other"));
+  test_assert(clash.lib.fileNames().debugAddAs(
+      IdDomain::Type, TypeId::of("x.Type").value, "other"));
   RawFile f;
   f.records.push_back(RawRecord());
-  test_assert(refused(clash, f.file(), StatusCode::InvalidArgument, "has the id of 'other'"));
+  test_assert(
+      refused(clash, f.file(), StatusCode::InvalidArgument, "has the id of 'other'"));
   /* A GUID source that repeats itself. */
   IoWorld w2;
   w2.doc(1, "x");
@@ -334,11 +354,14 @@ static void test_fuzz()
   for (int i = 8; i < int(good.size()) - 8; i++) {
     for (int k = 0; k < 3; k++) {
       Bytes b = good;
-      b[i] = k == 0 ? uint8_t(b[i] ^ (1 << (i % 8))) : k == 1 ? 0xff : uint8_t(rng.next());
+      b[i] = k == 0   ? uint8_t(b[i] ^ (1 << (i % 8)))
+             : k == 1 ? 0xff
+                      : uint8_t(rng.next());
       fixUp(b);
       IoWorld w;
       w.docs.onRekey = [&](const Datablock &block, const RekeyContext &) {
-        return cid(1000 + uint64_t(w.lib.size()) + rng.next() % 100000, block.id().client);
+        return cid(1000 + uint64_t(w.lib.size()) + rng.next() % 100000,
+                   block.id().client);
       };
       const BlockHandle own = w.doc(1, "mine"), kept = w.doc(2, "kept");
       w.root(own);
@@ -367,7 +390,8 @@ static void test_fuzz()
     }
   }
   test_assert(appended > 50 && refusals > 50);
-  test_assert(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 60);
+  test_assert(
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < 60);
 }
 
 int main()

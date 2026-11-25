@@ -44,8 +44,8 @@ static void test_block_commands()
 
   /* A strong Ref cascades: preview, refuse without cascade, delete both, undo both. */
   test_assert((registerImpl<BlockProvider, RigProvider>(rt, "test.Rig#provider").ok()));
-  Result<Owned<BlockProvider>> p =
-      own<BlockProvider>(rt, "test.Rig#provider", litestl::alloc::New<RigProvider>("provider"));
+  Result<Owned<BlockProvider>> p = own<BlockProvider>(
+      rt, "test.Rig#provider", litestl::alloc::New<RigProvider>("provider"));
   BlockTypeInfo info;
   info.name = "test.Rig";
   info.client = ClientId::of(kCoredccClient);
@@ -60,7 +60,8 @@ static void test_block_commands()
   test_assert(preview.size() == 3 && preview[0] == s.w.meshes[0]);
 
   in = rt.ext<CommandRegistry>().find(kDeleteBlockCommand)->newInputs();
-  test_assert(in.set("block", *mesh).ok() && in.set("cascade", PropValue::ofBool(false)).ok());
+  test_assert(in.set("block", *mesh).ok() &&
+              in.set("cascade", PropValue::ofBool(false)).ok());
   Result<PropertyBag> refused = s.ex.run(s.ctx, kDeleteBlockCommand, std::move(in));
   test_assert(hasMsg(refused.status(), "would also delete rig, rig2"));
   test_assert(lib.get(*rigH)->state() == BlockState::Live);
@@ -71,7 +72,8 @@ static void test_block_commands()
   test_assert(del.ok() && *del->get("count") == PropValue::ofInt(3));
   test_assert(lib.get(*rig2H)->state() == BlockState::InHistory);
   test_assert(s.ex.undo(s.ctx).ok());
-  test_assert(lib.get(*rig2H)->state() == BlockState::Live && lib.resolveRef(rig2->target) == *rigH);
+  test_assert(lib.get(*rig2H)->state() == BlockState::Live &&
+              lib.resolveRef(rig2->target) == *rigH);
   test_assert(s.ex.redo(s.ctx).ok() && lib.get(*rigH)->state() == BlockState::InHistory);
 
   /* Purge: history-held blocks are roots, so nothing goes until the history drops them.
@@ -84,7 +86,9 @@ static void test_block_commands()
   s.history.clear(); /* discards the applied delete: the three are destroyed */
   test_assert(!lib.get(*rigH) && !lib.get(*rig2H) && !lib.get(s.w.meshes[0]));
   test_assert(lib.validate().ok() && rt.validateAll().ok());
-  test_assert(s.ex.run(s.ctx, kDeleteBlockCommand, rt.ext<CommandRegistry>().find(kDeleteBlockCommand)->newInputs())
+  test_assert(s.ex.run(s.ctx,
+                       kDeleteBlockCommand,
+                       rt.ext<CommandRegistry>().find(kDeleteBlockCommand)->newInputs())
                   .status()
                   .code() == StatusCode::FailedPrecondition);
 }
@@ -124,8 +128,13 @@ static void test_undo_strategies()
 {
   std::string log;
   {
-    DelegatedUndo d([&log]() { log += "u"; }, [&log]() { log += "r"; return Status(); },
-                    [&log]() { log += "x"; }, 64);
+    DelegatedUndo d([&log]() { log += "u"; },
+                    [&log]() {
+                      log += "r";
+                      return Status();
+                    },
+                    [&log]() { log += "x"; },
+                    64);
     d.undo();
     test_assert(d.redo().ok() && d.memSize() == 64);
     DelegatedUndo moved = std::move(d);
@@ -139,7 +148,8 @@ static void test_undo_strategies()
   int value = 1234567;
   IntSnapshot impl;
   impl.value = &value;
-  SnapshotProvider snap = query<SnapshotProvider>(rt, TypeId::of("test.IntSnapshot"), &impl);
+  SnapshotProvider snap =
+      query<SnapshotProvider>(rt, TypeId::of("test.IntSnapshot"), &impl);
   test_assert(bool(snap));
   Context ctx(&rt, nullptr, PointerRef());
   litestl::util::Vector<uint8_t> blob;

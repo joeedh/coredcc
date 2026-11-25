@@ -1,7 +1,7 @@
 /*
- * A stand-in for the scene evaluator (P5c): it builds a standalone graph with a transform node
- * per object, and links parents, drivers and users' graphs. It uses only what the plan says
- * P5c may ("What P5c (the scene evaluator) uses").
+ * A stand-in for the scene evaluator (P5c): it builds a standalone graph with a transform
+ * node per object, and links parents, drivers and users' graphs. It uses only what the
+ * plan says P5c may ("What P5c (the scene evaluator) uses").
  */
 #include "edit_fixture.h"
 
@@ -85,17 +85,20 @@ Status transformKernel(NodeExecContext &ctx)
     return Status::error(StatusCode::OutOfRange, "singular");
   }
   const Place parent = placeOf(*ctx.input("parent"));
-  return ctx.setOutput(0, GraphValue::ofPayload(makePayload(Place{parent.x + local, parent.scale})));
+  return ctx.setOutput(
+      0, GraphValue::ofPayload(makePayload(Place{parent.x + local, parent.scale})));
 }
 
 /* A driver's value: time times the object's x. */
 Status driverKernel(NodeExecContext &ctx)
 {
   const Thing *t = static_cast<const Thing *>(ctx.paramBlock("object").data);
-  return ctx.setOutput(0, GraphValue::ofFloat(t ? t->value * ctx.input("time")->asFloat() : 0));
+  return ctx.setOutput(
+      0, GraphValue::ofFloat(t ? t->value * ctx.input("time")->asFloat() : 0));
 }
 
-/* In users' graphs: the place of an object, as the scene gives it; and the offset of one. */
+/* In users' graphs: the place of an object, as the scene gives it; and the offset of one.
+ */
 Status getPlaceKernel(NodeExecContext &ctx)
 {
   return ctx.setOutput(0, GraphValue::ofFloat(placeOf(ctx.input(0)).x));
@@ -139,8 +142,9 @@ void addSceneTypes(Runtime &rt)
 /* ---- the evaluator ---- */
 
 class SceneEvaluator {
- public:
-  SceneEvaluator(Runtime &rt, Library &lib) : lib_(lib), def(&rt, &lib), inst(&rt, &lib, &def)
+public:
+  SceneEvaluator(Runtime &rt, Library &lib)
+      : lib_(lib), def(&rt, &lib), inst(&rt, &lib, &def)
   {
     time_ = addSocket(def, SocketSide::Input, "time", "float");
     input_ = add(def, "graph.input");
@@ -191,7 +195,8 @@ class SceneEvaluator {
       }
       const std::string socket =
           "@" + std::to_string(n.id().value) + (writes ? ".offset" : ".place");
-      const SocketRef mine{object->second, writes ? "offset" : "place"}, theirs{group, socket};
+      const SocketRef mine{object->second, writes ? "offset" : "place"},
+          theirs{group, socket};
       status = (writes ? def.link(theirs, mine) : def.link(mine, theirs)).status();
     };
     user.forEachNode(NodeTypeFlags::OutputAdapter, connectAdapter);
@@ -237,13 +242,13 @@ class SceneEvaluator {
     return SocketPath::of(nodes_[id], "place");
   }
 
- private:
+private:
   Library &lib_;
   std::map<BlockId, NodeId> nodes_;
   int64_t time_ = 0;
   NodeId input_;
 
- public:
+public:
   struct Applied {
     double x = 0;
     bool stale = false;
@@ -329,14 +334,17 @@ void testScene()
   /* An error: what depends on it keeps its last place, the others move on. */
   s.set(a, 666);
   test_assert(e.apply() == 4 && e.errors == 3); /* a, b and c fail; d is driven by a */
-  test_assert(s.x(c) == 121 && e.applied[c].stale && s.x(d) == 5 + 666 * 4 && !e.applied[d].stale);
-  test_assert(e.inst.error(e.placePath(c))->origin == e.inst.error(e.placePath(a))->origin);
+  test_assert(s.x(c) == 121 && e.applied[c].stale && s.x(d) == 5 + 666 * 4 &&
+              !e.applied[d].stale);
+  test_assert(e.inst.error(e.placePath(c))->origin ==
+              e.inst.error(e.placePath(a))->origin);
   s.set(a, 2);
   test_assert(e.apply() == 4 && e.errors == 0 && s.x(c) == 122 && !e.applied[c].stale);
 
   /* An object is deleted, and comes back; then it is removed from the scene. */
   test_assert(s.lib.markDeleted(s.lib.find(d)).ok() && e.apply() == 1 && e.errors == 1);
-  test_assert(s.lib.restoreFromHistory(s.lib.find(d)).ok() && e.apply() == 1 && s.x(d) == 13);
+  test_assert(s.lib.restoreFromHistory(s.lib.find(d)).ok() && e.apply() == 1 &&
+              s.x(d) == 13);
   test_assert(e.def.node(NodeId{0}) == nullptr);
   e.removeObject(d);
   s.transforms();
@@ -372,7 +380,8 @@ void testUserGraphs()
   s.transforms();
   test_assert(e.apply() == 3 && s.transforms() == 3 && s.x(c) == 124);
   /* The user edits the graph. */
-  test_assert(user.def->setLiteral(twice, "a", PropValue::ofFloat(1)).ok() && e.apply() == 0);
+  test_assert(user.def->setLiteral(twice, "a", PropValue::ofFloat(1)).ok() &&
+              e.apply() == 0);
   test_assert(user.def->unlink(user.def->node(twice)->linkInto("a")->id).ok());
   test_assert(e.apply() == 1 && s.x(c) == 113 && s.x(a) == 2);
   /* The same graph for other objects: a second group, with its own values. */
@@ -393,7 +402,8 @@ void testUserGraphs()
   test_assert(hasCode(e.addGraph(bad.id, group2), StatusCode::InvalidArgument));
   test_assert(e.def.removeNode(group2).ok());
   test_assert(e.apply() >= 0 && e.errors == 0);
-  /* The user makes it later, inside: the evaluator reports it, for those on it and after it. */
+  /* The user makes it later, inside: the evaluator reports it, for those on it and after
+   * it. */
   const NodeId free = add(*bad.def, "math.float");
   test_assert(bad.def->unlink(bad.def->node(set2)->linkInto("offset")->id).ok());
   connect(*bad.def, free, "value", set2, "offset");
@@ -438,9 +448,11 @@ void testChain()
   s.set(s.ids.front(), 2);
   test_assert(e.apply() == n && s.transforms() == n);
   /* Cut in the middle, and joined again. */
-  test_assert(e.setParent(s.ids[n / 2], BlockId()).ok() && e.apply() == n / 2 && s.transforms() == n / 2);
+  test_assert(e.setParent(s.ids[n / 2], BlockId()).ok() && e.apply() == n / 2 &&
+              s.transforms() == n / 2);
   test_assert(e.setParent(s.ids[n / 2], s.ids[n / 2 - 1]).ok() && e.apply() == n / 2);
-  test_assert(hasCode(e.setParent(s.ids.front(), s.ids.back()), StatusCode::InvalidArgument));
+  test_assert(
+      hasCode(e.setParent(s.ids.front(), s.ids.back()), StatusCode::InvalidArgument));
 }
 
 } // namespace

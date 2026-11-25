@@ -1,4 +1,5 @@
-/* Inputs with dynamic defs: in bags, invocations, last-used values, and the commandDefaults. */
+/* Inputs with dynamic defs: in bags, invocations, last-used values, and the
+ * commandDefaults. */
 #include "command_fixture.h"
 
 #include "coredcc/command/literal.h"
@@ -37,12 +38,16 @@ struct Dyn {
     }
     return Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<Dyn> *defineBindings()
   {
     auto *st = new lbt::Struct<Dyn>("test::Dyn", sizeof(Dyn));
@@ -57,18 +62,17 @@ struct DynWorld {
   DynWorld()
   {
     CommandDef d("x.dyn");
-    d.input(PropertyDef::floatProp("amount").range(0, 1).dynamic([](PropertyDef &p, const void *o) {
-      p.range(0, manyOf(o) ? 100 : 1);
-    }));
-    d.input(PropertyDef::enumProp("mode").item("NONE", 0).dynamic([](PropertyDef &p, const void *o) {
-      p.item("A", 1);
-      if (manyOf(o)) {
-        p.item("B", 2);
-      }
-    }));
-    d.input(PropertyDef::stringProp("text").maxLength(1).dynamic([](PropertyDef &p, const void *o) {
-      p.maxLength(manyOf(o) ? 4 : 1);
-    }));
+    d.input(PropertyDef::floatProp("amount").range(0, 1).dynamic(
+        [](PropertyDef &p, const void *o) { p.range(0, manyOf(o) ? 100 : 1); }));
+    d.input(PropertyDef::enumProp("mode").item("NONE", 0).dynamic(
+        [](PropertyDef &p, const void *o) {
+          p.item("A", 1);
+          if (manyOf(o)) {
+            p.item("B", 2);
+          }
+        }));
+    d.input(PropertyDef::stringProp("text").maxLength(1).dynamic(
+        [](PropertyDef &p, const void *o) { p.maxLength(manyOf(o) ? 4 : 1); }));
     d.input(PropertyDef::boolProp("many"));
     def = *addNativeCommand<Dyn>(s.w.rt, std::move(d));
   }
@@ -87,10 +91,12 @@ static void test_invocations()
   DynWorld w;
   LastUsedStore &lu = w.s.w.rt.ext<LastUsedStore>();
   test_assert(w.run("x.dyn(mode=A)") == "0;#1;\"\";false;");
-  test_assert(w.run("x.dyn(amount=2)") == "1;#1;\"\";false;"); /* and the mode that was used */
+  test_assert(w.run("x.dyn(amount=2)") ==
+              "1;#1;\"\";false;"); /* and the mode that was used */
   lu.clear();
   /* Whatever the order, they see the others. */
-  test_assert(w.run("x.dyn(amount=2 mode=B text=\"xxxx\" many=true)") == "2;#2;\"xxxx\";true;");
+  test_assert(w.run("x.dyn(amount=2 mode=B text=\"xxxx\" many=true)") ==
+              "2;#2;\"xxxx\";true;");
   lu.clear();
   test_assert(w.run("x.dyn(mode=2 many=true)") == "0;#2;\"\";true;");
   lu.clear();
@@ -101,10 +107,10 @@ static void test_invocations()
   PropertyBag in = w.def->newInputs();
   for (int i : in.setOrder()) {
     test_assert(in.set(in.def(i).apiName().c_str(),
-                       i == 0 ? PropValue::ofFloat(50) :
-                       i == 1 ? PropValue::ofString("B") :
-                       i == 2 ? PropValue::ofString("xx") :
-                                PropValue::ofBool(true))
+                       i == 0   ? PropValue::ofFloat(50)
+                       : i == 1 ? PropValue::ofString("B")
+                       : i == 2 ? PropValue::ofString("xx")
+                                : PropValue::ofBool(true))
                     .ok());
   }
   test_assert(w.s.ex.run(w.s.ctx, *w.def, in).ok() && g_ran == "50;#2;\"xx\";true;");
@@ -116,7 +122,8 @@ static void test_last_used()
 {
   DynWorld w;
   LastUsedStore &lu = w.s.w.rt.ext<LastUsedStore>();
-  test_assert(w.run("x.dyn(amount=2 mode=B text=\"xxxx\" many=true)") == "2;#2;\"xxxx\";true;");
+  test_assert(w.run("x.dyn(amount=2 mode=B text=\"xxxx\" many=true)") ==
+              "2;#2;\"xxxx\";true;");
   test_assert(*lu.get(*w.def, "mode") == PropValue::ofEnum(2));
   test_assert(w.run("x.dyn") == "2;#2;\"xxxx\";true;");
   const std::string text = lu.serialize();
@@ -135,9 +142,10 @@ static void test_defaults()
   ApiStruct root("Prefs");
   rt.ext<LastUsedStore>().addCollectionTo(root);
   test_assert(rt.ext<ApiRegistry>().add(std::move(root)).ok());
-  test_assert(rt.ext<ApiRegistry>()
-                  .addRuntimeOwner("prefs", StructId::of("Prefs"), [&] { return (void *)&data; })
-                  .ok());
+  test_assert(
+      rt.ext<ApiRegistry>()
+          .addRuntimeOwner("prefs", StructId::of("Prefs"), [&] { return (void *)&data; })
+          .ok());
   Context pc(&rt, &w.s.w.lib, rt.ext<ApiRegistry>().runtimeOwner("prefs"));
   const std::string at = "commandDefaults[\"x.dyn\"].";
   /* A hook gets a bag here as well. */
@@ -170,7 +178,8 @@ static void test_layouts()
 {
   DynWorld w;
   const auto issues = [&](const char *invocation) {
-    const std::string xml = "<layout><tool invocation='" + std::string(invocation) + "'/></layout>";
+    const std::string xml =
+        "<layout><tool invocation='" + std::string(invocation) + "'/></layout>";
     Result<Layout> layout = parseLayout(xml);
     test_assert(layout.ok());
     litestl::util::Vector<LayoutIssue> out =

@@ -45,10 +45,12 @@ const char *statusCodeName(StatusCode code);
  * code, a message and optional suggestions ("did you mean ..."), heap-allocated.
  */
 class [[nodiscard]] Status {
- public:
+public:
   Status() = default;
   Status(const Status &b);
-  Status(Status &&b) noexcept : rep_(std::exchange(b.rep_, nullptr)) {}
+  Status(Status &&b) noexcept : rep_(std::exchange(b.rep_, nullptr))
+  {
+  }
   Status &operator=(const Status &b);
   Status &operator=(Status &&b) noexcept;
   ~Status();
@@ -72,12 +74,14 @@ class [[nodiscard]] Status {
   litestl::util::string toString() const;
 
   /** Explicitly discard a Status whose failure doesn't matter here. */
-  void ignore() const {}
+  void ignore() const
+  {
+  }
 
   /** Bound so interface slots can return a Status (Command::exec). */
   static const litestl::binding::types::Struct<Status> *defineBindings();
 
- private:
+private:
   struct Rep;
   Rep *rep_ = nullptr;
 };
@@ -86,8 +90,10 @@ class [[nodiscard]] Status {
 template <typename T> class [[nodiscard]] Result {
   static_assert(!std::is_same_v<std::remove_cvref_t<T>, Status>, "use Status directly");
 
- public:
-  Result(T value) : value_(std::move(value)) {}
+public:
+  Result(T value) : value_(std::move(value))
+  {
+  }
   Result(Status status) : status_(std::move(status))
   {
     CDCC_CHECK(!status_.ok(), "a Result built from a Status must hold an error");
@@ -140,7 +146,7 @@ template <typename T> class [[nodiscard]] Result {
     return value();
   }
 
- private:
+private:
   std::optional<T> value_;
   Status status_;
 };

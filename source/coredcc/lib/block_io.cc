@@ -54,7 +54,8 @@ void detail::EntryCodec::readBlockId(BytesReader &in, BlockId &id)
 {
   const uint32_t i = in.u32();
   if (!entry || i >= uint32_t(entry->refs.size())) {
-    in.fail(StatusCode::InvalidArgument, "a payload entry points at a ref it doesn't have");
+    in.fail(StatusCode::InvalidArgument,
+            "a payload entry points at a ref it doesn't have");
     return;
   }
   id = entry->refs[int(i)].target;
@@ -80,7 +81,9 @@ void detail::EntryCodec::chargeKey(BytesReader &in, uint32_t n)
 
 /* ---- BlockWriter ---- */
 
-BlockWriter::BlockWriter(const Library &lib) : codec_(lib.runtime(), tableOf(lib)) {}
+BlockWriter::BlockWriter(const Library &lib) : codec_(lib.runtime(), tableOf(lib))
+{
+}
 
 void BlockWriter::ref(const RefCell &cell)
 {
@@ -93,8 +96,9 @@ void BlockWriter::ref(const RefCell &cell)
 void BlockWriter::writeEntry(const BlockEntry &e)
 {
   if (e.unknownTag != 0 && isKnownValueTag(e.unknownTag)) {
-    bytes_.fail(Status::error(StatusCode::Internal,
-                              "a payload entry with raw bytes has the tag of a known type"));
+    bytes_.fail(
+        Status::error(StatusCode::Internal,
+                      "a payload entry with raw bytes has the tag of a known type"));
     return;
   }
   bytes_.str(e.name.c_str());
@@ -141,7 +145,8 @@ void BlockWriter::bag(const PropertyBag &bag,
     }
     BlockEntry e;
     e.name = bag.def(i).apiName();
-    e.value = bag.def(i).kind() == PropKind::Pointer ? refs.value(bag, i) : storedBagValue(bag, i);
+    e.value = bag.def(i).kind() == PropKind::Pointer ? refs.value(bag, i)
+                                                     : storedBagValue(bag, i);
     const RefCell *cell = refs.find(e.name.c_str());
     if (cell && isBlockPointer(e.value)) {
       e.refs.append(*cell);
@@ -268,8 +273,8 @@ void BlockReader::entries(litestl::util::function<bool(BlockEntry &)> fn)
   }
 }
 
-/* Whether coercing `from` to `to` lost nothing: an enum's key or a number of another type is as
- * good, a clamped number isn't. */
+/* Whether coercing `from` to `to` lost nothing: an enum's key or a number of another type
+ * is as good, a clamped number isn't. */
 static bool keptValue(const PropValue &from, const PropValue &to)
 {
   if (from.type() == to.type()) {
@@ -296,7 +301,8 @@ static bool setExactly(PropertyBag &bag, BagRefs &refs, int at, const PropValue 
   if (keptValue(value, bag.value(at))) {
     return true;
   }
-  (wasSet ? refs.setAt(bag, at, before) : refs.reset(bag, bag.def(at).apiName().c_str())).ignore();
+  (wasSet ? refs.setAt(bag, at, before) : refs.reset(bag, bag.def(at).apiName().c_str()))
+      .ignore();
   return false;
 }
 
@@ -309,7 +315,8 @@ void BlockReader::bag(PropertyBag &bag, BagRefs &refs, Vector<BlockEntry> &unrea
       return;
     }
     /* One ref for a pointer into a block, else none: anything more is a newer build's. */
-    const bool plain = !e.unknownTag && e.refs.size() <= (isBlockPointer(e.value) ? 1u : 0u);
+    const bool plain =
+        !e.unknownTag && e.refs.size() <= (isBlockPointer(e.value) ? 1u : 0u);
     const int at = plain ? bag.indexOf(e.name.c_str()) : -1;
     if (at < 0 || !setExactly(bag, refs, at, e.value)) {
       unread.append(std::move(e));
@@ -324,7 +331,8 @@ namespace {
 Status readyFor(const Library &lib, const char *what)
 {
   if (lib.busy()) {
-    return Status::error(StatusCode::Busy, (std::string(what) + ": the library is busy").c_str());
+    return Status::error(StatusCode::Busy,
+                         (std::string(what) + ": the library is busy").c_str());
   }
   if (lib.runtime().hasStickyError()) {
     return Status::error(
@@ -335,11 +343,11 @@ Status readyFor(const Library &lib, const char *what)
 }
 
 /* The block's type, if its data goes through payloads. */
-Result<const BlockTypeRegistry::Entry *> payloadType(const Library &lib,
-                                                     const Datablock &b,
-                                                     const char *what)
+Result<const BlockTypeRegistry::Entry *>
+payloadType(const Library &lib, const Datablock &b, const char *what)
 {
-  const BlockTypeRegistry::Entry *e = lib.runtime().ext<BlockTypeRegistry>().find(b.type());
+  const BlockTypeRegistry::Entry *e =
+      lib.runtime().ext<BlockTypeRegistry>().find(b.type());
   if (!e || e->info.storage != BlockStorage::Payload) {
     return Status::error(StatusCode::Unsupported,
                          (std::string(what) + ": the type of '" + b.name().c_str() +
@@ -351,7 +359,8 @@ Result<const BlockTypeRegistry::Entry *> payloadType(const Library &lib,
 
 Status notFound(const char *what)
 {
-  return Status::error(StatusCode::NotFound, (std::string(what) + ": no such block").c_str());
+  return Status::error(StatusCode::NotFound,
+                       (std::string(what) + ": no such block").c_str());
 }
 
 Status badState(const char *what, const Datablock &b, const char *want)
@@ -405,15 +414,17 @@ Status compareRefs(const Library &lib,
     return false;
   };
   if (differs(refs, rows)) {
-    return Status::error(StatusCode::Internal,
-                         (what + ": foreachRef reports a reference that serialize didn't write to "
-                                 "the ref table (or of another strength)")
-                             .c_str());
+    return Status::error(
+        StatusCode::Internal,
+        (what + ": foreachRef reports a reference that serialize didn't write to "
+                "the ref table (or of another strength)")
+            .c_str());
   }
   if (differs(rows, refs)) {
     return Status::error(StatusCode::Internal,
-                         (what + ": serialize wrote a reference that foreachRef doesn't report "
-                                 "(or of another strength)")
+                         (what +
+                          ": serialize wrote a reference that foreachRef doesn't report "
+                          "(or of another strength)")
                              .c_str());
   }
   return Status();
@@ -431,8 +442,9 @@ Status detail::PayloadAccess::checkRefs(const Library &lib,
                                         const BlockPayload &payload)
 {
   const Datablock *b = lib.get(h);
-  return compareRefs(lib, b ? quoted(b->name()) : "'?'", payload,
-                     [&](ForeachCell fn) { return lib.foreachDataRef(h, std::move(fn)); });
+  return compareRefs(lib, b ? quoted(b->name()) : "'?'", payload, [&](ForeachCell fn) {
+    return lib.foreachDataRef(h, std::move(fn));
+  });
 }
 
 Status detail::PayloadAccess::checkRefs(const Library &lib,
@@ -443,12 +455,15 @@ Status detail::PayloadAccess::checkRefs(const Library &lib,
 {
   const Datablock &b = *lib.get(h);
   return compareRefs(
-      lib, quoted(b.name()) + ", attachment " + quoted(type.info.name), payload,
+      lib,
+      quoted(b.name()) + ", attachment " + quoted(type.info.name),
+      payload,
       [&](ForeachCell fn) {
         const AttachmentProvider p = type.provider.get();
         if (p.hasForeachRef()) {
-          RefVisitor v([](void *to, RefCell &cell) { (*static_cast<ForeachCell *>(to))(cell); },
-                       &fn);
+          RefVisitor v(
+              [](void *to, RefCell &cell) { (*static_cast<ForeachCell *>(to))(cell); },
+              &fn);
           p.foreachRef(b, data, v);
         }
         return Status();
@@ -477,11 +492,11 @@ Result<BlockPayload> detail::PayloadAccess::write(const Library &lib, BlockHandl
   return p;
 }
 
-Result<BlockPayload> detail::PayloadAccess::writeAttachment(
-    const Library &lib,
-    BlockHandle h,
-    const AttachmentTypeRegistry::Entry &type,
-    const void *data)
+Result<BlockPayload>
+detail::PayloadAccess::writeAttachment(const Library &lib,
+                                       BlockHandle h,
+                                       const AttachmentTypeRegistry::Entry &type,
+                                       const void *data)
 {
   BlockWriter out(lib);
   CDCC_TRY(outcome(lib, type.provider.get().serialize(*lib.get(h), data, out)));

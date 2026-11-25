@@ -43,11 +43,9 @@ void appendName(std::string &out, const char *name, uint64_t id)
   if (!name) {
     out += '#';
     appendHex(out, id);
-  }
-  else if (isDottedIdentifier(name)) {
+  } else if (isDottedIdentifier(name)) {
     out += name;
-  }
-  else {
+  } else {
     appendQuoted(out, name);
   }
 }
@@ -64,8 +62,10 @@ int hexDigit(char c)
 }
 
 class RefParser {
- public:
-  explicit RefParser(std::string_view text) : lx_(text) {}
+public:
+  explicit RefParser(std::string_view text) : lx_(text)
+  {
+  }
 
   /** Ids separated by ';', which may also end the list. */
   bool blockIds(litestl::util::Vector<BlockId> &out)
@@ -107,7 +107,7 @@ class RefParser {
 
   Failure fail;
 
- private:
+private:
   bool expected(const std::string &what)
   {
     fail = lx_.failHere("expected " + what + ", got " + lx_.describeHere());
@@ -148,14 +148,12 @@ class RefParser {
       if (!hex(id)) {
         return false;
       }
-    }
-    else if (isQuote()) {
+    } else if (isQuote()) {
       if (!lx_.quoted(text, fail)) {
         return false;
       }
       id = text.empty() ? 0 : hashId(domain, prefix + text);
-    }
-    else {
+    } else {
       std::string_view ident;
       do {
         if (!lx_.identifier(ident)) {
@@ -219,11 +217,9 @@ class RefParser {
       if (!lx_.quoted(text, fail)) {
         return false;
       }
-    }
-    else if (lx_.identifier(ident)) {
+    } else if (lx_.identifier(ident)) {
       text = ident;
-    }
-    else {
+    } else {
       return expected("a member name");
     }
     out.key.append(KeySegment::member(text));
@@ -240,8 +236,7 @@ class RefParser {
         return false;
       }
       out.key.append(KeySegment::ofHandle(handle));
-    }
-    else {
+    } else {
       std::string text;
       if (!isQuote()) {
         return expected("a quoted key or '#handle'");
@@ -257,7 +252,10 @@ class RefParser {
   Lexer lx_;
 };
 
-void appendBlockId(std::string &out, const Runtime &rt, const BlockId &id, const char *comma)
+void appendBlockId(std::string &out,
+                   const Runtime &rt,
+                   const BlockId &id,
+                   const char *comma)
 {
   appendName(out, rt.nameOf(id.client), id.client.value);
   out += comma;
@@ -288,9 +286,8 @@ std::string formatBlockIds(const Runtime &rt, std::span<const BlockId> ids)
   return out;
 }
 
-Result<litestl::util::Vector<BlockId>> parseBlockIds(const Runtime &rt,
-                                                     std::string_view text,
-                                                     size_t *errorOffset)
+Result<litestl::util::Vector<BlockId>>
+parseBlockIds(const Runtime &rt, std::string_view text, size_t *errorOffset)
 {
   RefParser p(text);
   litestl::util::Vector<BlockId> ids;
@@ -311,10 +308,12 @@ Result<litestl::util::Vector<BlockId>> parseBlockIds(const Runtime &rt,
 
 std::string formatBlockId(const Runtime &rt, const BlockId &id)
 {
-  return id.isNull() ? std::string() : formatBlockIds(rt, std::span<const BlockId>(&id, 1));
+  return id.isNull() ? std::string()
+                     : formatBlockIds(rt, std::span<const BlockId>(&id, 1));
 }
 
-Result<BlockId> parseBlockId(const Runtime &rt, std::string_view text, size_t *errorOffset)
+Result<BlockId>
+parseBlockId(const Runtime &rt, std::string_view text, size_t *errorOffset)
 {
   Result<litestl::util::Vector<BlockId>> ids = parseBlockIds(rt, text, errorOffset);
   if (!ids.ok()) {
@@ -339,34 +338,33 @@ std::string formatRef(const Runtime &rt, const StableRef &ref)
     const BlockId &id = ref.owner.block;
     out += "@block(";
     appendBlockId(out, rt, id, ", ");
-  }
-  else {
+  } else {
     const char *name = rt.nameOf(IdDomain::Type, ref.owner.nameHash);
     const std::string_view prefix = kOwnerNamePrefix;
-    const bool isOwner = name && std::string_view(name).substr(0, prefix.size()) == prefix;
+    const bool isOwner =
+        name && std::string_view(name).substr(0, prefix.size()) == prefix;
     out += "@owner(";
     appendName(out, isOwner ? name + prefix.size() : nullptr, ref.owner.nameHash);
   }
   out += ')';
   for (const KeySegment &s : ref.key) {
     switch (s.kind) {
-      case KeySegment::Kind::Member:
-        out += '.';
-        if (isIdentifier(s.text.c_str())) {
-          out += s.text.c_str();
-        }
-        else {
-          appendQuoted(out, s.text.c_str());
-        }
-        break;
-      case KeySegment::Kind::StringKey:
-        out += '[';
+    case KeySegment::Kind::Member:
+      out += '.';
+      if (isIdentifier(s.text.c_str())) {
+        out += s.text.c_str();
+      } else {
         appendQuoted(out, s.text.c_str());
-        out += ']';
-        break;
-      case KeySegment::Kind::Handle:
-        out += "[#" + std::to_string(s.handle) + ']';
-        break;
+      }
+      break;
+    case KeySegment::Kind::StringKey:
+      out += '[';
+      appendQuoted(out, s.text.c_str());
+      out += ']';
+      break;
+    case KeySegment::Kind::Handle:
+      out += "[#" + std::to_string(s.handle) + ']';
+      break;
     }
   }
   if (ref.type) {
@@ -383,8 +381,7 @@ Result<StableRef> parseRef(const Runtime &rt, std::string_view text, size_t *err
   bool ok = false;
   if (text.size() > kMaxPathLength) {
     p.fail = tooLong(kMaxPathLength);
-  }
-  else {
+  } else {
     ok = p.parse(ref);
   }
   if (!ok) {

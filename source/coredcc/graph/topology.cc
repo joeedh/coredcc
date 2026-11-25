@@ -85,8 +85,7 @@ void GraphTopology::addInterior(const GraphDef &def, Node &n, int index)
         i.index = n.outCount++;
         groups.last().interiorOuts.append(int(list.size()));
         outputs.append(Output{text, type});
-      }
-      else if (works) {
+      } else if (works) {
         i.index = n.inCount++;
         Input in;
         in.key = text;
@@ -98,7 +97,8 @@ void GraphTopology::addInterior(const GraphDef &def, Node &n, int index)
     list.append(std::move(i));
   };
   for (const GraphLink *l : n.node->linksIn()) {
-    const bool works = def.findSocket(*l->from, SocketSide::Output, l->fromKey.c_str()).has_value();
+    const bool works =
+        def.findSocket(*l->from, SocketSide::Output, l->fromKey.c_str()).has_value();
     use(SocketSide::Input, l->toKey, works);
   }
   for (const GraphLink *l : n.node->linksOut()) {
@@ -145,12 +145,16 @@ std::shared_ptr<const GraphTopology> GraphTopology::build(const GraphDef &def)
     if (hasGroup(out.role)) {
       out.group = int(t->groups.size());
       const GraphDef *target = def.groupTarget(n);
-      t->groups.append(Group{&n, index, target ? target->interfaceVersion() : 0, n.socketsVersion(), {}, {}});
+      t->groups.append(Group{&n,
+                             index,
+                             target ? target->interfaceVersion() : 0,
+                             n.socketsVersion(),
+                             {},
+                             {}});
       if (out.role == NodeRole::Group) {
         t->addInterior(def, out, index);
       }
-    }
-    else if (out.role == NodeRole::Output) {
+    } else if (out.role == NodeRole::Output) {
       t->outputNode = index;
     }
     t->indexSockets(out);

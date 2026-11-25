@@ -20,7 +20,9 @@ namespace {
 
 struct Rand {
   uint64_t state;
-  explicit Rand(uint64_t seed) : state(seed) {}
+  explicit Rand(uint64_t seed) : state(seed)
+  {
+  }
   uint64_t next()
   {
     state += 0x9E3779B97F4A7C15ull;
@@ -54,7 +56,8 @@ double3 onSphere(double u, double v, double wobble)
 {
   const double ph = 6.283185307179586 * u, th = 3.141592653589793 * v;
   const double r = 1.0 + wobble * std::sin(9 * ph) * std::sin(11 * th);
-  return double3(std::sin(th) * std::cos(ph), std::sin(th) * std::sin(ph), std::cos(th)) * r;
+  return double3(std::sin(th) * std::cos(ph), std::sin(th) * std::sin(ph), std::cos(th)) *
+         r;
 }
 
 /* Every source is inside about [-1.1, 1.1] and in random order. `phase` moves it a
@@ -179,7 +182,8 @@ struct Args {
 template <class Src, class Make> int run(const Args &args, Make make)
 {
   const Src src = make(args.count, 0.0), moved = make(args.count, 0.003);
-  const Vector<Ray> coherent = coherentRays(args.queries), random = randomRays(args.queries);
+  const Vector<Ray> coherent = coherentRays(args.queries),
+                    random = randomRays(args.queries);
   const Vector<Region> picks = regions(coherent, args.queries / 16);
   /* Around what the random rays hit: what a brush or a snap asks for. */
   Vector<double3> points;
@@ -189,7 +193,8 @@ template <class Src, class Make> int run(const Args &args, Make make)
       return 1;
     }
     Rand r(8);
-    for (int i = 0; i < int(random.size()) && int(points.size()) < args.queries / 16; i++) {
+    for (int i = 0; i < int(random.size()) && int(points.size()) < args.queries / 16; i++)
+    {
       if (const RayHit h = bvh.rayClosest(random[i])) {
         points.append(random[i].origin + random[i].dir * h.t + r.vec(0.02));
       }
@@ -201,7 +206,8 @@ template <class Src, class Make> int run(const Args &args, Make make)
     BvhOptions opts;
     opts.leafSize = leaf;
     double build = 1e300, buildSerial = 1e300, refit = 1e300;
-    double tCoherent = 1e300, tRandom = 1e300, tRegion = 1e300, tSphere = 1e300, tNearest = 1e300;
+    double tCoherent = 1e300, tRandom = 1e300, tRegion = 1e300, tSphere = 1e300,
+           tNearest = 1e300;
     uint64_t sum = 0, found = 0;
     for (int rep = 0; rep < args.reps; rep++) {
       opts.parallel = false;
@@ -260,7 +266,8 @@ template <class Src, class Make> int run(const Args &args, Make make)
       }
       tNearest = std::fmin(tNearest, ms(t) * 1e6 / double(points.size()));
     }
-    printf("{\"source\":\"%s\",\"count\":%d,\"leaf\":%d,\"buildMs\":%.4f,\"serialBuildMs\":%.4f,"
+    printf("{\"source\":\"%s\",\"count\":%d,\"leaf\":%d,\"buildMs\":%.4f,"
+           "\"serialBuildMs\":%.4f,"
            "\"refitMs\":%.4f,\"coherentNs\":%.1f,\"randomNs\":%.1f,\"regionNs\":%.1f,"
            "\"sphereNs\":%.1f,\"nearestNs\":%.1f,"
            "\"nodes\":%d,\"nodeBytes\":%.0f,\"cost\":%.3f,\"check\":%llu}\n",

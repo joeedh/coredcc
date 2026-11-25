@@ -11,7 +11,8 @@ HostChannels::~HostChannels()
   }
 }
 
-ChannelBlock *HostChannels::put(const Library &lib, const BlockId &id, const ChannelBlock &channels)
+ChannelBlock *
+HostChannels::put(const Library &lib, const BlockId &id, const ChannelBlock &channels)
 {
   const Key key{&lib, id};
   ChannelBlock *const *known = byBlock_.lookup_ptr(key);

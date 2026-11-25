@@ -22,8 +22,10 @@ namespace coredcc {
  * names and descriptors (N-API, WASM).
  */
 class IfaceRegistry {
- public:
-  explicit IfaceRegistry(Runtime *rt) : rt_(*rt) {}
+public:
+  explicit IfaceRegistry(Runtime *rt) : rt_(*rt)
+  {
+  }
   ~IfaceRegistry();
   IfaceRegistry(const IfaceRegistry &) = delete;
   IfaceRegistry &operator=(const IfaceRegistry &) = delete;
@@ -70,7 +72,7 @@ class IfaceRegistry {
   const lbt::_StructBase *cachedImplDesc(TypeId implType) const;
   void cacheImplDesc(TypeId implType, const lbt::_StructBase *desc);
 
- private:
+private:
   struct TableKey {
     uint64_t type = 0;
     uint64_t iface = 0;
@@ -111,7 +113,9 @@ struct BaseOf<T> {
 };
 
 template <class I> struct UpcastsOf {
-  template <class F> static void each(F &&) {}
+  template <class F> static void each(F &&)
+  {
+  }
 };
 template <class I>
   requires requires { typename I::CdccUpcasts; }
@@ -137,8 +141,9 @@ template <class I, class F> void forEachRelated(F &&f)
 }
 
 /** Every interface related to I, transitively, without duplicates or I itself. */
-template <class I> void collectRelated(const lbt::_StructBase *root,
-                                       litestl::util::Vector<const lbt::_StructBase *> &out)
+template <class I>
+void collectRelated(const lbt::_StructBase *root,
+                    litestl::util::Vector<const lbt::_StructBase *> &out)
 {
   forEachRelated<I>([root, &out]<class R>() {
     const lbt::_StructBase *d = ifaceDesc<R>();
@@ -150,8 +155,8 @@ template <class I> void collectRelated(const lbt::_StructBase *root,
   });
 }
 
-inline std::span<const lbt::_StructBase *const> spanOf(
-    const litestl::util::Vector<const lbt::_StructBase *> &v)
+inline std::span<const lbt::_StructBase *const>
+spanOf(const litestl::util::Vector<const lbt::_StructBase *> &v)
 {
   return {v.data(), size_t(v.size())};
 }
@@ -161,7 +166,8 @@ inline std::span<const lbt::_StructBase *const> spanOf(
 /** Registers interface I and every interface related to it. registerImpl does this. */
 template <class I> Status registerInterface(Runtime &rt)
 {
-  if (rt.ifaces().findInterface(InterfaceId::of(I::ifaceName)) == detail::ifaceDesc<I>()) {
+  if (rt.ifaces().findInterface(InterfaceId::of(I::ifaceName)) == detail::ifaceDesc<I>())
+  {
     return Status();
   }
   litestl::util::Vector<const lbt::_StructBase *> related;
@@ -183,7 +189,8 @@ template <class I> Status registerInterface(Runtime &rt)
  * and MSVC). Fails with a Status naming every slot that doesn't match.
  */
 template <class I, class Impl>
-Status registerImpl(Runtime &rt, std::string_view implName, IfaceFlags flags = IfaceFlags::None)
+Status
+registerImpl(Runtime &rt, std::string_view implName, IfaceFlags flags = IfaceFlags::None)
 {
   CDCC_TRY(registerInterface<I>(rt));
   const TypeId type = TypeId::of(implName);

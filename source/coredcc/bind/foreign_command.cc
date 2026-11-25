@@ -47,7 +47,8 @@ const lbt::Struct<ForeignFactory> *ForeignFactory::defineBindings()
   static lbt::Struct<ForeignFactory> *st = nullptr;
   if (!st) {
     litestl::alloc::PermanentGuard guard;
-    st = new lbt::Struct<ForeignFactory>("coredcc::ForeignFactory", sizeof(ForeignFactory));
+    st = new lbt::Struct<ForeignFactory>("coredcc::ForeignFactory",
+                                         sizeof(ForeignFactory));
     st->isInterface = true;
     BIND_STRUCT_METHOD(st, make, MARGS());
   }
@@ -58,14 +59,18 @@ const lbt::Struct<ForeignFactory> *ForeignFactory::defineBindings()
 
 /** Every foreign table's dispatcher: `self` is the instance's handle. */
 class ForeignBindings::Dispatcher final : public ForeignDispatcher {
- public:
-  explicit Dispatcher(ForeignBindings *fb) : fb_(*fb) {}
-  Status call(const IfaceTable &table, void *self, int slot, void **args, void *ret) override
+public:
+  explicit Dispatcher(ForeignBindings *fb) : fb_(*fb)
   {
-    return fb_.call(handleOf(self), table.ifaceDesc, table.ifaceDesc->methods[slot], args, ret);
+  }
+  Status
+  call(const IfaceTable &table, void *self, int slot, void **args, void *ret) override
+  {
+    return fb_.call(
+        handleOf(self), table.ifaceDesc, table.ifaceDesc->methods[slot], args, ret);
   }
 
- private:
+private:
   ForeignBindings &fb_;
 };
 
@@ -157,21 +162,21 @@ bool scriptCantCarry(const lb::BindingBase *t)
 {
   while (t) {
     switch (t->type) {
-      case lb::BindingType::ParentTemplParam:
-        t = static_cast<const lbt::ParentTemplateParam *>(t)->concreteType;
-        break;
-      case lb::BindingType::Reference:
-        t = static_cast<const lbt::Reference *>(t)->refType;
-        break;
-      case lb::BindingType::Pointer:
-        t = static_cast<const lbt::Pointer *>(t)->ptrType;
-        break;
-      case lb::BindingType::Number:
-        return strcmp(t->name.c_str(), "pointer") == 0;
-      case lb::BindingType::Struct:
-        return strcmp(t->name.c_str(), "coredcc::QueryAnswer") == 0;
-      default:
-        return false;
+    case lb::BindingType::ParentTemplParam:
+      t = static_cast<const lbt::ParentTemplateParam *>(t)->concreteType;
+      break;
+    case lb::BindingType::Reference:
+      t = static_cast<const lbt::Reference *>(t)->refType;
+      break;
+    case lb::BindingType::Pointer:
+      t = static_cast<const lbt::Pointer *>(t)->ptrType;
+      break;
+    case lb::BindingType::Number:
+      return strcmp(t->name.c_str(), "pointer") == 0;
+    case lb::BindingType::Struct:
+      return strcmp(t->name.c_str(), "coredcc::QueryAnswer") == 0;
+    default:
+      return false;
     }
   }
   return false;
@@ -197,7 +202,8 @@ const char *cantReturn(const lbt::Method &m)
     return "returns a reference";
   }
   if (t->type == lb::BindingType::Pointer) {
-    return m.returnPolicy == lbt::ReturnPolicy::Owned ? "returns ownership of a pointer" : nullptr;
+    return m.returnPolicy == lbt::ReturnPolicy::Owned ? "returns ownership of a pointer"
+                                                      : nullptr;
   }
   if (t->type != lb::BindingType::Struct) {
     return nullptr;
@@ -210,7 +216,8 @@ const char *cantReturn(const lbt::Method &m)
   if (name == "litestl::util::Vector") {
     const lb::BindingBase *e = unwrap(st->templateParams[0].type);
     const bool scalar = e->type == lb::BindingType::Number ||
-                        e->type == lb::BindingType::Boolean || e->type == lb::BindingType::Enum;
+                        e->type == lb::BindingType::Boolean ||
+                        e->type == lb::BindingType::Enum;
     return scalar ? nullptr : "returns a Vector whose elements aren't scalars";
   }
   bool hasDefault = false, hasCopy = false;
@@ -221,8 +228,9 @@ const char *cantReturn(const lbt::Method &m)
       hasCopy = hasCopy || ref->refType->buildFullName() == st->buildFullName();
     }
   }
-  return hasDefault && hasCopy ? nullptr :
-                                 "returns a struct without bound default and copy constructors";
+  return hasDefault && hasCopy
+             ? nullptr
+             : "returns a struct without bound default and copy constructors";
 }
 
 } // namespace
@@ -235,7 +243,8 @@ Status foreignImplementable(const lbt::_StructBase *iface)
     for (const lbt::MethodParam &p : m->params) {
       cant = cant || scriptCantCarry(p.type);
     }
-    const char *why = cant ? "takes or returns a void * or a QueryAnswer" : cantReturn(*m);
+    const char *why =
+        cant ? "takes or returns a void * or a QueryAnswer" : cantReturn(*m);
     if (why) {
       bad += std::string(bad.empty() ? "" : "; ") + m->name.c_str() + " " + why;
     }
@@ -300,27 +309,28 @@ Result<PropertyDef> detail::scriptProp(const char *what,
   }
   PropertyDef pd = PropertyDef::boolProp(n);
   switch (defaultValue.type()) {
-    case PropValue::Type::Bool:
-      break;
-    case PropValue::Type::Int:
-      pd = PropertyDef::intProp(n);
-      break;
-    case PropValue::Type::Float:
-      pd = PropertyDef::floatProp(n);
-      break;
-    case PropValue::Type::String:
-      pd = PropertyDef::stringProp(n);
-      break;
-    case PropValue::Type::Vec2:
-    case PropValue::Type::Vec3:
-    case PropValue::Type::Vec4:
-      pd = PropertyDef::vecProp(n, defaultValue.componentCount());
-      break;
-    default:
-      return error(StatusCode::InvalidArgument,
-                   std::string(what) + " '" + name.c_str() + "': a script property can't be " +
-                       propValueTypeName(defaultValue.type()) +
-                       " (Bool, Int, Float, String and Vec2-4 can)");
+  case PropValue::Type::Bool:
+    break;
+  case PropValue::Type::Int:
+    pd = PropertyDef::intProp(n);
+    break;
+  case PropValue::Type::Float:
+    pd = PropertyDef::floatProp(n);
+    break;
+  case PropValue::Type::String:
+    pd = PropertyDef::stringProp(n);
+    break;
+  case PropValue::Type::Vec2:
+  case PropValue::Type::Vec3:
+  case PropValue::Type::Vec4:
+    pd = PropertyDef::vecProp(n, defaultValue.componentCount());
+    break;
+  default:
+    return error(StatusCode::InvalidArgument,
+                 std::string(what) + " '" + name.c_str() +
+                     "': a script property can't be " +
+                     propValueTypeName(defaultValue.type()) +
+                     " (Bool, Int, Float, String and Vec2-4 can)");
   }
   pd.defaultValue(defaultValue);
   return pd;
@@ -395,8 +405,7 @@ std::vector<std::string> detail::splitSlots(const string &slots)
         out.push_back(std::move(cur));
         cur.clear();
       }
-    }
-    else {
+    } else {
       cur += *p;
     }
   }
@@ -408,7 +417,8 @@ std::vector<std::string> detail::splitSlots(const string &slots)
 
 namespace {
 
-Status registerWith(Runtime &rt, const CommandDef &def, lf::Handle factory, const string &slots)
+Status
+registerWith(Runtime &rt, const CommandDef &def, lf::Handle factory, const string &slots)
 {
   const std::vector<std::string> names = splitSlots(slots);
   auto has = [&names](const char *slot) {
@@ -421,7 +431,8 @@ Status registerWith(Runtime &rt, const CommandDef &def, lf::Handle factory, cons
   };
   CommandRegistry &reg = rt.ext<CommandRegistry>();
   CDCC_TRY(reg.checkDef(def));
-  CDCC_TRY(CommandRegistry::checkSlots(def, has("redo"), has("foldKey"), has("foldFrom")));
+  CDCC_TRY(
+      CommandRegistry::checkSlots(def, has("redo"), has("foldKey"), has("foldFrom")));
   const std::string cmd = def.name().c_str();
   /* A script taking core.setProperty would break setValue for the whole Runtime. */
   if (cmd.rfind("core.", 0) == 0) {
@@ -431,7 +442,8 @@ Status registerWith(Runtime &rt, const CommandDef &def, lf::Handle factory, cons
   /* The native fold protocol downcasts `next`, which a script command can't do. */
   if (has("foldKey") || has("foldFrom")) {
     return error(StatusCode::Unsupported,
-                 "command '" + cmd + "': scripts can't fold commands (foldKey, foldFrom) yet");
+                 "command '" + cmd +
+                     "': scripts can't fold commands (foldKey, foldFrom) yet");
   }
   CDCC_TRY(foreignImplementable(coredcc::detail::ifaceDesc<Command>()));
 
@@ -440,11 +452,12 @@ Status registerWith(Runtime &rt, const CommandDef &def, lf::Handle factory, cons
     present.push_back(n.c_str());
   }
   const std::string impl = cmd + "#impl";
-  CDCC_TRY(registerForeign<Command>(rt,
-                                    impl,
-                                    rt.ext<ForeignBindings>().dispatcher(),
-                                    nullptr,
-                                    std::span<const char *const>(present.data(), present.size())));
+  CDCC_TRY(registerForeign<Command>(
+      rt,
+      impl,
+      rt.ext<ForeignBindings>().dispatcher(),
+      nullptr,
+      std::span<const char *const>(present.data(), present.size())));
   const TypeId type = TypeId::of(impl);
   /* A copy: the script's builder stays usable, and registering it twice is a clear
    * AlreadyExists. */
@@ -462,14 +475,14 @@ Status registerForeignCommand(Context &ctx,
                               const string &slots)
 {
   if (factory == 0) {
-    return error(StatusCode::InvalidArgument, "registerForeignCommand: no factory handle");
+    return error(StatusCode::InvalidArgument,
+                 "registerForeignCommand: no factory handle");
   }
   Runtime &rt = ctx.runtime();
   Status s = registerWith(rt, def, factory, slots);
   if (s.ok()) {
     rt.ext<ForeignBindings>().keepHandle(factory);
-  }
-  else {
+  } else {
     lf::release(factory);
   }
   return s;

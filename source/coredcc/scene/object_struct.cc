@@ -15,10 +15,11 @@ PointerRef blockRoot(Context &ctx, BlockHandle h)
   if (!b || b->state() != BlockState::Live) {
     return PointerRef();
   }
-  const BlockTypeRegistry::Entry *e = ctx.runtime().ext<BlockTypeRegistry>().find(b->type());
+  const BlockTypeRegistry::Entry *e =
+      ctx.runtime().ext<BlockTypeRegistry>().find(b->type());
   void *data = lib->data(h);
-  return e && data ? PointerRef{data, e->info.dataStruct, OwnerKey::ofBlock(b->id())} :
-                     PointerRef();
+  return e && data ? PointerRef{data, e->info.dataStruct, OwnerKey::ofBlock(b->id())}
+                   : PointerRef();
 }
 
 namespace {
@@ -39,12 +40,13 @@ Status setCell(Context &ctx, RefCell &cell, const PointerRef &target)
 /* The block of an instance, of any struct. */
 BlockHandle blockOf(const PointerRef &p, Context &ctx)
 {
-  return ctx.library() && p.owner.kind == OwnerKey::Kind::Block ?
-             ctx.library()->find(p.owner.block) :
-             BlockHandle();
+  return ctx.library() && p.owner.kind == OwnerKey::Kind::Block
+             ? ctx.library()->find(p.owner.block)
+             : BlockHandle();
 }
 
-/* What the block's Transformable says. An exception stays sticky: whoever reads gets it. */
+/* What the block's Transformable says. An exception stays sticky: whoever reads gets it.
+ */
 ObjectRead readOf(const PointerRef &p, Context &ctx)
 {
   ObjectRead r;
@@ -81,9 +83,10 @@ Status checkParent(const PointerRef &p, Context &ctx, const PointerRef &target)
 {
   const Library *lib = ctx.library();
   return !target.isNull() && target.owner.kind == OwnerKey::Kind::Block &&
-                 isSelfOrAncestor(*lib, blockOf(p, ctx), lib->find(target.owner.block)) ?
-             Status::error(StatusCode::FailedPrecondition, "an object can't be its own ancestor") :
-             Status();
+                 isSelfOrAncestor(*lib, blockOf(p, ctx), lib->find(target.owner.block))
+             ? Status::error(StatusCode::FailedPrecondition,
+                             "an object can't be its own ancestor")
+             : Status();
 }
 
 Status notABlock()
@@ -106,22 +109,25 @@ ApiStruct sceneObjectStruct()
   };
   flags.set = [](const PointerRef &p, Context &ctx, const PropValue &v) {
     ObjectRead r = readOf(p, ctx);
-    return r.iface && r.iface.hasSetFlags() ?
-               r.iface.setFlags(uint32_t(v.asFlags())) :
-               Status::error(StatusCode::Unsupported, "this object's flags can't be changed");
+    return r.iface && r.iface.hasSetFlags()
+               ? r.iface.setFlags(uint32_t(v.asFlags()))
+               : Status::error(StatusCode::Unsupported,
+                               "this object's flags can't be changed");
   };
   st.add(flagsDef(), std::move(flags));
 
   PointerAccessor parent;
   parent.target = StructId::of(kSceneObjectStruct);
   parent.get = [](const PointerRef &p, Context &ctx) {
-    return ctx.library() ? blockRoot(ctx, liveBlock(*ctx.library(), readOf(p, ctx).info.parent)) :
-                           PointerRef();
+    return ctx.library()
+               ? blockRoot(ctx, liveBlock(*ctx.library(), readOf(p, ctx).info.parent))
+               : PointerRef();
   };
   parent.set = [](const PointerRef &p, Context &ctx, const PointerRef &target) {
     ObjectRead r = readOf(p, ctx);
     if (!r.iface || !r.iface.hasSetParentId()) {
-      return Status::error(StatusCode::Unsupported, "this object's parent can't be changed");
+      return Status::error(StatusCode::Unsupported,
+                           "this object's parent can't be changed");
     }
     if (!target.isNull() && target.owner.kind != OwnerKey::Kind::Block) {
       return notABlock();
@@ -136,8 +142,9 @@ ApiStruct sceneObjectStruct()
   PointerAccessor data;
   data.target = StructId::of(kObjectDataStruct);
   data.get = [](const PointerRef &p, Context &ctx) {
-    return ctx.library() ? blockRoot(ctx, liveBlock(*ctx.library(), readOf(p, ctx).info.data)) :
-                           PointerRef();
+    return ctx.library()
+               ? blockRoot(ctx, liveBlock(*ctx.library(), readOf(p, ctx).info.data))
+               : PointerRef();
   };
   st.addPointer(PropertyDef::pointerProp("data", data.target), std::move(data));
 
@@ -147,11 +154,12 @@ ApiStruct sceneObjectStruct()
     return r.type ? PointerRef{ctx.runtime().ext<HostChannels>().put(
                                    *ctx.library(), p.owner.block, r.channels),
                                r.type->structId(),
-                               OwnerKey()} :
-                    PointerRef();
+                               OwnerKey()}
+                  : PointerRef();
   };
   transform.target = StructId::of(TransformRegistry::kChannelsStruct);
-  st.addPointer(PropertyDef::pointerProp("transform", transform.target), std::move(transform));
+  st.addPointer(PropertyDef::pointerProp("transform", transform.target),
+                std::move(transform));
 
   ValueAccessor type;
   type.get = [](const PointerRef &p, Context &ctx) {
@@ -169,15 +177,16 @@ ApiStruct sceneObjectStruct()
   locks.set = [](const PointerRef &p, Context &ctx, const PropValue &v) {
     ObjectRead r = readOf(p, ctx);
     if (!r.iface || !r.iface.hasSetLocks() || !r.type) {
-      return Status::error(StatusCode::Unsupported, "this object's channels can't be locked");
+      return Status::error(StatusCode::Unsupported,
+                           "this object's channels can't be locked");
     }
     std::string unknown;
     const uint64_t mask = lockMask(*r.type, v.asString().c_str(), &unknown);
-    return unknown.empty() ?
-               r.iface.setLocks(mask) :
-               Status::error(StatusCode::InvalidArgument,
-                             ("the transform has no channel '" + unknown + "' that can be locked")
-                                 .c_str());
+    return unknown.empty() ? r.iface.setLocks(mask)
+                           : Status::error(StatusCode::InvalidArgument,
+                                           ("the transform has no channel '" + unknown +
+                                            "' that can be locked")
+                                               .c_str());
   };
   st.add(PropertyDef::stringProp("locks").description(
              "Names of locked channels; one component is like location.0."),
@@ -188,13 +197,16 @@ ApiStruct sceneObjectStruct()
 ApiStruct objectStruct()
 {
   ApiStruct st(kObjectType);
-  st.parent(StructId::of(kSceneObjectStruct)).uiName("Object").description("Something placed in a scene.");
+  st.parent(StructId::of(kSceneObjectStruct))
+      .uiName("Object")
+      .description("Something placed in a scene.");
 
   PointerAccessor parent;
   parent.target = StructId::of(kSceneObjectStruct);
   parent.get = [](const PointerRef &p, Context &ctx) {
-    return ctx.library() ? blockRoot(ctx, ctx.library()->resolveRef(self(p).parent.cell())) :
-                           PointerRef();
+    return ctx.library()
+               ? blockRoot(ctx, ctx.library()->resolveRef(self(p).parent.cell()))
+               : PointerRef();
   };
   parent.set = [](const PointerRef &p, Context &ctx, const PointerRef &target) {
     CDCC_TRY(checkParent(p, ctx, target));
@@ -206,8 +218,8 @@ ApiStruct objectStruct()
   PointerAccessor data;
   data.target = StructId::of(kObjectDataStruct);
   data.get = [](const PointerRef &p, Context &ctx) {
-    return ctx.library() ? blockRoot(ctx, ctx.library()->resolveRef(self(p).data.cell())) :
-                           PointerRef();
+    return ctx.library() ? blockRoot(ctx, ctx.library()->resolveRef(self(p).data.cell()))
+                         : PointerRef();
   };
   data.set = [](const PointerRef &p, Context &ctx, const PointerRef &target) {
     return setCell(ctx, self(p).data.cell(), target);
@@ -223,7 +235,8 @@ ApiStruct objectStruct()
     return t ? PointerRef{&self(p).channels, t->structId(), OwnerKey()} : PointerRef();
   };
   transform.target = StructId::of(TransformRegistry::kChannelsStruct);
-  st.addPointer(PropertyDef::pointerProp("transform", transform.target), std::move(transform));
+  st.addPointer(PropertyDef::pointerProp("transform", transform.target),
+                std::move(transform));
 
   ValueAccessor type; /* also one that isn't registered */
   type.get = [](const PointerRef &p, Context &) {

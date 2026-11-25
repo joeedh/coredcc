@@ -112,9 +112,10 @@ Result<int> Library::collect()
       return providerFailure(status);
     }
     if (!sameRelations(fresh, relations_)) {
-      return Status::error(StatusCode::Internal,
-                           "collect: the relations cache is stale: a reference was written "
-                           "without Library::writeRef or noteRefsChanged");
+      return Status::error(
+          StatusCode::Internal,
+          "collect: the relations cache is stale: a reference was written "
+          "without Library::writeRef or noteRefsChanged");
     }
   }
 
@@ -127,8 +128,8 @@ Result<int> Library::collect()
     const bool held = b.state_ != BlockState::Live &&
                       (b.state_ != BlockState::Placeholder || b.type_ ||
                        b.placeholderReason_ != PlaceholderReason::MissingBlock);
-    if (held || b.hasFlag(BlockFlags::Root) ||
-        b.hasFlag(BlockFlags::FakeUser) || b.pins() > 0)
+    if (held || b.hasFlag(BlockFlags::Root) || b.hasFlag(BlockFlags::FakeUser) ||
+        b.pins() > 0)
     {
       marked.add(h, true);
       stack.append(h);
@@ -245,8 +246,7 @@ void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
     }
     if (b->state_ == BlockState::Doomed) {
       doomedCount_--; /* its id may be another record's */
-    }
-    else {
+    } else {
       byId_.remove(keyOf(b->id_));
       removed_++;
     }

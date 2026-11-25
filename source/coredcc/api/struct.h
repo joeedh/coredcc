@@ -24,7 +24,9 @@ namespace coredcc {
 struct ValueAccessor {
   litestl::util::function<PropValue(const PointerRef &self, Context &ctx)> get;
   /** Receives a value already coerced to the member's def. */
-  litestl::util::function<Status(const PointerRef &self, Context &ctx, const PropValue &v)> set;
+  litestl::util::function<Status(
+      const PointerRef &self, Context &ctx, const PropValue &v)>
+      set;
   /** Puts a stored value back, into the same member of the same instance. */
   using RestoreFn = litestl::util::function<Status(const PointerRef &self, Context &ctx)>;
   /** What `save` returns. */
@@ -34,9 +36,10 @@ struct ValueAccessor {
     uint64_t bytes = 0;
   };
   /**
-   * Optional, for a member that `set(get())` would change: one that can be unset, where `get`
-   * gives a default, or that stores more than `get` gives. Returns what puts back what is stored
-   * now, without checks. Undo then uses it; it must not keep pointers into the instance.
+   * Optional, for a member that `set(get())` would change: one that can be unset, where
+   * `get` gives a default, or that stores more than `get` gives. Returns what puts back
+   * what is stored now, without checks. Undo then uses it; it must not keep pointers into
+   * the instance.
    */
   litestl::util::function<Stored(const PointerRef &self, Context &ctx)> save = {};
 };
@@ -47,7 +50,8 @@ struct PointerAccessor {
    * null pointer. The type may be left null: `target` or `refine` supplies it. */
   litestl::util::function<PointerRef(const PointerRef &self, Context &ctx)> get;
   /** Optional: makes the pointer settable (a null target clears it). */
-  litestl::util::function<Status(const PointerRef &self, Context &ctx, const PointerRef &target)>
+  litestl::util::function<Status(
+      const PointerRef &self, Context &ctx, const PointerRef &target)>
       set;
   /** The target struct when it is static. */
   StructId target;
@@ -62,7 +66,8 @@ struct PointerAccessor {
    * can't use, so reading or walking such a pointer is Unsupported. Pointers into
    * another owner don't need it: they must return that owner's root struct.
    */
-  litestl::util::function<StableRef(const PointerRef &self, Context &ctx, const PointerRef &target)>
+  litestl::util::function<StableRef(
+      const PointerRef &self, Context &ctx, const PointerRef &target)>
       address;
   /**
    * Optional, for a settable pointer to a block: the RefCell it is stored in (null for
@@ -75,29 +80,33 @@ struct PointerAccessor {
 /** A Collection member. `keyOf` is mandatory: undo stores items by key. */
 struct CollectionAccessor {
   litestl::util::function<int64_t(const PointerRef &self, Context &ctx)> length;
-  litestl::util::function<PointerRef(const PointerRef &self, Context &ctx, int64_t index)> at;
+  litestl::util::function<PointerRef(const PointerRef &self, Context &ctx, int64_t index)>
+      at;
   /** By a string key or a handle; a null result means no such item. */
-  litestl::util::function<PointerRef(const PointerRef &self, Context &ctx, const KeySegment &key)>
+  litestl::util::function<PointerRef(
+      const PointerRef &self, Context &ctx, const KeySegment &key)>
       lookup;
   /** A stable key for `item`: a StringKey or a Handle segment. */
-  litestl::util::function<KeySegment(const PointerRef &self, Context &ctx, const PointerRef &item)>
+  litestl::util::function<KeySegment(
+      const PointerRef &self, Context &ctx, const PointerRef &item)>
       keyOf;
   /** Optional: `list.active`. */
   litestl::util::function<PointerRef(const PointerRef &self, Context &ctx)> active;
   /**
-   * Optional: the settable Pointer member, of the struct the collection is in, that holds the
-   * active item. Writing `list.active` then writes that member. Watch or read the member itself
-   * where there may be no active item: `list.active` is NotFound then.
+   * Optional: the settable Pointer member, of the struct the collection is in, that holds
+   * the active item. Writing `list.active` then writes that member. Watch or read the
+   * member itself where there may be no active item: `list.active` is NotFound then.
    */
   litestl::util::string activeMember;
   /** The items' struct (an item's own `type`, when set, wins). */
   StructId itemStruct;
-  /** Optional, for static checks of paths: the struct of the item with this key, or why there
-   * is none. Without it, an item is an `itemStruct` or inherits from it. */
+  /** Optional, for static checks of paths: the struct of the item with this key, or why
+   * there is none. Without it, an item is an `itemStruct` or inherits from it. */
   litestl::util::function<Result<StructId>(const KeySegment &key)> staticItem;
 };
 
-using MemberUpdateFn = litestl::util::function<void(const PointerRef &self, Context &ctx)>;
+using MemberUpdateFn =
+    litestl::util::function<void(const PointerRef &self, Context &ctx)>;
 /** Patches a copy of the member's def for one instance, with the Context (the props
  * hook can't see one). */
 using MemberDynamicFn =
@@ -106,8 +115,10 @@ using MemberDynamicFn =
 enum class MemberKind : uint8_t { Value, Pointer, Collection };
 
 class ApiMember {
- public:
-  ApiMember(PropertyDef def) : def_(std::move(def)) {}
+public:
+  ApiMember(PropertyDef def) : def_(std::move(def))
+  {
+  }
 
   /** Called after every successful set through setValue (step 5). */
   ApiMember &update(MemberUpdateFn fn)
@@ -131,9 +142,9 @@ class ApiMember {
   }
   MemberKind kind() const
   {
-    return def_.kind() == PropKind::Pointer    ? MemberKind::Pointer :
-           def_.kind() == PropKind::Collection ? MemberKind::Collection :
-                                                 MemberKind::Value;
+    return def_.kind() == PropKind::Pointer      ? MemberKind::Pointer
+           : def_.kind() == PropKind::Collection ? MemberKind::Collection
+                                                 : MemberKind::Value;
   }
   /** Read-only by flag, or for lack of a setter. */
   bool readOnly() const;
@@ -154,7 +165,8 @@ class ApiMember {
   {
     return update_;
   }
-  /** Whether a hook patches its def: items, range and access then depend on the instance. */
+  /** Whether a hook patches its def: items, range and access then depend on the instance.
+   */
   bool isDynamic() const
   {
     return def_.isDynamic() || bool(dynamic_);
@@ -164,7 +176,7 @@ class ApiMember {
     return dynamic_;
   }
 
- private:
+private:
   friend class ApiStruct;
   PropertyDef def_;
   ValueAccessor value_;
@@ -179,8 +191,7 @@ template <class M> constexpr int arrayLength()
 {
   if constexpr (std::is_array_v<M>) {
     return int(std::extent_v<M>);
-  }
-  else {
+  } else {
     return 0;
   }
 }
@@ -192,7 +203,7 @@ template <class M> constexpr int arrayLength()
  * makes it immutable. A returned ApiMember& is valid until the next add.
  */
 class ApiStruct {
- public:
+public:
   explicit ApiStruct(std::string_view name);
 
   ApiStruct &uiName(std::string_view s);
@@ -237,7 +248,7 @@ class ApiStruct {
   /** This struct's own member (not its parent's), or null. */
   const ApiMember *findOwn(std::string_view name) const;
 
- private:
+private:
   StructId id_;
   litestl::util::string name_;
   litestl::util::string uiName_;
@@ -257,10 +268,12 @@ inline constexpr const char *kOwnerNamePrefix = "owner:";
  * its OwnerKey holds the name's id, and collisions are rejected.
  */
 class ApiRegistry {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.ApiRegistry";
 
-  explicit ApiRegistry(Runtime *rt) : rt_(*rt) {}
+  explicit ApiRegistry(Runtime *rt) : rt_(*rt)
+  {
+  }
   ~ApiRegistry();
   ApiRegistry(const ApiRegistry &) = delete;
   ApiRegistry &operator=(const ApiRegistry &) = delete;
@@ -299,7 +312,7 @@ class ApiRegistry {
 
   Status validate() const;
 
- private:
+private:
   struct Owner {
     StructId type;
     litestl::util::function<void *()> data;
@@ -322,19 +335,15 @@ template <class M> PropValue fieldToValue(const M &field, PropKind kind)
       c[i] = double(field[i]);
     }
     return PropValue::ofComponents(valueTypeFor(kind), c);
-  }
-  else if constexpr (std::is_same_v<M, litestl::util::string>) {
+  } else if constexpr (std::is_same_v<M, litestl::util::string>) {
     return PropValue::ofString(field.c_str());
-  }
-  else if constexpr (std::is_same_v<M, bool>) {
+  } else if constexpr (std::is_same_v<M, bool>) {
     return PropValue::ofBool(field);
-  }
-  else if constexpr (std::is_floating_point_v<M>) {
+  } else if constexpr (std::is_floating_point_v<M>) {
     return PropValue::ofFloat(double(field));
-  }
-  else if constexpr (std::is_integral_v<M> || std::is_enum_v<M>) {
-    using U = std::conditional_t<std::is_enum_v<M>, std::underlying_type<M>,
-                                 std::type_identity<M>>;
+  } else if constexpr (std::is_integral_v<M> || std::is_enum_v<M>) {
+    using U = std::
+        conditional_t<std::is_enum_v<M>, std::underlying_type<M>, std::type_identity<M>>;
     const auto raw = static_cast<typename U::type>(field);
     if (kind == PropKind::Enum) {
       return PropValue::ofEnum(int64_t(raw));
@@ -343,8 +352,7 @@ template <class M> PropValue fieldToValue(const M &field, PropKind kind)
       return PropValue::ofFlags(uint64_t(raw));
     }
     return PropValue::ofInt(int64_t(raw));
-  }
-  else {
+  } else {
     static_assert(sizeof(M) == 0, "unsupported field type for addField");
   }
 }
@@ -355,22 +363,19 @@ template <class M> Status valueToField(const PropValue &v, M &field)
     for (int i = 0; i < arrayLength<M>(); i++) {
       field[i] = std::remove_extent_t<M>(v.component(i));
     }
-  }
-  else if constexpr (std::is_same_v<M, litestl::util::string>) {
+  } else if constexpr (std::is_same_v<M, litestl::util::string>) {
     field = v.asString();
-  }
-  else if constexpr (std::is_same_v<M, bool>) {
+  } else if constexpr (std::is_same_v<M, bool>) {
     field = v.asBool();
-  }
-  else if constexpr (std::is_floating_point_v<M>) {
+  } else if constexpr (std::is_floating_point_v<M>) {
     field = M(v.asFloat());
-  }
-  else if constexpr (std::is_integral_v<M> || std::is_enum_v<M>) {
-    using U = typename std::conditional_t<std::is_enum_v<M>, std::underlying_type<M>,
+  } else if constexpr (std::is_integral_v<M> || std::is_enum_v<M>) {
+    using U = typename std::conditional_t<std::is_enum_v<M>,
+                                          std::underlying_type<M>,
                                           std::type_identity<M>>::type;
-    const int64_t raw = v.type() == PropValue::Type::Enum  ? v.asEnum() :
-                        v.type() == PropValue::Type::Flags ? int64_t(v.asFlags()) :
-                                                             v.asInt();
+    const int64_t raw = v.type() == PropValue::Type::Enum    ? v.asEnum()
+                        : v.type() == PropValue::Type::Flags ? int64_t(v.asFlags())
+                                                             : v.asInt();
     if (raw < int64_t((std::numeric_limits<U>::min)()) ||
         (raw > 0 && uint64_t(raw) > uint64_t((std::numeric_limits<U>::max)())))
     {

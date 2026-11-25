@@ -25,7 +25,8 @@ struct Watch {
   std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
   double seconds() const
   {
-    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start)
+        .count();
   }
 };
 
@@ -33,8 +34,12 @@ std::string escaped(std::string_view s)
 {
   std::string out;
   for (char c : s) {
-    out += c == '<' ? "&lt;" : c == '>' ? "&gt;" : c == '&' ? "&amp;" : c == '"' ? "&quot;" :
-           c == '\'' ? "&apos;" : std::string(1, c);
+    out += c == '<'    ? "&lt;"
+           : c == '>'  ? "&gt;"
+           : c == '&'  ? "&amp;"
+           : c == '"'  ? "&quot;"
+           : c == '\'' ? "&apos;"
+                       : std::string(1, c);
   }
   return out;
 }
@@ -51,8 +56,8 @@ void writeXml(const Layout &l, int i, std::string &out)
       text = a.value.c_str();
       continue;
     }
-    out += std::string(" ") + (a.id == Id::Free ? a.name.c_str() : layoutAttrName(a.id)) + "=\"" +
-           escaped(a.value.c_str()) + "\"";
+    out += std::string(" ") + (a.id == Id::Free ? a.name.c_str() : layoutAttrName(a.id)) +
+           "=\"" + escaped(a.value.c_str()) + "\"";
   }
   out += ">" + escaped(text);
   for (int c = n.firstChild; c >= 0; c = l.node(c).nextSibling) {
@@ -72,8 +77,7 @@ Layout rebuilt(const Layout &l)
       const LayoutAttr &a = l.attrs()[n.attrBegin + j];
       if (a.id == Id::Free) {
         scopes.back().set(a.name.c_str(), a.value.c_str());
-      }
-      else {
+      } else {
         scopes.back().set(a.id, a.value.c_str());
       }
     }
@@ -101,36 +105,29 @@ bool isJson(const std::string &s)
         return false;
       }
       value = true;
-    }
-    else if (c == '{' || c == '[') {
+    } else if (c == '{' || c == '[') {
       open += c;
       value = false;
-    }
-    else if (c == '}' || c == ']') {
+    } else if (c == '}' || c == ']') {
       if (open.empty() || open.back() != (c == '}' ? '{' : '[')) {
         return false;
       }
       open.pop_back();
       value = true;
-    }
-    else if (c == ',' || c == ':') {
+    } else if (c == ',' || c == ':') {
       if (!value) {
         return false;
       }
       value = false;
-    }
-    else if (c >= '0' && c <= '9') {
+    } else if (c >= '0' && c <= '9') {
       value = true;
-    }
-    else if (s.compare(i, 4, "true") == 0) {
+    } else if (s.compare(i, 4, "true") == 0) {
       i += 3;
       value = true;
-    }
-    else if (s.compare(i, 5, "false") == 0) {
+    } else if (s.compare(i, 5, "false") == 0) {
       i += 4;
       value = true;
-    }
-    else {
+    } else {
       return false;
     }
   }
@@ -178,12 +175,13 @@ const char *const kCorpus[] = {
     R"(<layout><toolOptions target="a.b" enabledIf="e[F]"/><column expand="false"/></layout>)",
 };
 
-const char *const kPieces[] = {"<layout>", "</layout>", "<row>",  "</row>",     "<custom tag='x'>",
-                               "</custom>", "<sep/>",   "<!--",   "-->",        "<![CDATA[",
-                               "<?xml",     "?>",       "&amp;",  "&#1;",       "path='a.b'",
-                               "id=\"i\"",  " ",        "'",      "\"",         "<",
-                               ">",         "/>",       "]]>",    "text",       "\xC3\xA9",
-                               "\r\n",      "xmlns='a'", "a:b='c'", "label=''", "<!DOCTYPE"};
+const char *const kPieces[] = {
+    "<layout>",  "</layout>", "<row>",   "</row>",   "<custom tag='x'>",
+    "</custom>", "<sep/>",    "<!--",    "-->",      "<![CDATA[",
+    "<?xml",     "?>",        "&amp;",   "&#1;",     "path='a.b'",
+    "id=\"i\"",  " ",         "'",       "\"",       "<",
+    ">",         "/>",        "]]>",     "text",     "\xC3\xA9",
+    "\r\n",      "xmlns='a'", "a:b='c'", "label=''", "<!DOCTYPE"};
 
 } // namespace
 
@@ -199,24 +197,24 @@ static void test_mutations()
     for (int e = 0; e < edits; e++) {
       const size_t at = rng.below(uint32_t(s.size()));
       switch (rng.below(6)) {
-        case 0:
-          s.erase(at, 1 + rng.below(8));
-          break;
-        case 1:
-          s.insert(at, kPieces[rng.below(sizeof(kPieces) / sizeof(kPieces[0]))]);
-          break;
-        case 2:
-          s[at] = char(rng.below(256));
-          break;
-        case 3:
-          s.insert(at, s.substr(rng.below(uint32_t(s.size())), rng.below(40)));
-          break;
-        case 4:
-          s.resize(at);
-          break;
-        default:
-          s[at] = "<>&'\"/=! \n"[rng.below(10)];
-          break;
+      case 0:
+        s.erase(at, 1 + rng.below(8));
+        break;
+      case 1:
+        s.insert(at, kPieces[rng.below(sizeof(kPieces) / sizeof(kPieces[0]))]);
+        break;
+      case 2:
+        s[at] = char(rng.below(256));
+        break;
+      case 3:
+        s.insert(at, s.substr(rng.below(uint32_t(s.size())), rng.below(40)));
+        break;
+      case 4:
+        s.resize(at);
+        break;
+      default:
+        s[at] = "<>&'\"/=! \n"[rng.below(10)];
+        break;
       }
       if (s.empty()) {
         break;
@@ -259,7 +257,8 @@ static void test_random_layouts()
 {
   SplitMix64 rng(3);
   const char *const paths[] = {"a", "a.b[0]", "/", "/x.y", "k[\"<'&>\\\"\"]", "e[F]"};
-  const char *const texts[] = {"x", "a b", "<&>\"'", "\xF0\x9F\x98\x80", "  in  ", "-->", "]]>"};
+  const char *const texts[] = {
+      "x", "a b", "<&>\"'", "\xF0\x9F\x98\x80", "  in  ", "-->", "]]>"};
   int most = 0;
   for (int round = 0; round < 500 * coredcc_test::testScale(); round++) {
     LayoutBuilder b;
@@ -270,37 +269,37 @@ static void test_random_layouts()
     for (int i = 0; i < count; i++) {
       LayoutScope s = in[rng.below(uint32_t(in.size()))];
       switch (rng.below(9)) {
-        case 0:
-          s = s.panel(text()).path(path());
-          in.push_back(s);
-          break;
-        case 1:
-          s = s.row();
-          in.push_back(s);
-          break;
-        case 2:
-          s = s.tabs().tab(text());
-          in.push_back(s);
-          break;
-        case 3:
-          s = s.prop(paths[rng.below(2)]);
-          break;
-        case 4:
-          s = s.tool("a.b(c='<&>')", rng.below(2) ? "x &<" : "");
-          break;
-        case 5:
-          s = s.custom("t").set("free", text()).set("z.z-z", text());
-          in.push_back(s);
-          break;
-        case 6:
-          s = s.custom("t").set(Id::Text, "a\n <&>");
-          break;
-        case 7:
-          s = s.label("l").set(Id::Class, text());
-          break;
-        default:
-          s = s.separator();
-          break;
+      case 0:
+        s = s.panel(text()).path(path());
+        in.push_back(s);
+        break;
+      case 1:
+        s = s.row();
+        in.push_back(s);
+        break;
+      case 2:
+        s = s.tabs().tab(text());
+        in.push_back(s);
+        break;
+      case 3:
+        s = s.prop(paths[rng.below(2)]);
+        break;
+      case 4:
+        s = s.tool("a.b(c='<&>')", rng.below(2) ? "x &<" : "");
+        break;
+      case 5:
+        s = s.custom("t").set("free", text()).set("z.z-z", text());
+        in.push_back(s);
+        break;
+      case 6:
+        s = s.custom("t").set(Id::Text, "a\n <&>");
+        break;
+      case 7:
+        s = s.label("l").set(Id::Class, text());
+        break;
+      default:
+        s = s.separator();
+        break;
       }
       if (rng.below(3) == 0) {
         s.visibleIf(rng.below(2) ? "!a.b" : "/c");
@@ -326,21 +325,26 @@ static void test_random_layouts()
 /* The worst that 1 MiB of text can do. */
 static void test_bounds()
 {
-  const auto bounded = [](const char *what, const std::string &xml, bool ok, double seconds) {
-    test_assert(xml.size() <= LayoutLimits::kMaxBytes);
-    const Watch watch;
-    Result<Layout> r = parseLayout(xml);
-    size_t json = 0;
-    if (r.ok()) {
-      json = layoutToJson(*r).size();
-    }
-    const double took = watch.seconds();
-    if (r.ok() != ok || took > seconds || json > (8u << 20)) {
-      fprintf(stderr, "%s: %s, %f s, %zu bytes of JSON\n", what,
-              r.ok() ? "ok" : r.status().message(), took, json);
-    }
-    test_assert(r.ok() == ok && took <= seconds && json <= (8u << 20));
-  };
+  const auto bounded =
+      [](const char *what, const std::string &xml, bool ok, double seconds) {
+        test_assert(xml.size() <= LayoutLimits::kMaxBytes);
+        const Watch watch;
+        Result<Layout> r = parseLayout(xml);
+        size_t json = 0;
+        if (r.ok()) {
+          json = layoutToJson(*r).size();
+        }
+        const double took = watch.seconds();
+        if (r.ok() != ok || took > seconds || json > (8u << 20)) {
+          fprintf(stderr,
+                  "%s: %s, %f s, %zu bytes of JSON\n",
+                  what,
+                  r.ok() ? "ok" : r.status().message(),
+                  took,
+                  json);
+        }
+        test_assert(r.ok() == ok && took <= seconds && json <= (8u << 20));
+      };
   const auto repeated = [](const std::string &s, size_t bytes) {
     std::string out;
     while (out.size() + s.size() <= bytes) {
@@ -366,10 +370,19 @@ static void test_bounds()
     deep += "<prop path='b' visibleIf='c' enabledIf='d'/>";
   }
   bounded("long prefixes", in(deep, segments), false, 10);
-  bounded("long prefixes that fit", in(deep.substr(0, deep.size() / 16000 * 680), segments), true, 10);
-  bounded("long prefixes of tools", in(repeated("<tool invocation='a'/>", 1 << 18), segments), false, 10);
+  bounded("long prefixes that fit",
+          in(deep.substr(0, deep.size() / 16000 * 680), segments),
+          true,
+          10);
+  bounded("long prefixes of tools",
+          in(repeated("<tool invocation='a'/>", 1 << 18), segments),
+          false,
+          10);
   bounded("skipped", "<layout version='2'>" + repeated("<x a='1'>", room / 2), false, 5);
-  bounded("skipped attributes", "<layout version='2'><x" + repeated(" a='1'", room / 2) + "/></layout>", true, 5);
+  bounded("skipped attributes",
+          "<layout version='2'><x" + repeated(" a='1'", room / 2) + "/></layout>",
+          true,
+          5);
   bounded("long prefixes, deep", in(rows + deep + ends, segments), false, 10);
   std::string ids;
   for (int i = 0; i < 16000; i++) {
@@ -396,12 +409,15 @@ static void test_bounds()
   bounded("blanks", in("<label>a" + repeated(" ", room) + "b</label>"), true, 5);
   bounded("a long value", in("<label label='" + repeated("&lt;", room) + "'/>"), true, 5);
   bounded("a long path", in("<prop path='" + repeated("a.", room) + "a'/>"), false, 5);
-  bounded("a long invocation", in("<tool invocation='a(" + repeated("b=1 ", room) + ")'/>"), false,
+  bounded("a long invocation",
+          in("<tool invocation='a(" + repeated("b=1 ", room) + ")'/>"),
+          false,
           5);
   bounded("a long name", in("<" + repeated("panel", room) + "/>"), false, 5);
   bounded("a long attribute", in("<row " + repeated("path", room) + "='a'/>"), false, 5);
   bounded("comments", in(repeated("<!---->", room)), true, 5);
-  bounded("pieces of text", in("<label>" + repeated("a<!---->", room) + "</label>"), true, 5);
+  bounded(
+      "pieces of text", in("<label>" + repeated("a<!---->", room) + "</label>"), true, 5);
   bounded("open elements", repeated("<layout>", room), false, 5);
   bounded("lines", repeated("\n", room), false, 5);
   bounded("quotes", "<layout path='" + repeated("\"", room), false, 5);

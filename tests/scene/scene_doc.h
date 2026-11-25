@@ -1,8 +1,8 @@
 #pragma once
 
-/* A document for the scene tests: a Runtime, a Library, a Context whose root has `scene` and
- * `evaluated`, a data block type with bounds (test.Shape), and a host-owned Transformable
- * (test.Host) whose answers the tests choose. */
+/* A document for the scene tests: a Runtime, a Library, a Context whose root has `scene`
+ * and `evaluated`, a data block type with bounds (test.Shape), and a host-owned
+ * Transformable (test.Host) whose answers the tests choose. */
 
 #include "scene_fixture.h"
 
@@ -40,7 +40,9 @@ struct Shape {
   {
     return 1;
   }
-  void closestElements(const NearQuery &, NearSink &) const {}
+  void closestElements(const NearQuery &, NearSink &) const
+  {
+  }
   void invalidate(uint32_t kinds)
   {
     invalidated |= kinds;
@@ -91,7 +93,8 @@ struct Host {
   }
 };
 
-/* What the clientData of a test.Host or test.Shape block is: the host moves `data` about. */
+/* What the clientData of a test.Host or test.Shape block is: the host moves `data` about.
+ */
 struct Slot {
   void *data = nullptr;
   void (*free)(void *) = nullptr;
@@ -103,7 +106,9 @@ struct PlainProvider {
   {
     return static_cast<Slot *>(b.clientData())->data;
   }
-  void foreachRef(const Datablock &, RefVisitor &) const {}
+  void foreachRef(const Datablock &, RefVisitor &) const
+  {
+  }
   void destroy(const Datablock &b)
   {
     Slot *s = static_cast<Slot *>(b.clientData());
@@ -112,7 +117,8 @@ struct PlainProvider {
   }
   static lbt::Struct<PlainProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<PlainProvider>("test::PlainProvider", sizeof(PlainProvider));
+    auto *st =
+        new lbt::Struct<PlainProvider>("test::PlainProvider", sizeof(PlainProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
@@ -127,7 +133,9 @@ struct SlotProvider {
   {
     return static_cast<Slot *>(b.clientData())->data;
   }
-  void foreachRef(const Datablock &, RefVisitor &) const {}
+  void foreachRef(const Datablock &, RefVisitor &) const
+  {
+  }
   void destroy(const Datablock &b)
   {
     Slot *s = static_cast<Slot *>(b.clientData());
@@ -221,7 +229,8 @@ struct Doc {
     addEvaluated(root);
     must(api.add(std::move(root)).status());
     const StructId rootId = StructId::of("test.Root");
-    must(api.addRuntimeOwner("root", rootId, [this]() -> void * { return this; }).status());
+    must(api.addRuntimeOwner("root", rootId, [this]() -> void * { return this; })
+             .status());
     must(api.validate());
 
     lib = std::make_unique<Library>(&rt);
@@ -295,7 +304,8 @@ struct Doc {
   {
     return *static_cast<Host *>(slot(h).data);
   }
-  /** For changing it: what it answers may be different, so its bounds are asked for again. */
+  /** For changing it: what it answers may be different, so its bounds are asked for
+   * again. */
   Shape &shape(BlockHandle h)
   {
     rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(idOf(h)));
@@ -382,7 +392,9 @@ struct Doc {
     TransformTypeInfo info;
     info.name = name;
     info.channels.append(PropertyDef::floatProp("x"));
-    must(rt.ext<TransformRegistry>().add(std::move(info), std::move(owned).value()).status());
+    must(rt.ext<TransformRegistry>()
+             .add(std::move(info), std::move(owned).value())
+             .status());
   }
 };
 

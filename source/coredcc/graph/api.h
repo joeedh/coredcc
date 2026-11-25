@@ -8,12 +8,13 @@
  * interface, by `[#id]` or name).
  *
  * A node is a `coredcc.GraphNode:<type>`: `id`, `type`, `label`, `position`, and
- * - for a type with a kernel, `params` and `inputs` (the literals of unlinked inputs), with
- *   one member per param and per input that has a literal;
+ * - for a type with a kernel, `params` and `inputs` (the literals of unlinked inputs),
+ * with one member per param and per input that has a literal;
  * - for `graph.group`, the settable pointer `group`;
  * - for `graph.group` and `graph.output`, the collection `sockets` of inputs. A socket's
- *   `value` is read-only, and shows the default, until `isSet` is true. Setting `isSet` to
- *   false keeps the value for the next time. Both are read-only while the group isn't there.
+ *   `value` is read-only, and shows the default, until `isSet` is true. Setting `isSet`
+ * to false keeps the value for the next time. Both are read-only while the group isn't
+ * there.
  *
  * A node whose type isn't registered is a plain `coredcc.GraphNode`. Everything here goes
  * through GraphDef's setters. Nodes, links and the interface are edited by commands

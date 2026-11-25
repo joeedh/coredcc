@@ -41,7 +41,8 @@ PointerRef blockPointer(Context &ctx, const OwnerKey &owner);
 /* The struct an owner's keys start from: a block's data, or a runtime owner. */
 PointerRef ownerRoot(Context &ctx, const ApiRegistry &reg, const OwnerKey &owner)
 {
-  return owner.kind == OwnerKey::Kind::Block ? blockPointer(ctx, owner) : reg.runtimeOwner(owner);
+  return owner.kind == OwnerKey::Kind::Block ? blockPointer(ctx, owner)
+                                             : reg.runtimeOwner(owner);
 }
 
 /* The walk shared by paths and StableRefs: the current struct, its owner and the key
@@ -67,36 +68,36 @@ struct Walk {
     if (!next.owner.isNull() && !(next.owner == owner)) {
       const PointerRef root = ownerRoot(ctx, reg, next.owner);
       if (root.isNull() || root.data != next.data) {
-        return err(StatusCode::Unsupported,
-                   std::string("'") + m.name() +
-                       "' returned a struct of another owner that isn't the owner's root; "
-                       "return the root, or leave the owner unset");
+        return err(
+            StatusCode::Unsupported,
+            std::string("'") + m.name() +
+                "' returned a struct of another owner that isn't the owner's root; "
+                "return the root, or leave the owner unset");
       }
       if (!next.type) {
         next.type = root.type;
       }
       owner = next.owner;
       key.clear();
-    }
-    else if (m.kind() == MemberKind::Pointer && m.pointer().address) {
+    } else if (m.kind() == MemberKind::Pointer && m.pointer().address) {
       StableRef a = m.pointer().address(cur, ctx, next);
       if (a.owner.isNull()) {
         return err(StatusCode::Internal,
-                   std::string("pointer '") + m.name() + "': its address callback gave no owner");
+                   std::string("pointer '") + m.name() +
+                       "': its address callback gave no owner");
       }
       owner = a.owner;
       key.clear();
       for (const KeySegment &k : a.key) {
         key.append(k);
       }
-    }
-    else if (m.kind() == MemberKind::Pointer && m.pointer().set) {
-      return err(StatusCode::Unsupported,
-                 std::string("pointer '") + m.name() +
-                     "' is settable and points inside its own owner: give it an address "
-                     "callback, so paths through it don't depend on where it points later");
-    }
-    else {
+    } else if (m.kind() == MemberKind::Pointer && m.pointer().set) {
+      return err(
+          StatusCode::Unsupported,
+          std::string("pointer '") + m.name() +
+              "' is settable and points inside its own owner: give it an address "
+              "callback, so paths through it don't depend on where it points later");
+    } else {
       key.append(KeySegment::member(m.name()));
       if (itemKey) {
         key.append(*itemKey);
@@ -123,8 +124,7 @@ struct Walk {
     }
     if (m) {
       out.canonical.key.append(KeySegment::member(m->name()));
-    }
-    else {
+    } else {
       out.canonical.type = cur.type;
     }
     return std::move(out);
@@ -172,7 +172,9 @@ Result<ResolvedPath> walkPath(Walk &w, const Path &path, bool through = false)
   while (i < n) {
     const PathSegment &seg = path[i];
     if (seg.kind != SegmentKind::Member) {
-      return at(seg, err(StatusCode::InvalidArgument, "a subscript needs a collection or vector"));
+      return at(
+          seg,
+          err(StatusCode::InvalidArgument, "a subscript needs a collection or vector"));
     }
     const ApiMember *m = w.reg.findMember(w.cur.type, seg.text.c_str());
     if (!m) {
@@ -181,146 +183,151 @@ Result<ResolvedPath> walkPath(Walk &w, const Path &path, bool through = false)
     w.touch(m->name());
     const bool last = i + 1 == n;
     switch (m->kind()) {
-      case MemberKind::Value: {
-        if (last) {
-          return w.finish(ResolvedPath::Kind::Member, m);
-        }
-        const PathSegment &sub = path[i + 1];
-        if (i + 2 != n) {
-          return at(path[i + 2], err(StatusCode::InvalidArgument,
-                                     std::string("nothing can follow '") + m->name() +
-                                         "[...]'"));
-        }
-        const int comps = componentCount(m->def().kind());
-        if (sub.kind == SegmentKind::Index && comps > 1) {
-          if (sub.index >= comps) {
-            return at(sub, err(StatusCode::OutOfRange,
-                               std::string("'") + m->name() + "' has " +
-                                   std::to_string(comps) + " components"));
-          }
-          w.out.component = int(sub.index);
-          return w.finish(ResolvedPath::Kind::Component, m);
-        }
-        if (sub.kind == SegmentKind::EnumKey &&
-            (m->def().kind() == PropKind::Enum || m->def().kind() == PropKind::Flags))
-        {
-          const std::optional<int64_t> value =
-              m->isDynamic() ? itemValue(effectiveDef(w.ctx, *m, w.cur), sub.text.c_str()) :
-                               itemValue(m->def(), sub.text.c_str());
-          if (!value) {
-            return at(sub, err(StatusCode::NotFound,
-                               std::string("'") + m->name() + "' has no key '" +
-                                   sub.text.c_str() + "'"));
-          }
-          w.out.enumKey = sub.text;
-          w.out.enumValue = *value;
-          return w.finish(ResolvedPath::Kind::EnumKey, m);
-        }
-        return at(sub, err(StatusCode::InvalidArgument,
-                           std::string("'") + m->name() + "' (" + propKindName(m->def().kind()) +
-                               ") has no members or components"));
+    case MemberKind::Value: {
+      if (last) {
+        return w.finish(ResolvedPath::Kind::Member, m);
       }
-      case MemberKind::Pointer: {
-        if (last && !through) {
-          return w.finish(ResolvedPath::Kind::Member, m);
+      const PathSegment &sub = path[i + 1];
+      if (i + 2 != n) {
+        return at(path[i + 2],
+                  err(StatusCode::InvalidArgument,
+                      std::string("nothing can follow '") + m->name() + "[...]'"));
+      }
+      const int comps = componentCount(m->def().kind());
+      if (sub.kind == SegmentKind::Index && comps > 1) {
+        if (sub.index >= comps) {
+          return at(sub,
+                    err(StatusCode::OutOfRange,
+                        std::string("'") + m->name() + "' has " + std::to_string(comps) +
+                            " components"));
         }
-        PointerRef target = m->pointer().get(w.cur, w.ctx);
-        if (target.isNull()) {
-          return at(path[last ? i : i + 1],
+        w.out.component = int(sub.index);
+        return w.finish(ResolvedPath::Kind::Component, m);
+      }
+      if (sub.kind == SegmentKind::EnumKey &&
+          (m->def().kind() == PropKind::Enum || m->def().kind() == PropKind::Flags))
+      {
+        const std::optional<int64_t> value =
+            m->isDynamic() ? itemValue(effectiveDef(w.ctx, *m, w.cur), sub.text.c_str())
+                           : itemValue(m->def(), sub.text.c_str());
+        if (!value) {
+          return at(sub,
                     err(StatusCode::NotFound,
-                        std::string("pointer '") + m->name() + "' is null"));
+                        std::string("'") + m->name() + "' has no key '" +
+                            sub.text.c_str() + "'"));
         }
-        if (Status s = w.enter(target, *m, nullptr); !s.ok()) {
-          return at(seg, s);
-        }
-        if (!w.cur.type) {
-          w.cur.type = pointerTargetType(*m, w.cur);
-        }
-        i++;
-        break;
+        w.out.enumKey = sub.text;
+        w.out.enumValue = *value;
+        return w.finish(ResolvedPath::Kind::EnumKey, m);
       }
-      case MemberKind::Collection: {
-        if (last) {
-          return w.finish(ResolvedPath::Kind::Member, m);
+      return at(sub,
+                err(StatusCode::InvalidArgument,
+                    std::string("'") + m->name() + "' (" + propKindName(m->def().kind()) +
+                        ") has no members or components"));
+    }
+    case MemberKind::Pointer: {
+      if (last && !through) {
+        return w.finish(ResolvedPath::Kind::Member, m);
+      }
+      PointerRef target = m->pointer().get(w.cur, w.ctx);
+      if (target.isNull()) {
+        return at(path[last ? i : i + 1],
+                  err(StatusCode::NotFound,
+                      std::string("pointer '") + m->name() + "' is null"));
+      }
+      if (Status s = w.enter(target, *m, nullptr); !s.ok()) {
+        return at(seg, s);
+      }
+      if (!w.cur.type) {
+        w.cur.type = pointerTargetType(*m, w.cur);
+      }
+      i++;
+      break;
+    }
+    case MemberKind::Collection: {
+      if (last) {
+        return w.finish(ResolvedPath::Kind::Member, m);
+      }
+      const CollectionAccessor &c = m->collection();
+      const PathSegment &sub = path[i + 1];
+      PointerRef item;
+      if (sub.kind == SegmentKind::Member && strcmp(sub.text.c_str(), "length") == 0) {
+        if (i + 2 != n) {
+          return at(path[i + 2],
+                    err(StatusCode::InvalidArgument, "nothing can follow '.length'"));
         }
-        const CollectionAccessor &c = m->collection();
-        const PathSegment &sub = path[i + 1];
-        PointerRef item;
-        if (sub.kind == SegmentKind::Member && strcmp(sub.text.c_str(), "length") == 0) {
-          if (i + 2 != n) {
-            return at(path[i + 2], err(StatusCode::InvalidArgument,
-                                       "nothing can follow '.length'"));
-          }
-          return w.finish(ResolvedPath::Kind::Length, m);
+        return w.finish(ResolvedPath::Kind::Length, m);
+      }
+      if (sub.kind == SegmentKind::Member && strcmp(sub.text.c_str(), "active") == 0) {
+        if (!c.active) {
+          return at(sub,
+                    err(StatusCode::Unsupported,
+                        std::string("'") + m->name() + "' has no active item"));
         }
-        if (sub.kind == SegmentKind::Member && strcmp(sub.text.c_str(), "active") == 0) {
-          if (!c.active) {
-            return at(sub, err(StatusCode::Unsupported,
-                               std::string("'") + m->name() + "' has no active item"));
-          }
-          if (c.activeMember.size() > 0) {
-            w.touch(c.activeMember.c_str()); /* a write to it changes what this path means */
-            if (w.forWrite && i + 2 == n) {
-              const ApiMember *am = w.reg.findMember(w.cur.type, c.activeMember.c_str());
-              if (!am || am->kind() != MemberKind::Pointer) {
-                return at(sub, err(StatusCode::Internal,
-                                   std::string("'") + m->name() + "': its activeMember '" +
-                                       c.activeMember.c_str() + "' isn't a pointer member"));
-              }
-              return w.finish(ResolvedPath::Kind::Member, am);
+        if (c.activeMember.size() > 0) {
+          w.touch(
+              c.activeMember.c_str()); /* a write to it changes what this path means */
+          if (w.forWrite && i + 2 == n) {
+            const ApiMember *am = w.reg.findMember(w.cur.type, c.activeMember.c_str());
+            if (!am || am->kind() != MemberKind::Pointer) {
+              return at(sub,
+                        err(StatusCode::Internal,
+                            std::string("'") + m->name() + "': its activeMember '" +
+                                c.activeMember.c_str() + "' isn't a pointer member"));
             }
+            return w.finish(ResolvedPath::Kind::Member, am);
           }
-          item = c.active(w.cur, w.ctx);
         }
-        else if (sub.kind == SegmentKind::Index) {
-          const int64_t len = c.length(w.cur, w.ctx);
-          if (sub.index >= len) {
-            return at(sub, err(StatusCode::OutOfRange,
-                               std::string("index ") + std::to_string(sub.index) + " past '" +
-                                   m->name() + "' (length " + std::to_string(len) + ")"));
-          }
-          item = c.at(w.cur, w.ctx, sub.index);
+        item = c.active(w.cur, w.ctx);
+      } else if (sub.kind == SegmentKind::Index) {
+        const int64_t len = c.length(w.cur, w.ctx);
+        if (sub.index >= len) {
+          return at(sub,
+                    err(StatusCode::OutOfRange,
+                        std::string("index ") + std::to_string(sub.index) + " past '" +
+                            m->name() + "' (length " + std::to_string(len) + ")"));
         }
-        else if (sub.kind == SegmentKind::StringKey) {
-          item = c.lookup(w.cur, w.ctx, KeySegment::stringKey(sub.text.c_str()));
-        }
-        else if (sub.kind == SegmentKind::HandleKey) {
-          item = c.lookup(w.cur, w.ctx, KeySegment::ofHandle(sub.index));
-        }
-        else if (sub.kind == SegmentKind::Member) {
-          Status s = err(StatusCode::NotFound, std::string("collection '") + m->name() +
-                                                   "' has no member '" + sub.text.c_str() +
-                                                   "' (only .active and .length)");
-          Suggester sg(sub.text.c_str());
-          sg.consider("active");
-          sg.consider("length");
-          sg.addTo(s);
-          return at(sub, s);
-        }
-        else {
-          return at(sub, err(StatusCode::InvalidArgument,
-                             std::string("'") + m->name() +
-                                 "' takes [index], [\"key\"], [#handle], .active or .length"));
-        }
-        if (item.isNull()) {
-          return at(sub, err(StatusCode::NotFound,
-                             std::string("no such item in '") + m->name() + "'"));
-        }
-        const KeySegment k = c.keyOf(w.cur, w.ctx, item);
-        if (k.kind == KeySegment::Kind::Member) {
-          return at(sub, err(StatusCode::Internal,
-                             std::string("collection '") + m->name() +
-                                 "': keyOf must return a string key or a handle"));
-        }
-        if (Status s = w.enter(item, *m, &k); !s.ok()) {
-          return at(sub, s);
-        }
-        if (!w.cur.type) {
-          w.cur.type = c.itemStruct;
-        }
-        i += 2;
-        break;
+        item = c.at(w.cur, w.ctx, sub.index);
+      } else if (sub.kind == SegmentKind::StringKey) {
+        item = c.lookup(w.cur, w.ctx, KeySegment::stringKey(sub.text.c_str()));
+      } else if (sub.kind == SegmentKind::HandleKey) {
+        item = c.lookup(w.cur, w.ctx, KeySegment::ofHandle(sub.index));
+      } else if (sub.kind == SegmentKind::Member) {
+        Status s = err(StatusCode::NotFound,
+                       std::string("collection '") + m->name() + "' has no member '" +
+                           sub.text.c_str() + "' (only .active and .length)");
+        Suggester sg(sub.text.c_str());
+        sg.consider("active");
+        sg.consider("length");
+        sg.addTo(s);
+        return at(sub, s);
+      } else {
+        return at(sub,
+                  err(StatusCode::InvalidArgument,
+                      std::string("'") + m->name() +
+                          "' takes [index], [\"key\"], [#handle], .active or .length"));
       }
+      if (item.isNull()) {
+        return at(sub,
+                  err(StatusCode::NotFound,
+                      std::string("no such item in '") + m->name() + "'"));
+      }
+      const KeySegment k = c.keyOf(w.cur, w.ctx, item);
+      if (k.kind == KeySegment::Kind::Member) {
+        return at(sub,
+                  err(StatusCode::Internal,
+                      std::string("collection '") + m->name() +
+                          "': keyOf must return a string key or a handle"));
+      }
+      if (Status s = w.enter(item, *m, &k); !s.ok()) {
+        return at(sub, s);
+      }
+      if (!w.cur.type) {
+        w.cur.type = c.itemStruct;
+      }
+      i += 2;
+      break;
+    }
     }
   }
   return w.finish(ResolvedPath::Kind::Struct, nullptr);
@@ -333,8 +340,8 @@ Result<Walk *> startAtRoot(Context &ctx, Walk &w, bool fromRoot)
   w.owner = ctx.root().owner;
   if (ctx.hasPrefix() && !fromRoot) {
     Walk pw{ctx, w.reg, ctx.root(), ctx.root().owner, {}, {}};
-    Result<ResolvedPath> base = ctx.prefix() ? walkPath(pw, *ctx.prefix(), true) :
-                                               resolve(ctx, *ctx.prefixAddress());
+    Result<ResolvedPath> base = ctx.prefix() ? walkPath(pw, *ctx.prefix(), true)
+                                             : resolve(ctx, *ctx.prefixAddress());
     if (!base.ok()) {
       return base.status();
     }
@@ -360,7 +367,8 @@ PointerRef blockPointer(Context &ctx, const OwnerKey &owner)
   if (!b) {
     return PointerRef();
   }
-  const BlockTypeRegistry::Entry *e = ctx.runtime().ext<BlockTypeRegistry>().find(b->type());
+  const BlockTypeRegistry::Entry *e =
+      ctx.runtime().ext<BlockTypeRegistry>().find(b->type());
   void *data = lib->data(h); /* null unless Live */
   if (!e || !data) {
     return PointerRef();
@@ -420,8 +428,9 @@ Result<ResolvedPath> resolve(Context &ctx, const StableRef &ref)
     return err(StatusCode::InvalidArgument, "resolve: a null StableRef");
   }
   ApiRegistry &reg = ctx.runtime().ext<ApiRegistry>();
-  PointerRef start = ref.owner.kind == OwnerKey::Kind::Block ? blockPointer(ctx, ref.owner) :
-                                                               reg.runtimeOwner(ref.owner);
+  PointerRef start = ref.owner.kind == OwnerKey::Kind::Block
+                         ? blockPointer(ctx, ref.owner)
+                         : reg.runtimeOwner(ref.owner);
   if (start.isNull()) {
     return err(StatusCode::NotFound,
                "resolve: the owner is gone (deleted, detached, or not registered): " +
@@ -432,7 +441,8 @@ Result<ResolvedPath> resolve(Context &ctx, const StableRef &ref)
   for (int j = 0; j < n; j++) {
     const KeySegment &seg = ref.key[j];
     if (seg.kind != KeySegment::Kind::Member) {
-      return err(StatusCode::InvalidArgument, "resolve: a key where a member was expected");
+      return err(StatusCode::InvalidArgument,
+                 "resolve: a key where a member was expected");
     }
     const ApiMember *m = reg.findMember(w.cur.type, seg.text.c_str());
     if (!m) {
@@ -453,7 +463,8 @@ Result<ResolvedPath> resolve(Context &ctx, const StableRef &ref)
       /* A trailing pointer is followed when the ref addresses a struct (has a type). */
       PointerRef target = m->pointer().get(w.cur, ctx);
       if (target.isNull()) {
-        return err(StatusCode::NotFound, std::string("resolve: pointer '") + m->name() + "' is null");
+        return err(StatusCode::NotFound,
+                   std::string("resolve: pointer '") + m->name() + "' is null");
       }
       CDCC_TRY(w.enter(target, *m, nullptr));
       if (!w.cur.type) {
@@ -463,7 +474,8 @@ Result<ResolvedPath> resolve(Context &ctx, const StableRef &ref)
     }
     if (j + 1 >= n || ref.key[j + 1].kind == KeySegment::Kind::Member) {
       return err(StatusCode::InvalidArgument,
-                 std::string("resolve: collection '") + m->name() + "' needs an item key");
+                 std::string("resolve: collection '") + m->name() +
+                     "' needs an item key");
     }
     const KeySegment &k = ref.key[j + 1];
     PointerRef item = m->collection().lookup(w.cur, ctx, k);
@@ -502,7 +514,8 @@ namespace {
 
 /* The address a Pointer value stores for `target`: never a hop that can be reassigned
  * (see Walk::enter). */
-Result<StableRef> addressOf(Context &ctx, const ResolvedPath &rp, const PointerRef &target)
+Result<StableRef>
+addressOf(Context &ctx, const ResolvedPath &rp, const PointerRef &target)
 {
   const ApiMember &m = *rp.member;
   const ApiRegistry &reg = ctx.runtime().ext<ApiRegistry>();
@@ -522,16 +535,15 @@ Result<StableRef> addressOf(Context &ctx, const ResolvedPath &rp, const PointerR
     r = m.pointer().address(rp.ptr, ctx, target);
     if (r.owner.isNull()) {
       return err(StatusCode::Internal,
-                 std::string("pointer '") + m.name() + "': its address callback gave no owner");
+                 std::string("pointer '") + m.name() +
+                     "': its address callback gave no owner");
     }
-  }
-  else if (m.pointer().set) {
+  } else if (m.pointer().set) {
     return err(StatusCode::Unsupported,
                std::string("pointer '") + m.name() +
                    "' is settable and points inside its own owner: it needs an address "
                    "callback to give its target a stable address");
-  }
-  else {
+  } else {
     r.owner = rp.canonical.owner; /* a fixed sub-struct: the hop is stable */
     r.key = rp.canonical.key;
   }
@@ -547,9 +559,9 @@ Result<PropValue> readMember(Context &ctx, const ResolvedPath &rp)
   PropValue v = m.value().get(rp.ptr, ctx);
   const PropValue::Type want = valueTypeFor(m.def().kind());
   if (v.type() != want) {
-    return err(StatusCode::Internal, std::string("the getter of '") + m.name() + "' returned a " +
-                                         propValueTypeName(v.type()) + ", not a " +
-                                         propValueTypeName(want));
+    return err(StatusCode::Internal,
+               std::string("the getter of '") + m.name() + "' returned a " +
+                   propValueTypeName(v.type()) + ", not a " + propValueTypeName(want));
   }
   return v;
 }
@@ -559,17 +571,18 @@ Result<PropValue> readMember(Context &ctx, const ResolvedPath &rp)
 Result<PropValue> getValue(Context &ctx, const ResolvedPath &rp)
 {
   switch (rp.kind) {
-    case ResolvedPath::Kind::Struct:
-      return PropValue::ofPointer(rp.canonical);
-    case ResolvedPath::Kind::Length:
-      return PropValue::ofInt(rp.member->collection().length(rp.ptr, ctx));
-    default:
-      break;
+  case ResolvedPath::Kind::Struct:
+    return PropValue::ofPointer(rp.canonical);
+  case ResolvedPath::Kind::Length:
+    return PropValue::ofInt(rp.member->collection().length(rp.ptr, ctx));
+  default:
+    break;
   }
   const ApiMember &m = *rp.member;
   if (m.kind() == MemberKind::Collection) {
     return err(StatusCode::Unsupported,
-               std::string("'") + m.name() + "' is a collection: read .length or an item");
+               std::string("'") + m.name() +
+                   "' is a collection: read .length or an item");
   }
   if (m.kind() == MemberKind::Pointer) {
     PointerRef target = m.pointer().get(rp.ptr, ctx);
@@ -611,30 +624,29 @@ Result<PropValue> getValue(Context &ctx, std::string_view path)
 Result<PropertyDef> getMeta(Context &ctx, const ResolvedPath &rp)
 {
   switch (rp.kind) {
-    case ResolvedPath::Kind::Struct:
-      return err(StatusCode::InvalidArgument, "getMeta: the path names a struct");
-    case ResolvedPath::Kind::Length:
-      return PropertyDef::intProp("length").access(PropAccess::ReadOnly);
-    case ResolvedPath::Kind::EnumKey: {
-      PropertyDef d = PropertyDef::boolProp(rp.enumKey.c_str());
-      if (rp.member->readOnly() || effectiveDef(ctx, rp).hasAccess(PropAccess::ReadOnly)) {
-        d.access(PropAccess::ReadOnly);
-      }
-      const PropertyDef whole = effectiveDef(ctx, rp);
-      const EnumItem *item = whole.enumMeta() ? whole.enumMeta()->findKey(rp.enumKey.c_str()) :
-                                                nullptr;
-      const PropValue &v = whole.defaultValue();
-      if (item && v.tryEnum()) {
-        d.defaultValue(PropValue::ofBool(v.asEnum() == item->value));
-      }
-      else if (item && v.tryFlags()) {
-        const uint64_t bit = uint64_t(item->value);
-        d.defaultValue(PropValue::ofBool((v.asFlags() & bit) == bit));
-      }
-      return d;
+  case ResolvedPath::Kind::Struct:
+    return err(StatusCode::InvalidArgument, "getMeta: the path names a struct");
+  case ResolvedPath::Kind::Length:
+    return PropertyDef::intProp("length").access(PropAccess::ReadOnly);
+  case ResolvedPath::Kind::EnumKey: {
+    PropertyDef d = PropertyDef::boolProp(rp.enumKey.c_str());
+    if (rp.member->readOnly() || effectiveDef(ctx, rp).hasAccess(PropAccess::ReadOnly)) {
+      d.access(PropAccess::ReadOnly);
     }
-    default:
-      break;
+    const PropertyDef whole = effectiveDef(ctx, rp);
+    const EnumItem *item =
+        whole.enumMeta() ? whole.enumMeta()->findKey(rp.enumKey.c_str()) : nullptr;
+    const PropValue &v = whole.defaultValue();
+    if (item && v.tryEnum()) {
+      d.defaultValue(PropValue::ofBool(v.asEnum() == item->value));
+    } else if (item && v.tryFlags()) {
+      const uint64_t bit = uint64_t(item->value);
+      d.defaultValue(PropValue::ofBool((v.asFlags() & bit) == bit));
+    }
+    return d;
+  }
+  default:
+    break;
   }
   return getMemberMeta(ctx, rp);
 }
@@ -681,7 +693,8 @@ Status setPointer(Context &ctx, const ResolvedPath &rp, const PropValue &value)
         return t.status();
       }
       if (t->kind != ResolvedPath::Kind::Struct) {
-        return err(StatusCode::TypeMismatch, std::string(m.name()) + ": the value isn't a struct");
+        return err(StatusCode::TypeMismatch,
+                   std::string(m.name()) + ": the value isn't a struct");
       }
       target = t->ptr;
     }
@@ -739,7 +752,8 @@ Result<PropValue> widen(Context &ctx, const ResolvedPath &rp, const PropValue &v
   }
   if (whole.type() == PropValue::Type::Flags) {
     const uint64_t bit = uint64_t(rp.enumValue);
-    return PropValue::ofFlags(on->asBool() ? (whole.asFlags() | bit) : (whole.asFlags() & ~bit));
+    return PropValue::ofFlags(on->asBool() ? (whole.asFlags() | bit)
+                                           : (whole.asFlags() & ~bit));
   }
   if (!on->asBool()) {
     return err(StatusCode::InvalidArgument,
@@ -766,8 +780,7 @@ Status setValue(Context &ctx, const ResolvedPath &rp, const PropValue &value)
   }
   if (m.kind() == MemberKind::Pointer) {
     CDCC_TRY(setPointer(ctx, rp, value));
-  }
-  else {
+  } else {
     PropValue input = value;
     if (rp.kind != ResolvedPath::Kind::Member) {
       Result<PropValue> whole = widen(ctx, rp, value);

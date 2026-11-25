@@ -15,14 +15,14 @@
 namespace coredcc {
 
 /**
- * The blocks deleting `target` takes with it: Live and Placeholder users whose non-null `Ref`
- * (RefKind::Strong) to a deleted block would break, transitively, comparing canonical
- * ids. `target` comes first. Nullable refs aren't followed: they resolve to null while
- * their target is deleted.
+ * The blocks deleting `target` takes with it: Live and Placeholder users whose non-null
+ * `Ref` (RefKind::Strong) to a deleted block would break, transitively, comparing
+ * canonical ids. `target` comes first. Nullable refs aren't followed: they resolve to
+ * null while their target is deleted.
  */
 litestl::util::Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target);
-/** The same for several, which come first, each once; null handles are skipped. The relations are
- * built once, however many there are. */
+/** The same for several, which come first, each once; null handles are skipped. The
+ * relations are built once, however many there are. */
 litestl::util::Vector<BlockHandle> deletePreview(const Library &lib,
                                                  std::span<const BlockHandle> targets);
 
@@ -33,11 +33,12 @@ litestl::util::Vector<BlockHandle> deletePreview(const Library &lib,
  * so a purge can't free a block that redo would bring back. Blocks are found by id, so a
  * block recreated under its id in between is still the one that is undone.
  *
- * A block that filled a MissingBlock (createWithId, an append) is one again after the undo, with
- * the references, slots and attachments it had, and a discard then destroys the data only.
+ * A block that filled a MissingBlock (createWithId, an append) is one again after the
+ * undo, with the references, slots and attachments it had, and a discard then destroys
+ * the data only.
  */
 class CreatedBlocks {
- public:
+public:
   void add(Library &lib, BlockHandle h);
   int size() const
   {
@@ -49,7 +50,7 @@ class CreatedBlocks {
   /** What the history holds for it: the blocks' data too, while they are undone. */
   uint64_t memSize() const;
 
- private:
+private:
   struct Made {
     HistoryBlock block;
     /** It filled a MissingBlock. */
@@ -66,10 +67,10 @@ class CreatedBlocks {
 
 /**
  * Registers the built-in block commands (idempotent):
- * - `core.block.delete(block=<Pointer to a block> blocks="" cascade=true)` deletes the block,
- *   those of `blocks` (formatBlockIds text) and their preview, in one step. With `cascade=false`
- *   a non-empty cascade is FailedPrecondition naming the users. Undo restores them all with
- *   their ids. Outputs `count`.
+ * - `core.block.delete(block=<Pointer to a block> blocks="" cascade=true)` deletes the
+ * block, those of `blocks` (formatBlockIds text) and their preview, in one step. With
+ * `cascade=false` a non-empty cascade is FailedPrecondition naming the users. Undo
+ * restores them all with their ids. Outputs `count`.
  * - `core.block.rename` and `core.block.unlinkRef` (block_edits.h).
  * - `core.block.attach` and `core.block.detach` (attachment_commands.h).
  * - `core.block.duplicate` (library_commands.h).
@@ -82,12 +83,14 @@ inline constexpr const char *kPurgeCommand = "core.block.purge";
 
 namespace detail {
 
-/** Blocks that leave the history in one go: destroyed together, since each call of destroyFromHistory
- * looks at the whole Library. A Runtime extension. */
+/** Blocks that leave the history in one go: destroyed together, since each call of
+ * destroyFromHistory looks at the whole Library. A Runtime extension. */
 class HistoryDestroys {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.HistoryDestroys";
-  explicit HistoryDestroys(Runtime *) {}
+  explicit HistoryDestroys(Runtime *)
+  {
+  }
 
   void open()
   {
@@ -97,7 +100,7 @@ class HistoryDestroys {
   /** False unless it is open. */
   bool take(Library &lib, const litestl::util::Vector<BlockHandle> &blocks);
 
- private:
+private:
   struct Batch {
     LibraryRef lib;
     litestl::util::Vector<BlockHandle> blocks;
@@ -108,7 +111,7 @@ class HistoryDestroys {
 
 /** Keeps the batch open. */
 class HistoryDestroysScope {
- public:
+public:
   explicit HistoryDestroysScope(Runtime &rt) : batch_(rt.ext<HistoryDestroys>())
   {
     batch_.open();
@@ -120,7 +123,7 @@ class HistoryDestroysScope {
   HistoryDestroysScope(const HistoryDestroysScope &) = delete;
   HistoryDestroysScope &operator=(const HistoryDestroysScope &) = delete;
 
- private:
+private:
   HistoryDestroys &batch_;
 };
 

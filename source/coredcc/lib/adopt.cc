@@ -1,4 +1,5 @@
-/* MissingBlock records that are filled in place, and taking that back (architecture §8a). */
+/* MissingBlock records that are filled in place, and taking that back (architecture §8a).
+ */
 #include "coredcc/lib/io/format.h"
 #include "coredcc/lib/library.h"
 #include "coredcc/lib/type_names.h"
@@ -15,8 +16,9 @@ namespace {
 
 Status refused(const char *op, const Datablock &b, const char *why)
 {
-  return Status::error(StatusCode::FailedPrecondition,
-                       (std::string(op) + ": block '" + b.name().c_str() + "' " + why).c_str());
+  return Status::error(
+      StatusCode::FailedPrecondition,
+      (std::string(op) + ": block '" + b.name().c_str() + "' " + why).c_str());
 }
 
 } // namespace
@@ -67,8 +69,9 @@ Result<BlockHandle> Library::adopt(BlockHandle h,
                              .c_str());
   }
   if (detail::libio::hasCriticalField(b->fileExtension())) {
-    return Status::error(StatusCode::Unsupported,
-                         "createWithId: the block's record in the file needs a newer build");
+    return Status::error(
+        StatusCode::Unsupported,
+        "createWithId: the block's record in the file needs a newer build");
   }
   keepMissing(*b);
   b->type_ = type.id;
@@ -127,7 +130,8 @@ Result<BlockHandle> Library::unadopt(BlockHandle h)
   k->clientData_ = std::exchange(b->clientData_, nullptr);
   k->name_ = std::exchange(b->name_, a.name);
   k->slots_ = std::exchange(b->slots_, std::move(a.slots));
-  k->placeholderReason_ = std::exchange(b->placeholderReason_, PlaceholderReason::MissingBlock);
+  k->placeholderReason_ =
+      std::exchange(b->placeholderReason_, PlaceholderReason::MissingBlock);
   k->placeholderType_ = std::exchange(b->placeholderType_, a.typeName);
   k->placeholderData_ = std::exchange(b->placeholderData_, std::move(a.data));
   k->sourceName_ = std::exchange(b->sourceName_, a.sourceName);
@@ -149,7 +153,8 @@ Status Library::readopt(BlockHandle h, BlockHandle kept)
   if (!b || !k || k->state_ != BlockState::Doomed ||
       clients_.canonical(k->id_) != clients_.canonical(b->id_))
   {
-    return Status::error(StatusCode::NotFound, "readopt: no such block, or its data is gone");
+    return Status::error(StatusCode::NotFound,
+                         "readopt: no such block, or its data is gone");
   }
   if (b->state_ != BlockState::Placeholder ||
       b->placeholderReason_ != PlaceholderReason::MissingBlock)
@@ -198,7 +203,8 @@ void Library::releaseLent(Datablock &b)
   if (!b.adoption_) {
     return;
   }
-  const Vector<BlockHandle> lent = std::exchange(b.adoption_->lent, Vector<BlockHandle>());
+  const Vector<BlockHandle> lent =
+      std::exchange(b.adoption_->lent, Vector<BlockHandle>());
   for (BlockHandle h : lent) {
     unpin(h, PinKind::Host);
   }

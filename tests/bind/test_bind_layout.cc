@@ -13,7 +13,8 @@ namespace {
 /* The radius of object i's mesh. */
 double radius(Context &ctx, int i)
 {
-  return getValue(ctx, i ? "objects[1].data.radius" : "objects[0].data.radius")->asFloat();
+  return getValue(ctx, i ? "objects[1].data.radius" : "objects[0].data.radius")
+      ->asFloat();
 }
 
 struct Grow {
@@ -35,7 +36,9 @@ struct Grow {
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<Grow> *defineBindings()
   {
     auto *st = new lbt::Struct<Grow>("test::Grow", sizeof(Grow));
@@ -56,34 +59,40 @@ bool is(const sc::StringResult &r, const char *want)
 
 static void test_json()
 {
-  test_assert(is(sc::layoutJson("<layout path='a'><prop path='b' id='x'/></layout>"),
-                 "{\"kind\":\"layout\",\"version\":1,\"path\":\"a\",\"effectivePath\":\"/a\",\"children\":[{"
-                 "\"kind\":\"prop\",\"path\":\"b\",\"effectivePath\":\"/a.b\",\"id\":\"x\"}]}"));
+  test_assert(
+      is(sc::layoutJson("<layout path='a'><prop path='b' id='x'/></layout>"),
+         "{\"kind\":\"layout\",\"version\":1,\"path\":\"a\",\"effectivePath\":\"/"
+         "a\",\"children\":[{"
+         "\"kind\":\"prop\",\"path\":\"b\",\"effectivePath\":\"/a.b\",\"id\":\"x\"}]}"));
   sc::StringResult r = sc::layoutJson("<layout>\n  <prp/>\n</layout>");
   test_assert(r.status.code() == StatusCode::InvalidArgument && r.value.size() == 0 &&
-              strstr(r.status.message(), "layout 2:3: ") && r.status.suggestions().size() > 0);
+              strstr(r.status.message(), "layout 2:3: ") &&
+              r.status.suggestions().size() > 0);
 }
 
 static void test_issues()
 {
   Setup s;
-  test_assert(is(sc::validateLayoutXml(s.ctx, "<layout><prop path='tool.strength'/></layout>"),
-                 "[]"));
-  /* Lines and columns, in the issues' order. */
   test_assert(
-      is(sc::validateLayoutXml(s.ctx, "<layout>\n <prop path='tool.strenth'/>\n"
-                                      "<tool label='\xC3\xA9' invocation='test.ad'/></layout>"),
-         "[{\"severity\":\"Error\",\"line\":2,\"column\":8,\"node\":1,\"code\":\"NotFound\","
-         "\"message\":\"<prop> path: no member 'strenth' in Tool (at offset 4)\","
-         "\"suggestions\":[\"strength\"]},"
-         "{\"severity\":\"Error\",\"line\":3,\"column\":17,\"node\":2,\"code\":\"NotFound\","
-         "\"message\":\"<tool> invocation: no command 'test.ad'\","
-         "\"suggestions\":[\"test.add\"]}]"));
+      is(sc::validateLayoutXml(s.ctx, "<layout><prop path='tool.strength'/></layout>"),
+         "[]"));
+  /* Lines and columns, in the issues' order. */
+  test_assert(is(
+      sc::validateLayoutXml(s.ctx,
+                            "<layout>\n <prop path='tool.strenth'/>\n"
+                            "<tool label='\xC3\xA9' invocation='test.ad'/></layout>"),
+      "[{\"severity\":\"Error\",\"line\":2,\"column\":8,\"node\":1,\"code\":\"NotFound\","
+      "\"message\":\"<prop> path: no member 'strenth' in Tool (at offset 4)\","
+      "\"suggestions\":[\"strength\"]},"
+      "{\"severity\":\"Error\",\"line\":3,\"column\":17,\"node\":2,\"code\":\"NotFound\","
+      "\"message\":\"<tool> invocation: no command 'test.ad'\","
+      "\"suggestions\":[\"test.add\"]}]"));
   test_assert(!sc::validateLayoutXml(s.ctx, "<layout>").status.ok());
   /* The root is the Context's, whatever its prefix. */
   s.ctx.setPrefix(*parsePath("tool"));
-  test_assert(is(sc::validateLayoutXml(s.ctx, "<layout><prop path='tool.strength'/></layout>"),
-                 "[]"));
+  test_assert(
+      is(sc::validateLayoutXml(s.ctx, "<layout><prop path='tool.strength'/></layout>"),
+         "[]"));
   s.ctx.clearPrefix();
   Context none(&s.w.rt, &s.w.lib, PointerRef());
   sc::StringResult r = sc::validateLayoutXml(none, "<layout/>");
@@ -94,7 +103,8 @@ static void test_issues_late()
 {
   /* As many as there are, at the end of the largest text, in time. */
   Setup s;
-  std::string xml = "<layout><custom tag='x'>" + std::string(900 * 1000, 'a') + "</custom>";
+  std::string xml =
+      "<layout><custom tag='x'>" + std::string(900 * 1000, 'a') + "</custom>";
   for (int i = 0; i < 1500; i++) {
     xml += "<prop path='zzz'/>\n";
   }
@@ -124,7 +134,9 @@ static void test_invoke_at()
   test_assert(radius(s.ctx, 1) == r1 + 2 && radius(s.ctx, 0) == r0);
   /* A prefix that isn't there now, isn't a struct, or isn't a path. */
   const int size = s.history.size();
-  for (const char *prefix : {"objects[99]", "nothing", "tool.strength", "a..b", "objects"}) {
+  for (const char *prefix :
+       {"objects[99]", "nothing", "tool.strength", "a..b", "objects"})
+  {
     sc::BagResult r = sc::invokeAt(s.ctx, prefix, "test.add(amount=1)");
     test_assert(!r.status.ok() && !s.ctx.prefix());
   }

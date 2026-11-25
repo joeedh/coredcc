@@ -1,5 +1,5 @@
-/* Filling MissingBlock records, and taking it back (unadopt, readopt), by the host and by an
- * append. */
+/* Filling MissingBlock records, and taking it back (unadopt, readopt), by the host and by
+ * an append. */
 #include "coredcc/lib/duplicate.h"
 #include "coredcc/lib/pin.h"
 
@@ -19,8 +19,8 @@ BlockId cid(uint64_t n, ClientId client = ClientId::of(kCoredccClient))
 
 const BlockId kHosted = cid(5, kAcme);
 
-/* A root "a" with an OptStrong reference to a block that was Detached: the record has a name,
- * references (to c), a slot and a note. */
+/* A root "a" with an OptStrong reference to a block that was Detached: the record has a
+ * name, references (to c), a slot and a note. */
 Bytes sample()
 {
   IoWorld w;
@@ -177,26 +177,24 @@ static void test_host_pins()
       test_assert(w.lib.get(*kept) && w.docs.destroyed == destroyed);
       user.reset();
       test_assert(!w.lib.get(*kept) && w.docs.destroyed == destroyed + 1);
-    }
-    else if (end == 1) { /* the user's */
+    } else if (end == 1) { /* the user's */
       user.reset();
       test_assert(w.lib.get(*kept) && w.docs.destroyed == destroyed);
       pin.reset();
       test_assert(!w.lib.get(*kept) && w.docs.destroyed == destroyed + 1);
-    }
-    else if (end == 2) { /* a redo */
+    } else if (end == 2) { /* a redo */
       test_assert(w.lib.readopt(h, *kept).ok() && user.dataAlive());
       pin.reset();
       user.reset();
       test_assert(w.docs.destroyed == destroyed && w.lib.data(h));
-    }
-    else { /* the record goes before either */
+    } else { /* the record goes before either */
       test_assert(w.lib.markDeleted(h).ok() && w.lib.destroyFromHistory(h).ok());
       test_assert(w.lib.get(h)->state() == BlockState::Doomed);
       pin.reset();
       test_assert(w.lib.get(*kept));
       user.reset();
-      test_assert(!w.lib.get(*kept) && !w.lib.get(h) && w.docs.destroyed == destroyed + 1);
+      test_assert(!w.lib.get(*kept) && !w.lib.get(h) &&
+                  w.docs.destroyed == destroyed + 1);
     }
     test_assert(w.valid());
   }
@@ -227,7 +225,8 @@ static void test_host_changes()
   test_assert(w.lib.onHostRestored(kHosted).code() == StatusCode::FailedPrecondition);
   test_assert(w.lib.onHostDestroyed(kHosted).ok() && !pin.dataAlive());
   test_assert(w.lib.get(h)->state() == BlockState::Placeholder);
-  test_assert(w.lib.readopt(h, *kept).ok() && w.lib.get(h)->state() == BlockState::Detached);
+  test_assert(w.lib.readopt(h, *kept).ok() &&
+              w.lib.get(h)->state() == BlockState::Detached);
   kept = w.lib.unadopt(h);
   pin = LibraryPin(w.lib, *kept);
   test_assert(w.lib.onHostRestored(kHosted).ok() && w.lib.readopt(h, *kept).ok());
@@ -246,13 +245,15 @@ static void test_extension()
   const uint8_t three[] = {1, 2, 3};
   ext.blob(three);
   const Bytes extBytes = ext.take();
-  r.extension = std::string(reinterpret_cast<const char *>(extBytes.data()), extBytes.size());
+  r.extension =
+      std::string(reinterpret_cast<const char *>(extBytes.data()), extBytes.size());
   f.records.push_back(r);
   IoWorld w;
   test_assert(w.load(f.file()).ok());
   const BlockHandle h = w.at(1);
   const Bytes bytes = w.save();
-  test_assert(w.lib.createWithId(kDoc, cid(1), "x", newDoc(w)).ok() && w.lib.unadopt(h).ok());
+  test_assert(w.lib.createWithId(kDoc, cid(1), "x", newDoc(w)).ok() &&
+              w.lib.unadopt(h).ok());
   test_assert(w.lib.get(h)->fileExtension().size() == extBytes.size());
   test_assert(sameBytes(w.save(), bytes));
 }
@@ -308,13 +309,15 @@ static void test_append()
   test_assert(r.ok() && r->report.records == 2 && r->report.blocks[0] == m.h);
   test_assert(r->report.missingBlock == 0 && r->report.missingType == 0);
   test_assert(w.lib.adopted(m.h) && w.lib.get(m.h)->state() == BlockState::Live);
-  test_assert(strcmp(w.lib.get(m.h)->name().c_str(), "hosted") == 0 && w.data(m.h)->number == 200);
+  test_assert(strcmp(w.lib.get(m.h)->name().c_str(), "hosted") == 0 &&
+              w.data(m.h)->number == 200);
   test_assert(w.lib.get(m.h)->flags() == BlockFlags::FakeUser);
   /* What was there resolves to it. */
   test_assert(w.lib.resolveRef(w.data(w.at(1))->entries[0].refs[0]) == m.h);
   /* The file's slots, and this document's attachment. */
   const BlockId other = r->ids.find(cid(21));
-  test_assert(w.lib.slot(m.h, kDoc, 4)->target == other && w.lib.slot(m.h, kDoc, 5)->target == other);
+  test_assert(w.lib.slot(m.h, kDoc, 4)->target == other &&
+              w.lib.slot(m.h, kDoc, 5)->target == other);
   test_assert(static_cast<Note *>(w.lib.attachment(m.h, kNote))->value == 5);
   test_assert(r->report.issues.total == 1 &&
               has(issueText(r->report.issues), "has an attachment 'test.Note'"));
@@ -338,7 +341,8 @@ static void test_append()
   test_assert(hasMsg(w.append(library()).status(), "can't get ids here: acme.Doc"));
 }
 
-/* The type isn't there, or its data doesn't read: it stays a placeholder, with the payload. */
+/* The type isn't there, or its data doesn't read: it stays a placeholder, with the
+ * payload. */
 static void test_append_unread()
 {
   Missing m;
@@ -356,7 +360,8 @@ static void test_append_unread()
   test_assert(detail::resolvePlaceholders(w.lib).ok() &&
               w.lib.get(m.h)->state() == BlockState::Live && w.data(m.h)->number == 200);
   kept = w.lib.unadopt(m.h); /* Live by now */
-  test_assert(kept.ok() && isMissing(w, m.h) && w.lib.get(*kept)->dataState() == BlockState::Live);
+  test_assert(kept.ok() && isMissing(w, m.h) &&
+              w.lib.get(*kept)->dataState() == BlockState::Live);
 }
 
 /* A record without data fills it too, and the host fills that: two steps back. */
@@ -365,8 +370,10 @@ static void test_append_no_payload()
   Missing m;
   IoWorld &w = m.w;
   Result<AppendResult> r = w.append(library(true));
-  test_assert(r.ok() && w.lib.get(m.h)->placeholderReason() == PlaceholderReason::MissingBlock);
-  test_assert(strcmp(w.lib.get(m.h)->name().c_str(), "hosted") == 0 && w.lib.adopted(m.h));
+  test_assert(r.ok() &&
+              w.lib.get(m.h)->placeholderReason() == PlaceholderReason::MissingBlock);
+  test_assert(strcmp(w.lib.get(m.h)->name().c_str(), "hosted") == 0 &&
+              w.lib.adopted(m.h));
   test_assert(w.lib.createWithId(kAcmeDoc, kHosted, "mine", newDoc(w)).ok());
   Result<BlockHandle> data = w.lib.unadopt(m.h);
   test_assert(data.ok() && strcmp(w.lib.get(m.h)->name().c_str(), "hosted") == 0);
@@ -410,7 +417,8 @@ static void test_not_free()
   {
     IoWorld w;
     missing(w, "", PlaceholderReason::MissingBlock); /* of any type */
-    test_assert(!refuses(w, kHosted) && w.lib.get(w.lib.find(kHosted))->state() == BlockState::Live);
+    test_assert(!refuses(w, kHosted) &&
+                w.lib.get(w.lib.find(kHosted))->state() == BlockState::Live);
   }
   {
     IoWorld w;
@@ -451,7 +459,8 @@ static void test_append_extension()
   test_assert(kept.ok() && m.w.lib.get(m.h)->fileExtension().empty());
   test_assert(sameBytes(m.w.save(), m.before));
   LibraryPin pin(m.w.lib, *kept);
-  test_assert(m.w.lib.readopt(m.h, *kept).ok() && m.w.lib.get(m.h)->fileExtension().size() == 9);
+  test_assert(m.w.lib.readopt(m.h, *kept).ok() &&
+              m.w.lib.get(m.h)->fileExtension().size() == 9);
 }
 
 int main()

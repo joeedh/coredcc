@@ -26,7 +26,7 @@ inline constexpr const char *kCoredccClient = "coredcc";
  * the built-in "coredcc" client registered.
  */
 class ClientRegistry {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.ClientRegistry";
 
   explicit ClientRegistry(Runtime *rt);
@@ -53,7 +53,7 @@ class ClientRegistry {
 
   Status validate() const;
 
- private:
+private:
   Runtime &rt_;
   uint64_t generation_ = 0;
   litestl::util::Vector<ClientId> clients_;
@@ -63,8 +63,8 @@ class ClientRegistry {
 
 /** How the data of a block type or an attachment type is saved. */
 enum class BlockStorage : uint8_t {
-  /** Not said: Payload if the provider has serialize and deserialize. Otherwise a save of such
-   * data fails, naming the type. */
+  /** Not said: Payload if the provider has serialize and deserialize. Otherwise a save of
+   * such data fails, naming the type. */
   Unspecified,
   /** Through the provider's serialize and deserialize. */
   Payload,
@@ -91,7 +91,7 @@ struct BlockTypeInfo {
  * (`<type>#provider`).
  */
 class BlockTypeRegistry {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.BlockTypeRegistry";
 
   struct Entry {
@@ -100,14 +100,16 @@ class BlockTypeRegistry {
     Owned<BlockProvider> provider;
   };
 
-  explicit BlockTypeRegistry(Runtime *rt) : rt_(*rt) {}
+  explicit BlockTypeRegistry(Runtime *rt) : rt_(*rt)
+  {
+  }
   ~BlockTypeRegistry();
   BlockTypeRegistry(const BlockTypeRegistry &) = delete;
   BlockTypeRegistry &operator=(const BlockTypeRegistry &) = delete;
 
-  /** Registers a block type. Its client must be registered. Takes the provider. Refuses one
-   * of serialize and deserialize without the other, and a `storage` that contradicts them,
-   * and an attachment type's name (slots belong to either kind by TypeId). */
+  /** Registers a block type. Its client must be registered. Takes the provider. Refuses
+   * one of serialize and deserialize without the other, and a `storage` that contradicts
+   * them, and an attachment type's name (slots belong to either kind by TypeId). */
   Result<TypeId> add(BlockTypeInfo info, Owned<BlockProvider> provider);
   const Entry *find(TypeId type) const;
   /** The provider of `type`, or a null interface. */
@@ -115,7 +117,7 @@ class BlockTypeRegistry {
 
   Status validate() const;
 
- private:
+private:
   Runtime &rt_;
   litestl::util::Vector<Entry *> entries_;
   litestl::util::Map<uint64_t, Entry *> byId_;

@@ -17,9 +17,10 @@ bool ObjectEval::same(const ObjectEval &b) const
     static_assert(sizeof(x) % sizeof(double) == 0);
     return memcmp(&x, &y, sizeof(x)) == 0;
   };
-  return status == b.status && member == b.member && flags == b.flags && parent == b.parent &&
-         data == b.data && equal(state.world, b.state.world) &&
-         equal(state.rotation, b.state.rotation) && equal(state.localScale, b.state.localScale) &&
+  return status == b.status && member == b.member && flags == b.flags &&
+         parent == b.parent && data == b.data && equal(state.world, b.state.world) &&
+         equal(state.rotation, b.state.rotation) &&
+         equal(state.localScale, b.state.localScale) &&
          equal(localBounds, b.localBounds) && equal(bounds, b.bounds);
 }
 
@@ -41,15 +42,17 @@ namespace {
 constexpr const char *kEvaluatedStruct = "coredcc.EvaluatedScene";
 constexpr const char *kEvaluatedObjectStruct = "coredcc.EvaluatedObject";
 
-/* What the owner's structs are instances of: an id per object that was asked for. The results
- * themselves move with every evaluation. */
+/* What the owner's structs are instances of: an id per object that was asked for. The
+ * results themselves move with every evaluation. */
 class EvaluatedKeys {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.EvaluatedKeys";
   OwnerKey owner;
   const Vector<BlockHandle> none;
 
-  explicit EvaluatedKeys(Runtime *) {}
+  explicit EvaluatedKeys(Runtime *)
+  {
+  }
   ~EvaluatedKeys()
   {
     for (BlockId *id : ids_) {
@@ -67,7 +70,7 @@ class EvaluatedKeys {
     return made;
   }
 
- private:
+private:
   Vector<BlockId *> ids_;
   litestl::util::Map<BlockId, BlockId *> byId_;
 };
@@ -83,15 +86,16 @@ PointerRef itemFor(Context &ctx, const BlockId &id)
   ObjectEval e;
   return evalOf(ctx, id, e) ? PointerRef{ctx.runtime().ext<EvaluatedKeys>().keyFor(id),
                                          StructId::of(kEvaluatedObjectStruct),
-                                         OwnerKey()} :
-                              PointerRef();
+                                         OwnerKey()}
+                            : PointerRef();
 }
 
 /* The results that still have a record. */
 const Vector<BlockHandle> &handles(Context &ctx)
 {
   const Scene *scene = activeScene(ctx);
-  return scene ? scene->recordedObjects(*ctx.library()) : ctx.runtime().ext<EvaluatedKeys>().none;
+  return scene ? scene->recordedObjects(*ctx.library())
+               : ctx.runtime().ext<EvaluatedKeys>().none;
 }
 
 ApiStruct sceneStruct()
@@ -100,12 +104,14 @@ ApiStruct sceneStruct()
   st.uiName("Evaluated Scene").description("The results of the last evaluation.");
   CollectionAccessor c;
   c.itemStruct = StructId::of(kEvaluatedObjectStruct);
-  c.length = [](const PointerRef &, Context &ctx) { return int64_t(handles(ctx).size()); };
+  c.length = [](const PointerRef &, Context &ctx) {
+    return int64_t(handles(ctx).size());
+  };
   c.at = [](const PointerRef &, Context &ctx, int64_t i) {
     const Vector<BlockHandle> &l = handles(ctx);
-    return i >= 0 && i < int64_t(l.size()) ?
-               itemFor(ctx, ctx.library()->get(l[int(i)])->id()) :
-               PointerRef();
+    return i >= 0 && i < int64_t(l.size())
+               ? itemFor(ctx, ctx.library()->get(l[int(i)])->id())
+               : PointerRef();
   };
   c.lookup = [](const PointerRef &, Context &ctx, const KeySegment &key) {
     if (key.kind != KeySegment::Kind::StringKey) {
@@ -124,8 +130,8 @@ ApiStruct sceneStruct()
 
 PropValue corner(const Box3d &b, bool max)
 {
-  return max ? PropValue::ofVec3(b.max[0], b.max[1], b.max[2]) :
-               PropValue::ofVec3(b.min[0], b.min[1], b.min[2]);
+  return max ? PropValue::ofVec3(b.max[0], b.max[1], b.max[2])
+             : PropValue::ofVec3(b.min[0], b.min[1], b.min[2]);
 }
 
 ApiStruct resultStruct()
@@ -145,8 +151,10 @@ ApiStruct resultStruct()
     return PropValue::ofComponents(PropValue::Type::Mat4,
                                    static_cast<const double *>(e.state.world));
   });
-  add(PropertyDef::vecProp("boundsMin", 3), [](const ObjectEval &e) { return corner(e.bounds, false); });
-  add(PropertyDef::vecProp("boundsMax", 3), [](const ObjectEval &e) { return corner(e.bounds, true); });
+  add(PropertyDef::vecProp("boundsMin", 3),
+      [](const ObjectEval &e) { return corner(e.bounds, false); });
+  add(PropertyDef::vecProp("boundsMax", 3),
+      [](const ObjectEval &e) { return corner(e.bounds, true); });
   add(PropertyDef::enumProp("status")
           .item("OK", int64_t(EvalStatus::Ok))
           .item("INVALID", int64_t(EvalStatus::Invalid))
@@ -171,8 +179,9 @@ Status registerEvaluated(Runtime &rt)
   CDCC_TRY(api.add(resultStruct()).status());
   CDCC_TRY(api.add(sceneStruct()).status());
   EvaluatedKeys *keys = &rt.ext<EvaluatedKeys>();
-  Result<OwnerKey> owner = api.addRuntimeOwner(
-      kEvaluatedOwner, StructId::of(kEvaluatedStruct), [keys]() -> void * { return keys; });
+  Result<OwnerKey> owner = api.addRuntimeOwner(kEvaluatedOwner,
+                                               StructId::of(kEvaluatedStruct),
+                                               [keys]() -> void * { return keys; });
   if (!owner.ok()) {
     return owner.status();
   }

@@ -19,7 +19,8 @@ quatd readRotation(const EvalCtx &ctx)
 {
   const int32_t mode = ctx.enumChannel(trs::kRotationMode, trs::kQuaternionMode + 1);
   if (mode != trs::kQuaternionMode) {
-    return litestl::math::eulerToQuat(readVec3(ctx, trs::kRotationEuler), EulerOrder(mode));
+    return litestl::math::eulerToQuat(readVec3(ctx, trs::kRotationEuler),
+                                      EulerOrder(mode));
   }
   quatd q;
   for (int32_t i = 0; i < 4; i++) {
@@ -38,7 +39,10 @@ Node readNode(const EvalCtx &ctx)
 }
 
 /* Into the channels of `ctx`'s mode, nearest to what they are in `hint`. */
-void writeRotation(const EvalCtx &ctx, const EvalCtx &hint, const quatd &q, ChannelBlock &out)
+void writeRotation(const EvalCtx &ctx,
+                   const EvalCtx &hint,
+                   const quatd &q,
+                   ChannelBlock &out)
 {
   const int32_t mode = ctx.enumChannel(trs::kRotationMode, trs::kQuaternionMode + 1);
   if (mode != trs::kQuaternionMode) {
@@ -69,7 +73,8 @@ ChannelBlock withRotationMode(const ChannelBlock &channels, int32_t mode)
 TransformState Trs::evaluate(const EvalCtx &ctx, const TransformState &parent) const
 {
   const Node n = readNode(ctx);
-  const Linear world = (Linear::of(parent.world) * Linear::of(n.rotation)).scaled(n.scale);
+  const Linear world =
+      (Linear::of(parent.world) * Linear::of(n.rotation)).scaled(n.scale);
   return childState(parent, world, n.location, n.rotation, n.scale);
 }
 
@@ -115,8 +120,7 @@ Status Trs::applyDelta(const EvalCtx &base,
   if (delta.kind == DeltaKind::Rotate) {
     const quatd q = (turnUnder(delta, solver, p) * n.rotation).normalized();
     writeRotation(base, EvalCtx(hint), q, out);
-  }
-  else if (delta.kind == DeltaKind::Scale) {
+  } else if (delta.kind == DeltaKind::Scale) {
     quatd rotation = n.rotation;
     double3 scale = n.scale;
     if (mirrors(delta)) {
@@ -137,14 +141,18 @@ TransformTypeInfo trsInfo()
   TransformTypeInfo info;
   info.name = kTrsTransform;
   info.uiName = "Location, Rotation, Scale";
+  info.channels.append(PropertyDef::vecProp("location", 3)
+                           .subtype(PropSubtype::Distance)
+                           .unit(UnitFamily::Length));
   info.channels.append(
-      PropertyDef::vecProp("location", 3).subtype(PropSubtype::Distance).unit(UnitFamily::Length));
-  info.channels.append(orderEnum("rotationMode").item("QUATERNION", trs::kQuaternionMode));
+      orderEnum("rotationMode").item("QUATERNION", trs::kQuaternionMode));
+  info.channels.append(PropertyDef::vecProp("rotationEuler", 3)
+                           .subtype(PropSubtype::Euler)
+                           .unit(UnitFamily::Angle));
+  info.channels.append(PropertyDef::quatProp("rotationQuaternion")
+                           .defaultValue(PropValue::ofQuat(0, 0, 0, 1)));
   info.channels.append(
-      PropertyDef::vecProp("rotationEuler", 3).subtype(PropSubtype::Euler).unit(UnitFamily::Angle));
-  info.channels.append(
-      PropertyDef::quatProp("rotationQuaternion").defaultValue(PropValue::ofQuat(0, 0, 0, 1)));
-  info.channels.append(PropertyDef::vecProp("scale", 3).defaultValue(PropValue::ofVec3(1, 1, 1)));
+      PropertyDef::vecProp("scale", 3).defaultValue(PropValue::ofVec3(1, 1, 1)));
   return info;
 }
 

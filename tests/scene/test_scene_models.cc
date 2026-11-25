@@ -132,22 +132,23 @@ void testTrs(const Types &t)
   Rand r(3);
   for (int i = 0; i < 2000; i++) {
     TransformState parent;
-    parent.world = solve::affine(
-        Linear::of(r.rotation()).scaled(r.scale(4, true)) * Linear::of(r.rotation()), r.vec(4));
+    parent.world = solve::affine(Linear::of(r.rotation()).scaled(r.scale(4, true)) *
+                                     Linear::of(r.rotation()),
+                                 r.vec(4));
     parent.rotation = r.rotation();
     ChannelBlock c = trsChannels(r, *t.trs, r.scale(3, true), 3.0);
     const int mode = int(c.get(trs::kRotationMode));
     quatd q;
     if (mode < 6) {
-      const int axes[6][3] = {{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}};
+      const int axes[6][3] = {
+          {0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}};
       for (int k = 0; k < 3; k++) {
         double3 axis;
         axis[axes[mode][k]] = 1.0;
         const double angle = c.get(trs::kRotationEuler + axes[mode][k]);
         q = quatd::fromAxisAngle(axis, angle) * q;
       }
-    }
-    else {
+    } else {
       for (int k = 0; k < 4; k++) {
         q[k] = c.get(trs::kRotationQuaternion + k);
       }
@@ -167,7 +168,8 @@ void testTrs(const Types &t)
     const TransformState p = chain(q, t, 2, 2.0, true);
     const TransformState s = eval(*type, type->defaults(), p);
     test_assert(difference(s.world, p.world) < 1e-14 * 100);
-    test_assert(s.localScale[0] == 1.0 && s.localScale[1] == 1.0 && s.localScale[2] == 1.0);
+    test_assert(s.localScale[0] == 1.0 && s.localScale[1] == 1.0 &&
+                s.localScale[2] == 1.0);
   }
   /* Quaternions without a direction. */
   ChannelBlock c = t.trs->defaults();
@@ -206,7 +208,8 @@ void testMatrix(const Types &t)
       put(c, matrix_transform::kColumns + 3 * k, m.col[k]);
     }
     put(c, matrix_transform::kTranslation, at);
-    test_assert(difference(eval(*t.matrix, c, p).world, p.world * solve::affine(m, at)) < 1e-10);
+    test_assert(difference(eval(*t.matrix, c, p).world, p.world * solve::affine(m, at)) <
+                1e-10);
   }
   ChannelBlock c = t.matrix->defaults();
   const quatd q = r.rotation();
@@ -218,8 +221,8 @@ void testMatrix(const Types &t)
   test_assert(lengthOf(s.localScale - double3(-2, 3, 4)) < 1e-12);
   test_assert(std::fabs(std::fabs(s.rotation.dot(q)) - 1.0) < 1e-12);
 
-  /* The state's rotation and scale are decomposeTrs's: at right angles, nearly, and not at all; of
-   * ordinary, tiny and huge lengths. */
+  /* The state's rotation and scale are decomposeTrs's: at right angles, nearly, and not
+   * at all; of ordinary, tiny and huge lengths. */
   for (int i = 0; i < 4000; i++) {
     const double lengths[] = {1.0, 1.0, 1e-90, 1e-161, 1e90, 1e160};
     Linear l = Linear::of(r.rotation()).scaled(r.vec(3) * lengths[r.below(6)]);
@@ -257,7 +260,8 @@ void testFbxRotations(const Types &t)
       want = group == fbx::kPostRotation ? want.conjugated() : want;
       const TransformState s = eval(*t.fbx, c, TransformState());
       test_assert(std::fabs(s.rotation.dot(want)) > 1.0 - 1e-12);
-      test_assert(difference(s.world, solve::affine(Linear::of(want), double3(0, 0, 0))) < 1e-12);
+      test_assert(difference(s.world, solve::affine(Linear::of(want), double3(0, 0, 0))) <
+                  1e-12);
     }
   }
 }
@@ -332,7 +336,8 @@ struct Offset {
       litestl::alloc::PermanentGuard guard;
       st = new lbt::Struct<Offset>("test::Offset", sizeof(Offset));
       BIND_STRUCT_METHOD(st, evaluate, MARGS("ctx", "parent"));
-      BIND_STRUCT_METHOD(st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
+      BIND_STRUCT_METHOD(
+          st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
     }
     return st;
   }
@@ -344,7 +349,8 @@ Owned<TransformModel> offsetModel(Runtime &rt)
     const Status s = registerImpl<TransformModel, Offset>(rt, "test.offset#impl");
     test_assert(s.ok());
   }
-  auto m = own<TransformModel>(rt, "test.offset#impl", litestl::alloc::New<Offset>("test"));
+  auto m =
+      own<TransformModel>(rt, "test.offset#impl", litestl::alloc::New<Offset>("test"));
   return m.ok() ? std::move(*m) : Owned<TransformModel>();
 }
 
@@ -364,15 +370,18 @@ void testRegistry()
   TransformRegistry &reg = t.rt.ext<TransformRegistry>();
   ApiRegistry &api = t.rt.ext<ApiRegistry>();
   test_assert(registerTransformTypes(t.rt).ok() && reg.count() == 3);
-  test_assert(t.trs->channelCount() == trs::kCount && t.fbx->channelCount() == fbx::kCount);
+  test_assert(t.trs->channelCount() == trs::kCount &&
+              t.fbx->channelCount() == fbx::kCount);
   test_assert(t.matrix->channelCount() == matrix_transform::kCount);
   test_assert(reg.find("nope") == nullptr && reg.find(t.trs->id()) == t.trs);
   test_assert(&reg.at(1) == t.fbx && strcmp(t.trs->name().c_str(), kTrsTransform) == 0);
-  test_assert(api.isA(t.trs->structId(), StructId::of(TransformRegistry::kChannelsStruct)));
+  test_assert(
+      api.isA(t.trs->structId(), StructId::of(TransformRegistry::kChannelsStruct)));
 
   /* Distance channels. */
   for (int i = -1; i <= fbx::kCount; i++) {
-    const bool want = (i >= 0 && i < 3) || (i >= fbx::kRotationOffset && i < fbx::kScaling);
+    const bool want =
+        (i >= 0 && i < 3) || (i >= fbx::kRotationOffset && i < fbx::kScaling);
     test_assert(t.fbx->isDistance(i) == want);
   }
   for (int i = 0; i < trs::kCount; i++) {
@@ -384,17 +393,17 @@ void testRegistry()
 
   /* Every kind of channel, in order. */
   const double two53 = 9007199254740992.0;
-  Result<const TransformType *> added =
-      reg.add(info("test.kinds",
-                   {PropertyDef::floatProp("f").defaultValue(PropValue::ofFloat(1.5)),
-                    PropertyDef::boolProp("b").defaultValue(PropValue::ofBool(true)),
-                    PropertyDef::intProp("i").defaultValue(PropValue::ofInt(-7)),
-                    PropertyDef::enumProp("e").item("A", 3).item("B", -5).defaultValue(
-                        PropValue::ofEnum(-5)),
-                    PropertyDef::vecProp("v2", 2).defaultValue(PropValue::ofVec2(1, 2)),
-                    PropertyDef::vecProp("v4", 4).defaultValue(PropValue::ofVec4(1, 2, 3, 4)),
-                    PropertyDef::quatProp("q").defaultValue(PropValue::ofQuat(0, 0, 0, 1))}),
-              offsetModel(t.rt));
+  Result<const TransformType *> added = reg.add(
+      info("test.kinds",
+           {PropertyDef::floatProp("f").defaultValue(PropValue::ofFloat(1.5)),
+            PropertyDef::boolProp("b").defaultValue(PropValue::ofBool(true)),
+            PropertyDef::intProp("i").defaultValue(PropValue::ofInt(-7)),
+            PropertyDef::enumProp("e").item("A", 3).item("B", -5).defaultValue(
+                PropValue::ofEnum(-5)),
+            PropertyDef::vecProp("v2", 2).defaultValue(PropValue::ofVec2(1, 2)),
+            PropertyDef::vecProp("v4", 4).defaultValue(PropValue::ofVec4(1, 2, 3, 4)),
+            PropertyDef::quatProp("q").defaultValue(PropValue::ofQuat(0, 0, 0, 1))}),
+      offsetModel(t.rt));
   test_assert(added.ok());
   const TransformType &k = **added;
   const double defaults[] = {1.5, 1, -7, -5, 1, 2, 1, 2, 3, 4, 0, 0, 0, 1};
@@ -424,15 +433,19 @@ void testRegistry()
   test_assert(member("i")->get(self, ctx) == PropValue::ofInt(3));
   test_assert(member("v2")->set(self, ctx, PropValue::ofVec2(8, 9)).ok());
   test_assert(block.get(4) == 8 && block.get(5) == 9 && block.get(6) == 1);
-  test_assert(member("f")->set(self, ctx, PropValue::ofFloat(0.25)).ok() && block.get(0) == 0.25);
-  test_assert(member("b")->set(self, ctx, PropValue::ofBool(true)).ok() && block.get(1) == 1.0);
-  test_assert(member("e")->set(self, ctx, PropValue::ofEnum(-5)).ok() && block.get(3) == -5.0);
+  test_assert(member("f")->set(self, ctx, PropValue::ofFloat(0.25)).ok() &&
+              block.get(0) == 0.25);
+  test_assert(member("b")->set(self, ctx, PropValue::ofBool(true)).ok() &&
+              block.get(1) == 1.0);
+  test_assert(member("e")->set(self, ctx, PropValue::ofEnum(-5)).ok() &&
+              block.get(3) == -5.0);
   test_assert(member("q")->set(self, ctx, PropValue::ofQuat(1, 2, 3, 4)).ok());
   test_assert(block.get(13) == 4);
   for (int64_t big : {int64_t(two53), -int64_t(two53)}) {
     test_assert(member("i")->set(self, ctx, PropValue::ofInt(big)).ok());
     test_assert(member("i")->get(self, ctx) == PropValue::ofInt(big));
-    const Status over = member("i")->set(self, ctx, PropValue::ofInt(big + (big < 0 ? -1 : 1)));
+    const Status over =
+        member("i")->set(self, ctx, PropValue::ofInt(big + (big < 0 ? -1 : 1)));
     test_assert(over.code() == StatusCode::OutOfRange);
     test_assert(member("i")->get(self, ctx) == PropValue::ofInt(big));
   }
@@ -452,19 +465,24 @@ void testRegistry()
   const PropertyDef f = PropertyDef::floatProp("f");
   test_assert(refused(info("test.kinds", {f}), StatusCode::AlreadyExists));
   test_assert(refused(info(kTrsTransform, {f}), StatusCode::AlreadyExists));
-  test_assert(refused(info("test.s", {PropertyDef::stringProp("s")}), StatusCode::InvalidArgument));
-  test_assert(refused(info("test.m", {PropertyDef::mat4Prop("m")}), StatusCode::InvalidArgument));
+  test_assert(refused(info("test.s", {PropertyDef::stringProp("s")}),
+                      StatusCode::InvalidArgument));
+  test_assert(
+      refused(info("test.m", {PropertyDef::mat4Prop("m")}), StatusCode::InvalidArgument));
   test_assert(refused(info("test.fl", {PropertyDef::flagsProp("m").item("A", 1)}),
                       StatusCode::InvalidArgument));
-  test_assert(refused(info("test.i", {PropertyDef::intProp("i").defaultValue(
-                                         PropValue::ofInt(int64_t(two53) + 1))}),
+  test_assert(refused(info("test.i",
+                           {PropertyDef::intProp("i").defaultValue(
+                               PropValue::ofInt(int64_t(two53) + 1))}),
                       StatusCode::InvalidArgument));
   test_assert(refused(
-      info("test.e", {PropertyDef::enumProp("e").item("A", 0).item("B", int64_t(two53) + 1)}),
+      info("test.e",
+           {PropertyDef::enumProp("e").item("A", 0).item("B", int64_t(two53) + 1)}),
       StatusCode::InvalidArgument));
-  test_assert(refused(info("test.dyn", {PropertyDef::floatProp("f").dynamic(
-                                           [](PropertyDef &, const void *) {})}),
-                      StatusCode::InvalidArgument));
+  test_assert(refused(
+      info("test.dyn",
+           {PropertyDef::floatProp("f").dynamic([](PropertyDef &, const void *) {})}),
+      StatusCode::InvalidArgument));
   test_assert(refused(info("test.twice", {f, f}), StatusCode::InvalidArgument));
   test_assert(refused(info("test.name", {PropertyDef::floatProp("a b")}),
                       StatusCode::InvalidArgument));
@@ -489,7 +507,8 @@ void testForeign()
     sc::ForeignBindings &fb = t.rt.ext<sc::ForeignBindings>();
     const char *slots[] = {"evaluate", "setWorld"};
     test_assert(
-        registerForeign<TransformModel>(t.rt, "js.model", fb.dispatcher(), nullptr, slots).ok());
+        registerForeign<TransformModel>(t.rt, "js.model", fb.dispatcher(), nullptr, slots)
+            .ok());
     std::string fail;
     int32_t mode = -1, setCalls = 0;
     double startedAt = 0.0;
@@ -502,7 +521,8 @@ void testForeign()
         return false;
       }
       const EvalCtx &ctx = *static_cast<const EvalCtx *>(args[0]);
-      TransformState *s = new (ret) TransformState(*static_cast<TransformState *>(args[1]));
+      TransformState *s =
+          new (ret) TransformState(*static_cast<TransformState *>(args[1]));
       s->world[3][0] += ctx.channel(0);
       return true;
     };
@@ -544,7 +564,8 @@ void testForeign()
     test_assert(r.ok() && r->get(0) == 7.0 && mode == 1 && setCalls == 1);
     test_assert(solved(SetWorldMode::Exact).ok() && mode == 0 && setCalls == 2);
     at = 7.001;
-    test_assert(solved(SetWorldMode::Closest).status().code() == StatusCode::FailedPrecondition);
+    test_assert(solved(SetWorldMode::Closest).status().code() ==
+                StatusCode::FailedPrecondition);
     at = 7.0;
     const auto failsWith = [&](bool &flag, StatusCode code) {
       flag = true;
@@ -567,8 +588,9 @@ void testForeign()
     TransformState flat;
     flat.world[1][1] = 0.0;
     const int32_t before = setCalls;
-    test_assert(solveWorld(type, EvalCtx(c), target, flat, SetWorldMode::Closest).status().code() ==
-                StatusCode::FailedPrecondition);
+    test_assert(solveWorld(type, EvalCtx(c), target, flat, SetWorldMode::Closest)
+                    .status()
+                    .code() == StatusCode::FailedPrecondition);
     test_assert(setCalls == before);
 
     for (const char *slot : {"evaluate", "setWorld"}) {
@@ -578,8 +600,10 @@ void testForeign()
       test_assert(!t.rt.hasStickyError());
     }
     fail = "evaluate";
-    test_assert(strstr(evaluateTransform(type, EvalCtx(c), root).status().message(), "boom"));
-    test_assert(strstr(solveDelta(type, EvalCtx(c), c, delta, root).status().message(), "boom"));
+    test_assert(
+        strstr(evaluateTransform(type, EvalCtx(c), root).status().message(), "boom"));
+    test_assert(
+        strstr(solveDelta(type, EvalCtx(c), c, delta, root).status().message(), "boom"));
     test_assert(!t.rt.hasStickyError());
     fail.clear();
 
@@ -588,9 +612,11 @@ void testForeign()
       const ChannelBlock &d = any->defaults();
       const StatusCode pending = StatusCode::FailedPrecondition;
       test_assert(evaluateTransform(*any, EvalCtx(d), root).status().code() == pending);
-      test_assert(solveDelta(*any, EvalCtx(d), d, delta, root).status().code() == pending);
-      test_assert(solveWorld(*any, EvalCtx(d), target, root, SetWorldMode::Exact).status().code() ==
+      test_assert(solveDelta(*any, EvalCtx(d), d, delta, root).status().code() ==
                   pending);
+      test_assert(solveWorld(*any, EvalCtx(d), target, root, SetWorldMode::Exact)
+                      .status()
+                      .code() == pending);
     }
     test_assert(strcmp(t.rt.takeStickyError().message(), "earlier") == 0);
     fakehost::lf::release(h);
@@ -608,7 +634,7 @@ int main()
     testFbxGolden(t);
     testTrs(t);
     testFbxRotations(t);
-  testMatrix(t);
+    testMatrix(t);
     testRobust(t);
   }
   testRegistry();

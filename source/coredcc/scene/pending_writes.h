@@ -32,29 +32,37 @@ struct StoredFields {
 
 namespace detail {
 
-/** Stores the fields in a Live object: the parent before the rest, a type with its channels, and the
- * locks last. */
-Status writeStored(Context &ctx, BlockHandle h, const StoredFields &fields, const StoredObject &v);
+/** Stores the fields in a Live object: the parent before the rest, a type with its
+ * channels, and the locks last. */
+Status writeStored(Context &ctx,
+                   BlockHandle h,
+                   const StoredFields &fields,
+                   const StoredObject &v);
 
 /**
- * What an undo, a redo or a drag would have written to objects that aren't Live: their hosts took them
- * away. It is written when they are Live again. A Runtime extension.
+ * What an undo, a redo or a drag would have written to objects that aren't Live: their
+ * hosts took them away. It is written when they are Live again. A Runtime extension.
  */
 class PendingWrites {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.PendingWrites";
-  explicit PendingWrites(Runtime *) {}
+  explicit PendingWrites(Runtime *)
+  {
+  }
 
   /** In place of what waits for the same fields of it. */
-  void add(Library &lib, const BlockId &object, const StoredFields &fields, const StoredObject &v);
-  /** Writes what waits for an object, if it is Live; later, if nothing can be written now. An error
-   * becomes the sticky one, if there is none. */
+  void add(Library &lib,
+           const BlockId &object,
+           const StoredFields &fields,
+           const StoredObject &v);
+  /** Writes what waits for an object, if it is Live; later, if nothing can be written
+   * now. An error becomes the sticky one, if there is none. */
   void flush(Library &lib, const BlockId &object);
   /** The same for all objects of a Library. */
   void flush(Library &lib);
   int count(const Library &lib) const;
 
- private:
+private:
   struct Entry {
     BlockId object;
     StoredFields fields;

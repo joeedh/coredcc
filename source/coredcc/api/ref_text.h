@@ -39,7 +39,8 @@ std::string formatRef(const Runtime &rt, const StableRef &ref);
  * exist: resolve() says whether it does. On error the Status names the offset, and
  * `errorOffset` (if given) receives it.
  */
-Result<StableRef> parseRef(const Runtime &rt, std::string_view text, size_t *errorOffset = nullptr);
+Result<StableRef>
+parseRef(const Runtime &rt, std::string_view text, size_t *errorOffset = nullptr);
 
 /* Block ids alone, for keys and for lists of blocks as String inputs:
  *
@@ -54,14 +55,13 @@ inline constexpr size_t kMaxBlockIdsLength = size_t(1) << 26;
 
 /** "" for a null id. */
 std::string formatBlockId(const Runtime &rt, const BlockId &id);
-/** A null id for the empty text. A client's alias becomes its current name. Errors as parseRef's. */
-Result<BlockId> parseBlockId(const Runtime &rt,
-                             std::string_view text,
-                             size_t *errorOffset = nullptr);
+/** A null id for the empty text. A client's alias becomes its current name. Errors as
+ * parseRef's. */
+Result<BlockId>
+parseBlockId(const Runtime &rt, std::string_view text, size_t *errorOffset = nullptr);
 /** None of `ids` is null. */
 std::string formatBlockIds(const Runtime &rt, std::span<const BlockId> ids);
-Result<litestl::util::Vector<BlockId>> parseBlockIds(const Runtime &rt,
-                                                     std::string_view text,
-                                                     size_t *errorOffset = nullptr);
+Result<litestl::util::Vector<BlockId>>
+parseBlockIds(const Runtime &rt, std::string_view text, size_t *errorOffset = nullptr);
 
 } // namespace coredcc

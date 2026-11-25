@@ -1,5 +1,5 @@
-/* What another build may have put into the payloads of objects and scenes, and parents that are in no
- * scene. */
+/* What another build may have put into the payloads of objects and scenes, and parents
+ * that are in no scene. */
 #include "io_doc.h"
 
 #include "coredcc/api/ref_text.h"
@@ -26,7 +26,8 @@ double xOf(Library &lib, BlockHandle h)
 void testLooseParents()
 {
   IoDoc d;
-  const BlockHandle p = d.object("p", 10.0), c = d.object("c", 1.0), g = d.loose("g", double3(100, 0, 0));
+  const BlockHandle p = d.object("p", 10.0), c = d.object("c", 1.0),
+                    g = d.loose("g", double3(100, 0, 0));
   d.setParent(c, p);
   d.setParent(p, g);
   d.select({p});
@@ -37,7 +38,8 @@ void testLooseParents()
     Loaded l(d, save(*d.lib));
     test_assert(l.byName("p") && l.byName("g") && xOf(l.lib, l.byName("c")) == 111.0);
     must(evaluateScene(l.ctx));
-    test_assert(l.sc().evaluatedObjects().size() == 3 && l.sc().objects(l.lib).size() == 1);
+    test_assert(l.sc().evaluatedObjects().size() == 3 &&
+                l.sc().objects(l.lib).size() == 1);
     must(l.lib.collect().status());
     test_assert(xOf(l.lib, l.byName("c")) == 111.0);
     /* An append brings them along. */
@@ -62,10 +64,12 @@ void testLooseParents()
   /* Without children they go. */
   d.setParent(copy, BlockHandle());
   must(d.lib->collect().status());
-  test_assert(!d.lib->get(p) && !d.lib->get(g) && d.lib->get(copy) && d.lib->validate().ok());
+  test_assert(!d.lib->get(p) && !d.lib->get(g) && d.lib->get(copy) &&
+              d.lib->validate().ok());
 }
 
-/* A parent's deletion isn't its children's. A path may name an object outside the scene. */
+/* A parent's deletion isn't its children's. A path may name an object outside the scene.
+ */
 void testDeletedParent()
 {
   IoDoc d;
@@ -119,7 +123,8 @@ void testObjectFields()
 {
   IoDoc d;
   d.lib->setAuditRelations(false);
-  const BlockHandle kept = d.loose("kept"), gone = d.loose("gone"), p = d.loose("p", double3(5, 0, 0));
+  const BlockHandle kept = d.loose("kept"), gone = d.loose("gone"),
+                    p = d.loose("p", double3(5, 0, 0));
   Fields f(d);
   addOdd(f, f.fields, kept, gone);
   RefCell two[] = {RefCell(RefKind::OptStrong), RefCell(RefKind::OptStrong)};
@@ -130,7 +135,8 @@ void testObjectFields()
   f.fields.append(detail::refField("parent", std::span<const RefCell>(&parent, 1)));
   f.fields.append(detail::valueField("data", PropValue::ofInt(3)));
   f.fields.append(detail::valueField("transformVersion", PropValue::ofInt(-1)));
-  f.fields.append(detail::valueField("transformVersion", PropValue::ofInt(int64_t(1) << 40)));
+  f.fields.append(
+      detail::valueField("transformVersion", PropValue::ofInt(int64_t(1) << 40)));
   f.fields.append(detail::valueField("flags", PropValue::ofFlags(1)));
   f.fields.append(detail::valueField("flags", PropValue::ofFlags(4)));
   f.fields[int(f.fields.size()) - 1].refs.append(parent);
@@ -154,7 +160,8 @@ void testObjectFields()
   must(checkPayloadRefs(*d.lib, h, *again));
   BlockHandle h2;
   must(readInto(d, kObjectType, *again, &h2));
-  test_assert(same(writePayload(*d.lib, h2)->bytes, again->bytes) && d.obj(h2).unreadFields().size() == 9);
+  test_assert(same(writePayload(*d.lib, h2)->bytes, again->bytes) &&
+              d.obj(h2).unreadFields().size() == 9);
   Result<IdMap> ids = duplicateBlocks(*d.lib, std::span<const BlockHandle>(&h, 1));
   must(ids.status());
   const BlockHandle copy = d.lib->find(ids->find(d.idOf(h)));
@@ -188,14 +195,19 @@ void testSceneFields()
   e.append(detail::valueField("frame", PropValue::ofFloat(7.0)));
   e.append(detail::valueField("frame", PropValue::ofFloat(nan)));
   e.append(detail::valueField("startFrame", PropValue::ofFloat(3.0)));
-  e.append(detail::valueField("startFrame", PropValue::ofString("x")));  /* 1 */
+  e.append(detail::valueField("startFrame", PropValue::ofString("x"))); /* 1 */
   e.append(detail::valueField("lengthUnit", PropValue::ofString("cm")));
   e.append(detail::valueField("lengthUnit", PropValue::ofString("parsec"))); /* 2 */
   e.append(detail::valueField("angleUnit", PropValue::ofString("turns")));   /* 3 */
   e.append(detail::valueField("massUnit", PropValue::ofInt(1)));             /* 4 */
   e.append(detail::valueField("timeUnit", PropValue::ofString("f")));
-  for (const PropValue &v : {vec2(24.5, 1), vec2(0, 1), vec2(1e9, 1), vec2(nan, 1), vec2(50, 2),
-                             vec2(2997, 100), vec2(1, 1000000)}) /* 5 to 11 */
+  for (const PropValue &v : {vec2(24.5, 1),
+                             vec2(0, 1),
+                             vec2(1e9, 1),
+                             vec2(nan, 1),
+                             vec2(50, 2),
+                             vec2(2997, 100),
+                             vec2(1, 1000000)}) /* 5 to 11 */
   {
     e.append(detail::valueField("frameRate", v));
   }
@@ -204,7 +216,8 @@ void testSceneFields()
   BlockHandle h;
   must(readInto(d, kSceneType, *PayloadAccess::take(f.out, 1), &h));
   const Scene &s = *Scene::of(*d.lib, h);
-  test_assert(s.unreadFields().size() == 15 && s.frame == 7.0 && s.units.startFrame == 3.0);
+  test_assert(s.unreadFields().size() == 15 && s.frame == 7.0 &&
+              s.units.startFrame == 3.0);
   test_assert(s.units.rate == FrameRate() && s.cells().size() == 0);
   test_assert(strcmp(s.units.displayUnit(UnitFamily::Length).symbol, "cm") == 0);
   test_assert(strcmp(s.units.displayUnit(UnitFamily::Time).symbol, "f") == 0);
@@ -218,8 +231,8 @@ void testSceneFields()
   Scene &s2 = *Scene::of(*d.lib, h2);
   test_assert(same(writePayload(*d.lib, h2)->bytes, again->bytes) && s2.units == s.units);
   test_assert(s2.unreadFields().size() == 15 && s2.frame == 7.0);
-  /* A setting that this build couldn't read is still the last one, so a newer build has it. Until it
-   * is set. */
+  /* A setting that this build couldn't read is still the last one, so a newer build has
+   * it. Until it is set. */
   const auto last = [&](const char *name) {
     BlockPayload p = *writePayload(*d.lib, h2);
     BlockReader in(*d.lib, p);
@@ -232,11 +245,13 @@ void testSceneFields()
     return v;
   };
   test_assert(last("angleUnit") == PropValue::ofString("turns"));
-  test_assert(last("frameRate") == vec2(1, 1000000) && last("startFrame") == PropValue::ofFloat(3.0));
+  test_assert(last("frameRate") == vec2(1, 1000000) &&
+              last("startFrame") == PropValue::ofFloat(3.0));
   test_assert(last("lengthUnit") == PropValue::ofString("cm"));
   must(s2.units.setDisplayUnit(UnitFamily::Angle, "rad"));
   s2.units.rate = *FrameRate::of(2997, 100);
-  test_assert(last("angleUnit") == PropValue::ofString("rad") && last("frameRate") == vec2(30000, 1001));
+  test_assert(last("angleUnit") == PropValue::ofString("rad") &&
+              last("frameRate") == vec2(30000, 1001));
   test_assert(last("massUnit") == PropValue::ofInt(1) && last("factorUnit").tryString());
 
   Scene *copy = s2.duplicate();
@@ -252,7 +267,8 @@ void testSceneFields()
 
 /* ---- versions of transform types ---- */
 
-/* `size` of version 0 is `scale` in version 2, and twice as much; `mode` A is B since version 1. */
+/* `size` of version 0 is `scale` in version 2, and twice as much; `mode` A is B since
+ * version 1. */
 struct Upgrader {
   std::function<Status(uint32_t, ChannelEntries &)> fn;
   mutable int calls = 0;
@@ -301,7 +317,9 @@ struct VersionDoc : IoDoc {
       const char *impl = "io.versioned#plain";
       must(registerImpl<TransformModel, FnModel>(rt, impl));
       FnModel *m = litestl::alloc::New<FnModel>("FnModel");
-      m->fn = [](const EvalCtx &c, const TransformState &p) { return Upgrader().evaluate(c, p); };
+      m->fn = [](const EvalCtx &c, const TransformState &p) {
+        return Upgrader().evaluate(c, p);
+      };
       return rt.ext<TransformRegistry>()
           .add(std::move(info), own<TransformModel>(rt, impl, m).value())
           .status();
@@ -365,7 +383,8 @@ void testLittleOfAFile()
     return h;
   };
   const BlockHandle locked = read(kTrsTransform, 0, 0, "ghost");
-  test_assert(hasEntry(*d.lib, locked, "locks") && !hasEntry(*d.lib, locked, "transformVersion"));
+  test_assert(hasEntry(*d.lib, locked, "locks") &&
+              !hasEntry(*d.lib, locked, "transformVersion"));
   test_assert(hasEntry(*d.lib, read("no.type", 3, 1, ""), "transformVersion"));
   test_assert(hasEntry(*d.lib, read("io.versioned", 2, 3, ""), "transformVersion"));
   /* No channels at all, until the type is there. */
@@ -387,13 +406,16 @@ void testLittleOfAFile()
 void testVersions()
 {
   VersionDoc old, middle, now;
-  const Bytes v0 = old.saved(0, "size"), v1 = middle.saved(1, "scale"), v2 = now.saved(2, "scale");
+  const Bytes v0 = old.saved(0, "size"), v1 = middle.saved(1, "scale"),
+              v2 = now.saved(2, "scale");
   test_assert(now.upgrader->calls == 0);
-  const uint64_t small = sizeof(Object) + 2 * sizeof(double); /* nothing of a file is kept */
+  const uint64_t small =
+      sizeof(Object) + 2 * sizeof(double); /* nothing of a file is kept */
   {
     Loaded l(now, v0);
     test_assert(l.obj("v").memSize() > small);
-    test_assert(now.upgrader->calls == 0 && l.obj("v").channels.size() == 0); /* when it's asked for */
+    test_assert(now.upgrader->calls == 0 &&
+                l.obj("v").channels.size() == 0); /* when it's asked for */
     test_assert(same(save(l.lib), v0));
     test_assert(xOf(l.lib, l.byName("v")) == 6.0 && now.upgrader->calls == 1);
     test_assert(l.obj("v").channels.get(1) == 5.0 && l.obj("v").unread().empty());
@@ -417,9 +439,11 @@ void testVersions()
     Loaded l(middle, v0);
     test_assert(xOf(l.lib, l.byName("v")) == 0.0 && l.obj("v").unread().size() == 1);
     test_assert(l.obj("v").channels.get(1) == 5.0);
-    /* The old value is `size` of no version in particular: it stays, and the file is of this one. */
+    /* The old value is `size` of no version in particular: it stays, and the file is of
+     * this one. */
     Loaded again(middle, save(l.lib));
-    test_assert(again.obj("v").unread().size() == 1 && again.obj("v").channels.get(1) == 5.0);
+    test_assert(again.obj("v").unread().size() == 1 &&
+                again.obj("v").channels.get(1) == 5.0);
   }
   /* A newer file's are kept, unread. */
   Loaded l(old, v2);
@@ -449,7 +473,8 @@ void testVersions()
     /* Another type, and back. */
     l.ctx.setExecutor(old.ex.get());
     const TypeId id = l.obj("v").transformTypeId();
-    must(writeTransformType(l.ctx, l.byName("v"), TypeId::of(kTrsTransform), old.trs->defaults()));
+    must(writeTransformType(
+        l.ctx, l.byName("v"), TypeId::of(kTrsTransform), old.trs->defaults()));
     test_assert(hasEntry(l.lib, l.byName("v"), "location"));
     test_assert(!hasEntry(l.lib, l.byName("v"), "transformVersion"));
     Loaded trs(old, save(l.lib));
@@ -482,7 +507,8 @@ void testVersions()
   test_assert(xOf(waits.lib, waits.byName("v")) == 3.0 && late.upgrader->calls == 0);
   testLittleOfAFile();
   VersionDoc large;
-  test_assert(large.addType(uint32_t(1) << 31, "scale", false).code() == StatusCode::InvalidArgument);
+  test_assert(large.addType(uint32_t(1) << 31, "scale", false).code() ==
+              StatusCode::InvalidArgument);
 }
 
 /* A hook that can't: whoever asks first hears of it, and the file's channels stay. */
@@ -503,7 +529,8 @@ void testFailedUpgrade()
     };
     Loaded l(now, v0);
     Result<TransformState> s = computeState(l.lib, l.byName("v"), 0.0);
-    test_assert(s.status().code() == (thrown ? StatusCode::Internal : StatusCode::OutOfRange));
+    test_assert(s.status().code() ==
+                (thrown ? StatusCode::Internal : StatusCode::OutOfRange));
     test_assert(strstr(s.status().message(), "io.versioned', version 0: no way"));
     test_assert(!now.rt.hasStickyError() && now.upgrader->calls == 1);
     must(evaluateScene(l.ctx));
@@ -530,10 +557,12 @@ void testEntries()
   BlockEntry raw = detail::valueField("raw", PropValue::ofFloat(1));
   raw.unknownTag = 200;
   e.append(raw);
-  test_assert(c.get("a") == PropValue::ofFloat(2) && c.get("b").isNone() && c.get("raw").isNone());
+  test_assert(c.get("a") == PropValue::ofFloat(2) && c.get("b").isNone() &&
+              c.get("raw").isNone());
   test_assert(!c.rename("b", "a") && !c.remove("b") && e.size() == 3);
   test_assert(c.rename("a", "a") && e.size() == 3);
-  test_assert(c.rename("a", "raw") && e.size() == 2 && c.get("raw") == PropValue::ofFloat(2));
+  test_assert(c.rename("a", "raw") && e.size() == 2 &&
+              c.get("raw") == PropValue::ofFloat(2));
   c.set("raw", PropValue::ofFloat(5));
   test_assert(e.size() == 1 && c.get("raw") == PropValue::ofFloat(5));
   test_assert(c.remove("raw") && e.size() == 0);

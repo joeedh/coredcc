@@ -30,7 +30,9 @@ struct ThingProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &, RefVisitor &) const {}
+  void foreachRef(const Datablock &, RefVisitor &) const
+  {
+  }
   void destroy(const Datablock &b)
   {
     litestl::alloc::Delete(static_cast<Thing *>(b.clientData()));
@@ -42,7 +44,8 @@ struct ThingProvider {
   }
   static lbt::Struct<ThingProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<ThingProvider>("test::ThingProvider", sizeof(ThingProvider));
+    auto *st =
+        new lbt::Struct<ThingProvider>("test::ThingProvider", sizeof(ThingProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
@@ -57,7 +60,8 @@ inline const StructId kThingStruct = StructId::of("Thing");
 
 inline void addThings(Runtime &rt)
 {
-  test_assert((registerImpl<BlockProvider, ThingProvider>(rt, "test.Thing#provider").ok()));
+  test_assert(
+      (registerImpl<BlockProvider, ThingProvider>(rt, "test.Thing#provider").ok()));
   Result<Owned<BlockProvider>> p = own<BlockProvider>(
       rt, "test.Thing#provider", litestl::alloc::New<ThingProvider>("provider"));
   test_assert(p.ok());
@@ -71,7 +75,8 @@ inline void addThings(Runtime &rt)
 template <Status (*Fn)(NodeExecContext &)>
 const NodeType *addType(Runtime &rt, NodeTypeDef &def, const char *name)
 {
-  Result<Owned<GraphKernel>> k = makeKernel<FnKernel<Fn>>(rt, std::string(name) + "#kernel");
+  Result<Owned<GraphKernel>> k =
+      makeKernel<FnKernel<Fn>>(rt, std::string(name) + "#kernel");
   test_assert(k.ok());
   def.kernel(std::move(k).value());
   Result<const NodeType *> t = rt.ext<NodeTypeRegistry>().add(std::move(def));
@@ -133,7 +138,8 @@ inline NodeId add(GraphDef &def, const char *type)
   return *id;
 }
 
-inline LinkId connect(GraphDef &def, NodeId from, std::string_view out, NodeId to, std::string_view in)
+inline LinkId
+connect(GraphDef &def, NodeId from, std::string_view out, NodeId to, std::string_view in)
 {
   Result<LinkId> l = def.link({from, out}, {to, in});
   if (!l.ok()) {
@@ -143,7 +149,8 @@ inline LinkId connect(GraphDef &def, NodeId from, std::string_view out, NodeId t
   return *l;
 }
 
-inline int64_t addSocket(GraphDef &def, SocketSide side, const char *name, const char *type)
+inline int64_t
+addSocket(GraphDef &def, SocketSide side, const char *name, const char *type)
 {
   Result<int64_t> id = def.addInterface(side, name, type);
   test_assert(id.ok());

@@ -39,16 +39,19 @@ Status readComplete(const BytesReader &bytes, const void *data)
   if (!bytes.atEnd()) {
     return Status::error(
         StatusCode::InvalidArgument,
-        (std::to_string(bytes.remaining()) + " bytes of the payload were left over").c_str());
+        (std::to_string(bytes.remaining()) + " bytes of the payload were left over")
+            .c_str());
   }
-  return data ? Status() :
-                Status::error(StatusCode::Internal, "deserialize succeeded without calling setData");
+  return data ? Status()
+              : Status::error(StatusCode::Internal,
+                              "deserialize succeeded without calling setData");
 }
 
 Status newer(const char *what)
 {
-  return Status::error(StatusCode::Unsupported,
-                       (std::string(what) + " was written by a newer version of its type").c_str());
+  return Status::error(
+      StatusCode::Unsupported,
+      (std::string(what) + " was written by a newer version of its type").c_str());
 }
 
 } // namespace
@@ -72,10 +75,8 @@ LibraryFiller::Scope::~Scope()
 
 /* ---- records ---- */
 
-Result<BlockHandle> LibraryFiller::addRecord(BlockId id,
-                                             PlaceholderInfo info,
-                                             BlockFlags flags,
-                                             bool refill)
+Result<BlockHandle>
+LibraryFiller::addRecord(BlockId id, PlaceholderInfo info, BlockFlags flags, bool refill)
 {
   if (const BlockHandle h = refill ? lib_.find(id) : BlockHandle()) {
     Datablock &b = *lib_.rec(h);
@@ -131,7 +132,8 @@ void LibraryFiller::addAttachment(BlockHandle h, TypeId type, void *data)
 Status LibraryFiller::ready(const Library &lib, const char *what)
 {
   if (lib.busy()) {
-    return Status::error(StatusCode::Busy, (std::string(what) + ": the library is busy").c_str());
+    return Status::error(StatusCode::Busy,
+                         (std::string(what) + ": the library is busy").c_str());
   }
   CDCC_TRY(lib.runtime().busyIfEvaluating(what));
   if (lib.runtime().hasStickyError()) {
@@ -202,8 +204,7 @@ Status LibraryFiller::setData(BlockHandle h, void *data, Status s)
     b.placeholderType_ = string();
     b.sourceName_ = string();
     b.sourceStored_ = false;
-  }
-  else {
+  } else {
     lib_.setState(b, BlockState::Placeholder);
     lib_.rt_.takeStickyError().ignore(); /* `s` says what went wrong first */
   }
@@ -239,7 +240,8 @@ Status LibraryFiller::why(const Datablock &b) const
   const std::string type = "'" + std::string(b.placeholderType().c_str()) + "'";
   const BlockTypeRegistry::Entry *e = lib_.types_.find(b.type());
   if (!e) {
-    return Status::error(StatusCode::NotFound, ("no block type " + type + " is registered").c_str());
+    return Status::error(StatusCode::NotFound,
+                         ("no block type " + type + " is registered").c_str());
   }
   if (e->info.client != b.id().client) {
     return Status::error(StatusCode::TypeMismatch,
@@ -287,11 +289,13 @@ Status LibraryFiller::readAttachment(Datablock &b, const OpaqueAttachment &from)
   const AttachmentTypeRegistry::Entry *e = lib_.attachmentTypes_.find(type);
   const std::string what = "attachment '" + std::string(from.typeName.c_str()) + "'";
   if (!e) {
-    return Status::error(StatusCode::NotFound, (what + ": the type isn't registered").c_str());
+    return Status::error(StatusCode::NotFound,
+                         (what + ": the type isn't registered").c_str());
   }
   AttachmentProvider p = e->provider.get();
   if (!p.hasDeserialize()) {
-    return Status::error(StatusCode::Unsupported, (what + ": the type isn't read from files").c_str());
+    return Status::error(StatusCode::Unsupported,
+                         (what + ": the type isn't read from files").c_str());
   }
   if (from.payload.version > e->info.payloadVersion) {
     return newer(what.c_str());
@@ -338,8 +342,7 @@ int LibraryFiller::fillAttachments(BlockHandle h)
   }
   if (kept.size() > 0) {
     *b.opaque_ = std::move(kept);
-  }
-  else {
+  } else {
     b.opaque_.reset();
   }
   return filled;
@@ -367,9 +370,11 @@ void LibraryFiller::makeMissing(const string &source)
       continue;
     }
     if (uint32_t(lib_.size()) >= maxBlocks_) {
-      report_.issues.add(id, {},
-                         Status::error(StatusCode::OutOfRange,
-                                       "too many missing blocks: this one has no record"));
+      report_.issues.add(
+          id,
+          {},
+          Status::error(StatusCode::OutOfRange,
+                        "too many missing blocks: this one has no record"));
       continue;
     }
     PlaceholderInfo info;

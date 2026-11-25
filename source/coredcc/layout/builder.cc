@@ -23,12 +23,14 @@ struct LayoutBuilder::State {
   }
   std::string message(int node, const std::string &what) const
   {
-    return "layout: node " + std::to_string(node) + " (" + layoutKindName(nodes[node].kind) +
-           "): " + what;
+    return "layout: node " + std::to_string(node) + " (" +
+           layoutKindName(nodes[node].kind) + "): " + what;
   }
 };
 
-LayoutBuilder::LayoutBuilder() : s_(std::make_unique<State>()) {}
+LayoutBuilder::LayoutBuilder() : s_(std::make_unique<State>())
+{
+}
 LayoutBuilder::LayoutBuilder(const Layout &layout) : LayoutBuilder()
 {
   s_->nodes.clear();
@@ -54,7 +56,8 @@ LayoutBuilder::~LayoutBuilder() = default;
 
 LayoutScope LayoutBuilder::at(int node)
 {
-  CDCC_CHECK(node >= 0 && node < int(s_->nodes.size()), "LayoutBuilder::at: no such node");
+  CDCC_CHECK(node >= 0 && node < int(s_->nodes.size()),
+             "LayoutBuilder::at: no such node");
   return LayoutScope(*this, node);
 }
 
@@ -82,7 +85,10 @@ int LayoutBuilder::add(int parent, LayoutKind kind)
   return int(nodes.size()) - 1;
 }
 
-void LayoutBuilder::set(int node, LayoutAttrId id, std::string_view name, std::string_view value)
+void LayoutBuilder::set(int node,
+                        LayoutAttrId id,
+                        std::string_view name,
+                        std::string_view value)
 {
   s_->bytes += name.size() + value.size();
   if (s_->bytes > LayoutLimits::kMaxBytes) {
@@ -142,7 +148,8 @@ LayoutScope LayoutScope::add(LayoutKind kind)
 LayoutScope &LayoutScope::set(LayoutAttrId id, std::string_view value)
 {
   if (id == LayoutAttrId::Free) {
-    b_->s_->fail(index_, StatusCode::InvalidArgument, "a free attribute is set by its name");
+    b_->s_->fail(
+        index_, StatusCode::InvalidArgument, "a free attribute is set by its name");
     return *this;
   }
   b_->set(index_, id, {}, value);

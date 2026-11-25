@@ -1,7 +1,7 @@
 #pragma once
 
-/* A World with the node type `test.two`, which has every kind of socket and param, for the
- * tests of GraphDef. */
+/* A World with the node type `test.two`, which has every kind of socket and param, for
+ * the tests of GraphDef. */
 
 #include "graph_fixture.h"
 

@@ -46,9 +46,10 @@ template <typename T> struct Handle {
  * resolves to null instead of to an unrelated new object.
  */
 template <typename T, int PageSize = 256> class HandlePool {
-  static_assert(PageSize > 0 && (PageSize & (PageSize - 1)) == 0, "PageSize must be a power of 2");
+  static_assert(PageSize > 0 && (PageSize & (PageSize - 1)) == 0,
+                "PageSize must be a power of 2");
 
- public:
+public:
   using HandleT = Handle<T>;
 
   HandlePool() = default;
@@ -76,8 +77,7 @@ template <typename T, int PageSize = 256> class HandlePool {
     uint32_t index;
     if (!quarantine_ && free_.size() > 0) {
       index = free_.pop_back();
-    }
-    else {
+    } else {
       index = slotCount_++;
       if ((index & (PageSize - 1)) == 0) {
         pages_.append(litestl::alloc::New<Page>("coredcc::HandlePool page"));
@@ -162,7 +162,7 @@ template <typename T, int PageSize = 256> class HandlePool {
     slotAt(index).generation = generation;
   }
 
- private:
+private:
   struct Slot {
     alignas(T) unsigned char storage[sizeof(T)];
     uint32_t generation = 0;

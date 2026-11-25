@@ -22,7 +22,7 @@ struct LibraryToken {
 
 /** A weak reference to a Library. Copyable; from Library::ref(). */
 class LibraryRef {
- public:
+public:
   LibraryRef() = default;
   /** Null once the Library is being destroyed (its providers' `destroy` already see
    * null), and for a default-constructed ref. */
@@ -31,9 +31,12 @@ class LibraryRef {
     return token_ ? token_->lib : nullptr;
   }
 
- private:
+private:
   friend class Library;
-  explicit LibraryRef(std::shared_ptr<detail::LibraryToken> token) : token_(std::move(token)) {}
+  explicit LibraryRef(std::shared_ptr<detail::LibraryToken> token)
+      : token_(std::move(token))
+  {
+  }
   std::shared_ptr<detail::LibraryToken> token_;
 };
 
@@ -43,12 +46,12 @@ class LibraryRef {
  * hand its pin back.
  */
 class LibraryPin {
- public:
+public:
   LibraryPin() = default;
   LibraryPin(Library &lib, BlockHandle h, PinKind kind = PinKind::Host);
   LibraryPin(LibraryPin &&b) noexcept
-      : ref_(std::exchange(b.ref_, LibraryRef())), handle_(std::exchange(b.handle_, BlockHandle())),
-        kind_(b.kind_)
+      : ref_(std::exchange(b.ref_, LibraryRef())),
+        handle_(std::exchange(b.handle_, BlockHandle())), kind_(b.kind_)
   {
   }
   LibraryPin &operator=(LibraryPin &&b) noexcept;
@@ -79,7 +82,7 @@ class LibraryPin {
    */
   bool dataAlive() const;
 
- private:
+private:
   LibraryRef ref_;
   BlockHandle handle_;
   PinKind kind_ = PinKind::Host;

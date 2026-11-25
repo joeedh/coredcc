@@ -17,13 +17,14 @@ using detail::ok;
 using detail::view;
 
 /* Where the issues are, found in one pass over the text. */
-static std::vector<LayoutPosition> positions(std::string_view xml,
-                                             const litestl::util::Vector<LayoutIssue> &issues)
+static std::vector<LayoutPosition>
+positions(std::string_view xml, const litestl::util::Vector<LayoutIssue> &issues)
 {
   std::vector<int> order(size_t(issues.size()));
   std::iota(order.begin(), order.end(), 0);
-  std::sort(order.begin(), order.end(),
-            [&](int a, int b) { return issues[a].offset < issues[b].offset; });
+  std::sort(order.begin(), order.end(), [&](int a, int b) {
+    return issues[a].offset < issues[b].offset;
+  });
   std::vector<LayoutPosition> out(order.size());
   LayoutPosition at;
   for (int i : order) {
@@ -36,8 +37,8 @@ static std::vector<LayoutPosition> positions(std::string_view xml,
 StringResult layoutJson(const string &xml)
 {
   Result<Layout> layout = parseLayout(view(xml));
-  return layout.ok() ? ok<StringResult>(string(layoutToJson(*layout).c_str())) :
-                       failed<StringResult>(layout.status());
+  return layout.ok() ? ok<StringResult>(string(layoutToJson(*layout).c_str()))
+                     : failed<StringResult>(layout.status());
 }
 
 StringResult validateLayoutXml(Context &ctx, const string &xml)

@@ -41,16 +41,16 @@ static_assert(int(IdDomain::Command) + 1 == kIdDomainCount, "update kIdDomainCou
 constexpr std::string_view idDomainTag(IdDomain d)
 {
   switch (d) {
-    case IdDomain::Type:
-      return "type:";
-    case IdDomain::Interface:
-      return "iface:";
-    case IdDomain::Client:
-      return "client:";
-    case IdDomain::Struct:
-      return "struct:";
-    case IdDomain::Command:
-      return "command:";
+  case IdDomain::Type:
+    return "type:";
+  case IdDomain::Interface:
+    return "iface:";
+  case IdDomain::Client:
+    return "client:";
+  case IdDomain::Struct:
+    return "struct:";
+  case IdDomain::Command:
+    return "command:";
   }
   return "?:";
 }

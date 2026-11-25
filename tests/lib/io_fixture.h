@@ -1,7 +1,8 @@
 #pragma once
 
-/* For the library section's tests: a world with block and attachment types that serialize, a
- * deep comparison of two libraries that doesn't use the writer, and files built by hand. */
+/* For the library section's tests: a world with block and attachment types that
+ * serialize, a deep comparison of two libraries that doesn't use the writer, and files
+ * built by hand. */
 
 #include "doc_fixture.h"
 
@@ -24,7 +25,8 @@ inline std::span<const uint8_t> view(const Bytes &b)
 }
 inline bool sameBytes(const Bytes &a, const Bytes &b)
 {
-  return a.size() == b.size() && (a.size() == 0 || memcmp(a.data(), b.data(), a.size()) == 0);
+  return a.size() == b.size() &&
+         (a.size() == 0 || memcmp(a.data(), b.data(), a.size()) == 0);
 }
 inline bool has(const std::string &text, const char *needle)
 {
@@ -113,7 +115,8 @@ struct NoteProvider {
   void foreachRef(const Datablock &, const void *data, RefVisitor &v) const
   {
     if (host->failForeach) {
-      host->rt->setStickyError(Status::error(StatusCode::Internal, "note foreachRef threw"));
+      host->rt->setStickyError(
+          Status::error(StatusCode::Internal, "note foreachRef threw"));
       return;
     }
     v.visit(const_cast<Note *>(static_cast<const Note *>(data))->about);
@@ -132,7 +135,9 @@ struct NoteProvider {
 
 /* An attachment type that isn't saved. */
 struct BareProvider {
-  void destroy(void *) {}
+  void destroy(void *)
+  {
+  }
   static lbt::Struct<BareProvider> *defineBindings()
   {
     auto *st = new lbt::Struct<BareProvider>("test::BareProvider", sizeof(BareProvider));
@@ -155,14 +160,16 @@ inline void registerNote(Runtime &rt,
                          DuplicatePolicy onDuplicate = DuplicatePolicy::Drop)
 {
   host.rt = &rt;
-  test_assert((registerImpl<AttachmentProvider, NoteProvider>(rt, "test.Note#provider").ok()));
+  test_assert(
+      (registerImpl<AttachmentProvider, NoteProvider>(rt, "test.Note#provider").ok()));
   NoteProvider *p = litestl::alloc::New<NoteProvider>("provider");
   p->host = &host;
   AttachmentTypeInfo info;
   info.name = "test.Note";
   info.payloadVersion = version;
   info.onDuplicate = onDuplicate;
-  Result<Owned<AttachmentProvider>> owned = own<AttachmentProvider>(rt, "test.Note#provider", p);
+  Result<Owned<AttachmentProvider>> owned =
+      own<AttachmentProvider>(rt, "test.Note#provider", p);
   test_assert(owned.ok() &&
               rt.ext<AttachmentTypeRegistry>().add(info, std::move(owned).value()).ok());
 }
@@ -182,7 +189,8 @@ inline void registerBare(Runtime &rt,
               rt.ext<AttachmentTypeRegistry>().add(info, std::move(owned).value()).ok());
 }
 
-/* A Thing whose type says it is never saved. Its id is the client's, as a host's would be. */
+/* A Thing whose type says it is never saved. Its id is the client's, as a host's would
+ * be. */
 inline void registerTransient(Runtime &rt, ThingHost &host)
 {
   host.rt = &rt;
@@ -201,7 +209,8 @@ inline void registerTransient(Runtime &rt, ThingHost &host)
 
 /* ---- worlds ---- */
 
-/* What a world knows. The saved kinds are test.Doc, acme.Doc and the attachment test.Note. */
+/* What a world knows. The saved kinds are test.Doc, acme.Doc and the attachment
+ * test.Note. */
 struct Knows {
   bool doc = true;
   bool acme = true;
@@ -256,8 +265,10 @@ struct IoWorld {
     Doc *d = litestl::alloc::New<Doc>("Doc");
     d->bag = makeDocBag(docs);
     d->number = int64_t(n) * 10;
-    const ClientId client = type == kAcmeDoc || type == kAcmePlain ? kAcme : ClientId::of(kCoredccClient);
-    Result<BlockHandle> h = lib.createWithId(type, BlockId{client, LocalId{7, n}}, name, d);
+    const ClientId client =
+        type == kAcmeDoc || type == kAcmePlain ? kAcme : ClientId::of(kCoredccClient);
+    Result<BlockHandle> h =
+        lib.createWithId(type, BlockId{client, LocalId{7, n}}, name, d);
     test_assert(h.ok());
     return h.ok() ? *h : BlockHandle();
   }
@@ -300,7 +311,8 @@ struct IoWorld {
     test_assert(r.ok());
     return r.ok() ? std::move(r).value() : Bytes();
   }
-  Status load(const Bytes &b, LoadReport *report = nullptr, const LoadOptions &options = {})
+  Status
+  load(const Bytes &b, LoadReport *report = nullptr, const LoadOptions &options = {})
   {
     Result<LoadReport> r = detail::loadLibrary(lib, view(b), options);
     if (r.ok() && report) {
@@ -352,16 +364,17 @@ inline bool sameCells(const Vector<RefCell> &a, const Vector<RefCell> &b)
 
 inline bool samePayload(const BlockPayload &a, const BlockPayload &b)
 {
-  return a.version == b.version && sameBytes(a.bytes, b.bytes) && sameCells(a.refs, b.refs);
+  return a.version == b.version && sameBytes(a.bytes, b.bytes) &&
+         sameCells(a.refs, b.refs);
 }
 
 inline bool sameEntries(const Vector<BlockEntry> &a, const Vector<BlockEntry> &b)
 {
   bool same = a.size() == b.size();
   for (int i = 0; same && i < int(a.size()); i++) {
-    same = strcmp(a[i].name.c_str(), b[i].name.c_str()) == 0 && a[i].value == b[i].value &&
-           a[i].unknownTag == b[i].unknownTag && sameBytes(a[i].raw, b[i].raw) &&
-           a[i].refs.size() == b[i].refs.size();
+    same = strcmp(a[i].name.c_str(), b[i].name.c_str()) == 0 &&
+           a[i].value == b[i].value && a[i].unknownTag == b[i].unknownTag &&
+           sameBytes(a[i].raw, b[i].raw) && a[i].refs.size() == b[i].refs.size();
     for (int k = 0; same && k < int(a[i].refs.size()); k++) {
       same = sameCell(a[i].refs[k], b[i].refs[k]);
     }
@@ -371,18 +384,21 @@ inline bool sameEntries(const Vector<BlockEntry> &a, const Vector<BlockEntry> &b
 
 inline bool sameDocs(const Doc &a, const Doc &b)
 {
-  bool same = a.number == b.number && sameCell(a.parent, b.parent) && sameCell(a.mesh, b.mesh) &&
-              sameEntries(a.entries, b.entries) && sameEntries(a.unread, b.unread);
+  bool same = a.number == b.number && sameCell(a.parent, b.parent) &&
+              sameCell(a.mesh, b.mesh) && sameEntries(a.entries, b.entries) &&
+              sameEntries(a.unread, b.unread);
   for (const char *name : {"size", "target", "extra", "other"}) {
     const int x = a.bag.indexOf(name), y = b.bag.indexOf(name);
-    same = same && (x < 0 || y < 0 ? x == y :
-                                     a.bagRefs.value(a.bag, x) == b.bagRefs.value(b.bag, y));
+    same =
+        same && (x < 0 || y < 0 ? x == y
+                                : a.bagRefs.value(a.bag, x) == b.bagRefs.value(b.bag, y));
   }
   return same;
 }
 
 /* A record of `a` and the same record of `b`, loaded from a save of `a`. */
-inline bool sameRecord(const Library &la, BlockHandle ha, const Library &lb, BlockHandle hb)
+inline bool
+sameRecord(const Library &la, BlockHandle ha, const Library &lb, BlockHandle hb)
 {
   const Datablock &a = *la.get(ha);
   const Datablock &b = *lb.get(hb);
@@ -404,20 +420,17 @@ inline bool sameRecord(const Library &la, BlockHandle ha, const Library &lb, Blo
     {
       return differs("what a Detached block becomes", a);
     }
-  }
-  else if (a.state() != b.state()) {
+  } else if (a.state() != b.state()) {
     return differs("state", a);
-  }
-  else if (a.state() == BlockState::Placeholder) {
+  } else if (a.state() == BlockState::Placeholder) {
     if (a.placeholderReason() != b.placeholderReason() ||
         strcmp(a.placeholderType().c_str(), b.placeholderType().c_str()) != 0 ||
         !samePayload(a.placeholderData(), b.placeholderData()))
     {
       return differs("placeholder", a);
     }
-  }
-  else if (!sameDocs(*static_cast<const Doc *>(a.clientData()),
-                     *static_cast<const Doc *>(b.clientData())))
+  } else if (!sameDocs(*static_cast<const Doc *>(a.clientData()),
+                       *static_cast<const Doc *>(b.clientData())))
   {
     return differs("data", a);
   }
@@ -479,7 +492,8 @@ inline void fixUp(Bytes &file)
     }
   };
   put(16, uint64_t(file.size()));
-  const std::string_view all(reinterpret_cast<const char *>(file.data()), file.size() - 8);
+  const std::string_view all(reinterpret_cast<const char *>(file.data()),
+                             file.size() - 8);
   put(size_t(file.size()) - 8, coredcc::detail::fnv1a64(all));
 }
 
@@ -562,18 +576,17 @@ struct RawRecord {
     }
     if (slots) {
       slots(out);
-    }
-    else {
+    } else {
       out.u32(0);
     }
     if (attachments) {
       attachments(out);
-    }
-    else {
+    } else {
       out.u32(0);
     }
     out.u32(blob);
-    out.blob(std::span(reinterpret_cast<const uint8_t *>(extension.data()), extension.size()));
+    out.blob(
+        std::span(reinterpret_cast<const uint8_t *>(extension.data()), extension.size()));
     if (after) {
       after(out);
     }

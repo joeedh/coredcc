@@ -12,9 +12,10 @@ using litestl::math::double4;
 
 /**
  * From an object's space to the screen around a cursor. The point q, as (q, 1), is at
- * (x.q / w.q, y.q / w.q) device pixels from the cursor. It is visible if front.q >= 0, and then
- * w.q > 0, and back.q >= 0. These are its distances from the near and to the far plane, in world
- * units, so their normals are opposite; back is (0, 0, 0, 1) when there is no far plane.
+ * (x.q / w.q, y.q / w.q) device pixels from the cursor. It is visible if front.q >= 0,
+ * and then w.q > 0, and back.q >= 0. These are its distances from the near and to the far
+ * plane, in world units, so their normals are opposite; back is (0, 0, 0, 1) when there
+ * is no far plane.
  */
 struct ScreenMap {
   double4 x, y, w, front, back;
@@ -33,15 +34,15 @@ struct ScreenPoint {
   double3 point;
 };
 
-/** Distances up to this, in device pixels, are 0: rounding is smaller, also for solids that are
- * thinner on the screen. */
+/** Distances up to this, in device pixels, are 0: rounding is smaller, also for solids
+ * that are thinner on the screen. */
 constexpr double kCoveredPixels = 1e-4;
 
 /**
- * Of the visible part of a solid capsule (a sphere when a == b), under any affine matrix. The
- * distance is at most 0.01 pixels too large, and 0 if the cursor is covered; the point is then one
- * of those there, not the frontmost. False when nothing of the capsule is visible, or all of it is
- * farther than `limit`.
+ * Of the visible part of a solid capsule (a sphere when a == b), under any affine matrix.
+ * The distance is at most 0.01 pixels too large, and 0 if the cursor is covered; the
+ * point is then one of those there, not the frontmost. False when nothing of the capsule
+ * is visible, or all of it is farther than `limit`.
  */
 bool closestOnCapsule(const ScreenMap &map,
                       const double3 &a,
@@ -50,8 +51,8 @@ bool closestOnCapsule(const ScreenMap &map,
                       double limit,
                       ScreenPoint &out);
 
-/** Of the visible part of a point, a segment or a triangle: 1 to 3 corners. False when nothing of
- * it is visible. */
+/** Of the visible part of a point, a segment or a triangle: 1 to 3 corners. False when
+ * nothing of it is visible. */
 bool closestOnCorners(const ScreenMap &map,
                       const double3 *corners,
                       int count,

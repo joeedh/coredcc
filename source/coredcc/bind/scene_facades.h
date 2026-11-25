@@ -2,8 +2,8 @@
 
 /** \file
  * Scenes for scripts. The rules of facades.h hold here too. Blocks are pointers as text
- * (api/ref_text.h). Everything that takes a Context is Busy inside a script slot other than a
- * command's `exec`.
+ * (api/ref_text.h). Everything that takes a Context is Busy inside a script slot other
+ * than a command's `exec`.
  */
 
 #include "coredcc/bind/facades.h"
@@ -25,7 +25,8 @@ void vec3Put(double3 &v, int32_t i, double x);
 
 /* ---- scenes ---- */
 
-/** Makes a scene, undoably. Its value is a pointer to it. It doesn't become the Context's. */
+/** Makes a scene, undoably. Its value is a pointer to it. It doesn't become the
+ * Context's. */
 ValueResult newScene(Context &ctx, const string &name);
 /** The scene that commands and the functions below work on; "" for none. Not undoable. */
 Status setScene(Context &ctx, const string &scene);
@@ -42,7 +43,8 @@ struct SceneTable {
 
   /* 16 for each, column by column: ObjectEval::dataWorld. */
   Doubles matrixList;
-  /* Minimum and maximum, 6 for each, in the world. An empty box has a minimum above its maximum. */
+  /* Minimum and maximum, 6 for each, in the world. An empty box has a minimum above its
+   * maximum. */
   Doubles boundsList;
   /* EvalStatus, ObjectFlags, the parent's place or -1, and whether it is a member. */
   Ints statusList, flagsList, parentList, memberList;
@@ -102,11 +104,10 @@ struct SceneTableResult {
   static const litestl::binding::types::Struct<SceneTableResult> *defineBindings();
 };
 
-/** The results at these places (OutOfRange if one isn't there), or `all` of them. Before the first
- * evaluation there are none. */
-SceneTableResult sceneResults(Context &ctx,
-                              const litestl::util::Vector<int32_t> &places,
-                              bool all);
+/** The results at these places (OutOfRange if one isn't there), or `all` of them. Before
+ * the first evaluation there are none. */
+SceneTableResult
+sceneResults(Context &ctx, const litestl::util::Vector<int32_t> &places, bool all);
 
 /** Pointers to blocks, as text. */
 struct RefList {
@@ -131,7 +132,8 @@ struct RefListResult {
 };
 
 /** The objects at these places, or at `all`. "" for one whose record is gone. */
-RefListResult sceneRefs(Context &ctx, const litestl::util::Vector<int32_t> &places, bool all);
+RefListResult
+sceneRefs(Context &ctx, const litestl::util::Vector<int32_t> &places, bool all);
 /** Scene::children; `object` "" for the roots. */
 RefListResult sceneChildren(Context &ctx, const string &object);
 
@@ -191,10 +193,11 @@ struct PickResult {
 };
 
 /**
- * Evaluates the Context's scene, and gives the objects near a pixel (pickScene), without hidden
- * and unselectable ones. A script's exception comes with the hits of the other objects. When the
- * scene can't be evaluated, there are none.
+ * Evaluates the Context's scene, and gives the objects near a pixel (pickScene), without
+ * hidden and unselectable ones. A script's exception comes with the hits of the other
+ * objects. When the scene can't be evaluated, there are none.
  */
-PickResult pick(Context &ctx, const View &view, double x, double y, const PickOptions &options);
+PickResult
+pick(Context &ctx, const View &view, double x, double y, const PickOptions &options);
 
 } // namespace coredcc::script

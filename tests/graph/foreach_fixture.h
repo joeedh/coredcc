@@ -75,7 +75,8 @@ inline Status sumKernel(NodeExecContext &ctx)
 {
   const double a = ctx.input("a")->asFloat();
   if (a <= -100) {
-    return Status::error(StatusCode::OutOfRange, ("a is " + std::to_string(int(a))).c_str());
+    return Status::error(StatusCode::OutOfRange,
+                         ("a is " + std::to_string(int(a))).c_str());
   }
   return ctx.setOutput("value", GraphValue::ofFloat(a + ctx.input("b")->asFloat()));
 }
@@ -97,7 +98,8 @@ inline Status readKernel(NodeExecContext &ctx)
 /* The same if `a` isn't negative, else 0 without reading it. */
 inline Status readIfKernel(NodeExecContext &ctx)
 {
-  return ctx.input(0).asFloat() < 0 ? ctx.setOutput(0, GraphValue::ofFloat(0)) : readKernel(ctx);
+  return ctx.input(0).asFloat() < 0 ? ctx.setOutput(0, GraphValue::ofFloat(0))
+                                    : readKernel(ctx);
 }
 
 /* What the interface of its thing says, or -1. */
@@ -110,7 +112,8 @@ inline Status queryKernel(NodeExecContext &ctx)
 /* The value of its thing, of which it uses some aspects. */
 inline Status partKernel(NodeExecContext &ctx)
 {
-  const BlockUse use = ctx.paramBlock("thing", ChangeAspects(ctx.param("aspects")->asInt()));
+  const BlockUse use =
+      ctx.paramBlock("thing", ChangeAspects(ctx.param("aspects")->asInt()));
   const Thing *t = static_cast<const Thing *>(use.data);
   return ctx.setOutput(0, GraphValue::ofFloat(t ? t->value : -2));
 }
@@ -133,7 +136,8 @@ inline Status rangeKernel(NodeExecContext &ctx)
 inline Status totalKernel(NodeExecContext &ctx)
 {
   const Elements *t = ctx.input(0).payload<Elements>();
-  const Elements::Column *c = t ? t->column(ctx.param("column")->asString().c_str()) : nullptr;
+  const Elements::Column *c =
+      t ? t->column(ctx.param("column")->asString().c_str()) : nullptr;
   double sum = 0;
   for (int i = 0; c && i < int(c->values.size()); i++) {
     const GraphValue &v = c->values[i];
@@ -145,7 +149,9 @@ inline Status totalKernel(NodeExecContext &ctx)
 inline void addForeachTypes(Runtime &rt)
 {
   NodeTypeDef sum("t.sum");
-  sum.input(PropertyDef::floatProp("a")).input(PropertyDef::floatProp("b")).output("value", "float");
+  sum.input(PropertyDef::floatProp("a"))
+      .input(PropertyDef::floatProp("b"))
+      .output("value", "float");
   addType<sumKernel>(rt, sum, "t.sum");
   NodeTypeDef read("t.read");
   read.param(PropertyDef::pointerProp("thing", kThingStruct)).output("value", "float");
@@ -200,7 +206,8 @@ struct World {
   {
     scaled.value = value;
     return registerImpl<Scaled, ThingScaled>(rt, "test.Scaled").ok() &&
-           lib.setOverride(h, InterfaceId::of(Scaled::ifaceName),
+           lib.setOverride(h,
+                           InterfaceId::of(Scaled::ifaceName),
                            query<Scaled>(rt, TypeId::of("test.Scaled"), &scaled))
                .ok();
   }
@@ -253,9 +260,9 @@ inline NodePath at(std::initializer_list<NodeId> groups, NodeId node)
 }
 
 /*
- * A graph with the input `table`, a foreach node over it, and the output `out`. The foreach's
- * def has the inputs a, b and c, and the outputs sum = a + b (the node `add`) and c2 = c * c
- * (the node `square`).
+ * A graph with the input `table`, a foreach node over it, and the output `out`. The
+ * foreach's def has the inputs a, b and c, and the outputs sum = a + b (the node `add`)
+ * and c2 = c * c (the node `square`).
  */
 struct Loop {
   World &w;
@@ -333,8 +340,8 @@ struct Loop {
     lastRuns = now;
     return n;
   }
-  /* Evaluates; compares the result, and how many kernels ran. Columns without values aren't
-   * compared. */
+  /* Evaluates; compares the result, and how many kernels ran. Columns without values
+   * aren't compared. */
   bool is(std::initializer_list<int64_t> keys, const Columns &columns, int kernels)
   {
     ran();
@@ -348,7 +355,8 @@ struct Loop {
     for (int i = 0; ok && i < int(columns.size()); i++) {
       ok = strcmp(t->columns[i].name.c_str(), columns[size_t(i)].name) == 0;
       for (int j = 0; ok && j < int(columns[size_t(i)].values.size()); j++) {
-        ok = t->columns[i].values[j] == GraphValue::ofFloat(columns[size_t(i)].values[size_t(j)]);
+        ok = t->columns[i].values[j] ==
+             GraphValue::ofFloat(columns[size_t(i)].values[size_t(j)]);
       }
     }
     if (!ok) {
@@ -363,14 +371,16 @@ struct Loop {
     }
     return ok;
   }
-  bool fails(StatusCode code, std::initializer_list<int64_t> elements, const char *message)
+  bool
+  fails(StatusCode code, std::initializer_list<int64_t> elements, const char *message)
   {
     const Status s = evaluate();
     const GraphError *e = error();
-    const bool ok = e && s.code() == code && !inst.value(path) &&
-                    e->origin.elements.size() == elements.size() &&
-                    std::equal(elements.begin(), elements.end(), e->origin.elements.begin()) &&
-                    strncmp(e->status.message(), message, strlen(message)) == 0;
+    const bool ok =
+        e && s.code() == code && !inst.value(path) &&
+        e->origin.elements.size() == elements.size() &&
+        std::equal(elements.begin(), elements.end(), e->origin.elements.begin()) &&
+        strncmp(e->status.message(), message, strlen(message)) == 0;
     if (!ok) {
       printf("%s\n", s.toString().c_str());
     }

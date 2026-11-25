@@ -55,9 +55,10 @@ template <class R> R failed(Status s)
 }
 
 /** Busy unless no script slot is running, or the innermost one is one of Command's in
- * `allowed`: a script's discard, run while the host clears the history, must not push into
- * it. */
-Status slotGate(Context &ctx, const char *what, std::initializer_list<const char *> allowed);
+ * `allowed`: a script's discard, run while the host clears the history, must not push
+ * into it. */
+Status
+slotGate(Context &ctx, const char *what, std::initializer_list<const char *> allowed);
 /** Busy while the innermost script slot is a graph kernel's or a transform model's. */
 Status kernelGate(Context &ctx, const char *what);
 
@@ -70,7 +71,8 @@ Result<PropertyDef> scriptProp(const char *what,
                                const PropValue &defaultValue,
                                bool taken);
 
-/** An enum value's key, or flags' keys joined by '|'. NotFound unless items have all of it. */
+/** An enum value's key, or flags' keys joined by '|'. NotFound unless items have all of
+ * it. */
 Result<std::string> keysOf(const PropertyDef &def, const PropValue &value);
 
 /** The words of `slots`. */

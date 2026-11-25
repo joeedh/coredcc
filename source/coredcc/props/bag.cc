@@ -15,10 +15,10 @@ Status PropertyBag::add(PropertyDef def)
 {
   CDCC_TRY(def.validate());
   if (indexOf(def.apiName().c_str()) >= 0) {
-    return Status::error(StatusCode::AlreadyExists,
-                         (std::string("property '") + def.apiName().c_str() +
-                          "' is already in the bag")
-                             .c_str());
+    return Status::error(
+        StatusCode::AlreadyExists,
+        (std::string("property '") + def.apiName().c_str() + "' is already in the bag")
+            .c_str());
   }
   PropValue v = unsetValue(def);
   entries_.append(Entry{std::move(def), std::move(v), false});
@@ -68,8 +68,9 @@ bool PropertyBag::isSet(std::string_view name) const
 
 Status PropertyBag::notFound(std::string_view name) const
 {
-  Status err = Status::error(StatusCode::NotFound,
-                             (std::string("no property '") + std::string(name) + "'").c_str());
+  Status err =
+      Status::error(StatusCode::NotFound,
+                    (std::string("no property '") + std::string(name) + "'").c_str());
   Suggester sg(name);
   for (const Entry &e : entries_) {
     sg.consider(e.def.apiName().c_str());

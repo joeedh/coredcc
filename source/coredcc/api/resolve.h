@@ -55,8 +55,8 @@ struct ResolvedPath {
   litestl::util::Vector<PathTouch, 4> touched;
 };
 
-/** Resolves `path` from the context root, or from its prefix unless `path` starts with `/`.
- * Errors name the failing segment's offset and suggest members. */
+/** Resolves `path` from the context root, or from its prefix unless `path` starts with
+ * `/`. Errors name the failing segment's offset and suggest members. */
 Result<ResolvedPath> resolve(Context &ctx, const Path &path);
 Result<ResolvedPath> resolve(Context &ctx, std::string_view path);
 /** As resolve, for writing: a path that ends in `.active` of a collection with an
@@ -79,8 +79,8 @@ Result<PropValue> getValue(Context &ctx, std::string_view path);
  * enum-key paths give the whole member's def; Length gives a read-only Int. */
 Result<PropertyDef> getMeta(Context &ctx, const ResolvedPath &rp);
 Result<PropertyDef> getMeta(Context &ctx, std::string_view path);
-/** As getMeta, but a component's or an enum key's is the whole member's, and a struct's or a
- * length's is an error. */
+/** As getMeta, but a component's or an enum key's is the whole member's, and a struct's
+ * or a length's is an error. */
 Result<PropertyDef> getMemberMeta(Context &ctx, const ResolvedPath &rp);
 
 /**

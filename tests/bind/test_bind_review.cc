@@ -41,12 +41,16 @@ struct RunsScript {
     const CommandDef *d = ctx.runtime().ext<CommandRegistry>().find("js.add");
     return ctx.executor()->runSub(ctx, *d, d->newInputs()).status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<RunsScript> *defineBindings()
   {
     auto *st = new lbt::Struct<RunsScript>("test::RunsScript", sizeof(RunsScript));
@@ -76,7 +80,8 @@ static void test_core_ids_are_reserved()
       test_assert(impl.ok());
       CommandDef d(kSetPropertyCommand);
       d.impl("test.squat#impl", [](Runtime &r) {
-        return own<Command>(r, "test.squat#impl", litestl::alloc::New<AddCount>("AddCount"));
+        return own<Command>(
+            r, "test.squat#impl", litestl::alloc::New<AddCount>("AddCount"));
       });
       test_assert(rt.ext<CommandRegistry>().add(std::move(d)).ok());
       test_assert(setValueUndo(s.ctx, "tool.strength", PropValue::ofFloat(0.75)).code() ==
@@ -86,7 +91,8 @@ static void test_core_ids_are_reserved()
   test_assert(host.allReleasedOnce());
 }
 
-/* B2: a failed undo drops the command, so redo can't re-apply it over the un-undone state. */
+/* B2: a failed undo drops the command, so redo can't re-apply it over the un-undone
+ * state. */
 static void test_failed_undo_drops_the_command()
 {
   Host host;
@@ -205,18 +211,24 @@ static void test_registration_checks()
     /* B7: the def is copied, so registering it again is a clear AlreadyExists. */
     CommandDef *def = sc::newCommandDef("js.twice");
     test_assert(sc::defInput(*def, "amount", sc::makeInt(5)).ok());
-    test_assert(sc::registerForeignCommand(s.ctx, *def, host.add(factoryObj(host, &k)), kCore)
-                    .ok());
-    test_assert(sc::registerForeignCommand(s.ctx, *def, host.add(factoryObj(host, &k)), kCore)
-                    .code() == StatusCode::AlreadyExists);
+    test_assert(
+        sc::registerForeignCommand(s.ctx, *def, host.add(factoryObj(host, &k)), kCore)
+            .ok());
+    test_assert(
+        sc::registerForeignCommand(s.ctx, *def, host.add(factoryObj(host, &k)), kCore)
+            .code() == StatusCode::AlreadyExists);
     test_assert(sc::defInput(*def, "extra", sc::makeInt(1)).ok());
     test_assert(s.w.rt.ext<CommandRegistry>().find("js.twice")->inputCount() == 1);
     /* B9: names are checked when they are added. */
-    test_assert(sc::defInput(*def, "", sc::makeInt(1)).code() == StatusCode::InvalidArgument);
-    test_assert(sc::defInput(*def, "a b", sc::makeInt(1)).code() == StatusCode::InvalidArgument);
-    test_assert(sc::defInput(*def, "amount", sc::makeInt(1)).code() == StatusCode::AlreadyExists);
+    test_assert(sc::defInput(*def, "", sc::makeInt(1)).code() ==
+                StatusCode::InvalidArgument);
+    test_assert(sc::defInput(*def, "a b", sc::makeInt(1)).code() ==
+                StatusCode::InvalidArgument);
+    test_assert(sc::defInput(*def, "amount", sc::makeInt(1)).code() ==
+                StatusCode::AlreadyExists);
     test_assert(sc::defOutput(*def, "r", sc::makeInt(1)).ok());
-    test_assert(sc::defOutput(*def, "r", sc::makeInt(1)).code() == StatusCode::AlreadyExists);
+    test_assert(sc::defOutput(*def, "r", sc::makeInt(1)).code() ==
+                StatusCode::AlreadyExists);
     litestl::alloc::Delete(def);
 
     /* B8: ids must be dotted identifiers, so invoke can call them. */
@@ -256,7 +268,11 @@ static void test_slot_failures_and_history_paths()
   {
     Setup s;
     test_assert(registerScript(s, host, &k, "js.add", kCore).ok());
-    test_assert(registerScript(s, host, &k, "js.drag", "canRun exec undo redo memSize discard",
+    test_assert(registerScript(s,
+                               host,
+                               &k,
+                               "js.drag",
+                               "canRun exec undo redo memSize discard",
                                uint32_t(CommandFlags::Interactive))
                     .ok());
     ForeignBindings &fb = bindingsOf(s);
@@ -272,7 +288,8 @@ static void test_slot_failures_and_history_paths()
     test_assert(r.status.code() == StatusCode::FailedPrecondition);
     test_assert(count(s.ctx) == c0 && s.history.size() == 0 && fb.liveInstances() == 0);
 
-    /* memSize failing: applied and recorded, and reported (left to the TS adapter, B3). */
+    /* memSize failing: applied and recorded, and reported (left to the TS adapter, B3).
+     */
     k.failMemSize = true;
     r = sc::invoke(s.ctx, "js.add(amount=1)");
     k.failMemSize = false;
@@ -280,7 +297,8 @@ static void test_slot_failures_and_history_paths()
     test_assert(s.history.validate().ok() && !s.w.rt.hasStickyError());
 
     /* Redo truncation and budget eviction each release an instance. */
-    test_assert(sc::undo(s.ctx).ok() && sc::invoke(s.ctx, "js.add(amount=1)").status.ok());
+    test_assert(sc::undo(s.ctx).ok() &&
+                sc::invoke(s.ctx, "js.add(amount=1)").status.ok());
     test_assert(fb.liveInstances() == 1);
     s.history.setMemoryBudget(20); /* 16 bytes each: the newest stays */
     test_assert(sc::invoke(s.ctx, "js.add(amount=1)").status.ok());

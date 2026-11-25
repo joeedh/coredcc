@@ -61,7 +61,8 @@ static void test_registration_refusals()
     /* The corrected retry succeeds; the factory is kept. */
     fakehost::lf::Handle f = 0;
     test_assert(registerScript(s, host, &k, "js.a", kCore, 0, &f).ok());
-    test_assert(rt.ext<CommandRegistry>().find("js.a") != nullptr && host.releasesOf(f) == 0);
+    test_assert(rt.ext<CommandRegistry>().find("js.a") != nullptr &&
+                host.releasesOf(f) == 0);
     /* A second registration of the id is refused, and its factory released. */
     fakehost::lf::Handle f2 = 0;
     test_assert(registerScript(s, host, &k, "js.a", kCore, 0, &f2).code() ==
@@ -111,14 +112,16 @@ static void test_run_undo_redo()
     test_assert(!sc::inForeignCall(s.w.rt));
 
     /* With a redo slot, redo calls it. */
-    test_assert(registerScript(s, host, &k, "js.addr", "canRun exec undo redo memSize discard")
-                    .ok());
+    test_assert(
+        registerScript(s, host, &k, "js.addr", "canRun exec undo redo memSize discard")
+            .ok());
     test_assert(sc::invoke(s.ctx, "js.addr(amount=2)").status.ok());
     test_assert(sc::undo(s.ctx).ok() && sc::redo(s.ctx).ok());
     test_assert(k.redos == 1 && k.execs == 3 && count(s.ctx) == c0 + 5);
     test_assert(s.history.validate().ok());
   }
-  /* History teardown discarded every instance, then the Runtime released the factories. */
+  /* History teardown discarded every instance, then the Runtime released the factories.
+   */
   test_assert(k.discards == k.makes && host.live() == 0 && host.allReleasedOnce());
 }
 
@@ -129,8 +132,9 @@ static void test_failing_slots()
   {
     Setup s;
     test_assert(registerScript(s, host, &k, "js.add", kCore).ok());
-    test_assert(registerScript(s, host, &k, "js.addr", "canRun exec undo redo memSize discard")
-                    .ok());
+    test_assert(
+        registerScript(s, host, &k, "js.addr", "canRun exec undo redo memSize discard")
+            .ok());
     const int64_t c0 = count(s.ctx);
     const int liveBefore = host.live();
 
@@ -142,7 +146,8 @@ static void test_failing_slots()
     test_assert(!s.w.rt.hasStickyError());
 
     /* A throwing redo-by-exec leaves the cursor where it was. */
-    test_assert(sc::invoke(s.ctx, "js.add(amount=4)").status.ok() && sc::undo(s.ctx).ok());
+    test_assert(sc::invoke(s.ctx, "js.add(amount=4)").status.ok() &&
+                sc::undo(s.ctx).ok());
     k.failExecAt = k.execs + 1;
     Status rd = sc::redo(s.ctx);
     test_assert(!rd.ok() && strstr(rd.message(), "boom") != nullptr);
@@ -150,7 +155,8 @@ static void test_failing_slots()
     test_assert(!sc::undo(s.ctx).ok() && count(s.ctx) == c0 && !s.w.rt.hasStickyError());
 
     /* And so does a throwing redo slot. */
-    test_assert(sc::invoke(s.ctx, "js.addr(amount=4)").status.ok() && sc::undo(s.ctx).ok());
+    test_assert(sc::invoke(s.ctx, "js.addr(amount=4)").status.ok() &&
+                sc::undo(s.ctx).ok());
     k.failRedo = true;
     rd = sc::redo(s.ctx);
     k.failRedo = false;
@@ -171,7 +177,8 @@ static void test_factory_failures()
     k.failMake = true;
     sc::BagResult r = sc::invoke(s.ctx, "js.add()");
     k.failMake = false;
-    test_assert(!r.status.ok() && strstr(r.status.message(), "no instances today") != nullptr);
+    test_assert(!r.status.ok() &&
+                strstr(r.status.message(), "no instances today") != nullptr);
     k.makeZero = true;
     r = sc::invoke(s.ctx, "js.add()");
     k.makeZero = false;
@@ -227,7 +234,8 @@ static void test_set_value_in_exec()
     k.useSetValue = true;
     test_assert(registerScript(s, host, &k, "js.set", kCore).ok());
     const int64_t c0 = count(s.ctx);
-    test_assert(sc::invoke(s.ctx, "js.set(amount=7)").status.ok() && count(s.ctx) == c0 + 7);
+    test_assert(sc::invoke(s.ctx, "js.set(amount=7)").status.ok() &&
+                count(s.ctx) == c0 + 7);
     test_assert(s.history.size() == 1 && s.history.at(0).subCount() == 1);
     /* The sub-command is undone before the script's own undo. */
     test_assert(sc::undo(s.ctx).ok() && count(s.ctx) == c0);
@@ -241,7 +249,8 @@ static void test_foreign_implementable()
 {
   test_assert(sc::foreignImplementable(detail::ifaceDesc<Command>()).ok());
   Status bp = sc::foreignImplementable(detail::ifaceDesc<BlockProvider>());
-  test_assert(bp.code() == StatusCode::Unsupported && strstr(bp.message(), "data") != nullptr);
+  test_assert(bp.code() == StatusCode::Unsupported &&
+              strstr(bp.message(), "data") != nullptr);
 }
 
 /* Copyable, but a script can't make one. */
@@ -258,7 +267,9 @@ struct NoDefault {
 /* A constructor of one reference that isn't the copy constructor. */
 struct NoCopy {
   NoCopy() = default;
-  NoCopy(const NoDefault &) {}
+  NoCopy(const NoDefault &)
+  {
+  }
   int x = 0;
   static lbt::Struct<NoCopy> *defineBindings()
   {
@@ -375,15 +386,18 @@ static void test_foreign_returns()
   test_assert(sc::foreignImplementable(detail::ifaceDesc<Returnable>()).ok());
   const Status s = sc::foreignImplementable(detail::ifaceDesc<NotReturnable>());
   test_assert(s.code() == StatusCode::Unsupported);
-  for (const char *needle : {"noDefault returns a struct", "noCopy returns a struct",
-                             "typeId returns a struct", "statuses returns a Vector",
+  for (const char *needle : {"noDefault returns a struct",
+                             "noCopy returns a struct",
+                             "typeId returns a struct",
+                             "statuses returns a Vector",
                              "nested returns a Vector"})
   {
     test_assert(hasMsg(s, needle));
   }
   test_assert(!strstr(s.message(), "fine"));
   const Status r = sc::foreignImplementable(RefReturn::defineBindings());
-  test_assert(hasMsg(r, "byRef returns a reference") && hasMsg(r, "owned returns ownership"));
+  test_assert(hasMsg(r, "byRef returns a reference") &&
+              hasMsg(r, "owned returns ownership"));
 }
 
 int main()

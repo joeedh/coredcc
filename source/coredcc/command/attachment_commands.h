@@ -4,10 +4,10 @@
  * Undoable attachments (registered by registerBlockCommands):
  * - `core.block.attach(block=<Pointer> type=<String>)` attaches data made by the type's
  *   `create`.
- * - `core.block.detach(block=<Pointer> type=<String>)`, also of an attachment that this build
- *   couldn't read.
- * The command owns detached data until it leaves the history, and keeps what the data
- * references from being purged. Both post a change of the block's `attachments`.
+ * - `core.block.detach(block=<Pointer> type=<String>)`, also of an attachment that this
+ * build couldn't read. The command owns detached data until it leaves the history, and
+ * keeps what the data references from being purged. Both post a change of the block's
+ * `attachments`.
  */
 
 #include "coredcc/command/command.h"
@@ -21,10 +21,10 @@ inline constexpr const char *kDetachCommand = "core.block.detach";
 inline constexpr const char *kAttachDataCommand = "core.block.attachData";
 
 /**
- * Attaches `data` to `h` as an undo step, or as a sub-command inside a command's exec. Always
- * takes `data`: on an error the type's provider has destroyed it. The one exception is
- * InvalidArgument, for data that is null, or of a type that isn't registered, which nobody here
- * could destroy.
+ * Attaches `data` to `h` as an undo step, or as a sub-command inside a command's exec.
+ * Always takes `data`: on an error the type's provider has destroyed it. The one
+ * exception is InvalidArgument, for data that is null, or of a type that isn't
+ * registered, which nobody here could destroy.
  */
 Status attachUndo(Context &ctx, BlockHandle h, TypeId type, void *data);
 

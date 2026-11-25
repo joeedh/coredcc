@@ -25,14 +25,14 @@ struct Doc {
 
 enum class DocFault {
   None,
-  Error,          /* returns an error, having freed what it made */
-  Sticky,         /* a sticky error, as a throwing script leaves */
-  SkipRef,        /* serialize: a reference foreachRef reports isn't written */
-  ExtraRef,       /* serialize: one more than foreachRef reports */
-  WrongStrength,  /* serialize: a strong ref written as weak */
-  LeaveBytes,     /* deserialize: stops early */
-  NoData,         /* deserialize: forgets setData */
-  LateSticky,     /* duplicate: a sticky error after setData */
+  Error,         /* returns an error, having freed what it made */
+  Sticky,        /* a sticky error, as a throwing script leaves */
+  SkipRef,       /* serialize: a reference foreachRef reports isn't written */
+  ExtraRef,      /* serialize: one more than foreachRef reports */
+  WrongStrength, /* serialize: a strong ref written as weak */
+  LeaveBytes,    /* deserialize: stops early */
+  NoData,        /* deserialize: forgets setData */
+  LateSticky,    /* duplicate: a sticky error after setData */
 };
 
 struct DocHost {
@@ -56,10 +56,12 @@ inline PropertyBag makeDocBag(const DocHost &host)
 {
   PropertyBag bag;
   test_assert(bag.add(PropertyDef::floatProp("size").range(0, 10)).ok());
-  test_assert(bag.add(PropertyDef::pointerProp("target", StructId::of("acme.Mesh"))).ok());
+  test_assert(
+      bag.add(PropertyDef::pointerProp("target", StructId::of("acme.Mesh"))).ok());
   if (host.bagHasExtra) {
     test_assert(bag.add(PropertyDef::stringProp("extra")).ok());
-    test_assert(bag.add(PropertyDef::pointerProp("other", StructId::of("acme.Mesh"))).ok());
+    test_assert(
+        bag.add(PropertyDef::pointerProp("other", StructId::of("acme.Mesh"))).ok());
   }
   return bag;
 }
@@ -73,7 +75,8 @@ inline PropValue pointerTo(BlockId id, const char *key = "verts")
   return PropValue::ofPointer(r);
 }
 
-inline BlockEntry entryOf(const char *name, PropValue v, RefKind kind = RefKind::OptStrong)
+inline BlockEntry
+entryOf(const char *name, PropValue v, RefKind kind = RefKind::OptStrong)
 {
   BlockEntry e;
   e.name = name;
@@ -152,8 +155,10 @@ template <bool Extras> struct DocProviderT {
       extra.target = b.id();
       out.ref(extra);
     }
-    out.entries(std::span<const BlockEntry>(d->entries.data(), size_t(d->entries.size())));
-    out.bag(d->bag, d->bagRefs,
+    out.entries(
+        std::span<const BlockEntry>(d->entries.data(), size_t(d->entries.size())));
+    out.bag(d->bag,
+            d->bagRefs,
             std::span<const BlockEntry>(d->unread.data(), size_t(d->unread.size())));
     return Status();
   }
@@ -213,7 +218,8 @@ template <bool Extras> struct DocProviderT {
     *copy = *d;
     out.setData(copy);
     if (host->fault == DocFault::LateSticky) {
-      host->rt->setStickyError(Status::error(StatusCode::Internal, "duplicate threw late"));
+      host->rt->setStickyError(
+          Status::error(StatusCode::Internal, "duplicate threw late"));
     }
     return Status();
   }

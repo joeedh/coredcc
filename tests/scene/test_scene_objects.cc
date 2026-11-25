@@ -1,5 +1,5 @@
-/* The input `objects` of the commands that take several objects: it must do what the same objects
- * do when they are selected. */
+/* The input `objects` of the commands that take several objects: it must do what the same
+ * objects do when they are selected. */
 #include "command_doc.h"
 
 #include "coredcc/api/ref_text.h"
@@ -43,7 +43,8 @@ struct Case {
   std::vector<std::pair<const char *, PropValue>> inputs;
 };
 
-/* Objects a, b (under a), c (under b), e, f, with a selection that is none of those named. */
+/* Objects a, b (under a), c (under b), e, f, with a selection that is none of those
+ * named. */
 struct Five : CommandDoc {
   BlockHandle a, b, c, e, f;
   Five()
@@ -91,10 +92,10 @@ void testSameAsSelected()
     for (int which = 0; which < 4; which++) {
       Five s, n;
       const auto pick = [which](Five &d) {
-        return which == 0 ? std::vector<BlockHandle>{d.c, d.a} :
-               which == 1 ? std::vector<BlockHandle>{d.b} :
-               which == 2 ? std::vector<BlockHandle>{d.e, d.b, d.c} :
-                            std::vector<BlockHandle>{d.a, d.b, d.c, d.e, d.f};
+        return which == 0   ? std::vector<BlockHandle>{d.c, d.a}
+               : which == 1 ? std::vector<BlockHandle>{d.b}
+               : which == 2 ? std::vector<BlockHandle>{d.e, d.b, d.c}
+                            : std::vector<BlockHandle>{d.a, d.b, d.c, d.e, d.f};
       };
       Vector<BlockId> chosen;
       for (BlockHandle h : pick(s)) {
@@ -110,7 +111,8 @@ void testSameAsSelected()
       Result<PropertyBag> x = s.runCase(k, nullptr), y = n.runCase(k, &named);
       test_assert(x.ok() && y.ok());
       if (!x.ok() || !y.ok()) {
-        fprintf(stderr, "%s: %s %s\n", k.command, x.status().message(), y.status().message());
+        fprintf(
+            stderr, "%s: %s %s\n", k.command, x.status().message(), y.status().message());
         continue;
       }
       for (const char *out : {"count", "approximate"}) {
@@ -130,7 +132,8 @@ void testSameAsSelected()
         test_assert(s.obj(hs).transformTypeId() == n.obj(hn).transformTypeId());
         const BlockHandle ps = s.lib->resolveRef(s.obj(hs).parent.cell());
         const BlockHandle pn = n.lib->resolveRef(n.obj(hn).parent.cell());
-        test_assert(!ps == !pn && (!ps || s.lib->get(ps)->name() == n.lib->get(pn)->name()));
+        test_assert(!ps == !pn &&
+                    (!ps || s.lib->get(ps)->name() == n.lib->get(pn)->name()));
       }
       test_assert(names(s, s.sc().objects(*s.lib)) == names(n, n.sc().objects(*n.lib)));
       test_assert(after != before);
@@ -170,8 +173,12 @@ void testRefusals()
          StatusCode::NotFound,
          "coredcc,0123456789abcdef0123456789abcdef"},
         {good + ";" + goneId, StatusCode::NotFound, goneId.c_str()},
-        {good + ";" + ids(d, {outside}), StatusCode::FailedPrecondition, "'outside': isn't in"},
-        {ids(d, {shape}) + ";" + good, StatusCode::FailedPrecondition, "'shape': isn't in"},
+        {good + ";" + ids(d, {outside}),
+         StatusCode::FailedPrecondition,
+         "'outside': isn't in"},
+        {ids(d, {shape}) + ";" + good,
+         StatusCode::FailedPrecondition,
+         "'shape': isn't in"},
     };
     for (const Bad &b : bad) {
       const std::string before = d.describe();
@@ -185,7 +192,8 @@ void testRefusals()
     }
     if (strcmp(k.command, kSelectCommand) != 0) {
       const std::string none;
-      test_assert(isError(d.runCase(k, &none).status(), StatusCode::FailedPrecondition, "objects"));
+      test_assert(isError(
+          d.runCase(k, &none).status(), StatusCode::FailedPrecondition, "objects"));
     }
   }
 }
@@ -208,15 +216,15 @@ void testSelect()
 
   d.obj(d.b).flags = ObjectFlags::Unselectable;
   test_assert(select(kSet, ids(d, {d.a, d.b})) == "a");
-  const PropertyBag selectOut = d.ok(
-      kSelectCommand,
-      {{"mode", PropValue::ofEnum(kSet)}, {"objects", text(ids(d, {d.b, d.a, d.b, d.c}))}});
+  const PropertyBag selectOut = d.ok(kSelectCommand,
+                                     {{"mode", PropValue::ofEnum(kSet)},
+                                      {"objects", text(ids(d, {d.b, d.a, d.b, d.c}))}});
   test_assert(selectOut.get("skipped")->asInt() == 1);
   test_assert(select(kRemove, ids(d, {d.a, d.b, d.c})).empty());
-  test_assert(isError(d.fails(kSelectCommand,
-                              {{"object", d.ptr(d.a)}, {"objects", text(ids(d, {d.a}))}}),
-                      StatusCode::InvalidArgument,
-                      "both"));
+  test_assert(isError(
+      d.fails(kSelectCommand, {{"object", d.ptr(d.a)}, {"objects", text(ids(d, {d.a}))}}),
+      StatusCode::InvalidArgument,
+      "both"));
 }
 
 /* What the gesture command gets at its start, and parents named in the same list. */
@@ -238,16 +246,17 @@ void testOthers()
   d.evaluate();
   test_assert(d.isAt(d.a, 1) && d.isAt(d.e, 4));
 
-  test_assert(isError(d.fails(kSetParentCommand,
-                              {{"parent", d.ptr(d.c)}, {"objects", text(ids(d, {d.e, d.a}))}}),
-                      StatusCode::FailedPrecondition,
-                      "'c': is below one of the objects"));
+  test_assert(
+      isError(d.fails(kSetParentCommand,
+                      {{"parent", d.ptr(d.c)}, {"objects", text(ids(d, {d.e, d.a}))}}),
+              StatusCode::FailedPrecondition,
+              "'c': is below one of the objects"));
   d.cycle(kSetParentCommand, {{"parent", d.ptr(d.c)}, {"objects", text(ids(d, {d.e}))}});
   test_assert(d.lib->resolveRef(d.obj(d.e).parent.cell()) == d.c && selected(d) == "f");
 
   /* As an invocation's text. */
-  const std::string call = "core.object.applyDelta(vector=(0, 0, 7) objects=\"" + ids(d, {d.f}) +
-                           "\")";
+  const std::string call =
+      "core.object.applyDelta(vector=(0, 0, 7) objects=\"" + ids(d, {d.f}) + "\")";
   must(invoke(*d.ctx, call).status());
   d.evaluate();
   test_assert(d.isAt(d.f, 5, 0, 7) && d.isAt(d.a, 1));

@@ -43,9 +43,9 @@ template <EditFn Fn> struct GraphCommand {
   Status canRun(Context &ctx) const
   {
     const Library *lib = ctx.library();
-    return lib && graphDefOf(*lib, lib->find(graphInput(ctx))) ?
-               Status() :
-               Status::error(StatusCode::FailedPrecondition, "graph: no such graph");
+    return lib && graphDefOf(*lib, lib->find(graphInput(ctx)))
+               ? Status()
+               : Status::error(StatusCode::FailedPrecondition, "graph: no such graph");
   }
   Status exec(Context &ctx)
   {
@@ -77,7 +77,8 @@ template <EditFn Fn> struct GraphCommand {
   }
   static lbt::Struct<GraphCommand> *defineBindings()
   {
-    auto *st = new lbt::Struct<GraphCommand>("coredcc::GraphCommand", sizeof(GraphCommand));
+    auto *st =
+        new lbt::Struct<GraphCommand>("coredcc::GraphCommand", sizeof(GraphCommand));
     BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
@@ -94,8 +95,8 @@ struct CreateGraph {
 
   Status canRun(Context &ctx) const
   {
-    return ctx.library() ? Status() :
-                           Status::error(StatusCode::FailedPrecondition,
+    return ctx.library() ? Status()
+                         : Status::error(StatusCode::FailedPrecondition,
                                          "the Context has no Library");
   }
   Status exec(Context &ctx)
@@ -138,7 +139,8 @@ struct CreateGraph {
   }
   static lbt::Struct<CreateGraph> *defineBindings()
   {
-    auto *st = new lbt::Struct<CreateGraph>("coredcc::CreateGraphCommand", sizeof(CreateGraph));
+    auto *st =
+        new lbt::Struct<CreateGraph>("coredcc::CreateGraphCommand", sizeof(CreateGraph));
     BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
@@ -171,9 +173,10 @@ Status removeNode(Context &ctx, GraphEdit &edit)
 
 Status link(Context &ctx, GraphEdit &edit)
 {
-  const std::string from = stringInput(ctx, "fromSocket"), to = stringInput(ctx, "toSocket");
-  Result<LinkId> id = edit.link({NodeId{intInput(ctx, "from")}, from},
-                                {NodeId{intInput(ctx, "to")}, to});
+  const std::string from = stringInput(ctx, "fromSocket"),
+                    to = stringInput(ctx, "toSocket");
+  Result<LinkId> id =
+      edit.link({NodeId{intInput(ctx, "from")}, from}, {NodeId{intInput(ctx, "to")}, to});
   return id.ok() ? output(ctx, "link", id->value) : id.status();
 }
 
@@ -186,7 +189,9 @@ Status addInterface(Context &ctx, GraphEdit &edit)
 {
   const SocketSide side =
       ctx.inputs()->get("side")->asEnum() == 0 ? SocketSide::Input : SocketSide::Output;
-  Result<int64_t> id = edit.addInterface(side, stringInput(ctx, "name"), stringInput(ctx, "type"),
+  Result<int64_t> id = edit.addInterface(side,
+                                         stringInput(ctx, "name"),
+                                         stringInput(ctx, "type"),
                                          int(intInput(ctx, "index")));
   return id.ok() ? output(ctx, "socket", *id) : id.status();
 }
@@ -209,7 +214,8 @@ Status setInterfaceType(Context &ctx, GraphEdit &edit)
 CommandDef graphCommand(const char *id, const char *uiName)
 {
   CommandDef def(id);
-  def.uiName(uiName).input(PropertyDef::pointerProp("graph", StructId::of(kGraphDefType)));
+  def.uiName(uiName).input(
+      PropertyDef::pointerProp("graph", StructId::of(kGraphDefType)));
   return def;
 }
 
@@ -266,15 +272,18 @@ Status registerGraphCommands(Runtime &rt)
       .output(PropertyDef::intProp("socket"));
   CDCC_TRY(addOnce<GraphCommand<addInterface>>(rt, ifaceAdd));
 
-  CommandDef ifaceRemove = graphCommand(kGraphInterfaceRemoveCommand, "Remove Interface Socket");
+  CommandDef ifaceRemove =
+      graphCommand(kGraphInterfaceRemoveCommand, "Remove Interface Socket");
   ifaceRemove.input(PropertyDef::intProp("socket"));
   CDCC_TRY(addOnce<GraphCommand<removeInterface>>(rt, ifaceRemove));
 
-  CommandDef ifaceMove = graphCommand(kGraphInterfaceMoveCommand, "Move Interface Socket");
+  CommandDef ifaceMove =
+      graphCommand(kGraphInterfaceMoveCommand, "Move Interface Socket");
   ifaceMove.input(PropertyDef::intProp("socket")).input(PropertyDef::intProp("index"));
   CDCC_TRY(addOnce<GraphCommand<moveInterface>>(rt, ifaceMove));
 
-  CommandDef ifaceType = graphCommand(kGraphInterfaceSetTypeCommand, "Set Interface Socket Type");
+  CommandDef ifaceType =
+      graphCommand(kGraphInterfaceSetTypeCommand, "Set Interface Socket Type");
   ifaceType.input(PropertyDef::intProp("socket")).input(PropertyDef::stringProp("type"));
   return addOnce<GraphCommand<setInterfaceType>>(rt, ifaceType);
 }

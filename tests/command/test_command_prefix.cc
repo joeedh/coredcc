@@ -1,4 +1,5 @@
-/* A Context's path prefix goes with a run: its undo, its redo and its sub-commands see it. */
+/* A Context's path prefix goes with a run: its undo, its redo and its sub-commands see
+ * it. */
 #include "command_fixture.h"
 
 #include "coredcc/api/change_bus.h"
@@ -32,7 +33,9 @@ struct Grow {
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<Grow> *defineBindings()
   {
     auto *st = new lbt::Struct<Grow>("test::Grow", sizeof(Grow));
@@ -71,12 +74,16 @@ struct GrowTwice {
     PrefixScope root(ctx, nullptr); /* a slot can set its own, for as long as it runs */
     return setValueUndo(ctx, "tool.strength", PropValue::ofFloat(0.125));
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<GrowTwice> *defineBindings()
   {
     auto *st = new lbt::Struct<GrowTwice>("test::GrowTwice", sizeof(GrowTwice));
@@ -103,7 +110,9 @@ struct Named {
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<Named> *defineBindings()
   {
     auto *st = new lbt::Struct<Named>("test::Named", sizeof(Named));
@@ -124,12 +133,16 @@ struct Folder {
     ctx.setPrefix(*parsePath("tool"));
     return Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   uint64_t foldKey() const
   {
     return 7;
@@ -156,8 +169,8 @@ struct PrefixWorld {
 
   PrefixWorld()
   {
-    test_assert(addNativeCommand<Grow>(s.w.rt, CommandDef("test.grow")
-                                                   .input(PropertyDef::intProp("times")))
+    test_assert(addNativeCommand<Grow>(
+                    s.w.rt, CommandDef("test.grow").input(PropertyDef::intProp("times")))
                     .ok());
     test_assert(addNativeCommand<GrowLive>(
                     s.w.rt, CommandDef("test.growLive").flags(CommandFlags::Interactive))
@@ -168,7 +181,8 @@ struct PrefixWorld {
   }
   double radius(int i)
   {
-    return getValue(s.ctx, i ? "objects[1].data.radius" : "objects[0].data.radius")->asFloat();
+    return getValue(s.ctx, i ? "objects[1].data.radius" : "objects[0].data.radius")
+        ->asFloat();
   }
   double radiusOf(const StableRef &mesh)
   {
@@ -284,11 +298,14 @@ static void test_from_root()
   PrefixWorld w;
   Context &ctx = w.s.ctx;
   PrefixScope scope(ctx, &w.mesh1);
-  test_assert(getValue(ctx, "/objects[1].data.radius")->asFloat() == getValue(ctx, "radius")->asFloat());
-  test_assert(!getValue(ctx, "objects[1].data.radius").ok() && !getValue(ctx, "/radius").ok());
+  test_assert(getValue(ctx, "/objects[1].data.radius")->asFloat() ==
+              getValue(ctx, "radius")->asFloat());
+  test_assert(!getValue(ctx, "objects[1].data.radius").ok() &&
+              !getValue(ctx, "/radius").ok());
   test_assert(resolve(ctx, "/")->ptr.data == ctx.root().data);
   test_assert(setValueUndo(ctx, "/tool.strength", PropValue::ofFloat(0.25)).ok());
-  test_assert(w.s.w.tool.strength == 0.25 && w.s.ex.undo(ctx).ok() && w.s.w.tool.strength == 0.5);
+  test_assert(w.s.w.tool.strength == 0.25 && w.s.ex.undo(ctx).ok() &&
+              w.s.w.tool.strength == 0.5);
   test_assert(w.s.ex.redo(ctx).ok() && w.s.w.tool.strength == 0.25);
   /* A prefix can be one, too. */
   const Path path = *parsePath("/objects[0].data");
@@ -306,17 +323,24 @@ static void test_watcher_prefix()
   ScopedConnection a, b;
   {
     PrefixScope scope(ctx, &w.mesh1);
-    a = bus.watch(ctx, "radius", [&](const PropValue &, const Status &s) { under += s.ok(); }).value();
+    a = bus.watch(ctx,
+                  "radius",
+                  [&](const PropValue &, const Status &s) { under += s.ok(); })
+            .value();
   }
-  b = bus.watch(ctx, "tool.count", [&](const PropValue &, const Status &s) { root += s.ok(); }).value();
-  test_assert(setValue(ctx, "objects[1].data.radius", PropValue::ofFloat(7)).ok() && bus.flush() == 1);
+  b = bus.watch(ctx,
+                "tool.count",
+                [&](const PropValue &, const Status &s) { root += s.ok(); })
+          .value();
+  test_assert(setValue(ctx, "objects[1].data.radius", PropValue::ofFloat(7)).ok() &&
+              bus.flush() == 1);
   test_assert(setValue(ctx, "tool.count", PropValue::ofInt(77)).ok());
   PrefixScope scope(ctx, &w.mesh0);
   test_assert(bus.flush() == 1 && under == 1 && root == 1 && *ctx.prefix() == w.mesh0);
 }
 
-/* What a prefix names may change outside the history: undo, redo and rerun are where the run
- * was. */
+/* What a prefix names may change outside the history: undo, redo and rerun are where the
+ * run was. */
 static void test_repointed()
 {
   PrefixWorld w;
@@ -332,7 +356,8 @@ static void test_repointed()
   test_assert(w.at(active, "test.growTwice()").ok() && w.radius(1) == r1 + 1);
   w.s.w.scene.active = 0;
   in = w.s.history.head()->inputs();
-  test_assert(w.s.ex.rerunHead(ctx, in).ok() && w.radius(1) == r1 + 1 && w.radius(0) == r0 + 1);
+  test_assert(w.s.ex.rerunHead(ctx, in).ok() && w.radius(1) == r1 + 1 &&
+              w.radius(0) == r0 + 1);
   test_assert(w.s.ex.undo(ctx).ok() && w.radius(1) == r1 && w.radius(0) == r0 + 1);
   w.s.w.scene.active = -1; /* nor need it name anything */
   test_assert(w.s.ex.redo(ctx).ok() && w.radius(1) == r1 + 1);
@@ -349,20 +374,23 @@ static void test_repointed()
   /* A prefix inside its owner, by its key. */
   test_assert(w.at(*parsePath("tool.activeBrush"), "test.name()").ok());
   const StableRef *at = w.s.history.head()->prefix();
-  test_assert(at && at->key.size() > 0 && *at == *canonicalize(ctx, *parsePath("tool.brushes[0]")));
+  test_assert(at && at->key.size() > 0 &&
+              *at == *canonicalize(ctx, *parsePath("tool.brushes[0]")));
 
   /* One that names nothing. */
   w.s.w.scene.active = -1;
   const int size = w.s.history.size();
   const Status none = w.at(active, "test.name()");
-  test_assert(none.code() == StatusCode::NotFound && strstr(none.message(), "the path prefix: "));
+  test_assert(none.code() == StatusCode::NotFound &&
+              strstr(none.message(), "the path prefix: "));
   test_assert(w.s.history.size() == size && !ctx.hasPrefix());
   /* setValueUndo's own command too, once. */
   const CommandDef &add = *w.s.add;
   Result<Owned<Command>> cmd = add.instantiate(w.s.w.rt);
   PrefixScope scope(ctx, &active);
   g_log.clear();
-  test_assert(!w.s.ex.runInstance(ctx, add, std::move(cmd).value(), add.newInputs()).ok());
+  test_assert(
+      !w.s.ex.runInstance(ctx, add, std::move(cmd).value(), add.newInputs()).ok());
   test_assert(g_log == "discard;");
 }
 
@@ -374,7 +402,8 @@ static void test_fold_repointed()
   test_assert(w.at(active, "test.folder()").ok());
   w.s.w.scene.active = 1; /* the same path, another object */
   test_assert(w.at(active, "test.folder()").ok() && w.s.history.size() == 2);
-  test_assert(w.at(w.mesh1, "test.folder()").ok() && w.s.history.size() == 2); /* another, the same */
+  test_assert(w.at(w.mesh1, "test.folder()").ok() &&
+              w.s.history.size() == 2); /* another, the same */
 }
 
 /* The live phase of an interactive command is under its prefix. */
@@ -388,7 +417,8 @@ static void test_interactive()
     cmd.as<GrowLive>()->after = 9;
     return setValue(c, "radius", PropValue::ofFloat(9));
   };
-  test_assert(w.s.ex.updateInteractive(ctx, update).code() == StatusCode::FailedPrecondition);
+  test_assert(w.s.ex.updateInteractive(ctx, update).code() ==
+              StatusCode::FailedPrecondition);
   const double r1 = w.radius(1);
   for (bool commit : {false, true}) {
     {
@@ -400,11 +430,13 @@ static void test_interactive()
     test_assert(!ctx.hasPrefix() && !ctx.inputs());
     /* Commands, and the open one's end, aren't for it. */
     const Status nested = w.s.ex.updateInteractive(ctx, [&](Context &c, Command &) {
-      test_assert(w.s.ex.updateInteractive(c, update).code() == StatusCode::FailedPrecondition);
+      test_assert(w.s.ex.updateInteractive(c, update).code() ==
+                  StatusCode::FailedPrecondition);
       test_assert(!w.s.ex.commit(c).ok() && !w.s.ex.undo(c).ok());
       return w.s.ex.cancel(c);
     });
-    test_assert(nested.code() == StatusCode::FailedPrecondition && w.s.ex.interactiveOpen());
+    test_assert(nested.code() == StatusCode::FailedPrecondition &&
+                w.s.ex.interactiveOpen());
     test_assert((commit ? w.s.ex.commit(ctx) : w.s.ex.cancel(ctx)).ok());
     test_assert(w.radius(1) == (commit ? 9 : r1));
   }

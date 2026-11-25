@@ -1,5 +1,5 @@
-/* Scene::removeMany, putBack and addMany, and what commands ask about many objects at once, against
- * one object at a time. */
+/* Scene::removeMany, putBack and addMany, and what commands ask about many objects at
+ * once, against one object at a time. */
 #include "command_doc.h"
 
 #include "coredcc/scene/state_cache.h"
@@ -70,7 +70,8 @@ void testRemoveMany()
     std::vector<BlockId> ids, sorted, left;
     for (int i = int(r.below(8)); i >= 0; i--) {
       /* The last one, often: the index keeps what is before it. */
-      ids.push_back(r.below(3) ? before[r.below(uint32_t(before.size()))] : before.back());
+      ids.push_back(r.below(3) ? before[r.below(uint32_t(before.size()))]
+                               : before.back());
     }
     for (const BlockId &id : before) {
       (has(ids, id) ? sorted : left).push_back(id);
@@ -82,7 +83,8 @@ void testRemoveMany()
     /* One that isn't a member, and nothing is removed. */
     std::vector<BlockId> bad = ids;
     bad.push_back(r.coin() ? d.idOf(d.loose("other")) : BlockId());
-    test_assert(isError(d.sc().removeMany(*d.lib, bad).status(), StatusCode::NotFound, ""));
+    test_assert(
+        isError(d.sc().removeMany(*d.lib, bad).status(), StatusCode::NotFound, ""));
     test_assert(cellIds(d) == before);
 
     Result<Vector<Scene::Place>> places = d.sc().removeMany(*d.lib, ids);
@@ -123,7 +125,8 @@ void testRemoveMany()
     const std::vector<BlockId> after = cellIds(d);
     test_assert(after.size() == left.size() + sorted.size() - (early.isNull() ? 0 : 1));
     test_assert(indexIsRight(d, all));
-    /* Those that stayed are in their order, and each is behind the one before it, if that is there. */
+    /* Those that stayed are in their order, and each is behind the one before it, if that
+     * is there. */
     std::vector<BlockId> stayed;
     for (const BlockId &id : after) {
       if (has(left, id)) {
@@ -139,9 +142,9 @@ void testRemoveMany()
       if (!p.previous.isNull() && has(after, p.previous)) {
         behind++;
         test_assert(where(p.id) == where(p.previous) + 1);
-      }
-      else {
-        /* Nothing is put in front of it but what comes behind an earlier one that moved. */
+      } else {
+        /* Nothing is put in front of it but what comes behind an earlier one that moved.
+         */
         atIndex++;
         const int here = where(p.id), last = int(after.size()) - 1;
         test_assert(&p != places->data() || here >= std::min(p.index, last));
@@ -212,15 +215,16 @@ void testPutBack()
   odd.append(Scene::Place{d.idOf(h[2]), d.idOf(h[4]), 0});
   odd.append(Scene::Place{d.idOf(h[4]), d.idOf(h[2]), 0});
   odd.append(Scene::Place{d.idOf(h[2]), BlockId(), 0});
-  test_assert(
-      isError(d.sc().putBack(*d.lib, spanOf(odd)), StatusCode::AlreadyExists, "in the scene"));
+  test_assert(isError(
+      d.sc().putBack(*d.lib, spanOf(odd)), StatusCode::AlreadyExists, "in the scene"));
   test_assert(names() == "dfce" && d.sc().indexOf(*d.lib, h[4]) == 3);
 }
 
 void testAddMany()
 {
   CommandDoc d;
-  const BlockHandle a = d.object("a"), b = d.loose("b"), c = d.loose("c"), e = d.loose("e");
+  const BlockHandle a = d.object("a"), b = d.loose("b"), c = d.loose("c"),
+                    e = d.loose("e");
   const auto add = [&](std::initializer_list<BlockHandle> hs) {
     const std::vector<BlockHandle> v(hs);
     return d.sc().addMany(*d.lib, v);
@@ -257,7 +261,8 @@ void testPruneRemoved()
     const LibraryPin pin(*d.lib, b, PinKind::Host);
     must(d.lib->markDeleted(b));
     must(d.lib->destroyFromHistory(b));
-    test_assert(d.lib->removedCount() == count + 2 && !d.lib->find(d.sc().cells()[0].target));
+    test_assert(d.lib->removedCount() == count + 2 &&
+                !d.lib->find(d.sc().cells()[0].target));
     d.sc().pruneRemoved(*d.lib);
     test_assert(d.sc().cells().size() == 0);
   }
@@ -314,17 +319,17 @@ void testCaches()
     }
     for (BlockHandle h : all) {
       const uint32_t pick = r.below(8);
-      const BlockHandle p = pick == 0 ? BlockHandle() :
-                            pick == 1 ? shape :
-                                        all[r.below(uint32_t(all.size()))];
+      const BlockHandle p = pick == 0   ? BlockHandle()
+                            : pick == 1 ? shape
+                                        : all[r.below(uint32_t(all.size()))];
       if (d.lib->get(h)->type() == TypeId::of(kObjectType)) {
         const bool fbx = r.coin();
         d.setParent(h, p);
         d.obj(h).setTransformType(fbx ? kFbxTransform : kTrsTransform);
-        d.obj(h).channels = fbx ? fbxChannels(r, *d.fbx, int(r.below(3)), r.scale(2, true), 2.0) :
-                                  trsChannels(r, *d.trs, r.scale(2, true), 5.0);
-      }
-      else {
+        d.obj(h).channels =
+            fbx ? fbxChannels(r, *d.fbx, int(r.below(3)), r.scale(2, true), 2.0)
+                : trsChannels(r, *d.trs, r.scale(2, true), 5.0);
+      } else {
         d.host(h).info.parent = p ? d.idOf(p) : BlockId();
       }
     }
@@ -347,21 +352,21 @@ void testCaches()
       Result<ObjectRead> read = readObject(*d.lib, h);
       must(read.status());
       switch (r.below(3)) {
-        case 0: {
-          Result<TransformState> s = states.state(h), want = computeState(*d.lib, h, 0.0);
-          test_assert(s.ok() && want.ok() && sameBits(*s, *want));
-          break;
-        }
-        case 1: {
-          Result<TransformState> s = states.stateAbove(h, *read),
-                                 want = computeParentState(*d.lib, h, 0.0);
-          test_assert(s.ok() && want.ok() && sameBits(*s, *want));
-          Result<TransformState> own = states.stateUnder(*read, *s);
-          test_assert(own.ok() && sameBits(*own, *computeState(*d.lib, h, 0.0)));
-          break;
-        }
-        default:
-          test_assert(sameBits(*states.parentState(shape), TransformState()));
+      case 0: {
+        Result<TransformState> s = states.state(h), want = computeState(*d.lib, h, 0.0);
+        test_assert(s.ok() && want.ok() && sameBits(*s, *want));
+        break;
+      }
+      case 1: {
+        Result<TransformState> s = states.stateAbove(h, *read),
+                               want = computeParentState(*d.lib, h, 0.0);
+        test_assert(s.ok() && want.ok() && sameBits(*s, *want));
+        Result<TransformState> own = states.stateUnder(*read, *s);
+        test_assert(own.ok() && sameBits(*own, *computeState(*d.lib, h, 0.0)));
+        break;
+      }
+      default:
+        test_assert(sameBits(*states.parentState(shape), TransformState()));
       }
 
       const std::vector<BlockHandle> above = naive.above(h);
@@ -376,11 +381,13 @@ void testCaches()
       Result<bool> below = ancestry.below(h);
       test_assert(below.ok() && *below == (inSet && !cycle));
       Result<detail::Ancestry::Place> place = ancestry.place(h);
-      test_assert(place.ok() && place->parent == naive.parentOf(h) && place->cycle == cycle);
+      test_assert(place.ok() && place->parent == naive.parentOf(h) &&
+                  place->cycle == cycle);
       test_assert(place->within == (inSet || in) && place->outside == outside);
       test_assert(cycle || belowCycle || place->depth == int(above.size()));
       test_assert(!cycle || place->depth == 0);
-      test_assert(!belowCycle || place->depth == ancestry.place(place->parent)->depth + 1);
+      test_assert(!belowCycle ||
+                  place->depth == ancestry.place(place->parent)->depth + 1);
       cycles += cycle;
       belowCycles += belowCycle;
       within += inSet;
@@ -406,7 +413,8 @@ void testCacheErrors()
   Result<ObjectRead> read = readObject(*d.lib, a);
   must(read.status());
   test_assert(isError(states.state(a).status(), StatusCode::Internal, "read"));
-  test_assert(isError(states.stateAbove(a, *read).status(), StatusCode::Internal, "read"));
+  test_assert(
+      isError(states.stateAbove(a, *read).status(), StatusCode::Internal, "read"));
   test_assert(isError(states.parentState(h).status(), StatusCode::Internal, "read"));
   detail::HandleSet none;
   detail::Ancestry ancestry(*d.lib, none);
@@ -421,11 +429,14 @@ void testCacheErrors()
   });
   d.obj(a).setTransformType("test.fn");
   d.obj(a).channels = ChannelBlock(1);
-  test_assert(isError(detail::StateCache(*d.lib, 0.0).state(a).status(), StatusCode::Internal, "model"));
-  test_assert(!states.state(d.shapeBlock("shape", 1.0)).ok() && !states.state(BlockHandle()).ok());
+  test_assert(isError(
+      detail::StateCache(*d.lib, 0.0).state(a).status(), StatusCode::Internal, "model"));
+  test_assert(!states.state(d.shapeBlock("shape", 1.0)).ok() &&
+              !states.state(BlockHandle()).ok());
 }
 
-/* A child on a cycle that a deletion opens: each is placed under what its parent is by then. */
+/* A child on a cycle that a deletion opens: each is placed under what its parent is by
+ * then. */
 void testDeleteCycles()
 {
   const int rounds = 150 * coredcc_test::testScale();

@@ -29,21 +29,24 @@ struct NearestOptions {
   int32_t maxCount = 1;
 };
 
-/** What a Spatial is asked for: the elements of a domain that are near a point. In its object's
- * space. */
+/** What a Spatial is asked for: the elements of a domain that are near a point. In its
+ * object's space. */
 class NearQuery {
- public:
+public:
   NearQuery() = default;
-  /** For an object with the matrix `world`, and a point and a radius in the world. Without an
-   * inverse, the radius in the object's space is infinite. */
-  NearQuery(const double3 &point, double radius, const NearestOptions &options, const mat4d &world);
+  /** For an object with the matrix `world`, and a point and a radius in the world.
+   * Without an inverse, the radius in the object's space is infinite. */
+  NearQuery(const double3 &point,
+            double radius,
+            const NearestOptions &options,
+            const mat4d &world);
 
   const double3 &point() const
   {
     return point_;
   }
-  /** What is farther away than this isn't near enough in the world. What is within it may be: the
-   * object's matrix may stretch it. May be infinite. */
+  /** What is farther away than this isn't near enough in the world. What is within it may
+   * be: the object's matrix may stretch it. May be infinite. */
   double radius() const
   {
     return radius_;
@@ -57,14 +60,15 @@ class NearQuery {
   {
     return options_.maxCount;
   }
-  /** Object to world, for what can't be found exactly in an object that is stretched unevenly. */
+  /** Object to world, for what can't be found exactly in an object that is stretched
+   * unevenly. */
   const mat4d &world() const
   {
     return world_;
   }
   static litestl::binding::types::Struct<NearQuery> *defineBindings();
 
- private:
+private:
   friend class NearSink;
   double3 point_;
   double radius_ = 0.0;
@@ -87,15 +91,18 @@ struct NearHit {
 
 /** Takes elements, and keeps the nearest in the world. */
 class NearSink {
- public:
+public:
   /** `query` must outlive it. */
-  explicit NearSink(const NearQuery &query) : query_(query) {}
+  explicit NearSink(const NearQuery &query) : query_(query)
+  {
+  }
   NearSink(const NearSink &) = delete;
   NearSink &operator=(const NearSink &) = delete;
 
-  /** An element, and a point of it, in the object's space: the one that is nearest in the world. The
-   * object's own nearest is the same unless the matrix stretches unevenly, and isn't wrong then, but
-   * says that the element is farther away. Those that are too far away, or not finite, are ignored. */
+  /** An element, and a point of it, in the object's space: the one that is nearest in the
+   * world. The object's own nearest is the same unless the matrix stretches unevenly, and
+   * isn't wrong then, but says that the element is farther away. Those that are too far
+   * away, or not finite, are ignored. */
   void add(int32_t element, const double3 &position);
   /** Many at once: three numbers for each. InvalidArgument if the sizes don't match. */
   Status addAll(const litestl::util::Vector<int32_t> &elements,
@@ -103,24 +110,27 @@ class NearSink {
   /** As NearQuery::radius, but less once there are maxCount nearer ones. */
   double radius() const;
 
-  /** Nearest first; without `object`. Equally near ones are in the order of their elements. */
+  /** Nearest first; without `object`. Equally near ones are in the order of their
+   * elements. */
   const litestl::util::Vector<NearHit> &hits() const
   {
     return hits_;
   }
   static litestl::binding::types::Struct<NearSink> *defineBindings();
 
- private:
+private:
   const NearQuery &query_;
   litestl::util::Vector<NearHit> hits_;
 };
 
 /**
- * The elements within a radius of a point, in the world: the nearest ones of all objects. Equally
- * near ones are in the scene's order, then in that of their elements. `radius` may be infinite.
+ * The elements within a radius of a point, in the world: the nearest ones of all objects.
+ * Equally near ones are in the scene's order, then in that of their elements. `radius`
+ * may be infinite.
  *
- * The answer is for the last evaluateScene, as pickScene's, and the same rules hold. An object's
- * bounds must contain its elements. An object with a Spatial that throws gives no hits.
+ * The answer is for the last evaluateScene, as pickScene's, and the same rules hold. An
+ * object's bounds must contain its elements. An object with a Spatial that throws gives
+ * no hits.
  */
 Status nearestInScene(Context &ctx,
                       BlockHandle scene,

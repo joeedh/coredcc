@@ -1,5 +1,5 @@
-/* What grows with the size of a scene: sixteen times the size may take no more than 64 times as
- * long, where something quadratic takes 256. */
+/* What grows with the size of a scene: sixteen times the size may take no more than 64
+ * times as long, where something quadratic takes 256. */
 #include "command_doc.h"
 
 #include "coredcc/api/ref_text.h"
@@ -22,8 +22,8 @@ double secondsOf(const std::function<void()> &fn)
   return t.count();
 }
 
-/* `run(n)` gives the seconds that matter. The best of a few, and a few more if it looks bad:
- * the machine may be busy. */
+/* `run(n)` gives the seconds that matter. The best of a few, and a few more if it looks
+ * bad: the machine may be busy. */
 bool grows(const char *name, int n, const std::function<double(int)> &run)
 {
   double small = 1e9, large = 1e9;
@@ -36,7 +36,8 @@ bool grows(const char *name, int n, const std::function<double(int)> &run)
   }
   const bool ok = large < 64 * small + 0.002;
   if (!ok) {
-    printf("%s: %g ms for %d, %g ms for %d\n", name, small * 1000, n, large * 1000, 16 * n);
+    printf(
+        "%s: %g ms for %d, %g ms for %d\n", name, small * 1000, n, large * 1000, 16 * n);
   }
   return ok;
 }
@@ -61,7 +62,8 @@ struct Many : CommandDoc {
     for (size_t i = 0; i < all.size(); i += size_t(step)) {
       ids.append(idOf(all[i]));
     }
-    return PropValue::ofString(formatBlockIds(rt, {ids.data(), size_t(ids.size())}).c_str());
+    return PropValue::ofString(
+        formatBlockIds(rt, {ids.data(), size_t(ids.size())}).c_str());
   }
 };
 
@@ -107,7 +109,8 @@ void testMembers()
       }
     });
   }));
-  /* As many as there are objects: one look at the Library for all that leave the history. */
+  /* As many as there are objects: one look at the Library for all that leave the history.
+   */
   test_assert(many("a command after as many undone adds", 100, [](Many &d) {
     const int n = int(d.all.size());
     for (int i = 0; i < n; i++) {
@@ -117,7 +120,8 @@ void testMembers()
       d.undo();
     }
     const int blocks = d.lib->size();
-    const double t = secondsOf([&]() { d.ok(kSelectCommand, {{"mode", PropValue::ofEnum(4)}}); });
+    const double t =
+        secondsOf([&]() { d.ok(kSelectCommand, {{"mode", PropValue::ofEnum(4)}}); });
     test_assert(d.lib->size() == blocks - n);
     return t;
   }));
@@ -128,7 +132,8 @@ void testMembers()
     }
     const int blocks = d.lib->size();
     const double t = secondsOf([&]() { d.history->setMemoryBudget(1); });
-    test_assert(d.lib->size() == blocks - int(d.all.size()) + 1 && d.history->size() == 1);
+    test_assert(d.lib->size() == blocks - int(d.all.size()) + 1 &&
+                d.history->size() == 1);
     return t;
   }));
 }
@@ -141,7 +146,8 @@ void testChains()
       [](Many &d) {
         const PropValue all = d.list();
         return secondsOf([&]() {
-          d.ok(kApplyDeltaCommand, {{"objects", all}, {"vector", PropValue::ofVec3(1, 0, 0)}});
+          d.ok(kApplyDeltaCommand,
+               {{"objects", all}, {"vector", PropValue::ofVec3(1, 0, 0)}});
         });
       },
       true));

@@ -1,5 +1,5 @@
-/* Snapshot undo: before and after, sub-commands, failures, folding, interactive commands, the
- * budget, and the blocks a blob references. */
+/* Snapshot undo: before and after, sub-commands, failures, folding, interactive commands,
+ * the budget, and the blocks a blob references. */
 #include "command_fixture.h"
 
 #include "coredcc/command/snapshot_undo.h"
@@ -20,7 +20,8 @@ struct State {
   bool random = false;
   BlockId ref;
   int foreachs = 0, captures = 0, restores = 0, alive = 0;
-  bool failRestore = false, throwRestore = false, throwCapture = false, throwForeach = false;
+  bool failRestore = false, throwRestore = false, throwCapture = false,
+       throwForeach = false;
   bool failCapture = false;
   /** The Library and the root that each slot was called with. */
   std::vector<std::pair<const Library *, const void *>> where;
@@ -93,8 +94,8 @@ template <bool Refs> struct StateProvider {
   }
   static lbt::Struct<StateProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<StateProvider>(Refs ? "test::StateProvider" : "test::PlainState",
-                                              sizeof(StateProvider));
+    auto *st = new lbt::Struct<StateProvider>(
+        Refs ? "test::StateProvider" : "test::PlainState", sizeof(StateProvider));
     BIND_STRUCT_METHOD(st, capture, MARGS("ctx", "blob"));
     BIND_STRUCT_METHOD(st, restore, MARGS("ctx", "blob"));
     if constexpr (Refs) {
@@ -137,7 +138,9 @@ struct AddNine {
   {
     return 8;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<AddNine> *defineBindings()
   {
     auto *st = new lbt::Struct<AddNine>("test::AddNine", sizeof(AddNine));
@@ -346,12 +349,15 @@ static void test_registry()
   State s;
   {
     SnapshotRegistry &reg = rt.ext<SnapshotRegistry>();
-    test_assert(reg.add("a", makeProvider(rt, s)).ok() && reg.add("b", makeProvider(rt, s)).ok());
+    test_assert(reg.add("a", makeProvider(rt, s)).ok() &&
+                reg.add("b", makeProvider(rt, s)).ok());
     test_assert(reg.add("a", makeProvider(rt, s)).code() == StatusCode::AlreadyExists);
     test_assert(s.alive == 2);
     test_assert(reg.add("", makeProvider(rt, s)).code() == StatusCode::InvalidArgument);
-    test_assert(reg.add("c", Owned<SnapshotProvider>()).code() == StatusCode::InvalidArgument);
-    test_assert(reg.find("a") && reg.find("b") && !reg.find("c") && reg.find("a") != reg.find("b"));
+    test_assert(reg.add("c", Owned<SnapshotProvider>()).code() ==
+                StatusCode::InvalidArgument);
+    test_assert(reg.find("a") && reg.find("b") && !reg.find("c") &&
+                reg.find("a") != reg.find("b"));
     test_assert(reg.remove("a").ok() && s.alive == 1 && !reg.find("a") && reg.find("b"));
     test_assert(reg.remove("a").code() == StatusCode::NotFound);
   }
@@ -363,7 +369,8 @@ static void test_undo()
   SnapWorld w;
   ChangeBus &bus = w.s.w.rt.ext<ChangeBus>();
   int all = 0;
-  ScopedConnection l = bus.addListener([&](const OwnerKey *owner) { all += owner ? 0 : 1; });
+  ScopedConnection l =
+      bus.addListener([&](const OwnerKey *owner) { all += owner ? 0 : 1; });
   test_assert(w.run("test.opaque").ok() && w.state.value == 109 && w.state.captures == 2);
   test_assert(all == 0);
   const uint64_t libEpoch = w.s.w.lib.epoch();
@@ -377,7 +384,8 @@ static void test_undo()
   for (Fail f : {Fail::BeforeSub, Fail::AfterSub}) {
     g_fail = f;
     const int before = all;
-    test_assert(w.run("test.opaque").code() == StatusCode::Cancelled && w.state.value == 4);
+    test_assert(w.run("test.opaque").code() == StatusCode::Cancelled &&
+                w.state.value == 4);
     test_assert(all > before);
   }
   g_fail = Fail::AtEnd;
@@ -401,7 +409,8 @@ static void test_where()
   test_assert(w.run("test.opaque").code() == StatusCode::Cancelled);
   g_fail = Fail::None;
   test_assert(w.state.where.size() == 3); /* a capture, the rollback, and the discard */
-  test_assert(w.run("test.opaque").ok() && w.s.ex.undo(w.s.ctx).ok() && w.s.ex.redo(w.s.ctx).ok());
+  test_assert(w.run("test.opaque").ok() && w.s.ex.undo(w.s.ctx).ok() &&
+              w.s.ex.redo(w.s.ctx).ok());
   test_assert(w.state.where.size() == 7);
   for (const auto &[lib, root] : w.state.where) {
     test_assert(lib == &w.s.w.lib && root == w.s.ctx.root().data && root);
@@ -424,8 +433,7 @@ struct FakeHost : ForeignDispatcher {
     auto &blob = *static_cast<Vector<uint8_t> *>(args[1]);
     if (name == "capture") {
       blob.append(uint8_t(value));
-    }
-    else {
+    } else {
       value = blob[0];
     }
     new (ret) Status();
@@ -441,11 +449,13 @@ static void test_foreign()
   Runtime &rt = s.w.rt;
   FakeHost host;
   const char *slots[] = {"capture", "restore"};
-  test_assert(registerForeign<SnapshotProvider>(rt, "test.JsSnap", &host, nullptr, slots).ok());
+  test_assert(
+      registerForeign<SnapshotProvider>(rt, "test.JsSnap", &host, nullptr, slots).ok());
   int jsObject = 1;
   SnapshotProvider p = query<SnapshotProvider>(rt, TypeId::of("test.JsSnap"), &jsObject);
   test_assert(p && !p.hasForeachRef());
-  test_assert(rt.ext<SnapshotRegistry>().add("js", Owned<SnapshotProvider>(p, nullptr)).ok());
+  test_assert(
+      rt.ext<SnapshotRegistry>().add("js", Owned<SnapshotProvider>(p, nullptr)).ok());
   SnapshotUndo u("js");
   test_assert(u.begin(s.ctx).ok());
   host.value = 9;
@@ -475,10 +485,12 @@ static void test_failures()
   w.state.throwForeach = false;
 
   int all = 0;
-  ScopedConnection l = w.s.w.rt.ext<ChangeBus>().addListener([&](const OwnerKey *) { all++; });
+  ScopedConnection l =
+      w.s.w.rt.ext<ChangeBus>().addListener([&](const OwnerKey *) { all++; });
   test_assert(w.run("test.opaque").ok());
   w.state.failRestore = true;
-  test_assert(hasMsg(w.s.ex.undo(w.s.ctx), "can't restore") && all == 1); /* it may have changed */
+  test_assert(hasMsg(w.s.ex.undo(w.s.ctx), "can't restore") &&
+              all == 1); /* it may have changed */
   w.state.failRestore = false;
   test_assert(w.s.history.size() == 0);
   w.state.value = 4;
@@ -541,7 +553,8 @@ static void test_failures()
   test_assert(hasMsg(w2.s.w.rt.takeStickyError(), "can't restore"));
   w2.state.failRestore = false;
   /* A begin forgets a rollback. */
-  test_assert(s.begin(w2.s.ctx).ok() && s.rollback(w2.s.ctx).ok() && s.begin(w2.s.ctx).ok());
+  test_assert(s.begin(w2.s.ctx).ok() && s.rollback(w2.s.ctx).ok() &&
+              s.begin(w2.s.ctx).ok());
   w2.state.value = 3;
   s.discard();
   test_assert(w2.state.value == 3);
@@ -567,7 +580,9 @@ static void test_folding()
   g_noEnd = false;
   SnapshotUndo a("state"), b("other");
   test_assert(a.begin(w.s.ctx).ok() && a.end(w.s.ctx).ok());
-  test_assert(w.s.w.rt.ext<SnapshotRegistry>().add("other", makeProvider(w.s.w.rt, w.state)).ok());
+  test_assert(w.s.w.rt.ext<SnapshotRegistry>()
+                  .add("other", makeProvider(w.s.w.rt, w.state))
+                  .ok());
   test_assert(b.begin(w.s.ctx).ok() && b.end(w.s.ctx).ok());
   test_assert(!a.foldFrom(b) && b.redo(w.s.ctx).ok());
 }
@@ -576,7 +591,9 @@ static void test_interactive()
 {
   SnapWorld w;
   const CommandDef *def = w.s.w.rt.ext<CommandRegistry>().find("test.snapDrag");
-  const auto begin = [&]() { return w.s.ex.beginInteractive(w.s.ctx, *def, def->newInputs()); };
+  const auto begin = [&]() {
+    return w.s.ex.beginInteractive(w.s.ctx, *def, def->newInputs());
+  };
   test_assert(begin().ok() && w.state.value == 5);
   w.state.value = 30; /* the drag */
   test_assert(w.s.ex.cancel(w.s.ctx).ok() && w.state.value == 4);
@@ -597,7 +614,8 @@ static void test_budget()
   test_assert(w.run("test.opaque").ok());
   const uint64_t small = w.s.history.memoryUsed();
   test_assert(small < 20000); /* compressed */
-  test_assert(w.s.ex.undo(w.s.ctx).ok() && w.state.value == 4); /* and read back, 1 byte each */
+  test_assert(w.s.ex.undo(w.s.ctx).ok() &&
+              w.state.value == 4); /* and read back, 1 byte each */
   w.state.random = true;
   test_assert(w.run("test.opaque").ok());
   test_assert(w.s.history.memoryUsed() > 200000); /* both blobs, raw */
@@ -625,8 +643,10 @@ static void test_targets()
   for (BlockHandle ob : w.s.w.scene.objects) {
     lib.setFlag(ob, BlockFlags::FakeUser, true);
   }
-  Result<BlockHandle> a = lib.create(kMeshType, "before", litestl::alloc::New<Mesh>("Mesh"));
-  Result<BlockHandle> b = lib.create(kMeshType, "after", litestl::alloc::New<Mesh>("Mesh"));
+  Result<BlockHandle> a =
+      lib.create(kMeshType, "before", litestl::alloc::New<Mesh>("Mesh"));
+  Result<BlockHandle> b =
+      lib.create(kMeshType, "after", litestl::alloc::New<Mesh>("Mesh"));
   w.state.ref = lib.get(*a)->id();
   SnapshotUndo s("state");
   test_assert(s.begin(w.s.ctx).ok() && lib.get(*a)->pins(PinKind::History) == 1);
@@ -649,12 +669,14 @@ static void test_targets()
 
   /* Folding hands the pins over. */
   SnapshotUndo next("state");
-  Result<BlockHandle> c = lib.create(kMeshType, "later", litestl::alloc::New<Mesh>("Mesh"));
+  Result<BlockHandle> c =
+      lib.create(kMeshType, "later", litestl::alloc::New<Mesh>("Mesh"));
   test_assert(next.begin(w.s.ctx).ok());
   w.state.ref = lib.get(*c)->id();
   test_assert(next.end(w.s.ctx).ok() && s.foldFrom(next));
   next.discard();
-  test_assert(lib.get(*a)->pins() == 1 && lib.get(*b)->pins() == 0 && lib.get(*c)->pins() == 1);
+  test_assert(lib.get(*a)->pins() == 1 && lib.get(*b)->pins() == 0 &&
+              lib.get(*c)->pins() == 1);
   w.state.ref = BlockId();
   s.discard();
   test_assert(lib.get(*a)->pins() == 0 && lib.get(*c)->pins() == 0 && s.memSize() < size);

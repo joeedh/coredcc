@@ -28,8 +28,8 @@ bool sameError(const ErrorPtr &a, const ErrorPtr &b)
   return a == b || (a && b && *a == *b);
 }
 
-/* Whether a kernel was stopped, or gave Cancelled itself. (A conversion's is an error like
- * others.) */
+/* Whether a kernel was stopped, or gave Cancelled itself. (A conversion's is an error
+ * like others.) */
 bool isCancelled(const GraphError &e)
 {
   return e.status.code() == StatusCode::Cancelled && e.socket.size() == 0;
@@ -39,8 +39,10 @@ bool isCancelled(const GraphError &e)
 
 /** For the kernel of one node. */
 class Evaluator::Monitor final : public ExecMonitor {
- public:
-  Monitor(Evaluator &e, const Frame &f, NodeId node) : e_(e), f_(f), node_(node) {}
+public:
+  Monitor(Evaluator &e, const Frame &f, NodeId node) : e_(e), f_(f), node_(node)
+  {
+  }
   bool cancelled() override
   {
     return e_.cancelled();
@@ -63,7 +65,7 @@ class Evaluator::Monitor final : public ExecMonitor {
     e_.monitor_.progress(p);
   }
 
- private:
+private:
   Evaluator &e_;
   const Frame &f_;
   NodeId node_;
@@ -101,11 +103,13 @@ Status Evaluator::begin()
 {
   CDCC_TRY(rt_.busyIfEvaluating("GraphInstance::evaluate"));
   if (rt_.hasStickyError()) {
-    return Status::error(StatusCode::FailedPrecondition,
-                         "GraphInstance::evaluate: a sticky error is pending; take it first");
+    return Status::error(
+        StatusCode::FailedPrecondition,
+        "GraphInstance::evaluate: a sticky error is pending; take it first");
   }
   if (lib_.get() && lib_.get()->busy()) {
-    return Status::error(StatusCode::Busy, "GraphInstance::evaluate: the library is collecting");
+    return Status::error(StatusCode::Busy,
+                         "GraphInstance::evaluate: the library is collecting");
   }
   return Status();
 }
@@ -170,8 +174,7 @@ void Evaluator::pull(const SocketPath &path, Pulled &p, Status &status)
         pinDef(*f); /* as the way to it would have */
       }
     }
-  }
-  else {
+  } else {
     r = find(path);
     if (overBudget_) {
       return;
@@ -189,7 +192,8 @@ Status Evaluator::evaluate(std::span<const SocketPath> sockets, Vector<Status> &
 {
   results.clear();
   CDCC_TRY(begin());
-  NoCollectScope noCollect(lib_.get()); /* ends last: what it lets go may own this, or free defs */
+  NoCollectScope noCollect(
+      lib_.get()); /* ends last: what it lets go may own this, or free defs */
   if (currentKey() == failedKey_ && failedPaths_.size() > 0 &&
       sockets.size() >= size_t(failedPaths_.size()) &&
       std::equal(failedPaths_.begin(), failedPaths_.end(), sockets.begin()))
@@ -250,16 +254,17 @@ Evaluator::Request Evaluator::find(const SocketPath &path)
     return r;
   };
   /* Output `o` of a frame's interface. */
-  auto output = [&](Frame &f, int o, const SocketType *type, NodeId node, const Frame &at) {
-    if (f.topo->outputNode >= 0) {
-      r.vertex = Vertex{&f, f.topo->nodes[f.topo->outputNode].inBegin + o, false};
-      return r;
-    }
-    if (!type) {
-      return failed(makeError(at, node, unknownType()));
-    }
-    return constant(typeDefault(*type), *type, chains_);
-  };
+  auto output =
+      [&](Frame &f, int o, const SocketType *type, NodeId node, const Frame &at) {
+        if (f.topo->outputNode >= 0) {
+          r.vertex = Vertex{&f, f.topo->nodes[f.topo->outputNode].inBegin + o, false};
+          return r;
+        }
+        if (!type) {
+          return failed(makeError(at, node, unknownType()));
+        }
+        return constant(typeDefault(*type), *type, chains_);
+      };
 
   Frame *f = root_.get();
   sync(*f);
@@ -293,8 +298,8 @@ Evaluator::Request Evaluator::find(const SocketPath &path)
   }
   const GraphTopology::Node &n = f->topo->nodes[i];
   const bool input = path.side == SocketSide::Input;
-  const int s = input ? f->topo->inputIndex(n, path.key.c_str()) :
-                        f->topo->outputIndex(n, path.key.c_str());
+  const int s = input ? f->topo->inputIndex(n, path.key.c_str())
+                      : f->topo->outputIndex(n, path.key.c_str());
   if (s < 0) {
     return missing("the node has no such socket");
   }
@@ -315,7 +320,8 @@ Evaluator::Request Evaluator::find(const SocketPath &path)
   if (!type) {
     return failed(makeError(*f, path.node.node, unknownType()));
   }
-  return constant(n.role == NodeRole::Input ? external(s, *type) : typeDefault(*type), *type,
+  return constant(n.role == NodeRole::Input ? external(s, *type) : typeDefault(*type),
+                  *type,
                   chains_);
 }
 
@@ -349,8 +355,7 @@ void Evaluator::store(Pulled &out, const Request &r, Status &status)
       origin.origin.version = k.outputs[r.output].changedAt;
       origin.origin.c = uint64_t(r.output);
     }
-  }
-  else if (!r.done) {
+  } else if (!r.done) {
     const InputState &s = r.vertex.frame->inputs[r.vertex.index];
     error = s.error;
     origin = s.origin;
@@ -361,8 +366,7 @@ void Evaluator::store(Pulled &out, const Request &r, Status &status)
   out.error = error;
   if (error) {
     status = error->status;
-  }
-  else if (!out.hasValue || !(out.origin == origin)) {
+  } else if (!out.hasValue || !(out.origin == origin)) {
     if (!out.hasValue || out.value != *value) {
       out.value = *value;
       changed = true;
@@ -470,8 +474,7 @@ bool Evaluator::walk(Vertex root)
       if (n.type && item.next < n.inCount) {
         next = Vertex{v.frame, n.inBegin + item.next++, false};
       }
-    }
-    else if (item.next == 0) {
+    } else if (item.next == 0) {
       item.next = 1;
       next = follow(*v.frame, v.index);
       if (overBudget_) {
@@ -484,8 +487,7 @@ bool Evaluator::walk(Vertex root)
       const WalkState &w = walkState(*next);
       if (w.pass != pass_) {
         enter(*next);
-      }
-      else if (w.onStack) {
+      } else if (w.onStack) {
         WalkState &mine = walkState(v);
         mine.low = std::min(mine.low, w.number);
       }
@@ -513,12 +515,10 @@ bool Evaluator::walk(Vertex root)
         if (overBudget_) {
           return false;
         }
-      }
-      else {
+      } else {
         computeInput(*v.frame, v.index);
       }
-    }
-    else {
+    } else {
       Vector<Vertex> members;
       for (int i = first; i < int(component_.size()); i++) {
         members.append(component_[i]);
@@ -545,11 +545,13 @@ void Evaluator::failCycle(const Vector<Vertex> &members)
   for (const Vertex &v : members) {
     if (!v.kernel) {
       const GraphTopology::Input &in = v.frame->topo->inputs[v.index];
-      list.append(Member{v.frame->pathOf(v.frame->topo->nodes[in.node].node->id()), in.key});
+      list.append(
+          Member{v.frame->pathOf(v.frame->topo->nodes[in.node].node->id()), in.key});
     }
   }
   std::sort(list.begin(), list.end(), [](const Member &a, const Member &b) {
-    return a.path < b.path || (a.path == b.path && strcmp(a.key.c_str(), b.key.c_str()) < 0);
+    return a.path < b.path ||
+           (a.path == b.path && strcmp(a.key.c_str(), b.key.c_str()) < 0);
   });
   std::string text = "a cycle through ";
   for (int i = 0; i < int(list.size()) && i < 8; i++) {
@@ -566,8 +568,7 @@ void Evaluator::failCycle(const Vector<Vertex> &members)
   for (const Vertex &v : members) {
     if (v.kernel) {
       settle(kernel(*v.frame, v.index), error, false);
-    }
-    else {
+    } else {
       v.frame->inputs[v.index].error = error;
     }
   }
@@ -580,43 +581,44 @@ Evaluator::Feed Evaluator::feed(Frame &f, int node, int output)
   const GraphTopology::Node &n = f.topo->nodes[node];
   Feed out;
   switch (n.role) {
-    case NodeRole::Kernel:
-    case NodeRole::Foreach:
-      out.vertex = Vertex{&f, node, true};
-      out.output = output;
-      break;
-    case NodeRole::Input:
-      if (f.parent && !f.element) {
-        const GraphTopology::Node &g = f.parent->topo->nodes[f.groupIndex];
-        out.vertex = Vertex{f.parent, g.inBegin + output, false};
-      }
-      break;
-    case NodeRole::Group: {
-      Frame *c = child(f, n.group, out.error);
-      if (!c) {
-        break;
-      }
-      if (output < n.interfaceOuts) {
-        if (c->topo->outputNode >= 0) {
-          const GraphTopology::Node &o = c->topo->nodes[c->topo->outputNode];
-          out.vertex = Vertex{c, o.inBegin + output, false};
-        }
-        break;
-      }
-      const InteriorKey &key = f.topo->groups[n.group].interiorOutput(n, output).key;
-      for (NodeId id : key.groups) {
-        const int at = c->topo->find(id);
-        c = at >= 0 ? child(*c, c->topo->nodes[at].group, out.error) : nullptr;
-        if (!c) {
-          return out;
-        }
-      }
-      const int at = c->topo->find(key.node);
-      const int o = at >= 0 ? c->topo->outputIndex(c->topo->nodes[at], key.key.c_str()) : -1;
-      return o >= 0 ? feed(*c, at, o) : out; /* a key names no interior one: this ends */
+  case NodeRole::Kernel:
+  case NodeRole::Foreach:
+    out.vertex = Vertex{&f, node, true};
+    out.output = output;
+    break;
+  case NodeRole::Input:
+    if (f.parent && !f.element) {
+      const GraphTopology::Node &g = f.parent->topo->nodes[f.groupIndex];
+      out.vertex = Vertex{f.parent, g.inBegin + output, false};
     }
-    case NodeRole::Output:
-      break; /* it has no outputs */
+    break;
+  case NodeRole::Group: {
+    Frame *c = child(f, n.group, out.error);
+    if (!c) {
+      break;
+    }
+    if (output < n.interfaceOuts) {
+      if (c->topo->outputNode >= 0) {
+        const GraphTopology::Node &o = c->topo->nodes[c->topo->outputNode];
+        out.vertex = Vertex{c, o.inBegin + output, false};
+      }
+      break;
+    }
+    const InteriorKey &key = f.topo->groups[n.group].interiorOutput(n, output).key;
+    for (NodeId id : key.groups) {
+      const int at = c->topo->find(id);
+      c = at >= 0 ? child(*c, c->topo->nodes[at].group, out.error) : nullptr;
+      if (!c) {
+        return out;
+      }
+    }
+    const int at = c->topo->find(key.node);
+    const int o =
+        at >= 0 ? c->topo->outputIndex(c->topo->nodes[at], key.key.c_str()) : -1;
+    return o >= 0 ? feed(*c, at, o) : out; /* a key names no interior one: this ends */
+  }
+  case NodeRole::Output:
+    break; /* it has no outputs */
   }
   return out;
 }
@@ -633,16 +635,18 @@ std::optional<Vertex> Evaluator::follow(Frame &f, int input)
   s.replaced = by;
   if (by) {
     s.source = *by;
-  }
-  else if (in.fromNode >= 0) {
+  } else if (in.fromNode >= 0) {
     Feed source = feed(f, in.fromNode, in.fromOutput);
     s.source = source.vertex;
     s.sourceOutput = source.output;
     s.error = std::move(source.error);
   }
   if (f.deps) {
-    Dependents::setSource(f, input, s.source,
-                          s.source.kernel ? &kernel(*s.source.frame, s.source.index) : nullptr);
+    Dependents::setSource(f,
+                          input,
+                          s.source,
+                          s.source.kernel ? &kernel(*s.source.frame, s.source.index)
+                                          : nullptr);
   }
   return s.source.frame ? std::optional<Vertex>(s.source) : std::nullopt;
 }
@@ -734,7 +738,8 @@ void Evaluator::computeInput(Frame &f, int input)
     return; /* the group it comes from */
   }
   auto fail = [&](Status status) {
-    s.error = makeError(f, f.topo->nodes[in.node].node->id(), std::move(status), in.key.c_str());
+    s.error = makeError(
+        f, f.topo->nodes[in.node].node->id(), std::move(status), in.key.c_str());
   };
   auto keep = [&](const TraceInput &origin, GraphValue &&v) {
     if (!s.own) {
@@ -768,8 +773,7 @@ void Evaluator::computeInput(Frame &f, int input)
     o.version = k.outputs[s.sourceOutput].changedAt;
     value = &k.outputs[s.sourceOutput].value;
     s.origin.chain = chains_.extend(TypeChains::kEmpty, type);
-  }
-  else if (s.source.frame) {
+  } else if (s.source.frame) {
     const InputState &from = s.source.frame->inputs[s.source.index];
     if (from.error) {
       s.error = from.error;
@@ -777,19 +781,18 @@ void Evaluator::computeInput(Frame &f, int input)
     }
     s.origin = from.origin;
     value = from.value;
-  }
-  else {
+  } else {
     if (!type) {
       return fail(unknownType());
     }
-    const bool inner = in.fromNode >= 0 && f.topo->nodes[in.fromNode].role == NodeRole::Input;
+    const bool inner =
+        in.fromNode >= 0 && f.topo->nodes[in.fromNode].role == NodeRole::Input;
     if (inner && f.element) {
       value = elementInput(f, in.fromOutput, *type, s.origin);
-    }
-    else {
-      constant = in.fromNode < 0 ? unlinked(f, input) :
-                 inner           ? external(in.fromOutput, *type) :
-                                   typeDefault(*type);
+    } else {
+      constant = in.fromNode < 0 ? unlinked(f, input)
+                 : inner         ? external(in.fromOutput, *type)
+                                 : typeDefault(*type);
       s.origin = TraceInput{constant.origin, chains_.extend(TypeChains::kEmpty, type)};
     }
   }
@@ -803,14 +806,11 @@ void Evaluator::computeInput(Frame &f, int input)
   }
   if (type == in.type && value) {
     s.value = value;
-  }
-  else if (s.own && s.own->origin == s.origin) {
+  } else if (s.own && s.own->origin == s.origin) {
     s.value = &s.own->value; /* made from the same before */
-  }
-  else if (type == in.type) {
+  } else if (type == in.type) {
     keep(s.origin, std::move(constant.value));
-  }
-  else {
+  } else {
     GraphValue out;
     Status status = rt_.ext<SocketTypeRegistry>().convert(
         *type, *in.type, value ? *value : constant.value, out);
@@ -825,8 +825,10 @@ void Evaluator::computeInput(Frame &f, int input)
 
 void Evaluator::settle(KernelState &k, ErrorPtr error, bool inputFailed)
 {
-  /* A Cancelled that comes and goes moves nothing: what it fed runs if the value is another. */
-  const bool passing = (error && isCancelled(*error)) || (k.error && isCancelled(*k.error));
+  /* A Cancelled that comes and goes moves nothing: what it fed runs if the value is
+   * another. */
+  const bool passing =
+      (error && isCancelled(*error)) || (k.error && isCancelled(*k.error));
   if (!k.visited || (!passing && !sameError(k.error, error))) {
     const uint64_t version = rt_.nextVersion();
     for (KernelState::Output &o : k.outputs) {
@@ -869,7 +871,8 @@ void Evaluator::computeKernel(Frame &f, int node)
     return n.node->blockTarget(n.type->params[param].def.apiName().c_str());
   };
   for (int i = 0; same && params && i < int(n.type->params.size()); i++) {
-    same = i < int(k.trace.paramBlocks().size()) && k.trace.paramBlocks()[size_t(i)] == target(i);
+    same = i < int(k.trace.paramBlocks().size()) &&
+           k.trace.paramBlocks()[size_t(i)] == target(i);
   }
   if (!same || !blocks_.current(k.trace)) {
     Trace trace;
@@ -893,15 +896,18 @@ void Evaluator::run(Frame &f, int node, KernelState &k, Trace trace)
 {
   const GraphTopology::Node &n = f.topo->nodes[node];
   if (cancelled()) {
-    k.runError = makeError(
-        f, n.node->id(), Status::error(StatusCode::Cancelled, "the evaluation was cancelled"));
+    k.runError =
+        makeError(f,
+                  n.node->id(),
+                  Status::error(StatusCode::Cancelled, "the evaluation was cancelled"));
     return; /* what it has from before stays, to be compared with */
   }
   Vector<NodeExecContext::Input> inputs;
   for (int i = 0; i < n.inCount; i++) {
-    inputs.append(NodeExecContext::Input{f.inputs[n.inBegin + i].value,
-                                         f.inputs[n.inBegin + i].source.frame ||
-                                             f.topo->inputs[n.inBegin + i].fromNode >= 0});
+    inputs.append(
+        NodeExecContext::Input{f.inputs[n.inBegin + i].value,
+                               f.inputs[n.inBegin + i].source.frame ||
+                                   f.topo->inputs[n.inBegin + i].fromNode >= 0});
   }
   Vector<PropValue> params;
   Vector<BlockId> blocks;
@@ -925,7 +931,8 @@ void Evaluator::run(Frame &f, int node, KernelState &k, Trace trace)
 
   const auto start = std::chrono::steady_clock::now();
   Status status = n.type->kernel.get().evaluate(ctx);
-  k.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+  k.seconds =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
   k.totalSeconds += k.seconds;
   k.runs++;
   totalRuns++;

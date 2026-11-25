@@ -86,7 +86,8 @@ void testGroups()
   in[0] = addSocket(*inner.def, SocketSide::Input, "i0", "float");
   in[1] = addSocket(*inner.def, SocketSide::Input, "i1", "float");
   for (int i = 0; i < 4; i++) {
-    out[i] = addSocket(*inner.def, SocketSide::Output, ("o" + std::to_string(i)).c_str(), "float");
+    out[i] = addSocket(
+        *inner.def, SocketSide::Output, ("o" + std::to_string(i)).c_str(), "float");
   }
   const NodeId input = add(*inner.def, "graph.input");
   const NodeId output = add(*inner.def, "graph.output");
@@ -113,7 +114,8 @@ void testGroups()
   const NodeId group = add(*mid.def, "graph.group");
   test_assert(hasCode(mid.def->setGroup(input, inner.id), StatusCode::NotFound));
   test_assert(hasCode(inner.def->setGroup(sum, mid.id), StatusCode::TypeMismatch));
-  test_assert(hasCode(mid.def->setGroup(group, idOf(w.lib, thing)), StatusCode::TypeMismatch));
+  test_assert(
+      hasCode(mid.def->setGroup(group, idOf(w.lib, thing)), StatusCode::TypeMismatch));
   test_assert(hasCode(mid.def->setGroup(group, BlockId{inner.id.client, LocalId{1, 1}}),
                       StatusCode::NotFound));
   test_assert(mid.def->groupTarget(*mid.def->node(group)) == nullptr);
@@ -127,10 +129,13 @@ void testGroups()
 
   /* Cycles go by what each output depends on: o0 -> i1 is fine, o0 -> i0 isn't. */
   GraphDef &md = *mid.def;
-  test_assert(hasCode(md.link({group, key(out[0])}, {group, key(in[0])}), StatusCode::InvalidArgument));
+  test_assert(hasCode(md.link({group, key(out[0])}, {group, key(in[0])}),
+                      StatusCode::InvalidArgument));
   const LinkId cross = connect(md, group, key(out[0]), group, key(in[1]));
-  test_assert(hasCode(md.link({group, key(out[1])}, {group, key(in[0])}), StatusCode::InvalidArgument));
-  test_assert(hasCode(md.link({group, key(out[2])}, {group, key(in[1])}), StatusCode::InvalidArgument));
+  test_assert(hasCode(md.link({group, key(out[1])}, {group, key(in[0])}),
+                      StatusCode::InvalidArgument));
+  test_assert(hasCode(md.link({group, key(out[2])}, {group, key(in[1])}),
+                      StatusCode::InvalidArgument));
   test_assert(md.link(cross));
   connect(md, group, key(out[3]), group, key(in[0])); /* depends on nothing */
   test_assert(md.validate().ok() && md.linkCount() == 2);
@@ -143,8 +148,10 @@ void testGroups()
   /* And through a kernel outside the group. */
   const NodeId k = add(md, "math.float");
   connect(md, group, key(out[1]), k, "a");
-  test_assert(hasCode(md.link({k, "value"}, {group, key(in[1])}), StatusCode::InvalidArgument));
-  test_assert(hasCode(md.link({k, "value"}, {group, key(in[0])}), StatusCode::InvalidArgument));
+  test_assert(
+      hasCode(md.link({k, "value"}, {group, key(in[1])}), StatusCode::InvalidArgument));
+  test_assert(
+      hasCode(md.link({k, "value"}, {group, key(in[0])}), StatusCode::InvalidArgument));
 
   /* An edit inside shows in the tables above. */
   midReach = graphReach(md);
@@ -182,7 +189,8 @@ void testGroups()
   test_assert(w.lib.markDeleted(inner.h).ok());
   test_assert(md.groupTarget(*md.node(group)) == nullptr && md.diagnostics().size() == 0);
   test_assert(md.sockets(*md.node(group), SocketSide::Output).size() == 4);
-  test_assert(md.topology()->serial != serial && md.topology()->groups[0].targetInterface == 0);
+  test_assert(md.topology()->serial != serial &&
+              md.topology()->groups[0].targetInterface == 0);
   test_assert(graphReach(md)->inputs[0].size() == 0);
   test_assert(w.lib.restoreFromHistory(inner.h).ok());
   test_assert(md.topology()->groups[0].targetInterface == inner.def->interfaceVersion());
@@ -223,7 +231,8 @@ void testDoubling()
   }
   for (int i = n - 1; i >= 0; i--) {
     GraphDef &d = *g[i].def;
-    const NodeId a = add(d, "graph.input"), b = add(d, "graph.output"), m = add(d, "math.float");
+    const NodeId a = add(d, "graph.input"), b = add(d, "graph.output"),
+                 m = add(d, "math.float");
     connect(d, m, "value", b, key(out[i]));
     for (const char *socket : {"a", "b"}) {
       if (i + 1 == n) {

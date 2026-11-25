@@ -15,7 +15,8 @@ namespace {
 
 Status damaged(const std::string &what)
 {
-  return Status::error(StatusCode::InvalidArgument, ("the library section: " + what).c_str());
+  return Status::error(StatusCode::InvalidArgument,
+                       ("the library section: " + what).c_str());
 }
 
 Status tooLarge(const std::string &what)
@@ -67,9 +68,10 @@ bool hasCriticalField(std::span<const uint8_t> extension)
 namespace {
 
 class Parser {
- public:
+public:
   Parser(std::span<const uint8_t> bytes, const LoadLimits &limits, IoIssues &issues)
-      : bytes_(bytes), limits_(limits), issues_(issues), file_(std::make_unique<ParsedFile>())
+      : bytes_(bytes), limits_(limits), issues_(issues),
+        file_(std::make_unique<ParsedFile>())
   {
     file_->budget.left = limits.maxBytes;
   }
@@ -86,11 +88,12 @@ class Parser {
     }
     CDCC_TRY(section("NAME", names, [this](BytesReader &in) { return readNames(in); }));
     CDCC_TRY(section("BLCK", blocks, [this](BytesReader &in) { return readBlocks(in); }));
-    CDCC_TRY(section("DATA", data_.stored, [this](BytesReader &in) { return readData(in); }));
+    CDCC_TRY(
+        section("DATA", data_.stored, [this](BytesReader &in) { return readData(in); }));
     return std::move(file_);
   }
 
- private:
+private:
   /* ---- the container ---- */
 
   Status header()
@@ -119,7 +122,8 @@ class Parser {
       return damaged("it is " + std::to_string(bytes_.size()) + " bytes, but says " +
                      std::to_string(total));
     }
-    const std::string_view all(reinterpret_cast<const char *>(bytes_.data()), bytes_.size() - 8);
+    const std::string_view all(reinterpret_cast<const char *>(bytes_.data()),
+                               bytes_.size() - 8);
     BytesReader tail(bytes_.subspan(bytes_.size() - 8));
     if (tail.u64() != fnv1a64(all)) {
       return damaged("the checksum doesn't match");
@@ -147,10 +151,10 @@ class Parser {
       if (!in.ok()) {
         break;
       }
-      Chunk *to = tag == kTagName   ? &name_ :
-                  tag == kTagBlocks ? &blocks_ :
-                  tag == kTagData   ? &data_ :
-                                      nullptr;
+      Chunk *to = tag == kTagName     ? &name_
+                  : tag == kTagBlocks ? &blocks_
+                  : tag == kTagData   ? &data_
+                                      : nullptr;
       if (!to) {
         if (c.flags & kChunkCritical) {
           return Status::error(StatusCode::Unsupported,
@@ -158,15 +162,18 @@ class Parser {
                                 " that this build doesn't know and can't do without")
                                    .c_str());
         }
-        issues_.add(BlockId(), {},
-                    Status::error(StatusCode::Unsupported,
-                                  ("a chunk " + tagText(tag) + " this build doesn't know").c_str()));
+        issues_.add(
+            BlockId(),
+            {},
+            Status::error(
+                StatusCode::Unsupported,
+                ("a chunk " + tagText(tag) + " this build doesn't know").c_str()));
         continue;
       }
       if (c.flags & ~(kChunkCritical | kChunkLz4)) {
-        return Status::error(StatusCode::Unsupported,
-                             ("the chunk " + tagText(tag) + " has flags this build doesn't know")
-                                 .c_str());
+        return Status::error(
+            StatusCode::Unsupported,
+            ("the chunk " + tagText(tag) + " has flags this build doesn't know").c_str());
       }
       if (to->found) {
         return damaged("two chunks " + tagText(tag));
@@ -183,7 +190,10 @@ class Parser {
     return Status();
   }
 
-  Status open(const Chunk &c, const char *what, Vector<uint8_t> &own, std::span<const uint8_t> &out)
+  Status open(const Chunk &c,
+              const char *what,
+              Vector<uint8_t> &own,
+              std::span<const uint8_t> &out)
   {
     const bool lz4 = (c.flags & kChunkLz4) != 0;
     if (!lz4) {
@@ -200,7 +210,8 @@ class Parser {
     return Status();
   }
 
-  template <class Fn> Status section(const char *what, std::span<const uint8_t> bytes, Fn &&read)
+  template <class Fn>
+  Status section(const char *what, std::span<const uint8_t> bytes, Fn &&read)
   {
     BytesReader in(bytes);
     Status s = read(in);
@@ -210,8 +221,9 @@ class Parser {
     if (s.ok() && !in.atEnd()) {
       s = trailing(std::string("bytes after what ") + what + " should hold");
     }
-    return s.ok() ? s :
-                    Status::error(s.code(), (std::string(what) + ": " + s.message()).c_str());
+    return s.ok() ? s
+                  : Status::error(s.code(),
+                                  (std::string(what) + ": " + s.message()).c_str());
   }
 
   /* A newer file may hold more than this build knows; ours may not. */
@@ -227,21 +239,22 @@ class Parser {
   /* A code with a value that this build doesn't know. */
   Status unknown(const char *what) const
   {
-    return version_ <= kVersion ?
-               damaged(what) :
-               Status::error(StatusCode::Unsupported,
-                             (std::string("the library section: ") + what +
-                              ", of a newer format than this build's")
-                                 .c_str());
+    return version_ <= kVersion
+               ? damaged(what)
+               : Status::error(StatusCode::Unsupported,
+                               (std::string("the library section: ") + what +
+                                ", of a newer format than this build's")
+                                   .c_str());
   }
 
   Status charge(uint64_t n)
   {
-    return file_->budget.take(n) ? Status() : tooLarge("it needs more memory than allowed");
+    return file_->budget.take(n) ? Status()
+                                 : tooLarge("it needs more memory than allowed");
   }
 
-  /* Reserves room for `n` more items, which have been charged. `room` is what the Vector has:
-   * it doesn't say itself. */
+  /* Reserves room for `n` more items, which have been charged. `room` is what the Vector
+   * has: it doesn't say itself. */
   template <class T> Status reserve(Vector<T> &v, uint32_t n, uint64_t &room)
   {
     const uint64_t need = uint64_t(v.size()) + n;
@@ -277,15 +290,13 @@ class Parser {
         }
         name.client = ClientId::of(name.text);
         name.type = typeNamed(name.text);
-      }
-      else if (form == uint8_t(NameForm::RawId)) {
+      } else if (form == uint8_t(NameForm::RawId)) {
         name.isRaw = true;
         name.client.value = name.type.value = in.u64();
         if (!name.client) {
           in.fail(StatusCode::InvalidArgument, "a null name");
         }
-      }
-      else {
+      } else {
         in.fail(unknown("an unknown kind of name"));
       }
       CDCC_TRY(in.status());
@@ -335,17 +346,17 @@ class Parser {
     RefCell cell;
     const uint8_t kind = in.u8();
     switch (kind) {
-      case kRowStrong:
-        cell.kind = RefKind::Strong;
-        break;
-      case kRowOptStrong:
-        cell.kind = RefKind::OptStrong;
-        break;
-      case kRowWeak:
-        cell.kind = RefKind::Weak;
-        break;
-      default:
-        in.fail(unknown("an unknown kind of reference"));
+    case kRowStrong:
+      cell.kind = RefKind::Strong;
+      break;
+    case kRowOptStrong:
+      cell.kind = RefKind::OptStrong;
+      break;
+    case kRowWeak:
+      cell.kind = RefKind::Weak;
+      break;
+    default:
+      in.fail(unknown("an unknown kind of reference"));
     }
     cell.target.client = clientName(in);
     cell.target.local.hi = in.u64();
@@ -488,9 +499,10 @@ class Parser {
       CDCC_TRY(in.status());
       ParsedRecord r;
       if (Status s = record(body, r); !s.ok()) {
-        return Status::error(s.code(), ("block " + std::to_string(i) + " of the file, '" +
-                                        std::string(r.name.substr(0, 64)) + "': " + s.message())
-                                           .c_str());
+        return Status::error(s.code(),
+                             ("block " + std::to_string(i) + " of the file, '" +
+                              std::string(r.name.substr(0, 64)) + "': " + s.message())
+                                 .c_str());
       }
       file_->records.append(r);
     }
@@ -540,10 +552,11 @@ class Parser {
         CDCC_TRY(trailing("data that no block uses"));
         continue;
       }
-      if (Status s = unpack(bytes, lz4, raw, file_->budget, file_->blobs[int(i)]); !s.ok()) {
-        return Status::error(
-            s.code(),
-            ("data " + std::to_string(i) + ": " + s.message()).c_str());
+      if (Status s = unpack(bytes, lz4, raw, file_->budget, file_->blobs[int(i)]);
+          !s.ok())
+      {
+        return Status::error(s.code(),
+                             ("data " + std::to_string(i) + ": " + s.message()).c_str());
       }
     }
     return Status();
@@ -561,9 +574,8 @@ class Parser {
 
 } // namespace
 
-Result<std::unique_ptr<ParsedFile>> parseLibrary(std::span<const uint8_t> bytes,
-                                                 const LoadLimits &limits,
-                                                 IoIssues &issues)
+Result<std::unique_ptr<ParsedFile>>
+parseLibrary(std::span<const uint8_t> bytes, const LoadLimits &limits, IoIssues &issues)
 {
   return Parser(bytes, limits, issues).run();
 }

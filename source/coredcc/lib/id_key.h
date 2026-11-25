@@ -6,8 +6,8 @@
 
 namespace coredcc {
 
-/** A BlockId with a keyed hash, for maps over ids that came from files. BlockId's own hash
- * is easy to invert, so a file could give every block the same one. */
+/** A BlockId with a keyed hash, for maps over ids that came from files. BlockId's own
+ * hash is easy to invert, so a file could give every block the same one. */
 struct BlockIdKey {
   BlockId id;
   uint64_t hash = 0;
@@ -22,13 +22,16 @@ struct BlockIdKey {
   }
 };
 
-/** Makes BlockIdKeys with a secret seed (SipHash-1-3). Keys of different hashers don't mix. */
+/** Makes BlockIdKeys with a secret seed (SipHash-1-3). Keys of different hashers don't
+ * mix. */
 class BlockIdHasher {
- public:
-  explicit BlockIdHasher(LocalId seed) : seed_(seed) {}
+public:
+  explicit BlockIdHasher(LocalId seed) : seed_(seed)
+  {
+  }
   BlockIdKey key(const BlockId &id) const;
 
- private:
+private:
   LocalId seed_;
 };
 

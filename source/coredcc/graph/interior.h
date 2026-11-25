@@ -3,14 +3,15 @@
 /** \file
  * Interior sockets: sockets of nodes inside a group, as sockets of the group node.
  *
- * Their key is `@<node>.<socket>` for a node of the group's def, or `@<group>/<node>.<socket>`
- * for one in a group in it, and so on (not in a foreach). As an output, it reads the socket.
- * As an input, its link replaces the interior input's own link or literal, for that group
- * node only; where several do for one input, the outermost counts. A link with a broken
- * other end replaces nothing.
+ * Their key is `@<node>.<socket>` for a node of the group's def, or
+ * `@<group>/<node>.<socket>` for one in a group in it, and so on (not in a foreach). As
+ * an output, it reads the socket. As an input, its link replaces the interior input's own
+ * link or literal, for that group node only; where several do for one input, the
+ * outermost counts. A link with a broken other end replaces nothing.
  *
- * GraphDef::link accepts such keys; GraphDef::sockets doesn't list them. They are for graphs
- * that a program builds around the user's (a scene evaluator). Commands refuse them.
+ * GraphDef::link accepts such keys; GraphDef::sockets doesn't list them. They are for
+ * graphs that a program builds around the user's (a scene evaluator). Commands refuse
+ * them.
  */
 
 #include "coredcc/graph/def.h"
@@ -25,7 +26,8 @@
 namespace coredcc {
 
 struct InteriorKey {
-  /** The group nodes on the way in, in the group's def, the def of the first, and so on. */
+  /** The group nodes on the way in, in the group's def, the def of the first, and so on.
+   */
   litestl::util::Vector<NodeId, 1> groups;
   NodeId node;
   litestl::util::string key;

@@ -1,4 +1,5 @@
-/* GraphDef: linkAll, nodes with many links, and the limits of interfaces and interior links. */
+/* GraphDef: linkAll, nodes with many links, and the limits of interfaces and interior
+ * links. */
 #include "def_fixture.h"
 
 #include "coredcc/graph/interior.h"
@@ -42,9 +43,8 @@ void testLinkAll()
     n.push_back(add(d, "test.two"));
   }
   litestl::util::Vector<LinkId> ids;
-  const std::vector<LinkSpec> specs = {{{n[0], "x"}, {n[1], "a"}},
-                                       {{n[1], "y"}, {n[2], "a"}},
-                                       {{n[0], "y"}, {n[2], "b"}}};
+  const std::vector<LinkSpec> specs = {
+      {{n[0], "x"}, {n[1], "a"}}, {{n[1], "y"}, {n[2], "a"}}, {{n[0], "y"}, {n[2], "b"}}};
   const uint64_t edit = w.rt.lastEdit();
   test_assert(d.linkAll(specs, ids).ok() && ids.size() == 3 && d.linkCount() == 3);
   test_assert(w.rt.lastEdit() > edit);
@@ -59,32 +59,39 @@ void testLinkAll()
 
   /* Nothing of a batch with an error in it stays, whatever it replaced. */
   auto refused = [&](const std::vector<LinkSpec> &list, StatusCode code) {
-    return hasCode(d.linkAll(list, ids), code) && ids.size() == 0 && linksOf(d) == before &&
-           d.linkCount() == 3 && d.node(n[2])->linkInto("a")->id == old && d.validate().ok();
+    return hasCode(d.linkAll(list, ids), code) && ids.size() == 0 &&
+           linksOf(d) == before && d.linkCount() == 3 &&
+           d.node(n[2])->linkInto("a")->id == old && d.validate().ok();
   };
   const LinkSpec replace{{n[0], "x"}, {n[2], "a"}}, more{{n[2], "x"}, {n[3], "a"}};
-  test_assert(refused({replace, more, {{NodeId{999}, "x"}, {n[4], "a"}}}, StatusCode::NotFound));
-  test_assert(refused({replace, more, {{n[0], "nothing"}, {n[4], "a"}}}, StatusCode::NotFound));
-  test_assert(refused({replace, more, {{n[0], "x"}, {n[4], "nothing"}}}, StatusCode::NotFound));
-  test_assert(refused({replace, more, {{n[0], "m"}, {n[4], "a"}}}, StatusCode::TypeMismatch));
-  test_assert(refused({replace, more, {{n[0], "y"}, {n[2], "a"}}}, StatusCode::InvalidArgument));
+  test_assert(
+      refused({replace, more, {{NodeId{999}, "x"}, {n[4], "a"}}}, StatusCode::NotFound));
+  test_assert(
+      refused({replace, more, {{n[0], "nothing"}, {n[4], "a"}}}, StatusCode::NotFound));
+  test_assert(
+      refused({replace, more, {{n[0], "x"}, {n[4], "nothing"}}}, StatusCode::NotFound));
+  test_assert(
+      refused({replace, more, {{n[0], "m"}, {n[4], "a"}}}, StatusCode::TypeMismatch));
+  test_assert(
+      refused({replace, more, {{n[0], "y"}, {n[2], "a"}}}, StatusCode::InvalidArgument));
   test_assert(refused({replace, more, more}, StatusCode::InvalidArgument));
   /* Cycles through links of the batch, through one that stays, and of one node. */
-  test_assert(refused({replace, more, {{n[3], "x"}, {n[2], "b"}}}, StatusCode::InvalidArgument));
+  test_assert(
+      refused({replace, more, {{n[3], "x"}, {n[2], "b"}}}, StatusCode::InvalidArgument));
   test_assert(refused({more, {{n[3], "y"}, {n[0], "a"}}}, StatusCode::InvalidArgument));
-  test_assert(refused({replace, {{n[4], "x"}, {n[4], "a"}}}, StatusCode::InvalidArgument));
+  test_assert(
+      refused({replace, {{n[4], "x"}, {n[4], "a"}}}, StatusCode::InvalidArgument));
   /* Its error names a link that is on the cycle. */
   const std::vector<LinkSpec> list = {replace, more, {{n[4], "y"}, {n[4], "b"}}};
-  test_assert(strcmp(d.linkAll(list, ids).message(), "linking 'y' to 'b' would make a cycle") == 0);
+  test_assert(strcmp(d.linkAll(list, ids).message(),
+                     "linking 'y' to 'b' would make a cycle") == 0);
 
   /* One that breaks a cycle by what it replaces is fine. */
-  const std::vector<LinkSpec> turn = {{{n[2], "x"}, {n[0], "a"}},
-                                      {{n[5], "x"}, {n[1], "a"}},
-                                      {{n[5], "x"}, {n[2], "b"}}};
+  const std::vector<LinkSpec> turn = {
+      {{n[2], "x"}, {n[0], "a"}}, {{n[5], "x"}, {n[1], "a"}}, {{n[5], "x"}, {n[2], "b"}}};
   int notified = 0;
-  ScopedConnection c = w.rt.ext<ChangeBus>().addListener([&](const OwnerKey *o) {
-    notified += o && *o == OwnerKey::ofBlock(g.id);
-  });
+  ScopedConnection c = w.rt.ext<ChangeBus>().addListener(
+      [&](const OwnerKey *o) { notified += o && *o == OwnerKey::ofBlock(g.id); });
   test_assert(d.linkAll(turn, ids).ok() && d.linkCount() == 4 && ids.size() == 3);
   test_assert(notified == 1);
   test_assert(d.linkAll({}, ids).ok() && ids.size() == 0);
@@ -127,8 +134,9 @@ void testLinkAllGroups()
   test_assert(hasCode(all({{{group, x}, {t, "a"}}, {{t, "x"}, {group, a}}}),
                       StatusCode::InvalidArgument));
   test_assert(d.linkCount() == 0);
-  test_assert(all({{{group, ko0}, {t, "a"}}, {{t, "x"}, {group, ki1}}, {{t, "x"}, {group, a}}})
-                  .ok());
+  test_assert(
+      all({{{group, ko0}, {t, "a"}}, {{t, "x"}, {group, ki1}}, {{t, "x"}, {group, a}}})
+          .ok());
   test_assert(hasCode(all({{{group, x}, {t, "b"}}}), StatusCode::InvalidArgument));
 }
 
@@ -143,8 +151,8 @@ void testWide()
   std::vector<int64_t> sockets;
   std::vector<NodeId> from;
   for (int i = 0; i < 40; i++) {
-    sockets.push_back(
-        addSocket(*in.def, SocketSide::Input, ("s" + std::to_string(i)).c_str(), "float"));
+    sockets.push_back(addSocket(
+        *in.def, SocketSide::Input, ("s" + std::to_string(i)).c_str(), "float"));
     from.push_back(add(d, "test.two"));
   }
   std::vector<int> linked(40, -1);
@@ -157,8 +165,7 @@ void testWide()
     if (grow) {
       connect(d, from[f], "y", group, key(sockets[s]));
       linked[s] = int(f);
-    }
-    else if (linked[s] >= 0) {
+    } else if (linked[s] >= 0) {
       test_assert(d.unlink(d.node(group)->linkInto(key(sockets[s]))->id).ok());
       linked[s] = -1;
     }
@@ -204,10 +211,12 @@ void testInterfaceLimit()
     for (int i = 0; i < GraphDef::kMaxInterface; i++) {
       addSocket(*g.def, side, ("s" + std::to_string(i)).c_str(), "float");
     }
-    test_assert(hasCode(g.def->addInterface(side, "more", "float"), StatusCode::OutOfRange));
+    test_assert(
+        hasCode(g.def->addInterface(side, "more", "float"), StatusCode::OutOfRange));
     test_assert(g.def->removeInterface(g.def->interfaceSockets(side)[5].id).ok());
     addSocket(*g.def, side, "more", "float");
-    test_assert(hasCode(g.def->addInterface(side, "again", "float"), StatusCode::OutOfRange));
+    test_assert(
+        hasCode(g.def->addInterface(side, "again", "float"), StatusCode::OutOfRange));
   }
 }
 
@@ -222,18 +231,20 @@ void testInteriorLimit()
   }
   const int64_t face = addSocket(*in.def, SocketSide::Input, "face", "float");
   GraphDef &d = *g.def;
-  const NodeId group = add(d, "graph.group"), from = add(d, "test.two"), to = add(d, "test.two");
+  const NodeId group = add(d, "graph.group"), from = add(d, "test.two"),
+               to = add(d, "test.two");
   const NodeId other = add(d, "graph.group");
   test_assert(d.setGroup(group, in.id).ok() && d.setGroup(other, in.id).ok());
-  auto link = [&](int64_t id, NodeId a, const std::string &k, NodeId b, const std::string &l) {
-    LinkState s;
-    s.id = LinkId{id};
-    s.from = a;
-    s.fromKey = k.c_str();
-    s.to = b;
-    s.toKey = l.c_str();
-    return d.insertLink(s);
-  };
+  auto link =
+      [&](int64_t id, NodeId a, const std::string &k, NodeId b, const std::string &l) {
+        LinkState s;
+        s.id = LinkId{id};
+        s.from = a;
+        s.fromKey = k.c_str();
+        s.to = b;
+        s.toKey = l.c_str();
+        return d.insertLink(s);
+      };
   /* Up to the limit, in both directions: they count together. */
   test_assert(link(100000, group, inner(nodes[0], "x"), to, "a").ok());
   for (int i = 0; i < n - 1; i++) {
@@ -243,7 +254,8 @@ void testInteriorLimit()
   litestl::util::Vector<LinkId> ids;
   const std::vector<LinkSpec> spec = {{{from, "x"}, {group, last}}};
   test_assert(hasCode(link(200000, from, "x", group, last), StatusCode::OutOfRange));
-  test_assert(hasCode(link(200000, group, inner(nodes[0], "x"), to, "b"), StatusCode::OutOfRange));
+  test_assert(hasCode(link(200000, group, inner(nodes[0], "x"), to, "b"),
+                      StatusCode::OutOfRange));
   test_assert(hasCode(d.linkAll(spec, ids), StatusCode::OutOfRange));
   test_assert(hasCode(d.link({from, "x"}, {group, last}), StatusCode::OutOfRange));
   test_assert(d.linkCount() == n);
@@ -252,9 +264,11 @@ void testInteriorLimit()
   test_assert(link(200001, from, "x", group, key(face)).ok());
   test_assert(d.unlink(LinkId{100000}).ok());
   test_assert(link(200002, from, "x", group, last).ok());
-  test_assert(hasCode(link(200003, group, inner(nodes[0], "x"), to, "a"), StatusCode::OutOfRange));
+  test_assert(hasCode(link(200003, group, inner(nodes[0], "x"), to, "a"),
+                      StatusCode::OutOfRange));
   test_assert(d.removeNode(from).ok() && d.linkCount() == 0);
-  test_assert(link(200003, group, inner(nodes[0], "x"), to, "a").ok() && d.validate().ok());
+  test_assert(link(200003, group, inner(nodes[0], "x"), to, "a").ok() &&
+              d.validate().ok());
 }
 
 } // namespace

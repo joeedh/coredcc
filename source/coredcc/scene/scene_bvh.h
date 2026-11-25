@@ -18,17 +18,19 @@ class SceneEvaluator;
 struct SceneSettings {
   static constexpr const char *kExtName = "coredcc.SceneSettings";
 
-  /** Of every SceneBvh, from its next build on. Without `parallel`, evaluateScene doesn't use
-   * litestl's task pool. */
+  /** Of every SceneBvh, from its next build on. Without `parallel`, evaluateScene doesn't
+   * use litestl's task pool. */
   BvhOptions bvh;
 
-  explicit SceneSettings(Runtime *) {}
+  explicit SceneSettings(Runtime *)
+  {
+  }
 };
 
-/** A BVH over the world bounds that evaluateScene found, which keeps it up to date. Members only,
- * without those that have no bounds or whose status is Invalid. */
+/** A BVH over the world bounds that evaluateScene found, which keeps it up to date.
+ * Members only, without those that have no bounds or whose status is Invalid. */
 class SceneBvh {
- public:
+public:
   /** Whether the scene has been evaluated (and the last build didn't fail). */
   bool valid() const
   {
@@ -44,10 +46,10 @@ class SceneBvh {
     return index_->handles()[primitive];
   }
 
-  /* Objects, by their bounds in the world: those that a region may contain a part of, in the scene's
-   * order; that a ray hits, in the order it enters them; and whose bounds are within a distance of a
-   * point, nearest first. InvalidArgument, and none, for a region, a ray, a point or a radius that
-   * isn't valid. */
+  /* Objects, by their bounds in the world: those that a region may contain a part of, in
+   * the scene's order; that a ray hits, in the order it enters them; and whose bounds are
+   * within a distance of a point, nearest first. InvalidArgument, and none, for a region,
+   * a ray, a point or a radius that isn't valid. */
   Status objectsInRegion(std::span<const BvhPlane> planes,
                          litestl::util::Vector<BlockHandle> &out) const;
   Status objectsOnRay(const Ray &ray, litestl::util::Vector<BlockHandle> &out) const;
@@ -65,10 +67,10 @@ class SceneBvh {
     return counters_;
   }
 
- private:
+private:
   friend class detail::SceneEvaluator;
-  /** A refit if the objects are the same and none appears that had no bounds when it was built,
-   * unless that makes the tree too loose. */
+  /** A refit if the objects are the same and none appears that had no bounds when it was
+   * built, unless that makes the tree too loose. */
   Status update(const detail::EvaluatedStore &results, const BvhOptions &options);
 
   GeometryBvh<BoxSource> boxes_;

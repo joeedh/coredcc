@@ -81,8 +81,8 @@ const GraphSocketAddress *GraphNode::addressOf(std::string_view key)
       return a;
     }
   }
-  addresses_.append(
-      litestl::alloc::New<GraphSocketAddress>("coredcc::GraphSocketAddress", this, lsString(key)));
+  addresses_.append(litestl::alloc::New<GraphSocketAddress>(
+      "coredcc::GraphSocketAddress", this, lsString(key)));
   return addresses_.last();
 }
 
@@ -106,7 +106,8 @@ GraphPassKey GraphPassKey::of(Runtime &rt, const Library *lib)
   GraphPassKey k;
   k.edit = rt.lastEdit();
   if (lib) {
-    lib->find(BlockId()); /* an alias added since re-keys the records, which moves the epoch */
+    lib->find(
+        BlockId()); /* an alias added since re-keys the records, which moves the epoch */
     k.epoch = lib->epoch();
   }
   k.clients = rt.ext<ClientRegistry>().generation();
@@ -137,7 +138,8 @@ GraphDef::GraphDef(Runtime *rt, Library *lib, BlockId self)
     nextDef_->prevDef_ = this;
   }
   types.defs_ = this;
-  structureVersion_ = contentVersion_ = interfaceVersion_ = refsVersion_ = rt_.nextVersion();
+  structureVersion_ = contentVersion_ = interfaceVersion_ = refsVersion_ =
+      rt_.nextVersion();
   rt_.ext<GraphSystem>().noteStructure(structureVersion_);
 }
 
@@ -174,7 +176,8 @@ const InterfaceSocket *GraphDef::interfaceSocket(int64_t id) const
   return const_cast<GraphDef *>(this)->findInterface(id);
 }
 
-const InterfaceSocket *GraphDef::interfaceSocket(SocketSide side, std::string_view name) const
+const InterfaceSocket *GraphDef::interfaceSocket(SocketSide side,
+                                                 std::string_view name) const
 {
   for (const InterfaceSocket &s : interfaceSockets(side)) {
     if (name == s.name.c_str()) {
@@ -217,8 +220,8 @@ void GraphDef::refreshSockets(const GraphNode &node) const
   const bool foreach = type->role == NodeRole::Foreach;
   const GraphDef *source = hasGroup(type->role) ? groupTarget(node) : this;
   /* Interface versions are unique, so one also says which def it is of. */
-  if (source ? node.socketsVersion_ == source->interfaceVersion_ :
-               !foreach || (node.inputs_.size() > 0 && node.outputs_.size() > 0))
+  if (source ? node.socketsVersion_ == source->interfaceVersion_
+             : !foreach || (node.inputs_.size() > 0 && node.outputs_.size() > 0))
   {
     return;
   }
@@ -226,7 +229,8 @@ void GraphDef::refreshSockets(const GraphNode &node) const
   node.outputs_.clear();
   node.socketsVersion_ = source ? source->interfaceVersion_ : 0;
   if (foreach) {
-    const SocketInfo elements{kElementsSocket, kElementsSocket, PayloadTraits<Elements>::name};
+    const SocketInfo elements{
+        kElementsSocket, kElementsSocket, PayloadTraits<Elements>::name};
     node.inputs_.append(elements);
     node.outputs_.append(elements);
   }
@@ -258,9 +262,8 @@ const SocketInfos &GraphDef::sockets(const GraphNode &node, SocketSide side) con
   return side == SocketSide::Input ? node.inputs_ : node.outputs_;
 }
 
-std::optional<SocketInfo> GraphDef::findSocket(const GraphNode &node,
-                                               SocketSide side,
-                                               std::string_view key) const
+std::optional<SocketInfo>
+GraphDef::findSocket(const GraphNode &node, SocketSide side, std::string_view key) const
 {
   if (isInteriorKey(key)) {
     const std::optional<InteriorKey> k = InteriorKey::parse(key);
@@ -285,7 +288,8 @@ std::optional<SocketInfo> GraphDef::findSocket(const GraphNode &node,
 GraphDef *GraphDef::groupTarget(const GraphNode &node) const
 {
   const Library *lib = lib_.get();
-  return lib && !node.group_.isNull() ? graphDefOf(*lib, lib->resolveRef(node.group_)) : nullptr;
+  return lib && !node.group_.isNull() ? graphDefOf(*lib, lib->resolveRef(node.group_))
+                                      : nullptr;
 }
 
 const GraphNode *GraphDef::nodeAt(int index) const
@@ -336,7 +340,8 @@ PropValue GraphDef::paramValue(const GraphNode &node, std::string_view name) con
   }
   const PropertyDef &def = type->params[i].def;
   if (const NodeValue *set = node.param(name)) {
-    /* A file, or an older version of the type, may hold a value the def doesn't accept. */
+    /* A file, or an older version of the type, may hold a value the def doesn't accept.
+     */
     Result<PropValue> v = coerce(def, set->value);
     if (v.ok()) {
       return std::move(v).value();
@@ -354,22 +359,23 @@ const Vector<LinkDiagnostic> &GraphDef::diagnostics() const
   }
   diagnosedAt_ = topo->serial;
   const SocketTypeRegistry &types = rt_.ext<SocketTypeRegistry>();
-  auto typeOfSocket = [&](const GraphNode &n, SocketSide side, const string &key, Status &status) {
-    if (const std::optional<SocketInfo> s = findSocket(n, side, key.c_str())) {
-      const SocketType *t = types.find(s->typeName.c_str());
-      if (!t) {
-        status = types.unknown(s->typeName.c_str());
-      }
-      return t;
-    }
-    status = Status::error(StatusCode::NotFound,
-                           (std::string("node ") + std::to_string(n.id().value) + " (" +
-                            n.typeName().c_str() + ") has no " +
-                            (side == SocketSide::Input ? "input '" : "output '") + key.c_str() +
-                            "'")
-                               .c_str());
-    return static_cast<const SocketType *>(nullptr);
-  };
+  auto typeOfSocket =
+      [&](const GraphNode &n, SocketSide side, const string &key, Status &status) {
+        if (const std::optional<SocketInfo> s = findSocket(n, side, key.c_str())) {
+          const SocketType *t = types.find(s->typeName.c_str());
+          if (!t) {
+            status = types.unknown(s->typeName.c_str());
+          }
+          return t;
+        }
+        status = Status::error(StatusCode::NotFound,
+                               (std::string("node ") + std::to_string(n.id().value) +
+                                " (" + n.typeName().c_str() + ") has no " +
+                                (side == SocketSide::Input ? "input '" : "output '") +
+                                key.c_str() + "'")
+                                   .c_str());
+        return static_cast<const SocketType *>(nullptr);
+      };
   diagnostics_.clear();
   for (int i = 0; i < linkCount(); i++) {
     const GraphLink &l = *linkAt(i);
@@ -379,13 +385,15 @@ const Vector<LinkDiagnostic> &GraphDef::diagnostics() const
         status.ok() ? typeOfSocket(*l.to, SocketSide::Input, l.toKey, status) : nullptr;
     if (status.ok() && !types.canConvert(*from, *to)) {
       status = Status::error(StatusCode::TypeMismatch,
-                             (std::string("there is no conversion from ") + from->name.c_str() +
-                              " to " + to->name.c_str())
+                             (std::string("there is no conversion from ") +
+                              from->name.c_str() + " to " + to->name.c_str())
                                  .c_str());
     }
     if (!status.ok()) {
-      diagnostics_.append(LinkDiagnostic{
-          l.id, status, isInteriorKey(l.fromKey.c_str()) || isInteriorKey(l.toKey.c_str())});
+      diagnostics_.append(LinkDiagnostic{l.id,
+                                         status,
+                                         isInteriorKey(l.fromKey.c_str()) ||
+                                             isInteriorKey(l.toKey.c_str())});
     }
   }
   return diagnostics_;
@@ -395,8 +403,10 @@ const LinkDiagnostic *GraphDef::diagnostic(LinkId link) const
 {
   const Vector<LinkDiagnostic> &list = diagnostics();
   const LinkDiagnostic *end = list.data() + list.size();
-  const LinkDiagnostic *at = std::lower_bound(
-      list.data(), end, link, [](const LinkDiagnostic &d, LinkId id) { return d.link < id; });
+  const LinkDiagnostic *at =
+      std::lower_bound(list.data(), end, link, [](const LinkDiagnostic &d, LinkId id) {
+        return d.link < id;
+      });
   return at != end && at->link == link ? at : nullptr;
 }
 
@@ -404,7 +414,8 @@ const GraphLink *GraphDef::linkAt(int index) const
 {
   if (linkIndex_.size() == 0) {
     forEachLink([&](const GraphLink &l) { linkIndex_.append(&l); });
-    std::sort(linkIndex_.begin(), linkIndex_.end(),
+    std::sort(linkIndex_.begin(),
+              linkIndex_.end(),
               [](const GraphLink *a, const GraphLink *b) { return a->id < b->id; });
   }
   return index >= 0 && index < int(linkIndex_.size()) ? linkIndex_[index] : nullptr;
@@ -464,8 +475,9 @@ Result<GraphNode *> GraphDef::find(NodeId id, const char *what) const
   if (GraphNode *const *n = byId_.lookup_ptr(id.value)) {
     return *n;
   }
-  return Status::error(StatusCode::NotFound,
-                       (std::string(what) + ": no node " + std::to_string(id.value)).c_str());
+  return Status::error(
+      StatusCode::NotFound,
+      (std::string(what) + ": no node " + std::to_string(id.value)).c_str());
 }
 
 uint64_t GraphDef::stampNode(NodeId node)
@@ -599,8 +611,7 @@ GraphLink *GraphDef::attachLink(const LinkState &state, GraphNode *from, GraphNo
   linkIndex_.clear();
   if (to->inByKey_) {
     to->inByKey_->add({l->toKey}, l);
-  }
-  else if (to->in_.size() > GraphNode::kScan) {
+  } else if (to->in_.size() > GraphNode::kScan) {
     to->inByKey_ = std::make_unique<Map<detail::SocketKey, GraphLink *>>();
     for (GraphLink *in : to->in_) {
       to->inByKey_->add({in->toKey}, in);
@@ -692,7 +703,8 @@ std::shared_ptr<const GraphTopology> GraphDef::topology() const
 Status GraphDef::validate() const
 {
   auto bad = [](const char *what) {
-    return Status::error(StatusCode::Internal, (std::string("GraphDef: ") + what).c_str());
+    return Status::error(StatusCode::Internal,
+                         (std::string("GraphDef: ") + what).c_str());
   };
   int live = 0, outputs = 0, untyped = 0;
   for (const GraphNode *n = first_, *prev = nullptr; n; prev = n, n = n->next_) {
@@ -729,12 +741,16 @@ Status GraphDef::validate() const
       return bad("the links of a node and their counts differ");
     }
     for (int i = 0; i < int(n->out_.size()); i++) {
-      if (n->out_[i]->from != n || n->out_[i]->outSlot != i || link(n->out_[i]->id) != n->out_[i]) {
+      if (n->out_[i]->from != n || n->out_[i]->outSlot != i ||
+          link(n->out_[i]->id) != n->out_[i])
+      {
         return bad("an outgoing link is wrong");
       }
     }
   }
-  if (live != int(byId_.size()) || untyped != untyped_ || (live == 0 && last_) || outputs > 1) {
+  if (live != int(byId_.size()) || untyped != untyped_ || (live == 0 && last_) ||
+      outputs > 1)
+  {
     return bad("node counts differ, or there are two graph.output nodes");
   }
   Status status;

@@ -10,18 +10,20 @@
 
 namespace coredcc::script {
 
-/** A table. Copies of it share the rows until one of them is edited, as do sockets that were
- * set to it. */
+/** A table. Copies of it share the rows until one of them is edited, as do sockets that
+ * were set to it. */
 class ScriptTable {
- public:
+public:
   ScriptTable() = default;
-  explicit ScriptTable(PayloadRef ref) : ref_(std::move(ref)) {}
+  explicit ScriptTable(PayloadRef ref) : ref_(std::move(ref))
+  {
+  }
   /** Null when blocks that the rows are in are gone. */
   const Elements *get() const;
   /** For writing; null as for `get`, and when the rows are a block's. */
   Elements *edit();
-  /** Ok if it can be a socket's value: keys are there once, and all rows have a value in all
-   * columns. */
+  /** Ok if it can be a socket's value: keys are there once, and all rows have a value in
+   * all columns. */
   Status check() const;
   /** Null for a table nothing was put into. */
   const PayloadRef &ref() const
@@ -30,7 +32,7 @@ class ScriptTable {
   }
   static const litestl::binding::types::Struct<ScriptTable> *defineBindings();
 
- private:
+private:
   PayloadRef ref_;
 };
 
@@ -52,7 +54,8 @@ Status tableAddColumn(ScriptTable &table, const string &name);
 /** A row at the end, without values. A key that is there twice is found by `check`. */
 Status tableAddRow(ScriptTable &table, int64_t key);
 /** Not a Pointer, Enum or Flags. */
-Status tableSet(ScriptTable &table, const string &column, int32_t row, const PropValue &value);
+Status
+tableSet(ScriptTable &table, const string &column, int32_t row, const PropValue &value);
 /** NotFound for a column or row that isn't there; Unsupported for a payload. */
 ValueResult tableGet(const ScriptTable &table, const string &column, int32_t row);
 

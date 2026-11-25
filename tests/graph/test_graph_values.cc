@@ -184,7 +184,8 @@ void testValues()
   test_assert(graphTypeFor(PropKind::Collection) == Type::None);
 }
 
-GraphValue convert(const SocketTypeRegistry &reg, const char *from, const char *to, GraphValue v)
+GraphValue
+convert(const SocketTypeRegistry &reg, const char *from, const char *to, GraphValue v)
 {
   GraphValue out;
   const Status s = reg.convert(*reg.find(from), *reg.find(to), v, out);
@@ -215,7 +216,8 @@ void testSocketTypes()
   SocketTypeRegistry &reg = rt.ext<SocketTypeRegistry>();
   test_assert(rt.validateAll().ok());
   for (const char *name :
-       {"bool", "int", "float", "vec2", "vec3", "vec4", "mat4", "quat", "string"}) {
+       {"bool", "int", "float", "vec2", "vec3", "vec4", "mat4", "quat", "string"})
+  {
     const SocketType *t = reg.find(name);
     test_assert(t && t->holds(t->defaultValue) && t->hasLiteral());
     test_assert(reg.builtin(t->valueType) == t);
@@ -223,7 +225,8 @@ void testSocketTypes()
     test_assert(def.validate().ok() && graphTypeFor(def.kind()) == t->valueType);
     test_assert(*GraphValue::fromProp(def.defaultValue()) == t->defaultValue);
   }
-  test_assert(!reg.find("enum") && !reg.builtin(Type::Payload) && !reg.builtin(Type::None));
+  test_assert(!reg.find("enum") && !reg.builtin(Type::Payload) &&
+              !reg.builtin(Type::None));
   test_assert(!reg.find("float")->holds(GraphValue::ofInt(1)));
 
   /* Payload types, and the two C++ types under one name. */
@@ -232,7 +235,8 @@ void testSocketTypes()
   test_assert(mesh.ok() && rt.lastEdit() > before && !(*mesh)->hasLiteral());
   const uint64_t after = rt.lastEdit();
   test_assert(*reg.addPayloadType<Mesh>() == *mesh && rt.lastEdit() == after);
-  test_assert(reg.addPayloadType<Impostor>().status().code() == StatusCode::AlreadyExists);
+  test_assert(reg.addPayloadType<Impostor>().status().code() ==
+              StatusCode::AlreadyExists);
   test_assert(reg.addPayloadType<Points>().ok());
   test_assert((*mesh)->holds(GraphValue::ofPayload(makePayload(Mesh(1)))));
   test_assert((*mesh)->holds(GraphValue::ofPayload(PayloadRef())));
@@ -261,14 +265,22 @@ void testSocketTypes()
     test_assert(convert(reg, "float", "int", GraphValue::ofFloat(c.in)) ==
                 GraphValue::ofInt(c.out));
   }
-  test_assert(convert(reg, "float", "bool", GraphValue::ofFloat(0.25)) == GraphValue::ofBool(true));
-  test_assert(convert(reg, "float", "bool", GraphValue::ofFloat(0)) == GraphValue::ofBool(false));
-  test_assert(convert(reg, "int", "bool", GraphValue::ofInt(-1)) == GraphValue::ofBool(true));
-  test_assert(convert(reg, "int", "float", GraphValue::ofInt(-3)) == GraphValue::ofFloat(-3));
-  test_assert(convert(reg, "bool", "int", GraphValue::ofBool(true)) == GraphValue::ofInt(1));
-  test_assert(convert(reg, "bool", "float", GraphValue::ofBool(true)) == GraphValue::ofFloat(1));
-  test_assert(convert(reg, "float", "vec2", GraphValue::ofFloat(2)) == GraphValue::ofVec2(2, 2));
-  test_assert(convert(reg, "float", "vec3", GraphValue::ofFloat(2)) == GraphValue::ofVec3(2, 2, 2));
+  test_assert(convert(reg, "float", "bool", GraphValue::ofFloat(0.25)) ==
+              GraphValue::ofBool(true));
+  test_assert(convert(reg, "float", "bool", GraphValue::ofFloat(0)) ==
+              GraphValue::ofBool(false));
+  test_assert(convert(reg, "int", "bool", GraphValue::ofInt(-1)) ==
+              GraphValue::ofBool(true));
+  test_assert(convert(reg, "int", "float", GraphValue::ofInt(-3)) ==
+              GraphValue::ofFloat(-3));
+  test_assert(convert(reg, "bool", "int", GraphValue::ofBool(true)) ==
+              GraphValue::ofInt(1));
+  test_assert(convert(reg, "bool", "float", GraphValue::ofBool(true)) ==
+              GraphValue::ofFloat(1));
+  test_assert(convert(reg, "float", "vec2", GraphValue::ofFloat(2)) ==
+              GraphValue::ofVec2(2, 2));
+  test_assert(convert(reg, "float", "vec3", GraphValue::ofFloat(2)) ==
+              GraphValue::ofVec3(2, 2, 2));
   test_assert(convert(reg, "float", "vec4", GraphValue::ofFloat(2)) ==
               GraphValue::ofVec4(2, 2, 2, 2));
   test_assert(convert(reg, "quat", "quat", GraphValue::ofQuat(0, 0, 0, 1)) ==
@@ -279,7 +291,8 @@ void testSocketTypes()
   const SocketType &vec3 = *reg.find("vec3");
   const SocketType &text = *reg.find("string");
   test_assert(!reg.canConvert(mat4, vec3) && !reg.canConvert(vec3, *reg.find("float")));
-  test_assert(reg.canConvert(mat4, mat4) && reg.canConvert(*reg.find("bool"), *reg.find("int")));
+  test_assert(reg.canConvert(mat4, mat4) &&
+              reg.canConvert(*reg.find("bool"), *reg.find("int")));
   test_assert(reg.convert(mat4, vec3, GraphValue::identityMat4(), out).code() ==
               StatusCode::TypeMismatch);
   test_assert(out == GraphValue::ofInt(9));
@@ -289,10 +302,13 @@ void testSocketTypes()
   test_assert(reg.canConvert(mat4, vec3) && !reg.canConvert(vec3, mat4));
   test_assert(reg.convert(mat4, vec3, GraphValue::identityMat4(), out).ok());
   test_assert(out == GraphValue::ofVec3(0, 0, 0));
-  test_assert(reg.addConversion("mat4", "vec3", refuses).code() == StatusCode::AlreadyExists);
+  test_assert(reg.addConversion("mat4", "vec3", refuses).code() ==
+              StatusCode::AlreadyExists);
   test_assert(reg.convert(mat4, vec3, GraphValue::identityMat4(), out).ok());
-  test_assert(reg.addConversion("float", "float", liar).code() == StatusCode::InvalidArgument);
-  test_assert(reg.addConversion("float", "quat", nullptr).code() == StatusCode::InvalidArgument);
+  test_assert(reg.addConversion("float", "float", liar).code() ==
+              StatusCode::InvalidArgument);
+  test_assert(reg.addConversion("float", "quat", nullptr).code() ==
+              StatusCode::InvalidArgument);
   const Status missing = reg.addConversion("flaot", "int", liar);
   test_assert(missing.code() == StatusCode::NotFound && missing.suggestions().size() > 0);
   test_assert(reg.addConversion("int", "nothing", liar).code() == StatusCode::NotFound);
@@ -301,8 +317,9 @@ void testSocketTypes()
   test_assert(reg.addConversion("string", "quat", liar).ok());
   test_assert(reg.addConversion("string", "vec3", refuses).ok());
   out = GraphValue::ofInt(9);
-  test_assert(reg.convert(text, *reg.find("quat"), GraphValue::ofString(""), out).code() ==
-              StatusCode::Internal);
+  test_assert(
+      reg.convert(text, *reg.find("quat"), GraphValue::ofString(""), out).code() ==
+      StatusCode::Internal);
   test_assert(reg.convert(text, vec3, GraphValue::ofString(""), out).code() ==
               StatusCode::OutOfRange);
   test_assert(out == GraphValue::ofInt(9));

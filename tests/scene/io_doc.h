@@ -37,23 +37,30 @@ inline Bytes save(const Library &lib)
   return *b;
 }
 
-/* A transform type with a channel of each kind. `version` 1 has other channels: `size` is an Int,
- * `count` a Float, `mode` has other items and numbers, and `extra` isn't there. */
+/* A transform type with a channel of each kind. `version` 1 has other channels: `size` is
+ * an Int, `count` a Float, `mode` has other items and numbers, and `extra` isn't there.
+ */
 inline TransformTypeInfo everyKind(int version)
 {
   TransformTypeInfo info;
   info.name = "io.type";
   info.channels.append(PropertyDef::boolProp("on"));
-  PropertyDef size = version ? PropertyDef::intProp("size") : PropertyDef::floatProp("size");
+  PropertyDef size =
+      version ? PropertyDef::intProp("size") : PropertyDef::floatProp("size");
   info.channels.append(size);
-  info.channels.append(version ? PropertyDef::floatProp("count") : PropertyDef::intProp("count"));
+  info.channels.append(version ? PropertyDef::floatProp("count")
+                               : PropertyDef::intProp("count"));
   const int base = version ? 20 : 0;
   PropertyDef mode = PropertyDef::enumProp("mode");
   if (!version) {
-    mode.item("ONE", 1).item("TWO", 2).item("THREE", 3).defaultValue(PropValue::ofEnum(1));
-  }
-  else {
-    mode.item("TWO", base + 2).item("ONE", base + 1).defaultValue(PropValue::ofEnum(base + 2));
+    mode.item("ONE", 1)
+        .item("TWO", 2)
+        .item("THREE", 3)
+        .defaultValue(PropValue::ofEnum(1));
+  } else {
+    mode.item("TWO", base + 2)
+        .item("ONE", base + 1)
+        .defaultValue(PropValue::ofEnum(base + 2));
   }
   info.channels.append(std::move(mode));
   if (!version) {
@@ -78,7 +85,9 @@ struct IoDoc : CommandDoc {
     m->fn = [](const EvalCtx &, const TransformState &p) { return p; };
     Result<Owned<TransformModel>> owned = own<TransformModel>(rt, impl, m);
     must(owned.status());
-    must(rt.ext<TransformRegistry>().add(everyKind(version), std::move(owned).value()).status());
+    must(rt.ext<TransformRegistry>()
+             .add(everyKind(version), std::move(owned).value())
+             .status());
   }
   BlockHandle byName(const char *name)
   {
@@ -98,7 +107,8 @@ struct Loaded {
   Context ctx;
   LoadReport report;
 
-  Loaded(IoDoc &d, const Bytes &bytes, int64_t issues = 0) : lib(&d.rt), ctx(&d.rt, &lib, d.ctx->root())
+  Loaded(IoDoc &d, const Bytes &bytes, int64_t issues = 0)
+      : lib(&d.rt), ctx(&d.rt, &lib, d.ctx->root())
   {
     lib.setAuditRelations(true);
     Result<LoadReport> r = loadLibrary(ctx, view(bytes));
@@ -149,7 +159,9 @@ struct Fields {
   BlockWriter out;
   Vector<BlockEntry> fields, entries;
 
-  explicit Fields(IoDoc &doc) : d(doc), out(*doc.lib) {}
+  explicit Fields(IoDoc &doc) : d(doc), out(*doc.lib)
+  {
+  }
   BlockEntry &entry(const char *name, PropValue v)
   {
     BlockEntry e;
@@ -169,7 +181,8 @@ struct Fields {
   }
 };
 
-inline Status readInto(IoDoc &d, const char *type, const BlockPayload &p, BlockHandle *out = nullptr)
+inline Status
+readInto(IoDoc &d, const char *type, const BlockPayload &p, BlockHandle *out = nullptr)
 {
   const BlockId id{ClientId::of(kCoredccClient), d.rt.newLocalId()};
   Result<BlockHandle> h = d.lib->createWithId(TypeId::of(type), id, "read", nullptr);

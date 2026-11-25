@@ -102,7 +102,8 @@ static void test_watch()
               sc::watchedCount(ctx) == 5 && sc::readerTakeChanged(r) == -1 &&
               sc::readerTakeChangedMeta(r) == -1);
   sc::readerUnwatch(r);
-  test_assert(sc::watchedCount(ctx) == 0 && sc::setValue(ctx, "tool.count", sc::makeInt(1)).ok() &&
+  test_assert(sc::watchedCount(ctx) == 0 &&
+              sc::setValue(ctx, "tool.count", sc::makeInt(1)).ok() &&
               sc::flushChanges(ctx).value == 0 && holds(r, 0, PropValue::ofInt(4)));
 }
 
@@ -166,21 +167,30 @@ static void test_take()
     }
     return got == want;
   };
-  for (const char *path : {"tool.free", "tool.locked", "objects[0].name", "objects[0].mode",
-                           "objects[0].flags", "objects[0].location", "objects[0].data",
-                           "objects[0].mode[EDIT]", "objects.length", "tool.pick"})
+  for (const char *path : {"tool.free",
+                           "tool.locked",
+                           "objects[0].name",
+                           "objects[0].mode",
+                           "objects[0].flags",
+                           "objects[0].location",
+                           "objects[0].data",
+                           "objects[0].mode[EDIT]",
+                           "objects.length",
+                           "tool.pick"})
   {
     add(r, path);
   }
   test_assert(is(take(false), "[]"));
-  const char *unread = "\"the path wasn't read yet\",\"FailedPrecondition: the path wasn't read yet\"]";
+  const char *unread =
+      "\"the path wasn't read yet\",\"FailedPrecondition: the path wasn't read yet\"]";
   test_assert(take(true).find(unread) != std::string::npos);
   test_assert(sc::readerWatch(ctx, r).ok() && is(take(false), "[]"));
   s.w.object(0).location[1] = -0.5f;
   s.w.object(0).mesh.target = BlockId{};
   ctx.runtime().ext<ChangeBus>().notifyAll();
   test_assert(sc::flushChanges(ctx).value == 2);
-  test_assert(is(take(false), "[[5,1,\"v\",[0,-0.5,0]],[6,1,\"p\",null]]") && is(take(false), "[]"));
+  test_assert(is(take(false), "[[5,1,\"v\",[0,-0.5,0]],[6,1,\"p\",null]]") &&
+              is(take(false), "[]"));
   test_assert(sc::readerTakeChanged(r) == -1);
   test_assert(sc::setValue(ctx, "tool.count", sc::makeInt(9)).ok());
   test_assert(sc::flushChanges(ctx).value == 1 && is(take(false), "[[9,2,\"i\",0]]"));
@@ -190,7 +200,8 @@ static void test_take()
   const std::string want =
       "[[0,0,\"f\",0],[1,0,\"b\",false],[2,0,\"s\",\"Cube\"],[3,0,\"e\",0,\"OBJECT\"],"
       "[4,0,\"g\",0,[]],[5,0,\"v\",[0,-0.5,0]],[6,0,\"p\",\"" +
-      formatRef(ctx.runtime(), mesh) + "\"],[7,0,\"b\",false],[8,0,\"i\",2],[9,0,\"i\",0]]";
+      formatRef(ctx.runtime(), mesh) +
+      "\"],[7,0,\"b\",false],[8,0,\"i\",2],[9,0,\"i\",0]]";
   test_assert(is(take(true), want.c_str()));
   /* What no item has, what JSON can't hold, and errors. */
   s.w.tool.free = -std::numeric_limits<double>::infinity();
@@ -198,10 +209,12 @@ static void test_take()
   s.w.object(0).flags = 3;
   test_assert(sc::readerRead(ctx, r).ok());
   const std::string odd = take(true);
-  test_assert(odd.starts_with("[[0,0,\"f\",\"-inf\"],") && odd.find("[3,0,\"e\",7],") != odd.npos);
+  test_assert(odd.starts_with("[[0,0,\"f\",\"-inf\"],") &&
+              odd.find("[3,0,\"e\",7],") != odd.npos);
   test_assert(odd.find("[4,0,\"g\",3,[\"SELECT\",\"HIDE\"]],") != odd.npos);
   s.w.object(0).flags = 5;
-  test_assert(sc::readerRead(ctx, r).ok() && take(true).find("[4,0,\"g\",5],") != odd.npos);
+  test_assert(sc::readerRead(ctx, r).ok() &&
+              take(true).find("[4,0,\"g\",5],") != odd.npos);
   s.w.scene.objects.clear();
   ctx.runtime().ext<ChangeBus>().notifyAll();
   sc::flushChanges(ctx);

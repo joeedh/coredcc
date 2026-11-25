@@ -1,7 +1,7 @@
-/* Damaged and hostile library sections: every rejection, versions, limits, bombs and fuzzing,
- * within time and memory bounds. */
-#include "io_fixture.h"
+/* Damaged and hostile library sections: every rejection, versions, limits, bombs and
+ * fuzzing, within time and memory bounds. */
 #include "fuzz.h"
+#include "io_fixture.h"
 
 #include "litestl/io/compress.h"
 #include "litestl/util/alloc.h"
@@ -21,15 +21,21 @@ constexpr StatusCode kRange = StatusCode::OutOfRange;
 constexpr StatusCode kUnsupported = StatusCode::Unsupported;
 
 /* Loading fails with `code` and a message that has `what`, and changes nothing. */
-bool refused(const Bytes &file, StatusCode code, const char *what, const LoadOptions &options = {})
+bool refused(const Bytes &file,
+             StatusCode code,
+             const char *what,
+             const LoadOptions &options = {})
 {
   Runtime rt;
   Library lib(&rt);
   const uint64_t epoch = lib.epoch();
   Result<LoadReport> r = detail::loadLibrary(lib, view(file), options);
   if (r.ok() || r.status().code() != code) {
-    fprintf(stderr, "%s: %s, wanted %s\n", r.ok() ? "Ok" : statusCodeName(r.status().code()),
-            r.ok() ? "" : r.status().message(), what);
+    fprintf(stderr,
+            "%s: %s, wanted %s\n",
+            r.ok() ? "Ok" : statusCodeName(r.status().code()),
+            r.ok() ? "" : r.status().message(),
+            what);
     return false;
   }
   return hasMsg(r.status(), what) && lib.size() == 0 && lib.epoch() == epoch &&
@@ -59,7 +65,8 @@ Bytes sample()
   test_assert(w.lib.setSlot(a, TypeId{77}, -2, w.id(b), RefKind::OptStrong).ok());
   w.note(a, 5, w.id(c));
   w.addOptEntry(a, w.id(b));
-  w.addOptEntry(a, w.id(b), "a name that is long and long and long and long and long and long");
+  w.addOptEntry(
+      a, w.id(b), "a name that is long and long and long and long and long and long");
   for (int i = 0; i < 12; i++) {
     w.data(c)->entries.append(entryOf("the same entry again", PropValue::ofInt(i)));
   }
@@ -113,19 +120,35 @@ static void test_container()
     return f.build();
   };
   for (int i = 0; i < 3; i++) {
-    test_assert(refused(with([&]() { f.chunks.erase(f.chunks.begin() + i); }), kBad, "missing"));
-    test_assert(refused(with([&]() { f.chunks.push_back(chunks[i]); }), kBad, "two chunks '"));
-    test_assert(refused(with([&]() { f.chunks[i].flags |= 4; }), kUnsupported, "has flags"));
-    test_assert(refused(with([&]() { f.chunks[i].bytes.append(0); f.chunks[i].raw++; }), kBad,
-                        i == 0 ? "NAME: " : i == 1 ? "BLCK: " : "DATA: "));
+    test_assert(
+        refused(with([&]() { f.chunks.erase(f.chunks.begin() + i); }), kBad, "missing"));
+    test_assert(
+        refused(with([&]() { f.chunks.push_back(chunks[i]); }), kBad, "two chunks '"));
+    test_assert(
+        refused(with([&]() { f.chunks[i].flags |= 4; }), kUnsupported, "has flags"));
+    test_assert(refused(with([&]() {
+                          f.chunks[i].bytes.append(0);
+                          f.chunks[i].raw++;
+                        }),
+                        kBad,
+                        i == 0   ? "NAME: "
+                        : i == 1 ? "BLCK: "
+                                 : "DATA: "));
   }
-  test_assert(refused(with([&]() { f.chunks[0].raw++; }), kBad, "NAME says the wrong size"));
+  test_assert(
+      refused(with([&]() { f.chunks[0].raw++; }), kBad, "NAME says the wrong size"));
   test_assert(refused(with([&]() { f.chunks[2].flags |= 2; }), kBad, "DATA is never"));
   test_assert(refused(with([&]() { f.chunks[1].flags |= 2; }), kBad, "BLCK: "));
-  test_assert(refused(with([&]() { f.chunks.resize(17, chunks[0]); }), kBad, "too many chunks"));
+  test_assert(
+      refused(with([&]() { f.chunks.resize(17, chunks[0]); }), kBad, "too many chunks"));
   test_assert(refused(with([&]() { f.version = 0; }), kBad, "version numbers"));
   test_assert(refused(with([&]() { f.minReader = 0; }), kBad, "version numbers"));
-  test_assert(refused(with([&]() { f.version = 1; f.minReader = 2; }), kUnsupported, "newer build"));
+  test_assert(refused(with([&]() {
+                        f.version = 1;
+                        f.minReader = 2;
+                      }),
+                      kUnsupported,
+                      "newer build"));
   /* A newer file says so even when the rest can't be checked. */
   b = with([&]() { f.version = 5, f.minReader = 5; });
   b[40] ^= 1;
@@ -166,8 +189,12 @@ static void test_versions()
   test_assert(w.load(f.build(), &report).ok() && w.at(1));
   test_assert(w.lib.get(w.at(1))->flags() == BlockFlags::Root);
   const std::string issues = issueText(report.issues);
-  for (const char *what : {"a chunk 'MORE'", "bytes after a block's record", "flags this build",
-                           "what NAME should", "what BLCK should", "what DATA should",
+  for (const char *what : {"a chunk 'MORE'",
+                           "bytes after a block's record",
+                           "flags this build",
+                           "what NAME should",
+                           "what BLCK should",
+                           "what DATA should",
                            "data that no block uses"})
   {
     test_assert(has(issues, what));
@@ -182,18 +209,21 @@ static void test_versions()
     change(g);
     return g.file();
   };
-  test_assert(refused(v1([](RawFile &g) { g.records[0].flags = 64; }), kBad, "flags this build"));
-  test_assert(refused(v1([](RawFile &g) {
-                        g.records[0].after = [](BytesWriter &out) { out.u8(0); };
-                      }),
-                      kBad, "bytes after a block's record"));
-  test_assert(refused(v1([](RawFile &g) { g.blobs.push_back(bytesOf({1})); }), kBad,
+  test_assert(
+      refused(v1([](RawFile &g) { g.records[0].flags = 64; }), kBad, "flags this build"));
+  test_assert(refused(
+      v1([](RawFile &g) { g.records[0].after = [](BytesWriter &out) { out.u8(0); }; }),
+      kBad,
+      "bytes after a block's record"));
+  test_assert(refused(v1([](RawFile &g) { g.blobs.push_back(bytesOf({1})); }),
+                      kBad,
                       "data that no block uses"));
 }
 
 static void test_records()
 {
-  const auto bad = [](const char *what, litestl::util::function<void(RawRecord &)> change) {
+  const auto bad = [](const char *what,
+                      litestl::util::function<void(RawRecord &)> change) {
     return refused(oneRecord(std::move(change)).file(), kBad, what);
   };
   test_assert(bad("block 0 of the file, '", [](RawRecord &r) { r.client = 3; }));
@@ -205,7 +235,8 @@ static void test_records()
   test_assert(bad("in an unknown way", [](RawRecord &r) { r.as = 2; }));
   test_assert(bad("isn't there", [](RawRecord &r) { r.blob = 1; }));
   test_assert(bad("NUL", [](RawRecord &r) { r.name = std::string("a\0b", 3); }));
-  test_assert(bad("kind of reference", [](RawRecord &r) { r.rows = {{3, LocalId{1, 1}}}; }));
+  test_assert(
+      bad("kind of reference", [](RawRecord &r) { r.rows = {{3, LocalId{1, 1}}}; }));
   test_assert(bad("null reference with a client", [](RawRecord &r) {
     r.slots = [](BytesWriter &out) {
       out.u32(1);
@@ -241,10 +272,14 @@ static void test_records()
       }
     };
   };
-  test_assert(bad("one attachment twice", [&](RawRecord &r) { r.attachments = attachments({2, 2}); }));
-  test_assert(bad("without a type", [&](RawRecord &r) { r.attachments = attachments({0}); }));
-  test_assert(bad("isn't there", [&](RawRecord &r) { r.attachments = attachments({2}, 1); }));
-  test_assert(!bad("no damage", [&](RawRecord &r) { r.attachments = attachments({1, 2}); }));
+  test_assert(bad("one attachment twice",
+                  [&](RawRecord &r) { r.attachments = attachments({2, 2}); }));
+  test_assert(
+      bad("without a type", [&](RawRecord &r) { r.attachments = attachments({0}); }));
+  test_assert(
+      bad("isn't there", [&](RawRecord &r) { r.attachments = attachments({2}, 1); }));
+  test_assert(
+      !bad("no damage", [&](RawRecord &r) { r.attachments = attachments({1, 2}); }));
 
   RawFile f = oneRecord();
   f.records.push_back(RawRecord());
@@ -281,11 +316,16 @@ static void test_records()
       second(out);
     };
   };
-  test_assert(refused(names(two(0, [](BytesWriter &o) { o.str(""); })), kBad, "an empty name"));
-  test_assert(refused(names(two(1, [](BytesWriter &o) { o.u64(0); })), kBad, "a null name"));
-  test_assert(refused(names(two(2, [](BytesWriter &o) { o.u64(1); })), kBad, "unknown kind of name"));
-  test_assert(refused(names(two(1, [](BytesWriter &o) { o.u64(5); })), kBad, "an id where a name"));
-  test_assert(refused(names([](BytesWriter &o) { o.u32(0xffffffff); }), kBad, "a count of more"));
+  test_assert(
+      refused(names(two(0, [](BytesWriter &o) { o.str(""); })), kBad, "an empty name"));
+  test_assert(
+      refused(names(two(1, [](BytesWriter &o) { o.u64(0); })), kBad, "a null name"));
+  test_assert(refused(
+      names(two(2, [](BytesWriter &o) { o.u64(1); })), kBad, "unknown kind of name"));
+  test_assert(refused(
+      names(two(1, [](BytesWriter &o) { o.u64(5); })), kBad, "an id where a name"));
+  test_assert(
+      refused(names([](BytesWriter &o) { o.u32(0xffffffff); }), kBad, "a count of more"));
 
   /* Two names with one id: FNV-1a's collisions are easy to make. */
   RawFile clash = oneRecord();
@@ -311,7 +351,8 @@ static void test_records()
     test_assert(s.code() == kBad && hasMsg(s, "has the id of 'L45") && w.lib.size() == 0);
   }
   IoWorld same;
-  test_assert(same.load(clash.file()).ok() && same.lib.size() == 2); /* the same text: fine */
+  test_assert(same.load(clash.file()).ok() &&
+              same.lib.size() == 2); /* the same text: fine */
 
   /* Blobs. */
   const auto data = [](uint8_t lz4, uint64_t raw, uint64_t stored, int have) {
@@ -414,7 +455,8 @@ static void test_limits()
   RawFile rows = oneRecord();
   test_assert(!limited(rows, one));
   rows.records[0].rows.resize(1000, {uint8_t(2), LocalId{1, 1}});
-  test_assert(limited(rows, one + 999 * kRowCost) && !limited(rows, one + 1000 * kRowCost));
+  test_assert(limited(rows, one + 999 * kRowCost) &&
+              !limited(rows, one + 1000 * kRowCost));
   RawFile slots = oneRecord([](RawRecord &r) {
     r.slots = [](BytesWriter &o) {
       o.u32(1000);
@@ -425,10 +467,12 @@ static void test_limits()
       }
     };
   });
-  test_assert(limited(slots, one + 999 * kSlotCost) && !limited(slots, one + 1000 * kSlotCost));
+  test_assert(limited(slots, one + 999 * kSlotCost) &&
+              !limited(slots, one + 1000 * kSlotCost));
   RawFile names = oneRecord();
   names.names.resize(1000, "n");
-  test_assert(limited(names, one + 900 * kNameCost) && !limited(names, one + 1000 * kNameCost));
+  test_assert(limited(names, one + 900 * kNameCost) &&
+              !limited(names, one + 1000 * kNameCost));
   RawFile atts = oneRecord([](RawRecord &r) {
     r.attachments = [](BytesWriter &o) {
       o.u32(1000);
@@ -469,7 +513,8 @@ static void test_limits()
     r.local.lo = i + 1;
     many.records.push_back(std::move(r));
   }
-  test_assert(limited(many, 900 * kRecordCost) && !limited(many, 1000 * kRecordCost + 20000));
+  test_assert(limited(many, 900 * kRecordCost) &&
+              !limited(many, 1000 * kRecordCost + 20000));
   /* Long names are charged for each record that has them. */
   many.names[1] = std::string(10000, 't');
   test_assert(limited(many, 1000 * kRecordCost + 9000000));
@@ -554,7 +599,8 @@ static void test_large()
   test_assert(w.rt.ext<ClientRegistry>().registerClient("c.now", aliases).ok());
   LoadReport report;
   test_assert(w.load(g.file(), &report).ok() && report.blocks.size() == 40001);
-  test_assert(report.issues.total >= 20000 && report.issues.first.size() == IoIssues::kMaxKept);
+  test_assert(report.issues.total >= 20000 &&
+              report.issues.first.size() == IoIssues::kMaxKept);
   test_assert(seconds(t0) < 60);
 }
 
@@ -576,7 +622,8 @@ static void test_fuzz()
       IoWorld w(k);
       const size_t start = litestl::alloc::getMemorySize();
       Result<LoadReport> r = detail::loadLibrary(w.lib, view(file), options);
-      /* getMemorySize is 0 growth in release builds. The payload copy of a Doc is the rest. */
+      /* getMemorySize is 0 growth in release builds. The payload copy of a Doc is the
+       * rest. */
       test_assert(litestl::alloc::getMemorySize() - start < size_t(8) << 20);
       if (r.ok()) {
         loaded++;
@@ -587,8 +634,7 @@ static void test_fuzz()
         }
         test_assert(saved.ok());
         again = std::move(saved).value();
-      }
-      else {
+      } else {
         test_assert(w.lib.size() == 0);
       }
       w.lib.setAuditRelations(false);
@@ -617,25 +663,26 @@ static void test_fuzz()
     for (uint32_t n = 1 + rng.below(3); n > 0; n--) {
       const int at = 28 + int(rng.below(uint32_t(b.size()) - 36));
       switch (rng.below(4)) {
-        case 0:
-          b[at] = uint8_t(rng.next());
-          break;
-        case 1:
-          b[at] = uint8_t(b[at] + (rng.below(2) ? 1 : -1));
-          break;
-        case 2: { /* move a run */
-          const int from = 28 + int(rng.below(uint32_t(b.size()) - 36));
-          for (int k = 0; k < 12 && at + k < int(b.size()) && from + k < int(b.size()); k++) {
-            b[at + k] = b[from + k];
-          }
-          break;
+      case 0:
+        b[at] = uint8_t(rng.next());
+        break;
+      case 1:
+        b[at] = uint8_t(b[at] + (rng.below(2) ? 1 : -1));
+        break;
+      case 2: { /* move a run */
+        const int from = 28 + int(rng.below(uint32_t(b.size()) - 36));
+        for (int k = 0; k < 12 && at + k < int(b.size()) && from + k < int(b.size()); k++)
+        {
+          b[at + k] = b[from + k];
         }
-        default: { /* a count */
-          const uint32_t v = rng.below(3) ? rng.below(300) : uint32_t(rng.next());
-          for (int k = 0; k < 4 && at + k < int(b.size()); k++) {
-            b[at + k] = uint8_t(v >> (8 * k));
-          }
+        break;
+      }
+      default: { /* a count */
+        const uint32_t v = rng.below(3) ? rng.below(300) : uint32_t(rng.next());
+        for (int k = 0; k < 4 && at + k < int(b.size()); k++) {
+          b[at + k] = uint8_t(v >> (8 * k));
         }
+      }
       }
     }
     fixUp(b);
@@ -644,7 +691,11 @@ static void test_fuzz()
   test_assert(loaded > 1000); /* the fuzz reaches past the parser */
   test_assert(slowest < 5);
   test_assert(litestl::alloc::getMemorySize() <= before + 4096);
-  fprintf(stderr, "fuzz: %d loaded, slowest %.3f s, %.1f s in all\n", loaded, slowest, seconds(t0));
+  fprintf(stderr,
+          "fuzz: %d loaded, slowest %.3f s, %.1f s in all\n",
+          loaded,
+          slowest,
+          seconds(t0));
 }
 
 int main()

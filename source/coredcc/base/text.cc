@@ -111,20 +111,20 @@ void appendQuoted(std::string &out, std::string_view s)
   out += '"';
   for (char c : s) {
     switch (c) {
-      case '\\':
-        out += "\\\\";
-        break;
-      case '"':
-        out += "\\\"";
-        break;
-      case '\n':
-        out += "\\n";
-        break;
-      case '\t':
-        out += "\\t";
-        break;
-      default:
-        out += c;
+    case '\\':
+      out += "\\\\";
+      break;
+    case '"':
+      out += "\\\"";
+      break;
+    case '\n':
+      out += "\\n";
+      break;
+    case '\t':
+      out += "\\t";
+      break;
+    default:
+      out += c;
     }
   }
   out += '"';

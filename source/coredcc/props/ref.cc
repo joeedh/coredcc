@@ -19,12 +19,12 @@ bool OwnerKey::operator==(const OwnerKey &b) const
     return false;
   }
   switch (kind) {
-    case Kind::None:
-      return true;
-    case Kind::Block:
-      return block == b.block;
-    case Kind::Runtime:
-      return nameHash == b.nameHash;
+  case Kind::None:
+    return true;
+  case Kind::Block:
+    return block == b.block;
+  case Kind::Runtime:
+    return nameHash == b.nameHash;
   }
   return false;
 }
@@ -35,12 +35,12 @@ uint64_t OwnerKey::computeHash() const
     return 0;
   }
   switch (kind) {
-    case Kind::None:
-      return 0;
-    case Kind::Block:
-      return block.computeHash();
-    case Kind::Runtime:
-      return nameHash ^ 0x5bd1e9955bd1e995ull;
+  case Kind::None:
+    return 0;
+  case Kind::Block:
+    return block.computeHash();
+  case Kind::Runtime:
+    return nameHash ^ 0x5bd1e9955bd1e995ull;
   }
   return 0;
 }
@@ -75,7 +75,8 @@ bool KeySegment::operator==(const KeySegment &b) const
   if (kind != b.kind) {
     return false;
   }
-  return kind == Kind::Handle ? handle == b.handle : strcmp(text.c_str(), b.text.c_str()) == 0;
+  return kind == Kind::Handle ? handle == b.handle
+                              : strcmp(text.c_str(), b.text.c_str()) == 0;
 }
 
 bool StableRef::operator==(const StableRef &b) const
@@ -107,8 +108,7 @@ uint64_t StableRef::computeHash() const
     bytes(&s.kind, 1);
     if (s.kind == KeySegment::Kind::Handle) {
       bytes(&s.handle, sizeof(s.handle));
-    }
-    else {
+    } else {
       /* Length first, so a key holding a kind byte can't mimic two segments. */
       const uint64_t n = strlen(s.text.c_str());
       bytes(&n, sizeof(n));
@@ -125,35 +125,35 @@ std::string StableRef::toString() const
     return "{null}";
   }
   switch (owner.kind) {
-    case OwnerKey::Kind::None:
-      return "{null}";
-    case OwnerKey::Kind::Block:
-      snprintf(buf,
-               sizeof(buf),
-               "{block %016" PRIx64 ":%016" PRIx64 "%016" PRIx64 "}",
-               owner.block.client.value,
-               owner.block.local.hi,
-               owner.block.local.lo);
-      break;
-    case OwnerKey::Kind::Runtime:
-      snprintf(buf, sizeof(buf), "{runtime %016" PRIx64 "}", owner.nameHash);
-      break;
+  case OwnerKey::Kind::None:
+    return "{null}";
+  case OwnerKey::Kind::Block:
+    snprintf(buf,
+             sizeof(buf),
+             "{block %016" PRIx64 ":%016" PRIx64 "%016" PRIx64 "}",
+             owner.block.client.value,
+             owner.block.local.hi,
+             owner.block.local.lo);
+    break;
+  case OwnerKey::Kind::Runtime:
+    snprintf(buf, sizeof(buf), "{runtime %016" PRIx64 "}", owner.nameHash);
+    break;
   }
   std::string out = buf;
   for (const KeySegment &s : key) {
     switch (s.kind) {
-      case KeySegment::Kind::Member:
-        out += '.';
-        out += s.text.c_str();
-        break;
-      case KeySegment::Kind::StringKey:
-        out += '[';
-        appendQuoted(out, s.text.c_str());
-        out += ']';
-        break;
-      case KeySegment::Kind::Handle:
-        out += "[#" + std::to_string(s.handle) + "]";
-        break;
+    case KeySegment::Kind::Member:
+      out += '.';
+      out += s.text.c_str();
+      break;
+    case KeySegment::Kind::StringKey:
+      out += '[';
+      appendQuoted(out, s.text.c_str());
+      out += ']';
+      break;
+    case KeySegment::Kind::Handle:
+      out += "[#" + std::to_string(s.handle) + "]";
+      break;
     }
   }
   return out;

@@ -26,69 +26,70 @@ void appendNumber(std::string &out, double v)
 
 } // namespace
 
-Result<std::string> formatLiteral(const Runtime &rt, const PropertyDef &def, const PropValue &value)
+Result<std::string>
+formatLiteral(const Runtime &rt, const PropertyDef &def, const PropValue &value)
 {
   std::string out;
   switch (def.kind()) {
-    case PropKind::Bool:
-      return std::string(value.asBool() ? "true" : "false");
-    case PropKind::Int:
-      return std::to_string(value.asInt());
-    case PropKind::Float:
-      appendNumber(out, value.asFloat());
-      return out;
-    case PropKind::String:
-      appendQuoted(out, value.asString().c_str());
-      return out;
-    case PropKind::Enum: {
-      const EnumItem *item = def.enumMeta()->findValue(value.asEnum());
-      if (!item) {
-        return bad(def, "the value " + std::to_string(value.asEnum()) + " has no item");
-      }
-      return std::string(item->key.c_str());
+  case PropKind::Bool:
+    return std::string(value.asBool() ? "true" : "false");
+  case PropKind::Int:
+    return std::to_string(value.asInt());
+  case PropKind::Float:
+    appendNumber(out, value.asFloat());
+    return out;
+  case PropKind::String:
+    appendQuoted(out, value.asString().c_str());
+    return out;
+  case PropKind::Enum: {
+    const EnumItem *item = def.enumMeta()->findValue(value.asEnum());
+    if (!item) {
+      return bad(def, "the value " + std::to_string(value.asEnum()) + " has no item");
     }
-    case PropKind::Flags: {
-      uint64_t rest = value.asFlags();
-      if (rest == 0) {
-        return std::string("0");
-      }
-      std::string keys;
-      for (const EnumItem &item : def.enumMeta()->items) {
-        const uint64_t bit = uint64_t(item.value);
-        /* All of its bits, or a multi-bit item would add the ones that are clear. */
-        if (bit != 0 && (rest & bit) == bit) {
-          keys += keys.empty() ? "" : "|";
-          keys += item.key.c_str();
-          rest &= ~bit;
-        }
-      }
-      if (rest != 0) {
-        return bad(def, "a flag bit has no item");
-      }
-      appendQuoted(out, keys);
-      return out;
+    return std::string(item->key.c_str());
+  }
+  case PropKind::Flags: {
+    uint64_t rest = value.asFlags();
+    if (rest == 0) {
+      return std::string("0");
     }
-    case PropKind::Vec2:
-    case PropKind::Vec3:
-    case PropKind::Vec4:
-    case PropKind::Quat:
-    case PropKind::Mat4:
-      out += '(';
-      for (int i = 0; i < value.componentCount(); i++) {
-        out += i ? ", " : "";
-        appendNumber(out, value.component(i));
+    std::string keys;
+    for (const EnumItem &item : def.enumMeta()->items) {
+      const uint64_t bit = uint64_t(item.value);
+      /* All of its bits, or a multi-bit item would add the ones that are clear. */
+      if (bit != 0 && (rest & bit) == bit) {
+        keys += keys.empty() ? "" : "|";
+        keys += item.key.c_str();
+        rest &= ~bit;
       }
-      out += ')';
-      return out;
-    case PropKind::Pointer:
-      appendQuoted(out, formatRef(rt, value.asPointer()));
-      return out;
-    case PropKind::Collection:
-      break;
+    }
+    if (rest != 0) {
+      return bad(def, "a flag bit has no item");
+    }
+    appendQuoted(out, keys);
+    return out;
+  }
+  case PropKind::Vec2:
+  case PropKind::Vec3:
+  case PropKind::Vec4:
+  case PropKind::Quat:
+  case PropKind::Mat4:
+    out += '(';
+    for (int i = 0; i < value.componentCount(); i++) {
+      out += i ? ", " : "";
+      appendNumber(out, value.component(i));
+    }
+    out += ')';
+    return out;
+  case PropKind::Pointer:
+    appendQuoted(out, formatRef(rt, value.asPointer()));
+    return out;
+  case PropKind::Collection:
+    break;
   }
   return Status::error(StatusCode::Unsupported,
-                       (std::string(def.apiName().c_str()) + ": " + propKindName(def.kind()) +
-                        " values have no literal form")
+                       (std::string(def.apiName().c_str()) + ": " +
+                        propKindName(def.kind()) + " values have no literal form")
                            .c_str());
 }
 
@@ -111,7 +112,8 @@ Result<double> number(const PropertyDef &def, const RawScalar &s)
   if (s.kind == RawScalar::Kind::Number) {
     const double v = std::strtod(s.text.c_str(), nullptr);
     if (std::isinf(v)) {
-      return bad(def, std::string("'") + s.text.c_str() + "' is out of range (write inf)");
+      return bad(def,
+                 std::string("'") + s.text.c_str() + "' is out of range (write inf)");
     }
     return v;
   }
@@ -135,7 +137,8 @@ Result<double> number(const PropertyDef &def, const RawScalar &s)
 namespace {
 
 /* A literal as a value of the def's kind, whatever its range, items and length are. */
-Result<PropValue> literalValue(const Runtime &rt, const PropertyDef &def, const RawValue &raw)
+Result<PropValue>
+literalValue(const Runtime &rt, const PropertyDef &def, const RawValue &raw)
 {
   const int comps = componentCount(def.kind());
   if (comps > 1) {
@@ -158,57 +161,59 @@ Result<PropValue> literalValue(const Runtime &rt, const PropertyDef &def, const 
   const RawScalar &s = raw.items[0];
   const char *text = s.text.c_str();
   switch (def.kind()) {
-    case PropKind::Bool:
-      if (s.kind == RawScalar::Kind::Identifier &&
-          (strcmp(text, "true") == 0 || strcmp(text, "false") == 0))
-      {
-        return PropValue::ofBool(text[0] == 't');
-      }
-      if (s.kind == RawScalar::Kind::Number && s.isInteger) {
-        Result<int64_t> i = integer(def, text);
-        return i.ok() ? Result<PropValue>(PropValue::ofInt(*i)) : Result<PropValue>(i.status());
-      }
-      return bad(def, std::string("expected true or false, got '") + text + "'");
-    case PropKind::Int:
-      if (s.kind == RawScalar::Kind::Number && s.isInteger) {
-        Result<int64_t> i = integer(def, text);
-        return i.ok() ? Result<PropValue>(PropValue::ofInt(*i)) : Result<PropValue>(i.status());
-      }
-      break;
-    case PropKind::String:
-      if (s.kind == RawScalar::Kind::String) {
-        return PropValue::ofString(text);
-      }
-      return bad(def, "expected a quoted string");
-    case PropKind::Enum:
-    case PropKind::Flags:
-      if (s.kind == RawScalar::Kind::Number && s.isInteger) {
-        Result<int64_t> i = integer(def, text);
-        if (!i.ok()) {
-          return i.status();
-        }
-        return def.kind() == PropKind::Enum ? PropValue::ofEnum(*i) :
-                                              PropValue::ofFlags(uint64_t(*i));
-      }
-      if (s.kind == RawScalar::Kind::Number) {
-        return bad(def, std::string("expected a key or an integer, got '") + text + "'");
-      }
-      return PropValue::ofString(text); /* a key, or "A|B" */
-    case PropKind::Pointer: {
-      if (s.kind != RawScalar::Kind::String) {
-        return bad(def, "expected a quoted reference or path");
-      }
-      Result<StableRef> ref = parseRef(rt, text);
-      return ref.ok() ? Result<PropValue>(PropValue::ofPointer(std::move(ref).value())) :
-                        Result<PropValue>(bad(def, ref.status().message()));
+  case PropKind::Bool:
+    if (s.kind == RawScalar::Kind::Identifier &&
+        (strcmp(text, "true") == 0 || strcmp(text, "false") == 0))
+    {
+      return PropValue::ofBool(text[0] == 't');
     }
-    case PropKind::Collection:
-      return Status::error(StatusCode::Unsupported,
-                           (std::string(def.apiName().c_str()) + ": " +
-                            propKindName(def.kind()) + " values have no literal form")
-                               .c_str());
-    default:
-      break;
+    if (s.kind == RawScalar::Kind::Number && s.isInteger) {
+      Result<int64_t> i = integer(def, text);
+      return i.ok() ? Result<PropValue>(PropValue::ofInt(*i))
+                    : Result<PropValue>(i.status());
+    }
+    return bad(def, std::string("expected true or false, got '") + text + "'");
+  case PropKind::Int:
+    if (s.kind == RawScalar::Kind::Number && s.isInteger) {
+      Result<int64_t> i = integer(def, text);
+      return i.ok() ? Result<PropValue>(PropValue::ofInt(*i))
+                    : Result<PropValue>(i.status());
+    }
+    break;
+  case PropKind::String:
+    if (s.kind == RawScalar::Kind::String) {
+      return PropValue::ofString(text);
+    }
+    return bad(def, "expected a quoted string");
+  case PropKind::Enum:
+  case PropKind::Flags:
+    if (s.kind == RawScalar::Kind::Number && s.isInteger) {
+      Result<int64_t> i = integer(def, text);
+      if (!i.ok()) {
+        return i.status();
+      }
+      return def.kind() == PropKind::Enum ? PropValue::ofEnum(*i)
+                                          : PropValue::ofFlags(uint64_t(*i));
+    }
+    if (s.kind == RawScalar::Kind::Number) {
+      return bad(def, std::string("expected a key or an integer, got '") + text + "'");
+    }
+    return PropValue::ofString(text); /* a key, or "A|B" */
+  case PropKind::Pointer: {
+    if (s.kind != RawScalar::Kind::String) {
+      return bad(def, "expected a quoted reference or path");
+    }
+    Result<StableRef> ref = parseRef(rt, text);
+    return ref.ok() ? Result<PropValue>(PropValue::ofPointer(std::move(ref).value()))
+                    : Result<PropValue>(bad(def, ref.status().message()));
+  }
+  case PropKind::Collection:
+    return Status::error(StatusCode::Unsupported,
+                         (std::string(def.apiName().c_str()) + ": " +
+                          propKindName(def.kind()) + " values have no literal form")
+                             .c_str());
+  default:
+    break;
   }
   Result<double> d = number(def, s);
   if (!d.ok()) {
@@ -219,7 +224,8 @@ Result<PropValue> literalValue(const Runtime &rt, const PropertyDef &def, const 
 
 } // namespace
 
-Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw)
+Result<PropValue>
+parseLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw)
 {
   Result<PropValue> v = literalValue(rt, def, raw);
   return v.ok() ? coerce(def, *v) : v;
@@ -227,22 +233,25 @@ Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const 
 
 Status checkLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw)
 {
-  return (def.isDynamic() ? literalValue(rt, def, raw) : parseLiteral(rt, def, raw)).status();
+  return (def.isDynamic() ? literalValue(rt, def, raw) : parseLiteral(rt, def, raw))
+      .status();
 }
 
 Result<PropValue> parsePointer(Context &ctx, const PropertyDef &def, const RawValue &raw)
 {
   Runtime &rt = ctx.runtime();
-  if (raw.isTuple || raw.items.size() != 1 || raw.items[0].kind != RawScalar::Kind::String) {
+  if (raw.isTuple || raw.items.size() != 1 ||
+      raw.items[0].kind != RawScalar::Kind::String)
+  {
     return parseLiteral(rt, def, raw); /* says why not */
   }
   const std::string_view s = raw.items[0].text.c_str();
   const size_t start = s.find_first_not_of(" \t");
   Result<PropValue> value = PropValue();
   if (start == std::string_view::npos || s[start] == '@') {
-    value = parseLiteral(rt, PropertyDef::pointerProp(def.apiName().c_str(), StructId()), raw);
-  }
-  else {
+    value = parseLiteral(
+        rt, PropertyDef::pointerProp(def.apiName().c_str(), StructId()), raw);
+  } else {
     Result<ResolvedPath> rp = resolve(ctx, s);
     if (!rp.ok()) {
       return rp.status();

@@ -22,16 +22,20 @@ struct Stage {
       return int64_t(static_cast<Stage *>(self.data)->w->scene.objects.size());
     };
     c.at = [](const PointerRef &self, Context &ctx, int64_t i) {
-      return blockRef(*ctx.library(), static_cast<Stage *>(self.data)->w->scene.objects[int(i)],
+      return blockRef(*ctx.library(),
+                      static_cast<Stage *>(self.data)->w->scene.objects[int(i)],
                       kObject);
     };
-    c.lookup = [](const PointerRef &, Context &, const KeySegment &) { return PointerRef(); };
+    c.lookup = [](const PointerRef &, Context &, const KeySegment &) {
+      return PointerRef();
+    };
     c.keyOf = [](const PointerRef &, Context &, const PointerRef &) {
       return KeySegment::ofHandle(1);
     };
     const auto get = [](const PointerRef &self, Context &ctx) {
       Library &lib = *ctx.library();
-      return blockRef(lib, lib.resolveRef(static_cast<Stage *>(self.data)->active), kObject);
+      return blockRef(
+          lib, lib.resolveRef(static_cast<Stage *>(self.data)->active), kObject);
     };
     c.active = get;
     c.activeMember = activeMember;
@@ -63,9 +67,9 @@ struct Stage {
         });
     s.addField(PropertyDef::boolProp("fixed"), &Stage::fixed);
     test_assert(reg.add(std::move(s)).ok());
-    test_assert(
-        reg.addRuntimeOwner("stage", StructId::of("Stage"), [this]() { return (void *)this; })
-            .ok());
+    test_assert(reg.addRuntimeOwner(
+                       "stage", StructId::of("Stage"), [this]() { return (void *)this; })
+                    .ok());
   }
 };
 
@@ -102,7 +106,8 @@ static void test_writes()
   Fixture f;
   Context &ctx = f.sctx;
   /* From no item. Reads are as before; the member reads as a null pointer. */
-  test_assert(getValue(ctx, "objects.active.mode").status().code() == StatusCode::NotFound);
+  test_assert(getValue(ctx, "objects.active.mode").status().code() ==
+              StatusCode::NotFound);
   test_assert(resolve(ctx, "objects.active").status().code() == StatusCode::NotFound);
   Result<ResolvedPath> rp = resolveForWrite(ctx, "objects.active");
   test_assert(rp.ok() && rp->kind == ResolvedPath::Kind::Member);
@@ -118,7 +123,8 @@ static void test_writes()
   test_assert(setValue(ctx, "objects.active.mode", PropValue::ofEnum(1)).ok());
   test_assert(f.w.object(1).mode == 1 && f.stage.updates == 1);
   test_assert(resolveForWrite(ctx, "objects[0]")->kind == ResolvedPath::Kind::Struct);
-  test_assert(setValue(ctx, "objects[0]", f.object(0)).code() == StatusCode::FailedPrecondition);
+  test_assert(setValue(ctx, "objects[0]", f.object(0)).code() ==
+              StatusCode::FailedPrecondition);
 
   /* Refusals change nothing. */
   StableRef mesh;
@@ -128,8 +134,8 @@ static void test_writes()
               StatusCode::TypeMismatch);
   test_assert(setValue(ctx, "objects.active", PropValue::ofInt(0)).code() ==
               StatusCode::TypeMismatch);
-  Result<BlockHandle> other =
-      f.w.lib.create(kObjectType, "Other", litestl::alloc::New<fixture::Object>("Object"));
+  Result<BlockHandle> other = f.w.lib.create(
+      kObjectType, "Other", litestl::alloc::New<fixture::Object>("Object"));
   StableRef o;
   o.owner = OwnerKey::ofBlock(f.w.lib.get(*other)->id());
   test_assert(setValue(ctx, "objects.active", PropValue::ofPointer(o)).code() ==
@@ -199,9 +205,12 @@ static void test_inner_collection()
   Setup s;
   Result<ResolvedPath> b = resolve(s.ctx, "tool.brushes[1]");
   test_assert(b.ok());
-  test_assert(setValueUndo(s.ctx, "tool.brushes.active", PropValue::ofPointer(b->canonical)).ok());
+  test_assert(
+      setValueUndo(s.ctx, "tool.brushes.active", PropValue::ofPointer(b->canonical))
+          .ok());
   test_assert(s.w.tool.activeBrush == 1);
-  test_assert(canonicalize(s.ctx, P("tool.brushes.active"))->toString() == b->canonical.toString());
+  test_assert(canonicalize(s.ctx, P("tool.brushes.active"))->toString() ==
+              b->canonical.toString());
   test_assert(s.ex.undo(s.ctx).ok() && s.w.tool.activeBrush == 0);
   test_assert(s.ex.redo(s.ctx).ok() && s.w.tool.activeBrush == 1);
 }
@@ -216,8 +225,8 @@ static void test_watchers()
   ChangeBus &bus = s.w.rt.ext<ChangeBus>();
   double size = 0;
   int calls = 0;
-  Result<ScopedConnection> c =
-      bus.watch(s.ctx, P("tool.brushes.active.size"), [&](const PropValue &v, const Status &) {
+  Result<ScopedConnection> c = bus.watch(
+      s.ctx, P("tool.brushes.active.size"), [&](const PropValue &v, const Status &) {
         size = v.tryFloat().value_or(-1);
         calls++;
       });
@@ -234,8 +243,8 @@ static void test_watchers()
   Fixture f;
   ChangeBus &fb = f.w.rt.ext<ChangeBus>();
   int fired = 0;
-  Result<ScopedConnection> m =
-      fb.watch(f.sctx, P("activeObject"), [&](const PropValue &, const Status &) { fired++; });
+  Result<ScopedConnection> m = fb.watch(
+      f.sctx, P("activeObject"), [&](const PropValue &, const Status &) { fired++; });
   test_assert(m.ok());
   fb.flush();
   fired = 0;
@@ -256,16 +265,18 @@ static void test_registration()
     test_assert(s.code() == StatusCode::InvalidArgument);
     test_assert(hasMsg(s, "isn't a settable pointer"));
     Context ctx(&w.rt, &w.lib, w.rt.ext<ApiRegistry>().runtimeOwner("stage"));
-    test_assert(resolveForWrite(ctx, "objects.active").status().code() == StatusCode::Internal);
+    test_assert(resolveForWrite(ctx, "objects.active").status().code() ==
+                StatusCode::Internal);
   }
   {
     World w;
     Stage st(w);
     test_assert(w.rt.validateAll().ok());
   }
-  /* A pointer to the items' base struct is fine. Not: another struct; one without a setter; a collection without `active`. */
-  const char *expect[] = {"points to another struct", "isn't a settable pointer",
-                          "without `active`"};
+  /* A pointer to the items' base struct is fine. Not: another struct; one without a
+   * setter; a collection without `active`. */
+  const char *expect[] = {
+      "points to another struct", "isn't a settable pointer", "without `active`"};
   for (int i = 0; i < 4; i++) {
     World w;
     ApiRegistry &reg = w.rt.ext<ApiRegistry>();
@@ -273,7 +284,9 @@ static void test_registration()
     CollectionAccessor c;
     c.length = [](const PointerRef &, Context &) { return int64_t(0); };
     c.at = [](const PointerRef &, Context &, int64_t) { return PointerRef(); };
-    c.lookup = [](const PointerRef &, Context &, const KeySegment &) { return PointerRef(); };
+    c.lookup = [](const PointerRef &, Context &, const KeySegment &) {
+      return PointerRef();
+    };
     c.keyOf = [](const PointerRef &, Context &, const PointerRef &) {
       return KeySegment::ofHandle(0);
     };
@@ -286,8 +299,13 @@ static void test_registration()
     if (i != 1) {
       p.set = [](const PointerRef &, Context &, const PointerRef &) { return Status(); };
     }
-    s.addCollection(PropertyDef::collectionProp("list", i == 3 ? kMesh : kObject), std::move(c));
-    s.addPointer(PropertyDef::pointerProp("current", i == 0 ? kMesh : i == 3 ? kIdBase : kObject), std::move(p));
+    s.addCollection(PropertyDef::collectionProp("list", i == 3 ? kMesh : kObject),
+                    std::move(c));
+    s.addPointer(PropertyDef::pointerProp("current",
+                                          i == 0   ? kMesh
+                                          : i == 3 ? kIdBase
+                                                   : kObject),
+                 std::move(p));
     test_assert(reg.add(std::move(s)).ok());
     test_assert(i == 3 ? reg.validate().ok() : hasMsg(reg.validate(), expect[i]));
   }

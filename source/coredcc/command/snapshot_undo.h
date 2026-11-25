@@ -19,10 +19,12 @@ namespace coredcc {
 
 /** Snapshot providers by name. A Runtime extension. */
 class SnapshotRegistry {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.SnapshotRegistry";
 
-  explicit SnapshotRegistry(Runtime *) {}
+  explicit SnapshotRegistry(Runtime *)
+  {
+  }
   ~SnapshotRegistry();
   SnapshotRegistry(const SnapshotRegistry &) = delete;
   SnapshotRegistry &operator=(const SnapshotRegistry &) = delete;
@@ -36,7 +38,7 @@ class SnapshotRegistry {
 
   Status validate() const;
 
- private:
+private:
   struct Entry {
     std::string name;
     Owned<SnapshotProvider> provider;
@@ -45,25 +47,28 @@ class SnapshotRegistry {
 };
 
 /**
- * The undo of a command whose effect only a snapshot can take back. A member of the command:
+ * The undo of a command whose effect only a snapshot can take back. A member of the
+ * command:
  *
- * - exec calls `begin` first and `end` last, after its sub-commands. An Interactive command's
- *   tool calls `end` (again, if it likes) before `commit`. When exec fails after `begin`, a
- *   failed `end` included, it calls `rollback` and returns the error.
- * - Forward the command's undo, redo, memSize, discard and foldFrom to it. Without `end`, undo
- *   works and redo is FailedPrecondition.
+ * - exec calls `begin` first and `end` last, after its sub-commands. An Interactive
+ * command's tool calls `end` (again, if it likes) before `commit`. When exec fails after
+ * `begin`, a failed `end` included, it calls `rollback` and returns the error.
+ * - Forward the command's undo, redo, memSize, discard and foldFrom to it. Without `end`,
+ * undo works and redo is FailedPrecondition.
  * - Both blobs are there when the history asks for memSize, compressed with lz4.
  * - A restore is followed by Library::noteRefsChanged and ChangeBus::notifyAll,
  *   also when it failed: an opaque blob can't say what it changed.
  *
- * Blocks that a blob references are kept (History pins) while this does, if the provider has
- * `foreachRef`.
+ * Blocks that a blob references are kept (History pins) while this does, if the provider
+ * has `foreachRef`.
  */
 class SnapshotUndo {
- public:
+public:
   SnapshotUndo() = default;
   /** `provider` is a name in the SnapshotRegistry, looked up on each use. */
-  explicit SnapshotUndo(std::string provider) : name_(std::move(provider)) {}
+  explicit SnapshotUndo(std::string provider) : name_(std::move(provider))
+  {
+  }
   SnapshotUndo(SnapshotUndo &&) = default;
   SnapshotUndo &operator=(SnapshotUndo &&) = default;
   SnapshotUndo(const SnapshotUndo &) = delete;
@@ -76,18 +81,19 @@ class SnapshotUndo {
   /** Restores before. An error becomes the sticky error. */
   void undo(Context &ctx);
   /** Restores after. If it fails, the executor undoes the sub-commands that ran: one that
-   * writes the captured state itself then leaves what it had in the middle of the step. */
+   * writes the captured state itself then leaves what it had in the middle of the step.
+   */
   Status redo(Context &ctx);
-  /** Restores before, now and once more at the discard, when the sub-commands that ran have
-   * been undone. */
+  /** Restores before, now and once more at the discard, when the sub-commands that ran
+   * have been undone. */
   Status rollback(Context &ctx);
-  /** Takes what `next` captured after, so that redo does both steps. False, with nothing done,
-   * if they use different providers or one has no `end`. */
+  /** Takes what `next` captured after, so that redo does both steps. False, with nothing
+   * done, if they use different providers or one has no `end`. */
   bool foldFrom(SnapshotUndo &next);
   uint64_t memSize() const;
   void discard();
 
- private:
+private:
   /** A captured blob, compressed. */
   struct Blob {
     bool taken = false;

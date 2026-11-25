@@ -26,7 +26,8 @@ struct CommandWorld {
   }
   Result<PropertyBag> duplicate(BlockHandle h)
   {
-    PropertyBag in = w.rt.ext<CommandRegistry>().find(kDuplicateBlockCommand)->newInputs();
+    PropertyBag in =
+        w.rt.ext<CommandRegistry>().find(kDuplicateBlockCommand)->newInputs();
     StableRef r;
     r.owner = OwnerKey::ofBlock(h ? w.id(h) : BlockId{kAcme, LocalId{1, 1}});
     test_assert(in.set("block", PropValue::ofPointer(r)).ok());
@@ -76,7 +77,8 @@ static void test_duplicate()
   w.docs.fault = DocFault::Error;
   test_assert(hasMsg(c.duplicate(a).status(), "no copies today"));
   w.docs.fault = DocFault::None;
-  test_assert(c.duplicate(BlockHandle()).status().code() == StatusCode::FailedPrecondition);
+  test_assert(c.duplicate(BlockHandle()).status().code() ==
+              StatusCode::FailedPrecondition);
   test_assert(w.lib.size() == 1 && c.history.size() == 0);
 }
 
@@ -86,15 +88,18 @@ static void test_append()
   CommandWorld c;
   IoWorld &w = c.w;
   Result<AppendResult> r = appendUndo(c.ctx, view(bytes));
-  test_assert(r.ok() && r->report.records == 2 && r->report.blocks.size() == 3 && r->ids.size() == 2);
+  test_assert(r.ok() && r->report.records == 2 && r->report.blocks.size() == 3 &&
+              r->ids.size() == 2);
   test_assert(c.history.size() == 1 && c.history.memoryUsed() >= bytes.size());
-  const BlockHandle a = r->report.blocks[0], b = r->report.blocks[1], missing = r->report.blocks[2];
+  const BlockHandle a = r->report.blocks[0], b = r->report.blocks[1],
+                    missing = r->report.blocks[2];
   test_assert(w.lib.size() == 3 && w.lib.get(missing)->pins(PinKind::History) == 1);
   test_assert(c.ex.undo(c.ctx).ok());
   test_assert(w.lib.get(a)->state() == BlockState::InHistory &&
               w.lib.get(b)->state() == BlockState::InHistory);
   /* The missing block stays, so a redo finds it. A purge keeps it too. */
-  test_assert(w.lib.get(missing)->state() == BlockState::Placeholder && *w.lib.collect() == 0);
+  test_assert(w.lib.get(missing)->state() == BlockState::Placeholder &&
+              *w.lib.collect() == 0);
   test_assert(c.ex.redo(c.ctx).ok() && w.lib.get(a)->state() == BlockState::Live);
 
   /* The host fills it, then the append is undone: the host's block stays. */
@@ -114,11 +119,13 @@ static void test_append()
 
   Bytes damaged = bytes;
   damaged[60] ^= 1;
-  test_assert(appendUndo(c.ctx, view(damaged)).status().code() == StatusCode::InvalidArgument);
+  test_assert(appendUndo(c.ctx, view(damaged)).status().code() ==
+              StatusCode::InvalidArgument);
   test_assert(c.history.size() == 0 && w.lib.size() == 3);
   AppendOptions options;
   options.limits.maxBlocks = 1;
-  test_assert(appendUndo(c.ctx, view(bytes), options).status().code() == StatusCode::OutOfRange);
+  test_assert(appendUndo(c.ctx, view(bytes), options).status().code() ==
+              StatusCode::OutOfRange);
   /* The history's budget sees the file's size. */
   {
     IoWorld big;
@@ -136,13 +143,15 @@ static void test_append()
     c.history.clear();
   }
   Context noEx(&w.rt, &w.lib, PointerRef());
-  test_assert(appendUndo(noEx, view(bytes)).status().code() == StatusCode::FailedPrecondition);
+  test_assert(appendUndo(noEx, view(bytes)).status().code() ==
+              StatusCode::FailedPrecondition);
   Context noLib(&w.rt, nullptr, PointerRef());
   noLib.setExecutor(&c.ex);
   test_assert(hasMsg(appendUndo(noLib, view(bytes)).status(), "no Library"));
   test_assert(hasMsg(appendLibrary(noLib, view(bytes)).status(), "no Library"));
   /* The bare command has nothing to append. */
-  test_assert(c.ex.run(c.ctx, kAppendCommand,
+  test_assert(c.ex.run(c.ctx,
+                       kAppendCommand,
                        w.rt.ext<CommandRegistry>().find(kAppendCommand)->newInputs())
                   .status()
                   .code() == StatusCode::FailedPrecondition);

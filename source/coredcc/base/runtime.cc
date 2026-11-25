@@ -19,7 +19,8 @@ namespace coredcc {
 
 using litestl::util::string;
 
-Runtime::Runtime() : ifaces_(litestl::alloc::New<IfaceRegistry>("coredcc::IfaceRegistry", this))
+Runtime::Runtime()
+    : ifaces_(litestl::alloc::New<IfaceRegistry>("coredcc::IfaceRegistry", this))
 {
 }
 
@@ -49,7 +50,8 @@ Status Runtime::busyIfEvaluating(const char *what) const
   if (!evaluating()) {
     return Status();
   }
-  return Status::error(StatusCode::Busy, (std::string(what) + ": a graph is evaluating").c_str());
+  return Status::error(StatusCode::Busy,
+                       (std::string(what) + ": a graph is evaluating").c_str());
 }
 
 void Runtime::setStickyError(Status status)
@@ -107,7 +109,8 @@ Result<uint64_t> Runtime::registerName(IdDomain domain, std::string_view name)
   return debugRegisterNameAs(domain, hashId(domain, name), name);
 }
 
-Result<uint64_t> Runtime::debugRegisterNameAs(IdDomain domain, uint64_t id, std::string_view name)
+Result<uint64_t>
+Runtime::debugRegisterNameAs(IdDomain domain, uint64_t id, std::string_view name)
 {
   if (id == 0) {
     return Status::error(StatusCode::InvalidArgument, "name hashes to the null id");

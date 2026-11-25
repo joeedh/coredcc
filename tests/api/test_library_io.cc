@@ -55,11 +55,14 @@ static void test_notifications()
   options.limits.maxBlocks = 2;
   IoWorld w2;
   Context ctx2(&w2.rt, &w2.lib, PointerRef());
-  test_assert(loadLibrary(ctx2, view(bytes), options).status().code() == StatusCode::OutOfRange);
+  test_assert(loadLibrary(ctx2, view(bytes), options).status().code() ==
+              StatusCode::OutOfRange);
 
   Context none(&w.rt, nullptr, PointerRef());
-  test_assert(loadLibrary(none, view(bytes)).status().code() == StatusCode::FailedPrecondition);
-  test_assert(resolvePlaceholders(none).status().code() == StatusCode::FailedPrecondition);
+  test_assert(loadLibrary(none, view(bytes)).status().code() ==
+              StatusCode::FailedPrecondition);
+  test_assert(resolvePlaceholders(none).status().code() ==
+              StatusCode::FailedPrecondition);
 }
 
 int main()

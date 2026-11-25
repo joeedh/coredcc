@@ -8,12 +8,12 @@
 namespace coredcc {
 
 /**
- * Builds JSON text, without whitespace. Calls must nest properly, and inside an object each
- * value follows a key() (checked: a mistake aborts). The output is valid JSON and UTF-8 for
- * any strings: bytes that aren't UTF-8 become U+FFFD.
+ * Builds JSON text, without whitespace. Calls must nest properly, and inside an object
+ * each value follows a key() (checked: a mistake aborts). The output is valid JSON and
+ * UTF-8 for any strings: bytes that aren't UTF-8 become U+FFFD.
  */
 class JsonWriter {
- public:
+public:
   JsonWriter &beginObject();
   JsonWriter &endObject();
   JsonWriter &beginArray();
@@ -32,7 +32,7 @@ class JsonWriter {
   /** The text, once everything has been ended. */
   std::string take();
 
- private:
+private:
   void value();
   void open(char c);
   void close(char c, bool object);

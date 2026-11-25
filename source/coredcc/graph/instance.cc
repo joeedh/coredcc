@@ -79,7 +79,8 @@ Result<NodePath> NodePath::parse(std::string_view text)
   if (!ok || at != end) {
     return Status::error(
         StatusCode::InvalidArgument,
-        ("'" + std::string(text) + "' isn't the path of a node, as 12/34 or 12/34[7]").c_str());
+        ("'" + std::string(text) + "' isn't the path of a node, as 12/34 or 12/34[7]")
+            .c_str());
   }
   return p;
 }
@@ -137,7 +138,8 @@ GraphInstance::GraphInstance(Runtime *rt, Library *lib, GraphSource source)
 
 GraphInstance::~GraphInstance() = default;
 
-Status GraphInstance::evaluate(std::span<const SocketPath> sockets, Vector<Status> &results)
+Status GraphInstance::evaluate(std::span<const SocketPath> sockets,
+                               Vector<Status> &results)
 {
   return e_->evaluate(sockets, results);
 }
@@ -286,7 +288,8 @@ Status GraphInstance::status(SocketHandle socket) const
   const graph::Evaluator::Pulled *r = e_->result(socket);
   if (!r || r->at == 0) {
     return Status::error(StatusCode::FailedPrecondition,
-                         r ? "the socket wasn't evaluated yet" : "the handle isn't valid");
+                         r ? "the socket wasn't evaluated yet"
+                           : "the handle isn't valid");
   }
   return r->error ? r->error->status : Status();
 }
@@ -352,8 +355,9 @@ Status Evaluator::setInput(std::string_view name, GraphValue v)
     }
   }
   if (!s) {
-    status = Status::error(StatusCode::NotFound,
-                           ("the graph has no input '" + std::string(name) + "'").c_str());
+    status =
+        Status::error(StatusCode::NotFound,
+                      ("the graph has no input '" + std::string(name) + "'").c_str());
     Suggester sg(name);
     for (const InterfaceSocket &i : def->interfaceSockets(SocketSide::Input)) {
       sg.consider(i.name.c_str());

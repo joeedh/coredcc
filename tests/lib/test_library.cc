@@ -47,8 +47,9 @@ struct ThingProvider {
     if (g_createInMark && g_lib) {
       g_createInMark = false;
       Result<BlockHandle> c = g_lib->create(TypeId::of("test.Thing"), "mark", nullptr);
-      g_log += c.ok() ? "mark-create ok;" :
-                        std::string("mark-create ") + statusCodeName(c.status().code()) + ";";
+      g_log +=
+          c.ok() ? "mark-create ok;"
+                 : std::string("mark-create ") + statusCodeName(c.status().code()) + ";";
     }
     if (Thing *t = static_cast<Thing *>(b.clientData())) {
       v.visit(t->owner);
@@ -63,7 +64,8 @@ struct ThingProvider {
       /* Reads work, creates are Busy, void mutations wait for the sweep's end. */
       g_log += g_lib->get(g_lib->find(b.id())) ? "read ok;" : "read failed;";
       Result<BlockHandle> c = g_lib->create(TypeId::of("test.Thing"), "late", nullptr);
-      g_log += c.ok() ? "create ok;" : std::string("create ") + statusCodeName(c.status().code()) + ";";
+      g_log += c.ok() ? "create ok;"
+                      : std::string("create ") + statusCodeName(c.status().code()) + ";";
       g_lib->forEach([](BlockHandle h, const Datablock &other) {
         if (strcmp(other.name().c_str(), "survivor") == 0) {
           g_lib->setFlag(h, BlockFlags::FakeUser, true);
@@ -76,11 +78,13 @@ struct ThingProvider {
   }
   void onWeakTargetLost(const Datablock &user, const Datablock &lost)
   {
-    g_log += std::string("lost ") + user.name().c_str() + "->" + lost.name().c_str() + ";";
+    g_log +=
+        std::string("lost ") + user.name().c_str() + "->" + lost.name().c_str() + ";";
   }
   static lbt::Struct<ThingProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<ThingProvider>("test::ThingProvider", sizeof(ThingProvider));
+    auto *st =
+        new lbt::Struct<ThingProvider>("test::ThingProvider", sizeof(ThingProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
@@ -132,7 +136,8 @@ static const TypeId kThing = TypeId::of("test.Thing");
 
 static void setup(Runtime &rt)
 {
-  test_assert((registerImpl<BlockProvider, ThingProvider>(rt, "test.Thing#provider").ok()));
+  test_assert(
+      (registerImpl<BlockProvider, ThingProvider>(rt, "test.Thing#provider").ok()));
   Result<Owned<BlockProvider>> p = own<BlockProvider>(
       rt, "test.Thing#provider", litestl::alloc::New<ThingProvider>("provider"));
   test_assert(p.ok());
@@ -176,14 +181,15 @@ static void test_create_and_find()
   test_assert(lib.createWithId(kThing, id, "x", nullptr).ok());
   test_assert(lib.createWithId(kThing, id, "y", nullptr).status().code() ==
               StatusCode::AlreadyExists);
-  test_assert(lib.createWithId(kThing, BlockId{ClientId::of("other"), LocalId{1, 1}}, "z",
-                               nullptr)
+  test_assert(lib.createWithId(
+                     kThing, BlockId{ClientId::of("other"), LocalId{1, 1}}, "z", nullptr)
                   .status()
                   .code() == StatusCode::InvalidArgument);
-  test_assert(lib.createWithId(kThing, BlockId{ClientId::of(kCoredccClient), LocalId{}}, "z",
-                               nullptr)
-                  .status()
-                  .code() == StatusCode::InvalidArgument);
+  test_assert(
+      lib.createWithId(
+             kThing, BlockId{ClientId::of(kCoredccClient), LocalId{}}, "z", nullptr)
+          .status()
+          .code() == StatusCode::InvalidArgument);
   test_assert(lib.create(TypeId::of("test.Nope"), "n", nullptr).status().code() ==
               StatusCode::NotFound);
 
@@ -392,14 +398,16 @@ static void test_placeholders_and_slots()
   test_assert(strcmp(p->placeholderType().c_str(), "gone.Widget") == 0);
   test_assert(p->placeholderPayload().size() == 2 && lib.data(*ph) == nullptr);
   /* The placeholder's ref keeps the target alive, until it is force-unlinked. */
-  test_assert(lib.setSlot(*ph, TypeId::of("gone.Widget"), 4, lib.get(target)->id(),
-                          RefKind::Strong)
-                  .ok());
+  test_assert(
+      lib.setSlot(
+             *ph, TypeId::of("gone.Widget"), 4, lib.get(target)->id(), RefKind::Strong)
+          .ok());
   test_assert(lib.slot(*ph, TypeId::of("gone.Widget"), 4) != nullptr);
   test_assert(lib.slot(*ph, TypeId::of("other.Ns"), 4) == nullptr); /* namespaced */
   test_assert(*lib.collect() == 0);
   test_assert(lib.removeSlot(*ph, TypeId::of("gone.Widget"), 4).ok());
-  test_assert(lib.removeSlot(*ph, TypeId::of("gone.Widget"), 4).code() == StatusCode::NotFound);
+  test_assert(lib.removeSlot(*ph, TypeId::of("gone.Widget"), 4).code() ==
+              StatusCode::NotFound);
   test_assert(*lib.collect() == 1 && lib.get(target) == nullptr);
   test_assert(lib.get(*ph) != nullptr); /* placeholders are roots */
 }
@@ -414,25 +422,29 @@ static void test_client_aliases()
   test_assert(clients.canonical(ClientId::of("acme.old")) == *c);
   test_assert(clients.isRegistered(ClientId::of("acme.old")));
   const char *taken[] = {"acme.old"};
-  test_assert(clients.registerClient("other", taken).status().code() == StatusCode::AlreadyExists);
-  test_assert(clients.registerClient("acme.old").status().code() == StatusCode::AlreadyExists);
+  test_assert(clients.registerClient("other", taken).status().code() ==
+              StatusCode::AlreadyExists);
+  test_assert(clients.registerClient("acme.old").status().code() ==
+              StatusCode::AlreadyExists);
   test_assert(clients.registerClient("acme.new", aliases).ok()); /* idempotent */
 
   setup(rt);
   BlockTypeInfo info;
   info.name = "acme.Part";
   info.client = ClientId::of("acme.old"); /* normalized on registration */
-  test_assert((registerImpl<BlockProvider, ThingProvider>(rt, "acme.Part#provider").ok()));
+  test_assert(
+      (registerImpl<BlockProvider, ThingProvider>(rt, "acme.Part#provider").ok()));
   Result<Owned<BlockProvider>> p = own<BlockProvider>(
       rt, "acme.Part#provider", litestl::alloc::New<ThingProvider>("provider"));
   test_assert(rt.ext<BlockTypeRegistry>().add(info, std::move(p).value()).ok());
-  test_assert(rt.ext<BlockTypeRegistry>().find(TypeId::of("acme.Part"))->info.client == *c);
+  test_assert(rt.ext<BlockTypeRegistry>().find(TypeId::of("acme.Part"))->info.client ==
+              *c);
 
   Library lib(&rt);
   /* An id saved under the old name resolves to the block. */
   const BlockId oldId{ClientId::of("acme.old"), LocalId{5, 5}};
-  Result<BlockHandle> h =
-      lib.createWithId(TypeId::of("acme.Part"), oldId, "part", litestl::alloc::New<Thing>("T"));
+  Result<BlockHandle> h = lib.createWithId(
+      TypeId::of("acme.Part"), oldId, "part", litestl::alloc::New<Thing>("T"));
   test_assert(h.ok() && lib.get(*h)->id().client == *c);
   test_assert(lib.find(oldId) == *h);
   RefCell cell(RefKind::Weak);
@@ -477,8 +489,7 @@ struct FakeHost : ForeignDispatcher {
     const Datablock &b = *static_cast<const Datablock *>(args[0]);
     if (strcmp(name, "data") == 0) {
       new (ret)(void *)(b.clientData());
-    }
-    else if (strcmp(name, "foreachRef") == 0) {
+    } else if (strcmp(name, "foreachRef") == 0) {
       if (failForeach) {
         return Status::error(StatusCode::Internal, "TypeError: foreachRef threw");
       }
@@ -486,8 +497,7 @@ struct FakeHost : ForeignDispatcher {
       if (Thing *t = static_cast<Thing *>(b.clientData())) {
         v.visit(t->owner);
       }
-    }
-    else if (strcmp(name, "destroy") == 0) {
+    } else if (strcmp(name, "destroy") == 0) {
       destroyed++;
       litestl::alloc::Delete(static_cast<Thing *>(b.clientData()));
     }
@@ -500,14 +510,16 @@ static void test_foreign_provider()
   Runtime rt;
   FakeHost host;
   const char *slots[] = {"data", "foreachRef", "destroy"};
-  test_assert(registerForeign<BlockProvider>(rt, "test.Js#provider", &host, nullptr, slots).ok());
+  test_assert(
+      registerForeign<BlockProvider>(rt, "test.Js#provider", &host, nullptr, slots).ok());
   int jsObject = 1;
   BlockProvider p = query<BlockProvider>(rt, TypeId::of("test.Js#provider"), &jsObject);
   test_assert(bool(p) && !p.hasQueryInterface());
   BlockTypeInfo info;
   info.name = "test.Js";
   info.client = ClientId::of(kCoredccClient);
-  test_assert(rt.ext<BlockTypeRegistry>().add(info, Owned<BlockProvider>(p, nullptr)).ok());
+  test_assert(
+      rt.ext<BlockTypeRegistry>().add(info, Owned<BlockProvider>(p, nullptr)).ok());
   const TypeId js = TypeId::of("test.Js");
 
   {
@@ -589,8 +601,10 @@ static void test_review_fixes()
     test_assert(lib.writeRef(thing(lib, user)->owner, lib.get(t)->id()).ok());
     test_assert(lib.markDeleted(t).ok());
     Status s = lib.destroyFromHistory(t);
-    test_assert(s.code() == StatusCode::FailedPrecondition && hasMsg(s, "'user' still holds"));
-    test_assert(lib.get(t) && lib.markDeleted(user).ok() && lib.destroyFromHistory(t).ok());
+    test_assert(s.code() == StatusCode::FailedPrecondition &&
+                hasMsg(s, "'user' still holds"));
+    test_assert(lib.get(t) && lib.markDeleted(user).ok() &&
+                lib.destroyFromHistory(t).ok());
     test_assert(!lib.get(t) && lib.validate().ok());
   }
   {

@@ -48,14 +48,16 @@ const Unit *findUnit(UnitFamily family, std::string_view text);
  * `precision` decimals and trailing zeros removed, e.g. "1.25 m". Family None prints the
  * bare number.
  */
-std::string format(double baseValue, UnitFamily family, std::string_view unit, int precision);
+std::string
+format(double baseValue, UnitFamily family, std::string_view unit, int precision);
 
 /**
  * Parses "1.5", "1.5 cm" or "-2e3mm" into base units. A bare number is in
  * `displayUnit`. Errors: no number, an unknown unit (with suggestions), trailing text, a
  * non-finite result, or an unknown `displayUnit`.
  */
-Result<double> parse(std::string_view text, UnitFamily family, std::string_view displayUnit);
+Result<double>
+parse(std::string_view text, UnitFamily family, std::string_view displayUnit);
 
 } // namespace units
 } // namespace coredcc

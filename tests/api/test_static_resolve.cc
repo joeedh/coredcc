@@ -14,7 +14,8 @@ using litestl::util::Vector;
 
 namespace {
 
-/* Nodes of a type family: Base <- Left (x: float, next: Base) and Base <- Right (x: Bool). */
+/* Nodes of a type family: Base <- Left (x: float, next: Base) and Base <- Right (x:
+ * Bool). */
 const StructId kBase = StructId::of("Base");
 
 PointerAccessor pointerTo(StructId target)
@@ -30,8 +31,12 @@ CollectionAccessor collection()
   CollectionAccessor c;
   c.length = [](const PointerRef &, Context &) { return int64_t(0); };
   c.at = [](const PointerRef &, Context &, int64_t) { return PointerRef(); };
-  c.lookup = [](const PointerRef &, Context &, const KeySegment &) { return PointerRef(); };
-  c.keyOf = [](const PointerRef &, Context &, const PointerRef &) { return KeySegment::ofHandle(1); };
+  c.lookup = [](const PointerRef &, Context &, const KeySegment &) {
+    return PointerRef();
+  };
+  c.keyOf = [](const PointerRef &, Context &, const PointerRef &) {
+    return KeySegment::ofHandle(1);
+  };
   return c;
 }
 
@@ -42,7 +47,8 @@ struct StaticWorld {
   StaticWorld()
   {
     ApiRegistry &reg = w.rt.ext<ApiRegistry>();
-    const ValueAccessor none{[](const PointerRef &, Context &) { return PropValue(); }, {}};
+    const ValueAccessor none{[](const PointerRef &, Context &) { return PropValue(); },
+                             {}};
     ApiStruct base("Base");
     base.add(PropertyDef::intProp("shared"), none);
     base.addPointer(PropertyDef::pointerProp("again", kBase), pointerTo(kBase));
@@ -81,11 +87,14 @@ struct StaticWorld {
     root.addPointer(PropertyDef::pointerProp("unregistered", StructId::of("Nothing")),
                     pointerTo(StructId::of("Nothing")));
     CollectionAccessor any = collection();
-    root.addCollection(PropertyDef::collectionProp("any", StructId::of("Nothing")), std::move(any));
+    root.addCollection(PropertyDef::collectionProp("any", StructId::of("Nothing")),
+                       std::move(any));
     CollectionAccessor keyed = collection();
     keyed.itemStruct = kBase;
     keyed.staticItem = [](const KeySegment &key) -> Result<StructId> {
-      if (key.kind == KeySegment::Kind::StringKey && strcmp(key.text.c_str(), "left") == 0) {
+      if (key.kind == KeySegment::Kind::StringKey &&
+          strcmp(key.text.c_str(), "left") == 0)
+      {
         return StructId::of("Left");
       }
       if (key.kind == KeySegment::Kind::Handle && key.handle == 7) {
@@ -113,7 +122,8 @@ struct StaticWorld {
     }
     std::string out;
     for (const StaticTarget &t : res->targets) {
-      static const char *const kinds[] = {"struct", "member", "component", "key", "length"};
+      static const char *const kinds[] = {
+          "struct", "member", "component", "key", "length"};
       out += out.empty() ? "" : ", ";
       out += std::string(kinds[int(t.kind)]) + " " +
              w.rt.ext<ApiRegistry>().find(t.type)->name().c_str();
@@ -163,33 +173,52 @@ static void test_errors()
 {
   StaticWorld s;
   test_assert(s.is(kScene, "nothing", "! no member 'nothing' in Scene (at offset 0)"));
-  test_assert(s.is(kScene, "objects[0].nothing", "! no member 'nothing' in Object (at offset 10)"));
-  test_assert(s.is(kScene, "objects.activ", "! collection 'objects' has no member 'activ' (only "
-                                            ".active and .length) (at offset 7)"));
+  test_assert(s.is(
+      kScene, "objects[0].nothing", "! no member 'nothing' in Object (at offset 10)"));
+  test_assert(s.is(kScene,
+                   "objects.activ",
+                   "! collection 'objects' has no member 'activ' (only "
+                   ".active and .length) (at offset 7)"));
   test_assert(s.suggestion(kScene, "objects.activ") == "active");
   test_assert(s.suggestion(kScene, "objects[0].locaton") == "location");
-  test_assert(s.is(kScene, "objects.length.x", "! nothing can follow '.length' (at offset 14)"));
-  test_assert(s.is(kScene, "objects[KEY]", "! 'objects' takes [index], [\"key\"], [#handle], "
-                                           ".active or .length (at offset 7)"));
-  test_assert(s.is(kScene, "objects[0].location[3]",
-                   "! 'location' has 3 components (at offset 19)"));
-  test_assert(s.is(kScene, "objects[0].location[0].x",
+  test_assert(
+      s.is(kScene, "objects.length.x", "! nothing can follow '.length' (at offset 14)"));
+  test_assert(s.is(kScene,
+                   "objects[KEY]",
+                   "! 'objects' takes [index], [\"key\"], [#handle], "
+                   ".active or .length (at offset 7)"));
+  test_assert(s.is(
+      kScene, "objects[0].location[3]", "! 'location' has 3 components (at offset 19)"));
+  test_assert(s.is(kScene,
+                   "objects[0].location[0].x",
                    "! nothing can follow 'location[...]' (at offset 22)"));
-  test_assert(s.is(kScene, "objects[0].location.x",
+  test_assert(s.is(kScene,
+                   "objects[0].location.x",
                    "! 'location' (Vec3) has no members or components (at offset 19)"));
-  test_assert(s.is(kScene, "objects[0].mode[0]",
+  test_assert(s.is(kScene,
+                   "objects[0].mode[0]",
                    "! 'mode' (Enum) has no members or components (at offset 15)"));
-  test_assert(s.is(kScene, "objects[0].mode[NONE]", "! 'mode' has no key 'NONE' (at offset 15)"));
-  test_assert(s.is(kScene, "tool.locked[true]",
+  test_assert(
+      s.is(kScene, "objects[0].mode[NONE]", "! 'mode' has no key 'NONE' (at offset 15)"));
+  test_assert(s.is(kScene,
+                   "tool.locked[true]",
                    "! 'locked' (Bool) has no members or components (at offset 11)"));
-  test_assert(s.is(kScene, "tool[0]", "! a subscript needs a collection or vector (at offset 4)"));
+  test_assert(s.is(
+      kScene, "tool[0]", "! a subscript needs a collection or vector (at offset 4)"));
   test_assert(s.is(kRoot, "any.active", "! 'any' has no active item (at offset 3)"));
   test_assert(!s.r.resolve(kScene, "a..b").ok());
   /* The paths that resolve() refuses for the same reasons. */
   Context ctx = s.w.context();
-  for (const char *path : {"nothing", "objects[0].nothing", "objects.activ", "objects.length.x",
-                           "objects[KEY]", "objects[0].location[3]", "objects[0].location[0].x",
-                           "objects[0].location.x", "objects[0].mode[0]", "objects[0].mode[NONE]",
+  for (const char *path : {"nothing",
+                           "objects[0].nothing",
+                           "objects.activ",
+                           "objects.length.x",
+                           "objects[KEY]",
+                           "objects[0].location[3]",
+                           "objects[0].location[0].x",
+                           "objects[0].location.x",
+                           "objects[0].mode[0]",
+                           "objects[0].mode[NONE]",
                            "tool[0]"})
   {
     const Status a = resolve(ctx, path).status(), b = s.r.resolve(kScene, path).status();
@@ -200,7 +229,8 @@ static void test_errors()
 static void test_several()
 {
   StaticWorld s;
-  test_assert(s.is(kRoot, "base.shared", "member Base.shared")); /* once, though three have it */
+  test_assert(
+      s.is(kRoot, "base.shared", "member Base.shared")); /* once, though three have it */
   test_assert(s.is(kRoot, "base.x", "member Left.x, member Right.x"));
   test_assert(s.is(kRoot, "base.leftOnly", "member Left.leftOnly"));
   test_assert(s.is(kRoot, "base.again.again.rightOnly", "member Right.rightOnly"));
@@ -212,20 +242,25 @@ static void test_several()
   test_assert(s.is(kRoot, "base.way.length", "length Right.way"));
   test_assert(s.is(kRoot, "refined.leftOnly", "member Left.leftOnly"));
   test_assert(s.is(kRoot, "refined.strength", "member Mod.strength"));
-  test_assert(s.is(kRoot, "base.nothing",
+  test_assert(s.is(kRoot,
+                   "base.nothing",
                    "! no member 'nothing' in any of Base, Left, Right (at offset 4)"));
-  test_assert(s.is(kRoot, "refined.nothing",
+  test_assert(s.is(kRoot,
+                   "refined.nothing",
                    "! no member 'nothing' in any of Left, Mod (at offset 7)"));
   test_assert(s.suggestion(kRoot, "base.rightOnl") == "rightOnly");
   test_assert(s.suggestion(kRoot, "base.leftOnl") == "leftOnly");
   test_assert(s.suggestion(kRoot, "base.share") == "shared");
   /* The error of the furthest. */
   test_assert(s.is(kRoot, "base.way.active.x", "! no member 'x' in Mod (at offset 15)"));
-  test_assert(s.is(kRoot, "base.x.y", "! 'x' (Float) has no members or components (at offset 6)"));
+  test_assert(s.is(
+      kRoot, "base.x.y", "! 'x' (Float) has no members or components (at offset 6)"));
   /* One of two that came as far: the collection's, which was first. */
-  test_assert(s.is(kRoot, "base.both.nothing",
-                   "! collection 'both' has no member 'nothing' (only .active and .length) (at "
-                   "offset 9)"));
+  test_assert(
+      s.is(kRoot,
+           "base.both.nothing",
+           "! collection 'both' has no member 'nothing' (only .active and .length) (at "
+           "offset 9)"));
   /* Many. */
   ApiRegistry &reg = s.w.rt.ext<ApiRegistry>();
   for (int i = 0; i < 5; i++) {
@@ -234,9 +269,11 @@ static void test_several()
     test_assert(reg.add(std::move(more)).ok());
   }
   /* Registered since, and found. */
-  test_assert(s.is(kRoot, "base.nothing",
-                   "! no member 'nothing' in any of Base, Left, Right, More0 and 4 more (at "
-                   "offset 4)"));
+  test_assert(
+      s.is(kRoot,
+           "base.nothing",
+           "! no member 'nothing' in any of Base, Left, Right, More0 and 4 more (at "
+           "offset 4)"));
   test_assert(s.r.withSubtypes(kBase).structs.size() == 8 &&
               s.r.withSubtypes(kBase).structs[0] == kBase);
   test_assert(s.r.withSubtypes(StructId::of("Left")).structs.size() == 1);
@@ -251,7 +288,8 @@ static void test_unknown()
   test_assert(s.is(kRoot, "any.length", "length Root.any"));
   test_assert(s.is(StructId::of("Nothing"), "a", " ?"));
   StaticStructs none;
-  test_assert(!s.r.resolve(none, *parsePath("a")).ok() && !s.r.resolve(none, Path()).ok());
+  test_assert(!s.r.resolve(none, *parsePath("a")).ok() &&
+              !s.r.resolve(none, Path()).ok());
   /* Some are known. */
   StaticStructs some = s.r.only(kMod);
   some.unknown = true;
@@ -259,7 +297,8 @@ static void test_unknown()
   test_assert(r.ok() && r->unknown && r->targets.size() == 1);
   r = s.r.resolve(some, *parsePath("other"));
   test_assert(r.ok() && r->unknown && r->targets.size() == 0);
-  test_assert(s.r.only(StructId::of("Nothing")).unknown && s.r.only(kMod).structs.size() == 1);
+  test_assert(s.r.only(StructId::of("Nothing")).unknown &&
+              s.r.only(kMod).structs.size() == 1);
 }
 
 static void test_items()
@@ -267,7 +306,8 @@ static void test_items()
   StaticWorld s;
   test_assert(s.is(kRoot, "keyed[\"left\"].leftOnly", "member Left.leftOnly"));
   test_assert(s.is(kRoot, "keyed[#7].strength", "member Mod.strength"));
-  test_assert(s.is(kRoot, "keyed[\"left\"].rightOnly",
+  test_assert(s.is(kRoot,
+                   "keyed[\"left\"].rightOnly",
                    "! no member 'rightOnly' in Left (at offset 13)"));
   test_assert(s.is(kRoot, "keyed[\"right\"].x", "! no such thing (at offset 5)"));
   test_assert(s.is(kRoot, "keyed[#8].x", " ?"));
@@ -291,14 +331,17 @@ static void test_structs()
     }
     return out + (r->unknown ? "?" : "");
   };
-  test_assert(structs(kRoot, "") == "Root" && structs(kRoot, "base") == "Base Left Right");
+  test_assert(structs(kRoot, "") == "Root" &&
+              structs(kRoot, "base") == "Base Left Right");
   test_assert(structs(kRoot, "doubled") == "Left Base Right");
-  test_assert(structs(kRoot, "refined") == "Left Mod" && structs(kRoot, "unregistered") == "?");
+  test_assert(structs(kRoot, "refined") == "Left Mod" &&
+              structs(kRoot, "unregistered") == "?");
   test_assert(structs(kScene, "objects[0]") == "Object");
   test_assert(structs(kScene, "objects[0].location") ==
               "! 'objects[0].location' isn't a struct");
   test_assert(structs(kScene, "objects") == "! 'objects' isn't a struct");
-  test_assert(structs(kScene, "nothing") == "! no member 'nothing' in Scene (at offset 0)");
+  test_assert(structs(kScene, "nothing") ==
+              "! no member 'nothing' in Scene (at offset 0)");
   /* A struct in one of the cases is enough. */
   test_assert(structs(kRoot, "base.way") == "Mod");
 }
@@ -313,8 +356,8 @@ static void test_against_resolve()
   for (size_t i = 0; i < paths.size() && paths.size() < 2000; i++) {
     const std::string path = paths[i];
     const StructId type = path.empty() ? kScene : StructId();
-    Result<ResolvedPath> rp = path.empty() ? Result<ResolvedPath>(ResolvedPath()) :
-                                             resolve(ctx, path);
+    Result<ResolvedPath> rp =
+        path.empty() ? Result<ResolvedPath>(ResolvedPath()) : resolve(ctx, path);
     if (!rp.ok()) {
       continue;
     }
@@ -343,8 +386,15 @@ static void test_against_resolve()
       for (int m = 0; m < st->memberCount(); m++) {
         const std::string next = (path.empty() ? "" : path + ".") + st->member(m).name();
         paths.push_back(next);
-        for (const char *sub : {"[0]", "[1]", "[5]", ".active", ".length", "[\"Cube\"]", "[\"A\"]",
-                                "[HIDE]", "[EDIT]"})
+        for (const char *sub : {"[0]",
+                                "[1]",
+                                "[5]",
+                                ".active",
+                                ".length",
+                                "[\"Cube\"]",
+                                "[\"A\"]",
+                                "[HIDE]",
+                                "[EDIT]"})
         {
           paths.push_back(next + sub);
         }

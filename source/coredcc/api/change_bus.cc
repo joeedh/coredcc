@@ -96,7 +96,9 @@ bool hits(const Vector<PathTouch, 4> &touched, const Changes &changes)
   }
   for (const PathTouch &t : touched) {
     const std::string_view member(t.member.c_str(), t.member.size());
-    if (changes.contains(ChangeKey{t.owner, member}) || changes.contains(ChangeKey{t.owner, {}})) {
+    if (changes.contains(ChangeKey{t.owner, member}) ||
+        changes.contains(ChangeKey{t.owner, {}}))
+    {
       return true;
     }
   }
@@ -134,8 +136,7 @@ Reading read(Context &ctx, const Path &path)
   r.touched = std::move(rp->touched);
   if (v.ok()) {
     r.value = *v;
-  }
-  else {
+  } else {
     r.status = v.status();
   }
   return r;
@@ -212,11 +213,15 @@ struct ChangeBus::State final : detail::SignalStateBase {
   }
 };
 
-ChangeBus::ChangeBus(Runtime *) : state_(std::make_shared<State>()) {}
+ChangeBus::ChangeBus(Runtime *) : state_(std::make_shared<State>())
+{
+}
 
 ChangeBus::~ChangeBus() = default;
 
-void ChangeBus::notify(const OwnerKey &owner, std::string_view member, ChangeAspects aspects)
+void ChangeBus::notify(const OwnerKey &owner,
+                       std::string_view member,
+                       ChangeAspects aspects)
 {
   if (owner.isNull()) {
     return;
@@ -247,11 +252,8 @@ int ChangeBus::pendingCount() const
   return int(state_->pending.size());
 }
 
-Result<ScopedConnection> ChangeBus::watch(Context &ctx,
-                                          const Path &path,
-                                          WatchFn fn,
-                                          MetaFn meta,
-                                          Start *start)
+Result<ScopedConnection>
+ChangeBus::watch(Context &ctx, const Path &path, WatchFn fn, MetaFn meta, Start *start)
 {
   CDCC_CHECK(bool(fn), "ChangeBus::watch: an empty callback");
   Watcher w;
@@ -272,10 +274,8 @@ Result<ScopedConnection> ChangeBus::watch(Context &ctx,
   return ScopedConnection(Connection(state_, id));
 }
 
-Result<ScopedConnection> ChangeBus::watch(Context &ctx,
-                                          std::string_view path,
-                                          WatchFn fn,
-                                          MetaFn meta)
+Result<ScopedConnection>
+ChangeBus::watch(Context &ctx, std::string_view path, WatchFn fn, MetaFn meta)
 {
   Result<PathPtr> p = ctx.runtime().ext<PathCache>().get(path);
   if (!p.ok()) {
@@ -287,7 +287,8 @@ Result<ScopedConnection> ChangeBus::watch(Context &ctx,
 ScopedConnection ChangeBus::addListener(ListenFn fn)
 {
   CDCC_CHECK(bool(fn), "ChangeBus::addListener: an empty callback");
-  return addChangeListener([fn = std::move(fn)](const BusChange &c) mutable { fn(c.owner); });
+  return addChangeListener(
+      [fn = std::move(fn)](const BusChange &c) mutable { fn(c.owner); });
 }
 
 ScopedConnection ChangeBus::addChangeListener(ChangeFn fn)
@@ -367,7 +368,8 @@ Status ChangeBus::validate() const
 {
   for (const Watcher &w : state_->watchers) {
     if (w.live && (!w.ctx || !w.fn)) {
-      return Status::error(StatusCode::Internal, "ChangeBus: a live watcher has no context");
+      return Status::error(StatusCode::Internal,
+                           "ChangeBus: a live watcher has no context");
     }
   }
   return Status();

@@ -1,4 +1,5 @@
-/* GraphInstance: cycles, recursion, depth, size, and calls made while a graph evaluates. */
+/* GraphInstance: cycles, recursion, depth, size, and calls made while a graph evaluates.
+ */
 #include "graph_fixture.h"
 
 #include "coredcc/graph/instance.h"
@@ -20,8 +21,8 @@ Status sum(NodeExecContext &ctx)
   if (g_inKernel) {
     g_inKernel();
   }
-  return ctx.setOutput(0,
-                       GraphValue::ofFloat(ctx.input(0).asFloat() + ctx.input(1).asFloat()));
+  return ctx.setOutput(
+      0, GraphValue::ofFloat(ctx.input(0).asFloat() + ctx.input(1).asFloat()));
 }
 
 Status two(NodeExecContext &ctx)
@@ -38,7 +39,9 @@ struct World {
     addThings(rt);
     test_assert(registerGraphBlocks(rt).ok());
     NodeTypeDef s("t.sum");
-    s.input(PropertyDef::floatProp("a")).input(PropertyDef::floatProp("b")).output("value", "float");
+    s.input(PropertyDef::floatProp("a"))
+        .input(PropertyDef::floatProp("b"))
+        .output("value", "float");
     addType<sum>(rt, s, "t.sum");
     NodeTypeDef t("t.two");
     t.input(PropertyDef::floatProp("a")).output("x", "float").output("y", "float");
@@ -65,7 +68,8 @@ NodePath at(NodeId n, std::initializer_list<NodeId> groups = {})
 }
 
 /* A link with no checks, as a file or an undo makes it. */
-void force(GraphDef &def, NodeId from, std::string_view out, NodeId to, std::string_view in)
+void force(
+    GraphDef &def, NodeId from, std::string_view out, NodeId to, std::string_view in)
 {
   static int64_t id = 1000;
   LinkState s;
@@ -87,7 +91,10 @@ NodeId insert(GraphDef &def, const char *type, int64_t id)
 }
 
 /* The error is the same whichever socket is pulled first, in a new instance. */
-void everyEntry(World &w, const Graph &g, const std::vector<SocketPath> &sockets, const GraphError &want)
+void everyEntry(World &w,
+                const Graph &g,
+                const std::vector<SocketPath> &sockets,
+                const GraphError &want)
 {
   for (size_t i = 0; i < sockets.size(); i++) {
     GraphInstance inst(&w.rt, &w.lib, g.id);
@@ -96,8 +103,10 @@ void everyEntry(World &w, const Graph &g, const std::vector<SocketPath> &sockets
       test_assert(!inst.evaluate(p).ok() && !inst.value(p));
       const bool same = *inst.error(p) == want;
       if (!same) {
-        printf("%s at %s.%s\n", inst.error(p)->status.toString().c_str(),
-               inst.error(p)->origin.toString().c_str(), inst.error(p)->socket.c_str());
+        printf("%s at %s.%s\n",
+               inst.error(p)->status.toString().c_str(),
+               inst.error(p)->origin.toString().c_str(),
+               inst.error(p)->socket.c_str());
       }
       test_assert(same);
     }
@@ -110,7 +119,8 @@ void testCycles()
   /* Kernels: 1 -> 2 -> 3 -> 1, with 4 feeding in and 5 hanging off. */
   const Graph g = newGraph(w.lib, "g");
   GraphDef &d = *g.def;
-  const NodeId n3 = insert(d, "t.sum", 3), n1 = insert(d, "t.sum", 1), n2 = insert(d, "t.sum", 2);
+  const NodeId n3 = insert(d, "t.sum", 3), n1 = insert(d, "t.sum", 1),
+               n2 = insert(d, "t.sum", 2);
   const NodeId n4 = insert(d, "t.sum", 4), n5 = insert(d, "t.sum", 5);
   connect(d, n1, "value", n2, "a");
   connect(d, n2, "value", n3, "b");
@@ -122,18 +132,25 @@ void testCycles()
   const GraphError want = *i.error(out(n5));
   test_assert(want.origin == at(n1) && strcmp(want.socket.c_str(), "b") == 0);
   test_assert(strcmp(want.status.message(), "a cycle through 1.b, 2.a, 3.b") == 0);
-  test_assert(i.report(at(n2)).state == NodeReport::State::Failed && i.report(at(n2)).runs == 0);
+  test_assert(i.report(at(n2)).state == NodeReport::State::Failed &&
+              i.report(at(n2)).runs == 0);
   test_assert(i.report(at(n5)).state == NodeReport::State::InputFailed);
   test_assert(i.evaluate(out(n4)).ok());
-  everyEntry(w, g,
-             {out(n1), out(n2), out(n3), out(n5), SocketPath::of(n1, "b", SocketSide::Input),
+  everyEntry(w,
+             g,
+             {out(n1),
+              out(n2),
+              out(n3),
+              out(n5),
+              SocketPath::of(n1, "b", SocketSide::Input),
               SocketPath::of(n3, "b", SocketSide::Input)},
              want);
   /* The input beside the cycle is fine. */
   test_assert(i.evaluate(SocketPath::of(n1, "a", SocketSide::Input)).ok());
   /* Broken open, it evaluates; nothing is left of the cycle. */
   test_assert(d.unlink(d.node(n1)->linkInto("b")->id).ok());
-  test_assert(i.evaluate(out(n5)).ok() && i.report(at(n2)).state == NodeReport::State::Ok);
+  test_assert(i.evaluate(out(n5)).ok() &&
+              i.report(at(n2)).state == NodeReport::State::Ok);
 
   /* Two loops that share a node are one component, and 8 members are named. */
   force(d, n3, "value", n1, "b");
@@ -150,8 +167,10 @@ void testCycles()
   test_assert(d.unlink(d.node(n1)->linkInto("a")->id).ok());
   force(d, last, "value", n1, "a");
   test_assert(!i.evaluate(out(n1)).ok());
-  test_assert(strcmp(i.error(out(n1))->status.message(),
-                     "a cycle through 1.a, 1.b, 2.a, 3.b, 4.a, 10.a, 11.a, 12.a and 7 more") == 0);
+  test_assert(
+      strcmp(i.error(out(n1))->status.message(),
+             "a cycle through 1.a, 1.b, 2.a, 3.b, 4.a, 10.a, 11.a, 12.a and 7 more") ==
+      0);
 }
 
 /* Two outputs of one node have one version; which one is read still counts. */
@@ -162,9 +181,11 @@ void testSameVersion()
   const NodeId both = add(d, "t.two"), user = add(d, "t.sum");
   connect(d, both, "x", user, "a");
   GraphInstance i(&w.rt, nullptr, &d);
-  test_assert(i.evaluate(out(user)).ok() && *i.value(out(user)) == GraphValue::ofFloat(1));
+  test_assert(i.evaluate(out(user)).ok() &&
+              *i.value(out(user)) == GraphValue::ofFloat(1));
   connect(d, both, "y", user, "a");
-  test_assert(i.evaluate(out(user)).ok() && *i.value(out(user)) == GraphValue::ofFloat(2));
+  test_assert(i.evaluate(out(user)).ok() &&
+              *i.value(out(user)) == GraphValue::ofFloat(2));
   test_assert(i.totalRuns() == 3);
 }
 
@@ -179,7 +200,8 @@ void testInnerCycles()
     i[k] = *in.addInterface(SocketSide::Input, k ? "i1" : "i0", "float", -1, 100 + k);
     u[k] = *in.addInterface(SocketSide::Output, k ? "o1" : "o0", "float", -1, 200 + k);
   }
-  const NodeId input = insert(in, "graph.input", 1), output = insert(in, "graph.output", 2);
+  const NodeId input = insert(in, "graph.input", 1),
+               output = insert(in, "graph.output", 2);
   connect(in, input, key(i[0]), output, key(u[0]));
   const NodeId g = insert(o, "graph.group", 5), s = insert(o, "t.sum", 6);
   test_assert(o.setGroup(g, inner.id).ok());
@@ -189,22 +211,24 @@ void testInnerCycles()
   GraphInstance inst(&w.rt, &w.lib, outer.id);
   test_assert(inst.evaluate(out(s)).ok());
 
-  /* o1 <- i1 makes the outer one a cycle, through a kernel: s -> i0 -> o0 -> i1 -> o1 -> s. */
+  /* o1 <- i1 makes the outer one a cycle, through a kernel: s -> i0 -> o0 -> i1 -> o1 ->
+   * s. */
   connect(in, input, key(i[1]), output, key(u[1]));
   test_assert(hasCode(inst.evaluate(out(s)), StatusCode::FailedPrecondition));
   GraphError want = *inst.error(out(s));
   test_assert(want.origin == at(g) && strcmp(want.socket.c_str(), "#100") == 0);
   test_assert(strcmp(want.status.message(),
                      "a cycle through 5.#100, 5.#101, 6.a, 5/2.#200, 5/2.#201") == 0);
-  std::vector<SocketPath> all = {out(s),
-                                 out(g, u[0]),
-                                 out(g, u[1]),
-                                 SocketPath::of(s, "a", SocketSide::Input),
-                                 SocketPath::of(g, key(i[0]), SocketSide::Input),
-                                 SocketPath::of(g, key(i[1]), SocketSide::Input),
-                                 SocketPath::of(at(input, {g}), key(i[0])),
-                                 SocketPath::of(at(input, {g}), key(i[1])),
-                                 SocketPath::of(at(output, {g}), key(u[0]), SocketSide::Input)};
+  std::vector<SocketPath> all = {
+      out(s),
+      out(g, u[0]),
+      out(g, u[1]),
+      SocketPath::of(s, "a", SocketSide::Input),
+      SocketPath::of(g, key(i[0]), SocketSide::Input),
+      SocketPath::of(g, key(i[1]), SocketSide::Input),
+      SocketPath::of(at(input, {g}), key(i[0])),
+      SocketPath::of(at(input, {g}), key(i[1])),
+      SocketPath::of(at(output, {g}), key(u[0]), SocketSide::Input)};
   everyEntry(w, outer, all, want);
 
   /* Without any kernel in it: o1 -> i0 directly. */
@@ -216,7 +240,8 @@ void testInnerCycles()
                      "a cycle through 5.#100, 5.#101, 5/2.#200, 5/2.#201") == 0);
   everyEntry(w, outer, all, want);
   test_assert(inst.report(at(s)).state == NodeReport::State::InputFailed);
-  test_assert(o.unlink(o.node(g)->linkInto(key(i[0]))->id).ok() && inst.evaluate(out(s)).ok());
+  test_assert(o.unlink(o.node(g)->linkInto(key(i[0]))->id).ok() &&
+              inst.evaluate(out(s)).ok());
 
   /* A def whose output node feeds itself through an inner group. */
   const Graph top = newGraph(w.lib, "top");
@@ -225,7 +250,9 @@ void testInnerCycles()
   force(*top.def, tg, key(u[0]), tg, key(i[0]));
   GraphInstance t(&w.rt, &w.lib, top.id);
   test_assert(!t.evaluate(out(tg, u[0])).ok());
-  everyEntry(w, top, {out(tg, u[0]), SocketPath::of(tg, key(i[0]), SocketSide::Input)},
+  everyEntry(w,
+             top,
+             {out(tg, u[0]), SocketPath::of(tg, key(i[0]), SocketSide::Input)},
              *t.error(out(tg, u[0])));
   test_assert(t.evaluate(out(tg, u[1])).ok());
 }
@@ -262,7 +289,8 @@ void testRecursion()
   test_assert(i.evaluate(SocketPath::output("o")).ok());
   redirect(w.lib, *b.def, a.id);
   force(*b.def, bg, key(ao), bOut, key(bo));
-  test_assert(hasCode(i.evaluate(SocketPath::output("o")), StatusCode::FailedPrecondition));
+  test_assert(
+      hasCode(i.evaluate(SocketPath::output("o")), StatusCode::FailedPrecondition));
   test_assert(i.error(SocketPath::output("o"))->origin == at(bg, {ag}));
   test_assert(strcmp(i.error(SocketPath::output("o"))->status.message(),
                      "the graph contains itself") == 0);
@@ -272,7 +300,8 @@ void testRecursion()
   test_assert(b.def->unlink(b.def->node(bOut)->linkInto(key(bo))->id).ok());
   force(*b.def, bg, key(bo), bOut, key(bo));
   GraphInstance j(&w.rt, &w.lib, b.id);
-  test_assert(hasCode(j.evaluate(SocketPath::output("o")), StatusCode::FailedPrecondition));
+  test_assert(
+      hasCode(j.evaluate(SocketPath::output("o")), StatusCode::FailedPrecondition));
   test_assert(j.error(SocketPath::output("o"))->origin == at(bg) && j.frameCount() == 0);
   redirect(w.lib, *b.def, BlockId());
   test_assert(hasCode(j.evaluate(SocketPath::output("o")), StatusCode::NotFound));
@@ -315,8 +344,7 @@ void testDepth()
     test_assert(i.frameCount() == (depth <= 64 ? depth : 64));
     if (depth <= 64) {
       test_assert(*i.value(p) == GraphValue::ofFloat(1));
-    }
-    else {
+    } else {
       test_assert(i.error(p)->origin.groups.size() == 64);
       GraphInstance inner(&w.rt, &w.lib, g[1].id);
       test_assert(inner.evaluate(p).ok());
@@ -389,10 +417,12 @@ void testLong()
     last = next;
   }
   GraphInstance i(&w.rt, &w.lib, g.id);
-  test_assert(i.evaluate(out(last)).ok() && *i.value(out(last)) == GraphValue::ofFloat(1));
+  test_assert(i.evaluate(out(last)).ok() &&
+              *i.value(out(last)) == GraphValue::ofFloat(1));
   test_assert(i.totalRuns() == uint64_t(n));
   test_assert(d.setLiteral(first, "a", PropValue::ofFloat(2)).ok());
-  test_assert(i.evaluate(out(last)).ok() && *i.value(out(last)) == GraphValue::ofFloat(2));
+  test_assert(i.evaluate(out(last)).ok() &&
+              *i.value(out(last)) == GraphValue::ofFloat(2));
   w.rt.touch();
   test_assert(i.evaluate(out(last)).ok() && i.totalRuns() == 2 * uint64_t(n));
   /* Calls under one key share their pass: this would be 10^9 steps otherwise. */
@@ -402,11 +432,13 @@ void testLong()
   }
   const std::chrono::duration<double> t = std::chrono::steady_clock::now() - start;
   test_assert(t.count() < 5);
-  test_assert(hasCode(d.link({last, "value"}, {first, "b"}), StatusCode::InvalidArgument));
+  test_assert(
+      hasCode(d.link({last, "value"}, {first, "b"}), StatusCode::InvalidArgument));
   force(d, last, "value", first, "a");
   test_assert(hasCode(i.evaluate(out(last)), StatusCode::FailedPrecondition));
   GraphInstance j(&w.rt, &w.lib, g.id);
-  test_assert(!j.evaluate(out(first)).ok() && *i.error(out(last)) == *j.error(out(first)));
+  test_assert(!j.evaluate(out(first)).ok() &&
+              *i.error(out(last)) == *j.error(out(first)));
   test_assert(i.clear().ok());
 }
 
@@ -432,13 +464,16 @@ void testReentrancy()
       test_assert(hasCode(x->evaluate({&p, 1}, results), StatusCode::Busy));
       test_assert(hasCode(x->setInput("in", GraphValue::ofFloat(1)), StatusCode::Busy));
       test_assert(hasCode(x->forget(p), StatusCode::Busy));
-      test_assert(hasCode(x->retry(), StatusCode::Busy) && hasCode(x->clear(), StatusCode::Busy));
+      test_assert(hasCode(x->retry(), StatusCode::Busy) &&
+                  hasCode(x->clear(), StatusCode::Busy));
     }
     test_assert(hasCode(w.lib.collect(), StatusCode::Busy));
     test_assert(hasCode(d.addNode("t.sum"), StatusCode::Busy));
-    test_assert(hasCode(w.rt.ext<SocketTypeRegistry>().addConversion("int", "vec2", nullptr),
-                        StatusCode::Busy));
-    test_assert(hasCode(w.rt.ext<NodeTypeRegistry>().add(NodeTypeDef("t.x")), StatusCode::Busy));
+    test_assert(
+        hasCode(w.rt.ext<SocketTypeRegistry>().addConversion("int", "vec2", nullptr),
+                StatusCode::Busy));
+    test_assert(
+        hasCode(w.rt.ext<NodeTypeRegistry>().add(NodeTypeDef("t.x")), StatusCode::Busy));
     test_assert(w.rt.lastEdit() == edit);
     /* Reading is fine. */
     test_assert(!i.isCurrent(out(s2)) && i.report(at(s2)).runs == 0);

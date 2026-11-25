@@ -83,7 +83,10 @@ int NodeType::paramIndex(std::string_view paramName) const
 
 /* ---- NodeTypeDef ---- */
 
-NodeTypeDef::NodeTypeDef(std::string_view name) : name_(lsString(name)), uiName_(lsString(name)) {}
+NodeTypeDef::NodeTypeDef(std::string_view name)
+    : name_(lsString(name)), uiName_(lsString(name))
+{
+}
 
 NodeTypeDef &NodeTypeDef::uiName(std::string_view s)
 {
@@ -169,7 +172,9 @@ PropertyDef *NodeTypeDef::paramDef(std::string_view name)
   return nullptr;
 }
 
-bool NodeTypeDef::setSocketUiName(bool output, std::string_view name, std::string_view uiName)
+bool NodeTypeDef::setSocketUiName(bool output,
+                                  std::string_view name,
+                                  std::string_view uiName)
 {
   if (output) {
     const int i = indexOfName(outputs_, name);
@@ -290,7 +295,9 @@ static bool sameParam(const NodeParamDef &a, const NodeParamDef &b)
   {
     return false;
   }
-  if (a.def.kind() == PropKind::Pointer && !(a.def.target()->target == b.def.target()->target)) {
+  if (a.def.kind() == PropKind::Pointer &&
+      !(a.def.target()->target == b.def.target()->target))
+  {
     return false;
   }
   const EnumMeta *x = a.def.enumMeta(), *y = b.def.enumMeta();
@@ -330,12 +337,13 @@ Status NodeTypeRegistry::checkReplace(const NodeTypeDef &def) const
     same = sameParam(type.params[i], old->params[i]);
   }
   litestl::alloc::Delete(*made);
-  return same ? Status() :
-                Status::error(StatusCode::FailedPrecondition,
-                              (std::string("node type '") + def.name_.c_str() +
-                               "': its sockets, params, flags or version are others; only its "
-                               "kernel can be replaced")
-                                  .c_str());
+  return same ? Status()
+              : Status::error(
+                    StatusCode::FailedPrecondition,
+                    (std::string("node type '") + def.name_.c_str() +
+                     "': its sockets, params, flags or version are others; only its "
+                     "kernel can be replaced")
+                        .c_str());
 }
 
 Status NodeTypeRegistry::replaceKernel(NodeTypeDef def)
@@ -375,7 +383,8 @@ Result<NodeType *> NodeTypeRegistry::build(const NodeTypeDef &def, bool replaces
     return invalid(where + ": the name must be dotted identifiers");
   }
   if (!replaces && find(def.name_.c_str())) {
-    return Status::error(StatusCode::AlreadyExists, (where + " is registered already").c_str());
+    return Status::error(StatusCode::AlreadyExists,
+                         (where + " is registered already").c_str());
   }
   if (!replaces) {
     CDCC_TRY(detail::checkNodeStructs(rt_, def.name_.c_str()));
@@ -429,8 +438,7 @@ Result<NodeType *> NodeTypeRegistry::build(const NodeTypeDef &def, bool replaces
         return invalid(where + ": input '" + in.name.c_str() + "' has no usable default");
       }
       out.defaultValue = std::move(v).value();
-    }
-    else {
+    } else {
       out.type = sockets.find(in.payloadType.c_str());
       if (!out.type) {
         return sockets.unknown(in.payloadType.c_str());
@@ -452,8 +460,8 @@ Result<NodeType *> NodeTypeRegistry::build(const NodeTypeDef &def, bool replaces
     if (!type) {
       return sockets.unknown(out.socketType.c_str());
     }
-    t->outputs.append(
-        NodeOutputDef{out.name, out.uiName.size() > 0 ? out.uiName : shownName(out.name), type});
+    t->outputs.append(NodeOutputDef{
+        out.name, out.uiName.size() > 0 ? out.uiName : shownName(out.name), type});
   }
 
   for (const NodeParamDef &p : def.params_) {
@@ -490,7 +498,8 @@ Result<NodeType *> NodeTypeRegistry::build(const NodeTypeDef &def, bool replaces
 const NodeType *NodeTypeRegistry::find(std::string_view name) const
 {
   NodeType *const *t = byId_.lookup_ptr(TypeId::of(idName(name)).value);
-  return t && name == (*t)->name.c_str() ? *t : nullptr; /* a file's name can have its id */
+  return t && name == (*t)->name.c_str() ? *t
+                                         : nullptr; /* a file's name can have its id */
 }
 
 Status NodeTypeRegistry::unknown(std::string_view name) const

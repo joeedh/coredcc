@@ -1,5 +1,6 @@
-/* What grows with the size of a graph: sixteen times the size may take no more than 64 times as
- * long, where something quadratic takes 256. And what an edit looks at, which doesn't grow. */
+/* What grows with the size of a graph: sixteen times the size may take no more than 64
+ * times as long, where something quadratic takes 256. And what an edit looks at, which
+ * doesn't grow. */
 #include "edit_fixture.h"
 #include "foreach_fixture.h"
 
@@ -22,8 +23,8 @@ double secondsOf(const std::function<void()> &fn)
   return t.count();
 }
 
-/* `run(n)` gives the seconds that matter. The best of a few, and a few more if it looks bad:
- * the machine may be busy. */
+/* `run(n)` gives the seconds that matter. The best of a few, and a few more if it looks
+ * bad: the machine may be busy. */
 bool grows(const char *name, int n, const std::function<double(int)> &run)
 {
   double small = 1e9, large = 1e9;
@@ -36,7 +37,8 @@ bool grows(const char *name, int n, const std::function<double(int)> &run)
   }
   const bool ok = large < 64 * small + 0.002;
   if (!ok) {
-    printf("%s: %g ms for %d, %g ms for %d\n", name, small * 1000, n, large * 1000, 16 * n);
+    printf(
+        "%s: %g ms for %d, %g ms for %d\n", name, small * 1000, n, large * 1000, 16 * n);
   }
   return ok;
 }
@@ -137,8 +139,8 @@ struct Wide {
   void interface(int n)
   {
     for (int i = 0; i < n; i++) {
-      sockets.push_back(
-          addSocket(*in.def, SocketSide::Input, ("s" + std::to_string(i)).c_str(), "float"));
+      sockets.push_back(addSocket(
+          *in.def, SocketSide::Input, ("s" + std::to_string(i)).c_str(), "float"));
       keys.push_back(key(sockets.back()));
     }
     for (const std::string &k : keys) {
@@ -193,7 +195,8 @@ void testWide()
       return out;
     };
     const std::string name = inside ? "interior sockets: " : "an interface: ";
-    test_assert(grows((name + "linkAll").c_str(), 250, [&](int n) { return wide(n)->linkAll(); }));
+    test_assert(grows(
+        (name + "linkAll").c_str(), 250, [&](int n) { return wide(n)->linkAll(); }));
     test_assert(grows((name + "evaluate").c_str(), 250, [&](int n) {
       const auto f = wide(n);
       f->linkAll();
@@ -226,7 +229,8 @@ void testWide()
     test_assert(grows((name + "a link").c_str(), 250, [&](int n) {
       const auto f = wide(n);
       f->linkAll();
-      return secondsOf([&]() { connect(*f->g.def, f->from, "value", f->group, f->keys[0]); });
+      return secondsOf(
+          [&]() { connect(*f->g.def, f->from, "value", f->group, f->keys[0]); });
     }));
   }
 }

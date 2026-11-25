@@ -1,4 +1,5 @@
-/* Graphs in files: saving and loading, appending, duplicating, and types that aren't there. */
+/* Graphs in files: saving and loading, appending, duplicating, and types that aren't
+ * there. */
 #include "edit_fixture.h"
 #include "foreach_fixture.h"
 #include "io_compare.h"
@@ -18,7 +19,9 @@ namespace {
 void addSum(Runtime &rt)
 {
   NodeTypeDef t("t.sum");
-  t.input(PropertyDef::floatProp("a")).input(PropertyDef::floatProp("b")).output("value", "float");
+  t.input(PropertyDef::floatProp("a"))
+      .input(PropertyDef::floatProp("b"))
+      .output("value", "float");
   addType<sumKernel>(rt, t, "t.sum");
 }
 
@@ -34,7 +37,8 @@ void addMode(Runtime &rt, int64_t base)
 {
   NodeTypeDef t("io.mode");
   t.input(PropertyDef::floatProp("a"))
-      .param(PropertyDef::enumProp("mode").item("KEEP", base + 1).item("NEGATE", base + 2))
+      .param(
+          PropertyDef::enumProp("mode").item("KEEP", base + 1).item("NEGATE", base + 2))
       .param(PropertyDef::flagsProp("flags").item("A", base ? 4 : 1).item("B", 2))
       .param(PropertyDef::stringProp("name"))
       .param(PropertyDef::pointerProp("strong", StructId::of(kGraphDefType)))
@@ -65,14 +69,16 @@ struct Content {
   NodeId in, out, group, each, mode, sum, late;
   int64_t i = 0, o = 0, a = 0, innerOut = 0;
 
-  explicit Content(Library &lib) : root(newGraph(lib, "root")), inner(newGraph(lib, "inner"))
+  explicit Content(Library &lib)
+      : root(newGraph(lib, "root")), inner(newGraph(lib, "inner"))
   {
     lib.setFlag(root.h, BlockFlags::Root, true);
     GraphDef &d = *inner.def;
     a = addSocket(d, SocketSide::Input, "a", "float");
     innerOut = addSocket(d, SocketSide::Output, "o", "float");
     test_assert(d.setInterfaceDefault(a, PropValue::ofFloat(2)).ok());
-    const NodeId din = add(d, "graph.input"), dout = add(d, "graph.output"), s = add(d, "t.sum");
+    const NodeId din = add(d, "graph.input"), dout = add(d, "graph.output"),
+                 s = add(d, "t.sum");
     connect(d, din, key(a), s, "a");
     connect(d, s, "value", dout, key(innerOut));
     test_assert(d.setLiteral(s, "b", PropValue::ofFloat(0.25)).ok());
@@ -90,7 +96,8 @@ struct Content {
     sum = add(r, "t.sum");
     test_assert(r.setGroup(group, inner.id).ok() && r.setGroup(each, inner.id).ok());
     test_assert(r.setParam(each, kMaxCachedParam, PropValue::ofInt(3)).ok());
-    test_assert(r.setLabel(mode, "a label").ok() && r.setPosition(mode, -1.5, 1e300).ok());
+    test_assert(r.setLabel(mode, "a label").ok() &&
+                r.setPosition(mode, -1.5, 1e300).ok());
     test_assert(r.setParam(mode, "mode", PropValue::ofString("NEGATE")).ok());
     test_assert(r.setParam(mode, "flags", PropValue::ofString("A|B")).ok());
     test_assert(r.setParam(mode, "name", PropValue::ofString("text")).ok());
@@ -133,7 +140,8 @@ struct Content {
     s2.outputs.append(SocketInfo{"value", "value", "late.type"});
     test_assert(r.insertNode(s2).ok());
     late = s2.id;
-    const LinkState l{LinkId{42}, late, "value", sum, "c"}, m{LinkId{43}, sum, "value", late, "a"};
+    const LinkState l{LinkId{42}, late, "value", sum, "c"},
+        m{LinkId{43}, sum, "value", late, "a"};
     test_assert(r.insertLink(l).ok() && r.insertLink(m).ok());
     connect(r, in, key(i), group, "@" + std::to_string(s.value) + ".b");
   }
@@ -196,7 +204,8 @@ void testRoundTrip()
   Content c(a.lib);
   test_assert(evaluates(a.rt, a.lib, kResult));
   SaveReport report;
-  test_assert(saveLibrary(a.lib, &report).ok() && report.blocks == 2 && report.issues.total == 0);
+  test_assert(saveLibrary(a.lib, &report).ok() && report.blocks == 2 &&
+              report.issues.total == 0);
   const Bytes bytes = save(a.lib);
   test_assert(same(bytes, save(a.lib)));
 
@@ -204,7 +213,8 @@ void testRoundTrip()
   const LoadReport loaded = load(b.ctx, bytes);
   test_assert(loaded.issues.total == 0 && loaded.records == 2 && loaded.missingType == 0);
   const Graph root = byName(b.lib, "root"), inner = byName(b.lib, "inner");
-  test_assert(root.id == c.root.id && root.def->self() == root.id && inner.def->self() == inner.id);
+  test_assert(root.id == c.root.id && root.def->self() == root.id &&
+              inner.def->self() == inner.id);
   test_assert(sameGraph(*c.root.def, *root.def) && sameGraph(*c.inner.def, *inner.def));
   test_assert(root.def->validate().ok() && root.def->library() == &b.lib);
   test_assert(evaluates(b.rt, b.lib, kResult) && same(bytes, save(b.lib)));
@@ -212,9 +222,11 @@ void testRoundTrip()
 
   /* Strengths: the group and `strong` keep inner, `weak` doesn't. */
   test_assert(b.lib.collect().ok() && !b.lib.find(inner.id).isNull());
-  test_assert(root.def->setGroup(c.group, BlockId()).ok() && root.def->setGroup(c.each, BlockId()).ok());
+  test_assert(root.def->setGroup(c.group, BlockId()).ok() &&
+              root.def->setGroup(c.each, BlockId()).ok());
   test_assert(b.lib.collect().ok() && !b.lib.find(inner.id).isNull());
-  test_assert(root.def->setParam(c.mode, "strong", PropValue()).ok() && b.lib.collect().ok());
+  test_assert(root.def->setParam(c.mode, "strong", PropValue()).ok() &&
+              b.lib.collect().ok());
   test_assert(b.lib.find(inner.id).isNull());
 }
 
@@ -236,7 +248,8 @@ void testEdits()
   test_assert(!inst.evaluate(p).ok() && b.undo().ok());
   test_assert(inst.evaluate(p).ok() && inst.value(p)->asFloat() == kResult + 100);
   test_assert(hasCode(root.def->setGroup(c.group, root.id), StatusCode::InvalidArgument));
-  test_assert(hasCode(root.def->link({c.sum, "value"}, {c.mode, "a"}), StatusCode::InvalidArgument));
+  test_assert(hasCode(root.def->link({c.sum, "value"}, {c.mode, "a"}),
+                      StatusCode::InvalidArgument));
   test_assert(hasCode(root.def->addNode("graph.output"), StatusCode::AlreadyExists));
   /* New ids are new, and an edit's version is after everything that was read. */
   const uint64_t version = root.def->node(c.mode)->paramVersion();
@@ -265,7 +278,8 @@ void testMissingTypes()
   IoDoc d;
   load(d.ctx, again);
   test_assert(sameGraph(*c.root.def, *byName(d.lib, "root").def));
-  test_assert(evaluates(d.rt, d.lib, kResult) && same(save(d.lib), bytes) && same(again, bytes));
+  test_assert(evaluates(d.rt, d.lib, kResult) && same(save(d.lib), bytes) &&
+              same(again, bytes));
   /* A type with a pointer that the file doesn't have, and without one that it has. */
   IoDoc e;
   NodeTypeDef t("late.sum");
@@ -276,9 +290,11 @@ void testMissingTypes()
   const Graph read = byName(e.lib, "root");
   const GraphNode &late = *read.def->node(c.late);
   test_assert(late.blockRefs().size() == 2 && late.blockTarget("gone") == c.inner.id);
-  test_assert(strcmp(late.blockRefs()[1].name.c_str(), "extra") == 0 && late.blockRefs()[1].cell.kind == RefKind::Weak);
+  test_assert(strcmp(late.blockRefs()[1].name.c_str(), "extra") == 0 &&
+              late.blockRefs()[1].cell.kind == RefKind::Weak);
   test_assert(!read.def->setParam(c.late, "extra", graphPointer(read)).ok()); /* itself */
-  test_assert(read.def->setParam(c.late, "extra", graphPointer(byName(e.lib, "inner"))).ok());
+  test_assert(
+      read.def->setParam(c.late, "extra", graphPointer(byName(e.lib, "inner"))).ok());
   save(e.lib);
   /* Later. */
   addSum(b.rt);
@@ -358,9 +374,11 @@ void testStrength()
                 (weak ? RefKind::Weak : RefKind::OptStrong));
     test_assert(b.lib.collect().ok() && !byName(b.lib, "target").h.isNull() == !weak);
     /* Undo of removing a node. */
-    test_assert(runGraphEdit(b.ctx, read.id, "remove", [&](GraphEdit &e) {
-                  return e.removeNode(n);
-                }).ok() && b.undo().ok());
+    test_assert(
+        runGraphEdit(
+            b.ctx, read.id, "remove", [&](GraphEdit &e) { return e.removeNode(n); })
+            .ok() &&
+        b.undo().ok());
     test_assert(read.def->node(n)->blockRefs()[0].cell.kind ==
                 (weak ? RefKind::Weak : RefKind::OptStrong));
   }
@@ -391,7 +409,8 @@ void testVersions()
   load(b.ctx, bytes);
   load(c.ctx, bytes); /* without the type */
   const Graph newer = byName(b.lib, "root"), none = byName(c.lib, "root");
-  test_assert(newer.def->node(n)->typeVersion() == 2 && none.def->node(n)->typeVersion() == 2);
+  test_assert(newer.def->node(n)->typeVersion() == 2 &&
+              none.def->node(n)->typeVersion() == 2);
   addVersion(c.rt, 1);
   test_assert(none.def->node(n)->typeVersion() == 2 && same(save(b.lib), bytes) &&
               same(save(c.lib), bytes));
@@ -433,14 +452,18 @@ void testExtraRefs()
   /* Undo brings it back, and holds the block until then. */
   auto edit = [&](auto fn) { return runGraphEdit(d.ctx, c.root.id, "edit", fn).ok(); };
   test_assert(edit([&](GraphEdit &g) { return g.removeNode(s.id); }));
-  test_assert(d.lib.usersOf(kept.h).size() == 0 && d.lib.collect().ok() && d.lib.get(kept.h));
+  test_assert(d.lib.usersOf(kept.h).size() == 0 && d.lib.collect().ok() &&
+              d.lib.get(kept.h));
   test_assert(d.undo().ok() && d.lib.usersOf(kept.h).size() == 1);
-  test_assert(edit([&](GraphEdit &g) { return g.setExtra(s.id, "new.graph", PropValue::ofInt(1)); }));
-  test_assert(d.lib.usersOf(kept.h).size() == 0 && d.lib.collect().ok() && d.lib.get(kept.h));
+  test_assert(edit(
+      [&](GraphEdit &g) { return g.setExtra(s.id, "new.graph", PropValue::ofInt(1)); }));
+  test_assert(d.lib.usersOf(kept.h).size() == 0 && d.lib.collect().ok() &&
+              d.lib.get(kept.h));
   test_assert(d.undo().ok() && d.lib.usersOf(kept.h).size() == 1);
   IoDoc b;
   load(b.ctx, save(d.lib));
-  test_assert(sameGraph(*c.root.def, *byName(b.lib, "root").def) && byName(b.lib, "kept").def);
+  test_assert(sameGraph(*c.root.def, *byName(b.lib, "root").def) &&
+              byName(b.lib, "kept").def);
   test_assert(c.root.def->removeNode(s.id).ok() && d.lib.usersOf(kept.h).size() == 0);
   d.history.clear();
   test_assert(d.lib.collect().ok() && !d.lib.get(kept.h));
@@ -468,16 +491,19 @@ void testTargets()
   GraphDef &r = *c.root.def;
   const NodeId m = add(r, "io.mode"), g = add(r, "graph.group");
   test_assert(r.setParam(m, "strong", graphPointer(lost)).ok());
-  test_assert(r.setParam(m, "weak", graphPointer(lost)).ok() && r.setGroup(g, lost.id).ok());
+  test_assert(r.setParam(m, "weak", graphPointer(lost)).ok() &&
+              r.setGroup(g, lost.id).ok());
   test_assert(a.lib.markDeleted(lost.h).ok());
   load(b.ctx, save(a.lib));
   const Graph root = byName(b.lib, "root");
   test_assert(root.def->node(g)->group().isNull());
-  test_assert(root.def->node(m)->blockTarget("strong").isNull() && evaluates(b.rt, b.lib, kResult));
+  test_assert(root.def->node(m)->blockTarget("strong").isNull() &&
+              evaluates(b.rt, b.lib, kResult));
   /* Only the cell of a group node counts, also when the Library wrote it. */
   test_assert(a.lib.restoreFromHistory(lost.h).ok());
   a.lib.writeRef(const_cast<RefCell &>(r.node(g)->group()), c.inner.id).ignore();
-  a.lib.writeRef(const_cast<RefCell &>(r.node(m)->blockRefs()[0].cell), c.inner.id).ignore();
+  a.lib.writeRef(const_cast<RefCell &>(r.node(m)->blockRefs()[0].cell), c.inner.id)
+      .ignore();
   IoDoc d;
   load(d.ctx, save(a.lib));
   const Graph again = byName(d.lib, "root");
@@ -485,7 +511,8 @@ void testTargets()
   test_assert(again.def->node(m)->blockTarget("strong") == c.inner.id);
 }
 
-/* Graphs that reach themselves, or have a cycle, load; the evaluator says what is wrong. */
+/* Graphs that reach themselves, or have a cycle, load; the evaluator says what is wrong.
+ */
 void testCycles()
 {
   IoDoc a, b;
@@ -493,20 +520,25 @@ void testCycles()
   a.lib.setFlag(g.h, BlockFlags::Root, true);
   const int64_t o = addSocket(*g.def, SocketSide::Output, "out", "float");
   const int64_t ho = addSocket(*h.def, SocketSide::Output, "out", "float");
-  const NodeId out = add(*g.def, "graph.output"), x = add(*g.def, "t.sum"), n = add(*g.def, "graph.group");
+  const NodeId out = add(*g.def, "graph.output"), x = add(*g.def, "t.sum"),
+               n = add(*g.def, "graph.group");
   const NodeId hout = add(*h.def, "graph.output"), back = add(*h.def, "graph.group");
   test_assert(g.def->setGroup(n, h.id).ok());
   a.lib.writeRef(const_cast<RefCell &>(h.def->node(back)->group()), g.id).ignore();
   connect(*g.def, x, "value", out, key(o));
   test_assert(g.def->insertLink(LinkState{LinkId{5}, x, "value", x, "a"}).ok());
-  test_assert(h.def->insertLink(LinkState{LinkId{5}, back, key(o).c_str(), hout, key(ho).c_str()}).ok());
+  test_assert(
+      h.def->insertLink(LinkState{LinkId{5}, back, key(o).c_str(), hout, key(ho).c_str()})
+          .ok());
   const Bytes bytes = save(a.lib);
   load(b.ctx, bytes);
   const Graph root = byName(b.lib, "root");
   test_assert(sameGraph(*g.def, *root.def) && same(bytes, save(b.lib)));
   GraphInstance inst(&b.rt, &b.lib, root.id);
-  test_assert(hasCode(inst.evaluate(SocketPath::output("out")), StatusCode::FailedPrecondition));
-  test_assert(hasCode(inst.evaluate(SocketPath::of(n, key(ho))), StatusCode::FailedPrecondition));
+  test_assert(
+      hasCode(inst.evaluate(SocketPath::output("out")), StatusCode::FailedPrecondition));
+  test_assert(
+      hasCode(inst.evaluate(SocketPath::of(n, key(ho))), StatusCode::FailedPrecondition));
   test_assert(root.def->node(x)->linksIn().size() == 1);
 }
 
@@ -521,24 +553,28 @@ void testDuplicate()
   test_assert(ids.ok() && ids->size() == 2);
   GraphDef *root = graphDefOf(a.lib, a.lib.find(ids->find(c.root.id)));
   GraphDef *inner = graphDefOf(a.lib, a.lib.find(ids->find(c.inner.id)));
-  test_assert(root->self() == ids->find(c.root.id) && root->serial() != c.root.def->serial());
+  test_assert(root->self() == ids->find(c.root.id) &&
+              root->serial() != c.root.def->serial());
   test_assert(root->node(c.group)->group().target == inner->self());
   test_assert(root->node(c.each)->group().target == inner->self());
   test_assert(root->node(c.mode)->blockTarget("weak") == inner->self());
   test_assert(sameGraph(*c.inner.def, *inner) && sameGraph(*c.root.def, *root, &*ids));
   GraphInstance inst(&a.rt, &a.lib, root->self()), old(&a.rt, &a.lib, c.root.id);
   const SocketPath p = SocketPath::output("out");
-  test_assert(inst.evaluate(p).ok() && inst.value(p)->asFloat() == kResult && old.evaluate(p).ok());
+  test_assert(inst.evaluate(p).ok() && inst.value(p)->asFloat() == kResult &&
+              old.evaluate(p).ok());
   /* They are apart. */
   test_assert(root->setParam(c.mode, "mode", PropValue::ofString("KEEP")).ok());
   test_assert(inst.evaluate(p).ok() && inst.value(p)->asFloat() == -kResult);
-  test_assert(old.evaluate(p).ok() && old.value(p)->asFloat() == kResult && old.totalRuns() == 3);
+  test_assert(old.evaluate(p).ok() && old.value(p)->asFloat() == kResult &&
+              old.totalRuns() == 3);
   /* One alone shares what it uses. */
   const BlockHandle one[] = {c.root.h};
   ids = duplicateBlocks(a.lib, one);
   test_assert(ids.ok());
   root = graphDefOf(a.lib, a.lib.find(ids->find(c.root.id)));
-  test_assert(root->node(c.group)->group().target == c.inner.id && sameGraph(*c.root.def, *root));
+  test_assert(root->node(c.group)->group().target == c.inner.id &&
+              sameGraph(*c.root.def, *root));
 }
 
 void testAppend()
@@ -549,7 +585,8 @@ void testAppend()
   Result<AppendResult> r = appendLibrary(a.ctx, view(bytes));
   test_assert(r.ok() && r->ids.size() == 2 && r->report.issues.total == 0);
   GraphDef *root = graphDefOf(a.lib, a.lib.find(r->ids.find(c.root.id)));
-  test_assert(root && root->self() == r->ids.find(c.root.id) && root->self() != c.root.id);
+  test_assert(root && root->self() == r->ids.find(c.root.id) &&
+              root->self() != c.root.id);
   test_assert(root->node(c.group)->group().target == r->ids.find(c.inner.id));
   test_assert(sameGraph(*c.root.def, *root, &r->ids));
   GraphInstance inst(&a.rt, &a.lib, root->self());
@@ -581,18 +618,15 @@ void testLimits()
       if (kind == 0) {
         s.id = NodeId{i + 1};
         test_assert(g.def->insertNode(s).ok());
-      }
-      else if (kind == 1) {
+      } else if (kind == 1) {
         if (i == 0) {
           test_assert(g.def->insertNode(s).ok());
         }
         const LinkState l{LinkId{i + 2}, s.id, "o", s.id, name.c_str()};
         test_assert(g.def->insertLink(l).ok());
-      }
-      else if (kind == 2) {
+      } else if (kind == 2) {
         s.inputs.append(SocketInfo{name.c_str(), "", "t"});
-      }
-      else {
+      } else {
         addSocket(*g.def, SocketSide::Output, name.c_str(), "float");
       }
     }
@@ -601,14 +635,17 @@ void testLimits()
     }
     const Bytes bytes = save(a.lib);
     /* Smaller than what is counted for `kind`, larger than all the rest. */
-    const uint64_t counted[] = {sizeof(GraphNode) + 256, sizeof(GraphLink) + 256,
-                                2 * sizeof(SocketInfo), 2 * sizeof(InterfaceSocket)};
+    const uint64_t counted[] = {sizeof(GraphNode) + 256,
+                                sizeof(GraphLink) + 256,
+                                2 * sizeof(SocketInfo),
+                                2 * sizeof(InterfaceSocket)};
     for (const bool enough : {false, true}) {
       Doc b;
       LoadOptions options;
       options.limits.maxBytes = enough ? 32 << 20 : n * counted[kind] - 1;
       Result<LoadReport> r = loadLibrary(b.ctx, view(bytes), options);
-      test_assert(r.ok() && r->missingType == (enough ? 0 : 1) && byName(b.lib, "empty").def);
+      test_assert(r.ok() && r->missingType == (enough ? 0 : 1) &&
+                  byName(b.lib, "empty").def);
       test_assert(enough || hasCode(r->issues.first[0].why, StatusCode::OutOfRange));
       test_assert(same(save(b.lib), bytes));
     }
@@ -620,11 +657,13 @@ void testNames()
 {
   Doc d;
   const char *one = kTwinNodes[0], *other = kTwinNodes[1];
-  test_assert(TypeId::of(std::string("node:") + one) == TypeId::of(std::string("node:") + other));
+  test_assert(TypeId::of(std::string("node:") + one) ==
+              TypeId::of(std::string("node:") + other));
   NodeTypeDef t(one);
   t.output("value", "float");
   addType<modeKernel>(d.rt, t, one);
-  test_assert(d.rt.ext<NodeTypeRegistry>().find(one) && !d.rt.ext<NodeTypeRegistry>().find(other));
+  test_assert(d.rt.ext<NodeTypeRegistry>().find(one) &&
+              !d.rt.ext<NodeTypeRegistry>().find(other));
   test_assert(hasCode(newGraph(d.lib, "g").def->addNode(other), StatusCode::NotFound));
   SocketTypeRegistry &sockets = d.rt.ext<SocketTypeRegistry>();
   test_assert(sockets.addPayloadType<Twin>().ok());

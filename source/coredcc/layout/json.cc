@@ -20,7 +20,8 @@ std::string joined(const std::string &prefix, std::string_view path)
 }
 
 /* `around` is the prefix of its paths. Gives that of its children. */
-std::string writeNode(JsonWriter &out, const Layout &layout, int i, const std::string &around)
+std::string
+writeNode(JsonWriter &out, const Layout &layout, int i, const std::string &around)
 {
   const LayoutNode &n = layout.node(i);
   std::string within = around;
@@ -46,16 +47,14 @@ std::string writeNode(JsonWriter &out, const Layout &layout, int i, const std::s
     out.key(layoutAttrName(a.id));
     if (isBool(a.id)) {
       out.boolean(layout.flag(i, a.id, false));
-    }
-    else if (a.id == LayoutAttrId::VisibleIf || a.id == LayoutAttrId::EnabledIf) {
+    } else if (a.id == LayoutAttrId::VisibleIf || a.id == LayoutAttrId::EnabledIf) {
       const bool negated = value[0] == '!';
       out.beginObject().key("path").string(joined(around, value + (negated ? 1 : 0)));
       if (negated) {
         out.key("not").boolean(true);
       }
       out.endObject();
-    }
-    else {
+    } else {
       out.string(value);
     }
     if (a.id == LayoutAttrId::Path) {
@@ -69,7 +68,8 @@ std::string writeNode(JsonWriter &out, const Layout &layout, int i, const std::s
   if (n.kind == LayoutKind::ToolOptions) {
     out.key("optionsPath").string(layout.optionsPath(i).toString());
   }
-  if ((n.kind == LayoutKind::Tool || n.kind == LayoutKind::ToolOptions) && within != "/") {
+  if ((n.kind == LayoutKind::Tool || n.kind == LayoutKind::ToolOptions) && within != "/")
+  {
     out.key("prefix").string(within);
   }
   return within;
@@ -80,7 +80,8 @@ std::string writeNode(JsonWriter &out, const Layout &layout, int i, const std::s
 std::string layoutToJson(const Layout &layout)
 {
   JsonWriter out;
-  std::vector<std::string> prefixes{"/"}; /* of the open nodes' children, the root's parent first */
+  std::vector<std::string> prefixes{
+      "/"}; /* of the open nodes' children, the root's parent first */
   int i = 0;
   while (true) {
     out.beginObject();

@@ -37,7 +37,8 @@ static void test_format()
   test_assert(units::format(0.5, UnitFamily::Factor, "", 2) == "0.5");
   test_assert(units::format(-0.0001, UnitFamily::Length, "m", 2) == "0 m"); /* no "-0" */
   test_assert(units::format(3.0, UnitFamily::None, "", 2) == "3");
-  test_assert(units::format(1.0, UnitFamily::Length, "parsec", 1) == "1 m"); /* fallback */
+  test_assert(units::format(1.0, UnitFamily::Length, "parsec", 1) ==
+              "1 m"); /* fallback */
   test_assert(units::format(123.456, UnitFamily::Length, "m", 0) == "123 m");
 }
 
@@ -81,9 +82,11 @@ static void test_round_trip()
     z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
     return z ^ (z >> 31);
   };
-  const UnitFamily families[] = {
-      UnitFamily::Length, UnitFamily::Angle, UnitFamily::Time, UnitFamily::Mass,
-      UnitFamily::Factor};
+  const UnitFamily families[] = {UnitFamily::Length,
+                                 UnitFamily::Angle,
+                                 UnitFamily::Time,
+                                 UnitFamily::Mass,
+                                 UnitFamily::Factor};
   int checked = 0;
   for (UnitFamily f : families) {
     for (const units::Unit &u : units::unitsOf(f)) {

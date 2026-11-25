@@ -1,4 +1,5 @@
-/* rename and unlinkRef, deleting placeholders, and pointer undo through PointerAccessor::cell. */
+/* rename and unlinkRef, deleting placeholders, and pointer undo through
+ * PointerAccessor::cell. */
 #include "command_fixture.h"
 
 #include "coredcc/api/library_io.h"
@@ -60,10 +61,11 @@ static void test_rename()
   ChangeBus &bus = s.w.rt.ext<ChangeBus>();
   int fired = 0;
   std::string seen;
-  Result<ScopedConnection> c = bus.watch(s.ctx, "objects[0].name", [&](const PropValue &v, const Status &) {
-    fired++;
-    seen = v.isNone() ? "none" : v.asString().c_str();
-  });
+  Result<ScopedConnection> c =
+      bus.watch(s.ctx, "objects[0].name", [&](const PropValue &v, const Status &) {
+        fired++;
+        seen = v.isNone() ? "none" : v.asString().c_str();
+      });
   int heard = 0;
   ScopedConnection l = bus.addListener([&](const OwnerKey *owner) {
     heard += owner && *owner == OwnerKey::ofBlock(s.w.lib.get(ob)->id()) ? 1 : 0;
@@ -81,7 +83,8 @@ static void test_rename()
   const BlockHandle ph = addPlaceholder(s, BlockId());
   test_assert(renameTo(s, ph, "p2").ok() && nameOf(s, ph) == "p2");
   test_assert(s.ex.undo(s.ctx).ok() && nameOf(s, ph) == "ph");
-  PropertyBag in = blockInputs(s, kRenameBlockCommand, BlockId{ClientId::of("x"), {1, 1}});
+  PropertyBag in =
+      blockInputs(s, kRenameBlockCommand, BlockId{ClientId::of("x"), {1, 1}});
   test_assert(s.ex.run(s.ctx, kRenameBlockCommand, std::move(in)).status().code() ==
               StatusCode::FailedPrecondition);
   /* Its block gone for good: undo's error is sticky, not a crash. */
@@ -115,7 +118,9 @@ static void test_unlink_ref()
   /* Deleting the target takes the placeholder with it, unless it is unlinked. */
   litestl::util::Vector<BlockHandle> preview = deletePreview(s.w.lib, s.w.meshes[0]);
   test_assert(preview.size() == 2 && preview[1] == ph);
-  test_assert(s.ex.run(s.ctx, kDeleteBlockCommand, blockInputs(s, kDeleteBlockCommand, mesh)).ok());
+  test_assert(
+      s.ex.run(s.ctx, kDeleteBlockCommand, blockInputs(s, kDeleteBlockCommand, mesh))
+          .ok());
   test_assert(s.w.lib.get(ph)->state() == BlockState::InHistory);
   test_assert(s.ex.undo(s.ctx).ok());
   test_assert(s.w.lib.get(ph)->state() == BlockState::Placeholder && row() == mesh);
@@ -126,7 +131,8 @@ static void test_unlink_ref()
   /* Detached blocks can be deleted too. */
   const BlockHandle m1 = s.w.meshes[1];
   test_assert(s.w.lib.onHostDestroyed(s.w.meshId(1)).ok());
-  test_assert(s.ex.run(s.ctx, kDeleteBlockCommand,
+  test_assert(s.ex.run(s.ctx,
+                       kDeleteBlockCommand,
                        blockInputs(s, kDeleteBlockCommand, s.w.meshId(1)))
                   .ok());
   test_assert(s.w.lib.get(m1)->state() == BlockState::InHistory);
@@ -225,7 +231,8 @@ static void test_unlink_opaque()
   test_assert(s.ex.undo(s.ctx).ok() && row() == mesh);
   test_assert(s.ex.redo(s.ctx).ok() && row().isNull());
   test_assert(s.ex.undo(s.ctx).ok());
-  test_assert(lib.unlinkRef(owner, 0, TypeId::of("other")).code() == StatusCode::NotFound);
+  test_assert(lib.unlinkRef(owner, 0, TypeId::of("other")).code() ==
+              StatusCode::NotFound);
   test_assert(lib.unlinkRef(owner, 1, type).code() == StatusCode::OutOfRange);
   const uint64_t epoch = lib.epoch();
   test_assert(lib.unlinkRef(owner, 0, type).ok() && lib.epoch() > epoch);
@@ -270,8 +277,11 @@ static void test_pointer_cell()
     test_assert(s.ex.redo(s.ctx).ok() && s.w.object(0).mesh.target == s.w.meshId(1));
     if (hasCell) {
       /* Filled in meanwhile: undo links it, and it resolves. */
-      test_assert(s.w.lib.createWithId(kMeshType, lostId, "m", litestl::alloc::New<Mesh>("Mesh")).ok());
-      test_assert(s.ex.undo(s.ctx).ok() && s.w.lib.resolveRef(s.w.object(0).mesh) == *lost);
+      test_assert(
+          s.w.lib.createWithId(kMeshType, lostId, "m", litestl::alloc::New<Mesh>("Mesh"))
+              .ok());
+      test_assert(s.ex.undo(s.ctx).ok() &&
+                  s.w.lib.resolveRef(s.w.object(0).mesh) == *lost);
       test_assert(s.ex.redo(s.ctx).ok());
     }
     s.history.clear();
@@ -312,13 +322,16 @@ static void test_history_block()
   const BlockHandle m = w.meshes[0];
   const BlockId id = w.meshId(0);
   HistoryBlock hb(w.lib, m);
-  test_assert(hb.get() == m && hb.id() == id && w.lib.get(m)->pins(PinKind::History) == 1);
+  test_assert(hb.get() == m && hb.id() == id &&
+              w.lib.get(m)->pins(PinKind::History) == 1);
   HistoryBlock moved = std::move(hb);
   test_assert(moved.get() == m && w.lib.get(m)->pins() == 1);
   /* The record is replaced under its id: found, and the new one isn't unpinned. */
   w.object(0).mesh.target = BlockId();
-  test_assert(w.lib.markDeleted(m).ok() && w.lib.destroyFromHistory(m).ok() && !moved.get());
-  Result<BlockHandle> again = w.lib.reviveAs(kMeshType, id, "m", litestl::alloc::New<Mesh>("Mesh"));
+  test_assert(w.lib.markDeleted(m).ok() && w.lib.destroyFromHistory(m).ok() &&
+              !moved.get());
+  Result<BlockHandle> again =
+      w.lib.reviveAs(kMeshType, id, "m", litestl::alloc::New<Mesh>("Mesh"));
   test_assert(again.ok() && moved.get() == *again && *again != m);
   w.lib.pin(*again, PinKind::History);
   moved.release();

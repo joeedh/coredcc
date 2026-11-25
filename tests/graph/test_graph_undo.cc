@@ -1,5 +1,5 @@
-/* What undo of graph edits puts back exactly: values that weren't set, node order, extras. And
- * undo when its Library is gone, or isn't the Context's. */
+/* What undo of graph edits puts back exactly: values that weren't set, node order,
+ * extras. And undo when its Library is gone, or isn't the Context's. */
 #include "edit_fixture.h"
 
 #include "coredcc/api/library_io.h"
@@ -18,8 +18,9 @@ Status paramKernel(NodeExecContext &ctx)
 {
   const PropValue *maybe = ctx.param("maybe");
   const double m = maybe && !maybe->isNone() ? maybe->asFloat() : -1;
-  return ctx.setOutput(
-      0, GraphValue::ofFloat(m + 100 * ctx.param("plain")->asFloat() + 10000 * ctx.input(0).asFloat()));
+  return ctx.setOutput(0,
+                       GraphValue::ofFloat(m + 100 * ctx.param("plain")->asFloat() +
+                                           10000 * ctx.input(0).asFloat()));
 }
 
 PropValue fl(double v)
@@ -60,8 +61,10 @@ struct UndoDoc : Doc {
     GraphInstance inst(&rt, &lib, g.id);
     const Status s = inst.evaluate(out);
     if (!s.ok() || inst.value(out)->asFloat() != want) {
-      printf("%s: %g, not %g\n", s.toString().c_str(),
-             s.ok() ? inst.value(out)->asFloat() : 0.0, want);
+      printf("%s: %g, not %g\n",
+             s.toString().c_str(),
+             s.ok() ? inst.value(out)->asFloat() : 0.0,
+             want);
     }
     return s.ok() && inst.value(out)->asFloat() == want;
   }
@@ -73,7 +76,8 @@ struct UndoDoc : Doc {
   }
 };
 
-bool same(const litestl::util::Vector<uint8_t> &a, const litestl::util::Vector<uint8_t> &b)
+bool same(const litestl::util::Vector<uint8_t> &a,
+          const litestl::util::Vector<uint8_t> &b)
 {
   return a.size() == b.size() && memcmp(a.data(), b.data(), size_t(a.size())) == 0;
 }
@@ -91,10 +95,12 @@ void testParams()
   test_assert(same(before, d.save()));
   test_assert(d.redo().ok() && d.gives(10205) && d.node().param("maybe"));
   /* Set: undo sets what it was. */
-  test_assert(d.set(d.path(".params.maybe"), fl(7)).ok() && d.undo().ok() && d.gives(10205));
+  test_assert(d.set(d.path(".params.maybe"), fl(7)).ok() && d.undo().ok() &&
+              d.gives(10205));
   test_assert(d.undo().ok());
 
-  /* So that the type's default may change later, plain params and literals aren't set either. */
+  /* So that the type's default may change later, plain params and literals aren't set
+   * either. */
   test_assert(d.set(d.path(".params.plain"), fl(3)).ok() && d.undo().ok());
   test_assert(!d.node().param("plain") && d.node().params().size() == 0);
   test_assert(d.set(d.path(".params.vec[1]"), fl(3)).ok());
@@ -103,13 +109,15 @@ void testParams()
   test_assert(d.redo().ok() && d.is(d.path(".params.vec"), PropValue::ofVec3(0, 3, 0)));
   test_assert(d.undo().ok());
   test_assert(d.set(d.path(".inputs.a"), fl(3)).ok() && d.gives(30199) && d.undo().ok());
-  test_assert(d.node().literals().size() == 0 && d.gives(10199) && same(before, d.save()));
+  test_assert(d.node().literals().size() == 0 && d.gives(10199) &&
+              same(before, d.save()));
   test_assert(d.redo().ok() && d.gives(30199) && d.undo().ok());
 
   /* Others stay as they are. */
   test_assert(d.g.def->setParam(d.n, "plain", fl(3)).ok());
   test_assert(d.set(d.path(".params.maybe"), fl(5)).ok() && d.undo().ok());
-  test_assert(d.node().params().size() == 1 && d.g.def->setParam(d.n, "plain", PropValue()).ok());
+  test_assert(d.node().params().size() == 1 &&
+              d.g.def->setParam(d.n, "plain", PropValue()).ok());
 
   /* A gesture is one step. */
   for (int i = 0; i < 3; i++) {
@@ -123,13 +131,16 @@ void testParams()
   odd.append(NodeValue{"plain", PropValue::ofString("odd")});
   test_assert(d.g.def->restoreValues(d.n, true, "plain", odd).ok());
   test_assert(d.is(d.path(".params.plain"), fl(2)));
-  test_assert(d.set(d.path(".params.plain"), fl(4)).ok() && d.gives(10399) && d.undo().ok());
+  test_assert(d.set(d.path(".params.plain"), fl(4)).ok() && d.gives(10399) &&
+              d.undo().ok());
   test_assert(d.node().param("plain")->value == PropValue::ofString("odd"));
 
   /* Watchers hear of it, and it waits for an evaluation like a set does. */
   int fired = 0;
-  auto c = d.rt.ext<ChangeBus>().watch(d.ctx, d.path(".params.maybe"),
-                                       [&](const PropValue &, const Status &) { fired++; });
+  auto c =
+      d.rt.ext<ChangeBus>().watch(d.ctx,
+                                  d.path(".params.maybe"),
+                                  [&](const PropValue &, const Status &) { fired++; });
   test_assert(c.ok());
   test_assert(d.set(d.path(".params.maybe"), fl(5)).ok());
   d.rt.ext<ChangeBus>().flush();
@@ -149,17 +160,21 @@ void testSockets()
   const GraphNode &n = *d.g.def->node(group);
   const std::string socket = d.path(".sockets[\"a\"]", group);
 
-  test_assert(d.set(socket + ".isSet", PropValue::ofBool(true)).ok() && n.literals().size() == 1);
+  test_assert(d.set(socket + ".isSet", PropValue::ofBool(true)).ok() &&
+              n.literals().size() == 1);
   test_assert(d.set(socket + ".value", fl(3)).ok());
   test_assert(d.undo().ok() && d.is(socket + ".value", fl(0)));
   test_assert(d.undo().ok() && n.literals().size() == 0); /* it had no value */
   test_assert(d.redo().ok() && d.redo().ok() && d.is(socket + ".value", fl(3)));
   /* One out of use keeps its value, and so does one of another type. */
-  test_assert(d.set(socket + ".isSet", PropValue::ofBool(false)).ok() && n.literals()[0].off);
-  test_assert(d.undo().ok() && !n.literals()[0].off && d.redo().ok() && n.literals()[0].off);
+  test_assert(d.set(socket + ".isSet", PropValue::ofBool(false)).ok() &&
+              n.literals()[0].off);
+  test_assert(d.undo().ok() && !n.literals()[0].off && d.redo().ok() &&
+              n.literals()[0].off);
   test_assert(d.undo().ok());
   test_assert(inner.def->setInterfaceType(a, "int").ok());
-  test_assert(d.set(socket + ".isSet", PropValue::ofBool(true)).ok() && n.literals().size() == 2);
+  test_assert(d.set(socket + ".isSet", PropValue::ofBool(true)).ok() &&
+              n.literals().size() == 2);
   test_assert(d.set(socket + ".value", PropValue::ofInt(8)).ok());
   test_assert(d.undo().ok() && d.undo().ok() && n.literals().size() == 1);
   test_assert(n.literals()[0].value == fl(3));
@@ -169,7 +184,8 @@ void testSockets()
   test_assert(d.g.def->setLiteral(group, key(a), PropValue()).ok());
   test_assert(inner.def->setInterfaceDefault(a, fl(1)).ok());
   test_assert(d.set(socket + ".isSet", PropValue::ofBool(true)).ok() && d.undo().ok());
-  test_assert(inner.def->setInterfaceDefault(a, fl(2)).ok() && d.is(socket + ".value", fl(2)));
+  test_assert(inner.def->setInterfaceDefault(a, fl(2)).ok() &&
+              d.is(socket + ".value", fl(2)));
   test_assert(d.redo().ok() && d.is(socket + ".value", fl(1)) && d.undo().ok());
   test_assert(inner.def->setInterfaceDefault(a, PropValue()).ok());
 
@@ -203,8 +219,9 @@ void testOrder()
     return same && !def.nodeAt(-1) && !def.nodeAt(def.nodeCount());
   };
   auto remove = [&](int i) {
-    return d.run(kGraphNodeRemoveCommand,
-                 {{"graph", pointerTo(d.g)}, {"node", PropValue::ofInt(ids[i].value)}})
+    return d
+        .run(kGraphNodeRemoveCommand,
+             {{"graph", pointerTo(d.g)}, {"node", PropValue::ofInt(ids[i].value)}})
         .ok();
   };
   const auto before = d.save();
@@ -231,7 +248,8 @@ void testOrder()
               }).ok());
   const NodeId last = def.nodeAt(def.nodeCount() - 1)->id();
   test_assert(d.undo().ok() && ordered() && same(before, d.save()));
-  test_assert(d.redo().ok() && def.nodeAt(def.nodeCount() - 1)->id() == last && d.undo().ok());
+  test_assert(d.redo().ok() && def.nodeAt(def.nodeCount() - 1)->id() == last &&
+              d.undo().ok());
 
   /* By hand: after a node, first, and last when there is no such node. */
   NodeState s = def.stateOf(*def.nodeAt(5));
@@ -249,7 +267,8 @@ void testOrder()
   test_assert(def.validate().ok());
 }
 
-/* Undo of other edits gives the same bytes too, though it stores things in another order. */
+/* Undo of other edits gives the same bytes too, though it stores things in another order.
+ */
 /* linkAll: one step, with the links it replaced. */
 void testLinkAll()
 {
@@ -262,8 +281,8 @@ void testLinkAll()
   litestl::util::Vector<LinkId> ids;
   const LinkSpec replace{{m[1], "value"}, {d.n, "a"}}, more{{m[0], "value"}, {m[1], "a"}};
   auto linkAll = [&](std::vector<LinkSpec> list) {
-    return runGraphEdit(d.ctx, d.g.id, "links",
-                        [&](GraphEdit &e) { return e.linkAll(list, ids); });
+    return runGraphEdit(
+        d.ctx, d.g.id, "links", [&](GraphEdit &e) { return e.linkAll(list, ids); });
   };
   test_assert(hasCode(linkAll({replace, more, {{m[1], "value"}, {m[0], "a"}}}),
                       StatusCode::InvalidArgument));
@@ -275,7 +294,8 @@ void testLinkAll()
   for (int i = 0; i < 2; i++) {
     test_assert(d.g.def->linkCount() == 2 && d.node().linkInto("a")->id == made[0]);
     test_assert(d.g.def->node(m[1])->linkInto("a")->id == made[1]);
-    test_assert(d.undo().ok() && d.g.def->linkCount() == 1 && d.node().linkInto("a")->id == old);
+    test_assert(d.undo().ok() && d.g.def->linkCount() == 1 &&
+                d.node().linkInto("a")->id == old);
     test_assert(d.redo().ok());
   }
 }
@@ -290,7 +310,8 @@ void testBytes()
   const NodeId out = add(def, "graph.output");
   const LinkId l = connect(def, a, "value", out, key(in));
   connect(def, b, "value", out, key(in2));
-  test_assert(def.setParam(a, "maybe", fl(1)).ok() && def.setParam(a, "plain", fl(2)).ok());
+  test_assert(def.setParam(a, "maybe", fl(1)).ok() &&
+              def.setParam(a, "plain", fl(2)).ok());
   test_assert(def.setExtra(a, "ui.x", fl(1)).ok() && def.setExtra(a, "ui.y", fl(1)).ok());
   const auto before = d.save();
   test_assert(runGraphEdit(d.ctx, d.g.id, "all", [&](GraphEdit &e) {
@@ -337,31 +358,38 @@ void testExtras()
     return v.isNone();
   };
   test_assert(def.setExtra(d.n, "ui.color", PropValue::ofVec3(1, 0, 0)).ok());
-  test_assert(def.setExtra(d.n, "ui.width", fl(80)).ok() && d.node().extras().size() == 2);
-  test_assert(def.setExtra(d.n, "ui.width", fl(90)).ok() && d.node().extras().size() == 2);
+  test_assert(def.setExtra(d.n, "ui.width", fl(80)).ok() &&
+              d.node().extras().size() == 2);
+  test_assert(def.setExtra(d.n, "ui.width", fl(90)).ok() &&
+              d.node().extras().size() == 2);
   test_assert(is("ui.width", fl(90)) && is("ui.color", PropValue::ofVec3(1, 0, 0)));
-  test_assert(def.setExtra(d.n, "ui.color", PropValue()).ok() && d.node().extras().size() == 1);
+  test_assert(def.setExtra(d.n, "ui.color", PropValue()).ok() &&
+              d.node().extras().size() == 1);
   test_assert(def.setExtra(d.n, "ui.color", PropValue()).ok());
   test_assert(hasCode(def.setExtra(d.n, "", fl(1)), StatusCode::InvalidArgument));
   test_assert(hasCode(def.setExtra(NodeId{5}, "a", fl(1)), StatusCode::NotFound));
   test_assert(hasCode(def.setExtra(d.n, "a", pointerTo(d.g)), StatusCode::Unsupported));
-  test_assert(hasCode(def.setExtra(d.n, "a", PropValue::nullPointer()), StatusCode::Unsupported));
+  test_assert(
+      hasCode(def.setExtra(d.n, "a", PropValue::nullPointer()), StatusCode::Unsupported));
   /* Nothing evaluates because of them. */
   test_assert(def.contentVersion() == content && inst.isCurrent(d.out));
 
   /* Undo, with the node too. */
   auto edit = [&](const char *name, const PropValue &v) {
-    return runGraphEdit(d.ctx, d.g.id, "extra",
-                        [&](GraphEdit &e) { return e.setExtra(d.n, name, v); });
+    return runGraphEdit(
+        d.ctx, d.g.id, "extra", [&](GraphEdit &e) { return e.setExtra(d.n, name, v); });
   };
   test_assert(edit("ui.width", fl(3)).ok() && edit("ui.new", fl(4)).ok());
   test_assert(edit("ui.width", PropValue()).ok() && is("ui.width", PropValue()));
   test_assert(hasCode(edit("", fl(1)), StatusCode::InvalidArgument));
   test_assert(d.undo().ok() && is("ui.width", fl(3)) && is("ui.new", fl(4)));
-  test_assert(d.undo().ok() && is("ui.new", PropValue()) && d.undo().ok() && is("ui.width", fl(90)));
-  test_assert(d.redo().ok() && d.redo().ok() && is("ui.width", fl(3)) && is("ui.new", fl(4)));
+  test_assert(d.undo().ok() && is("ui.new", PropValue()) && d.undo().ok() &&
+              is("ui.width", fl(90)));
+  test_assert(d.redo().ok() && d.redo().ok() && is("ui.width", fl(3)) &&
+              is("ui.new", fl(4)));
   test_assert(d.run(kGraphNodeRemoveCommand,
-                    {{"graph", pointerTo(d.g)}, {"node", PropValue::ofInt(d.n.value)}}).ok());
+                    {{"graph", pointerTo(d.g)}, {"node", PropValue::ofInt(d.n.value)}})
+                  .ok());
   test_assert(d.undo().ok() && is("ui.width", fl(3)) && is("ui.new", fl(4)));
   test_assert(def.stateOf(d.node()).extras.size() == 2);
 

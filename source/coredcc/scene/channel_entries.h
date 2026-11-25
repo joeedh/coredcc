@@ -8,14 +8,18 @@
 namespace coredcc {
 
 /**
- * The channels of one object as a file has them, for TransformModel::upgrade. Values are by the
- * names that the old version's channels had, and an Enum is its item's key, a String.
+ * The channels of one object as a file has them, for TransformModel::upgrade. Values are
+ * by the names that the old version's channels had, and an Enum is its item's key, a
+ * String.
  */
 class ChannelEntries {
- public:
-  explicit ChannelEntries(litestl::util::Vector<BlockEntry> &entries) : entries_(entries) {}
+public:
+  explicit ChannelEntries(litestl::util::Vector<BlockEntry> &entries) : entries_(entries)
+  {
+  }
 
-  /** The value, or None if there isn't one, or it is of a type that this build doesn't know. */
+  /** The value, or None if there isn't one, or it is of a type that this build doesn't
+   * know. */
   PropValue get(const litestl::util::string &name) const;
   /** Sets it, or adds it. */
   void set(const litestl::util::string &name, const PropValue &value);
@@ -26,7 +30,7 @@ class ChannelEntries {
 
   static litestl::binding::types::Struct<ChannelEntries> *defineBindings();
 
- private:
+private:
   litestl::util::Vector<BlockEntry> &entries_;
 };
 

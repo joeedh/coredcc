@@ -24,7 +24,8 @@ struct GraphEditNote {
     Block,
     /** A param or literal of a node. */
     Node,
-    /** Nodes or links of a def, but none that its interface depends on, and no node went. */
+    /** Nodes or links of a def, but none that its interface depends on, and no node went.
+     */
     Links,
     /** Anything else of a def. */
     Def,
@@ -45,23 +46,26 @@ struct BlockVersion {
 using BlockVersionPtr = std::shared_ptr<const BlockVersion>;
 
 /**
- * A version per block that some kernel used and the aspects of it that it used, moved by every
- * ChangeBus notification of some of those (and of all blocks, by notifyAll). Those count as edits (Runtime::touch), so the
- * next evaluation looks at its dependencies again. A Runtime extension.
+ * A version per block that some kernel used and the aspects of it that it used, moved by
+ * every ChangeBus notification of some of those (and of all blocks, by notifyAll). Those
+ * count as edits (Runtime::touch), so the next evaluation looks at its dependencies
+ * again. A Runtime extension.
  *
- * The last edits are kept, so that an instance can look at only what they touch. An edit that
- * isn't noted here (a plain Runtime::touch) counts as Kind::All.
+ * The last edits are kept, so that an instance can look at only what they touch. An edit
+ * that isn't noted here (a plain Runtime::touch) counts as Kind::All.
  */
 class GraphSystem {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.GraphSystem";
 
   explicit GraphSystem(Runtime *rt);
 
-  /** The version of aspects of a block, which moves with their changes while it is held. Not
-   * after notifyAll, or when the block's canonical id became another: it has another one then. */
+  /** The version of aspects of a block, which moves with their changes while it is held.
+   * Not after notifyAll, or when the block's canonical id became another: it has another
+   * one then. */
   BlockVersionPtr follow(BlockId id, ChangeAspects aspects = kAllAspects);
-  /** Moves when the nodes, links, groups or interface of any GraphDef do, or one is made. */
+  /** Moves when the nodes, links, groups or interface of any GraphDef do, or one is made.
+   */
   uint64_t structureVersion() const
   {
     return structure_;
@@ -85,9 +89,9 @@ class GraphSystem {
   /** Edit `number`, or null if it isn't kept any more. */
   const GraphEditNote *journal(uint64_t number) const
   {
-    return number < end_ && end_ - number <= uint64_t(journal_.size()) ?
-               &journal_[int(number % kJournal)] :
-               nullptr;
+    return number < end_ && end_ - number <= uint64_t(journal_.size())
+               ? &journal_[int(number % kJournal)]
+               : nullptr;
   }
   /** Blocks followed, with some that nobody follows any more. */
   int blockCount() const
@@ -95,15 +99,15 @@ class GraphSystem {
     return int(versions_.size());
   }
 
- private:
+private:
   void changed(const BusChange &change);
   void note(const GraphEditNote &edit);
   void prune();
 
   Runtime &rt_;
   ClientRegistry &clients_;
-  /** By canonical id. An id that became an alias leaves its entry behind, never found again;
-   * its block has another version from then on, so its users run. */
+  /** By canonical id. An id that became an alias leaves its entry behind, never found
+   * again; its block has another version from then on, so its users run. */
   using Versions = litestl::util::Vector<std::shared_ptr<BlockVersion>, 1>;
   litestl::util::Map<BlockId, Versions> versions_;
   /** How many blocks there may be before those that nobody holds go. */

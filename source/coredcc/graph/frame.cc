@@ -90,8 +90,7 @@ void Evaluator::dropNewFrames()
         if (f->top->element) {
           f->top->pass = 0; /* its inputs may have been from there */
         }
-      }
-      else if (g.child) {
+      } else if (g.child) {
         stack.append(g.child);
       }
     }
@@ -169,8 +168,7 @@ void Evaluator::sync(Frame &f)
       {
         f.kernels[at] = k;
         k->index = at;
-      }
-      else {
+      } else {
         litestl::alloc::Delete(k);
       }
     }
@@ -181,8 +179,7 @@ void Evaluator::sync(Frame &f)
       const int group = at >= 0 ? f.topo->nodes[at].group : -1;
       if (group >= 0) {
         f.groups[group].child = c;
-      }
-      else {
+      } else {
         dropFrame(c);
       }
     }
@@ -216,20 +213,20 @@ KernelState &Evaluator::kernel(Frame &f, int node)
       if (f.deps) {
         f.deps->foreachs.add(k, true);
       }
-    }
-    else if (k->type) {
+    } else if (k->type) {
       k->outputs.resize(size_t(k->type->outputs.size()));
     }
   }
   return *k;
 }
 
-Status Evaluator::checkGroup(const Frame &f, const GraphNode &node, const GraphDef *def) const
+Status
+Evaluator::checkGroup(const Frame &f, const GraphNode &node, const GraphDef *def) const
 {
   if (!def) {
     return Status::error(StatusCode::NotFound,
-                         node.group().isNull() ? "the group has no graph" :
-                                                 "the group's graph isn't there");
+                         node.group().isNull() ? "the group has no graph"
+                                               : "the group's graph isn't there");
   }
   for (const Frame *a = &f; a; a = a->parent) {
     if (a->def == def) {
@@ -278,7 +275,8 @@ void Evaluator::setReplaced(Frame &f, int group, Frame &c)
       return;
     }
     const int at = c.topo->find(key.node);
-    const int input = at >= 0 ? c.topo->inputIndex(c.topo->nodes[at], key.key.c_str()) : -1;
+    const int input =
+        at >= 0 ? c.topo->inputIndex(c.topo->nodes[at], key.key.c_str()) : -1;
     if (input >= 0) {
       if (!c.replaced) {
         c.replaced = std::make_unique<litestl::util::Map<int, Vertex>>();

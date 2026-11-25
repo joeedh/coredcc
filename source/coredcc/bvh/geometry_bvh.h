@@ -41,15 +41,16 @@ struct AcceptAll {
 /**
  * A Bvh with a leaf-ordered copy of its source's primitives, and the queries. Everything
  * is in the source's space and in double. Primitives are named by their index in the
- * source. Queries are const and may run on several threads, but not during build() or a refit.
+ * source. Queries are const and may run on several threads, but not during build() or a
+ * refit.
  *
  * - Ties go to the lowest primitive, so answers don't depend on the tree.
- * - Bad input (a ray that isn't valid, a point or a plane that isn't finite, a radius that isn't a
- *   number of at least 0) finds nothing. Queries that call back for each primitive also say so:
- *   InvalidArgument.
+ * - Bad input (a ray that isn't valid, a point or a plane that isn't finite, a radius
+ * that isn't a number of at least 0) finds nothing. Queries that call back for each
+ * primitive also say so: InvalidArgument.
  */
 template <GeometrySource Source> class GeometryBvh {
- public:
+public:
   using Scalar = typename Source::Scalar;
   using Tree = Bvh<Scalar>;
 
@@ -80,11 +81,13 @@ template <GeometrySource Source> class GeometryBvh {
   }
 
   /**
-   * Takes some primitives at other positions: `primitives[k]` is now element k of `moved`, which
-   * has as many. The time is that of the leaves they are in, not of the whole tree.
+   * Takes some primitives at other positions: `primitives[k]` is now element k of
+   * `moved`, which has as many. The time is that of the leaves they are in, not of the
+   * whole tree.
    *
-   * As for refit(), one that has no bounds any more stays without them, and one that the build left
-   * out but that has bounds now is FailedPrecondition. On an error nothing changes.
+   * As for refit(), one that has no bounds any more stays without them, and one that the
+   * build left out but that has bounds now is FailedPrecondition. On an error nothing
+   * changes.
    */
   Status refit(const Source &moved, std::span<const int> primitives)
   {
@@ -97,7 +100,8 @@ template <GeometrySource Source> class GeometryBvh {
     for (int k = 0; k < int(primitives.size()); k++) {
       const int primitive = primitives[size_t(k)];
       if (primitive < 0 || primitive >= bvh_.size()) {
-        return Status::error(StatusCode::OutOfRange, "GeometryBvh: refit of no such primitive");
+        return Status::error(StatusCode::OutOfRange,
+                             "GeometryBvh: refit of no such primitive");
       }
       const int position = bvh_.position(primitive);
       const auto box = moved.bounds(k);
@@ -118,8 +122,8 @@ template <GeometrySource Source> class GeometryBvh {
   }
 
   /**
-   * Takes the changed geometry: a build for Topology, else a refit for Positions (or a build when
-   * that is refused), else nothing. On an error the old one is kept.
+   * Takes the changed geometry: a build for Topology, else a refit for Positions (or a
+   * build when that is refused), else nothing. On an error the old one is kept.
    */
   Status onInvalidate(InvalidateKinds kinds, const Source &src)
   {
@@ -136,8 +140,8 @@ template <GeometrySource Source> class GeometryBvh {
   {
     return bvh_;
   }
-  /** The primitives in leaf order: element i is the source's `bvh().order()[i]`. For traversals of
-   * one's own, which have to ask bvh().present(i). */
+  /** The primitives in leaf order: element i is the source's `bvh().order()[i]`. For
+   * traversals of one's own, which have to ask bvh().present(i). */
   const Source &source() const
   {
     return prims_;
@@ -191,9 +195,10 @@ template <GeometrySource Source> class GeometryBvh {
   /**
    * Every hit, in no particular order: `fn(const RayHit &) -> bool`, false stops.
    *
-   * A ray through an edge or a vertex that triangles share hits each of them. So the number of hits
-   * doesn't tell the inside from the outside: whether it is odd is wrong for such rays, which those
-   * along an axis often are. Use the side of the nearest hit (RayHit::backFacing) instead.
+   * A ray through an edge or a vertex that triangles share hits each of them. So the
+   * number of hits doesn't tell the inside from the outside: whether it is odd is wrong
+   * for such rays, which those along an axis often are. Use the side of the nearest hit
+   * (RayHit::backFacing) instead.
    */
   template <class Fn> Status rayAll(const Ray &ray, Fn &&fn) const
   {
@@ -208,8 +213,8 @@ template <GeometrySource Source> class GeometryBvh {
     return Status();
   }
 
-  /** The nearest primitive within `radius` (inclusive) of `p` that `accept(int) -> bool` takes.
-   * Solids contain their inside. Distances whose square overflows aren't found. */
+  /** The nearest primitive within `radius` (inclusive) of `p` that `accept(int) -> bool`
+   * takes. Solids contain their inside. Distances whose square overflows aren't found. */
   template <class Accept = bvh::AcceptAll>
   NearestHit nearest(const double3 &p, double radius, Accept &&accept = {}) const
   {
@@ -229,8 +234,8 @@ template <GeometrySource Source> class GeometryBvh {
             const double3 c = prims_.closest(i, p);
             const double d = distanceSq(p, c);
             const int id = bvh_.order()[i];
-            if (d <= limitSq && (best.primitive < 0 || d < limitSq || id < best.primitive) &&
-                accept(id))
+            if (d <= limitSq &&
+                (best.primitive < 0 || d < limitSq || id < best.primitive) && accept(id))
             {
               limitSq = d;
               best.primitive = id;
@@ -252,20 +257,21 @@ template <GeometrySource Source> class GeometryBvh {
                            "sphereOverlap: the point or the radius isn't valid");
     }
     const double limitSq = radius * radius;
-    bvh_.traverse([&](const BvhNode<Scalar> &n) { return nodeDistanceSq(n, p) <= limitSq; },
-                  [&](int first, int count) {
-                    for (int i = first; i < first + count; i++) {
-                      if (!bvh_.present(i)) {
-                        continue;
-                      }
-                      const double3 c = prims_.closest(i, p);
-                      const double d = distanceSq(p, c);
-                      if (d <= limitSq && !report(fn, bvh_.order()[i], d, c)) {
-                        return false;
-                      }
-                    }
-                    return true;
-                  });
+    bvh_.traverse(
+        [&](const BvhNode<Scalar> &n) { return nodeDistanceSq(n, p) <= limitSq; },
+        [&](int first, int count) {
+          for (int i = first; i < first + count; i++) {
+            if (!bvh_.present(i)) {
+              continue;
+            }
+            const double3 c = prims_.closest(i, p);
+            const double d = distanceSq(p, c);
+            if (d <= limitSq && !report(fn, bvh_.order()[i], d, c)) {
+              return false;
+            }
+          }
+          return true;
+        });
     return Status();
   }
 
@@ -309,10 +315,11 @@ template <GeometrySource Source> class GeometryBvh {
     return Status();
   }
 
- private:
+private:
   static constexpr size_t kMaxPlanes = 8;
 
-  template <class Fn> static bool report(Fn &fn, int primitive, double distanceSq, const double3 &c)
+  template <class Fn>
+  static bool report(Fn &fn, int primitive, double distanceSq, const double3 &c)
   {
     if constexpr (std::is_invocable_v<Fn &, const NearestHit &>) {
       return fn(NearestHit{primitive, std::sqrt(distanceSq), c});
@@ -338,7 +345,9 @@ template <GeometrySource Source> class GeometryBvh {
           return q.nodeSlab(n.min, n.max, limit, enter) ? enter : bvh::kSkip;
         },
         [&] { return limit; },
-        [&](int first, int count) { return prims_.rayRange(q, first, count, limit, present); });
+        [&](int first, int count) {
+          return prims_.rayRange(q, first, count, limit, present);
+        });
   }
 
   static bool finitePoint(const double3 &p)
@@ -350,8 +359,8 @@ template <GeometrySource Source> class GeometryBvh {
     const double3 d = a - b;
     return d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
   }
-  /* closest() gives points in the bounds up to rounding, which for far coordinates can be large
-   * compared to the distance: each axis gets that much less. */
+  /* closest() gives points in the bounds up to rounding, which for far coordinates can be
+   * large compared to the distance: each axis gets that much less. */
   static double nodeDistanceSq(const BvhNode<Scalar> &n, const double3 &p)
   {
     constexpr double kRound = 16.0 * std::numeric_limits<double>::epsilon();

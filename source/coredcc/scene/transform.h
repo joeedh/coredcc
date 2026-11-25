@@ -21,8 +21,8 @@ using litestl::math::quatd;
 struct TransformState {
   /** Object to world. Column-major, affine. */
   mat4d world;
-  /** The product of the local rotations along the chain: the world's rotation without scale,
-   * shear and reflection. FBX inherit types need it carried, not decomposed. */
+  /** The product of the local rotations along the chain: the world's rotation without
+   * scale, shear and reflection. FBX inherit types need it carried, not decomposed. */
   quatd rotation;
   /** The local scale, signed. */
   double3 localScale;
@@ -41,9 +41,9 @@ struct TransformState {
 enum class SetWorldMode : int32_t {
   /** The target exactly (within the tolerances of solveWorld), or an error. */
   Exact = 0,
-  /** Without what the model can't represent (shear, usually). It isn't the closest by a norm: the
-   * built-in models fit the rotation to the two most independent columns of the target, and choose the
-   * scales for that rotation. The translation is exact. */
+  /** Without what the model can't represent (shear, usually). It isn't the closest by a
+   * norm: the built-in models fit the rotation to the two most independent columns of the
+   * target, and choose the scales for that rotation. The translation is exact. */
   Closest = 1,
 };
 
@@ -81,14 +81,17 @@ struct TransformDelta {
   static litestl::binding::types::Struct<TransformDelta> *defineBindings();
 };
 
-/** What TransformModel::evaluateMany is given: several objects of one type, and where the answer goes.
- * A state is 23 numbers: the world matrix, column by column, the rotation (x, y, z, w), and the local
- * scale. */
+/** What TransformModel::evaluateMany is given: several objects of one type, and where the
+ * answer goes. A state is 23 numbers: the world matrix, column by column, the rotation
+ * (x, y, z, w), and the local scale. */
 class TransformBatch {
- public:
+public:
   static constexpr int kStateSize = 23;
 
-  TransformBatch(int32_t channelCount, double time) : channelCount_(channelCount), time_(time) {}
+  TransformBatch(int32_t channelCount, double time)
+      : channelCount_(channelCount), time_(time)
+  {
+  }
   void add(const EvalCtx &object, const TransformState &parent)
   {
     for (int32_t i = 0; i < channelCount_; i++) {
@@ -127,7 +130,7 @@ class TransformBatch {
   }
   static litestl::binding::types::Struct<TransformBatch> *defineBindings();
 
- private:
+private:
   int32_t channelCount_;
   double time_;
   litestl::util::Vector<double> channels_;
@@ -136,29 +139,30 @@ class TransformBatch {
 };
 
 /**
- * A kind of transform: how channels and the parent's state give an object's. Stateless: one
- * instance serves every object of its type. Native or foreign, and never called from a worker
- * when it is thread-affine.
+ * A kind of transform: how channels and the parent's state give an object's. Stateless:
+ * one instance serves every object of its type. Native or foreign, and never called from
+ * a worker when it is thread-affine.
  *
- * - `evaluate` is pure. It must accept any channel values, and may give a state that isn't
- *   finite.
+ * - `evaluate` is pure. It must accept any channel values, and may give a state that
+ * isn't finite.
  * - `setWorld` finds channels that put the object at `target`. `out` starts as a copy of
- *   `current`; channels that don't matter are left as they are. The caller checks the result
- *   (solveWorld), so a model may return its nearest solution without measuring it. It also puts back
- *   the channels that are fixed (EvalCtx::isFixed), so a model needn't look at that; one that does can
- *   find a better solution with the others.
- * - `applyDelta` (optional) applies `delta` to `base`. `nearTo` is the previous result of the
- *   same interaction (or `base`): where several channel values mean the same, such as Euler
- *   angles, the ones nearest to it are wanted. `out` starts as a copy of `nearTo`. Without the
- *   slot, setWorld in Closest mode is used.
- * - `evaluateMany` (optional) is `evaluate` for several objects at once (TransformBatch), and must give
- *   the same. evaluateScene uses it, for the objects of each level of the hierarchy; all others use
- *   `evaluate`. For scripts, where a call costs more than the work in it.
- * - `pivot` (optional) is the point, in world space, that the model turns about: a gizmo's place. It
- *   is the translation of the object's matrix without the slot.
- * - `upgrade` (optional) changes what a file has of version `version` to what this build's
- *   channels are (TransformTypeInfo::version). After an error the object keeps the file's channels
- *   unread, and its status is Invalid.
+ *   `current`; channels that don't matter are left as they are. The caller checks the
+ * result (solveWorld), so a model may return its nearest solution without measuring it.
+ * It also puts back the channels that are fixed (EvalCtx::isFixed), so a model needn't
+ * look at that; one that does can find a better solution with the others.
+ * - `applyDelta` (optional) applies `delta` to `base`. `nearTo` is the previous result of
+ * the same interaction (or `base`): where several channel values mean the same, such as
+ * Euler angles, the ones nearest to it are wanted. `out` starts as a copy of `nearTo`.
+ * Without the slot, setWorld in Closest mode is used.
+ * - `evaluateMany` (optional) is `evaluate` for several objects at once (TransformBatch),
+ * and must give the same. evaluateScene uses it, for the objects of each level of the
+ * hierarchy; all others use `evaluate`. For scripts, where a call costs more than the
+ * work in it.
+ * - `pivot` (optional) is the point, in world space, that the model turns about: a
+ * gizmo's place. It is the translation of the object's matrix without the slot.
+ * - `upgrade` (optional) changes what a file has of version `version` to what this
+ * build's channels are (TransformTypeInfo::version). After an error the object keeps the
+ * file's channels unread, and its status is Invalid.
  */
 struct TransformModel : IfaceRef {
   TransformState evaluate(const EvalCtx &ctx, const TransformState &parent) const

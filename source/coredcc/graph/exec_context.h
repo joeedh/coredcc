@@ -26,39 +26,40 @@ struct BlockUse {
   void *data = nullptr;
 };
 
-/** Where a NodeExecContext gets blocks from; it records that it did. The evaluator's, or a
- * test's. */
+/** Where a NodeExecContext gets blocks from; it records that it did. The evaluator's, or
+ * a test's. */
 class ExecBlocks {
- public:
+public:
   virtual BlockUse useBlock(BlockId id, ChangeAspects aspects) = 0;
   virtual IfaceRef queryBlock(BlockHandle h, InterfaceId iface) = 0;
 
- protected:
+protected:
   ~ExecBlocks() = default;
 };
 
-/** What a kernel may ask of, and tell, the evaluation it is in. The evaluator's, or a test's. */
+/** What a kernel may ask of, and tell, the evaluation it is in. The evaluator's, or a
+ * test's. */
 class ExecMonitor {
- public:
+public:
   virtual bool cancelled() = 0;
   virtual void progress(double fraction, std::string_view text) = 0;
 
- protected:
+protected:
   ~ExecMonitor() = default;
 };
 
 /**
  * A kernel's inputs, params and outputs. Valid only during its `evaluate`.
  *
- * A kernel must be a pure function of what it reads here: the evaluator runs it again only
- * when some of that changed. It reads blocks with `useBlock` and `paramBlock` (and
+ * A kernel must be a pure function of what it reads here: the evaluator runs it again
+ * only when some of that changed. It reads blocks with `useBlock` and `paramBlock` (and
  * `queryBlock`), which record them as dependencies, and writes only its outputs.
  *
- * An error that a kernel returns is kept as a value is, until something it read changes. Only
- * Cancelled isn't: the node runs again in the next evaluation that needs it.
+ * An error that a kernel returns is kept as a value is, until something it read changes.
+ * Only Cancelled isn't: the node runs again in the next evaluation that needs it.
  */
 class NodeExecContext {
- public:
+public:
   struct Input {
     const GraphValue *value = nullptr;
     bool linked = false;
@@ -93,8 +94,8 @@ class NodeExecContext {
   {
     return s_.library;
   }
-  /** Whether the client wants the evaluation to end (GraphInstance::setMonitor). A kernel that
-   * takes long asks now and then, and returns Cancelled. */
+  /** Whether the client wants the evaluation to end (GraphInstance::setMonitor). A kernel
+   * that takes long asks now and then, and returns Cancelled. */
   bool cancelled() const
   {
     return s_.monitor && s_.monitor->cancelled();
@@ -106,8 +107,8 @@ class NodeExecContext {
       s_.monitor->progress(fraction, text);
     }
   }
-  /** What the client gave GraphInstance::setUserData. Changing it runs no kernel. The client
-   * changes nothing there that kernels read while it evaluates. */
+  /** What the client gave GraphInstance::setUserData. Changing it runs no kernel. The
+   * client changes nothing there that kernels read while it evaluates. */
   void *userData() const
   {
     return s_.userData;
@@ -134,14 +135,14 @@ class NodeExecContext {
   /** A block, recorded as a dependency: the node runs again when it changes, appears or
    * goes away. The handle is null if there is none.
    *
-   * With `aspects`, only changes of those count (ChangeBus::notify), as if the kernel read
-   * nothing else of it: one that reads a mesh's positions doesn't run when its selection
-   * changes. Appearing, going away and being renamed always count. */
+   * With `aspects`, only changes of those count (ChangeBus::notify), as if the kernel
+   * read nothing else of it: one that reads a mesh's positions doesn't run when its
+   * selection changes. Appearing, going away and being renamed always count. */
   BlockUse useBlock(BlockId id, ChangeAspects aspects = kAllAspects);
-  /** An interface of a block; the answer is recorded as a dependency. Null if it has none.
-   * What a block answers may change only with a notification of the block or a move of the
-   * Library's epoch (an override does move it): without either, the node isn't looked at
-   * again. */
+  /** An interface of a block; the answer is recorded as a dependency. Null if it has
+   * none. What a block answers may change only with a notification of the block or a move
+   * of the Library's epoch (an override does move it): without either, the node isn't
+   * looked at again. */
   template <class I> I queryBlock(BlockHandle h)
   {
     I out;
@@ -180,7 +181,7 @@ class NodeExecContext {
   /** Bound without members: scripts use bind/'s facades. */
   static const litestl::binding::types::Struct<NodeExecContext> *defineBindings();
 
- private:
+private:
   Setup s_;
   litestl::util::Vector<GraphValue> outputs_;
   Status outputError_;

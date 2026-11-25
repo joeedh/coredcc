@@ -50,7 +50,7 @@ struct ForeignFactory {
  * any is alive aborts, naming the cause: a history or executor outlived the Runtime.
  */
 class ForeignBindings {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.script.ForeignBindings";
 
   explicit ForeignBindings(Runtime *rt);
@@ -102,7 +102,7 @@ class ForeignBindings {
   /** Releases a kept handle now. */
   void dropHandle(litestl::binding::foreign::Handle h);
 
- private:
+private:
   class Dispatcher;
   Dispatcher *dispatcher_;
   litestl::util::Vector<Frame> frames_;
@@ -112,19 +112,19 @@ class ForeignBindings {
 
 /** Whether a foreign call is in progress on `rt`. */
 bool inForeignCall(const Runtime &rt);
-/** Whether the innermost foreign call on `rt` is one of `iface`'s methods; with `slots`, one
- * of those. False when none is in progress. */
+/** Whether the innermost foreign call on `rt` is one of `iface`'s methods; with `slots`,
+ * one of those. False when none is in progress. */
 bool inForeignSlot(const Runtime &rt,
                    const lbt::_StructBase *iface,
                    std::initializer_list<const char *> slots = {});
 
 /**
- * Ok if every slot of `iface` can be implemented by a script. Else Unsupported, naming the
- * slots and why:
+ * Ok if every slot of `iface` can be implemented by a script. Else Unsupported, naming
+ * the slots and why:
  * - a `void *` or a QueryAnswer, taken or returned;
  * - a reference returned, or ownership of a returned pointer;
- * - a struct returned by value without bound default and copy constructors (the script makes
- *   one, litestl copies it);
+ * - a struct returned by value without bound default and copy constructors (the script
+ * makes one, litestl copies it);
  * - a Vector returned whose elements aren't numbers, booleans or enums.
  */
 Status foreignImplementable(const lbt::_StructBase *iface);

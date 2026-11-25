@@ -42,14 +42,15 @@ struct Best {
   double covered = kNoLimit;
   bool thin = false;
 
-  /* Behind this is nothing that comes first: a thin shape is behind the occluder there, and what
-   * covers comes after the frontmost that does. Without an occluder there is no such depth. */
+  /* Behind this is nothing that comes first: a thin shape is behind the occluder there,
+   * and what covers comes after the frontmost that does. Without an occluder there is no
+   * such depth. */
   double limitDepth() const
   {
     return options.maxHits == 1 ? std::fmax(occluder.behind, covered) : kNoLimit;
   }
-  /* Surfaces that only are near come after a hit that covers, and after a thin shape, unless that
-   * is hidden by something that isn't a hit. */
+  /* Surfaces that only are near come after a hit that covers, and after a thin shape,
+   * unless that is hidden by something that isn't a hit. */
   bool nearSurfaces() const
   {
     const bool thinIsFirst = thin && (options.domains == ~0u || !options.occlusion);
@@ -125,8 +126,7 @@ Status pickScene(Context &ctx,
       if (scope.thrown()) {
         continue;
       }
-    }
-    else {
+    } else {
       sink.box(e.localBounds);
     }
     for (detail::PickCandidate c : sink.kept()) {

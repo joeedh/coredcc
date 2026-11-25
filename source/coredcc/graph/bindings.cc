@@ -14,7 +14,8 @@ const lbt::Struct<NodeExecContext> *NodeExecContext::defineBindings()
   static lbt::Struct<NodeExecContext> *st = nullptr;
   if (!st) {
     litestl::alloc::PermanentGuard guard;
-    st = new lbt::Struct<NodeExecContext>("coredcc::NodeExecContext", sizeof(NodeExecContext));
+    st = new lbt::Struct<NodeExecContext>("coredcc::NodeExecContext",
+                                          sizeof(NodeExecContext));
   }
   return st;
 }

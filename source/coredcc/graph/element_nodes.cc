@@ -94,7 +94,8 @@ Status value(NodeExecContext &ctx)
   }
   const SocketType *from = types.typeOf(v);
   if (!from) {
-    return Status::error(StatusCode::TypeMismatch, ("column '" + name + "' has no value").c_str());
+    return Status::error(StatusCode::TypeMismatch,
+                         ("column '" + name + "' has no value").c_str());
   }
   GraphValue out;
   CDCC_TRY(types.convert(*from, to, v, out));
@@ -119,8 +120,7 @@ Status rename(NodeExecContext &ctx)
     if (from == c.name.c_str()) {
       out.columns.append(c);
       out.columns.last().name = to.c_str();
-    }
-    else if (to != c.name.c_str()) {
+    } else if (to != c.name.c_str()) {
       out.columns.append(c);
     }
   }
@@ -167,8 +167,9 @@ void detail::addElementNodes(Runtime &rt, NodeTypeRegistry &reg)
 {
   NodeTypeDef r("elements.range");
   r.uiName("Range")
-      .input(PropertyDef::intProp("count").range(0, double(kMaxRange)).defaultValue(
-          PropValue::ofInt(10)))
+      .input(PropertyDef::intProp("count")
+                 .range(0, double(kMaxRange))
+                 .defaultValue(PropValue::ofInt(10)))
       .output("elements", "elements");
   addBuiltin<range>(rt, reg, r, "elements.range");
 
@@ -177,7 +178,8 @@ void detail::addElementNodes(Runtime &rt, NodeTypeRegistry &reg)
   addBuiltin<count>(rt, reg, n, "elements.count");
 
   for (const char *type :
-       {"bool", "int", "float", "vec2", "vec3", "vec4", "mat4", "quat", "string"}) {
+       {"bool", "int", "float", "vec2", "vec3", "vec4", "mat4", "quat", "string"})
+  {
     const std::string name = std::string("elements.value.") + type;
     NodeTypeDef v(name);
     v.uiName("Element Value")

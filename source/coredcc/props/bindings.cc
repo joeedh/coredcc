@@ -5,7 +5,8 @@
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
-const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::PropValue::Type>::bind()
+const litestl::binding::BindingBase *
+litestl::binding::Binder<coredcc::PropValue::Type>::bind()
 {
   using T = coredcc::PropValue::Type;
   static types::Enum *e = nullptr;

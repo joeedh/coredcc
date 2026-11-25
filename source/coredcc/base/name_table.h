@@ -19,7 +19,7 @@ namespace coredcc {
  * Bounded: a table holds at most kMaxBytes of names (counting kEntryBytes for each).
  */
 class NameTable {
- public:
+public:
   static constexpr size_t kMaxBytes = size_t(16) << 20;
   static constexpr size_t kEntryBytes = 64;
 
@@ -32,7 +32,7 @@ class NameTable {
   /** Test hook: add() for a chosen id, to exercise collisions. */
   bool debugAddAs(IdDomain domain, uint64_t id, std::string_view name);
 
- private:
+private:
   /* Ordered: a file chooses the ids, and litestl's hash of a number is easy to invert. */
   std::map<uint64_t, litestl::util::string> names_[kIdDomainCount];
   size_t bytes_ = 0;

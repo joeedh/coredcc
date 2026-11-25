@@ -1,5 +1,5 @@
-/* Results for drawing: the hierarchy, flags, what an evaluation did, bounds that are kept until they
- * change, and transform types that are evaluated many at a time. */
+/* Results for drawing: the hierarchy, flags, what an evaluation did, bounds that are kept
+ * until they change, and transform types that are evaluated many at a time. */
 #include "command_doc.h"
 
 #include "coredcc/api/ref_text.h"
@@ -97,7 +97,8 @@ void testHierarchy()
   const uint64_t v = d.sc().lastChanges().version;
   d.obj(a).flags = ObjectFlags::Hidden;
   d.evaluate();
-  test_assert(d.sc().lastChanges().version == v + 1 && d.sc().lastChanges().places.size() == 1);
+  test_assert(d.sc().lastChanges().version == v + 1 &&
+              d.sc().lastChanges().places.size() == 1);
   d.setParent(b, a);
   d.evaluate();
   test_assert(d.sc().lastChanges().version == v + 2 && d.sc().children(a).size() == 1);
@@ -115,7 +116,8 @@ void testHierarchy()
   d.setParent(b, BlockHandle());
   test_assert(d.sc().children(a).size() == 1); /* the last evaluation's */
   d.evaluate();
-  test_assert(d.sc().children(a).size() == 0 && d.sc().children(BlockHandle()).size() == 2);
+  test_assert(d.sc().children(a).size() == 0 &&
+              d.sc().children(BlockHandle()).size() == 2);
 }
 
 /* ---- what an evaluation did ---- */
@@ -141,7 +143,8 @@ void testResult()
   d.host(a).onRead = [&](ObjectInfo &info) {
     info.parent = flip++ & 1 ? BlockId() : d.idOf(a);
   };
-  test_assert(evaluateScene(*d.ctx, &r).code() == StatusCode::FailedPrecondition && !r.done);
+  test_assert(evaluateScene(*d.ctx, &r).code() == StatusCode::FailedPrecondition &&
+              !r.done);
 }
 
 /* ---- lists by path ---- */
@@ -215,7 +218,9 @@ struct Plain {
   {
     return 1;
   }
-  void closestElements(const NearQuery &, NearSink &) const {}
+  void closestElements(const NearQuery &, NearSink &) const
+  {
+  }
   static lbt::Struct<Plain> *defineBindings()
   {
     auto *st = new lbt::Struct<Plain>("test::Plain", sizeof(Plain));
@@ -340,8 +345,9 @@ void testKeptBounds()
     over.box.max[i] = 0.5;
   }
   must(registerImpl<Spatial, Plain>(d.rt, "test.Over"));
-  must(d.lib->setOverride(
-      s, InterfaceId::of(Spatial::ifaceName), query<Spatial>(d.rt, TypeId::of("test.Over"), &over)));
+  must(d.lib->setOverride(s,
+                          InterfaceId::of(Spatial::ifaceName),
+                          query<Spatial>(d.rt, TypeId::of("test.Over"), &over)));
   d.evaluate();
   test_assert(reaches(d, a, 0.5));
   {
@@ -353,14 +359,16 @@ void testKeptBounds()
 
 /* ---- many at a time ---- */
 
-/* World = parent * translation(x, y, time), and a turn by z about z; the local scale is (1, 2, z). */
+/* World = parent * translation(x, y, time), and a turn by z about z; the local scale is
+ * (1, 2, z). */
 struct Many {
   Runtime *rt = nullptr;
   int single = 0, batches = 0, objects = 0;
   int mode = 0;
   double factor = 1.0;
 
-  static TransformState one(double x, double y, double z, double time, const TransformState &p)
+  static TransformState
+  one(double x, double y, double z, double time, const TransformState &p)
   {
     TransformState s;
     mat4d local;
@@ -422,7 +430,8 @@ struct Many {
         parent.localScale[k] = p[i * 23 + 20 + k];
       }
       test_assert(sameBits(parent, b.parent(i)));
-      const TransformState s = one(factor * c[i * 3], c[i * 3 + 1], c[i * 3 + 2], b.time(), parent);
+      const TransformState s =
+          one(factor * c[i * 3], c[i * 3 + 1], c[i * 3 + 2], b.time(), parent);
       const double *w = s.world;
       for (int k = 0; k < 16; k++) {
         out.append(w[k]);
@@ -486,7 +495,9 @@ template <class M> M *addModel(Doc &d, const char *name)
   for (const char *channel : {"x", "y", "z"}) {
     info.channels.append(PropertyDef::floatProp(channel));
   }
-  must(d.rt.ext<TransformRegistry>().add(std::move(info), std::move(owned).value()).status());
+  must(d.rt.ext<TransformRegistry>()
+           .add(std::move(info), std::move(owned).value())
+           .status());
   return m;
 }
 
@@ -513,8 +524,8 @@ struct Driver : OverrideProvider {
   }
 };
 
-/* Random hierarchies with both types among others, with cycles, hosts that move parents, and bad
- * channels: the same results as without batches. */
+/* Random hierarchies with both types among others, with cycles, hosts that move parents,
+ * and bad channels: the same results as without batches. */
 void testBatches()
 {
   int batched = 0, batches = 0, cycles = 0, others_ = 0;
@@ -562,7 +573,8 @@ void testBatches()
           doc.obj(h).channels = ChannelBlock(s.below(12) ? 3 : 2);
           for (int c = 0; c < doc.obj(h).channels.size(); c++) {
             doc.obj(h).channels.set(
-                c, s.below(20) ? s.range(-2, 2) : std::numeric_limits<double>::infinity());
+                c,
+                s.below(20) ? s.range(-2, 2) : std::numeric_limits<double>::infinity());
           }
         }
         list.append(h);
@@ -584,10 +596,11 @@ void testBatches()
           }
           if (change) { /* of another type, behind the back of what was looked up */
             const bool m = doc.obj(list[a]).transformTypeId() == TypeId::of("test.m");
-            doc.obj(list[a]).setTransformType(!m    ? "test.m" :
-                                              x > 0 ? "test.n" :
-                                                      kTrsTransform);
-            doc.obj(list[a]).channels = m && x <= 0 ? doc.trs->defaults() : ChannelBlock(3);
+            doc.obj(list[a]).setTransformType(!m      ? "test.m"
+                                              : x > 0 ? "test.n"
+                                                      : kTrsTransform);
+            doc.obj(list[a]).channels =
+                m && x <= 0 ? doc.trs->defaults() : ChannelBlock(3);
           }
           doc.obj(list[a]).channels.set(0, x);
           doc.obj(list[a]).flags = change ? ObjectFlags::Hidden : ObjectFlags::None;
@@ -600,8 +613,8 @@ void testBatches()
       test_assert(got.code() == want.code() && got.ok() == (!driven || step != 3));
       for (int i = 0; i < 25; i++) {
         const ObjectEval e = d.result(all[i]), f = o.result(others[i]);
-        test_assert(e.status == f.status && sameBits(e.state, f.state) && e.parent == f.parent &&
-                    e.flags == f.flags);
+        test_assert(e.status == f.status && sameBits(e.state, f.state) &&
+                    e.parent == f.parent && e.flags == f.flags);
         cycles += e.status == EvalStatus::Cycle ? 1 : 0;
       }
     }
@@ -635,13 +648,15 @@ void testBatches()
     const char *what = mode == 1 ? "refused" : mode == 2 ? "thrown" : "no states";
     test_assert(isError(evaluateScene(*d.ctx), StatusCode::Internal, what));
     test_assert(!d.rt.hasStickyError());
-    test_assert(d.statusOf(a) == EvalStatus::ModelFailed && d.isAt(a, 7) && d.isAt(b, 7) &&
-                d.isAt(low, 8) && d.isAt(t, 3) && d.statusOf(low) == EvalStatus::Ok);
+    test_assert(d.statusOf(a) == EvalStatus::ModelFailed && d.isAt(a, 7) &&
+                d.isAt(b, 7) && d.isAt(low, 8) && d.isAt(t, 3) &&
+                d.statusOf(low) == EvalStatus::Ok);
   }
   many->mode = 0;
   d.evaluate();
   test_assert(d.isAt(b, 12));
-  /* Of another type, which nobody said: by itself this time, and with the others from then on. */
+  /* Of another type, which nobody said: by itself this time, and with the others from
+   * then on. */
   d.obj(t).setTransformType("test.m");
   d.obj(t).channels = ChannelBlock(3);
   int together = many->objects;

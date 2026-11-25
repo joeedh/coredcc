@@ -13,26 +13,30 @@ namespace coredcc {
 const char *unitFamilyName(UnitFamily family)
 {
   switch (family) {
-    case UnitFamily::None:
-      return "None";
-    case UnitFamily::Length:
-      return "Length";
-    case UnitFamily::Angle:
-      return "Angle";
-    case UnitFamily::Time:
-      return "Time";
-    case UnitFamily::Mass:
-      return "Mass";
-    case UnitFamily::Factor:
-      return "Factor";
+  case UnitFamily::None:
+    return "None";
+  case UnitFamily::Length:
+    return "Length";
+  case UnitFamily::Angle:
+    return "Angle";
+  case UnitFamily::Time:
+    return "Time";
+  case UnitFamily::Mass:
+    return "Mass";
+  case UnitFamily::Factor:
+    return "Factor";
   }
   return "?";
 }
 
 std::optional<UnitFamily> unitFamilyOfName(std::string_view name)
 {
-  for (const UnitFamily f : {UnitFamily::None, UnitFamily::Length, UnitFamily::Angle,
-                             UnitFamily::Time, UnitFamily::Mass, UnitFamily::Factor})
+  for (const UnitFamily f : {UnitFamily::None,
+                             UnitFamily::Length,
+                             UnitFamily::Angle,
+                             UnitFamily::Time,
+                             UnitFamily::Mass,
+                             UnitFamily::Factor})
   {
     if (name == unitFamilyName(f)) {
       return f;
@@ -47,7 +51,8 @@ namespace {
 const char *const kNoAliases[] = {nullptr};
 /* U+00B5 MICRO SIGN is the symbol; U+03BC GREEK SMALL LETTER MU is what many keyboards
  * type. */
-const char *const kMicronAliases[] = {"um", "\xCE\xBCm", "micrometer", "micrometers", nullptr};
+const char *const kMicronAliases[] = {
+    "um", "\xCE\xBCm", "micrometer", "micrometers", nullptr};
 const char *const kInchAliases[] = {"inch", "inches", nullptr};
 const char *const kFootAliases[] = {"foot", "feet", nullptr};
 const char *const kDegAliases[] = {"deg", "degree", "degrees", nullptr};
@@ -153,18 +158,18 @@ std::string_view trim(std::string_view s)
 std::span<const Unit> unitsOf(UnitFamily family)
 {
   switch (family) {
-    case UnitFamily::None:
-      return {};
-    case UnitFamily::Length:
-      return kLength;
-    case UnitFamily::Angle:
-      return kAngle;
-    case UnitFamily::Time:
-      return kTime;
-    case UnitFamily::Mass:
-      return kMass;
-    case UnitFamily::Factor:
-      return kFactor;
+  case UnitFamily::None:
+    return {};
+  case UnitFamily::Length:
+    return kLength;
+  case UnitFamily::Angle:
+    return kAngle;
+  case UnitFamily::Time:
+    return kTime;
+  case UnitFamily::Mass:
+    return kMass;
+  case UnitFamily::Factor:
+    return kFactor;
   }
   return {};
 }
@@ -230,9 +235,9 @@ Result<Typed> parseNumber(std::string_view text)
   const std::string_view s = trim(text);
   const size_t n = scanNumber(s);
   if (n == 0) {
-    return Status::error(StatusCode::InvalidArgument,
-                         (std::string("expected a number, got '") + std::string(text) + "'")
-                             .c_str());
+    return Status::error(
+        StatusCode::InvalidArgument,
+        (std::string("expected a number, got '") + std::string(text) + "'").c_str());
   }
   Typed out;
   const char *first = s.data();
@@ -241,10 +246,10 @@ Result<Typed> parseNumber(std::string_view text)
   }
   std::from_chars_result fr = std::from_chars(first, s.data() + n, out.number);
   if (fr.ec != std::errc() || fr.ptr != s.data() + n) {
-    return Status::error(StatusCode::OutOfRange,
-                         (std::string("number out of range: '") + std::string(s.substr(0, n)) +
-                          "'")
-                             .c_str());
+    return Status::error(
+        StatusCode::OutOfRange,
+        (std::string("number out of range: '") + std::string(s.substr(0, n)) + "'")
+            .c_str());
   }
   out.unit = trim(s.substr(n));
   return out;
@@ -253,8 +258,9 @@ Result<Typed> parseNumber(std::string_view text)
 Result<double> finite(double v, std::string_view text)
 {
   if (!std::isfinite(v)) {
-    return Status::error(StatusCode::OutOfRange,
-                         (std::string("value out of range: '") + std::string(text) + "'").c_str());
+    return Status::error(
+        StatusCode::OutOfRange,
+        (std::string("value out of range: '") + std::string(text) + "'").c_str());
   }
   return v;
 }
@@ -264,8 +270,8 @@ namespace {
 Status unknown(UnitFamily family, std::string_view unit, Suggester &suggestions)
 {
   Status err = Status::error(StatusCode::InvalidArgument,
-                             (std::string("unknown ") + unitFamilyName(family) + " unit '" +
-                              std::string(unit) + "'")
+                             (std::string("unknown ") + unitFamilyName(family) +
+                              " unit '" + std::string(unit) + "'")
                                  .c_str());
   suggestions.addTo(err);
   return err;
@@ -295,23 +301,25 @@ Status unknownUnit(UnitFamily family, std::string_view unit)
 
 } // namespace detail
 
-std::string format(double baseValue, UnitFamily family, std::string_view unit, int precision)
+std::string
+format(double baseValue, UnitFamily family, std::string_view unit, int precision)
 {
   const Unit *u = findUnit(family, unit);
   if (!u && !unitsOf(family).empty()) {
     u = &unitsOf(family)[0];
   }
-  return u ? detail::formatNumber(baseValue / u->scale, *u, precision) :
-             detail::formatNumber(baseValue, UnitSettings().unitAt(family, 0), precision);
+  return u ? detail::formatNumber(baseValue / u->scale, *u, precision)
+           : detail::formatNumber(baseValue, UnitSettings().unitAt(family, 0), precision);
 }
 
-Result<double> parse(std::string_view text, UnitFamily family, std::string_view displayUnit)
+Result<double>
+parse(std::string_view text, UnitFamily family, std::string_view displayUnit)
 {
   const Unit *u = findUnit(family, displayUnit);
   if (!u && family != UnitFamily::None) {
     return Status::error(StatusCode::InvalidArgument,
-                         (std::string("unknown display unit '") + std::string(displayUnit) +
-                          "' for " + unitFamilyName(family))
+                         (std::string("unknown display unit '") +
+                          std::string(displayUnit) + "' for " + unitFamilyName(family))
                              .c_str());
   }
   Result<detail::Typed> t = detail::parseNumber(text);

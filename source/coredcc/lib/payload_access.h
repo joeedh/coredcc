@@ -12,8 +12,8 @@ struct PayloadAccess {
   {
     return out.take(version);
   }
-  /** Bounds what entries() and bag() allocate: they take from `*left` (null: no bound), and
-   * fail with OutOfRange when it runs out. */
+  /** Bounds what entries() and bag() allocate: they take from `*left` (null: no bound),
+   * and fail with OutOfRange when it runs out. */
   static void setBudget(BlockReader &in, uint64_t *left)
   {
     in.codec_.budget = left;
@@ -26,9 +26,11 @@ struct PayloadAccess {
   {
     return copy.data_;
   }
-  /** writePayload while the library is busy with a save: inside a LibraryFiller::Scope. */
+  /** writePayload while the library is busy with a save: inside a LibraryFiller::Scope.
+   */
   static Result<BlockPayload> write(const Library &lib, BlockHandle h);
-  /** An attachment's payload, its references checked if the library audits. `type` serializes. */
+  /** An attachment's payload, its references checked if the library audits. `type`
+   * serializes. */
   static Result<BlockPayload> writeAttachment(const Library &lib,
                                               BlockHandle h,
                                               const AttachmentTypeRegistry::Entry &type,

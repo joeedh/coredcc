@@ -28,7 +28,8 @@ Elements *ScriptTable::edit()
 
 static Status gone()
 {
-  return error(StatusCode::FailedPrecondition, "the table's blocks aren't there any more");
+  return error(StatusCode::FailedPrecondition,
+               "the table's blocks aren't there any more");
 }
 
 Status ScriptTable::check() const
@@ -42,8 +43,9 @@ Status ScriptTable::check() const
     for (int i = 0; i < t->size(); i++) {
       if (c.values[i].isNone()) {
         return error(StatusCode::InvalidArgument,
-                     std::string("column '") + c.name.c_str() + "' of the table has no value in "
-                                                                "row " +
+                     std::string("column '") + c.name.c_str() +
+                         "' of the table has no value in "
+                         "row " +
                          std::to_string(i));
       }
     }
@@ -53,13 +55,15 @@ Status ScriptTable::check() const
 
 static Status noRow(const Elements &t, int32_t row)
 {
-  return error(StatusCode::NotFound, "row " + std::to_string(row) + " of a table that has " +
-                                         std::to_string(t.size()));
+  return error(StatusCode::NotFound,
+               "row " + std::to_string(row) + " of a table that has " +
+                   std::to_string(t.size()));
 }
 
 static Status noColumn(const string &name)
 {
-  return error(StatusCode::NotFound, std::string("the table has no column '") + name.c_str() + "'");
+  return error(StatusCode::NotFound,
+               std::string("the table has no column '") + name.c_str() + "'");
 }
 
 TableResult newTable()
@@ -82,9 +86,10 @@ int32_t tableColumns(const ScriptTable &table)
 StringResult tableColumnName(const ScriptTable &table, int32_t column)
 {
   if (column < 0 || column >= tableColumns(table)) {
-    return failed<StringResult>(
-        error(StatusCode::NotFound, "column " + std::to_string(column) + " of a table that has " +
-                                        std::to_string(tableColumns(table))));
+    return failed<StringResult>(error(StatusCode::NotFound,
+                                      "column " + std::to_string(column) +
+                                          " of a table that has " +
+                                          std::to_string(tableColumns(table))));
   }
   return ok<StringResult>(table.get()->columns[column].name);
 }
@@ -95,8 +100,8 @@ IntResult tableKey(const ScriptTable &table, int32_t row)
   if (!t) {
     return failed<IntResult>(gone());
   }
-  return row >= 0 && row < t->size() ? ok<IntResult>(t->keys[row]) :
-                                       failed<IntResult>(noRow(*t, row));
+  return row >= 0 && row < t->size() ? ok<IntResult>(t->keys[row])
+                                     : failed<IntResult>(noRow(*t, row));
 }
 
 Status tableAddColumn(ScriptTable &table, const string &name)
@@ -131,7 +136,8 @@ Status tableAddRow(ScriptTable &table, int64_t key)
   return Status();
 }
 
-Status tableSet(ScriptTable &table, const string &column, int32_t row, const PropValue &value)
+Status
+tableSet(ScriptTable &table, const string &column, int32_t row, const PropValue &value)
 {
   Result<GraphValue> v = GraphValue::fromProp(value);
   if (!v.ok()) {

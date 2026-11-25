@@ -86,9 +86,9 @@ bool TransformState::finite() const
 
 quatd TransformDelta::rotation() const
 {
-  return kind == DeltaKind::Rotate ?
-             quatd::fromAxisAngle(basis.normalized().rotate(axis), angle) :
-             quatd();
+  return kind == DeltaKind::Rotate
+             ? quatd::fromAxisAngle(basis.normalized().rotate(axis), angle)
+             : quatd();
 }
 
 mat4d TransformDelta::matrix() const
@@ -97,9 +97,9 @@ mat4d TransformDelta::matrix() const
   if (kind == DeltaKind::Translate) {
     return solve::affine(Linear::identity(), b.rotate(vector));
   }
-  const Linear m = kind == DeltaKind::Rotate ?
-                       Linear::of(rotation()) :
-                       Linear::of(b).scaled(vector) * Linear::of(b.conjugated());
+  const Linear m = kind == DeltaKind::Rotate
+                       ? Linear::of(rotation())
+                       : Linear::of(b).scaled(vector) * Linear::of(b.conjugated());
   return solve::affine(m, pivot - m.apply(pivot));
 }
 
@@ -128,7 +128,8 @@ Status thrown(const TransformType &type)
 Status checkTarget(const mat4d &target)
 {
   const double *d = target;
-  if (!finiteMatrix(target) || d[3] != 0.0 || d[7] != 0.0 || d[11] != 0.0 || d[15] != 1.0) {
+  if (!finiteMatrix(target) || d[3] != 0.0 || d[7] != 0.0 || d[11] != 0.0 || d[15] != 1.0)
+  {
     return Status::error(StatusCode::InvalidArgument,
                          "a transform's target must be finite and affine");
   }
@@ -156,7 +157,8 @@ bool sameTranslation(const TransformType &type,
     scale = std::fmax(scale, std::fabs(state.localScale[i]));
   }
   const double3 want = solve::translationOf(target);
-  const double size = Linear::of(parent.world).norm() * lengths * (1.0 + scale) + lengthOf(want);
+  const double size =
+      Linear::of(parent.world).norm() * lengths * (1.0 + scale) + lengthOf(want);
   const double e = lengthOf(solve::translationOf(state.world) - want);
   return e <= 16.0 * std::numeric_limits<double>::epsilon() * size;
 }
@@ -172,7 +174,8 @@ Status checkResult(const TransformType &type,
     return r.status();
   }
   state = *r;
-  return state.finite() ? Status() : failed("the transform isn't representable: it isn't finite");
+  return state.finite() ? Status()
+                        : failed("the transform isn't representable: it isn't finite");
 }
 
 /* Fixed channels as they are stored. Which of them were to change. */
@@ -184,7 +187,9 @@ FixedChannels putBackFixed(const EvalCtx &ctx, ChannelBlock &out)
       continue;
     }
     const double was = ctx.channel(i), is = out.get(i);
-    if (!(std::fabs(is - was) <= 1e-9 * std::fmax(1.0, std::fmax(std::fabs(is), std::fabs(was))))) {
+    if (!(std::fabs(is - was) <=
+          1e-9 * std::fmax(1.0, std::fmax(std::fabs(is), std::fabs(was)))))
+    {
       (ctx.isOverridden(i) ? f.driven : f.locked) = true;
     }
     out.set(i, ctx.stored(i));
@@ -214,7 +219,8 @@ Result<double3> transformPivot(const TransformType &type,
 {
   if (!type.model().hasPivot()) {
     Result<TransformState> s = evaluateTransform(type, ctx, parent);
-    return s.ok() ? Result<double3>(solve::translationOf(s->world)) : Result<double3>(s.status());
+    return s.ok() ? Result<double3>(solve::translationOf(s->world))
+                  : Result<double3>(s.status());
   }
   if (Status s = ready(type, ctx); !s.ok()) {
     return s;
@@ -337,7 +343,8 @@ Result<ChannelBlock> solveDelta(const TransformType &type,
   if (delta.kind != DeltaKind::Scale) {
     return out;
   }
-  /* A model scales along its own axes. Other channels may give exactly what was asked for. */
+  /* A model scales along its own axes. Other channels may give exactly what was asked
+   * for. */
   Result<TransformState> from = evaluateTransform(type, base, parent);
   if (!from.ok()) {
     return from.status();
@@ -346,7 +353,8 @@ Result<ChannelBlock> solveDelta(const TransformType &type,
   if (solve::sameLinear(state.world, target)) {
     return out;
   }
-  Result<ChannelBlock> exact = solveWorld(type, base, target, parent, SetWorldMode::Exact);
+  Result<ChannelBlock> exact =
+      solveWorld(type, base, target, parent, SetWorldMode::Exact);
   const bool threw = exact.status().code() == StatusCode::Internal;
   return exact.ok() || threw ? exact : Result<ChannelBlock>(std::move(out));
 }

@@ -1,8 +1,8 @@
 #pragma once
 
 /** \file
- * The check at the entry of strings from scripts: a NUL is refused here, since the strings
- * behind the facades can't hold one.
+ * The check at the entry of strings from scripts: a NUL is refused here, since the
+ * strings behind the facades can't hold one.
  */
 
 #include "coredcc/bind/detail.h"
@@ -31,8 +31,8 @@ template <class... A> int nulArgument(const A &...args)
   return found;
 }
 
-/** `F`, a facade, refusing strings with a NUL: what is bound for scripts. If it owns a foreign
- * handle, argument `Owned` (from 1), a refusal releases that, as `F` would. */
+/** `F`, a facade, refusing strings with a NUL: what is bound for scripts. If it owns a
+ * foreign handle, argument `Owned` (from 1), a refusal releases that, as `F` would. */
 template <auto F, int Owned = 0> struct Checked;
 
 template <class R, class... A, R (*F)(A...), int Owned> struct Checked<F, Owned> {
@@ -40,7 +40,8 @@ template <class R, class... A, R (*F)(A...), int Owned> struct Checked<F, Owned>
   {
     if constexpr (Owned > 0) {
       const auto handle = std::get<size_t(Owned) - 1>(std::tie(args...));
-      static_assert(std::is_same_v<decltype(handle), const litestl::binding::foreign::Handle>);
+      static_assert(
+          std::is_same_v<decltype(handle), const litestl::binding::foreign::Handle>);
       if (handle != 0) {
         litestl::binding::foreign::release(handle);
       }
@@ -54,14 +55,11 @@ template <class R, class... A, R (*F)(A...), int Owned> struct Checked<F, Owned>
                        "argument " + std::to_string(i) + ": a string can't hold a NUL");
       if constexpr (std::is_same_v<R, Status>) {
         return s;
-      }
-      else if constexpr (std::is_same_v<R, string>) {
+      } else if constexpr (std::is_same_v<R, string>) {
         return s.toString();
-      }
-      else if constexpr (requires { R().status; }) {
+      } else if constexpr (requires { R().status; }) {
         return failed<R>(std::move(s));
-      }
-      else {
+      } else {
         /* With a string, it has to return one of those. */
         static_assert(!(std::is_same_v<std::decay_t<A>, string> || ...));
       }
@@ -80,9 +78,9 @@ template <class R, class... A, R (*F)(A...), int Owned> struct Checked<F, Owned>
 /** BIND_FACADE of a facade that takes over a foreign handle: argument `owned`, from 1. */
 #define BIND_OWNING_FACADE(mgr, qualifiedName, fn, owned, ARGNAMES)                      \
   (mgr)                                                                                  \
-      ->addFunction(::litestl::binding::types::makeFunction<                             \
-                    &::coredcc::script::detail::Checked<&fn, owned>::call>(              \
-          qualifiedName))                                                                \
+      ->addFunction(                                                                     \
+          ::litestl::binding::types::makeFunction<                                       \
+              &::coredcc::script::detail::Checked<&fn, owned>::call>(qualifiedName))     \
       ->setArgNames(ARGNAMES)
 
 } // namespace coredcc::script::detail

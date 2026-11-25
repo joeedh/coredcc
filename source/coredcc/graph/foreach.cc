@@ -68,7 +68,8 @@ bool Elements::operator==(const Elements &b) const
   }
   for (int i = 0; i < int(columns.size()); i++) {
     const Column &x = columns[i], &y = b.columns[i];
-    if (strcmp(x.name.c_str(), y.name.c_str()) != 0 || x.values.size() != y.values.size() ||
+    if (strcmp(x.name.c_str(), y.name.c_str()) != 0 ||
+        x.values.size() != y.values.size() ||
         !std::equal(x.values.begin(), x.values.end(), y.values.begin()))
     {
       return false;
@@ -158,7 +159,8 @@ void Evaluator::computeForeach(Frame &f, int node)
     s.clear();
     s.defSerial = def->serial(); /* worldMoved sees it too */
   }
-  /* The state is noted before the elements run, so what moves meanwhile is seen next time. */
+  /* The state is noted before the elements run, so what moves meanwhile is seen next
+   * time. */
   bool world = worldMoved(f, node, k, *def);
   world |= k.trace.inputs.size() != inputs.size() ||
            !std::equal(inputs.begin() + 1, inputs.end(), k.trace.inputs.begin() + 1);
@@ -182,7 +184,8 @@ void Evaluator::computeForeach(Frame &f, int node)
     }
     k.ran = true;
     k.runError = std::move(error);
-    k.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    k.seconds =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     k.totalSeconds += k.seconds;
   }
   if (sink_.set) {
@@ -220,7 +223,9 @@ bool Evaluator::worldMoved(Frame &f, int node, KernelState &k, const GraphDef &d
       }
     }
   }
-  if (defs.size() != s.defs.size() || !std::equal(defs.begin(), defs.end(), s.defs.begin())) {
+  if (defs.size() != s.defs.size() ||
+      !std::equal(defs.begin(), defs.end(), s.defs.begin()))
+  {
     moved = true;
     s.defs = std::move(defs);
     s.serials.clear();
@@ -229,7 +234,8 @@ bool Evaluator::worldMoved(Frame &f, int node, KernelState &k, const GraphDef &d
     }
   }
 
-  /* The Library may write a Pointer param's cell, which moves its epoch but not the def. */
+  /* The Library may write a Pointer param's cell, which moves its epoch but not the def.
+   */
   const uint64_t epoch = lib_.get() ? lib_.get()->epoch() : 0;
   if (s.epoch != epoch) {
     s.epoch = epoch;
@@ -241,7 +247,9 @@ bool Evaluator::worldMoved(Frame &f, int node, KernelState &k, const GraphDef &d
         }
       });
     }
-    if (refs.size() != s.refs.size() || !std::equal(refs.begin(), refs.end(), s.refs.begin())) {
+    if (refs.size() != s.refs.size() ||
+        !std::equal(refs.begin(), refs.end(), s.refs.begin()))
+    {
       moved = true;
       s.refs = std::move(refs);
     }
@@ -265,7 +273,8 @@ static ErrorPtr inElement(const GraphError &e, int64_t key)
   return std::make_shared<const GraphError>(std::move(out));
 }
 
-ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &def, bool newTable)
+ErrorPtr
+Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &def, bool newTable)
 {
   const GraphTopology::Node &n = f.topo->nodes[node];
   Foreach &s = *k.foreach;
@@ -280,8 +289,9 @@ ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &de
                               "the table's blocks aren't there any more"));
   }
   const Elements *old = s.madeIn == s.world ? s.madeFrom.get<Elements>() : nullptr;
-  const bool sameKeys = old && old->keys.size() == table->keys.size() &&
-                        std::equal(old->keys.begin(), old->keys.end(), table->keys.begin());
+  const bool sameKeys =
+      old && old->keys.size() == table->keys.size() &&
+      std::equal(old->keys.begin(), old->keys.end(), table->keys.begin());
   if (newTable) {
     s.table = table->validate(!sameKeys);
   }
@@ -292,11 +302,13 @@ ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &de
   const SocketTypeRegistry &types = rt_.ext<SocketTypeRegistry>();
   ElementsMap map;
   for (const InterfaceSocket &in : def.interfaceSockets(SocketSide::Input)) {
-    map.inputs.append(ElementsMap::Input{in.id, table->column(in.name.c_str()),
+    map.inputs.append(ElementsMap::Input{in.id,
+                                         table->column(in.name.c_str()),
                                          old ? old->column(in.name.c_str()) : nullptr,
                                          types.find(in.typeName.c_str())});
   }
-  /* For the same keys it starts as a copy of the last one, made when the first value differs. */
+  /* For the same keys it starts as a copy of the last one, made when the first value
+   * differs. */
   Elements out;
   const Elements *oldOut = old ? k.outputs[0].value.payload<Elements>() : nullptr;
   bool changed = !sameKeys;
@@ -309,7 +321,8 @@ ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &de
       out.columns.append(std::move(c));
     }
   }
-  const bool marks = !sameKeys || s.failed; /* else the elements there are, are the table's */
+  const bool marks =
+      !sameKeys || s.failed; /* else the elements there are, are the table's */
   Map<int64_t, int> oldRows;
   for (int i = 0; old && !sameKeys && i < old->size(); i++) {
     oldRows.add(old->keys[i], i);
@@ -369,8 +382,7 @@ ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &de
     bool same = true;
     if (Status status = setRow(*e, map, row, same); !status.ok()) {
       error = fail(std::move(status));
-    }
-    else if (!same || e->world != s.world) {
+    } else if (!same || e->world != s.world) {
       error = runElement(f, node, k, *e);
       if (overBudget_) {
         return nullptr;
@@ -470,14 +482,14 @@ Status Evaluator::setRow(Element &e, const ElementsMap &map, int row, bool &same
     GraphValue converted;
     if (!m.type->holds(*v)) { /* the type is known: the node's own input is of it */
       const SocketType *from = types.typeOf(*v);
-      Status status = from ? types.convert(*from, *m.type, *v, converted) :
-                             Status::error(StatusCode::TypeMismatch, "there is no value");
+      Status status = from ? types.convert(*from, *m.type, *v, converted)
+                           : Status::error(StatusCode::TypeMismatch, "there is no value");
       if (!status.ok()) {
         same = false;
-        return Status::error(status.code(),
-                             (std::string("column '") + m.column->name.c_str() +
-                              "': " + status.message())
-                                 .c_str());
+        return Status::error(
+            status.code(),
+            (std::string("column '") + m.column->name.c_str() + "': " + status.message())
+                .c_str());
       }
       v = &converted;
     }
@@ -533,10 +545,11 @@ ErrorPtr Evaluator::runElement(Frame &f, int node, KernelState &k, Element &e)
   ErrorPtr error;
   for (int i = 0; i < int(outs.size()) && !error; i++) {
     if (ef.topo->outputNode < 0) {
-      if (const SocketType *t = rt_.ext<SocketTypeRegistry>().find(outs[i].typeName.c_str())) {
+      if (const SocketType *t =
+              rt_.ext<SocketTypeRegistry>().find(outs[i].typeName.c_str()))
+      {
         e.outputs[i] = t->defaultValue;
-      }
-      else {
+      } else {
         error = makeError(f, ef.groupNode, unknownType());
       }
       continue;

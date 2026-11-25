@@ -50,7 +50,8 @@ TransformState childState(const TransformState &parent,
                           const double3 &localScale)
 {
   TransformState s;
-  s.world = solve::affine(world, litestl::math::transformPoint(parent.world, localTranslation));
+  s.world =
+      solve::affine(world, litestl::math::transformPoint(parent.world, localTranslation));
   s.rotation = (parent.rotation * localRotation).normalized();
   s.localScale = localScale;
   return s;
@@ -64,8 +65,9 @@ Status singularParent()
 
 Status unsolvable()
 {
-  return Status::error(StatusCode::FailedPrecondition,
-                       "the target isn't representable: it isn't finite under this parent");
+  return Status::error(
+      StatusCode::FailedPrecondition,
+      "the target isn't representable: it isn't finite under this parent");
 }
 
 namespace {
@@ -97,12 +99,12 @@ double3 shiftOf(const TransformDelta &delta, const double3 &point)
 {
   const double3 arm = point - delta.pivot;
   switch (delta.kind) {
-    case DeltaKind::Translate:
-      return delta.basis.normalized().rotate(delta.vector);
-    case DeltaKind::Rotate:
-      return delta.rotation().rotate(arm) - arm;
-    case DeltaKind::Scale:
-      return scaleVector(delta, delta.vector, arm) - arm;
+  case DeltaKind::Translate:
+    return delta.basis.normalized().rotate(delta.vector);
+  case DeltaKind::Rotate:
+    return delta.rotation().rotate(arm) - arm;
+  case DeltaKind::Scale:
+    return scaleVector(delta, delta.vector, arm) - arm;
   }
   return double3();
 }
@@ -146,13 +148,10 @@ Linear mirrored(const TransformDelta &delta, const Linear &m)
   return r;
 }
 
-Status takeMirror(const Linear &x,
-                  quatd &rotation,
-                  double3 &scale,
-                  bool &turned)
+Status takeMirror(const Linear &x, quatd &rotation, double3 &scale, bool &turned)
 {
-  /* Pairs of signs are a half turn. For a mirror with a determinant of -1, rotationScale adds the one
-   * that is missing. */
+  /* Pairs of signs are a half turn. For a mirror with a determinant of -1, rotationScale
+   * adds the one that is missing. */
   static const double kSigns[4][3] = {{1, 1, 1}, {-1, -1, 1}, {-1, 1, -1}, {1, -1, -1}};
   const quatd current = rotation.normalized();
   double best = -1.0;
@@ -179,10 +178,13 @@ Status takeMirror(const Linear &x,
   return Status();
 }
 
-quatd turnUnder(const TransformDelta &delta, const solve::ParentSolver &solver, const Linear &p)
+quatd turnUnder(const TransformDelta &delta,
+                const solve::ParentSolver &solver,
+                const Linear &p)
 {
   const double3 axis = delta.basis.normalized().rotate(delta.axis);
-  const bool mirrored = unitOf(p.col[0]).cross(unitOf(p.col[1])).dot(unitOf(p.col[2])) < 0.0;
+  const bool mirrored =
+      unitOf(p.col[0]).cross(unitOf(p.col[1])).dot(unitOf(p.col[2])) < 0.0;
   return quatd::fromAxisAngle(solver.vector(axis), mirrored ? -delta.angle : delta.angle);
 }
 
@@ -196,8 +198,8 @@ template <class Model> Status addBuiltin(Runtime &rt, TransformTypeInfo info)
   }
   const std::string impl = std::string(info.name.c_str()) + "#impl";
   CDCC_TRY((registerImpl<TransformModel, Model>(rt, impl)));
-  Result<Owned<TransformModel>> model =
-      own<TransformModel>(rt, impl, litestl::alloc::New<Model>("coredcc::TransformModel"));
+  Result<Owned<TransformModel>> model = own<TransformModel>(
+      rt, impl, litestl::alloc::New<Model>("coredcc::TransformModel"));
   if (!model.ok()) {
     return model.status();
   }

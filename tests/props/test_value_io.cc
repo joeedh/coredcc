@@ -115,31 +115,56 @@ static void test_golden()
   test_assert(golden(PropValue::ofEnum(3), {10, 3, 0, 0, 0, 0, 0, 0, 0}));
   test_assert(golden(PropValue::ofFlags(6), {11, 6, 0, 0, 0, 0, 0, 0, 0}));
   test_assert(golden(PropValue::nullPointer(), {12, 0}));
-  test_assert(names.add(IdDomain::Client, "acme") && rt.registerId<IdDomain::Struct>("S").ok());
+  test_assert(names.add(IdDomain::Client, "acme") &&
+              rt.registerId<IdDomain::Struct>("S").ok());
   StableRef r;
   r.owner = OwnerKey::ofBlock(BlockId{ClientId::of("acme"), LocalId{1, 2}});
   r.key.append(KeySegment::member("m"));
   r.key.append(KeySegment::stringKey("k"));
   r.key.append(KeySegment::ofHandle(7));
   r.type = StructId::of("S");
-  test_assert(golden(PropValue::ofPointer(r),
-                     {12, 1,                                     /* a block */
-                      1,  4, 0, 0, 0, 'a', 'c', 'm', 'e',        /* its client's name */
-                      1,  0, 0, 0, 0, 0,   0,   0,   2,   0, 0, 0, 0, 0, 0, 0, /* LocalId */
-                      3,  0, 0, 0,                               /* three segments */
-                      0,  1, 0, 0, 0, 'm',                       /* member */
-                      1,  1, 0, 0, 0, 'k',                       /* string key */
-                      2,  7, 0, 0, 0, 0,   0,   0,   0,          /* handle */
-                      1,  1, 0, 0, 0, 'S'}));                    /* the struct's name */
+  test_assert(
+      golden(PropValue::ofPointer(r),
+             {12, 1,                              /* a block */
+              1,  4, 0, 0, 0, 'a', 'c', 'm', 'e', /* its client's name */
+              1,  0, 0, 0, 0, 0,   0,   0,   2,   0, 0, 0, 0, 0, 0, 0, /* LocalId */
+              3,  0, 0, 0,                      /* three segments */
+              0,  1, 0, 0, 0, 'm',              /* member */
+              1,  1, 0, 0, 0, 'k',              /* string key */
+              2,  7, 0, 0, 0, 0,   0,   0,   0, /* handle */
+              1,  1, 0, 0, 0, 'S'}));           /* the struct's name */
   StableRef o;
   o.owner = OwnerKey::ofRuntime(0x0102);
   test_assert(golden(PropValue::ofPointer(o),
-                     {12, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0, /* a raw id */
-                      0, 0, 0, 0, 0}));                 /* no segments, no struct */
+                     {12,
+                      2,
+                      2,
+                      2,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0, /* a raw id */
+                      0,
+                      0,
+                      0,
+                      0,
+                      0})); /* no segments, no struct */
   /* Every type's tag. */
-  const ValueTag tags[] = {ValueTag::None,  ValueTag::Bool, ValueTag::Int,  ValueTag::Float,
-                           ValueTag::String, ValueTag::Vec2, ValueTag::Vec3, ValueTag::Vec4,
-                           ValueTag::Mat4,  ValueTag::Quat, ValueTag::Enum, ValueTag::Flags,
+  const ValueTag tags[] = {ValueTag::None,
+                           ValueTag::Bool,
+                           ValueTag::Int,
+                           ValueTag::Float,
+                           ValueTag::String,
+                           ValueTag::Vec2,
+                           ValueTag::Vec3,
+                           ValueTag::Vec4,
+                           ValueTag::Mat4,
+                           ValueTag::Quat,
+                           ValueTag::Enum,
+                           ValueTag::Flags,
                            ValueTag::Pointer};
   for (int i = 0; i < 13; i++) {
     test_assert(int(tags[i]) == i && valueTag(PropValue::Type(i)) == tags[i]);
@@ -186,7 +211,8 @@ static void test_names()
   writeValue(w, v, ca);
   BytesReader r(view(w)), r2(view(w));
   test_assert(readValue(r, cb) == v && r.ok());
-  test_assert(strcmp(table.nameOf(IdDomain::Struct, StructId::of("acme.Mod").value), "acme.Mod") == 0);
+  test_assert(strcmp(table.nameOf(IdDomain::Struct, StructId::of("acme.Mod").value),
+                     "acme.Mod") == 0);
   test_assert(!b.nameOf(StructId::of("acme.Mod"))); /* never in the Runtime */
   writeValue(again, v, cb);
   test_assert(again.data().size() == w.data().size() &&
@@ -194,15 +220,19 @@ static void test_names()
   test_assert(readValue(r2, cnull) == v && r2.ok());
   writeValue(noTable, v, cnull); /* as raw ids */
   BytesReader r3(view(noTable));
-  test_assert(readValue(r3, cnull) == v && r3.ok() && noTable.data().size() != w.data().size());
+  test_assert(readValue(r3, cnull) == v && r3.ok() &&
+              noTable.data().size() != w.data().size());
 
   /* A name whose id the Runtime has under another name: only this read fails. */
   Runtime c;
-  test_assert(c.debugRegisterNameAs(IdDomain::Struct, StructId::of("acme.Mod").value, "other").ok());
+  test_assert(
+      c.debugRegisterNameAs(IdDomain::Struct, StructId::of("acme.Mod").value, "other")
+          .ok());
   NameTable tc;
   ValueCodec cc(c, &tc);
   BytesReader r4(view(w));
-  test_assert(readValue(r4, cc).isNone() && r4.status().code() == StatusCode::InvalidArgument);
+  test_assert(readValue(r4, cc).isNone() &&
+              r4.status().code() == StatusCode::InvalidArgument);
   test_assert(hasMsg(r4.status(), "'other'") && !c.hasStickyError());
   /* The same in the table. */
   Runtime d;
@@ -245,7 +275,8 @@ static void test_bad_values()
   test_assert(fails({12, 2, 1, 0, 0, 0, 0}, "empty name"));
   test_assert(fails({12, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0}, "null id"));
   test_assert(fails({12, 2, 0, 1, 0, 0, 0, 9, 0, 0, 0, 0}, "kind of key"));
-  test_assert(fails({12, 2, 0, 1, 0, 0, 0, 2, 255, 255, 255, 255, 255, 255, 255, 255}, "negative"));
+  test_assert(fails({12, 2, 0, 1, 0, 0, 0, 2, 255, 255, 255, 255, 255, 255, 255, 255},
+                    "negative"));
   test_assert(fails({12, 2, 0, 255, 255, 255, 255, 0, 0, 0, 0, 0}, "count"));
   test_assert(fails({4, 1, 0, 0, 0, 0}, "NUL"));
   test_assert(fails({1, 2}, "boolean"));
@@ -267,9 +298,10 @@ static void test_bad_values()
 static PropertyBag makeBag(bool withSize = true)
 {
   PropertyBag bag;
-  test_assert(bag.add(PropertyDef::enumProp("mode").item("EDIT", 1).item("OBJ", 2).defaultValue(
-                          PropValue::ofEnum(2)))
-                  .ok());
+  test_assert(
+      bag.add(PropertyDef::enumProp("mode").item("EDIT", 1).item("OBJ", 2).defaultValue(
+                  PropValue::ofEnum(2)))
+          .ok());
   test_assert(bag.add(PropertyDef::flagsProp("bits").item("A", 1).item("B", 2)).ok());
   test_assert(bag.add(PropertyDef::floatProp("size").range(0, 10)).ok() || !withSize);
   test_assert(bag.add(PropertyDef::stringProp("label").maxLength(4)).ok());
@@ -287,9 +319,10 @@ static void test_bag_golden()
   test_assert(bag.set("bits", PropValue::ofFlags(3)).ok());
   BytesWriter w;
   writeBag(w, bag, codec); /* keys, and only what is set */
-  test_assert(bytesAre(w, {2,   0,   0,   0,   4,   0,   0, 0, 'm', 'o', 'd', 'e', 4,   8, 0,
-                           0,   0,   4,   0,   0,   0,   'E', 'D', 'I', 'T', 4,   0,   0,   0, 'b',
-                           'i', 't', 's', 4,   7,   0,   0, 0, 3,   0,   0,   0,   'A', '|', 'B'}));
+  test_assert(
+      bytesAre(w, {2,   0,   0,   0, 4, 0, 0,   0,   'm', 'o', 'd', 'e', 4,   8,   0,
+                   0,   0,   4,   0, 0, 0, 'E', 'D', 'I', 'T', 4,   0,   0,   0,   'b',
+                   'i', 't', 's', 4, 7, 0, 0,   0,   3,   0,   0,   0,   'A', '|', 'B'}));
 }
 
 static void test_bag_round_trip()
@@ -301,7 +334,10 @@ static void test_bag_round_trip()
   test_assert(bag.set("mode", PropValue::ofEnum(1)).ok());
   test_assert(bag.set("bits", PropValue::ofFlags(0)).ok());
   test_assert(bag.set("size", PropValue::ofFloat(2.5)).ok());
-  test_assert(bag.set("label", PropValue::ofString("\xff""b")).ok());
+  test_assert(bag.set("label",
+                      PropValue::ofString("\xff"
+                                          "b"))
+                  .ok());
   test_assert(bag.set("target", PropValue::ofPointer(samplePointer())).ok());
   BytesWriter w;
   writeBag(w, bag, codec);
@@ -346,7 +382,8 @@ static void test_bag_issues()
   test_assert(strcmp(issues[0].name.c_str(), "mode") == 0 && !issues[0].why.ok());
   test_assert(issues[1].why.code() == StatusCode::NotFound);
   test_assert(strcmp(issues[2].name.c_str(), "label") == 0);
-  test_assert(!back.isSet("mode") && *back.get("size") == PropValue::ofFloat(10)); /* clamped */
+  test_assert(!back.isSet("mode") &&
+              *back.get("size") == PropValue::ofFloat(10)); /* clamped */
 
   /* A value with no item is written as a number, which coerce rejects on read. */
   PropertyBag dyn;
@@ -372,12 +409,13 @@ static void test_bag_issues()
   /* Flags with a bit no item names: a number, so the bit isn't lost. */
   PropertyBag flags;
   bool more = true;
-  test_assert(flags.add(PropertyDef::flagsProp("bits").item("A", 1).dynamic(
-                            [&more](PropertyDef &d, const void *) {
-                              if (more) {
-                                d.item("B", 2);
-                              }
-                            }))
+  test_assert(flags
+                  .add(PropertyDef::flagsProp("bits").item("A", 1).dynamic(
+                      [&more](PropertyDef &d, const void *) {
+                        if (more) {
+                          d.item("B", 2);
+                        }
+                      }))
                   .ok());
   test_assert(flags.set("bits", PropValue::ofFlags(3)).ok());
   test_assert(storedBagValue(flags, 0) == PropValue::ofString("A|B"));
@@ -400,7 +438,8 @@ static void test_bag_issues()
   issues.clear();
   BytesReader r3(view(w3));
   readBag(r3, b3, codec, issues);
-  test_assert(r3.ok() && issues.size() == 1 && issues[0].why.code() == StatusCode::Unsupported);
+  test_assert(r3.ok() && issues.size() == 1 &&
+              issues[0].why.code() == StatusCode::Unsupported);
   test_assert(*b3.get("label") == PropValue::ofString("ok") && !b3.isSet("size"));
 
   /* A body of the wrong length is damage, not an issue. */
@@ -431,28 +470,29 @@ static PropValue uglyValue(SplitMix64 &rng)
 {
   const auto bits = [&rng]() { return std::bit_cast<double>(rng.next()); };
   switch (rng.below(5)) {
-    case 0:
-      return PropValue::ofString(uglyText(rng));
-    case 1:
-      return PropValue::ofVec4(bits(), bits(), bits(), bits());
-    case 2:
-      return rng.below(2) ? PropValue::ofEnum(int64_t(rng.next())) : PropValue::ofFlags(rng.next());
-    default: {
-      StableRef r;
-      if (rng.below(2)) {
-        r.owner = OwnerKey::ofBlock(BlockId{ClientId{rng.below(3)}, LocalId{rng.next(), rng.below(2)}});
-      }
-      else {
-        r.owner = OwnerKey::ofRuntime(rng.below(3));
-      }
-      for (uint32_t n = rng.below(4); n > 0; n--) {
-        r.key.append(rng.below(3) == 0 ? KeySegment::ofHandle(int64_t(rng.next() >> 1)) :
-                     rng.below(2)      ? KeySegment::member(uglyText(rng)) :
-                                         KeySegment::stringKey(uglyText(rng)));
-      }
-      r.type.value = rng.below(2) ? 0 : rng.next();
-      return PropValue::ofPointer(r);
+  case 0:
+    return PropValue::ofString(uglyText(rng));
+  case 1:
+    return PropValue::ofVec4(bits(), bits(), bits(), bits());
+  case 2:
+    return rng.below(2) ? PropValue::ofEnum(int64_t(rng.next()))
+                        : PropValue::ofFlags(rng.next());
+  default: {
+    StableRef r;
+    if (rng.below(2)) {
+      r.owner = OwnerKey::ofBlock(
+          BlockId{ClientId{rng.below(3)}, LocalId{rng.next(), rng.below(2)}});
+    } else {
+      r.owner = OwnerKey::ofRuntime(rng.below(3));
     }
+    for (uint32_t n = rng.below(4); n > 0; n--) {
+      r.key.append(rng.below(3) == 0 ? KeySegment::ofHandle(int64_t(rng.next() >> 1))
+                   : rng.below(2)    ? KeySegment::member(uglyText(rng))
+                                     : KeySegment::stringKey(uglyText(rng)));
+    }
+    r.type.value = rng.below(2) ? 0 : rng.next();
+    return PropValue::ofPointer(r);
+  }
   }
 }
 
@@ -504,26 +544,25 @@ static void test_fuzz()
       bag.set("label", PropValue::ofString("abc")).ignore();
       bag.set("bits", PropValue::ofFlags(3)).ignore();
       writeBag(w, bag, codec);
-    }
-    else {
+    } else {
       writeValue(w, seed, codec);
     }
     Vector<uint8_t> bytes = w.take();
     for (uint32_t e = rng.below(6); e > 0 && bytes.size() > 0; e--) {
       const int at = int(rng.below(uint32_t(bytes.size())));
       switch (rng.below(4)) {
-        case 0:
-          bytes[at] = uint8_t(rng.next());
-          break;
-        case 1:
-          bytes[at] = rng.below(2) ? 0xff : uint8_t(rng.below(14));
-          break;
-        case 2:
-          bytes.resize(size_t(at));
-          break;
-        case 3:
-          bytes.append(uint8_t(rng.next()));
-          break;
+      case 0:
+        bytes[at] = uint8_t(rng.next());
+        break;
+      case 1:
+        bytes[at] = rng.below(2) ? 0xff : uint8_t(rng.below(14));
+        break;
+      case 2:
+        bytes.resize(size_t(at));
+        break;
+      case 3:
+        bytes.append(uint8_t(rng.next()));
+        break;
       }
     }
     const std::span<const uint8_t> in(bytes.data(), size_t(bytes.size()));
@@ -537,8 +576,7 @@ static void test_fuzz()
       const size_t bagSize = litestl::alloc::getMemorySize() - before;
       readBag(r, back, codec, issues);
       worst = std::max(worst, litestl::alloc::getMemorySize() - before - bagSize);
-    }
-    else {
+    } else {
       v = readValue(r, codec);
       worst = std::max(worst, litestl::alloc::getMemorySize() - before);
       test_assert(r.ok() || v.isNone());
@@ -586,8 +624,8 @@ static void test_fuzz()
     }
     BytesWriter out;
     writeValue(out, PropValue::ofPointer(ref), codec);
-    test_assert(out.status().ok() ? n <= kMaxKeySegments :
-                                    out.status().code() == StatusCode::OutOfRange);
+    test_assert(out.status().ok() ? n <= kMaxKeySegments
+                                  : out.status().code() == StatusCode::OutOfRange);
     test_assert(out.status().ok() == (n <= kMaxKeySegments));
   }
   {

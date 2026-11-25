@@ -18,28 +18,28 @@ using litestl::util::string;
 const char *graphValueTypeName(GraphValue::Type type)
 {
   switch (type) {
-    case GraphValue::Type::None:
-      return "None";
-    case GraphValue::Type::Bool:
-      return "Bool";
-    case GraphValue::Type::Int:
-      return "Int";
-    case GraphValue::Type::Float:
-      return "Float";
-    case GraphValue::Type::String:
-      return "String";
-    case GraphValue::Type::Vec2:
-      return "Vec2";
-    case GraphValue::Type::Vec3:
-      return "Vec3";
-    case GraphValue::Type::Vec4:
-      return "Vec4";
-    case GraphValue::Type::Mat4:
-      return "Mat4";
-    case GraphValue::Type::Quat:
-      return "Quat";
-    case GraphValue::Type::Payload:
-      return "Payload";
+  case GraphValue::Type::None:
+    return "None";
+  case GraphValue::Type::Bool:
+    return "Bool";
+  case GraphValue::Type::Int:
+    return "Int";
+  case GraphValue::Type::Float:
+    return "Float";
+  case GraphValue::Type::String:
+    return "String";
+  case GraphValue::Type::Vec2:
+    return "Vec2";
+  case GraphValue::Type::Vec3:
+    return "Vec3";
+  case GraphValue::Type::Vec4:
+    return "Vec4";
+  case GraphValue::Type::Mat4:
+    return "Mat4";
+  case GraphValue::Type::Quat:
+    return "Quat";
+  case GraphValue::Type::Payload:
+    return "Payload";
   }
   return "?";
 }
@@ -47,52 +47,52 @@ const char *graphValueTypeName(GraphValue::Type type)
 int graphComponentCount(GraphValue::Type type)
 {
   switch (type) {
-    case GraphValue::Type::Float:
-      return 1;
-    case GraphValue::Type::Vec2:
-      return 2;
-    case GraphValue::Type::Vec3:
-      return 3;
-    case GraphValue::Type::Vec4:
-    case GraphValue::Type::Quat:
-      return 4;
-    case GraphValue::Type::Mat4:
-      return 16;
-    default:
-      return 0;
+  case GraphValue::Type::Float:
+    return 1;
+  case GraphValue::Type::Vec2:
+    return 2;
+  case GraphValue::Type::Vec3:
+    return 3;
+  case GraphValue::Type::Vec4:
+  case GraphValue::Type::Quat:
+    return 4;
+  case GraphValue::Type::Mat4:
+    return 16;
+  default:
+    return 0;
   }
 }
 
 GraphValue::Type graphTypeFor(PropKind kind)
 {
   switch (kind) {
-    case PropKind::Bool:
-      return GraphValue::Type::Bool;
-    case PropKind::Int:
-      return GraphValue::Type::Int;
-    case PropKind::Float:
-      return GraphValue::Type::Float;
-    case PropKind::String:
-      return GraphValue::Type::String;
-    case PropKind::Vec2:
-      return GraphValue::Type::Vec2;
-    case PropKind::Vec3:
-      return GraphValue::Type::Vec3;
-    case PropKind::Vec4:
-      return GraphValue::Type::Vec4;
-    case PropKind::Mat4:
-      return GraphValue::Type::Mat4;
-    case PropKind::Quat:
-      return GraphValue::Type::Quat;
-    default:
-      return GraphValue::Type::None;
+  case PropKind::Bool:
+    return GraphValue::Type::Bool;
+  case PropKind::Int:
+    return GraphValue::Type::Int;
+  case PropKind::Float:
+    return GraphValue::Type::Float;
+  case PropKind::String:
+    return GraphValue::Type::String;
+  case PropKind::Vec2:
+    return GraphValue::Type::Vec2;
+  case PropKind::Vec3:
+    return GraphValue::Type::Vec3;
+  case PropKind::Vec4:
+    return GraphValue::Type::Vec4;
+  case PropKind::Mat4:
+    return GraphValue::Type::Mat4;
+  case PropKind::Quat:
+    return GraphValue::Type::Quat;
+  default:
+    return GraphValue::Type::None;
   }
 }
 
 /* ---- copying ---- */
 
-/* The count is atomic: workers may copy values. There are many, so a release build allocates
- * them plainly, and a debug build so that leaks show. */
+/* The count is atomic: workers may copy values. There are many, so a release build
+ * allocates them plainly, and a debug build so that leaks show. */
 struct GraphValue::Matrix {
   std::atomic<int> refs{1};
   double m[16];
@@ -126,13 +126,11 @@ void GraphValue::reset()
 {
   if (type_ == Type::String) {
     litestl::alloc::Delete(s_);
-  }
-  else if (type_ == Type::Mat4) {
+  } else if (type_ == Type::Mat4) {
     if (m_->refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
       Matrix::free(m_);
     }
-  }
-  else if (type_ == Type::Payload) {
+  } else if (type_ == Type::Payload) {
     p_.~PayloadRef();
   }
   type_ = Type::None;
@@ -142,21 +140,16 @@ GraphValue::GraphValue(const GraphValue &b)
 {
   if (b.type_ == Type::String) {
     s_ = litestl::alloc::New<string>("coredcc::GraphValue string", *b.s_);
-  }
-  else if (b.type_ == Type::Payload) {
+  } else if (b.type_ == Type::Payload) {
     new (&p_) PayloadRef(b.p_);
-  }
-  else if (b.type_ == Type::Bool) {
+  } else if (b.type_ == Type::Bool) {
     b_ = b.b_;
-  }
-  else if (b.type_ == Type::Int) {
+  } else if (b.type_ == Type::Int) {
     i_ = b.i_;
-  }
-  else if (b.type_ == Type::Mat4) {
+  } else if (b.type_ == Type::Mat4) {
     m_ = b.m_;
     m_->refs.fetch_add(1, std::memory_order_relaxed);
-  }
-  else {
+  } else {
     memcpy(d_, b.d_, sizeof(double) * size_t(graphComponentCount(b.type_)));
   }
   type_ = b.type_;
@@ -185,22 +178,19 @@ GraphValue &GraphValue::operator=(GraphValue &&b) noexcept
     reset();
     s_ = s;
     type_ = Type::String;
-  }
-  else if (b.type_ == Type::Mat4) {
+  } else if (b.type_ == Type::Mat4) {
     Matrix *m = b.m_;
     b.type_ = Type::None;
     reset();
     m_ = m;
     type_ = Type::Mat4;
-  }
-  else if (b.type_ == Type::Payload) {
+  } else if (b.type_ == Type::Payload) {
     PayloadRef p = std::move(b.p_);
     b.reset();
     reset();
     new (&p_) PayloadRef(std::move(p));
     type_ = Type::Payload;
-  }
-  else {
+  } else {
     reset();
     new (this) GraphValue(static_cast<const GraphValue &>(b));
   }
@@ -246,7 +236,8 @@ GraphValue GraphValue::ofComponents(Type type, const double *components)
   const int n = graphComponentCount(type);
   CDCC_CHECK(n > 0, "GraphValue::ofComponents: a type without components");
   GraphValue g;
-  memcpy(type == Type::Mat4 ? g.newMatrix() : g.d_, components, sizeof(double) * size_t(n));
+  memcpy(
+      type == Type::Mat4 ? g.newMatrix() : g.d_, components, sizeof(double) * size_t(n));
   g.type_ = type;
   return g;
 }
@@ -312,16 +303,16 @@ constexpr TypePair kComponentTypes[] = {
 Result<GraphValue> GraphValue::fromProp(const PropValue &v)
 {
   switch (v.type()) {
-    case PropValue::Type::None:
-      return GraphValue();
-    case PropValue::Type::Bool:
-      return ofBool(v.asBool());
-    case PropValue::Type::Int:
-      return ofInt(v.asInt());
-    case PropValue::Type::String:
-      return ofString(v.asString().c_str());
-    default:
-      break;
+  case PropValue::Type::None:
+    return GraphValue();
+  case PropValue::Type::Bool:
+    return ofBool(v.asBool());
+  case PropValue::Type::Int:
+    return ofInt(v.asInt());
+  case PropValue::Type::String:
+    return ofString(v.asString().c_str());
+  default:
+    break;
   }
   for (const TypePair &t : kComponentTypes) {
     if (t.prop == v.type()) {
@@ -341,16 +332,16 @@ Result<GraphValue> GraphValue::fromProp(const PropValue &v)
 PropValue GraphValue::toProp() const
 {
   switch (type_) {
-    case Type::Bool:
-      return PropValue::ofBool(b_);
-    case Type::Int:
-      return PropValue::ofInt(i_);
-    case Type::Float:
-      return PropValue::ofFloat(d_[0]);
-    case Type::String:
-      return PropValue::ofString(s_->c_str());
-    default:
-      break;
+  case Type::Bool:
+    return PropValue::ofBool(b_);
+  case Type::Int:
+    return PropValue::ofInt(i_);
+  case Type::Float:
+    return PropValue::ofFloat(d_[0]);
+  case Type::String:
+    return PropValue::ofString(s_->c_str());
+  default:
+    break;
   }
   for (const TypePair &t : kComponentTypes) {
     if (t.graph == type_) {
@@ -400,12 +391,12 @@ const double *GraphValue::components() const
 size_t GraphValue::heapBytes() const
 {
   switch (type_) {
-    case Type::String:
-      return sizeof(string) + size_t(s_->size());
-    case Type::Mat4:
-      return sizeof(Matrix);
-    default:
-      return 0;
+  case Type::String:
+    return sizeof(string) + size_t(s_->size());
+  case Type::Mat4:
+    return sizeof(Matrix);
+  default:
+    return 0;
   }
 }
 
@@ -421,19 +412,20 @@ bool GraphValue::operator==(const GraphValue &b) const
     return false;
   }
   switch (type_) {
-    case Type::None:
-      return true;
-    case Type::Bool:
-      return b_ == b.b_;
-    case Type::Int:
-      return i_ == b.i_;
-    case Type::String:
-      return strcmp(s_->c_str(), b.s_->c_str()) == 0;
-    case Type::Payload:
-      return p_ == b.p_;
-    default:
-      return memcmp(components(), b.components(),
-                    sizeof(double) * size_t(graphComponentCount(type_))) == 0;
+  case Type::None:
+    return true;
+  case Type::Bool:
+    return b_ == b.b_;
+  case Type::Int:
+    return i_ == b.i_;
+  case Type::String:
+    return strcmp(s_->c_str(), b.s_->c_str()) == 0;
+  case Type::Payload:
+    return p_ == b.p_;
+  default:
+    return memcmp(components(),
+                  b.components(),
+                  sizeof(double) * size_t(graphComponentCount(type_))) == 0;
   }
 }
 

@@ -31,16 +31,17 @@ Status thrown(Runtime &rt)
 Status ready(const Library &lib, const char *what)
 {
   CDCC_TRY(lib.runtime().busyIfEvaluating(what));
-  return lib.runtime().hasStickyError() ? failed(std::string(what) + ": an error is pending") :
-                                          Status();
+  return lib.runtime().hasStickyError()
+             ? failed(std::string(what) + ": an error is pending")
+             : Status();
 }
 
 } // namespace
 
 /* ---- Object ---- */
 
-/* Six cache lines. Evaluating goes through all objects: what most of them do not use belongs in
- * FileData, or in another place. */
+/* Six cache lines. Evaluating goes through all objects: what most of them do not use
+ * belongs in FileData, or in another place. */
 static_assert(sizeof(Object) <= 384);
 
 void Object::setTransformType(std::string_view name)
@@ -172,7 +173,8 @@ struct ObjectProvider {
   }
   static lbt::Struct<ObjectProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<ObjectProvider>("coredcc::ObjectProvider", sizeof(ObjectProvider));
+    auto *st = new lbt::Struct<ObjectProvider>("coredcc::ObjectProvider",
+                                               sizeof(ObjectProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
@@ -186,7 +188,8 @@ struct ObjectProvider {
 
 } // namespace
 
-Result<BlockHandle> newObject(Library &lib, std::string_view name, std::string_view transformType)
+Result<BlockHandle>
+newObject(Library &lib, std::string_view name, std::string_view transformType)
 {
   Runtime &rt = lib.runtime();
   const TransformType *type = rt.ext<TransformRegistry>().find(transformType);
@@ -225,8 +228,7 @@ EvalStatus evaluateObject(Runtime &rt,
           error = std::move(s);
         }
         status = EvalStatus::ModelFailed;
-      }
-      else if (out.finite()) {
+      } else if (out.finite()) {
         return EvalStatus::Ok;
       }
     }
@@ -255,8 +257,8 @@ Result<ObjectRead> readObject(const Library &lib, BlockHandle object)
   if (!r.iface) {
     const Datablock *b = lib.get(object);
     return failed(b ? "'" + std::string(b->name().c_str()) + "' isn't " +
-                          (b->state() == BlockState::Live ? "Transformable" : "Live") :
-                      "there is no such block");
+                          (b->state() == BlockState::Live ? "Transformable" : "Live")
+                    : "there is no such block");
   }
   r.iface.read(r.info, r.channels);
   if (Status s = thrown(lib.runtime()); !s.ok()) {
@@ -294,14 +296,15 @@ BlockHandle parentOf(const Library &lib, BlockHandle h)
   return detail::liveBlock(lib, info.parent);
 }
 
-/* The objects from `h` up to the root, or to the first one that comes again. One that isn't
- * Transformable is the last, and isn't there: the identity. */
+/* The objects from `h` up to the root, or to the first one that comes again. One that
+ * isn't Transformable is the last, and isn't there: the identity. */
 Status walkUp(const Library &lib, BlockHandle h, double time, Vector<ObjectRead> &steps)
 {
   litestl::util::Map<BlockHandle, int> seen;
   while (h) {
     if (const int *first = seen.lookup_ptr(h)) {
-      /* A cycle: its members have no parent, so what is above its first one doesn't count. */
+      /* A cycle: its members have no parent, so what is above its first one doesn't
+       * count. */
       while (int(steps.size()) > *first + 1) {
         steps.pop_back();
       }
@@ -355,7 +358,8 @@ Result<TransformState> computeState(const Library &lib, BlockHandle object, doub
   return stateFrom(lib, object, time);
 }
 
-Result<TransformState> computeParentState(const Library &lib, BlockHandle object, double time)
+Result<TransformState>
+computeParentState(const Library &lib, BlockHandle object, double time)
 {
   if (Status s = ready(lib, "computeParentState"); !s.ok()) {
     return s;
@@ -463,7 +467,8 @@ Status writeTransformType(Context &ctx,
     return r.status();
   }
   if (!r->iface.hasSetTransformTypeId()) {
-    return Status::error(StatusCode::Unsupported, "this object's transform type can't be changed");
+    return Status::error(StatusCode::Unsupported,
+                         "this object's transform type can't be changed");
   }
   const Status s = r->iface.setTransformTypeId(type);
   CDCC_TRY(thrown(ctx.runtime()));
@@ -497,7 +502,8 @@ Status writeLocks(Context &ctx, BlockHandle object, uint64_t locks)
     return r.status();
   }
   if (!r->iface.hasSetLocks()) {
-    return Status::error(StatusCode::Unsupported, "this object's channels can't be locked");
+    return Status::error(StatusCode::Unsupported,
+                         "this object's channels can't be locked");
   }
   const Status s = r->iface.setLocks(locks);
   CDCC_TRY(thrown(ctx.runtime()));
@@ -514,7 +520,8 @@ Status writeParent(Context &ctx, BlockHandle object, const BlockId &parent)
     return r.status();
   }
   if (!r->iface.hasSetParentId()) {
-    return Status::error(StatusCode::Unsupported, "this object's parent can't be changed");
+    return Status::error(StatusCode::Unsupported,
+                         "this object's parent can't be changed");
   }
   const Status s = r->iface.setParentId(parent);
   CDCC_TRY(thrown(ctx.runtime()));

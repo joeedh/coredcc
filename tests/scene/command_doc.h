@@ -1,6 +1,7 @@
 #pragma once
 
-/* A scene document with an executor and a history, and the helpers of the command tests. */
+/* A scene document with an executor and a history, and the helpers of the command tests.
+ */
 
 #include "scene_doc.h"
 
@@ -57,7 +58,8 @@ struct CommandDoc : Doc {
       fprintf(stderr, "%s: %s\n", command, r.status().message());
     }
     test_assert(r.ok());
-    return r.ok() ? std::move(r).value() : rt.ext<CommandRegistry>().find(command)->newOutputs();
+    return r.ok() ? std::move(r).value()
+                  : rt.ext<CommandRegistry>().find(command)->newOutputs();
   }
   Status fails(const char *command, Inputs inputs = {})
   {
@@ -96,8 +98,8 @@ struct CommandDoc : Doc {
       return std::to_string(b.local.hi) + ":" + std::to_string(b.local.lo);
     };
     lib->forEach([&](BlockHandle h, const Datablock &b) {
-      out += "block " + std::to_string(h.index) + " " + b.name().c_str() + " " + id(b.id()) + " " +
-             std::to_string(int(b.state())) + "\n";
+      out += "block " + std::to_string(h.index) + " " + b.name().c_str() + " " +
+             id(b.id()) + " " + std::to_string(int(b.state())) + "\n";
       const bool own = b.type() == TypeId::of(kObjectType);
       const bool foreign = b.type() == TypeId::of("test.Host");
       if (own || foreign) {
@@ -109,8 +111,9 @@ struct CommandDoc : Doc {
         if (own) {
           obj(h).read(info, ignored);
         }
-        out += " type " + std::to_string(type.value) + " parent " + id(parent) + " flags " +
-               std::to_string(info.flags) + " locks " + std::to_string(info.locks) + ":";
+        out += " type " + std::to_string(type.value) + " parent " + id(parent) +
+               " flags " + std::to_string(info.flags) + " locks " +
+               std::to_string(info.locks) + ":";
         for (int i = 0; i < c.size(); i++) {
           uint64_t bits;
           const double v = c.get(i);
@@ -142,7 +145,8 @@ struct CommandDoc : Doc {
   {
     must(ex->redo(*ctx));
   }
-  /** Runs a command, undoes it, redoes it, undoes and redoes it again, comparing all of it. */
+  /** Runs a command, undoes it, redoes it, undoes and redoes it again, comparing all of
+   * it. */
   PropertyBag cycle(const char *command, Inputs inputs = {})
   {
     const std::string before = liveOnly(describe());

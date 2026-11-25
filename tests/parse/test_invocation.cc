@@ -40,7 +40,8 @@ static size_t failsAt(std::string_view text, const char *needle = nullptr)
 static bool scalarIs(const InvocationArg *a, RawScalar::Kind kind, const char *text)
 {
   return a && !a->value.isTuple && a->value.items.size() == 1 &&
-         a->value.items[0].kind == kind && strcmp(a->value.items[0].text.c_str(), text) == 0;
+         a->value.items[0].kind == kind &&
+         strcmp(a->value.items[0].text.c_str(), text) == 0;
 }
 
 static void test_forms()
@@ -57,7 +58,8 @@ static void test_forms()
   test_assert(inv.args.size() == 0 && inv.toString() == "view.frame");
   test_assert(ok("  view.frame ( )  ").args.size() == 0);
 
-  inv = ok("object.transform(offset=(0, 0, 1.5), target=\"objects[\\\"Cube\\\"]\", n=-3)");
+  inv =
+      ok("object.transform(offset=(0, 0, 1.5), target=\"objects[\\\"Cube\\\"]\", n=-3)");
   const InvocationArg *offset = inv.find("offset");
   test_assert(offset && offset->value.isTuple && offset->value.items.size() == 3);
   test_assert(offset->value.items[2].kind == RawScalar::Kind::Number);
@@ -70,7 +72,8 @@ static void test_forms()
   test_assert(ok("c(v=[1 2,3,])") == ok("c(v=(1, 2, 3))"));
   test_assert(ok("c(v=())").find("v")->value.isTuple);
   test_assert(ok("c(v=(1))").find("v")->value.isTuple);
-  test_assert(scalarIs(ok("c(flag=true)").find("flag"), RawScalar::Kind::Identifier, "true"));
+  test_assert(
+      scalarIs(ok("c(flag=true)").find("flag"), RawScalar::Kind::Identifier, "true"));
   test_assert(scalarIs(ok("c(x=+5)").find("x"), RawScalar::Kind::Number, "5"));
   test_assert(scalarIs(ok("c(x=.5e-3)").find("x"), RawScalar::Kind::Number, ".5e-3"));
 }

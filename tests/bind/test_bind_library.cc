@@ -76,12 +76,13 @@ static void test_bytes()
   const sc::ScriptBytes copy = bytes;
   test_assert(sc::bytesSize(copy) == 10 && copy.bytes().data() == bytes.bytes().data());
   uint8_t out[10] = {};
-  test_assert(sc::bytesRead(bytes, 7, std::span(out, 3)).ok() && out[0] == 7 && out[2] == 9 &&
-              out[3] == 0);
+  test_assert(sc::bytesRead(bytes, 7, std::span(out, 3)).ok() && out[0] == 7 &&
+              out[2] == 9 && out[3] == 0);
   test_assert(sc::bytesRead(bytes, 0, out).ok() && memcmp(out, b.data(), 10) == 0);
   test_assert(sc::bytesRead(bytes, 10, {}).ok());
   for (int64_t offset : {int64_t(-1), int64_t(8), int64_t(11), INT64_MAX, INT64_MIN}) {
-    test_assert(sc::bytesRead(bytes, offset, std::span(out, 3)).code() == StatusCode::OutOfRange);
+    test_assert(sc::bytesRead(bytes, offset, std::span(out, 3)).code() ==
+                StatusCode::OutOfRange);
   }
 }
 
@@ -96,13 +97,16 @@ static void test_save()
   SaveReport report;
   c.w.save(&report);
   test_assert(shows(r.report, "\"blocks\":3,"));
-  test_assert(shows(r.report, ("\"loadBytes\":" + std::to_string(report.loadBytes)).c_str()));
-  test_assert(shows(r.report, ("\"loadBlocks\":" + std::to_string(report.loadBlocks)).c_str()));
-  test_assert(shows(r.report, "\"hostPinned\":{\"total\":1,\"first\":[{\"block\":\"coredcc,"
-                              "00000000000000070000000000000003\",\"name\":\"pinned\"}]}"));
+  test_assert(
+      shows(r.report, ("\"loadBytes\":" + std::to_string(report.loadBytes)).c_str()));
+  test_assert(
+      shows(r.report, ("\"loadBlocks\":" + std::to_string(report.loadBlocks)).c_str()));
+  test_assert(shows(r.report,
+                    "\"hostPinned\":{\"total\":1,\"first\":[{\"block\":\"coredcc,"
+                    "00000000000000070000000000000003\",\"name\":\"pinned\"}]}"));
   for (const char *key : {"transient", "throughTransient", "detached", "issues"}) {
-    test_assert(shows(r.report,
-                      ("\"" + std::string(key) + "\":{\"total\":0,\"first\":[]}").c_str()));
+    test_assert(shows(
+        r.report, ("\"" + std::string(key) + "\":{\"total\":0,\"first\":[]}").c_str()));
   }
   c.w.docs.fault = DocFault::Error;
   r = sc::librarySave(c.ctx);
@@ -119,12 +123,15 @@ static void test_load()
     BindWorld c;
     sc::StringResult r = sc::libraryLoad(c.ctx, view(bytes), "file", 0, 0);
     test_assert(r.status.ok());
-    test_assert(shows(r.value, "{\"records\":2,\"missingType\":0,\"missingBlock\":1,"
-                               "\"blocks\":{\"total\":3,\"first\":["));
-    test_assert(shows(r.value, "{\"block\":\"coredcc,00000000000000070000000000000002\","
-                               "\"name\":\"b \\\"quoted\\\"\"}"));
+    test_assert(shows(r.value,
+                      "{\"records\":2,\"missingType\":0,\"missingBlock\":1,"
+                      "\"blocks\":{\"total\":3,\"first\":["));
+    test_assert(shows(r.value,
+                      "{\"block\":\"coredcc,00000000000000070000000000000002\","
+                      "\"name\":\"b \\\"quoted\\\"\"}"));
     test_assert(shows(r.value, "{\"block\":\"acme,00000000000000070000000000000032\""));
-    test_assert(strcmp(c.w.lib.get(c.w.at(50, kAcme))->sourceName().c_str(), "file") == 0);
+    test_assert(strcmp(c.w.lib.get(c.w.at(50, kAcme))->sourceName().c_str(), "file") ==
+                0);
     /* Not empty any more. */
     r = sc::libraryLoad(c.ctx, view(bytes), "", 0, 0);
     test_assert(r.status.code() == StatusCode::FailedPrecondition);
@@ -137,7 +144,8 @@ static void test_load()
   const auto load = [&](int64_t maxBytes, int64_t maxBlocks) {
     return sc::libraryLoad(c.ctx, view(bytes), "", maxBytes, maxBlocks).status.code();
   };
-  test_assert(load(10, 0) == StatusCode::OutOfRange && load(0, 2) == StatusCode::OutOfRange);
+  test_assert(load(10, 0) == StatusCode::OutOfRange &&
+              load(0, 2) == StatusCode::OutOfRange);
   for (int64_t n : {int64_t(-1), INT64_MIN}) {
     test_assert(load(n, 0) == StatusCode::InvalidArgument &&
                 load(0, n) == StatusCode::InvalidArgument);
@@ -160,9 +168,10 @@ static void test_append()
   BindWorld c;
   sc::StringResult r = sc::libraryAppend(c.ctx, view(bytes), "file", 0, 0);
   test_assert(r.status.ok() && c.history.size() == 1 && c.w.lib.size() == 3);
-  test_assert(shows(r.value, ("{\"ids\":{\"total\":2,\"first\":[{\"from\":\"" + std::string(kA) +
-                              "\",\"to\":\"coredcc,")
-                                 .c_str()));
+  test_assert(shows(r.value,
+                    ("{\"ids\":{\"total\":2,\"first\":[{\"from\":\"" + std::string(kA) +
+                     "\",\"to\":\"coredcc,")
+                        .c_str()));
   test_assert(shows(r.value, "\"records\":2,\"missingType\":0,\"missingBlock\":1,"));
   test_assert(!c.w.at(1)); /* a fresh id */
   test_assert(c.ex.undo(c.ctx).ok() && c.ex.redo(c.ctx).ok());
@@ -189,9 +198,9 @@ static void test_resolve()
   sc::StringResult r = sc::libraryLoad(c.ctx, view(bytes), "", 0, 0);
   test_assert(r.status.ok() && shows(r.value, "\"records\":2,\"missingType\":2,"));
   test_assert(shows(r.value, "\"issues\":{\"total\":") &&
-              shows(r.value, ("{\"block\":\"" + std::string(kA) +
-                              "\",\"name\":\"a\",\"code\":\"")
-                                 .c_str()) &&
+              shows(r.value,
+                    ("{\"block\":\"" + std::string(kA) + "\",\"name\":\"a\",\"code\":\"")
+                        .c_str()) &&
               shows(r.value, "\"message\":\"") && shows(r.value, "\"suggestions\":["));
   registerDoc(c.w.rt, c.w.docs);
   /* Not while there is something to undo, or to redo. */
@@ -239,10 +248,11 @@ static void test_slots()
   fakehost::Host host;
   std::string log;
   const auto probe = [&](Context &ctx) {
-    for (const StatusCode code : {sc::librarySave(ctx).status.code(),
-                                  sc::libraryLoad(ctx, view(bytes), "", 0, 0).status.code(),
-                                  sc::libraryResolve(ctx).status.code(),
-                                  sc::clearHistory(ctx).code()})
+    for (const StatusCode code :
+         {sc::librarySave(ctx).status.code(),
+          sc::libraryLoad(ctx, view(bytes), "", 0, 0).status.code(),
+          sc::libraryResolve(ctx).status.code(),
+          sc::clearHistory(ctx).code()})
     {
       log += code == StatusCode::Busy ? "busy;" : "no;";
     }
@@ -250,16 +260,17 @@ static void test_slots()
   fakehost::Obj cmd;
   cmd.methods["canRun"] = [&](void **args, void *ret, litestl::util::string *) {
     Context &ctx = *static_cast<Context *>(args[0]);
-    log += sc::libraryAppend(ctx, view(bytes), "", 0, 0).status.code() == StatusCode::Busy ?
-               "busy;" :
-               "no;";
+    log += sc::libraryAppend(ctx, view(bytes), "", 0, 0).status.code() == StatusCode::Busy
+               ? "busy;"
+               : "no;";
     new (ret) Status();
     return true;
   };
   cmd.methods["exec"] = [&](void **args, void *ret, litestl::util::string *) {
     Context &ctx = *static_cast<Context *>(args[0]);
     probe(ctx);
-    log += sc::libraryAppend(ctx, view(bytes), "", 0, 0).status.ok() ? "appended;" : "no;";
+    log +=
+        sc::libraryAppend(ctx, view(bytes), "", 0, 0).status.ok() ? "appended;" : "no;";
     new (ret) Status();
     return true;
   };
@@ -278,8 +289,8 @@ static void test_slots()
     return true;
   };
   CommandDef *def = sc::newCommandDef("js.append");
-  test_assert(sc::registerForeignCommand(c.ctx, *def, host.add(factory),
-                                         "canRun exec undo memSize discard")
+  test_assert(sc::registerForeignCommand(
+                  c.ctx, *def, host.add(factory), "canRun exec undo memSize discard")
                   .ok());
   litestl::alloc::Delete(def);
   test_assert(sc::invoke(c.ctx, "js.append()").status.ok());

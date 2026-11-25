@@ -10,19 +10,18 @@ namespace coredcc::detail {
 bool inheritsOtherwise(const TransformState &a, const TransformState &b);
 
 /**
- * The objects below some that a command keeps in place. They may move all the same: an object can
- * depend on its parent's rotation and scale, besides its matrix (FBX's inherit types).
+ * The objects below some that a command keeps in place. They may move all the same: an
+ * object can depend on its parent's rotation and scale, besides its matrix (FBX's inherit
+ * types).
  */
 class KeptWorlds {
- public:
+public:
   /** Remembers where the objects below `changing` are, without those in it. */
-  Status remember(const Library &lib,
-                  const HandleSet &changing,
-                  double time);
+  Status remember(const Library &lib, const HandleSet &changing, double time);
   /** How many of them are elsewhere now. */
   int moved(const Library &lib) const;
 
- private:
+private:
   struct Place {
     BlockHandle object;
     mat4d world;

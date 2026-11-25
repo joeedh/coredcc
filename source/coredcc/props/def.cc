@@ -36,25 +36,25 @@ char toUpper(char c)
 bool unitAgrees(PropSubtype subtype, UnitFamily unit)
 {
   switch (subtype) {
-    case PropSubtype::None:
-    case PropSubtype::Xyz:
-      return true;
-    case PropSubtype::Distance:
-      return unit == UnitFamily::Length;
-    case PropSubtype::Angle:
-    case PropSubtype::Euler:
-      return unit == UnitFamily::Angle;
-    case PropSubtype::Time:
-      return unit == UnitFamily::Time;
-    case PropSubtype::Factor:
-    case PropSubtype::Percentage:
-      return unit == UnitFamily::Factor;
-    case PropSubtype::Color:
-    case PropSubtype::ColorGamma:
-    case PropSubtype::Direction:
-    case PropSubtype::FilePath:
-    case PropSubtype::Password:
-      return false;
+  case PropSubtype::None:
+  case PropSubtype::Xyz:
+    return true;
+  case PropSubtype::Distance:
+    return unit == UnitFamily::Length;
+  case PropSubtype::Angle:
+  case PropSubtype::Euler:
+    return unit == UnitFamily::Angle;
+  case PropSubtype::Time:
+    return unit == UnitFamily::Time;
+  case PropSubtype::Factor:
+  case PropSubtype::Percentage:
+    return unit == UnitFamily::Factor;
+  case PropSubtype::Color:
+  case PropSubtype::ColorGamma:
+  case PropSubtype::Direction:
+  case PropSubtype::FilePath:
+  case PropSubtype::Password:
+    return false;
   }
   return false;
 }
@@ -80,10 +80,11 @@ std::string uiNameFromApiName(std::string_view s)
     }
     if (i > 0 && !wordStart) {
       const char prev = s[i - 1];
-      /* "edgeCrease" and "HTTPServer" (the S starts a word: it's followed by lowercase). */
+      /* "edgeCrease" and "HTTPServer" (the S starts a word: it's followed by lowercase).
+       */
       const bool lowerToUpper = (isLower(prev) || isDigit(prev)) && isUpper(c);
-      const bool acronymEnd = isUpper(prev) && isUpper(c) && i + 1 < s.size() &&
-                              isLower(s[i + 1]);
+      const bool acronymEnd =
+          isUpper(prev) && isUpper(c) && i + 1 < s.size() && isLower(s[i + 1]);
       wordStart = lowerToUpper || acronymEnd;
     }
     if (wordStart && !out.empty()) {
@@ -116,65 +117,66 @@ const EnumItem *EnumMeta::findValue(int64_t value) const
 }
 
 PropertyDef::PropertyDef(PropKind kind, std::string_view apiName)
-    : kind_(kind), apiName_(lsString(apiName)), uiName_(lsString(uiNameFromApiName(apiName)))
+    : kind_(kind), apiName_(lsString(apiName)),
+      uiName_(lsString(uiNameFromApiName(apiName)))
 {
   switch (kind) {
-    case PropKind::Bool:
-      default_ = PropValue::ofBool(false);
-      break;
-    case PropKind::Int:
-      meta_ = NumericMeta{};
-      std::get<NumericMeta>(meta_).precision = 0;
-      default_ = PropValue::ofInt(0);
-      break;
-    case PropKind::Float:
-      meta_ = NumericMeta{};
-      default_ = PropValue::ofFloat(0.0);
-      break;
-    case PropKind::Vec2:
-    case PropKind::Vec3:
-    case PropKind::Vec4: {
-      meta_ = NumericMeta{};
-      const double zero[4] = {};
-      default_ = PropValue::ofComponents(valueTypeFor(kind), zero);
-      break;
-    }
-    case PropKind::Quat:
-      meta_ = NumericMeta{};
-      default_ = PropValue::ofQuat(0, 0, 0, 1);
-      break;
-    case PropKind::Mat4:
-      meta_ = NumericMeta{};
-      default_ = PropValue::identityMat4();
-      break;
-    case PropKind::String:
-      meta_ = StringMeta{};
-      default_ = PropValue::ofString("");
-      break;
-    case PropKind::Enum:
-      meta_ = EnumMeta{};
-      default_ = PropValue::ofEnum(0);
-      break;
-    case PropKind::Flags:
-      meta_ = EnumMeta{};
-      default_ = PropValue::ofFlags(0);
-      break;
-    case PropKind::Pointer:
-      meta_ = TargetMeta{};
-      default_ = PropValue::nullPointer();
-      break;
-    case PropKind::Collection:
-      meta_ = TargetMeta{};
-      break;
+  case PropKind::Bool:
+    default_ = PropValue::ofBool(false);
+    break;
+  case PropKind::Int:
+    meta_ = NumericMeta{};
+    std::get<NumericMeta>(meta_).precision = 0;
+    default_ = PropValue::ofInt(0);
+    break;
+  case PropKind::Float:
+    meta_ = NumericMeta{};
+    default_ = PropValue::ofFloat(0.0);
+    break;
+  case PropKind::Vec2:
+  case PropKind::Vec3:
+  case PropKind::Vec4: {
+    meta_ = NumericMeta{};
+    const double zero[4] = {};
+    default_ = PropValue::ofComponents(valueTypeFor(kind), zero);
+    break;
+  }
+  case PropKind::Quat:
+    meta_ = NumericMeta{};
+    default_ = PropValue::ofQuat(0, 0, 0, 1);
+    break;
+  case PropKind::Mat4:
+    meta_ = NumericMeta{};
+    default_ = PropValue::identityMat4();
+    break;
+  case PropKind::String:
+    meta_ = StringMeta{};
+    default_ = PropValue::ofString("");
+    break;
+  case PropKind::Enum:
+    meta_ = EnumMeta{};
+    default_ = PropValue::ofEnum(0);
+    break;
+  case PropKind::Flags:
+    meta_ = EnumMeta{};
+    default_ = PropValue::ofFlags(0);
+    break;
+  case PropKind::Pointer:
+    meta_ = TargetMeta{};
+    default_ = PropValue::nullPointer();
+    break;
+  case PropKind::Collection:
+    meta_ = TargetMeta{};
+    break;
   }
 }
 
 PropertyDef PropertyDef::vecProp(std::string_view name, int components)
 {
   CDCC_CHECK(components >= 2 && components <= 4, "vecProp takes 2, 3 or 4 components");
-  const PropKind k = components == 2 ? PropKind::Vec2 :
-                     components == 3 ? PropKind::Vec3 :
-                                       PropKind::Vec4;
+  const PropKind k = components == 2   ? PropKind::Vec2
+                     : components == 3 ? PropKind::Vec3
+                                       : PropKind::Vec4;
   return {k, name};
 }
 
@@ -295,7 +297,9 @@ const char *componentName(PropKind kind, PropSubtype subtype, int i)
 {
   static constexpr const char *kAxes[] = {"X", "Y", "Z", "W"};
   static constexpr const char *kColors[] = {"R", "G", "B", "A"};
-  if (kind == PropKind::Mat4 || i < 0 || i >= componentCount(kind) || componentCount(kind) < 2) {
+  if (kind == PropKind::Mat4 || i < 0 || i >= componentCount(kind) ||
+      componentCount(kind) < 2)
+  {
     return nullptr;
   }
   const bool color = subtype == PropSubtype::Color || subtype == PropSubtype::ColorGamma;
@@ -379,8 +383,9 @@ bool PropertyDef::sameAs(const PropertyDef &b) const
 {
   return kind_ == b.kind_ && apiName_ == b.apiName_ && uiName_ == b.uiName_ &&
          description_ == b.description_ && icon_ == b.icon_ && subtype_ == b.subtype_ &&
-         access_ == b.access_ && ui_.iconsOnly == b.ui_.iconsOnly && ui_.expand == b.ui_.expand &&
-         ui_.slider == b.ui_.slider && ui_.multiline == b.ui_.multiline && default_ == b.default_ &&
+         access_ == b.access_ && ui_.iconsOnly == b.ui_.iconsOnly &&
+         ui_.expand == b.ui_.expand && ui_.slider == b.ui_.slider &&
+         ui_.multiline == b.ui_.multiline && default_ == b.default_ &&
          sameOrNone(numeric(), b.numeric()) && sameOrNone(enumMeta(), b.enumMeta()) &&
          sameOrNone(stringMeta(), b.stringMeta()) && sameOrNone(target(), b.target());
 }
@@ -413,12 +418,13 @@ Status PropertyDef::validate() const
       return fail("the soft range is empty");
     }
     if ((std::isfinite(m->softMin) && m->softMin < m->hardMin) ||
-        (std::isfinite(m->softMax) && m->softMax > m->hardMax)) {
+        (std::isfinite(m->softMax) && m->softMax > m->hardMax))
+    {
       return fail("the soft range must lie inside the hard range");
     }
     if (m->unit != UnitFamily::None && !unitAgrees(subtype_, m->unit)) {
-      return fail(std::string("the subtype ") + propSubtypeName(subtype_) + " and the unit " +
-                  unitFamilyName(m->unit) + " don't agree");
+      return fail(std::string("the subtype ") + propSubtypeName(subtype_) +
+                  " and the unit " + unitFamilyName(m->unit) + " don't agree");
     }
     if (m->precision < 0 || m->precision > 15) {
       return fail("precision must be 0 to 15");
@@ -444,7 +450,8 @@ Status PropertyDef::validate() const
     for (int i = 0; i < int(m->items.size()); i++) {
       const EnumItem &it = m->items[i];
       if (!isIdentifier(it.key.c_str())) {
-        return fail(std::string("item key '") + it.key.c_str() + "' is not an identifier");
+        return fail(std::string("item key '") + it.key.c_str() +
+                    "' is not an identifier");
       }
       if (kind_ == PropKind::Flags && !isSingleBit(it.value)) {
         return fail(std::string("flag '") + it.key.c_str() + "' must be a single bit");
@@ -464,8 +471,8 @@ Status PropertyDef::validate() const
     return default_.isNone() ? Status() : fail("a Collection has no default value");
   }
   if (default_.type() != valueTypeFor(kind_)) {
-    return fail(std::string("the default value is a ") + propValueTypeName(default_.type()) +
-                ", not a " + propKindName(kind_));
+    return fail(std::string("the default value is a ") +
+                propValueTypeName(default_.type()) + ", not a " + propKindName(kind_));
   }
   /* The static def: a dynamic hook needs a real owner, which validation doesn't have. */
   PropertyDef plain = *this;
@@ -526,8 +533,9 @@ int64_t clampI(int64_t v, const NumericMeta &m)
 
 Status nanError(const PropertyDef &def)
 {
-  return Status::error(StatusCode::OutOfRange,
-                       (std::string(def.apiName().c_str()) + ": NaN is not a value").c_str());
+  return Status::error(
+      StatusCode::OutOfRange,
+      (std::string(def.apiName().c_str()) + ": NaN is not a value").c_str());
 }
 
 /* An Int, or a Float holding an integer in int64 (JS numbers arrive as Float). */
@@ -563,10 +571,10 @@ Result<PropValue> coerceEnum(const PropertyDef &def, const PropValue &v)
     if (const EnumItem *it = m.findKey(key->c_str())) {
       return PropValue::ofEnum(it->value);
     }
-    Status err = Status::error(StatusCode::NotFound,
-                               (std::string(def.apiName().c_str()) + ": no item '" +
-                                key->c_str() + "'")
-                                   .c_str());
+    Status err = Status::error(
+        StatusCode::NotFound,
+        (std::string(def.apiName().c_str()) + ": no item '" + key->c_str() + "'")
+            .c_str());
     Suggester sg(key->c_str());
     for (const EnumItem &it : m.items) {
       sg.consider(it.key.c_str());
@@ -602,18 +610,18 @@ Result<PropValue> coerceFlags(const PropertyDef &def, const PropValue &v)
   if (const string *keys = v.tryString()) {
     uint64_t out = 0;
     std::string_view rest = keys->c_str();
-    /* "" is no flags; otherwise every '|'-separated piece, including an empty one, must be
-     * a key. */
+    /* "" is no flags; otherwise every '|'-separated piece, including an empty one, must
+     * be a key. */
     for (bool more = !rest.empty(); more;) {
       const size_t bar = rest.find('|');
       more = bar != std::string_view::npos;
       const std::string_view key = rest.substr(0, bar);
       const EnumItem *it = m.findKey(key);
       if (!it) {
-        Status err = Status::error(StatusCode::NotFound,
-                                   (std::string(def.apiName().c_str()) + ": no flag '" +
-                                    std::string(key) + "'")
-                                       .c_str());
+        Status err = Status::error(
+            StatusCode::NotFound,
+            (std::string(def.apiName().c_str()) + ": no flag '" + std::string(key) + "'")
+                .c_str());
         Suggester sg(key);
         for (const EnumItem &c : m.items) {
           sg.consider(c.key.c_str());
@@ -641,121 +649,118 @@ Result<PropValue> coerce(const PropertyDef &def, const PropValue &v)
   }
   const NumericMeta *num = def.numeric();
   switch (def.kind()) {
-    case PropKind::Bool:
-      if (v.type() == PropValue::Type::Bool) {
-        return v;
-      }
-      if (std::optional<int64_t> i = integral(v); i && (*i == 0 || *i == 1)) {
-        return PropValue::ofBool(*i == 1);
-      }
-      return mismatch(def, v);
-    case PropKind::Int: {
-      int64_t i = 0;
-      if (std::optional<int64_t> vi = v.tryInt()) {
-        i = *vi;
-      }
-      else if (std::optional<double> vf = v.tryFloat()) {
-        if (std::isnan(*vf)) {
-          return nanError(def);
-        }
-        if (!integralInt64(*vf, i)) {
-          return Status::error(StatusCode::OutOfRange,
-                               (std::string(def.apiName().c_str()) + ": " + v.toString() +
-                                " is not an integer in the int64 range")
-                                   .c_str());
-        }
-      }
-      else {
-        return mismatch(def, v);
-      }
-      return PropValue::ofInt(clampI(i, *num));
+  case PropKind::Bool:
+    if (v.type() == PropValue::Type::Bool) {
+      return v;
     }
-    case PropKind::Float: {
-      double d = 0.0;
-      if (std::optional<double> vf = v.tryFloat()) {
-        d = *vf;
-      }
-      else if (std::optional<int64_t> vi = v.tryInt()) {
-        d = double(*vi);
-      }
-      else {
-        return mismatch(def, v);
-      }
-      if (std::isnan(d)) {
+    if (std::optional<int64_t> i = integral(v); i && (*i == 0 || *i == 1)) {
+      return PropValue::ofBool(*i == 1);
+    }
+    return mismatch(def, v);
+  case PropKind::Int: {
+    int64_t i = 0;
+    if (std::optional<int64_t> vi = v.tryInt()) {
+      i = *vi;
+    } else if (std::optional<double> vf = v.tryFloat()) {
+      if (std::isnan(*vf)) {
         return nanError(def);
       }
-      return PropValue::ofFloat(clampD(d, *num));
-    }
-    case PropKind::Vec2:
-    case PropKind::Vec3:
-    case PropKind::Vec4:
-    case PropKind::Quat:
-    case PropKind::Mat4: {
-      const PropValue::Type want = valueTypeFor(def.kind());
-      const int n = valueComponentCount(want);
-      double c[16];
-      if (v.type() == want ||
-          (want == PropValue::Type::Quat && v.type() == PropValue::Type::Vec4)) {
-        for (int i = 0; i < n; i++) {
-          c[i] = v.component(i);
-        }
-      }
-      else if (isVector(def.kind()) &&
-               (v.type() == PropValue::Type::Float || v.type() == PropValue::Type::Int)) {
-        const double s = v.type() == PropValue::Type::Float ? v.asFloat() : double(v.asInt());
-        for (int i = 0; i < n; i++) {
-          c[i] = s;
-        }
-      }
-      else {
-        return mismatch(def, v);
-      }
-      for (int i = 0; i < n; i++) {
-        if (std::isnan(c[i])) {
-          return nanError(def);
-        }
-        c[i] = clampD(c[i], *num);
-      }
-      return PropValue::ofComponents(want, c);
-    }
-    case PropKind::String: {
-      const string *s = v.tryString();
-      if (!s) {
-        return mismatch(def, v);
-      }
-      const int64_t max = def.stringMeta()->maxLength;
-      if (max > 0 && int64_t(strlen(s->c_str())) > max) {
+      if (!integralInt64(*vf, i)) {
         return Status::error(StatusCode::OutOfRange,
-                             (std::string(def.apiName().c_str()) + ": longer than " +
-                              std::to_string(max) + " bytes")
+                             (std::string(def.apiName().c_str()) + ": " + v.toString() +
+                              " is not an integer in the int64 range")
+                                 .c_str());
+      }
+    } else {
+      return mismatch(def, v);
+    }
+    return PropValue::ofInt(clampI(i, *num));
+  }
+  case PropKind::Float: {
+    double d = 0.0;
+    if (std::optional<double> vf = v.tryFloat()) {
+      d = *vf;
+    } else if (std::optional<int64_t> vi = v.tryInt()) {
+      d = double(*vi);
+    } else {
+      return mismatch(def, v);
+    }
+    if (std::isnan(d)) {
+      return nanError(def);
+    }
+    return PropValue::ofFloat(clampD(d, *num));
+  }
+  case PropKind::Vec2:
+  case PropKind::Vec3:
+  case PropKind::Vec4:
+  case PropKind::Quat:
+  case PropKind::Mat4: {
+    const PropValue::Type want = valueTypeFor(def.kind());
+    const int n = valueComponentCount(want);
+    double c[16];
+    if (v.type() == want ||
+        (want == PropValue::Type::Quat && v.type() == PropValue::Type::Vec4))
+    {
+      for (int i = 0; i < n; i++) {
+        c[i] = v.component(i);
+      }
+    } else if (isVector(def.kind()) &&
+               (v.type() == PropValue::Type::Float || v.type() == PropValue::Type::Int))
+    {
+      const double s =
+          v.type() == PropValue::Type::Float ? v.asFloat() : double(v.asInt());
+      for (int i = 0; i < n; i++) {
+        c[i] = s;
+      }
+    } else {
+      return mismatch(def, v);
+    }
+    for (int i = 0; i < n; i++) {
+      if (std::isnan(c[i])) {
+        return nanError(def);
+      }
+      c[i] = clampD(c[i], *num);
+    }
+    return PropValue::ofComponents(want, c);
+  }
+  case PropKind::String: {
+    const string *s = v.tryString();
+    if (!s) {
+      return mismatch(def, v);
+    }
+    const int64_t max = def.stringMeta()->maxLength;
+    if (max > 0 && int64_t(strlen(s->c_str())) > max) {
+      return Status::error(StatusCode::OutOfRange,
+                           (std::string(def.apiName().c_str()) + ": longer than " +
+                            std::to_string(max) + " bytes")
+                               .c_str());
+    }
+    return v;
+  }
+  case PropKind::Enum:
+    return coerceEnum(def, v);
+  case PropKind::Flags:
+    return coerceFlags(def, v);
+  case PropKind::Pointer:
+    if (const StableRef *ref = v.tryPointer()) {
+      const StructId want = def.target()->target;
+      if (!ref->isNull() && want && ref->type && ref->type != want) {
+        return Status::error(StatusCode::TypeMismatch,
+                             (std::string(def.apiName().c_str()) +
+                              ": the pointer's target is of another struct type")
                                  .c_str());
       }
       return v;
     }
-    case PropKind::Enum:
-      return coerceEnum(def, v);
-    case PropKind::Flags:
-      return coerceFlags(def, v);
-    case PropKind::Pointer:
-      if (const StableRef *ref = v.tryPointer()) {
-        const StructId want = def.target()->target;
-        if (!ref->isNull() && want && ref->type && ref->type != want) {
-          return Status::error(StatusCode::TypeMismatch,
-                               (std::string(def.apiName().c_str()) +
-                                ": the pointer's target is of another struct type")
-                                   .c_str());
-        }
-        return v;
-      }
-      if (v.isNone()) {
-        return PropValue::nullPointer();
-      }
-      return mismatch(def, v);
-    case PropKind::Collection:
-      return Status::error(StatusCode::Unsupported,
-                           (std::string(def.apiName().c_str()) +
-                            ": a Collection can't be set as a value")
-                               .c_str());
+    if (v.isNone()) {
+      return PropValue::nullPointer();
+    }
+    return mismatch(def, v);
+  case PropKind::Collection:
+    return Status::error(
+        StatusCode::Unsupported,
+        (std::string(def.apiName().c_str()) + ": a Collection can't be set as a value")
+            .c_str());
   }
   return mismatch(def, v);
 }

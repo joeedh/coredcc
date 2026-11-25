@@ -1,6 +1,7 @@
-/* A Spatial that a script implements, through a fake foreign host, end to end: what pickScene, pickRegion
- * and nearestInScene answer is the same as for a native one with the same triangles. The script makes
- * the calls that scripts can make: numbers in vectors, and AnyBvh. */
+/* A Spatial that a script implements, through a fake foreign host, end to end: what
+ * pickScene, pickRegion and nearestInScene answer is the same as for a native one with
+ * the same triangles. The script makes the calls that scripts can make: numbers in
+ * vectors, and AnyBvh. */
 #include "../scene/pick_doc.h"
 #include "fake_host.h"
 
@@ -180,7 +181,8 @@ void testSame()
       PickOptions o;
       o.radius = r.range(0.0, 20.0);
       o.maxHits = int32_t(r.below(2));
-      const Vector<PickHit> a = foreign.picks(view, x, y, o), b = native.picks(view, x, y, o);
+      const Vector<PickHit> a = foreign.picks(view, x, y, o),
+                            b = native.picks(view, x, y, o);
       test_assert(a.size() == b.size());
       for (int i = 0; i < int((std::min)(a.size(), b.size())); i++) {
         test_assert(a[i].element == b[i].element && a[i].domain == b[i].domain &&
@@ -199,12 +201,14 @@ void testSame()
         test_assert(na[i].element == nb[i].element && na[i].distance == nb[i].distance);
         near++;
       }
-      /* The script's tree answers with boxes: never fewer than the native one's triangles. */
+      /* The script's tree answers with boxes: never fewer than the native one's
+       * triangles. */
       const ViewRegion region = view.regionFromRect(x, y, x + 200.0, y + 100.0);
       Vector<RegionHit> ra, rb;
       must(pickRegion(
           *foreign.ctx, foreign.scene, region, int32_t(ElementDomain::Face), {}, ra));
-      must(pickRegion(*native.ctx, native.scene, region, int32_t(ElementDomain::Face), {}, rb));
+      must(pickRegion(
+          *native.ctx, native.scene, region, int32_t(ElementDomain::Face), {}, rb));
       size_t found[2] = {};
       for (const RegionHit &h : ra) {
         found[0] += h.elements.size();
@@ -239,8 +243,9 @@ void testErrors()
     /* What it throws is returned, with the others' hits. */
     Vector<PickHit> hits;
     bad.throwPick = true;
-    test_assert(isError(
-        d.tryPick(view, p.x, p.y, PickOptions(), hits), StatusCode::Internal, "no triangles"));
+    test_assert(isError(d.tryPick(view, p.x, p.y, PickOptions(), hits),
+                        StatusCode::Internal,
+                        "no triangles"));
     test_assert(hits.size() == 1 && hits[0].object == b && !d.rt.hasStickyError());
     bad.throwPick = false;
     bad.throwNear = bad.throwRegion = true;
@@ -252,14 +257,11 @@ void testErrors()
                         "nothing"));
     test_assert(near.size() == 1 && near[0].object == b);
     Vector<RegionHit> region;
-    test_assert(isError(pickRegion(*d.ctx,
-                                   d.scene,
-                                   view.regionFromRect(0, 0, 2000, 1100),
-                                   -1,
-                                   {},
-                                   region),
-                        StatusCode::Internal,
-                        "none"));
+    test_assert(isError(
+        pickRegion(
+            *d.ctx, d.scene, view.regionFromRect(0, 0, 2000, 1100), -1, {}, region),
+        StatusCode::Internal,
+        "none"));
     test_assert(region.size() == 1 && region[0].object == b);
     /* Vectors of the wrong length: nothing is taken, and the script is told. */
     bad.throwNear = bad.throwRegion = false;

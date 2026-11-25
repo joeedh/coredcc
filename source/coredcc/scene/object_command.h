@@ -33,7 +33,9 @@ struct ChangesCommand {
   {
     return sizeof(*this) + changes.memSize();
   }
-  void discard() {}
+  void discard()
+  {
+  }
 };
 
 Status registerDeltaCommands(Runtime &rt);

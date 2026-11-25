@@ -11,8 +11,8 @@ using solve::Linear;
 
 namespace {
 
-/* decomposeTrs for what most matrices are: three columns at right angles, of usual lengths. False for
- * others. */
+/* decomposeTrs for what most matrices are: three columns at right angles, of usual
+ * lengths. False for others. */
 bool decomposeOrthogonal(const Linear &m, quatd &rotation, double3 &scale)
 {
   litestl::math::Matrix<double, 3> basis;
@@ -27,7 +27,9 @@ bool decomposeOrthogonal(const Linear &m, quatd &rotation, double3 &scale)
   }
   const double3 z = axis[0].cross(axis[1]);
   const auto right = [](double cosine) { return std::fabs(cosine) < 1e-14; };
-  if (!right(axis[0].dot(axis[1])) || !right(axis[0].dot(axis[2])) || !right(axis[1].dot(axis[2]))) {
+  if (!right(axis[0].dot(axis[1])) || !right(axis[0].dot(axis[2])) ||
+      !right(axis[1].dot(axis[2])))
+  {
     return false;
   }
   if (z.dot(axis[2]) < 0.0) {
@@ -74,7 +76,8 @@ Status Matrix::setWorld(const EvalCtx &,
   for (int i = 0; i < 3; i++) {
     writeVec3(out, matrix_transform::kColumns + i * 3, local.col[i]);
   }
-  writeVec3(out, matrix_transform::kTranslation, solver.point(solve::translationOf(target)));
+  writeVec3(
+      out, matrix_transform::kTranslation, solver.point(solve::translationOf(target)));
   return Status();
 }
 
@@ -85,8 +88,10 @@ TransformTypeInfo matrixInfo()
   info.uiName = "Matrix";
   const char *const names[] = {"columnX", "columnY", "columnZ"};
   for (int i = 0; i < 3; i++) {
-    info.channels.append(PropertyDef::vecProp(names[i], 3).defaultValue(
-        PropValue::ofVec3(i == 0 ? 1.0 : 0.0, i == 1 ? 1.0 : 0.0, i == 2 ? 1.0 : 0.0)));
+    info.channels.append(PropertyDef::vecProp(names[i], 3)
+                             .defaultValue(PropValue::ofVec3(i == 0 ? 1.0 : 0.0,
+                                                             i == 1 ? 1.0 : 0.0,
+                                                             i == 2 ? 1.0 : 0.0)));
   }
   info.channels.append(PropertyDef::vecProp("translation", 3)
                            .subtype(PropSubtype::Distance)

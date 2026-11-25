@@ -2,7 +2,8 @@
 
 /** \file
  * The binary form of PropValue and PropertyBag (files, clipboards, preferences). The wire
- * tags below and the layouts in value_io.cc are the file format: they never change meaning.
+ * tags below and the layouts in value_io.cc are the file format: they never change
+ * meaning.
  */
 
 #include "coredcc/base/bytes.h"
@@ -47,10 +48,12 @@ bool isKnownValueTag(uint8_t tag);
  * table knows it) the raw id, so an unknown name never fails a save.
  */
 class ValueCodec {
- public:
+public:
   /** `names` holds the names only files know; null to keep none (ids whose names aren't
    * registered then lose them). Both must outlive the codec. */
-  ValueCodec(const Runtime &rt, NameTable *names) : rt_(rt), names_(names) {}
+  ValueCodec(const Runtime &rt, NameTable *names) : rt_(rt), names_(names)
+  {
+  }
   virtual ~ValueCodec() = default;
 
   virtual void writeBlockId(BytesWriter &out, const BlockId &id);
@@ -64,7 +67,7 @@ class ValueCodec {
    * another name fails the read (InvalidArgument). */
   uint64_t readName(BytesReader &in, IdDomain domain);
 
- private:
+private:
   const Runtime &rt_;
   NameTable *names_;
 };
@@ -73,8 +76,8 @@ class ValueCodec {
 inline constexpr uint32_t kMaxKeySegments = 1024;
 
 /** A tag byte, then the body. Fails the writer for a Pointer that can't be read back:
- * with a negative handle in its key (InvalidArgument), which no path can address, or more than
- * kMaxKeySegments (OutOfRange). */
+ * with a negative handle in its key (InvalidArgument), which no path can address, or more
+ * than kMaxKeySegments (OutOfRange). */
 void writeValue(BytesWriter &out, const PropValue &v, ValueCodec &codec);
 /** None after a failure, an unknown tag among them. */
 PropValue readValue(BytesReader &in, ValueCodec &codec);
@@ -104,8 +107,8 @@ void readBag(BytesReader &in,
              ValueCodec &codec,
              litestl::util::Vector<BagIssue> &issues);
 
-/** A value of `def` (not a dynamic one) as it is stored: an Enum or Flags as its keys where it
- * has them. */
+/** A value of `def` (not a dynamic one) as it is stored: an Enum or Flags as its keys
+ * where it has them. */
 PropValue storedValue(const PropertyDef &def, const PropValue &v);
 /** The same for entry `i` of `bag`. */
 PropValue storedBagValue(const PropertyBag &bag, int i);

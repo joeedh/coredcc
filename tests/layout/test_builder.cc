@@ -31,7 +31,10 @@ static bool fails(const std::function<void(LayoutBuilder &)> &build,
   Result<Layout> r = b.finish();
   const bool ok = !r.ok() && r.status().code() == code && what == r.status().message();
   if (!ok) {
-    fprintf(stderr, "got  %s\nwant %s\n", r.ok() ? "a layout" : r.status().message(), what.c_str());
+    fprintf(stderr,
+            "got  %s\nwant %s\n",
+            r.ok() ? "a layout" : r.status().message(),
+            what.c_str());
   }
   return ok;
 }
@@ -53,7 +56,8 @@ static void test_same()
   panel.tool("a.b");
   panel.toolOptions("a.b");
   tabs.tab("Two");
-  LayoutScope custom = root.custom("host").set("size", "3").set("b", "x").set("label", "L");
+  LayoutScope custom =
+      root.custom("host").set("size", "3").set("b", "x").set("label", "L");
   custom.custom("inner").set(Id::Text, "text\n here");
   row.prop("last").set(Id::Widget, "slider");
   test_assert(root.index() == 0 && panel.index() == 1);
@@ -109,14 +113,16 @@ static void test_differs()
 /* From a layout. */
 static void test_edit()
 {
-  const char *const xml = R"(<layout version="3" path="a"><panel id="p" label="P" data-x="1"><prop path="b"/></panel>
+  const char *const xml =
+      R"(<layout version="3" path="a"><panel id="p" label="P" data-x="1"><prop path="b"/></panel>
     <custom tag="t" c="d">text</custom><label id="l">L</label></layout>)";
   const Layout from = parsed(xml);
   LayoutBuilder same(from);
   test_assert(*same.finish() == from);
   test_assert(*same.finish() == Layout()); /* it starts again, empty */
   LayoutBuilder b(from);
-  test_assert(b.findId("p") == 1 && b.findId("l") == 4 && b.findId("x") == -1 && b.findId("") == -1);
+  test_assert(b.findId("p") == 1 && b.findId("l") == 4 && b.findId("x") == -1 &&
+              b.findId("") == -1);
   b.at(1).prop("c").id("x");
   test_assert(b.findId("x") == 5);
   b.at(4).set(Id::Label, "M");
@@ -146,7 +152,8 @@ static void test_refuses()
   LayoutBuilder bad;
   bad.root().row().prop("a..b");
   Result<Layout> r = bad.finish();
-  test_assert(strncmp(r.status().message(), "layout: node 2 (prop): path: expected", 37) == 0);
+  test_assert(
+      strncmp(r.status().message(), "layout: node 2 (prop): path: expected", 37) == 0);
   test_assert(fails([](LayoutBuilder &b) { b.root().prop("a").row(); },
                     "layout: node 2 (row): a <prop> can't hold elements"));
   test_assert(fails([](LayoutBuilder &b) { b.root().add(LayoutKind::Layout); },
@@ -159,16 +166,18 @@ static void test_refuses()
                     "layout: node 1 (tool): a <tool> needs 'invocation'"));
   test_assert(fails([](LayoutBuilder &b) { b.root().row().setFlag(Id::Closed, true); },
                     "layout: node 1 (row): a <row> has no 'closed'"));
-  test_assert(fails([](LayoutBuilder &b) { b.root().panel("a").set(Id::Closed, "maybe"); },
-                    "layout: node 1 (panel): closed: it is neither 'true' nor 'false'"));
+  test_assert(
+      fails([](LayoutBuilder &b) { b.root().panel("a").set(Id::Closed, "maybe"); },
+            "layout: node 1 (panel): closed: it is neither 'true' nor 'false'"));
   test_assert(fails([](LayoutBuilder &b) { b.root().set(Id::Free, "x"); },
                     "layout: node 0 (layout): a free attribute is set by its name"));
   test_assert(fails([](LayoutBuilder &b) { b.root().custom("a").set("b c", "x"); },
                     "layout: node 1 (custom): 'b c' isn't an attribute's name"));
   test_assert(fails([](LayoutBuilder &b) { b.root().custom("a").set("", "x"); },
                     "layout: node 1 (custom): '' isn't an attribute's name"));
-  test_assert(fails([](LayoutBuilder &b) { b.root().custom("a").set(Id::Text, "x").row(); },
-                    "layout: node 2 (row): text and elements can't be mixed"));
+  test_assert(
+      fails([](LayoutBuilder &b) { b.root().custom("a").set(Id::Text, "x").row(); },
+            "layout: node 2 (row): text and elements can't be mixed"));
   test_assert(fails([](LayoutBuilder &b) { b.root().label(std::string_view("a\0b", 3)); },
                     "layout: node 1 (label): label: a NUL character"));
   test_assert(fails([](LayoutBuilder &b) { b.root().custom("a").set("b", "\xFF"); },
@@ -177,8 +186,8 @@ static void test_refuses()
   LayoutBuilder b;
   b.root().row().set("pathh", "x").set("nothing", "x");
   r = b.finish();
-  test_assert(strcmp(r.status().message(), "layout: node 1 (row): there is no attribute 'pathh'") ==
-              0);
+  test_assert(strcmp(r.status().message(),
+                     "layout: node 1 (row): there is no attribute 'pathh'") == 0);
   test_assert(r.status().suggestions().size() == 1 &&
               strcmp(r.status().suggestions()[0].c_str(), "path") == 0);
   test_assert(b.finish().ok());
@@ -202,7 +211,8 @@ static void test_limits()
   rows(b, 63);
   test_assert(b.finish().ok());
   test_assert(fails([&](LayoutBuilder &c) { rows(c, 64); },
-                    "layout: node 64 (row): the elements are nested more than 64 deep", over));
+                    "layout: node 64 (row): the elements are nested more than 64 deep",
+                    over));
   const auto many = [](LayoutBuilder &c, int n) {
     for (int i = 0; i < n; i++) {
       c.root().separator().set(Id::Class, "a");
@@ -211,8 +221,10 @@ static void test_limits()
   many(b, 16383);
   test_assert(b.finish()->nodeCount() == 16384);
   for (int n : {16384, 20000}) {
-    test_assert(fails([&](LayoutBuilder &c) { many(c, n); },
-                      "layout: node 16384 (separator): there are more than 16384 elements", over));
+    test_assert(
+        fails([&](LayoutBuilder &c) { many(c, n); },
+              "layout: node 16384 (separator): there are more than 16384 elements",
+              over));
   }
   const auto attrs = [](LayoutBuilder &c, int n) {
     LayoutScope s = c.root().custom("t");
@@ -224,19 +236,23 @@ static void test_limits()
   test_assert(b.finish()->node(1).attrCount == 64);
   for (int n : {65, 200}) {
     test_assert(fails([&](LayoutBuilder &c) { attrs(c, n); },
-                      "layout: node 1 (custom): an element has more than 64 attributes", over));
+                      "layout: node 1 (custom): an element has more than 64 attributes",
+                      over));
   }
   b.root().set(Id::Class, std::string(1 << 20, 'x'));
   test_assert(b.finish().ok());
-  test_assert(fails([&](LayoutBuilder &c) { c.root().set(Id::Class, std::string((1 << 20) + 1, 'x')); },
-                    "layout: node 0 (layout): the attributes are more than 1 MiB of text", over));
+  test_assert(fails(
+      [&](LayoutBuilder &c) { c.root().set(Id::Class, std::string((1 << 20) + 1, 'x')); },
+      "layout: node 0 (layout): the attributes are more than 1 MiB of text",
+      over));
   test_assert(fails(
       [&](LayoutBuilder &c) {
         for (int i = 0; i < 3; i++) {
           c.root().custom("t").set("name", std::string(400000, 'x'));
         }
       },
-      "layout: node 3 (custom): the attributes are more than 1 MiB of text", over));
+      "layout: node 3 (custom): the attributes are more than 1 MiB of text",
+      over));
 }
 
 int main()

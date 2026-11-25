@@ -42,10 +42,10 @@ static void test_golden()
   const uint8_t raw[] = {0, 255};
   w.blob(raw);
   const uint8_t golden[] = {
-      0xab, 0x34, 0x12, 0xef, 0xbe, 0xad, 0xde, 8,   7,   6, 5, 4, 3, 2,   1,   0xfe, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0,    0,   0,   0, 0, 0, 0, 0x80, 1,   0,    2,
-      0,    0,    0,    'h',  'i',  3,    0,    0,   0,   'c', 'u', 't', 2,   0,   0,    0,
-      0,    255};
+      0xab, 0x34, 0x12, 0xef, 0xbe, 0xad, 0xde, 8,    7,    6,    5, 4,   3,
+      2,    1,    0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0,   0,
+      0,    0,    0,    0,    0x80, 1,    0,    2,    0,    0,    0, 'h', 'i',
+      3,    0,    0,    0,    'c',  'u',  't',  2,    0,    0,    0, 0,   255};
   test_assert(w.status().ok() && size_t(w.data().size()) == sizeof(golden));
   test_assert(memcmp(w.data().data(), golden, sizeof(golden)) == 0);
 
@@ -64,8 +64,11 @@ static void test_golden()
 
 static void test_floats_keep_bits()
 {
-  const uint64_t bits[] = {0x7ff8000000000001ull, 0xfff8dead0000beefull, 0x0000000000000001ull,
-                           0x7ff0000000000000ull, 0x8000000000000000ull};
+  const uint64_t bits[] = {0x7ff8000000000001ull,
+                           0xfff8dead0000beefull,
+                           0x0000000000000001ull,
+                           0x7ff0000000000000ull,
+                           0x8000000000000000ull};
   for (uint64_t b : bits) {
     BytesWriter w;
     w.f64(std::bit_cast<double>(b));
@@ -89,11 +92,11 @@ static void test_arrays()
   w.values(std::span<const uint64_t>(big));
   w.array(std::span<const double>());
   const uint8_t golden[] = {
-      0xfe, 0xff, 0xff, 0xff, 0x45, 0x23, 0xc1, 0x7f,                         /* scalars */
-      0,    0,    0x80, 0x3f, 0x45, 0x23, 0xc1, 0x7f, 0, 0, 0, 0x80,          /* f, no count */
-      2,    0,    0,    0,    4,    3,    2,    1,    7, 0, 0, 0,             /* u */
-      2,    0,    0,    0,    0xfe, 0xff, 2,    1,                            /* i */
-      8,    7,    6,    5,    4,    3,    2,    1,    0, 0, 0, 0};            /* big, none */
+      0xfe, 0xff, 0xff, 0xff, 0x45, 0x23, 0xc1, 0x7f,                /* scalars */
+      0,    0,    0x80, 0x3f, 0x45, 0x23, 0xc1, 0x7f, 0, 0, 0, 0x80, /* f, no count */
+      2,    0,    0,    0,    4,    3,    2,    1,    7, 0, 0, 0,    /* u */
+      2,    0,    0,    0,    0xfe, 0xff, 2,    1,                   /* i */
+      8,    7,    6,    5,    4,    3,    2,    1,    0, 0, 0, 0};   /* big, none */
   test_assert(w.status().ok() && size_t(w.data().size()) == sizeof(golden));
   test_assert(memcmp(w.data().data(), golden, sizeof(golden)) == 0);
 
@@ -209,7 +212,8 @@ static void test_reader_failures()
     const uint8_t seven[7] = {1, 2, 3, 4, 5, 6, 7};
     BytesReader r(seven);
     test_assert(r.u8() == 1 && r.u64() == 0 && !r.ok());
-    test_assert(r.status().code() == StatusCode::InvalidArgument && hasMsg(r.status(), "at byte 1"));
+    test_assert(r.status().code() == StatusCode::InvalidArgument &&
+                hasMsg(r.status(), "at byte 1"));
     test_assert(r.u8() == 0 && r.str().empty() && r.blob().empty() && r.count(1) == 0);
     r.fail(StatusCode::Internal, "later");
     test_assert(r.status().code() == StatusCode::InvalidArgument && r.atEnd());
@@ -235,7 +239,10 @@ static void test_reader_failures()
                 hasMsg(r.status(), "a newer file (at byte 0)"));
   }
   /* Lengths and counts near 2^32. */
-  for (uint32_t n : {uint32_t(5), uint32_t(0x7fffffff), uint32_t(0x80000000), uint32_t(0xfffffffc),
+  for (uint32_t n : {uint32_t(5),
+                     uint32_t(0x7fffffff),
+                     uint32_t(0x80000000),
+                     uint32_t(0xfffffffc),
                      uint32_t(0xffffffff)})
   {
     BytesWriter w;
@@ -272,33 +279,33 @@ static void test_fuzz_reader()
       const bool wasOk = r.ok();
       size_t got = 0;
       switch (rng.below(7)) {
-        case 0:
-          got = r.u8();
-          break;
-        case 1:
-          got = r.u16();
-          break;
-        case 2:
-          got = r.u32();
-          break;
-        case 3:
-          got = size_t(r.u64());
-          break;
-        case 4:
-          got = r.boolean() ? 1 : 0;
-          break;
-        case 5: {
-          const std::string_view s = r.str();
-          got = s.size();
-          test_assert(s.find('\0') == std::string_view::npos);
-          break;
-        }
-        case 6: {
-          const std::span<const uint8_t> b = r.blob();
-          got = b.size();
-          test_assert(b.empty() || (b.data() >= bytes && b.data() + b.size() <= bytes + n));
-          break;
-        }
+      case 0:
+        got = r.u8();
+        break;
+      case 1:
+        got = r.u16();
+        break;
+      case 2:
+        got = r.u32();
+        break;
+      case 3:
+        got = size_t(r.u64());
+        break;
+      case 4:
+        got = r.boolean() ? 1 : 0;
+        break;
+      case 5: {
+        const std::string_view s = r.str();
+        got = s.size();
+        test_assert(s.find('\0') == std::string_view::npos);
+        break;
+      }
+      case 6: {
+        const std::span<const uint8_t> b = r.blob();
+        got = b.size();
+        test_assert(b.empty() || (b.data() >= bytes && b.data() + b.size() <= bytes + n));
+        break;
+      }
       }
       test_assert(wasOk || got == 0);
       test_assert(r.offset() + r.remaining() == n);
@@ -315,7 +322,8 @@ static void test_names()
   test_assert(strcmp(t.nameOf(IdDomain::Struct, id), "acme.Widget") == 0);
   test_assert(!t.nameOf(IdDomain::Client, id) && !t.nameOf(IdDomain::Struct, id + 1));
   test_assert(t.add(IdDomain::Struct, "acme.Widget"));
-  test_assert(!t.add(IdDomain::Struct, "") && !t.add(IdDomain::Struct, std::string_view("a\0b", 3)));
+  test_assert(!t.add(IdDomain::Struct, "") &&
+              !t.add(IdDomain::Struct, std::string_view("a\0b", 3)));
   test_assert(!t.debugAddAs(IdDomain::Struct, id, "other")); /* a collision */
   test_assert(strcmp(t.nameOf(IdDomain::Struct, id), "acme.Widget") == 0);
 

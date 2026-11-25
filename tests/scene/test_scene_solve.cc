@@ -49,13 +49,11 @@ void testOwnWorld(const Types &t)
           ChannelBlock c = k.defaults();
           if (type == 0) {
             c = trsChannels(r, k, s, pivots + 1.0);
-          }
-          else if (type == 1) {
+          } else if (type == 1) {
             for (int n = 0; n < c.size(); n++) {
               c.set(n, r.range(-span, span));
             }
-          }
-          else {
+          } else {
             c = fbxChannels(r, k, type - 2, s, pivots);
           }
           for (SetWorldMode mode : {SetWorldMode::Exact, SetWorldMode::Closest}) {
@@ -98,8 +96,8 @@ void testRepresentable(const Types &t)
       const TransformType &k = type == 0 ? *t.trs : *t.fbx;
       const double3 s = r.scale(3.0, signs);
       const double pivots = i % 3 == 0 ? 10.0 : 0.0;
-      const ChannelBlock goal = type == 0 ? trsChannels(r, k, s, 3.0) :
-                                            fbxChannels(r, k, type - 1, s, pivots);
+      const ChannelBlock goal =
+          type == 0 ? trsChannels(r, k, s, 3.0) : fbxChannels(r, k, type - 1, s, pivots);
       ChannelBlock from = goal;
       const int at = type == 0 ? int(trs::kScale) : int(fbx::kScaling);
       put(from, at, r.scale(3.0, signs));
@@ -117,7 +115,8 @@ void testRepresentable(const Types &t)
       wrong += columnError(eval(k, *out, p).world, target) > 1e-9;
       /* The scale's magnitude is unique; only its signs aren't. */
       for (int a = 0; a < 3; a++) {
-        scale += std::fabs(std::fabs(out->get(at + a)) - std::fabs(s[a])) > 1e-9 * std::fabs(s[a]);
+        scale += std::fabs(std::fabs(out->get(at + a)) - std::fabs(s[a])) >
+                 1e-9 * std::fabs(s[a]);
       }
       /* Pivots and orders are kept. */
       if (type > 0) {
@@ -158,8 +157,8 @@ void testSigns(const Types &t)
   }
   test_assert(bad == 0);
 
-  /* A mirror along x, from positive channels: one sign changes, and the nearest rotation is the
-   * current one. */
+  /* A mirror along x, from positive channels: one sign changes, and the nearest rotation
+   * is the current one. */
   for (int axis = 0; axis < 3; axis++) {
     ChannelBlock c = t.trs->defaults();
     double3 s(1, 2, 3);
@@ -174,8 +173,8 @@ void testSigns(const Types &t)
     test_assert(out.ok());
     s[axis] = -s[axis];
     test_assert(out.ok() && lengthOf(get(*out, trs::kScale) - s) < 1e-12);
-    test_assert(out.ok() &&
-                lengthOf(get(*out, trs::kRotationEuler) - double3(0.3, -0.4, 0.5)) < 1e-12);
+    test_assert(out.ok() && lengthOf(get(*out, trs::kRotationEuler) -
+                                     double3(0.3, -0.4, 0.5)) < 1e-12);
   }
 }
 
@@ -192,8 +191,8 @@ void testZeroColumns(const Types &t)
     const int type = int(r.below(4));
     const TransformType &k = type == 0 ? *t.trs : *t.fbx;
     const TransformState p = chain(r, t, int(r.below(3)), 2.0, true);
-    const ChannelBlock goal = type == 0 ? trsChannels(r, k, s, 3.0) :
-                                          fbxChannels(r, k, type - 1, s, 0.0);
+    const ChannelBlock goal =
+        type == 0 ? trsChannels(r, k, s, 3.0) : fbxChannels(r, k, type - 1, s, 0.0);
     const TransformState want = eval(k, goal, p);
     ChannelBlock from = goal;
     const int at = type == 0 ? int(trs::kScale) : int(fbx::kScaling);
@@ -226,7 +225,8 @@ void testZeroColumns(const Types &t)
     for (int row = 0; row < 3; row++) {
       target[flat][row] = noise[row];
     }
-    const Result<ChannelBlock> out = solved(*t.trs, t.trs->defaults(), target, TransformState());
+    const Result<ChannelBlock> out =
+        solved(*t.trs, t.trs->defaults(), target, TransformState());
     test_assert(out.ok() && out->get(trs::kScale + flat) == 0.0);
   }
   /* One column, opposite to where it is now. */
@@ -237,7 +237,8 @@ void testZeroColumns(const Types &t)
     target[3][3] = 1.0;
     target[a][a] = -2.0;
     const Result<ChannelBlock> out = solved(*t.trs, c, target, TransformState());
-    test_assert(out.ok() && difference(eval(*t.trs, *out, TransformState()).world, target) < 1e-12);
+    test_assert(out.ok() &&
+                difference(eval(*t.trs, *out, TransformState()).world, target) < 1e-12);
     test_assert(out.ok() && out->get(trs::kScale + a) == 2.0);
   }
 }
@@ -250,11 +251,13 @@ void testShear(const Types &t)
   for (double e : {1e-11, 1e-7, 1e-3, 0.5}) {
     mat4d shear = at;
     shear[1][0] = e;
-    const Result<ChannelBlock> out = solved(*t.trs, t.trs->defaults(), shear, TransformState());
+    const Result<ChannelBlock> out =
+        solved(*t.trs, t.trs->defaults(), shear, TransformState());
     test_assert(out.ok() == (e < 1e-9));
     test_assert(out.ok() || out.status().code() == StatusCode::FailedPrecondition);
     test_assert(
-        solved(*t.trs, t.trs->defaults(), shear, TransformState(), SetWorldMode::Closest).ok());
+        solved(*t.trs, t.trs->defaults(), shear, TransformState(), SetWorldMode::Closest)
+            .ok());
   }
   int lost = 0, refused = 0, accepted = 0;
   for (int i = 0; i < 2000; i++) {
@@ -318,7 +321,9 @@ void testFloatTargets(const Types &t)
       d[k] = float(d[k]);
     }
     exact += solved(*t.trs, t.trs->defaults(), m, TransformState()).ok();
-    closest += solved(*t.trs, t.trs->defaults(), m, TransformState(), SetWorldMode::Closest).ok();
+    closest +=
+        solved(*t.trs, t.trs->defaults(), m, TransformState(), SetWorldMode::Closest)
+            .ok();
   }
   test_assert(exact < 5 && closest == 500);
 }
@@ -336,16 +341,15 @@ void testTranslations(const Types &t)
     put(goal, fbx::kRotation, turn);
     if (i % 3 == 0) {
       const double3 arm = r.vec(1e6);
-      const double3 back = litestl::math::eulerToQuat(turn, EulerOrder::XYZ).rotate(arm) * -1.0;
+      const double3 back =
+          litestl::math::eulerToQuat(turn, EulerOrder::XYZ).rotate(arm) * -1.0;
       for (ChannelBlock *b : {&c, &goal}) {
         put(*b, fbx::kScalingOffset, arm);
         put(*b, fbx::kRotationOffset, back);
       }
-    }
-    else if (i % 3 == 1) {
+    } else if (i % 3 == 1) {
       p.world = solve::affine(Linear::of(r.rotation()), r.vec(1e10));
-    }
-    else {
+    } else {
       const Linear big = Linear::of(r.rotation()).scaled(double3(1e6, 2e6, 3e6));
       p.world = solve::affine(big, big.apply(at) * -1.0);
     }
@@ -368,7 +372,8 @@ void testTranslations(const Types &t)
       for (int a = 0; a < 3; a++) {
         target[3][a] = to[a];
       }
-      const Result<ChannelBlock> out = solved(*t.trs, c, target, p, SetWorldMode::Closest);
+      const Result<ChannelBlock> out =
+          solved(*t.trs, c, target, p, SetWorldMode::Closest);
       test_assert(out.ok());
       if (out.ok()) {
         const double e = lengthOf(solve::translationOf(eval(*t.trs, *out, p).world) - to);
@@ -384,7 +389,8 @@ void testTranslations(const Types &t)
   bit[3][0] = std::nextafter(1e10, 2e10);
   const Result<ChannelBlock> same = solved(*t.trs, t.trs->defaults(), bit, distant);
   test_assert(same.ok() && *same == t.trs->defaults());
-  /* Far away, translations are compared as exactly, and the linear part isn't hidden by them. */
+  /* Far away, translations are compared as exactly, and the linear part isn't hidden by
+   * them. */
   ChannelBlock c = t.trs->defaults();
   put(c, trs::kLocation, double3(1e10, -2e10, 3e10));
   mat4d target = eval(*t.trs, c, TransformState()).world;
@@ -410,22 +416,27 @@ void testBadInput(const Types &t)
     for (SetWorldMode mode : {SetWorldMode::Exact, SetWorldMode::Closest}) {
       mat4d m = root.world;
       m[1][2] = nan;
-      test_assert(solved(*k, c, m, root, mode).status().code() == StatusCode::InvalidArgument);
+      test_assert(solved(*k, c, m, root, mode).status().code() ==
+                  StatusCode::InvalidArgument);
       m = root.world;
       m[1][3] = 0.1;
-      test_assert(solved(*k, c, m, root, mode).status().code() == StatusCode::InvalidArgument);
+      test_assert(solved(*k, c, m, root, mode).status().code() ==
+                  StatusCode::InvalidArgument);
       m = root.world;
       m[3][3] = 2.0;
-      test_assert(solved(*k, c, m, root, mode).status().code() == StatusCode::InvalidArgument);
+      test_assert(solved(*k, c, m, root, mode).status().code() ==
+                  StatusCode::InvalidArgument);
       TransformState p;
       p.world[0][0] = nan;
       m = root.world;
-      test_assert(solved(*k, c, m, p, mode).status().code() == StatusCode::FailedPrecondition);
+      test_assert(solved(*k, c, m, p, mode).status().code() ==
+                  StatusCode::FailedPrecondition);
       /* Too large for the channels. */
       p = TransformState();
       p.world[0][0] = 1e-200;
       m[0][0] = 1e200;
-      test_assert(solved(*k, c, m, p, mode).status().code() == StatusCode::FailedPrecondition);
+      test_assert(solved(*k, c, m, p, mode).status().code() ==
+                  StatusCode::FailedPrecondition);
     }
     const ChannelBlock few(k->channelCount() - 1);
     TransformDelta d;
@@ -473,7 +484,8 @@ void testBadInput(const Types &t)
   const mat4d m = solve::affine(Linear::of(turn), double3(4, 0, 0));
   const Result<ChannelBlock> out = solved(*t.trs, q, m, root);
   test_assert(out.ok() && difference(eval(*t.trs, *out, root).world, m) < 1e-14);
-  test_assert(out.ok() && out->get(trs::kRotationQuaternion + 3) < -0.9); /* the same side */
+  test_assert(out.ok() &&
+              out->get(trs::kRotationQuaternion + 3) < -0.9); /* the same side */
 }
 
 /* ---- deltas ---- */
@@ -503,13 +515,12 @@ void testDeltaMatrix()
       double3 want;
       if (k == 0) {
         want = p + d.basis.rotate(d.vector);
-      }
-      else if (k == 1) { /* Rodrigues, in the basis */
-        const double3 turned = local * std::cos(d.angle) + u.cross(local) * std::sin(d.angle) +
+      } else if (k == 1) { /* Rodrigues, in the basis */
+        const double3 turned = local * std::cos(d.angle) +
+                               u.cross(local) * std::sin(d.angle) +
                                u * (u.dot(local) * (1.0 - std::cos(d.angle)));
         want = d.pivot + d.basis.rotate(turned);
-      }
-      else {
+      } else {
         want = d.pivot + d.basis.rotate(local * d.vector);
       }
       test_assert(lengthOf(litestl::math::transformPoint(d.matrix(), p) - want) < 1e-12);
@@ -517,8 +528,8 @@ void testDeltaMatrix()
   }
 }
 
-/* Under parents that only rotate, move and scale uniformly (or mirror), every delta that keeps
- * an object free of shear is exact. */
+/* Under parents that only rotate, move and scale uniformly (or mirror), every delta that
+ * keeps an object free of shear is exact. */
 void testDeltas(const Types &t)
 {
   Rand r(29);
@@ -533,9 +544,9 @@ void testDeltas(const Types &t)
     const int type = int(r.below(3)); /* Trs, RSrs, Matrix */
     const TransformType &k = type == 0 ? *t.trs : type == 1 ? *t.fbx : *t.matrix;
     const double pivots = i % 2 ? 3.0 : 0.0;
-    ChannelBlock c = type == 0 ? trsChannels(r, k, r.scale(3, true), 3.0) :
-                     type == 1 ? fbxChannels(r, k, fbx::kRSrs, r.scale(3, true), pivots) :
-                                 k.defaults();
+    ChannelBlock c = type == 0   ? trsChannels(r, k, r.scale(3, true), 3.0)
+                     : type == 1 ? fbxChannels(r, k, fbx::kRSrs, r.scale(3, true), pivots)
+                                 : k.defaults();
     const TransformState base = eval(k, c, p);
     for (int kind = 0; kind < 3; kind++) {
       TransformDelta d = deltaOf(DeltaKind(kind));
@@ -547,8 +558,7 @@ void testDeltas(const Types &t)
       if (kind == 2) { /* uniform, or along the object's own axes */
         if (r.coin()) {
           d.vector = double3(1, 1, 1) * (r.range(0.1, 3) * (r.coin() ? -1.0 : 1.0));
-        }
-        else {
+        } else {
           Linear axes = Linear::of(base.world);
           for (double3 &col : axes.col) {
             col = col * (1.0 / lengthOf(col));
@@ -561,8 +571,10 @@ void testDeltas(const Types &t)
       }
       const Result<ChannelBlock> out = solveDelta(k, EvalCtx(c), c, d, p);
       test_assert(out.ok());
-      test_assert(out.ok() && difference(eval(k, *out, p).world, d.matrix() * base.world) < 1e-10);
-      if (out.ok() && kind == 2 && type == 0) { /* only the scale and the location change */
+      test_assert(out.ok() &&
+                  difference(eval(k, *out, p).world, d.matrix() * base.world) < 1e-10);
+      if (out.ok() && kind == 2 &&
+          type == 0) { /* only the scale and the location change */
         for (int n = trs::kRotationMode; n < trs::kScale; n++) {
           test_assert(out->get(n) == c.get(n));
         }
@@ -578,8 +590,8 @@ void testFbxTurns(const Types &t)
   Rand r(30);
   for (int i = 0; i < 2000; i++) {
     const TransformState p = chain(r, t, 3, 3.0, true);
-    const ChannelBlock c =
-        fbxChannels(r, *t.fbx, i % 2 ? fbx::kRrSs : fbx::kRrs, r.scale(3, true), i % 3 ? 2.0 : 0.0);
+    const ChannelBlock c = fbxChannels(
+        r, *t.fbx, i % 2 ? fbx::kRrSs : fbx::kRrs, r.scale(3, true), i % 3 ? 2.0 : 0.0);
     TransformDelta d = deltaOf(DeltaKind::Rotate);
     d.axis = r.vec(1);
     d.angle = r.range(-3, 3);
@@ -592,8 +604,8 @@ void testFbxTurns(const Types &t)
   }
 }
 
-/* Non-uniform parents: the axis stays where it is, the origin goes where the delta says, and the
- * scale is untouched. */
+/* Non-uniform parents: the axis stays where it is, the origin goes where the delta says,
+ * and the scale is untouched. */
 void testShearedParents(const Types &t)
 {
   Rand r(31);
@@ -615,7 +627,8 @@ void testShearedParents(const Types &t)
         litestl::math::transformPoint(d.matrix(), solve::translationOf(base.world));
     test_assert(lengthOf(solve::translationOf(after.world) - want) < 1e-11 * 30);
     test_assert(lengthOf(get(*out, trs::kScale) - get(c, trs::kScale)) == 0.0);
-    /* The object's line along the axis: world direction d.axis, in the object before and after. */
+    /* The object's line along the axis: world direction d.axis, in the object before and
+     * after. */
     mat4d inv0, inv1;
     test_assert(litestl::math::tryInverse(base.world, inv0) &&
                 litestl::math::tryInverse(after.world, inv1));
@@ -629,8 +642,9 @@ void testShearedParents(const Types &t)
       const TransformState p = chain(r, t, 2, 3.0, true);
       const bool isTrs = r.coin();
       const TransformType &k = isTrs ? *t.trs : *t.fbx;
-      const ChannelBlock c = isTrs ? trsChannels(r, k, r.scale(3, true), 3.0) :
-                                     fbxChannels(r, k, int(r.below(3)), r.scale(3, true), 0.0);
+      const ChannelBlock c =
+          isTrs ? trsChannels(r, k, r.scale(3, true), 3.0)
+                : fbxChannels(r, k, int(r.below(3)), r.scale(3, true), 0.0);
       TransformDelta d = deltaOf(DeltaKind(kind));
       d.pivot = solve::translationOf(eval(k, c, p).world);
       d.axis = r.vec(1);
@@ -658,7 +672,8 @@ void testDrags(const Types &t)
         d.axis[axis] = 2.0;
         for (int step = 1; step <= 48; step++) {
           d.angle = step * pi / 12.0; /* to 720 degrees */
-          const Result<ChannelBlock> out = solveDelta(k, EvalCtx(base), last, d, TransformState());
+          const Result<ChannelBlock> out =
+              solveDelta(k, EvalCtx(base), last, d, TransformState());
           test_assert(out.ok());
           double jump = 0.0;
           for (int i = 0; i < 3; i++) {
@@ -680,13 +695,15 @@ void testDrags(const Types &t)
     ChannelBlock base = t.trs->defaults();
     base.set(trs::kRotationMode, double(i % 6));
     const int mid[6] = {1, 2, 0, 2, 0, 1};
-    base.set(trs::kRotationEuler + mid[i % 6], pi / 2 - (i % 4 ? r.range(-1e-6, 1e-6) : 0.0));
+    base.set(trs::kRotationEuler + mid[i % 6],
+             pi / 2 - (i % 4 ? r.range(-1e-6, 1e-6) : 0.0));
     ChannelBlock last = base;
     TransformDelta d = deltaOf(DeltaKind::Rotate);
     d.axis = r.vec(1);
     for (int step = 1; step <= 20; step++) {
       d.angle = step * 0.05;
-      const Result<ChannelBlock> out = solveDelta(*t.trs, EvalCtx(base), last, d, TransformState());
+      const Result<ChannelBlock> out =
+          solveDelta(*t.trs, EvalCtx(base), last, d, TransformState());
       test_assert(out.ok());
       const mat4d want = d.matrix() * eval(*t.trs, base, TransformState()).world;
       test_assert(difference(eval(*t.trs, *out, TransformState()).world, want) < 1e-7);
@@ -702,10 +719,12 @@ void testDrags(const Types &t)
   d.axis = double3(0, 0, 1);
   for (int step = 1; step <= 96; step++) {
     d.angle = step * pi / 24.0;
-    const Result<ChannelBlock> out = solveDelta(*t.trs, EvalCtx(base), last, d, TransformState());
+    const Result<ChannelBlock> out =
+        solveDelta(*t.trs, EvalCtx(base), last, d, TransformState());
     double dot = 0.0;
     for (int i = 0; i < 4; i++) {
-      dot += out->get(trs::kRotationQuaternion + i) * last.get(trs::kRotationQuaternion + i);
+      dot +=
+          out->get(trs::kRotationQuaternion + i) * last.get(trs::kRotationQuaternion + i);
     }
     test_assert(out.ok() && dot > 0.9);
     last = *out;
@@ -717,8 +736,10 @@ void testDrags(const Types &t)
   d = deltaOf(DeltaKind::Scale);
   for (double v : {0.5, 0.0, -1.0, 1.0}) {
     d.vector = double3(v, 1.0, 1.0);
-    const Result<ChannelBlock> out = solveDelta(*t.trs, EvalCtx(base), last, d, TransformState());
-    test_assert(out.ok() && lengthOf(get(*out, trs::kScale) - double3(2 * v, 3, 4)) < 1e-14);
+    const Result<ChannelBlock> out =
+        solveDelta(*t.trs, EvalCtx(base), last, d, TransformState());
+    test_assert(out.ok() &&
+                lengthOf(get(*out, trs::kScale) - double3(2 * v, 3, 4)) < 1e-14);
     last = *out;
   }
   test_assert(last == base);
@@ -747,14 +768,16 @@ void testDrags(const Types &t)
   d = deltaOf(DeltaKind::Translate);
   d.vector = double3(1, 2, 3);
   FixedChannels fixed;
-  Result<ChannelBlock> out =
-      solveDelta(*t.trs, EvalCtx(base, 0.0, over, set), base, d, TransformState(), &fixed);
+  Result<ChannelBlock> out = solveDelta(
+      *t.trs, EvalCtx(base, 0.0, over, set), base, d, TransformState(), &fixed);
   test_assert(out.ok() && fixed.driven && !fixed.locked &&
-              lengthOf(get(*out, trs::kLocation) - double3(base.get(trs::kLocation), 2, 3)) == 0.0);
+              lengthOf(get(*out, trs::kLocation) -
+                       double3(base.get(trs::kLocation), 2, 3)) == 0.0);
   /* What is stored under them isn't looked at: it may be anything. */
   ChannelBlock odd = t.trs->defaults();
   odd.set(trs::kLocation, std::numeric_limits<double>::infinity());
-  out = solveDelta(*t.trs, EvalCtx(odd, 0.0, over, set), odd, d, TransformState(), &fixed);
+  out =
+      solveDelta(*t.trs, EvalCtx(odd, 0.0, over, set), odd, d, TransformState(), &fixed);
   test_assert(out.ok() && fixed.driven && out->get(trs::kLocation) > 1e300 &&
               out->get(trs::kLocation + 1) == 2.0);
   odd = t.trs->defaults();
@@ -766,7 +789,8 @@ void testDrags(const Types &t)
   d = deltaOf(DeltaKind::Rotate);
   d.axis = double3(0, 1, 0);
   d.angle = 0.01;
-  out = solveDelta(*t.trs, EvalCtx(odd, 0.0, over, set), odd, d, TransformState(), &fixed);
+  out =
+      solveDelta(*t.trs, EvalCtx(odd, 0.0, over, set), odd, d, TransformState(), &fixed);
   test_assert(out.ok() && std::fabs(out->get(trs::kRotationEuler + 1) - 0.21) < 0.01);
 }
 
@@ -788,10 +812,12 @@ void testRotationScale()
   test_assert(!solve::rotationScale(x, a, quatd(), double3(1, 1, 1), rs));
   /* Lengths from denormal to huge. */
   for (double size : {1e-310, 1e-150, 1.0, 1e150, 1e300}) {
-    x = Linear::of(quatd::fromAxisAngle(double3(1, 1, 0), 0.5)).scaled(double3(size, size, size));
+    x = Linear::of(quatd::fromAxisAngle(double3(1, 1, 0), 0.5))
+            .scaled(double3(size, size, size));
     test_assert(solve::rotationScale(x, a, quatd(), double3(1, 1, 1), rs));
     test_assert(rs.residual < (size < 1e-300 ? 1e-9 : 1e-14));
-    test_assert(rs.rotation.dot(quatd::fromAxisAngle(double3(1, 1, 0), 0.5)) > 1.0 - 1e-14);
+    test_assert(rs.rotation.dot(quatd::fromAxisAngle(double3(1, 1, 0), 0.5)) >
+                1.0 - 1e-14);
     test_assert(std::fabs(rs.scale[0] / size - 1.0) < (size < 1e-300 ? 1e-9 : 1e-14));
   }
   /* Parallel columns: finite, and the best that can be done. */
@@ -800,13 +826,15 @@ void testRotationScale()
   }
   test_assert(solve::rotationScale(x, a, quatd(), double3(1, 1, 1), rs));
   test_assert(rs.residual > 0.1);
-  test_assert(lengthOf(rs.rotation.rotate(double3(1, 0, 0)) * rs.scale[0] - x.col[0]) < 1e-14);
+  test_assert(lengthOf(rs.rotation.rotate(double3(1, 0, 0)) * rs.scale[0] - x.col[0]) <
+              1e-14);
   /* Two nearly parallel columns: the rotation comes from the others. */
   for (int skip = 0; skip < 3; skip++) {
     a = Linear::identity();
     a.col[(skip + 1) % 3] = a.col[(skip + 2) % 3];
     a.col[(skip + 1) % 3][skip] = 1e-9;
-    x = (Linear::of(quatd::fromAxisAngle(double3(1, 2, 3), 1.0)) * a).scaled(double3(2, -3, 4));
+    x = (Linear::of(quatd::fromAxisAngle(double3(1, 2, 3), 1.0)) * a)
+            .scaled(double3(2, -3, 4));
     test_assert(solve::rotationScale(x, a, quatd(), double3(1, -1, 1), rs));
     test_assert(rs.residual < 1e-14 && std::fabs(rs.scale[1] + 3.0) < 1e-14);
   }
@@ -817,7 +845,8 @@ void testRotationScale()
     col = double3();
   }
   test_assert(solve::rotationScale(x, a, q, double3(1, 1, 1), rs));
-  test_assert(rs.rotation.dot(q) > 1.0 - 1e-15 && rs.residual == 0.0 && rs.scale[0] == 0.0);
+  test_assert(rs.rotation.dot(q) > 1.0 - 1e-15 && rs.residual == 0.0 &&
+              rs.scale[0] == 0.0);
 }
 
 } // namespace

@@ -27,7 +27,8 @@ Result<Typed> parseNumber(std::string_view text);
 Result<double> finite(double v, std::string_view text);
 
 /** InvalidArgument, with suggestions from the units of the settings. */
-Status unknownUnit(UnitFamily family, std::string_view unit, const UnitSettings &settings);
+Status
+unknownUnit(UnitFamily family, std::string_view unit, const UnitSettings &settings);
 /** From those of the family, without the frame. */
 Status unknownUnit(UnitFamily family, std::string_view unit);
 

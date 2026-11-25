@@ -76,14 +76,16 @@ struct ThingProvider {
   }
   void onWeakTargetLost(const Datablock &user, const Datablock &lost)
   {
-    host->log += std::string("lost ") + user.name().c_str() + "->" + lost.name().c_str() + ";";
+    host->log +=
+        std::string("lost ") + user.name().c_str() + "->" + lost.name().c_str() + ";";
     if (host->onLost) {
       host->onLost();
     }
   }
   static lbt::Struct<ThingProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<ThingProvider>("test::ThingProvider", sizeof(ThingProvider));
+    auto *st =
+        new lbt::Struct<ThingProvider>("test::ThingProvider", sizeof(ThingProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
@@ -97,7 +99,8 @@ inline const TypeId kThing = TypeId::of("test.Thing");
 inline void registerThing(Runtime &rt, ThingHost &host)
 {
   host.rt = &rt;
-  test_assert((registerImpl<BlockProvider, ThingProvider>(rt, "test.Thing#provider").ok()));
+  test_assert(
+      (registerImpl<BlockProvider, ThingProvider>(rt, "test.Thing#provider").ok()));
   ThingProvider *p = litestl::alloc::New<ThingProvider>("provider");
   p->host = &host;
   Result<Owned<BlockProvider>> owned = own<BlockProvider>(rt, "test.Thing#provider", p);

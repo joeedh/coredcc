@@ -1,4 +1,5 @@
-/* Locked channels, flags and world matrices through commands, and a host's objects by path. */
+/* Locked channels, flags and world matrices through commands, and a host's objects by
+ * path. */
 #include "io_doc.h"
 
 #include "coredcc/api/ref_text.h"
@@ -30,7 +31,8 @@ PropValue text(const std::string &s)
 
 /* ---- the solvers ---- */
 
-/* Against the solution without locks: locked channels are as they were, the others as they are there. */
+/* Against the solution without locks: locked channels are as they were, the others as
+ * they are there. */
 void testSolvers()
 {
   Types t;
@@ -40,10 +42,11 @@ void testSolvers()
     const bool useTrs = r.coin();
     const TransformType &type = useTrs ? *t.trs : *t.fbx;
     const double3 scale = r.scale(2, true);
-    const ChannelBlock c = useTrs ? trsChannels(r, type, scale, 3.0) :
-                                    fbxChannels(r, type, int(r.below(3)), scale, 0.5);
+    const ChannelBlock c = useTrs ? trsChannels(r, type, scale, 3.0)
+                                  : fbxChannels(r, type, int(r.below(3)), scale, 0.5);
     const TransformState parent = chain(r, t, int(r.below(3)), 2.0, true);
-    const uint64_t locks = r.next() & r.next() & ((uint64_t(1) << type.channelCount()) - 1);
+    const uint64_t locks =
+        r.next() & r.next() & ((uint64_t(1) << type.channelCount()) - 1);
     const EvalCtx free(c), locked = EvalCtx(c).withLocks(locks);
     TransformDelta d;
     d.kind = DeltaKind(int(r.below(3)));
@@ -63,8 +66,7 @@ void testSolvers()
       if ((locks >> i) & 1) {
         test_assert(b->get(i) == c.get(i));
         differs = differs || std::fabs(a->get(i) - c.get(i)) > 1e-6;
-      }
-      else if (lone) {
+      } else if (lone) {
         test_assert(b->get(i) == a->get(i));
       }
     }
@@ -72,8 +74,10 @@ void testSolvers()
     (fixed.locked ? some : none)++;
 
     /* A place. Exactly, or an error. */
-    const mat4d target = eval(type, useTrs ? trsChannels(r, type, scale, 3.0) : c, parent).world;
-    const Result<ChannelBlock> e = solveWorld(type, locked, target, parent, SetWorldMode::Exact);
+    const mat4d target =
+        eval(type, useTrs ? trsChannels(r, type, scale, 3.0) : c, parent).world;
+    const Result<ChannelBlock> e =
+        solveWorld(type, locked, target, parent, SetWorldMode::Exact);
     if (e.ok()) {
       test_assert(difference(eval(type, *e, parent).world, target) < 1e-6);
     }
@@ -82,7 +86,8 @@ void testSolvers()
     for (int i = 0; n.ok() && i < c.size(); i++) {
       test_assert(!((locks >> i) & 1) || n->get(i) == c.get(i));
     }
-    const Result<ChannelBlock> w = solveWorld(type, free, target, parent, SetWorldMode::Exact);
+    const Result<ChannelBlock> w =
+        solveWorld(type, free, target, parent, SetWorldMode::Exact);
     test_assert(!w.ok() || fixed.any() || !n.ok() || e.ok());
   }
   printf("locks: %d in the way, %d not\n", some, none);
@@ -91,7 +96,8 @@ void testSolvers()
   /* Channels after the first 64 can't be locked. */
   ChannelBlock many(70);
   const EvalCtx all = EvalCtx(many).withLocks(~uint64_t(0));
-  test_assert(all.isLocked(0) && all.isLocked(63) && !all.isLocked(64) && !all.isLocked(-1));
+  test_assert(all.isLocked(0) && all.isLocked(63) && !all.isLocked(64) &&
+              !all.isLocked(-1));
   test_assert(all.isFixed(63) && !all.isFixed(64) && !EvalCtx(many).hasFixed());
 }
 
@@ -101,7 +107,8 @@ void testNames()
 {
   Types t;
   const auto names = [&](uint64_t locks) { return detail::lockNames(*t.trs, locks); };
-  test_assert(names(0).empty() && names(7) == "location" && names(5) == "location.0 location.2");
+  test_assert(names(0).empty() && names(7) == "location" &&
+              names(5) == "location.0 location.2");
   test_assert(names(8 | 7).rfind("location ", 0) == 0);
   std::string unknown;
   test_assert(detail::lockMask(*t.trs, " location.0  location.2 ", &unknown) == 5 &&
@@ -111,8 +118,8 @@ void testNames()
   /* Those after the first 64. */
   Runtime rt;
   must(registerImpl<TransformModel, FnModel>(rt, "test.many#impl"));
-  Result<Owned<TransformModel>> owned = own<TransformModel>(
-      rt, "test.many#impl", litestl::alloc::New<FnModel>("FnModel"));
+  Result<Owned<TransformModel>> owned =
+      own<TransformModel>(rt, "test.many#impl", litestl::alloc::New<FnModel>("FnModel"));
   must(owned.status());
   TransformTypeInfo info;
   info.name = "test.many";
@@ -134,7 +141,8 @@ void testNames()
     const TransformType &type = k & 1 ? *t.trs : *t.fbx;
     const uint64_t locks = r.next() & ((uint64_t(1) << type.channelCount()) - 1);
     unknown.clear();
-    test_assert(detail::lockMask(type, detail::lockNames(type, locks), &unknown) == locks &&
+    test_assert(detail::lockMask(type, detail::lockNames(type, locks), &unknown) ==
+                    locks &&
                 unknown.empty());
   }
 }
@@ -180,10 +188,12 @@ void testCommand()
   test_assert(drag->locked() == 0);
   must(d.ex->cancel(*d.ctx));
 
-  /* What keeps its place isn't hindered; another transform type has no locks, and undo has them. */
+  /* What keeps its place isn't hindered; another transform type has no locks, and undo
+   * has them. */
   d.select({a});
   d.cycle(kSetParentCommand, {{"parent", d.ptr(b)}});
-  test_assert(d.obj(a).channels.get(0) == -14.0 && readObject(*d.lib, a)->info.locks == 5);
+  test_assert(d.obj(a).channels.get(0) == -14.0 &&
+              readObject(*d.lib, a)->info.locks == 5);
   out = d.cycle(kSetTransformTypeCommand, {{"type", text(kMatrixTransform)}});
   test_assert(readObject(*d.lib, a)->info.locks == 0);
   d.undo();
@@ -203,7 +213,8 @@ void testCommand()
   /* All of them, and none. */
   d.cycle(kSetLocksCommand);
   test_assert(readObject(*d.lib, a)->info.locks == (uint64_t(1) << trs::kCount) - 1);
-  d.cycle(kSetLocksCommand, {{"on", PropValue::ofBool(false)}, {"channels", text("location")}});
+  d.cycle(kSetLocksCommand,
+          {{"on", PropValue::ofBool(false)}, {"channels", text("location")}});
   test_assert(readObject(*d.lib, a)->info.locks == (uint64_t(1) << trs::kCount) - 8);
   d.cycle(kSetLocksCommand, {{"on", PropValue::ofBool(false)}});
   test_assert(readObject(*d.lib, a)->info.locks == 0);
@@ -227,7 +238,8 @@ void testFlags()
   const auto flags = [](ObjectFlags f) { return PropValue::ofFlags(uint32_t(f)); };
   d.cycle(kSetFlagsCommand, {{"flags", flags(ObjectFlags::Unselectable)}});
   test_assert(d.obj(a).flags == ObjectFlags::Unselectable);
-  const PropValue both = text(formatBlockId(d.rt, d.idOf(a)) + ";" + formatBlockId(d.rt, d.idOf(b)));
+  const PropValue both =
+      text(formatBlockId(d.rt, d.idOf(a)) + ";" + formatBlockId(d.rt, d.idOf(b)));
   test_assert(!d.run(kSetFlagsCommand, {{"flags", flags(ObjectFlags::Hidden)}}).ok());
   d.cycle(kSetFlagsCommand, {{"flags", flags(ObjectFlags::Hidden)}, {"objects", both}});
   test_assert(d.obj(b).flags == (ObjectFlags::Hidden | ObjectFlags::Unselectable));
@@ -291,12 +303,14 @@ void testSetWorld()
     if (ids.empty()) {
       continue;
     }
-    PropertyBag out = d.cycle(kSetWorldCommand,
-                              {{"objects", text(ids)}, {"matrices", text(matrices)}});
+    PropertyBag out =
+        d.cycle(kSetWorldCommand, {{"objects", text(ids)}, {"matrices", text(matrices)}});
     test_assert(out.get("approximate")->asInt() == 0 && out.get("skipped")->asInt() == 0);
     for (int i = 0; i < 10; i++) {
       const double *e = want[i];
-      if (e[15] == 1.0 && ids.find(formatBlockId(d.rt, d.idOf(all[i]))) != std::string::npos) {
+      if (e[15] == 1.0 &&
+          ids.find(formatBlockId(d.rt, d.idOf(all[i]))) != std::string::npos)
+      {
         test_assert(difference(d.stateOf(all[i]).world, want[i]) < 1e-9);
       }
     }
@@ -304,13 +318,16 @@ void testSetWorld()
 
   CommandDoc d;
   const BlockHandle a = d.object("a"), b = d.object("b");
-  const std::string ia = formatBlockId(d.rt, d.idOf(a)), ib = formatBlockId(d.rt, d.idOf(b));
+  const std::string ia = formatBlockId(d.rt, d.idOf(a)),
+                    ib = formatBlockId(d.rt, d.idOf(b));
   mat4d m;
   m.identity();
   static_cast<double *>(m)[12] = 4.0;
   const std::string one = numbers(m);
   const auto run = [&](const std::string &ids, const std::string &matrices) {
-    return d.fails(kSetWorldCommand, {{"objects", text(ids)}, {"matrices", text(matrices)}}).code();
+    return d
+        .fails(kSetWorldCommand, {{"objects", text(ids)}, {"matrices", text(matrices)}})
+        .code();
   };
   test_assert(run(ia, "") == StatusCode::InvalidArgument);
   test_assert(run("", "") == StatusCode::InvalidArgument);
@@ -333,7 +350,8 @@ void testSetWorld()
   must(writeLocks(*d.ctx, a, 1));
   static_cast<double *>(m)[12] = 9.0;
   static_cast<double *>(m)[13] = 6.0;
-  PropertyBag held = d.ok(kSetWorldCommand, {{"objects", text(ia)}, {"matrices", text(numbers(m))}});
+  PropertyBag held =
+      d.ok(kSetWorldCommand, {{"objects", text(ia)}, {"matrices", text(numbers(m))}});
   test_assert(held.get("approximate")->asInt() == 1 &&
               lengthOf(get(d.obj(a).channels, 0) - double3(4, 6, 0)) == 0.0);
   must(writeLocks(*d.ctx, a, 0));
@@ -348,14 +366,16 @@ void testSetWorld()
                           {"matrices", text(sheared)},
                           {"mode", PropValue::ofEnum(int64_t(SetWorldMode::Exact))}});
   test_assert(out.get("skipped")->asInt() == 1 && d.obj(b).channels.get(0) == 4.0);
-  out = d.cycle(kSetWorldCommand, {{"objects", text(ia + ";" + ib)}, {"matrices", text(sheared)}});
+  out = d.cycle(kSetWorldCommand,
+                {{"objects", text(ia + ";" + ib)}, {"matrices", text(sheared)}});
   test_assert(out.get("skipped")->asInt() == 0 && out.get("approximate")->asInt() == 1);
-  test_assert(isError(d.fails(kSetWorldCommand,
-                              {{"objects", text(ia)},
-                               {"matrices", text(numbers(m))},
-                               {"mode", PropValue::ofEnum(int64_t(SetWorldMode::Exact))}}),
-                      StatusCode::FailedPrecondition,
-                      "'a'"));
+  test_assert(
+      isError(d.fails(kSetWorldCommand,
+                      {{"objects", text(ia)},
+                       {"matrices", text(numbers(m))},
+                       {"mode", PropValue::ofEnum(int64_t(SetWorldMode::Exact))}}),
+              StatusCode::FailedPrecondition,
+              "'a'"));
 }
 
 /* ---- files ---- */
@@ -382,7 +402,9 @@ void testFiles()
   }
   /* A copy has them. */
   const Result<IdMap> ids = duplicateBlocks(*d.lib, std::span<const BlockHandle>(&a, 1));
-  test_assert(ids.ok() && readObject(*d.lib, d.lib->find(ids->find(d.idOf(a))))->info.locks == 0b1011);
+  test_assert(ids.ok() &&
+              readObject(*d.lib, d.lib->find(ids->find(d.idOf(a))))->info.locks ==
+                  0b1011);
 
   /* Without the type they are kept as they are, and read when it comes. */
   IoDoc b;
@@ -507,7 +529,8 @@ struct ActorDoc : CommandDoc {
 void testActor()
 {
   ActorDoc d;
-  const BlockHandle a = d.add("a", 1), b = d.add("b", 2), o = d.object("o", 3), h = d.hostObject("h");
+  const BlockHandle a = d.add("a", 1), b = d.add("b", 2), o = d.object("o", 3),
+                    h = d.hostObject("h");
   const BlockHandle shape = d.shapeBlock("shape", 1.0);
   d.actor(a).info.data = d.idOf(shape);
   const std::string p = "scene.objects[\"a\"].", q = "scene.objects[\"h\"].";
@@ -516,7 +539,8 @@ void testActor()
   test_assert(d.read(p + "data") == d.ptr(shape));
   test_assert(d.read(p + "parent") == PropValue::nullPointer());
   test_assert(d.read(p + "transform.location") == PropValue::ofVec3(1, 0, 0));
-  test_assert(d.read("scene.objects[\"b\"].transform.location") == PropValue::ofVec3(2, 0, 0));
+  test_assert(d.read("scene.objects[\"b\"].transform.location") ==
+              PropValue::ofVec3(2, 0, 0));
   test_assert(d.read(q + "flags") == PropValue::ofFlags(0));
 
   must(setValue(*d.ctx, p + "flags[HIDDEN]", PropValue::ofBool(true)));
@@ -524,7 +548,8 @@ void testActor()
               d.read(p + "flags[HIDDEN]") == PropValue::ofBool(true));
   must(setValue(*d.ctx, p + "transform.location[1]", PropValue::ofFloat(7)));
   must(setValue(*d.ctx, p + "transform.scale", PropValue::ofVec3(2, 2, 2)));
-  test_assert(lengthOf(get(d.actor(a).channels, trs::kLocation) - double3(1, 7, 0)) == 0.0);
+  test_assert(lengthOf(get(d.actor(a).channels, trs::kLocation) - double3(1, 7, 0)) ==
+              0.0);
   test_assert(lengthOf(get(d.actor(a).channels, trs::kScale) - double3(2, 2, 2)) == 0.0);
   test_assert(d.actor(b).channels.get(trs::kLocation) == 2.0);
   must(setValue(*d.ctx, q + "transform.location[2]", PropValue::ofFloat(9)));
@@ -539,7 +564,8 @@ void testActor()
   must(setValue(*d.ctx, p + "parent", PropValue::nullPointer()));
   test_assert(d.actor(a).info.parent.isNull());
   must(setValue(*d.ctx, p + "locks", text("location rotationEuler.1")));
-  test_assert(d.actor(a).info.locks == (kLocation | uint64_t(1) << (trs::kRotationEuler + 1)));
+  test_assert(d.actor(a).info.locks ==
+              (kLocation | uint64_t(1) << (trs::kRotationEuler + 1)));
   test_assert(d.read(p + "locks") == text("location rotationEuler.1"));
   test_assert(isError(setValue(*d.ctx, p + "locks", text("location nope")),
                       StatusCode::InvalidArgument,
@@ -549,15 +575,18 @@ void testActor()
 
   /* What its slots say, and slots that aren't there. */
   d.actor(a).answer = boom("no");
-  test_assert(isError(setValue(*d.ctx, p + "flags", PropValue::ofFlags(0)), StatusCode::Internal));
-  test_assert(isError(setValue(*d.ctx, p + "transform.location", PropValue::ofVec3(0, 0, 0)),
-                      StatusCode::Internal,
-                      "no"));
+  test_assert(isError(setValue(*d.ctx, p + "flags", PropValue::ofFlags(0)),
+                      StatusCode::Internal));
+  test_assert(
+      isError(setValue(*d.ctx, p + "transform.location", PropValue::ofVec3(0, 0, 0)),
+              StatusCode::Internal,
+              "no"));
   test_assert(d.read(p + "transform.location") == PropValue::ofVec3(1, 7, 0));
   d.actor(a).answer = Status();
   for (const char *member : {"flags", "locks", "parent"}) {
-    const PropValue v = !strcmp(member, "flags") ? PropValue::ofFlags(1) :
-                        !strcmp(member, "locks") ? text("location") : d.ptr(b);
+    const PropValue v = !strcmp(member, "flags")   ? PropValue::ofFlags(1)
+                        : !strcmp(member, "locks") ? text("location")
+                                                   : d.ptr(b);
     test_assert(setValue(*d.ctx, q + member, v).code() == StatusCode::Unsupported);
   }
   test_assert(!setValue(*d.ctx, p + "data", d.ptr(shape)).ok());
@@ -566,11 +595,13 @@ void testActor()
   const std::string before = d.describe();
   must(setValueUndo(*d.ctx, p + "transform.location", PropValue::ofVec3(5, 5, 5)));
   must(setValueUndo(*d.ctx, p + "flags", PropValue::ofFlags(2)));
-  test_assert(d.actor(a).channels.get(trs::kLocation) == 5.0 && d.actor(a).info.flags == 2);
+  test_assert(d.actor(a).channels.get(trs::kLocation) == 5.0 &&
+              d.actor(a).info.flags == 2);
   d.undo();
   d.undo();
   test_assert(d.describe() == before);
-  test_assert(d.actor(a).channels.get(trs::kLocation) == 1.0 && d.actor(a).info.flags == 1);
+  test_assert(d.actor(a).channels.get(trs::kLocation) == 1.0 &&
+              d.actor(a).info.flags == 1);
   d.redo();
   test_assert(d.actor(a).channels.get(trs::kLocation) == 5.0);
   d.actor(a).info.flags = 0;
@@ -598,7 +629,8 @@ void testErrors()
   Status s = d.fails(kApplyDeltaCommand);
   test_assert(!strcmp(s.message(), "'shape' isn't Transformable"));
   must(d.lib->markDeleted(a));
-  test_assert(isError(readObject(*d.lib, a).status(), StatusCode::FailedPrecondition, "'a' isn't Live"));
+  test_assert(isError(
+      readObject(*d.lib, a).status(), StatusCode::FailedPrecondition, "'a' isn't Live"));
   test_assert(isError(readObject(*d.lib, BlockHandle()).status(),
                       StatusCode::FailedPrecondition,
                       "no such block"));

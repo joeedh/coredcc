@@ -42,31 +42,31 @@ static std::string mutate(SplitMix64 &rng, std::string s)
   for (int e = 0; e < edits; e++) {
     const uint32_t op = rng.below(5);
     const size_t pos = s.empty() ? 0 : rng.below(uint32_t(s.size() + 1));
-    const char c = rng.below(8) == 0 ? char(rng.below(256)) :
-                                       kInteresting[rng.below(sizeof(kInteresting) - 1)];
+    const char c = rng.below(8) == 0 ? char(rng.below(256))
+                                     : kInteresting[rng.below(sizeof(kInteresting) - 1)];
     switch (op) {
-      case 0:
-        s.insert(s.begin() + pos, c);
-        break;
-      case 1:
-        if (pos < s.size()) {
-          s.erase(pos, 1);
-        }
-        break;
-      case 2:
-        if (pos < s.size()) {
-          s[pos] = c;
-        }
-        break;
-      case 3: /* duplicate a span */
-        if (pos < s.size()) {
-          const size_t len = 1 + rng.below(uint32_t(s.size() - pos));
-          s.insert(pos, s.substr(pos, len));
-        }
-        break;
-      default: /* a long run of digits, to provoke overflow */
-        s.insert(pos, std::string(1 + rng.below(25), char('0' + rng.below(10))));
-        break;
+    case 0:
+      s.insert(s.begin() + pos, c);
+      break;
+    case 1:
+      if (pos < s.size()) {
+        s.erase(pos, 1);
+      }
+      break;
+    case 2:
+      if (pos < s.size()) {
+        s[pos] = c;
+      }
+      break;
+    case 3: /* duplicate a span */
+      if (pos < s.size()) {
+        const size_t len = 1 + rng.below(uint32_t(s.size() - pos));
+        s.insert(pos, s.substr(pos, len));
+      }
+      break;
+    default: /* a long run of digits, to provoke overflow */
+      s.insert(pos, std::string(1 + rng.below(25), char('0' + rng.below(10))));
+      break;
     }
   }
   return s;
@@ -76,8 +76,8 @@ static std::string randomBytes(SplitMix64 &rng)
 {
   std::string s(rng.below(40), '\0');
   for (char &c : s) {
-    c = rng.below(3) ? kInteresting[rng.below(sizeof(kInteresting) - 1)] :
-                       char(rng.below(256));
+    c = rng.below(3) ? kInteresting[rng.below(sizeof(kInteresting) - 1)]
+                     : char(rng.below(256));
   }
   return s;
 }
@@ -121,9 +121,9 @@ static void fuzz(const char *name,
   const int iterations = 20000 * coredcc_test::testScale();
   int valid = 0;
   for (int i = 0; i < iterations; i++) {
-    const std::string input = rng.below(4) == 0 ?
-                                  randomBytes(rng) :
-                                  mutate(rng, corpus[rng.below(uint32_t(corpusSize))]);
+    const std::string input = rng.below(4) == 0
+                                  ? randomBytes(rng)
+                                  : mutate(rng, corpus[rng.below(uint32_t(corpusSize))]);
     if (!check<T>(input, parse, valid)) {
       std::string hex;
       for (unsigned char c : input) {
@@ -149,15 +149,17 @@ int main()
   for (const char *c : kInvocationCorpus) {
     test_assert(parseInvocation(c).ok());
   }
-  fuzz<Path>("path",
-             kPathCorpus,
-             int(sizeof(kPathCorpus) / sizeof(kPathCorpus[0])),
-             [](std::string_view s, size_t *off) { return parsePath(s, off); },
-             0xC0DEDCC1ull);
-  fuzz<Invocation>("invocation",
-                   kInvocationCorpus,
-                   int(sizeof(kInvocationCorpus) / sizeof(kInvocationCorpus[0])),
-                   [](std::string_view s, size_t *off) { return parseInvocation(s, off); },
-                   0xC0DEDCC2ull);
+  fuzz<Path>(
+      "path",
+      kPathCorpus,
+      int(sizeof(kPathCorpus) / sizeof(kPathCorpus[0])),
+      [](std::string_view s, size_t *off) { return parsePath(s, off); },
+      0xC0DEDCC1ull);
+  fuzz<Invocation>(
+      "invocation",
+      kInvocationCorpus,
+      int(sizeof(kInvocationCorpus) / sizeof(kInvocationCorpus[0])),
+      [](std::string_view s, size_t *off) { return parseInvocation(s, off); },
+      0xC0DEDCC2ull);
   return test_end();
 }

@@ -57,7 +57,9 @@ CommandDef deltaDef(const char *name, const char *uiName)
       .input(PropertyDef::vecProp("vector", 3))
       .input(PropertyDef::vecProp("axis", 3).defaultValue(
           PropValue::ofComponents(PropValue::Type::Vec3, z)))
-      .input(PropertyDef::floatProp("angle").subtype(PropSubtype::Angle).unit(UnitFamily::Angle))
+      .input(PropertyDef::floatProp("angle")
+                 .subtype(PropSubtype::Angle)
+                 .unit(UnitFamily::Angle))
       .input(detail::objectsInput())
       .input(PropertyDef::intProp("gesture").access(PropAccess::Optional |
                                                     PropAccess::NotRemembered))
@@ -151,22 +153,25 @@ Status ApplyDelta::update(Context &ctx, const TransformDelta &delta)
 
 Status ApplyDelta::update(Context &ctx, std::span<const TransformDelta> deltas)
 {
-  return deltas.size() == size_t(count()) ?
-             updateWith(ctx, deltas) :
-             Status::error(StatusCode::InvalidArgument,
-                           "ApplyDelta::update: there must be one delta for each object");
+  return deltas.size() == size_t(count())
+             ? updateWith(ctx, deltas)
+             : Status::error(
+                   StatusCode::InvalidArgument,
+                   "ApplyDelta::update: there must be one delta for each object");
 }
 
 Result<TransformState> ApplyDelta::startState(const Context &ctx, int i) const
 {
   const TransformType *type = ctx.runtime().ext<TransformRegistry>().find(bases_[i].type);
-  return evaluateTransform(*type, bases_[i].ctx(changes_.before(i), time_), bases_[i].parent);
+  return evaluateTransform(
+      *type, bases_[i].ctx(changes_.before(i), time_), bases_[i].parent);
 }
 
 Result<double3> ApplyDelta::startPivot(const Context &ctx, int i) const
 {
   const TransformType *type = ctx.runtime().ext<TransformRegistry>().find(bases_[i].type);
-  return transformPivot(*type, bases_[i].ctx(changes_.before(i), time_), bases_[i].parent);
+  return transformPivot(
+      *type, bases_[i].ctx(changes_.before(i), time_), bases_[i].parent);
 }
 
 uint64_t ApplyDelta::foldKey() const
@@ -197,8 +202,8 @@ Status ApplyDelta::updateWith(Context &ctx, std::span<const TransformDelta> delt
     const TransformType *type = ctx.runtime().ext<TransformRegistry>().find(b.type);
     const TransformDelta &delta = deltas[deltas.size() == 1 ? 0 : size_t(i)];
     const ChannelBlock &last = changes_.after(i);
-    Result<ChannelBlock> c =
-        solveDelta(*type, b.ctx(changes_.before(i), time_), last, delta, b.parent, &b.fixed);
+    Result<ChannelBlock> c = solveDelta(
+        *type, b.ctx(changes_.before(i), time_), last, delta, b.parent, &b.fixed);
     if (!c.ok()) {
       CDCC_TRY(skips.add(lib, b.object, c.status()));
     }

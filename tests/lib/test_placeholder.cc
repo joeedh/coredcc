@@ -30,7 +30,8 @@ struct World {
   {
     return lib.get(h)->state();
   }
-  BlockHandle missingType(const char *name, BlockId ref = BlockId(), RefKind kind = RefKind::Strong)
+  BlockHandle
+  missingType(const char *name, BlockId ref = BlockId(), RefKind kind = RefKind::Strong)
   {
     PlaceholderInfo info;
     info.typeName = "gone.Widget";
@@ -86,7 +87,8 @@ static void test_delete_any_state()
   test_assert(!LibraryPin(w.lib, ph).dataAlive());
   /* Its refs still count while the history holds it. */
   test_assert(w.lib.usersOf(target).size() == 1 && *w.lib.collect() == 0);
-  test_assert(w.lib.restoreFromHistory(ph).ok() && w.state(ph) == BlockState::Placeholder);
+  test_assert(w.lib.restoreFromHistory(ph).ok() &&
+              w.state(ph) == BlockState::Placeholder);
   test_assert(w.lib.get(ph)->placeholderPayload().size() == 1);
 
   /* A Placeholder user keeps a strong target from leaving the history. */
@@ -100,7 +102,8 @@ static void test_delete_any_state()
   PlaceholderInfo known;
   known.typeName = "test.Thing";
   Result<BlockHandle> ph0 = w.lib.addPlaceholder(w.newId(), known);
-  test_assert(ph0.ok() && w.lib.markDeleted(*ph0).ok() && w.lib.destroyFromHistory(*ph0).ok());
+  test_assert(ph0.ok() && w.lib.markDeleted(*ph0).ok() &&
+              w.lib.destroyFromHistory(*ph0).ok());
   test_assert(!w.lib.get(*ph0) && w.host.log.find("destroy ;") == std::string::npos);
 
   /* Detached blocks, and the host changing its mind while they are deleted. */
@@ -130,7 +133,8 @@ static void test_delete_any_state()
   const BlockHandle ph3 = w.missingType("ph3", w.id(t2));
   w.lib.pin(ph3);
   test_assert(w.lib.markDeleted(ph3).ok() && w.lib.destroyFromHistory(ph3).ok());
-  test_assert(w.state(ph3) == BlockState::Doomed && *w.lib.collect() >= 0 && w.lib.get(t2));
+  test_assert(w.state(ph3) == BlockState::Doomed && *w.lib.collect() >= 0 &&
+              w.lib.get(t2));
   w.host.log.clear();
   w.lib.unpin(ph3);
   test_assert(!w.lib.get(ph3) && w.host.log.empty() && w.valid());
@@ -148,7 +152,8 @@ static void test_placeholder_refs()
   test_assert(w.lib.usersOf(a).size() == 1);
   int seen = 0;
   test_assert(w.lib.foreachDataRef(ph, [&](RefCell &) { seen++; }).ok() && seen == 1);
-  test_assert(*w.lib.collect() == 1 && w.lib.get(a) && !w.lib.get(b)); /* keeps its target */
+  test_assert(*w.lib.collect() == 1 && w.lib.get(a) &&
+              !w.lib.get(b)); /* keeps its target */
 
   uint64_t epoch = w.lib.epoch();
   test_assert(w.lib.unlinkRef(ph, 1).code() == StatusCode::OutOfRange);
@@ -157,7 +162,8 @@ static void test_placeholder_refs()
   test_assert(w.lib.unlinkRef(BlockHandle(), 0).code() == StatusCode::NotFound);
   test_assert(w.lib.epoch() == epoch);
   test_assert(w.lib.unlinkRef(ph, 0).ok() && w.lib.epoch() > epoch);
-  test_assert(p->placeholderData().refs.size() == 1 && p->placeholderData().refs[0].isNull());
+  test_assert(p->placeholderData().refs.size() == 1 &&
+              p->placeholderData().refs[0].isNull());
   test_assert(p->placeholderData().refs[0].kind == RefKind::Strong);
   test_assert(w.lib.usersOf(a).size() == 0);
   test_assert(w.lib.relinkRef(ph, 0, w.id(a)).ok() && w.lib.usersOf(a).size() == 1);
@@ -167,7 +173,8 @@ static void test_placeholder_refs()
   test_assert(w.lib.addPlaceholder(w.newId(), none).status().code() ==
               StatusCode::InvalidArgument); /* MissingType without a type */
   none.typeName = "x";
-  test_assert(w.lib.addPlaceholder(w.id(ph), none).status().code() == StatusCode::AlreadyExists);
+  test_assert(w.lib.addPlaceholder(w.id(ph), none).status().code() ==
+              StatusCode::AlreadyExists);
 }
 
 static void test_missing_blocks()
@@ -180,7 +187,8 @@ static void test_missing_blocks()
   test_assert(w.lib.writeRef(thing(w.lib, user)->owner, lostId).ok());
   const BlockHandle lost = w.missingBlock(lostId);
   test_assert(w.state(lost) == BlockState::Placeholder && *w.lib.collect() == 0);
-  test_assert(w.lib.usersOf(lost).size() == 1 && !w.lib.resolveRef(thing(w.lib, user)->owner));
+  test_assert(w.lib.usersOf(lost).size() == 1 &&
+              !w.lib.resolveRef(thing(w.lib, user)->owner));
   const BlockHandle unused = w.missingBlock(w.newId());
   test_assert(*w.lib.collect() == 1 && !w.lib.get(unused));
   /* A record: a root, and it keeps what it referenced. */
@@ -214,7 +222,8 @@ static void test_adoption()
   Result<BlockHandle> h = w.lib.createWithId(kThing, id, "found", t);
   test_assert(h.ok() && *h == lost && w.state(lost) == BlockState::Live);
   const Datablock *b = w.lib.get(lost);
-  test_assert(strcmp(b->name().c_str(), "found") == 0 && b->clientData() == t && b->type() == kThing);
+  test_assert(strcmp(b->name().c_str(), "found") == 0 && b->clientData() == t &&
+              b->type() == kThing);
   test_assert(b->pins(PinKind::Host) == 1 && b->hasFlag(BlockFlags::FakeUser));
   test_assert(w.lib.slot(lost, att, 3) != nullptr);
   test_assert(b->placeholderData().refs.size() == 0 && b->placeholderType().size() == 0);
@@ -234,7 +243,8 @@ static void test_adoption()
   /* Another type than the stored one; MissingType; a deleted MissingBlock: refused. */
   const BlockId id3 = w.newId();
   const BlockHandle lost3 = w.missingBlock(id3, "test.Other");
-  test_assert(hasMsg(w.lib.createWithId(kThing, id3, "x", nullptr).status(), "'test.Other'"));
+  test_assert(
+      hasMsg(w.lib.createWithId(kThing, id3, "x", nullptr).status(), "'test.Other'"));
   test_assert(w.state(lost3) == BlockState::Placeholder);
   PlaceholderInfo info;
   info.typeName = "test.Thing";
@@ -271,7 +281,8 @@ static void test_rename_and_listing()
            (cell.target == w.id(b) && cell.kind == RefKind::Strong ? "s;" : "w;");
   });
   test_assert(log == "1:4w;2:5s;");
-  w.lib.forEachSlot(BlockHandle(), [&](TypeId, int64_t, const RefCell &) { log.clear(); });
+  w.lib.forEachSlot(BlockHandle(),
+                    [&](TypeId, int64_t, const RefCell &) { log.clear(); });
   w.lib.forEachSlot(b, [&](TypeId, int64_t, const RefCell &) { log.clear(); });
   test_assert(!log.empty());
 
@@ -302,16 +313,18 @@ static void test_colliding_ids()
         test_assert(LocalId(local).computeHash() == 42);
       }
       Thing *t = litestl::alloc::New<Thing>("Thing");
-      t->parent.target = BlockId{ClientId::of(kCoredccClient), local}; /* the relations map */
-      Result<BlockHandle> h =
-          w.lib.createWithId(kThing, BlockId{ClientId::of(kCoredccClient), local}, "x", t);
+      t->parent.target =
+          BlockId{ClientId::of(kCoredccClient), local}; /* the relations map */
+      Result<BlockHandle> h = w.lib.createWithId(
+          kThing, BlockId{ClientId::of(kCoredccClient), local}, "x", t);
       test_assert(h.ok());
       first = i == 1 && h.ok() ? *h : first;
     }
     test_assert(w.lib.usersOf(first).size() == 1);
     w.lib.setFlag(first, BlockFlags::Root, true);
     test_assert(*w.lib.collect() == n - 1);
-    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start)
+        .count();
   };
   const int n = 20000;
   const double plain = build(false, n), hostile = build(true, n);

@@ -14,8 +14,8 @@ using litestl::util::Vector;
 
 namespace {
 
-/* Ids are name hashes, so a file can make two names share one. Such a file is refused: its
- * blocks would be taken for another type's. */
+/* Ids are name hashes, so a file can make two names share one. Such a file is refused:
+ * its blocks would be taken for another type's. */
 Status checkNames(const ParsedFile &file, const Runtime &rt, const NameTable &known)
 {
   struct Use {
@@ -77,7 +77,8 @@ void addNames(const ParsedFile &file, Library &lib, IoIssues &issues)
     }
   }
   if (full) {
-    issues.add(BlockId(), {},
+    issues.add(BlockId(),
+               {},
                Status::error(StatusCode::OutOfRange,
                              "too many names to keep: a save will write some as ids"));
   }
@@ -91,7 +92,8 @@ struct Plan {
 };
 
 /* The records by the id they would have here, the one that is stored under it first. */
-Status sortRecords(const ParsedFile &file, const ClientRegistry &clients, Vector<Plan> &plans)
+Status
+sortRecords(const ParsedFile &file, const ClientRegistry &clients, Vector<Plan> &plans)
 {
   for (int i = 0; i < int(file.records.size()); i++) {
     const BlockId stored = file.records[i].id;
@@ -104,17 +106,21 @@ Status sortRecords(const ParsedFile &file, const ClientRegistry &clients, Vector
   for (int i = 1; i < int(plans.size()); i++) {
     if (plans[i - 1].stored == plans[i].stored) {
       const std::string name(file.records[plans[i].record].name.substr(0, 64));
-      return Status::error(StatusCode::InvalidArgument,
-                           ("the library section: two blocks have one id ('" + name + "')").c_str());
+      return Status::error(
+          StatusCode::InvalidArgument,
+          ("the library section: two blocks have one id ('" + name + "')").c_str());
     }
   }
   return Status();
 }
 
-/* Ids that nothing in the library or the file has, or a MissingBlock that can be filled. */
+/* Ids that nothing in the library or the file has, or a MissingBlock that can be filled.
+ */
 class IdSource {
- public:
-  explicit IdSource(Library &lib) : lib_(lib) {}
+public:
+  explicit IdSource(Library &lib) : lib_(lib)
+  {
+  }
   /* False if it is null or in use. */
   bool take(BlockId id)
   {
@@ -139,10 +145,11 @@ class IdSource {
         return id;
       }
     }
-    return Status::error(StatusCode::Internal, "the GUID source keeps returning ids in use");
+    return Status::error(StatusCode::Internal,
+                         "the GUID source keeps returning ids in use");
   }
 
- private:
+private:
   bool usable(BlockId id) const
   {
     const Datablock *b = id.isNull() ? nullptr : lib_.get(lib_.find(id));
@@ -158,7 +165,8 @@ class IdSource {
 };
 
 /* What `rekey` answers for the record, if it can be used. */
-Result<BlockId> ask(RekeyFn &rekey, const ParsedRecord &r, BlockId id, Library &lib, IdSource &ids)
+Result<BlockId>
+ask(RekeyFn &rekey, const ParsedRecord &r, BlockId id, Library &lib, IdSource &ids)
 {
   ids.askFor(r.typeId);
   BlockId to = rekey(r, id, RekeyContext(lib, &ids, &IdSource::isFree));
@@ -169,8 +177,8 @@ Result<BlockId> ask(RekeyFn &rekey, const ParsedRecord &r, BlockId id, Library &
   return to.client == id.client && ids.take(to) ? to : BlockId();
 }
 
-/* Two records become one through a client alias: the one under the current name keeps the id,
- * and the others get new ones, which `moves` has: from their client, or fresh. */
+/* Two records become one through a client alias: the one under the current name keeps the
+ * id, and the others get new ones, which `moves` has: from their client, or fresh. */
 Status planRecordIds(
     ParsedFile &file, Library &lib, RekeyFn &rekey, IdMap &moves, IoIssues &issues)
 {
@@ -204,12 +212,14 @@ Status planRecordIds(
     }
     r.id = *id;
     moves.add(p.stored, r.id);
-    issues.add(r.id, r.name,
-               Status::error(StatusCode::AlreadyExists,
-                             random ? "another block has its id, under its client's current name: "
-                                      "it got a random one, which its client may not know" :
-                                      "another block has its id, under its client's current name: "
-                                      "it got a new one"));
+    issues.add(r.id,
+               r.name,
+               Status::error(
+                   StatusCode::AlreadyExists,
+                   random ? "another block has its id, under its client's current name: "
+                            "it got a random one, which its client may not know"
+                          : "another block has its id, under its client's current name: "
+                            "it got a new one"));
   }
   return Status();
 }
@@ -230,8 +240,7 @@ Status planAppendIds(ParsedFile &file, Library &lib, RekeyFn &rekey, IdMap &move
         return id.status();
       }
       to = *id;
-    }
-    else {
+    } else {
       Result<BlockId> answer = ask(rekey, r, p.id, lib, ids);
       if (!answer.ok()) {
         return answer.status();
@@ -258,7 +267,8 @@ Status planAppendIds(ParsedFile &file, Library &lib, RekeyFn &rekey, IdMap &move
 }
 
 /* Gives every reference its target, finds the missing blocks, and checks the limits. */
-Status placeRefs(ParsedFile &file, Library &lib, const LoadLimits &limits, const IdMap &moves)
+Status
+placeRefs(ParsedFile &file, Library &lib, const LoadLimits &limits, const IdMap &moves)
 {
   const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
   const auto place = [&](RefCell &cell) {
@@ -312,8 +322,11 @@ Status placeRefs(ParsedFile &file, Library &lib, const LoadLimits &limits, const
 
 } // namespace
 
-Status planIds(
-    ParsedFile &file, Library &lib, const LoadLimits &limits, RekeyFn rekey, IoIssues &issues)
+Status planIds(ParsedFile &file,
+               Library &lib,
+               const LoadLimits &limits,
+               RekeyFn rekey,
+               IoIssues &issues)
 {
   CDCC_TRY(checkNames(file, lib.runtime(), lib.fileNames()));
   IdMap moves;

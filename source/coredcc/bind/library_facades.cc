@@ -28,8 +28,8 @@ ScriptBytes::ScriptBytes(Vector<uint8_t> bytes)
 
 std::span<const uint8_t> ScriptBytes::bytes() const
 {
-  return bytes_ ? std::span<const uint8_t>(bytes_->data(), size_t(bytes_->size())) :
-                  std::span<const uint8_t>();
+  return bytes_ ? std::span<const uint8_t>(bytes_->data(), size_t(bytes_->size()))
+                : std::span<const uint8_t>();
 }
 
 const litestl::binding::types::Struct<ScriptBytes> *ScriptBytes::defineBindings()
@@ -70,8 +70,8 @@ Status bytesRead(const ScriptBytes &bytes, int64_t offset, std::span<uint8_t> ou
   /* A negative offset is a large one. */
   if (uint64_t(offset) > all.size() || out.size() > all.size() - size_t(offset)) {
     return error(StatusCode::OutOfRange,
-                 std::to_string(out.size()) + " bytes at " + std::to_string(offset) + " of " +
-                     std::to_string(all.size()));
+                 std::to_string(out.size()) + " bytes at " + std::to_string(offset) +
+                     " of " + std::to_string(all.size()));
   }
   std::copy_n(all.begin() + std::ptrdiff_t(offset), out.size(), out.begin());
   return Status();
@@ -83,7 +83,7 @@ namespace {
 constexpr int64_t kMaxListed = 10000;
 
 class Report {
- public:
+public:
   Report(const Runtime &rt, const Library &lib) : rt_(rt), lib_(lib)
   {
     out_.beginObject();
@@ -151,7 +151,7 @@ class Report {
     return string(out_.take().c_str());
   }
 
- private:
+private:
   void begin(const char *key, int64_t total)
   {
     out_.key(key).beginObject();
@@ -174,25 +174,25 @@ class Report {
 };
 
 /* Of what the facades here have in common. */
-Status canRun(Context &ctx, const char *what, std::initializer_list<const char *> slots = {})
+Status
+canRun(Context &ctx, const char *what, std::initializer_list<const char *> slots = {})
 {
   CDCC_TRY(detail::slotGate(ctx, what, slots));
-  return ctx.library() ? Status() :
-                         error(StatusCode::FailedPrecondition,
+  return ctx.library() ? Status()
+                       : error(StatusCode::FailedPrecondition,
                                std::string(what) + ": the Context has no library");
 }
 
 /* LoadOptions or AppendOptions. */
 template <class Options>
-Result<Options> options(const char *what,
-                        const string &sourceName,
-                        int64_t maxBytes,
-                        int64_t maxBlocks)
+Result<Options>
+options(const char *what, const string &sourceName, int64_t maxBytes, int64_t maxBlocks)
 {
   Options out;
   out.sourceName = sourceName;
   if (maxBytes < 0 || maxBlocks < 0 || maxBlocks > std::numeric_limits<uint32_t>::max()) {
-    return error(StatusCode::InvalidArgument, std::string(what) + ": a limit is out of range");
+    return error(StatusCode::InvalidArgument,
+                 std::string(what) + ": a limit is out of range");
   }
   out.limits.maxBytes = maxBytes ? uint64_t(maxBytes) : out.limits.maxBytes;
   out.limits.maxBlocks = maxBlocks ? uint32_t(maxBlocks) : out.limits.maxBlocks;
@@ -282,8 +282,8 @@ StringResult libraryResolve(Context &ctx)
   }
   const UndoHistory *history = ctx.executor() ? ctx.executor()->history() : nullptr;
   if (history && (history->canUndo() || history->canRedo())) {
-    return failed<StringResult>(error(StatusCode::FailedPrecondition,
-                                      "libraryResolve: clear the history first"));
+    return failed<StringResult>(
+        error(StatusCode::FailedPrecondition, "libraryResolve: clear the history first"));
   }
   Result<LoadReport> r = resolvePlaceholders(ctx);
   if (!r.ok()) {

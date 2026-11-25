@@ -18,7 +18,9 @@ using litestl::math::double3;
 
 struct Rand {
   coredcc_test::SplitMix64 gen;
-  explicit Rand(uint64_t seed) : gen(seed) {}
+  explicit Rand(uint64_t seed) : gen(seed)
+  {
+  }
   double unit()
   {
     return double(gen.next() >> 11) * 0x1p-53;
@@ -85,25 +87,25 @@ inline double3 latticeEnd(Rand &r, const double3 &a)
 inline double3 place(Rand &r, Layout layout, int i)
 {
   switch (layout) {
-    case Layout::Clustered: {
-      Rand c(uint64_t(i % 7) + 99);
-      const double3 center = c.vec(100.0);
-      return center + r.vec(0.5);
-    }
-    case Layout::Coplanar:
-      return double3(r.range(-10, 10), r.range(-10, 10), 2.0);
-    case Layout::AllEqual:
-      return double3(1.0, 2.0, 3.0);
-    case Layout::Exponential:
-      return double3(std::ldexp(1.0, i % 30), 0.0, 0.0);
-    case Layout::Lattice: {
-      const double x = lattice(r, 8), y = lattice(r, 8);
-      return double3(x, y, lattice(r, 8));
-    }
-    case Layout::Far:
-      return double3(3e6, -5e6, 1e6) + r.vec(0.5);
-    default:
-      return r.vec(10.0);
+  case Layout::Clustered: {
+    Rand c(uint64_t(i % 7) + 99);
+    const double3 center = c.vec(100.0);
+    return center + r.vec(0.5);
+  }
+  case Layout::Coplanar:
+    return double3(r.range(-10, 10), r.range(-10, 10), 2.0);
+  case Layout::AllEqual:
+    return double3(1.0, 2.0, 3.0);
+  case Layout::Exponential:
+    return double3(std::ldexp(1.0, i % 30), 0.0, 0.0);
+  case Layout::Lattice: {
+    const double x = lattice(r, 8), y = lattice(r, 8);
+    return double3(x, y, lattice(r, 8));
+  }
+  case Layout::Far:
+    return double3(3e6, -5e6, 1e6) + r.vec(0.5);
+  default:
+    return r.vec(10.0);
   }
 }
 
@@ -271,14 +273,17 @@ const char *treeProblem(const Bvh<S> &bvh, const Src &src, int leafSize)
     stack.push_back({n.rightOrFirst, it.depth + 1});
     stack.push_back({it.node + 1, it.depth + 1});
   }
-  return nextNode == nodes.size() && nextPrim == order.size() ? nullptr : "unreachable nodes";
+  return nextNode == nodes.size() && nextPrim == order.size() ? nullptr
+                                                              : "unreachable nodes";
 }
 
 /** Whether two trees are the same, bit for bit. */
 template <class S> bool sameTree(const Bvh<S> &a, const Bvh<S> &b)
 {
   return a.nodes().size() == b.nodes().size() && a.order().size() == b.order().size() &&
-         memcmp(a.nodes().data(), b.nodes().data(), a.nodes().size() * sizeof(BvhNode<S>)) == 0 &&
+         memcmp(a.nodes().data(),
+                b.nodes().data(),
+                a.nodes().size() * sizeof(BvhNode<S>)) == 0 &&
          memcmp(a.order().data(), b.order().data(), a.order().size() * sizeof(int)) == 0;
 }
 

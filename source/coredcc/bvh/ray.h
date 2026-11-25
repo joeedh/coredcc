@@ -122,18 +122,20 @@ struct RayQuery {
   }
 
   /**
-   * Whether the ray meets a box that stands for what is in it, between tMin and `limit`, and where
-   * it enters (tMin, if it starts inside). The box is made larger, by kNodeSlack of how far from the
-   * origin it reaches: more than the kernels' rounding.
+   * Whether the ray meets a box that stands for what is in it, between tMin and `limit`,
+   * and where it enters (tMin, if it starts inside). The box is made larger, by
+   * kNodeSlack of how far from the origin it reaches: more than the kernels' rounding.
    */
-  template <class S> bool nodeSlab(const S *lo, const S *hi, double limit, double &enter) const
+  template <class S>
+  bool nodeSlab(const S *lo, const S *hi, double limit, double &enter) const
   {
     double leave = limit;
     enter = tMin;
     return meets(lo, hi, reach(lo, hi) * kNodeSlack, 0.0, enter, leave);
   }
   /** The same for a box that is the primitive. Never misses one the exact ray meets. */
-  template <class S> bool boxSlab(const S *lo, const S *hi, double limit, double &enter) const
+  template <class S>
+  bool boxSlab(const S *lo, const S *hi, double limit, double &enter) const
   {
     const double late = reach(lo, hi) * (16.0 * std::numeric_limits<double>::epsilon());
     double leave = limit;
@@ -141,8 +143,9 @@ struct RayQuery {
     return meets(lo, hi, 0.0, late, enter, leave);
   }
   /**
-   * Moves a triangle's t into its own box, or is false if the ray misses that. The box is made
-   * larger, but less than nodeSlab does. A triangle without an area has a t that is noise.
+   * Moves a triangle's t into its own box, or is false if the ray misses that. The box is
+   * made larger, but less than nodeSlab does. A triangle without an area has a t that is
+   * noise.
    */
   bool keep(const double *lo, const double *hi, double &t) const
   {
@@ -154,7 +157,7 @@ struct RayQuery {
     return true;
   }
 
- private:
+private:
   /* How far from the origin a box reaches, along any axis. */
   template <class S> double reach(const S *lo, const S *hi) const
   {
@@ -168,10 +171,11 @@ struct RayQuery {
     return most;
   }
 
-  /* Narrows [t0, t1] to where the ray is in the box, which is larger by `pad` on each side, and left
-   * later by `late`. A NaN (infinity minus infinity) narrows nothing. */
+  /* Narrows [t0, t1] to where the ray is in the box, which is larger by `pad` on each
+   * side, and left later by `late`. A NaN (infinity minus infinity) narrows nothing. */
   template <class S>
-  bool meets(const S *lo, const S *hi, double pad, double late, double &t0, double &t1) const
+  bool
+  meets(const S *lo, const S *hi, double pad, double late, double &t0, double &t1) const
   {
     double enter = t0, leave = t1;
     for (int i = 0; i < 3; i++) {
@@ -190,7 +194,8 @@ struct RayQuery {
       const bool neg = inv_[i] < 0.0;
       const double grow = pad * std::fabs(inv_[i]);
       const double a = (double(neg ? hi[i] : lo[i]) - origin[i]) * inv_[i] - grow;
-      const double b = (double(neg ? lo[i] : hi[i]) - origin[i]) * inv_[i] + (grow + late);
+      const double b =
+          (double(neg ? lo[i] : hi[i]) - origin[i]) * inv_[i] + (grow + late);
       enter = a > enter ? a : enter;
       leave = b < leave ? b : leave;
     }

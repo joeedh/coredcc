@@ -1,4 +1,5 @@
-/* Kernels: stopping them, hearing of their progress, replacing them, and those for tables. */
+/* Kernels: stopping them, hearing of their progress, replacing them, and those for
+ * tables. */
 #include "foreach_fixture.h"
 
 #include "coredcc/graph/system.h"
@@ -15,7 +16,8 @@ bool isFloat(const GraphValue *v, double x)
 {
   const bool ok = v && *v == GraphValue::ofFloat(x);
   if (!ok) {
-    printf("%s %g\n", v ? graphValueTypeName(v->type()) : "null",
+    printf("%s %g\n",
+           v ? graphValueTypeName(v->type()) : "null",
            v && v->type() == GraphValue::Type::Float ? v->asFloat() : 0.0);
   }
   return ok;
@@ -122,9 +124,12 @@ void testCancel()
   stop.after = 2;
   uint64_t runs = inst.totalRuns();
   test_assert(hasCode(inst.evaluate(last), StatusCode::Cancelled));
-  test_assert(inst.totalRuns() == runs + 2 && stop.asked == 3); /* not asked again in this call */
-  test_assert(!inst.value(last) && isFloat(inst.lastGood(last), 6) && !inst.isCurrent(last));
-  test_assert(inst.error(last)->origin.node == n[2] && inst.error(last)->socket.size() == 0);
+  test_assert(inst.totalRuns() == runs + 2 &&
+              stop.asked == 3); /* not asked again in this call */
+  test_assert(!inst.value(last) && isFloat(inst.lastGood(last), 6) &&
+              !inst.isCurrent(last));
+  test_assert(inst.error(last)->origin.node == n[2] &&
+              inst.error(last)->socket.size() == 0);
   test_assert(inst.report(at({}, n[1])).state == NodeReport::State::Ok);
   test_assert(inst.report(at({}, n[2])).state == NodeReport::State::Failed);
   test_assert(!inst.report(at({}, n[2])).current);
@@ -136,7 +141,8 @@ void testCancel()
   test_assert(inst.totalRuns() == runs + 3);
   stop = Stop();
   test_assert(inst.evaluate({&*h, 1}, moved).ok() && moved.size() == 1);
-  test_assert(isFloat(inst.value(*h), 16) && inst.isCurrent(*h) && inst.totalRuns() == runs + 6);
+  test_assert(isFloat(inst.value(*h), 16) && inst.isCurrent(*h) &&
+              inst.totalRuns() == runs + 6);
   test_assert(inst.evaluate(last).ok() && isFloat(inst.value(last), 16));
   test_assert(inst.isCurrent(last) && inst.totalRuns() == runs + 6);
 
@@ -167,7 +173,8 @@ void testCancel()
   stop.after = 0;
   test_assert(inst.evaluate(last).ok());
   test_assert(inst.setMonitor(GraphMonitor()).ok());
-  test_assert(def.setLiteral(n[0], "a", PropValue::ofFloat(0)).ok() && inst.evaluate(last).ok());
+  test_assert(def.setLiteral(n[0], "a", PropValue::ofFloat(0)).ok() &&
+              inst.evaluate(last).ok());
 }
 
 void testKernelCancels()
@@ -185,7 +192,8 @@ void testKernelCancels()
   stop.after = 7; /* 5 for a, 1 before b, and then b's second step */
   test_assert(hasCode(inst.evaluate(p), StatusCode::Cancelled) && g_steps == 5);
   test_assert(strcmp(inst.error(p)->status.message(), "stopped") == 0);
-  test_assert(stop.progress.size() == 5 && stop.progress[0].first == std::to_string(a.value));
+  test_assert(stop.progress.size() == 5 &&
+              stop.progress[0].first == std::to_string(a.value));
   test_assert(stop.progress[3].second == 0.75 && stop.progress[4].second == 0);
   test_assert(stop.progress[4].first == std::to_string(b.value));
   stop = Stop();
@@ -195,7 +203,8 @@ void testKernelCancels()
   GraphInstance quiet(&w.rt, &w.lib, &def);
   test_assert(quiet.evaluate(p).ok() && g_steps == 17);
 
-  /* A kernel's own Cancelled isn't kept, and what doesn't need it is. Other errors are. */
+  /* A kernel's own Cancelled isn't kept, and what doesn't need it is. Other errors are.
+   */
   const NodeId t = add(def, "t.test");
   connect(def, t, "value", other, "a");
   const SocketPath o = SocketPath::of(other, "value");
@@ -211,7 +220,8 @@ void testKernelCancels()
   }
   code = StatusCode::OutOfRange;
   test_assert(hasCode(inst.evaluate(o), StatusCode::OutOfRange) && calls == 4);
-  test_assert(hasCode(inst.evaluate(o), StatusCode::OutOfRange) && calls == 4 && inst.isCurrent(o));
+  test_assert(hasCode(inst.evaluate(o), StatusCode::OutOfRange) && calls == 4 &&
+              inst.isCurrent(o));
   /* A sticky Cancelled is one too. */
   code = StatusCode::Cancelled;
   test_assert(inst.retry().ok());
@@ -253,12 +263,14 @@ void testCancelElements(int maxCached)
   const NodeId slow = add(*l.inner.def, "t.slow");
   connect(*l.inner.def, l.innerIn, key(l.a), slow, "a");
   connect(*l.inner.def, slow, "value", l.add, "a");
-  test_assert(l.root.def->setParam(l.node, kMaxCachedParam, PropValue::ofInt(maxCached)).ok());
+  test_assert(
+      l.root.def->setParam(l.node, kMaxCachedParam, PropValue::ofInt(maxCached)).ok());
   l.set(table({3, 4, 5}, {{"a", {1, 2, 3}}}));
   Stop stop;
   test_assert(l.inst.setMonitor(stop.monitor()).ok());
   g_steps = 0;
-  stop.after = 8; /* slow, sum and square of 3 are 7; then 4's slow stops at its second step */
+  stop.after =
+      8; /* slow, sum and square of 3 are 7; then 4's slow stops at its second step */
   const uint64_t before = l.inst.totalRuns();
   test_assert(l.fails(StatusCode::Cancelled, {4}, "element 4: stopped") && g_steps == 4);
   test_assert(l.inst.totalRuns() - before == 4 && !l.inst.isCurrent(l.path));
@@ -269,13 +281,15 @@ void testCancelElements(int maxCached)
     /* 3 x 3 kernels, and at most the one that was stopped again. */
     test_assert(l.inst.totalRuns() - before == 10 && g_steps == 12);
   }
-  const std::string path = std::to_string(l.node.value) + "/" + std::to_string(slow.value);
+  const std::string path =
+      std::to_string(l.node.value) + "/" + std::to_string(slow.value);
   test_assert(stop.progress.size() >= 4 && stop.progress.back().first == path + "[5]");
   /* All of them. */
   const Elements::Column *sum = l.result()->column("sum");
   test_assert(isFloat(&sum->values[1], 3) && isFloat(&sum->values[2], 4));
   const uint64_t runs = l.inst.totalRuns();
-  test_assert(l.evaluate().ok() && l.inst.totalRuns() == runs && l.inst.isCurrent(l.path));
+  test_assert(l.evaluate().ok() && l.inst.totalRuns() == runs &&
+              l.inst.isCurrent(l.path));
 }
 
 /* ---- replacing kernels ---- */
@@ -329,7 +343,9 @@ void testReplace()
            hasCode(reg.replaceKernel(withKernel<two>(w.rt, std::move(d), "t.v#2")), code);
   };
   test_assert(reg.checkReplace(versioned()).ok());
-  const auto mode = []() { return PropertyDef::enumProp("mode").item("A", 0).item("B", 1); };
+  const auto mode = []() {
+    return PropertyDef::enumProp("mode").item("A", 0).item("B", 1);
+  };
   const auto thing = []() { return PropertyDef::pointerProp("thing", kThingStruct); };
   struct Parts {
     PropertyDef a = PropertyDef::floatProp("a"), b = PropertyDef::floatProp("b");
@@ -337,7 +353,10 @@ void testReplace()
   };
   auto made = [&](const Parts &x, PropertyDef m, PropertyDef t, bool weak) {
     NodeTypeDef d("t.v");
-    d.input(x.a).input(x.b).payloadInput(x.payload, "elements").output(x.output, x.outputType);
+    d.input(x.a)
+        .input(x.b)
+        .payloadInput(x.payload, "elements")
+        .output(x.output, x.outputType);
     d.param(std::move(m)).param(std::move(t), weak);
     return d;
   };
@@ -358,23 +377,25 @@ void testReplace()
   x.outputType = "int";
   test_assert(refused(made(x, mode(), thing(), true)));
   x = Parts();
-  test_assert(refused(made(x, PropertyDef::enumProp("mode").item("A", 0), thing(), true)));
   test_assert(
-      refused(made(x, PropertyDef::enumProp("mode").item("A", 0).item("B", 2), thing(), true)));
-  test_assert(
-      refused(made(x, PropertyDef::enumProp("mode").item("A", 0).item("C", 1), thing(), true)));
+      refused(made(x, PropertyDef::enumProp("mode").item("A", 0), thing(), true)));
+  test_assert(refused(
+      made(x, PropertyDef::enumProp("mode").item("A", 0).item("B", 2), thing(), true)));
+  test_assert(refused(
+      made(x, PropertyDef::enumProp("mode").item("A", 0).item("C", 1), thing(), true)));
   test_assert(refused(made(x, PropertyDef::intProp("mode"), thing(), true)));
-  test_assert(refused(made(x, PropertyDef::enumProp("kind").item("A", 0).item("B", 1), thing(), true)));
+  test_assert(refused(
+      made(x, PropertyDef::enumProp("kind").item("A", 0).item("B", 1), thing(), true)));
   test_assert(refused(made(x, mode(), thing(), false)));
   test_assert(refused(made(x, mode().access(PropAccess::Optional), thing(), true)));
-  test_assert(
-      refused(made(x, mode(), PropertyDef::pointerProp("thing", StructId::of("S")), true)));
+  test_assert(refused(
+      made(x, mode(), PropertyDef::pointerProp("thing", StructId::of("S")), true)));
   for (int i = 0; i < 4; i++) {
     NodeTypeDef more = versioned();
-    i == 0   ? more.version(2) :
-    i == 1   ? more.output("z", "float") :
-    i == 2   ? more.param(PropertyDef::intProp("n")) :
-               more.input(PropertyDef::intProp("n"));
+    i == 0   ? more.version(2)
+    : i == 1 ? more.output("z", "float")
+    : i == 2 ? more.param(PropertyDef::intProp("n"))
+             : more.input(PropertyDef::intProp("n"));
     test_assert(refused(std::move(more)));
   }
   NodeTypeDef flagged = versioned();
@@ -428,12 +449,15 @@ void testNames()
       .payloadInput("u", "elements")
       .output("x", "float", "Result")
       .output("y", "float");
-  test_assert(d.inputDef("a") && !d.inputDef("t") && !d.inputDef("no") && !d.paramDef("a"));
+  test_assert(d.inputDef("a") && !d.inputDef("t") && !d.inputDef("no") &&
+              !d.paramDef("a"));
   d.param(PropertyDef::intProp("n"));
   test_assert(d.paramDef("n") && !d.inputDef("n"));
   d.paramDef("n")->range(0, 5);
-  test_assert(d.setSocketUiName(false, "b", "Bias") && d.setSocketUiName(false, "u", "Other"));
-  test_assert(d.setSocketUiName(true, "y", "Rest") && !d.setSocketUiName(true, "a", "no"));
+  test_assert(d.setSocketUiName(false, "b", "Bias") &&
+              d.setSocketUiName(false, "u", "Other"));
+  test_assert(d.setSocketUiName(true, "y", "Rest") &&
+              !d.setSocketUiName(true, "a", "no"));
   test_assert(!d.setSocketUiName(false, "x", "no"));
   NodeTypeDef copy = d.copy();
   const NodeType *t = addType<one>(w.rt, copy, "t.names");
@@ -468,10 +492,28 @@ void testPaths()
     Result<NodePath> r = NodePath::parse(p.toString());
     test_assert(r.ok() && *r == p && r->elements.size() == 4);
   }
-  for (const char *bad : {"", "0", "-1", "a", "1/", "/1", "1//2", "1/0", "1[", "1[]", "1[2", "1[2,3]",
-                          "1[2, ]", "1[2] ", " 1", "1.5", "99999999999999999999", "1[2][3]", "+1"})
+  for (const char *bad : {"",
+                          "0",
+                          "-1",
+                          "a",
+                          "1/",
+                          "/1",
+                          "1//2",
+                          "1/0",
+                          "1[",
+                          "1[]",
+                          "1[2",
+                          "1[2,3]",
+                          "1[2, ]",
+                          "1[2] ",
+                          " 1",
+                          "1.5",
+                          "99999999999999999999",
+                          "1[2][3]",
+                          "+1"})
   {
-    const bool refused = hasCode(NodePath::parse(bad).status(), StatusCode::InvalidArgument);
+    const bool refused =
+        hasCode(NodePath::parse(bad).status(), StatusCode::InvalidArgument);
     test_assert(refused || !printf("%s\n", bad));
   }
 }
@@ -500,7 +542,8 @@ void testElementNodes()
   const Elements *t = table(range);
   test_assert(t && t->size() == 10 && t->validate().ok() && t->keys[9] == 9);
   test_assert(t->column("index")->values[4] == GraphValue::ofInt(4));
-  test_assert(isFloat(&t->column("factor")->values[9], 1) && isFloat(&t->column("factor")->values[0], 0));
+  test_assert(isFloat(&t->column("factor")->values[9], 1) &&
+              isFloat(&t->column("factor")->values[0], 0));
   connect(def, range, "elements", count, "elements");
   test_assert(value(count, "count") == GraphValue::ofInt(10));
   test_assert(def.setLiteral(range, "count", PropValue::ofInt(1)).ok());
@@ -520,16 +563,19 @@ void testElementNodes()
   test_assert(value(empty, "count") == GraphValue::ofInt(0));
 
   /* A value, converted. */
-  const NodeId get = add(def, "elements.value.float"), vec = add(def, "elements.value.vec3");
+  const NodeId get = add(def, "elements.value.float"),
+               vec = add(def, "elements.value.vec3");
   connect(def, range, "elements", get, "elements");
   connect(def, range, "elements", vec, "elements");
   test_assert(code(get, "value") == StatusCode::NotFound); /* no column */
-  test_assert(strstr(inst.error(SocketPath::of(get, "value"))->status.message(), "'factor'"));
+  test_assert(
+      strstr(inst.error(SocketPath::of(get, "value"))->status.message(), "'factor'"));
   for (NodeId v : {get, vec}) {
     test_assert(def.setParam(v, "column", PropValue::ofString("index")).ok());
   }
   const GraphValue three = GraphValue::ofFloat(3);
-  test_assert(def.setLiteral(get, "index", PropValue::ofInt(3)).ok() && value(get, "value") == three);
+  test_assert(def.setLiteral(get, "index", PropValue::ofInt(3)).ok() &&
+              value(get, "value") == three);
   for (int64_t bad : {int64_t(-1), int64_t(5)}) {
     test_assert(def.setLiteral(get, "index", PropValue::ofInt(bad)).ok());
     test_assert(code(get, "value") == StatusCode::OutOfRange);
@@ -539,7 +585,8 @@ void testElementNodes()
   const GraphValue quarter = value(get, "value");
   test_assert(isFloat(&quarter, 0.25));
   const bool converts = w.rt.ext<SocketTypeRegistry>().canConvert(
-      *w.rt.ext<SocketTypeRegistry>().find("int"), *w.rt.ext<SocketTypeRegistry>().find("vec3"));
+      *w.rt.ext<SocketTypeRegistry>().find("int"),
+      *w.rt.ext<SocketTypeRegistry>().find("vec3"));
   test_assert((code(vec, "value") == StatusCode::Ok) == converts);
 
   /* Renamed, also over another, and to itself. */
@@ -549,7 +596,8 @@ void testElementNodes()
   test_assert(def.setParam(rename, "from", PropValue::ofString("factor")).ok());
   test_assert(def.setParam(rename, "to", PropValue::ofString("x")).ok());
   t = table(rename);
-  test_assert(t->columns.size() == 2 && t->column("x") && t->column("index") && t->size() == 5);
+  test_assert(t->columns.size() == 2 && t->column("x") && t->column("index") &&
+              t->size() == 5);
   test_assert(isFloat(&t->column("x")->values[1], 0.25) && t->validate().ok());
   test_assert(def.setParam(rename, "to", PropValue::ofString("index")).ok());
   t = table(rename);
@@ -563,7 +611,8 @@ void testElementNodes()
   connect(def, rename, "elements", combine, "a");
   connect(def, range, "elements", combine, "b");
   t = table(combine);
-  test_assert(t->columns.size() == 3 && t->column("factor") && t->column("x") && t->validate().ok());
+  test_assert(t->columns.size() == 3 && t->column("factor") && t->column("x") &&
+              t->validate().ok());
   Elements a, b;
   for (int64_t k : {3, 1}) {
     a.keys.append(k);
@@ -587,12 +636,15 @@ void testElementNodes()
   const NodeId in = add(def, "graph.input");
   connect(def, in, key(ia), combine, "a");
   connect(def, in, key(ib), combine, "b");
-  test_assert(inst.setInput("a", tableValue(a)).ok() && inst.setInput("b", tableValue(b)).ok());
+  test_assert(inst.setInput("a", tableValue(a)).ok() &&
+              inst.setInput("b", tableValue(b)).ok());
   t = table(combine);
   test_assert(t->size() == 2 && t->keys[0] == 3 && t->columns.size() == 2);
-  test_assert(isFloat(&t->column("v")->values[0], 30) && isFloat(&t->column("w")->values[0], 300));
+  test_assert(isFloat(&t->column("v")->values[0], 30) &&
+              isFloat(&t->column("w")->values[0], 300));
   test_assert(isFloat(&t->column("w")->values[1], 100));
-  test_assert(inst.setInput("a", tableValue(b)).ok() && inst.setInput("b", tableValue(a)).ok());
+  test_assert(inst.setInput("a", tableValue(b)).ok() &&
+              inst.setInput("b", tableValue(a)).ok());
   test_assert(code(combine, "elements") == StatusCode::NotFound);
   test_assert(inst.setInput("b", GraphValue()).ok());
   test_assert(code(combine, "elements") == StatusCode::NotFound);
@@ -604,7 +656,8 @@ void testElementNodes()
 
   /* All of it, with no native node: the squares of 0 to 4 as a sum of two columns. */
   Loop l(w);
-  const NodeId r = add(*l.root.def, "elements.range"), name = add(*l.root.def, "elements.rename");
+  const NodeId r = add(*l.root.def, "elements.range"),
+               name = add(*l.root.def, "elements.rename");
   connect(*l.root.def, r, "elements", name, "elements");
   connect(*l.root.def, name, "elements", l.node, kElementsSocket);
   test_assert(l.root.def->setParam(name, "from", PropValue::ofString("index")).ok());

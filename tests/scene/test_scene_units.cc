@@ -68,14 +68,20 @@ void testSettings()
   must(write(d, "scene.units.startFrame", PropValue::ofFloat(1001.0)));
   must(write(d, "scene.units.fps", PropValue::ofFloat(29.97)));
   const UnitSettings s = d.ctx->units();
-  test_assert(s == d.sc().units && s.startFrame == 1001.0 && s.rate == *FrameRate::of(30000, 1001));
+  test_assert(s == d.sc().units && s.startFrame == 1001.0 &&
+              s.rate == *FrameRate::of(30000, 1001));
   test_assert(!strcmp(s.displayUnit(UnitFamily::Length).name, "centimeter"));
   test_assert(!strcmp(s.displayUnit(UnitFamily::Angle).name, "radian"));
   test_assert(!strcmp(s.displayUnit(UnitFamily::Time).name, "frame"));
   test_assert(!strcmp(s.displayUnit(UnitFamily::Mass).name, "pound"));
   test_assert(!strcmp(s.displayUnit(UnitFamily::Factor).name, "percent"));
   /* Each reads what it was set to, so that undo is exact. */
-  for (const char *m : {"lengthUnit", "angleUnit", "timeUnit", "massUnit", "factorUnit", "fps",
+  for (const char *m : {"lengthUnit",
+                        "angleUnit",
+                        "timeUnit",
+                        "massUnit",
+                        "factorUnit",
+                        "fps",
                         "startFrame"})
   {
     const std::string path = std::string("scene.units.") + m;
@@ -96,7 +102,12 @@ void testSettings()
   must(write(d, "scene.units.fps", PropValue::ofFloat(0.0)));
   test_assert(d.sc().units.rate == *FrameRate::of(1, 1000));
 
-  for (const char *m : {"lengthUnit", "angleUnit", "timeUnit", "massUnit", "factorUnit", "fps",
+  for (const char *m : {"lengthUnit",
+                        "angleUnit",
+                        "timeUnit",
+                        "massUnit",
+                        "factorUnit",
+                        "fps",
                         "startFrame"})
   {
     const std::string path = std::string("scene.units.") + m;
@@ -170,8 +181,8 @@ void testPaths()
   const BlockHandle a = d.object("a", 1.5, -2.0, 0.25);
   put(d.obj(a).channels, trs::kRotationEuler, double3(std::numbers::pi / 2, 0.0, 0.0));
   const char *const at = "scene.objects[\"a\"].transform.location",
-                   *const x = "scene.objects[\"a\"].transform.location[1]",
-                   *const turn = "scene.objects[\"a\"].transform.rotationEuler";
+                    *const x = "scene.objects[\"a\"].transform.location[1]",
+                    *const turn = "scene.objects[\"a\"].transform.rotationEuler";
   test_assert(text(d, at) == "1.5 m, -2 m, 0.25 m" && text(d, x) == "-2 m");
   test_assert(text(d, turn) == "90\xC2\xB0, 0\xC2\xB0, 0\xC2\xB0");
   must(d.sc().units.setDisplayUnit(UnitFamily::Length, "cm"));
@@ -180,11 +191,14 @@ void testPaths()
   test_assert(typed(d, x, "7") == "7 cm" && text(d, at) == "1 cm, 7 cm, 0.3 cm");
   test_assert(parseValue(*d.ctx, x, "7")->type() == PropValue::Type::Float);
   test_assert(typed(d, at, "4 in") == "10.16 cm, 10.16 cm, 10.16 cm");
-  for (const char *bad : {"1, 2", "1, 2, 3, 4", "1,,3", "1, 2, 3,", "", ",", "1 kg, 2, 3", "x"}) {
+  for (const char *bad :
+       {"1, 2", "1, 2, 3, 4", "1,,3", "1, 2, 3,", "", ",", "1 kg, 2, 3", "x"})
+  {
     test_assert(refused(d, at, bad) == StatusCode::InvalidArgument);
   }
   test_assert(refused(d, x, "1, 2, 3") == StatusCode::InvalidArgument);
-  test_assert(typed(d, turn, "180, 0, 1 rad") == "180\xC2\xB0, 0\xC2\xB0, 57.296\xC2\xB0");
+  test_assert(typed(d, turn, "180, 0, 1 rad") ==
+              "180\xC2\xB0, 0\xC2\xB0, 57.296\xC2\xB0");
 
   test_assert(text(d, "scene.name") == "Scene" && text(d, "scene.objects.length") == "1");
   test_assert(text(d, "scene.objects[\"a\"].flags[HIDDEN]") == "false");
@@ -230,14 +244,18 @@ void testDefs()
   const int64_t big = (int64_t(1) << 53) + 1;
   test_assert(formatValue(i, PropValue::ofInt(big), s) == "9007199254740993");
   test_assert(parsed(i, "+9007199254740993") == PropValue::ofInt(big));
-  test_assert(parsed(i, "-7") == PropValue::ofInt(-7) && parsed(i, "2e3") == PropValue::ofInt(2000));
-  test_assert(code(i, "1.5") == StatusCode::OutOfRange && code(i, "+-1") != StatusCode::Ok);
+  test_assert(parsed(i, "-7") == PropValue::ofInt(-7) &&
+              parsed(i, "2e3") == PropValue::ofInt(2000));
+  test_assert(code(i, "1.5") == StatusCode::OutOfRange &&
+              code(i, "+-1") != StatusCode::Ok);
   test_assert(code(i, "0.9999999999") == StatusCode::OutOfRange);
-  const PropertyDef ms = PropertyDef::intProp("ms").unit(UnitFamily::Length).range(-10, 1000);
+  const PropertyDef ms =
+      PropertyDef::intProp("ms").unit(UnitFamily::Length).range(-10, 1000);
   test_assert(formatValue(ms, PropValue::ofInt(7), s) == "7 m");
   for (int n = -10; n <= 1000; n++) {
     for (const char *unit : {" cm", " mm", "in", " ft", " mi"}) {
-      const units::Unit &u = *units::findUnit(UnitFamily::Length, unit[0] == ' ' ? unit + 1 : unit);
+      const units::Unit &u =
+          *units::findUnit(UnitFamily::Length, unit[0] == ' ' ? unit + 1 : unit);
       const std::string in = units::format(n, UnitFamily::Length, u.symbol, 12);
       test_assert(parsed(ms, in.c_str()) == PropValue::ofInt(n));
     }
@@ -246,10 +264,14 @@ void testDefs()
   test_assert(code(ms, "0.001 mm") == StatusCode::OutOfRange);
   test_assert(parsed(ms, "2 km") == PropValue::ofInt(1000));
 
-  const PropertyDef percent =
-      PropertyDef::floatProp("p").subtype(PropSubtype::Percentage).unit(UnitFamily::Factor).range(0, 1);
-  const PropertyDef factor = PropertyDef::floatProp("f").subtype(PropSubtype::Factor).unit(UnitFamily::Factor);
-  const PropertyDef number = PropertyDef::floatProp("n").subtype(PropSubtype::Percentage).precision(1);
+  const PropertyDef percent = PropertyDef::floatProp("p")
+                                  .subtype(PropSubtype::Percentage)
+                                  .unit(UnitFamily::Factor)
+                                  .range(0, 1);
+  const PropertyDef factor =
+      PropertyDef::floatProp("f").subtype(PropSubtype::Factor).unit(UnitFamily::Factor);
+  const PropertyDef number =
+      PropertyDef::floatProp("n").subtype(PropSubtype::Percentage).precision(1);
   test_assert(formatValue(percent, PropValue::ofFloat(0.5), s) == "50%");
   test_assert(formatValue(factor, PropValue::ofFloat(0.5), s) == "0.5");
   test_assert(formatValue(number, PropValue::ofFloat(0.55), s) == "0.6" ||
@@ -262,7 +284,8 @@ void testDefs()
   test_assert(formatValue(factor, PropValue::ofFloat(0.5), s) == "50%");
   must(s.setDisplayUnit(UnitFamily::Factor, "factor"));
 
-  const PropertyDef time = PropertyDef::floatProp("t").subtype(PropSubtype::Time).unit(UnitFamily::Time);
+  const PropertyDef time =
+      PropertyDef::floatProp("t").subtype(PropSubtype::Time).unit(UnitFamily::Time);
   must(s.setDisplayUnit(UnitFamily::Time, "f"));
   s.startFrame = 10.0;
   test_assert(formatValue(time, PropValue::ofFloat(0.5), s) == "12 f");
@@ -275,25 +298,34 @@ void testDefs()
   const std::string identity = formatValue(m4, PropValue::identityMat4(), s);
   test_assert(parsed(m4, identity.c_str()) == PropValue::identityMat4());
 
-  const PropertyDef e = PropertyDef::enumProp("e").item("ONE", 1, "The One").item("TWO", 2);
+  const PropertyDef e =
+      PropertyDef::enumProp("e").item("ONE", 1, "The One").item("TWO", 2);
   test_assert(formatValue(e, PropValue::ofEnum(1), s) == "The One");
   test_assert(formatValue(e, PropValue::ofEnum(9), s) == "9");
-  test_assert(parsed(e, " The One") == PropValue::ofEnum(1) && parsed(e, "TWO") == PropValue::ofEnum(2));
-  test_assert(code(e, "THREE") != StatusCode::Ok && parseValue(e, "TWOO", s).status().suggestions().size() > 0);
+  test_assert(parsed(e, " The One") == PropValue::ofEnum(1) &&
+              parsed(e, "TWO") == PropValue::ofEnum(2));
+  test_assert(code(e, "THREE") != StatusCode::Ok &&
+              parseValue(e, "TWOO", s).status().suggestions().size() > 0);
 
-  const PropertyDef f = PropertyDef::flagsProp("f").item("A", 1, "First").item("B", 2).item("C", int64_t(1) << 62);
+  const PropertyDef f = PropertyDef::flagsProp("f")
+                            .item("A", 1, "First")
+                            .item("B", 2)
+                            .item("C", int64_t(1) << 62);
   const uint64_t ac = (uint64_t(1) << 62) | 1;
   test_assert(formatValue(f, PropValue::ofFlags(0), s) == "");
   test_assert(formatValue(f, PropValue::ofFlags(ac), s) == "First, C");
-  test_assert(parsed(f, "First, C") == PropValue::ofFlags(ac) && parsed(f, "C|A") == PropValue::ofFlags(ac));
+  test_assert(parsed(f, "First, C") == PropValue::ofFlags(ac) &&
+              parsed(f, "C|A") == PropValue::ofFlags(ac));
   test_assert(parsed(f, "B, C | A") == PropValue::ofFlags(ac | 2));
-  test_assert(parsed(f, "") == PropValue::ofFlags(0) && parsed(f, "B") == PropValue::ofFlags(2));
+  test_assert(parsed(f, "") == PropValue::ofFlags(0) &&
+              parsed(f, "B") == PropValue::ofFlags(2));
   for (const char *bad : {"A,", ",A", "A,,B", "D", "A B"}) {
     test_assert(code(f, bad) != StatusCode::Ok);
   }
 
   const PropertyDef str = PropertyDef::stringProp("s").maxLength(4);
-  test_assert(parsed(str, " a ") == PropValue::ofString(" a ") && code(str, "abcde") != StatusCode::Ok);
+  test_assert(parsed(str, " a ") == PropValue::ofString(" a ") &&
+              code(str, "abcde") != StatusCode::Ok);
   test_assert(formatValue(str, PropValue::ofString("1 m"), s) == "1 m");
   test_assert(formatValue(str, PropValue(), s) == PropValue().toString());
 }
@@ -305,17 +337,20 @@ void testRoundTrip()
   UnitSettings s;
   for (int n = 0; n < 3000; n++) {
     const UnitFamily family = UnitFamily(1 + r.below(5));
-    must(s.setDisplayIndex(family, int(r.below(uint32_t(UnitSettings::unitCount(family))))));
+    must(s.setDisplayIndex(family,
+                           int(r.below(uint32_t(UnitSettings::unitCount(family))))));
     s.rate = *FrameRate::of(1 + r.below(240), 1 + r.below(10));
     const int precision = int(r.below(8));
-    const PropertyDef def = PropertyDef::vecProp("v", 3).unit(family).precision(precision);
+    const PropertyDef def =
+        PropertyDef::vecProp("v", 3).unit(family).precision(precision);
     const double3 v = r.vec(std::exp(r.range(-5, 10)));
     const std::string shown = formatValue(def, PropValue::ofVec3(v[0], v[1], v[2]), s);
     const Result<PropValue> back = parseValue(def, shown, s);
     test_assert(back.ok());
     const double digit = std::pow(10.0, -precision) * s.displayUnit(family).scale;
     for (int i = 0; i < 3 && back.ok(); i++) {
-      test_assert(std::fabs(back->component(i) - v[i]) <= 0.5 * digit * (1 + 1e-9) + 1e-12 * std::fabs(v[i]));
+      test_assert(std::fabs(back->component(i) - v[i]) <=
+                  0.5 * digit * (1 + 1e-9) + 1e-12 * std::fabs(v[i]));
     }
   }
 }

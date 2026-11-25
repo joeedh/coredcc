@@ -54,7 +54,7 @@ using SocketConvertFn = Status (*)(const GraphValue &in, GraphValue &out);
  * evaluates.
  */
 class SocketTypeRegistry {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.SocketTypeRegistry";
 
   explicit SocketTypeRegistry(Runtime *rt);
@@ -97,7 +97,7 @@ class SocketTypeRegistry {
   }
   Status validate() const;
 
- private:
+private:
   struct Entry {
     SocketType type;
     /** The payload's C++ type (litestl's typeKeyOf). */

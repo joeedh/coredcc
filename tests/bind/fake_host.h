@@ -24,7 +24,7 @@ struct Obj {
 };
 
 class Host {
- public:
+public:
   Host()
   {
     host_ = {&Host::callFn, &Host::releaseFn, this};
@@ -64,7 +64,7 @@ class Host {
   }
   int calls = 0;
 
- private:
+private:
   static bool callFn(void *ctx,
                      lf::Handle h,
                      const litestl::binding::types::Method *m,

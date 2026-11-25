@@ -16,8 +16,9 @@ Status addKernel(NodeExecContext &ctx)
 {
   const BlockUse use = ctx.paramBlock("thing");
   const Thing *t = static_cast<const Thing *>(use.data);
-  return ctx.setOutput(0, GraphValue::ofFloat(ctx.input(0).asFloat() + ctx.input(1).asFloat() +
-                                              (t ? t->value : 0)));
+  return ctx.setOutput(0,
+                       GraphValue::ofFloat(ctx.input(0).asFloat() +
+                                           ctx.input(1).asFloat() + (t ? t->value : 0)));
 }
 
 void addTypes(Runtime &rt)
@@ -50,7 +51,8 @@ std::string describe(const GraphDef &def)
   auto values = [](const NodeValues &list) {
     std::string s;
     for (const NodeValue &v : list) {
-      s += std::string(v.name.c_str()) + (v.off ? "~" : "=") + v.value.toString().c_str() + ",";
+      s += std::string(v.name.c_str()) + (v.off ? "~" : "=") +
+           v.value.toString().c_str() + ",";
     }
     return s;
   };
@@ -60,7 +62,8 @@ std::string describe(const GraphDef &def)
                     std::to_string(s.pos[0]) + "," + std::to_string(s.pos[1]) + " " +
                     values(s.params) + " " + values(s.literals) + " ";
     for (const NodeState::Ref &r : s.refs) {
-      t += std::string(r.name.c_str()) + (r.weak ? "~" : "=") + std::to_string(r.target.local.lo) + ",";
+      t += std::string(r.name.c_str()) + (r.weak ? "~" : "=") +
+           std::to_string(r.target.local.lo) + ",";
     }
     parts[s.id.value] = t + " " + std::to_string(s.group.local.lo);
   });
@@ -76,8 +79,8 @@ std::string describe(const GraphDef &def)
   for (SocketSide side : {SocketSide::Input, SocketSide::Output}) {
     out += "|";
     for (const InterfaceSocket &s : def.interfaceSockets(side)) {
-      out += std::to_string(s.id) + " " + s.name.c_str() + " " + s.typeName.c_str() + " " +
-             s.defaultValue.toString().c_str() + ";";
+      out += std::to_string(s.id) + " " + s.name.c_str() + " " + s.typeName.c_str() +
+             " " + s.defaultValue.toString().c_str() + ";";
     }
   }
   return out;
@@ -107,33 +110,39 @@ void testCommands()
   test_assert(made.ok());
   const StableRef *ref = made->get("graph")->tryPointer();
   test_assert(ref && ref->owner.kind == OwnerKey::Kind::Block);
-  const Graph g{d.lib.find(ref->owner.block), ref->owner.block,
+  const Graph g{d.lib.find(ref->owner.block),
+                ref->owner.block,
                 graphDefOf(d.lib, d.lib.find(ref->owner.block))};
   test_assert(g.def && d.is("graphs[\"g\"].nodes.length", in(0)));
   const PropValue gp = pointerTo(g);
   GraphDef &def = *g.def;
   test_assert(d.undo().ok() && d.lib.get(g.h)->state() == BlockState::InHistory);
-  test_assert(hasCode(d.run(kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.add")}}),
-                      StatusCode::FailedPrecondition));
+  test_assert(
+      hasCode(d.run(kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.add")}}),
+              StatusCode::FailedPrecondition));
   test_assert(d.redo().ok() && graphDefOf(d.lib, g.h) == &def);
   GraphInstance inst(&d.rt, &d.lib, g.id);
 
   std::string before = describe(def);
   const double at[2] = {1, 2};
-  const NodeId a{d.runFor("node", kGraphNodeAddCommand,
-                          {{"graph", gp},
-                           {"type", str("t.add")},
-                           {"position", PropValue::ofComponents(PropValue::Type::Vec2, at)},
-                           {"label", str("A")}})};
+  const NodeId a{
+      d.runFor("node",
+               kGraphNodeAddCommand,
+               {{"graph", gp},
+                {"type", str("t.add")},
+                {"position", PropValue::ofComponents(PropValue::Type::Vec2, at)},
+                {"label", str("A")}})};
   test_assert(def.node(a) && def.node(a)->x() == 1 && def.node(a)->y() == 2);
   test_assert(strcmp(def.node(a)->label().c_str(), "A") == 0);
   roundTrip(d, def, before);
-  const NodeId b{d.runFor("node", kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.add")}})};
-  const NodeId v{
-      d.runFor("node", kGraphNodeAddCommand, {{"graph", gp}, {"type", str("value.float")}})};
+  const NodeId b{
+      d.runFor("node", kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.add")}})};
+  const NodeId v{d.runFor(
+      "node", kGraphNodeAddCommand, {{"graph", gp}, {"type", str("value.float")}})};
 
   auto link = [&](NodeId from, NodeId to, const char *key) {
-    return LinkId{d.runFor("link", kGraphLinkCommand,
+    return LinkId{d.runFor("link",
+                           kGraphLinkCommand,
                            {{"graph", gp},
                             {"from", in(from.value)},
                             {"fromSocket", str("value")},
@@ -152,7 +161,9 @@ void testCommands()
     test_assert(inst.evaluate(out).ok());
     return inst.value(out)->asFloat();
   };
-  test_assert(d.set("graphs[\"g\"].nodes[#" + std::to_string(v.value) + "].params.value", fl(3)).ok());
+  test_assert(
+      d.set("graphs[\"g\"].nodes[#" + std::to_string(v.value) + "].params.value", fl(3))
+          .ok());
   test_assert(value() == 12);
 
   /* Into an input that has a link: undo brings the old one back, with its id. */
@@ -175,7 +186,8 @@ void testCommands()
   before = describe(def);
   test_assert(d.set("graphs[\"g\"].nodes[\"A\"].inputs.a", fl(5)).ok());
   before = describe(def);
-  test_assert(d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(a.value)}}).ok());
+  test_assert(
+      d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(a.value)}}).ok());
   test_assert(!def.node(a) && def.linkCount() == 0 && value() == 0);
   roundTrip(d, def, before);
   test_assert(d.undo().ok() && value() == 12 && def.linkCount() == 4);
@@ -187,11 +199,16 @@ void testCommands()
   before = describe(def);
   const uint64_t version = def.contentVersion();
   const int steps = d.history.size();
-  test_assert(hasCode(d.run(kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.no")}}), StatusCode::NotFound));
-  test_assert(hasCode(d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(4)}}), StatusCode::NotFound));
-  test_assert(hasCode(d.run(kGraphUnlinkCommand, {{"graph", gp}, {"link", in(4)}}), StatusCode::NotFound));
-  test_assert(hasCode(d.run(kGraphNodeAddCommand, {{"graph", PropValue::nullPointer()}, {"type", str("t.add")}}),
-                      StatusCode::FailedPrecondition));
+  test_assert(hasCode(d.run(kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.no")}}),
+                      StatusCode::NotFound));
+  test_assert(hasCode(d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(4)}}),
+                      StatusCode::NotFound));
+  test_assert(hasCode(d.run(kGraphUnlinkCommand, {{"graph", gp}, {"link", in(4)}}),
+                      StatusCode::NotFound));
+  test_assert(
+      hasCode(d.run(kGraphNodeAddCommand,
+                    {{"graph", PropValue::nullPointer()}, {"type", str("t.add")}}),
+              StatusCode::FailedPrecondition));
   test_assert(describe(def) == before && def.contentVersion() == version);
   test_assert(d.history.size() == steps);
 }
@@ -204,7 +221,8 @@ void testInterface()
   GraphDef &def = *g.def;
   const PropValue gp = pointerTo(g);
   auto add = [&](int side, const char *name, int index) {
-    return d.runFor("socket", kGraphInterfaceAddCommand,
+    return d.runFor("socket",
+                    kGraphInterfaceAddCommand,
                     {{"graph", gp},
                      {"side", PropValue::ofEnum(side)},
                      {"name", str(name)},
@@ -223,7 +241,8 @@ void testInterface()
   test_assert(def.interfaceSocket(SocketSide::Output, "r")->id == r);
 
   /* A use of it: links and literals to a removed socket come back to life. */
-  const NodeId input = fixture::add(def, "graph.input"), output = fixture::add(def, "graph.output");
+  const NodeId input = fixture::add(def, "graph.input"),
+               output = fixture::add(def, "graph.output");
   connect(def, input, key(x), output, key(r));
   const NodeId group = fixture::add(*o.def, "graph.group");
   test_assert(o.def->setGroup(group, g.id).ok());
@@ -240,27 +259,35 @@ void testInterface()
   test_assert(d.set("graphs[\"g\"].inputs[\"x\"].default", fl(2)).ok());
   roundTrip(d, def, before);
   before = describe(def);
-  test_assert(d.run(kGraphInterfaceRemoveCommand, {{"graph", gp}, {"socket", in(x)}}).ok());
+  test_assert(
+      d.run(kGraphInterfaceRemoveCommand, {{"graph", gp}, {"socket", in(x)}}).ok());
   test_assert(is(0));
   roundTrip(d, def, before);
   test_assert(d.undo().ok() && is(6));
 
   before = describe(def);
-  test_assert(d.run(kGraphInterfaceMoveCommand, {{"graph", gp}, {"socket", in(x)}, {"index", in(0)}}).ok());
+  test_assert(d.run(kGraphInterfaceMoveCommand,
+                    {{"graph", gp}, {"socket", in(x)}, {"index", in(0)}})
+                  .ok());
   test_assert(def.interfaceSockets(SocketSide::Input)[0].id == x);
   roundTrip(d, def, before);
-  test_assert(hasCode(d.run(kGraphInterfaceMoveCommand, {{"graph", gp}, {"socket", in(x)}, {"index", in(2)}}),
+  test_assert(hasCode(d.run(kGraphInterfaceMoveCommand,
+                            {{"graph", gp}, {"socket", in(x)}, {"index", in(2)}}),
                       StatusCode::OutOfRange));
 
   before = describe(def);
   auto setType = [&](const char *type) {
-    return d.run(kGraphInterfaceSetTypeCommand, {{"graph", gp}, {"socket", in(x)}, {"type", str(type)}});
+    return d.run(kGraphInterfaceSetTypeCommand,
+                 {{"graph", gp}, {"socket", in(x)}, {"type", str(type)}});
   };
-  test_assert(setType("bool").ok() && def.interfaceSocket(x)->defaultValue.isNone() && is(0));
+  test_assert(setType("bool").ok() && def.interfaceSocket(x)->defaultValue.isNone() &&
+              is(0));
   roundTrip(d, def, before);
   test_assert(d.undo().ok() && def.interfaceSocket(x)->defaultValue == fl(2) && is(6));
   test_assert(hasCode(setType("no"), StatusCode::NotFound));
-  test_assert(hasCode(d.run(kGraphInterfaceRemoveCommand, {{"graph", gp}, {"socket", in(3)}}), StatusCode::NotFound));
+  test_assert(
+      hasCode(d.run(kGraphInterfaceRemoveCommand, {{"graph", gp}, {"socket", in(3)}}),
+              StatusCode::NotFound));
   /* Without a literal in the way, the default is restored for instances too. */
   test_assert(o.def->setLiteral(group, key(x), PropValue()).ok() && is(2));
   test_assert(setType("bool").ok() && is(0) && d.undo().ok() && is(2));
@@ -321,16 +348,17 @@ struct RunInside {
   static inline bool fail = false;
   Status exec(Context &ctx)
   {
-    CDCC_TRY(runGraphEdit(ctx, graph, "inner", [](GraphEdit &e) {
-      return e.addNode("t.add").status();
-    }));
+    CDCC_TRY(runGraphEdit(
+        ctx, graph, "inner", [](GraphEdit &e) { return e.addNode("t.add").status(); }));
     return fail ? Status::error(StatusCode::Cancelled, "outer") : Status();
   }
   Status canRun(Context &) const
   {
     return Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   Status redo(Context &)
   {
     return Status(); /* the inner one's */
@@ -339,7 +367,9 @@ struct RunInside {
   {
     return sizeof(*this);
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<RunInside> *defineBindings()
   {
     auto *st = new lbt::Struct<RunInside>("test::RunInside", sizeof(RunInside));
@@ -375,7 +405,8 @@ void testRunGraphEdit()
   test_assert(d.history.size() == 1 && def.node(NodeId{77}));
   roundTrip(d, def, before);
 
-  /* What its refs point to is pinned: the removed node's t2, and t1 and o after the undo. */
+  /* What its refs point to is pinned: the removed node's t2, and t1 and o after the undo.
+   */
   test_assert(d.lib.collect().ok() && d.lib.get(t2) && d.undo().ok());
   test_assert(d.lib.collect().ok() && d.lib.get(t1) && d.lib.get(t2));
   test_assert(d.redo().ok() && d.undo().ok() && describe(def) == before);
@@ -394,32 +425,35 @@ void testRunGraphEdit()
   }
   test_assert(d.history.size() == steps && d.redo().ok() && d.undo().ok());
   /* One edit that fails records nothing, and the rest goes on. */
-  test_assert(runGraphEdit(d.ctx, g.id, "some", [&](GraphEdit &e) {
-                const NodeId no{5};
-                test_assert(hasCode(e.addNode("t.no"), StatusCode::NotFound));
-                test_assert(hasCode(e.insertNode(NodeState()), StatusCode::InvalidArgument));
-                test_assert(hasCode(e.removeNode(no), StatusCode::NotFound));
-                test_assert(hasCode(e.setLabel(no, "x"), StatusCode::NotFound));
-                test_assert(hasCode(e.setPosition(no, 1, 1), StatusCode::NotFound));
-                test_assert(hasCode(e.setParam(no, "thing", PropValue()), StatusCode::NotFound));
-                test_assert(hasCode(e.setParam(old, "no", PropValue()), StatusCode::NotFound));
-                test_assert(hasCode(e.setLiteral(no, "a", fl(1)), StatusCode::NotFound));
-                test_assert(hasCode(e.useLiteral(old, "no", true), StatusCode::NotFound));
-                test_assert(hasCode(e.setGroup(no, o.id), StatusCode::NotFound));
-                test_assert(hasCode(e.link({self, "value"}, {old, "a"}), StatusCode::InvalidArgument));
-                test_assert(hasCode(e.unlink(LinkId{5}), StatusCode::NotFound));
-                test_assert(hasCode(e.insertLink(LinkState()), StatusCode::NotFound));
-                test_assert(hasCode(e.setInterfaceType(5, "int"), StatusCode::NotFound));
-                test_assert(hasCode(e.setInterfaceName(5, "x"), StatusCode::NotFound));
-                test_assert(hasCode(e.setInterfaceDefault(5, fl(1)), StatusCode::NotFound));
-                test_assert(hasCode(e.moveInterface(5, 0), StatusCode::NotFound));
-                test_assert(hasCode(e.removeInterface(5), StatusCode::NotFound));
-                test_assert(hasCode(e.addInterface(SocketSide::Input, "x", "no"), StatusCode::NotFound));
-                test_assert(describe(e.def()) == before);
-                CDCC_TRY(e.setLiteral(old, "b", fl(3)));
-                CDCC_TRY(e.setPosition(old, 8, 9));
-                return e.setLabel(old, "kept");
-              }).ok());
+  test_assert(
+      runGraphEdit(d.ctx, g.id, "some", [&](GraphEdit &e) {
+        const NodeId no{5};
+        test_assert(hasCode(e.addNode("t.no"), StatusCode::NotFound));
+        test_assert(hasCode(e.insertNode(NodeState()), StatusCode::InvalidArgument));
+        test_assert(hasCode(e.removeNode(no), StatusCode::NotFound));
+        test_assert(hasCode(e.setLabel(no, "x"), StatusCode::NotFound));
+        test_assert(hasCode(e.setPosition(no, 1, 1), StatusCode::NotFound));
+        test_assert(hasCode(e.setParam(no, "thing", PropValue()), StatusCode::NotFound));
+        test_assert(hasCode(e.setParam(old, "no", PropValue()), StatusCode::NotFound));
+        test_assert(hasCode(e.setLiteral(no, "a", fl(1)), StatusCode::NotFound));
+        test_assert(hasCode(e.useLiteral(old, "no", true), StatusCode::NotFound));
+        test_assert(hasCode(e.setGroup(no, o.id), StatusCode::NotFound));
+        test_assert(
+            hasCode(e.link({self, "value"}, {old, "a"}), StatusCode::InvalidArgument));
+        test_assert(hasCode(e.unlink(LinkId{5}), StatusCode::NotFound));
+        test_assert(hasCode(e.insertLink(LinkState()), StatusCode::NotFound));
+        test_assert(hasCode(e.setInterfaceType(5, "int"), StatusCode::NotFound));
+        test_assert(hasCode(e.setInterfaceName(5, "x"), StatusCode::NotFound));
+        test_assert(hasCode(e.setInterfaceDefault(5, fl(1)), StatusCode::NotFound));
+        test_assert(hasCode(e.moveInterface(5, 0), StatusCode::NotFound));
+        test_assert(hasCode(e.removeInterface(5), StatusCode::NotFound));
+        test_assert(
+            hasCode(e.addInterface(SocketSide::Input, "x", "no"), StatusCode::NotFound));
+        test_assert(describe(e.def()) == before);
+        CDCC_TRY(e.setLiteral(old, "b", fl(3)));
+        CDCC_TRY(e.setPosition(old, 8, 9));
+        return e.setLabel(old, "kept");
+      }).ok());
   roundTrip(d, def, before);
   test_assert(d.undo().ok());
 
@@ -441,10 +475,13 @@ void testRunGraphEdit()
 
   /* Errors of the call itself. */
   auto nothing = [](GraphEdit &) { return Status(); };
-  test_assert(hasCode(runGraphEdit(d.ctx, id1, "x", nothing), StatusCode::FailedPrecondition));
-  test_assert(hasCode(runGraphEdit(d.ctx, BlockId(), "x", nothing), StatusCode::FailedPrecondition));
+  test_assert(
+      hasCode(runGraphEdit(d.ctx, id1, "x", nothing), StatusCode::FailedPrecondition));
+  test_assert(hasCode(runGraphEdit(d.ctx, BlockId(), "x", nothing),
+                      StatusCode::FailedPrecondition));
   Context bare(&d.rt, &d.lib, d.rt.ext<ApiRegistry>().runtimeOwner("doc"));
-  test_assert(hasCode(runGraphEdit(bare, g.id, "x", nothing), StatusCode::FailedPrecondition));
+  test_assert(
+      hasCode(runGraphEdit(bare, g.id, "x", nothing), StatusCode::FailedPrecondition));
   Result<PropertyBag> direct = d.run("graph.edit", {{"name", str("x")}});
   test_assert(hasCode(direct, StatusCode::FailedPrecondition));
   test_assert(strstr(direct.status().message(), "runGraphEdit"));
@@ -456,7 +493,8 @@ void testRunGraphEdit()
   roundTrip(d, def, before);
   test_assert(d.undo().ok() && describe(def) == before);
   RunInside::fail = true;
-  test_assert(hasCode(d.run("test.inside", {}), StatusCode::Cancelled) && describe(def) == before);
+  test_assert(hasCode(d.run("test.inside", {}), StatusCode::Cancelled) &&
+              describe(def) == before);
 }
 
 /* Undo and redo when the graph isn't there, or isn't what it was. */
@@ -470,7 +508,8 @@ void testGone()
     return d.run(kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.add")}}).ok();
   };
   test_assert(addOne() && d.lib.markDeleted(g.h).ok());
-  test_assert(hasCode(d.undo(), StatusCode::FailedPrecondition)); /* and the step is dropped */
+  test_assert(
+      hasCode(d.undo(), StatusCode::FailedPrecondition)); /* and the step is dropped */
   test_assert(d.lib.restoreFromHistory(g.h).ok() && g.def->nodeCount() == 1);
   test_assert(addOne() && d.undo().ok() && d.lib.markDeleted(g.h).ok());
   test_assert(hasCode(d.redo(), StatusCode::FailedPrecondition));
@@ -532,7 +571,8 @@ void testRecursive()
       &redirect);
   g.def->foreachRef(v);
   const PropValue gp = pointerTo(g);
-  test_assert(d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(n.value)}}).ok());
+  test_assert(
+      d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(n.value)}}).ok());
   test_assert(d.undo().ok() && g.def->node(n)->group().target == g.id);
   NodeState s = g.def->stateOf(*g.def->node(n));
   s.id = NodeId{9};
@@ -547,7 +587,8 @@ void testStamps()
   const Graph g = newGraph(d.lib, "g"), o = newGraph(d.lib, "o");
   const BlockHandle t = newThing(d.lib, "t", 1);
   GraphDef &def = *g.def;
-  const NodeId n = add(def, "t.add"), v = add(def, "value.float"), p = add(def, "graph.group");
+  const NodeId n = add(def, "t.add"), v = add(def, "value.float"),
+               p = add(def, "graph.group");
   const int64_t x = addSocket(def, SocketSide::Input, "x", "float");
   auto edit = [&](auto fn) {
     test_assert(runGraphEdit(d.ctx, g.id, "x", fn).ok());
@@ -561,11 +602,14 @@ void testStamps()
   test_assert(!edit([&](GraphEdit &e) { return e.setLiteral(n, "a", fl(2)); }));
   test_assert(def.node(n)->literals()[0].version == now());
   test_assert(def.node(n)->paramVersion() < now());
-  test_assert(def.useLiteral(n, "a", false).ok() && def.node(n)->literals()[0].version == now());
-  test_assert(def.useLiteral(n, "a", true).ok() && def.node(n)->literals()[0].version == now());
+  test_assert(def.useLiteral(n, "a", false).ok() &&
+              def.node(n)->literals()[0].version == now());
+  test_assert(def.useLiteral(n, "a", true).ok() &&
+              def.node(n)->literals()[0].version == now());
   test_assert(def.setParam(v, "value", fl(1)).ok());
   test_assert(!edit([&](GraphEdit &e) { return e.setParam(v, "value", fl(2)); }));
-  test_assert(def.node(v)->params()[0].version == now() && def.node(v)->paramVersion() == now());
+  test_assert(def.node(v)->params()[0].version == now() &&
+              def.node(v)->paramVersion() == now());
   const PropValue thing = pointerTo(idOf(d.lib, t));
   test_assert(!edit([&](GraphEdit &e) { return e.setParam(n, "thing", thing); }));
   test_assert(def.node(n)->paramVersion() == now());
@@ -593,9 +637,11 @@ void testCollect()
   const NodeId n = add(*g.def, "t.add");
   test_assert(g.def->setParam(n, "thing", pointerTo(idOf(d.lib, t))).ok());
   const PropValue gp = pointerTo(g);
-  test_assert(d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(n.value)}}).ok());
+  test_assert(
+      d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(n.value)}}).ok());
   test_assert(d.lib.collect().ok() && d.lib.get(t) && !d.lib.get(u));
-  test_assert(d.lib.get(t)->pins(PinKind::History) == 1 && d.lib.get(t)->pins(PinKind::Host) == 0);
+  test_assert(d.lib.get(t)->pins(PinKind::History) == 1 &&
+              d.lib.get(t)->pins(PinKind::Host) == 0);
   test_assert(d.undo().ok() && d.lib.collect().ok());
   test_assert(g.def->node(n)->blockTarget("thing") == idOf(d.lib, t));
   GraphInstance inst(&d.rt, &d.lib, g.id);
@@ -618,7 +664,8 @@ void testCollect()
               }).ok());
   test_assert(d.lib.get(v)->pins(PinKind::History) == 1);
 
-  /* A group param the edit replaced, and the graph itself while only the history has it. */
+  /* A group param the edit replaced, and the graph itself while only the history has it.
+   */
   const Graph a = newGraph(d.lib, "a"), b = newGraph(d.lib, "b");
   const NodeId group = add(*g.def, "graph.group");
   test_assert(g.def->setGroup(group, a.id).ok());
@@ -626,12 +673,14 @@ void testCollect()
                 return e.setGroup(group, b.id);
               }).ok());
   test_assert(d.lib.collect().ok() && d.lib.get(a.h) && d.undo().ok());
-  test_assert(d.lib.collect().ok() && d.lib.get(b.h) && g.def->node(group)->group().target == a.id);
+  test_assert(d.lib.collect().ok() && d.lib.get(b.h) &&
+              g.def->node(group)->group().target == a.id);
   /* A removed group node's. */
   const Graph c = newGraph(d.lib, "c");
   const NodeId other = add(*g.def, "graph.group");
   test_assert(g.def->setGroup(other, c.id).ok());
-  test_assert(d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(other.value)}}).ok());
+  test_assert(
+      d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(other.value)}}).ok());
   test_assert(d.lib.collect().ok() && d.lib.get(c.h) && d.undo().ok());
   d.lib.setFlag(g.h, BlockFlags::Root, false);
   test_assert(d.lib.collect().ok() && d.lib.get(g.h) && d.redo().ok());

@@ -36,8 +36,10 @@ template <class T> void put(BytesWriter &out, const Vector<T> &v)
 
 /* The NAME chunk's table. Indices are in order of first use, which is sorted order. */
 class Names {
- public:
-  explicit Names(const Library &lib) : rt_(lib.runtime()), files_(lib.fileNames()) {}
+public:
+  explicit Names(const Library &lib) : rt_(lib.runtime()), files_(lib.fileNames())
+  {
+  }
 
   uint32_t text(std::string_view s)
   {
@@ -79,15 +81,14 @@ class Names {
       if (raw != raw_.end()) {
         out.u8(uint8_t(NameForm::RawId));
         out.u64(raw->second);
-      }
-      else {
+      } else {
         out.u8(uint8_t(NameForm::Text));
         out.str(order_[int(i)]->substr(1));
       }
     }
   }
 
- private:
+private:
   uint32_t add(std::string key)
   {
     const auto [it, fresh] = index_.emplace(std::move(key), uint32_t(index_.size()) + 1);
@@ -113,11 +114,11 @@ struct Item {
 };
 
 class Saver {
- public:
+public:
   Saver(const Library &lib, SaveReport &report)
       : lib_(lib), rt_(lib.runtime()), clients_(rt_.ext<ClientRegistry>()),
-        types_(rt_.ext<BlockTypeRegistry>()), attachments_(rt_.ext<AttachmentTypeRegistry>()),
-        report_(report), names_(lib)
+        types_(rt_.ext<BlockTypeRegistry>()),
+        attachments_(rt_.ext<AttachmentTypeRegistry>()), report_(report), names_(lib)
   {
   }
 
@@ -137,16 +138,18 @@ class Saver {
     BytesWriter names;
     names_.write(names);
     CDCC_TRY(names.status());
-    const Stored packedNames = pack(view(names.data())), packedBlocks = pack(view(blocks.data()));
+    const Stored packedNames = pack(view(names.data())),
+                 packedBlocks = pack(view(blocks.data()));
     countLoad(packedNames, packedBlocks);
     return assemble(packedNames, packedBlocks);
   }
 
- private:
+private:
   static Status named(const Status &s, const Datablock &b)
   {
-    return Status::error(s.code(),
-                         ("saving '" + std::string(b.name().c_str()) + "': " + s.message()).c_str());
+    return Status::error(
+        s.code(),
+        ("saving '" + std::string(b.name().c_str()) + "': " + s.message()).c_str());
   }
   Status takeSticky(Status s)
   {
@@ -158,7 +161,8 @@ class Saver {
   bool isTransient(const Datablock &b) const
   {
     const BlockTypeRegistry::Entry *e = types_.find(b.type());
-    return b.state() == BlockState::Live && e && e->info.storage == BlockStorage::Transient;
+    return b.state() == BlockState::Live && e &&
+           e->info.storage == BlockStorage::Transient;
   }
   /* What a block without its data keeps in a record. */
   bool hasExtras(BlockHandle h, const Datablock &b) const
@@ -221,8 +225,9 @@ class Saver {
     while (stack.size() > 0) {
       const BlockHandle h = stack.pop_back();
       Status s = lib_.foreachRef(h, [&](RefCell &cell) {
-        const BlockHandle t =
-            isStrong(cell.kind) && !cell.target.isNull() ? lib_.find(cell.target) : BlockHandle();
+        const BlockHandle t = isStrong(cell.kind) && !cell.target.isNull()
+                                  ? lib_.find(cell.target)
+                                  : BlockHandle();
         if (t) {
           visit(t, *lib_.get(t));
         }
@@ -263,11 +268,17 @@ class Saver {
       }
       const uint64_t c = b.id().client.value;
       const char *name = names_.nameOf(IdDomain::Client, c);
-      sorted.append(Keyed{{c == 0 ? 0 : name ? 1 : 2, name ? name : "", name ? 0 : c},
+      sorted.append(Keyed{{c == 0 ? 0
+                           : name ? 1
+                                  : 2,
+                           name ? name : "",
+                           name ? 0 : c},
                           b.id().local,
                           Item{h, &b}});
       const BlockTypeRegistry::Entry *e = types_.find(b.type());
-      if (b.state() == BlockState::Live && e && e->info.storage == BlockStorage::Unspecified) {
+      if (b.state() == BlockState::Live && e &&
+          e->info.storage == BlockStorage::Unspecified)
+      {
         unsaved.append(e->info.name.c_str());
       }
       lib_.forEachAttachment(h, [&](TypeId type, void *) {
@@ -308,8 +319,9 @@ class Saver {
         list += (list.empty() ? "" : ", ") + unsaved[i];
       }
     }
-    return Status::error(StatusCode::FailedPrecondition,
-                         ("these types neither serialize nor are Transient: " + list).c_str());
+    return Status::error(
+        StatusCode::FailedPrecondition,
+        ("these types neither serialize nor are Transient: " + list).c_str());
   }
 
   /* ---- records ---- */
@@ -320,9 +332,9 @@ class Saver {
   }
   void writeRow(BytesWriter &out, const RefCell &cell)
   {
-    out.u8(cell.kind == RefKind::Strong    ? kRowStrong :
-           cell.kind == RefKind::OptStrong ? kRowOptStrong :
-                                             kRowWeak);
+    out.u8(cell.kind == RefKind::Strong      ? kRowStrong
+           : cell.kind == RefKind::OptStrong ? kRowOptStrong
+                                             : kRowWeak);
     BlockId id = cell.target.isNull() ? BlockId() : clients_.canonical(cell.target);
     if (cell.kind == RefKind::OptStrong && !id.isNull()) {
       const Datablock *t = lib_.get(lib_.find(id));
@@ -403,15 +415,19 @@ class Saver {
     lib_.forEachOpaqueAttachment(item.h, [&](const OpaqueAttachment &o) {
       all.append(Att{o.typeName.c_str(), nullptr, nullptr, &o});
     });
-    std::sort(first(all), last(all), [](const Att &a, const Att &b) { return a.name < b.name; });
+    std::sort(first(all), last(all), [](const Att &a, const Att &b) {
+      return a.name < b.name;
+    });
     out.u32(uint32_t(all.size()));
     for (const Att &a : all) {
       BlockPayload own;
       if (a.type) {
-        Result<BlockPayload> p = PayloadAccess::writeAttachment(lib_, item.h, *a.type, a.data);
+        Result<BlockPayload> p =
+            PayloadAccess::writeAttachment(lib_, item.h, *a.type, a.data);
         if (!p.ok()) {
-          return Status::error(p.status().code(),
-                               ("attachment '" + a.name + "': " + p.status().message()).c_str());
+          return Status::error(
+              p.status().code(),
+              ("attachment '" + a.name + "': " + p.status().message()).c_str());
         }
         own = std::move(p).value();
         if (!lib_.auditsRelations()) {
@@ -455,23 +471,22 @@ class Saver {
       if (!lib_.auditsRelations()) {
         note(item, PayloadAccess::checkRefs(lib_, item.h, own));
       }
-    }
-    else if (b.state() == BlockState::Placeholder) {
+    } else if (b.state() == BlockState::Placeholder) {
       payload = &b.placeholderData();
       if (b.placeholderReason() == PlaceholderReason::MissingType) {
         as = StoredAs::Payload;
       }
-    }
-    else { /* Detached or Transient */
-      Status s = lib_.foreachDataRef(item.h, [&](RefCell &cell) { own.refs.append(cell); });
+    } else { /* Detached or Transient */
+      Status s =
+          lib_.foreachDataRef(item.h, [&](RefCell &cell) { own.refs.append(cell); });
       CDCC_TRY(takeSticky(std::move(s)));
     }
     const bool named = b.state() == BlockState::Placeholder;
     out.u32(clientIndex(b.id().client));
     out.u64(b.id().local.hi);
     out.u64(b.id().local.lo);
-    out.u32(named ? names_.text(b.placeholderType().c_str()) :
-                    names_.id(IdDomain::Type, b.type().value));
+    out.u32(named ? names_.text(b.placeholderType().c_str())
+                  : names_.id(IdDomain::Type, b.type().value));
     out.str(b.name().c_str());
     out.u32((b.hasFlag(BlockFlags::Root) ? kFlagRoot : 0) |
             (b.hasFlag(BlockFlags::FakeUser) ? kFlagFakeUser : 0));
@@ -480,8 +495,8 @@ class Saver {
     const std::string_view source = b.sourceStored() ? b.sourceName().c_str() : "";
     const char *type = names_.nameOf(IdDomain::Type, b.type().value);
     report_.loadBytes += kRecordCost + uint64_t(b.name().size()) + source.size() +
-                         (named ? std::string_view(b.placeholderType().c_str()) :
-                                  std::string_view(type ? type : ""))
+                         (named ? std::string_view(b.placeholderType().c_str())
+                                : std::string_view(type ? type : ""))
                              .size() +
                          b.fileExtension().size();
     out.u32(names_.text(source));
@@ -513,7 +528,8 @@ class Saver {
                          (blocks.lz4 ? unpackCost(blocks.raw) : 0);
   }
 
-  static void chunkHeader(BytesWriter &out, uint32_t tag, bool lz4, uint64_t raw, uint64_t stored)
+  static void
+  chunkHeader(BytesWriter &out, uint32_t tag, bool lz4, uint64_t raw, uint64_t stored)
   {
     out.u32(tag);
     out.u32(kChunkCritical | (lz4 ? kChunkLz4 : 0));
@@ -528,8 +544,9 @@ class Saver {
     for (const Stored &s : blobs_) {
       data += kBlobBytes + uint64_t(s.bytes.size());
     }
-    const uint64_t total = kHeaderBytes + 3 * kChunkHeaderBytes + uint64_t(names.bytes.size()) +
-                           uint64_t(blocks.bytes.size()) + data + 8;
+    const uint64_t total = kHeaderBytes + 3 * kChunkHeaderBytes +
+                           uint64_t(names.bytes.size()) + uint64_t(blocks.bytes.size()) +
+                           data + 8;
     if (total > SIZE_MAX / 4) {
       return Status::error(StatusCode::OutOfRange, "the library is too large to save");
     }

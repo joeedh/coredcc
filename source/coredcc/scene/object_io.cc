@@ -34,8 +34,8 @@ std::string numberName(int i)
 
 } // namespace
 
-/* Two lists of entries: the object's fields, and its channels, by name. They are numbered instead when
- * they have no names: the type isn't there, or has another count. */
+/* Two lists of entries: the object's fields, and its channels, by name. They are numbered
+ * instead when they have no names: the type isn't there, or has another count. */
 void Object::write(BlockWriter &out) const
 {
   const TransformType *type = rt_->ext<TransformRegistry>().find(type_);
@@ -83,8 +83,7 @@ void Object::write(BlockWriter &out) const
   }
   if (named) {
     detail::appendChannels(*type, channels, entries);
-  }
-  else {
+  } else {
     for (int32_t i = 0; i < channels.size(); i++) {
       entries.append(
           detail::valueField(numberName(i).c_str(), PropValue::ofFloat(channels.get(i))));
@@ -103,8 +102,8 @@ void Object::readFrom(BlockReader &in)
       type = e.value.asString().c_str();
       return true;
     }
-    if (detail::isValueField(e, kVersion, PropValue::Type::Int) &&
-        e.value.asInt() >= 0 && e.value.asInt() <= INT32_MAX)
+    if (detail::isValueField(e, kVersion, PropValue::Type::Int) && e.value.asInt() >= 0 &&
+        e.value.asInt() <= INT32_MAX)
     {
       version = uint32_t(e.value.asInt());
       return true;
@@ -159,7 +158,8 @@ void Object::readFrom(BlockReader &in)
   dropFileData(known && numbers.size() == 0);
 }
 
-/* If there is nothing in it. `versionKnown`: the type's own version is what would be written. */
+/* If there is nothing in it. `versionKnown`: the type's own version is what would be
+ * written. */
 void Object::dropFileData(bool versionKnown)
 {
   if (!file_->pending && file_->fields.size() == 0 && file_->unread.size() == 0 &&
@@ -169,7 +169,8 @@ void Object::dropFileData(bool versionKnown)
   }
 }
 
-/* Whether it reads from `version`, as `entries`. An error is sticky: whoever asked gets it, once. */
+/* Whether it reads from `version`, as `entries`. An error is sticky: whoever asked gets
+ * it, once. */
 bool Object::upgrade(const TransformType &type, Vector<BlockEntry> &entries)
 {
   const uint32_t from = file_->version;
@@ -189,11 +190,11 @@ bool Object::upgrade(const TransformType &type, Vector<BlockEntry> &entries)
   }
   file_->upgradeFailed = !s.ok();
   if (!s.ok()) {
-    rt_->setStickyError(Status::error(
-        s.code(),
-        ("upgrading the channels of a '" + std::string(type.name().c_str()) + "', version " +
-         std::to_string(from) + ": " + s.message())
-            .c_str()));
+    rt_->setStickyError(Status::error(s.code(),
+                                      ("upgrading the channels of a '" +
+                                       std::string(type.name().c_str()) + "', version " +
+                                       std::to_string(from) + ": " + s.message())
+                                          .c_str()));
   }
   return s.ok();
 }
@@ -234,8 +235,7 @@ void Object::takeLocks(const TransformType *type)
     }
     if (bit >= 0) {
       locks_ |= uint64_t(1) << bit;
-    }
-    else if (!name.empty()) {
+    } else if (!name.empty()) {
       rest += rest.empty() ? name : " " + name;
     }
   }
@@ -246,8 +246,8 @@ uint64_t Object::memSize() const
 {
   return sizeof(Object) + uint64_t(channels.size()) * sizeof(double) +
          (file_ ? sizeof(FileData) + detail::fieldsMemSize(file_->unread) +
-                      detail::fieldsMemSize(file_->fields) :
-                  0);
+                      detail::fieldsMemSize(file_->fields)
+                : 0);
 }
 
 /* ---- ChannelEntries ---- */

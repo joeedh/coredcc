@@ -36,7 +36,8 @@ Status usable(Runtime &rt, const AnyBvhSource &src)
   return Status();
 }
 
-Status gatherRange(Runtime &rt, const AnyBvhSource &src, int begin, int end, BoxSource &out)
+Status
+gatherRange(Runtime &rt, const AnyBvhSource &src, int begin, int end, BoxSource &out)
 {
   for (int first = begin; first < end; first += kChunk) {
     const int count = end - first < kChunk ? end - first : kChunk;
@@ -47,8 +48,9 @@ Status gatherRange(Runtime &rt, const AnyBvhSource &src, int begin, int end, Box
     if (values.size() != size_t(count) * 6) {
       return Status::error(StatusCode::InvalidArgument,
                            ("AnyBvh: bounds(" + std::to_string(first) + ", " +
-                            std::to_string(count) + ") gave " + std::to_string(values.size()) +
-                            " values instead of " + std::to_string(count * 6))
+                            std::to_string(count) + ") gave " +
+                            std::to_string(values.size()) + " values instead of " +
+                            std::to_string(count * 6))
                                .c_str());
     }
     for (int i = 0; i < count; i++) {
@@ -66,7 +68,8 @@ Status gatherAll(Runtime &rt, const AnyBvhSource &src, BoxSource &out)
     return rt.takeStickyError();
   }
   if (n < 0) {
-    return Status::error(StatusCode::InvalidArgument, "AnyBvh: a source of negative size");
+    return Status::error(StatusCode::InvalidArgument,
+                         "AnyBvh: a source of negative size");
   }
   return gatherRange(rt, src, 0, n, out);
 }
@@ -74,7 +77,8 @@ Status gatherAll(Runtime &rt, const AnyBvhSource &src, BoxSource &out)
 Status boxesOf(const Vector<double> &bounds, BoxSource &out)
 {
   if (bounds.size() % 6 != 0) {
-    return Status::error(StatusCode::InvalidArgument, "AnyBvh: six numbers for each primitive");
+    return Status::error(StatusCode::InvalidArgument,
+                         "AnyBvh: six numbers for each primitive");
   }
   const int n = int(bounds.size() / 6);
   out.ensureCapacity(n);
@@ -133,7 +137,9 @@ Status AnyBvh::refit(Runtime &rt, AnyBvhSource src, int first, int count)
 
 Status AnyBvh::onInvalidate(Runtime &rt, AnyBvhSource src, InvalidateKinds kinds)
 {
-  if (!hasFlag(kinds, InvalidateKinds::Topology) && !hasFlag(kinds, InvalidateKinds::Positions)) {
+  if (!hasFlag(kinds, InvalidateKinds::Topology) &&
+      !hasFlag(kinds, InvalidateKinds::Positions))
+  {
     return Status();
   }
   BoxSource gathered;
@@ -164,8 +170,10 @@ Status AnyBvh::refitSome(const Vector<int32_t> &primitives, const Vector<double>
   return boxes_.refit(boxes, {primitives.data(), primitives.size()});
 }
 
-RayHit
-AnyBvh::rayClosest(const double3 &origin, const double3 &dir, double tMin, double tMax) const
+RayHit AnyBvh::rayClosest(const double3 &origin,
+                          const double3 &dir,
+                          double tMin,
+                          double tMax) const
 {
   return boxes_.rayClosest(rayOf(origin, dir, tMin, tMax));
 }

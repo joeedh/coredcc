@@ -1,6 +1,7 @@
 #pragma once
 
-/* Views, matrices, and a proof of distances on the screen that shares nothing with the search. */
+/* Views, matrices, and a proof of distances on the screen that shares nothing with the
+ * search. */
 
 #include "scene_fixture.h"
 
@@ -31,7 +32,8 @@ struct ViewCase {
   double dpiScale = 1.0;
 };
 
-/** 1920 by 1080 pixels, at (40, 20). The vertical field of view is 1 (perspective), the height 6. */
+/** 1920 by 1080 pixels, at (40, 20). The vertical field of view is 1 (perspective), the
+ * height 6. */
 inline ViewMath viewOf(const ViewCase &c)
 {
   View v;
@@ -46,16 +48,17 @@ inline ViewMath viewOf(const ViewCase &c)
   v.infiniteFar = c.infinite && !c.ortho;
   v.view = litestl::math::lookAt(c.eye, c.target, c.up);
   const double aspect = 16.0 / 9.0, far = c.zFar;
-  v.proj = c.ortho ? litestl::math::orthographic(
-                         -3.0 * aspect, 3.0 * aspect, -3.0, 3.0, c.zNear, far, v.depth, c.reversed) :
-                     litestl::math::perspective(1.0,
-                                                aspect,
-                                                c.zNear,
-                                                v.infiniteFar ?
-                                                    std::numeric_limits<double>::infinity() :
-                                                    far,
-                                                v.depth,
-                                                c.reversed);
+  v.proj =
+      c.ortho
+          ? litestl::math::orthographic(
+                -3.0 * aspect, 3.0 * aspect, -3.0, 3.0, c.zNear, far, v.depth, c.reversed)
+          : litestl::math::perspective(
+                1.0,
+                aspect,
+                c.zNear,
+                v.infiniteFar ? std::numeric_limits<double>::infinity() : far,
+                v.depth,
+                c.reversed);
   ViewMath m;
   const Status s = m.set(v);
   if (!s.ok()) {
@@ -87,8 +90,8 @@ inline mat4d identity()
   return solve::affine(Linear::identity(), double3());
 }
 
-/** A rotation and scale, a shear, a reflection, a matrix with one, two or three zero columns, or
- * one with two that almost are. */
+/** A rotation and scale, a shear, a reflection, a matrix with one, two or three zero
+ * columns, or one with two that almost are. */
 inline Linear randomLinear(Rand &r, int kind)
 {
   Linear m;
@@ -124,7 +127,8 @@ inline ScreenMap mapOf(const ViewMath &v, const mat4d &world, double x, double y
   m.front = planeToLocal(world, front * (1.0 / std::hypot(front[0], front[1], front[2])));
   const double4 &back = v.farPlane();
   const double length = std::hypot(back[0], back[1], back[2]);
-  m.back = length > 0.0 ? planeToLocal(world, back * (1.0 / length)) : double4(0, 0, 0, 1);
+  m.back =
+      length > 0.0 ? planeToLocal(world, back * (1.0 / length)) : double4(0, 0, 0, 1);
   return m;
 }
 
@@ -134,31 +138,34 @@ inline double normalLength(const double4 &row)
 }
 
 /**
- * How certainly all of a solid's visible part (the points within `r` of the hull of `ends`) is at least
- * `distance` from the cursor, beyond the line across `n`: whether `L = n.(x, y) - distance w` is
- * never negative there. Proven if the answer isn't negative.
+ * How certainly all of a solid's visible part (the points within `r` of the hull of
+ * `ends`) is at least `distance` from the cursor, beyond the line across `n`: whether `L
+ * = n.(x, y) - distance w` is never negative there. Proven if the answer isn't negative.
  *
- * For any k >= 0, the smallest `L - k front` of the whole solid is a lower bound, and so is that of
- * `L - k back`. The best one is exact: `front + back` is a positive constant, so of both factors only
- * what is left of the larger one counts. Each is concave in k, so a search finds it.
+ * For any k >= 0, the smallest `L - k front` of the whole solid is a lower bound, and so
+ * is that of `L - k back`. The best one is exact: `front + back` is a positive constant,
+ * so of both factors only what is left of the larger one counts. Each is concave in k, so
+ * a search finds it.
  */
 inline double provenDistance(const ScreenMap &map,
-                           const std::vector<double3> &ends,
-                           double r,
-                           double nx,
-                           double ny,
-                           double distance)
+                             const std::vector<double3> &ends,
+                             double r,
+                             double nx,
+                             double ny,
+                             double distance)
 {
   const double4 line = map.x * nx + map.y * ny - map.w * distance;
   double terms = 0.0;
   for (const double3 &q : ends) {
     for (int c = 0; c < 4; c++) {
       const double k = c < 3 ? q[c] : 1.0;
-      terms = std::fmax(terms, std::fabs(map.x[c] * k) + std::fabs(map.y[c] * k) +
-                                   std::fabs(map.w[c] * k) * distance);
+      terms = std::fmax(terms,
+                        std::fabs(map.x[c] * k) + std::fabs(map.y[c] * k) +
+                            std::fabs(map.w[c] * k) * distance);
     }
   }
-  terms += r * (normalLength(map.x) + normalLength(map.y) + normalLength(map.w) * distance);
+  terms +=
+      r * (normalLength(map.x) + normalLength(map.y) + normalLength(map.w) * distance);
   const double tolerance = 1e-10 * terms + 1e-300;
   const auto bound = [&](const double4 &plane, double k) {
     const double4 row = line - plane * k;
@@ -183,8 +190,8 @@ inline double provenDistance(const ScreenMap &map,
   return best + tolerance;
 }
 
-/** Whether it is proven for a line across `n`, or almost: the edge of a shape may be a million
- * pixels long. */
+/** Whether it is proven for a line across `n`, or almost: the edge of a shape may be a
+ * million pixels long. */
 inline bool provenNear(const ScreenMap &map,
                        const std::vector<double3> &ends,
                        double r,

@@ -1,4 +1,5 @@
-/* Block payloads: round trips, unknown data kept, the ref audit, errors, hostile input. */
+/* Block payloads: round trips, unknown data kept, the ref audit, errors, hostile input.
+ */
 #include "coredcc/lib/block_io.h"
 
 #include "doc_fixture.h"
@@ -43,9 +44,9 @@ bool sameEntries(const Vector<BlockEntry> &a, const Vector<BlockEntry> &b)
 {
   bool same = a.size() == b.size();
   for (int i = 0; same && i < int(a.size()); i++) {
-    same = strcmp(a[i].name.c_str(), b[i].name.c_str()) == 0 && a[i].value == b[i].value &&
-           a[i].unknownTag == b[i].unknownTag && a[i].refs.size() == b[i].refs.size() &&
-           a[i].raw.size() == b[i].raw.size();
+    same = strcmp(a[i].name.c_str(), b[i].name.c_str()) == 0 &&
+           a[i].value == b[i].value && a[i].unknownTag == b[i].unknownTag &&
+           a[i].refs.size() == b[i].refs.size() && a[i].raw.size() == b[i].raw.size();
     for (int k = 0; same && k < int(a[i].refs.size()); k++) {
       same = sameCell(a[i].refs[k], b[i].refs[k]);
     }
@@ -101,16 +102,19 @@ static void test_round_trip()
   test_assert(p->refs.size() == 5);
   test_assert(p->refs[0].target == w.id(a) && p->refs[0].kind == RefKind::Weak);
   test_assert(p->refs[1].target == w.id(b) && p->refs[1].kind == RefKind::Strong);
-  test_assert(p->refs[2].kind == RefKind::Strong && p->refs[4].kind == RefKind::OptStrong);
+  test_assert(p->refs[2].kind == RefKind::Strong &&
+              p->refs[4].kind == RefKind::OptStrong);
 
   const BlockHandle back = emptyDoc(w.lib, "back");
   const uint64_t epoch = w.lib.epoch();
   test_assert(readPayload(w.lib, back, *p).ok() && w.lib.epoch() > epoch);
   const Doc *d = doc(w.lib, h), *e = doc(w.lib, back);
-  test_assert(e && e->number == -7 && sameCell(d->parent, e->parent) && sameCell(d->mesh, e->mesh));
+  test_assert(e && e->number == -7 && sameCell(d->parent, e->parent) &&
+              sameCell(d->mesh, e->mesh));
   test_assert(sameEntries(d->entries, e->entries) && e->unread.size() == 0);
   for (int i = 0; i < d->bag.size(); i++) {
-    test_assert(d->bag.value(i) == e->bag.value(i) && d->bag.wasSet(i) == e->bag.wasSet(i));
+    test_assert(d->bag.value(i) == e->bag.value(i) &&
+                d->bag.wasSet(i) == e->bag.wasSet(i));
   }
   test_assert(w.docs.lastVersion == 3 && w.lib.usersOf(b).size() == 2);
   Result<BlockPayload> again = writePayload(w.lib, back);
@@ -133,20 +137,21 @@ static void test_golden()
   const BlockHandle h = makeDoc(w.lib, w.docs, "g");
   Doc *d = doc(w.lib, h);
   d->number = 1;
-  d->entries.append(entryOf("p", pointerTo(BlockId{ClientId::of(kCoredccClient), {1, 2}}, "v")));
+  d->entries.append(
+      entryOf("p", pointerTo(BlockId{ClientId::of(kCoredccClient), {1, 2}}, "v")));
   Result<BlockPayload> p = writePayload(w.lib, h);
   const uint64_t mesh = StructId::of("acme.Mesh").value;
   uint8_t golden[] = {
-      1, 0, 0, 0,   0, 0, 0, 0,                       /* number */
-      0, 0, 0, 0,   1, 0, 0, 0,                       /* parent, mesh: rows 0 and 1 */
-      1, 0, 0, 0,                                     /* one entry */
-      1, 0, 0, 0,   'p', 12,                          /* its name, the Pointer tag */
-      1, 0, 0, 0,   2, 0, 0, 0,                       /* one ref: row 2 */
-      24, 0, 0, 0,                                    /* the body */
-      1, 0, 0, 0,   0,                                /* a block: the entry's ref 0 */
-      1, 0, 0, 0,   0, 1, 0, 0, 0, 'v',               /* one member segment */
-      2, 0, 0, 0,   0, 0, 0, 0, 0,                    /* the struct: a raw id */
-      0, 0, 0, 0,                                     /* an empty bag */
+      1,  0, 0, 0, 0,   0,  0, 0,         /* number */
+      0,  0, 0, 0, 1,   0,  0, 0,         /* parent, mesh: rows 0 and 1 */
+      1,  0, 0, 0,                        /* one entry */
+      1,  0, 0, 0, 'p', 12,               /* its name, the Pointer tag */
+      1,  0, 0, 0, 2,   0,  0, 0,         /* one ref: row 2 */
+      24, 0, 0, 0,                        /* the body */
+      1,  0, 0, 0, 0,                     /* a block: the entry's ref 0 */
+      1,  0, 0, 0, 0,   1,  0, 0, 0, 'v', /* one member segment */
+      2,  0, 0, 0, 0,   0,  0, 0, 0,      /* the struct: a raw id */
+      0,  0, 0, 0,                        /* an empty bag */
   };
   for (int i = 0; i < 8; i++) {
     golden[sizeof(golden) - 12 + i] = uint8_t(mesh >> (8 * i));
@@ -155,7 +160,8 @@ static void test_golden()
   test_assert(p.ok() && memcmp(p->bytes.data(), golden, sizeof(golden)) == 0);
 }
 
-/* An entry of a type this build doesn't know, and entries no def takes: kept, with refs. */
+/* An entry of a type this build doesn't know, and entries no def takes: kept, with refs.
+ */
 static void test_unknown_kept()
 {
   World w;
@@ -199,7 +205,8 @@ static void test_unknown_kept()
   test_assert(d->entries[0].unknownTag == 200 && d->entries[0].refs.size() == 2);
   test_assert(d->unread.size() == 3 && d->unread[0].unknownTag == 200);
   test_assert(d->unread[1].value == bag[1].value && d->unread[1].refs.size() == 1);
-  test_assert(*d->bag.get("extra") == PropValue::ofString("kept") && !d->bag.isSet("size"));
+  test_assert(*d->bag.get("extra") == PropValue::ofString("kept") &&
+              !d->bag.isSet("size"));
   /* Their refs are the block's refs. */
   test_assert(w.lib.usersOf(a).size() == 1 && w.lib.usersOf(b).size() == 1);
 
@@ -286,7 +293,8 @@ static void test_bad_entries()
   test_assert(readEntry(boolean, {1}).ok());
   test_assert(hasMsg(readEntry(boolean, {1, 1}), "left over"));
   test_assert(hasMsg(readEntry(boolean, {2}), "boolean"));
-  test_assert(hasMsg(readEntry(uint8_t(ValueTag::Pointer), {1, 0, 0, 0, 0}), "ref it doesn't"));
+  test_assert(
+      hasMsg(readEntry(uint8_t(ValueTag::Pointer), {1, 0, 0, 0, 0}), "ref it doesn't"));
   BlockWriter out(w.lib);
   out.bytes().u32(0xffffffffu);
   Result<BlockPayload> p = PayloadAccess::take(out, 1);
@@ -298,8 +306,7 @@ static void test_bad_entries()
     if (bag) {
       BagRefs refs;
       in.bag(values, refs, entries);
-    }
-    else {
+    } else {
       in.entries(entries);
     }
     test_assert(hasMsg(in.bytes().status(), "a count of more") && entries.size() == 0);
@@ -350,7 +357,9 @@ static void test_errors()
   const BlockHandle h = makeFull(w, a, b);
   Result<BlockPayload> p = writePayload(w.lib, h);
   test_assert(p.ok());
-  const auto writeCode = [&](BlockHandle x) { return writePayload(w.lib, x).status().code(); };
+  const auto writeCode = [&](BlockHandle x) {
+    return writePayload(w.lib, x).status().code();
+  };
   const auto readCode = [&](BlockHandle x) { return readPayload(w.lib, x, *p).code(); };
 
   test_assert(writeCode(a) == StatusCode::Unsupported); /* Thing has no serialize */
@@ -370,15 +379,17 @@ static void test_errors()
 
   /* Busy inside a sweep, also from a provider. */
   bool busy = false;
-  w.things.onDestroy = [&](const Datablock &) { busy = writeCode(h) == StatusCode::Busy; };
+  w.things.onDestroy = [&](const Datablock &) {
+    busy = writeCode(h) == StatusCode::Busy;
+  };
   w.lib.setFlag(h, BlockFlags::Root, true);
   makeThing(w.lib, "garbage");
   test_assert(w.lib.collect().ok() && busy);
   w.things.onDestroy = {};
 
   w.docs.fault = DocFault::Error;
-  test_assert(writeCode(h) == StatusCode::Unsupported && readCode(emptyDoc(w.lib, "e")) ==
-                                                             StatusCode::Unsupported);
+  test_assert(writeCode(h) == StatusCode::Unsupported &&
+              readCode(emptyDoc(w.lib, "e")) == StatusCode::Unsupported);
   w.docs.fault = DocFault::Sticky;
   test_assert(hasMsg(writePayload(w.lib, h).status(), "serialize threw"));
   test_assert(hasMsg(readPayload(w.lib, emptyDoc(w.lib, "e"), *p), "deserialize threw"));
@@ -387,7 +398,8 @@ static void test_errors()
 
   /* Versions: older is read, newer isn't. */
   p->version = 2;
-  test_assert(readPayload(w.lib, emptyDoc(w.lib, "old"), *p).ok() && w.docs.lastVersion == 2);
+  test_assert(readPayload(w.lib, emptyDoc(w.lib, "old"), *p).ok() &&
+              w.docs.lastVersion == 2);
   p->version = 4;
   test_assert(readCode(emptyDoc(w.lib, "new")) == StatusCode::Unsupported);
   p->version = 3;
@@ -419,7 +431,9 @@ static void test_errors()
 
   /* Nothing is collected under a deserialize. */
   StatusCode inner = StatusCode::Ok;
-  w.docs.onDeserialize = [&](BlockReader &in) { inner = in.library().collect().status().code(); };
+  w.docs.onDeserialize = [&](BlockReader &in) {
+    inner = in.library().collect().status().code();
+  };
   test_assert(readPayload(w.lib, e, *p).ok() && inner == StatusCode::Busy);
   w.docs.onDeserialize = {};
   test_assert(doc(w.lib, e)->number == -7);
@@ -450,7 +464,8 @@ static void test_names()
   test_assert(readPayload(lib, h, p).ok());
   const StructId mesh = StructId::of("acme.Mesh");
   test_assert(!rt.nameOf(mesh));
-  test_assert(strcmp(lib.fileNames().nameOf(IdDomain::Struct, mesh.value), "acme.Mesh") == 0);
+  test_assert(strcmp(lib.fileNames().nameOf(IdDomain::Struct, mesh.value), "acme.Mesh") ==
+              0);
   Result<BlockPayload> again = writePayload(lib, h);
   test_assert(again.ok() && samePayload(p, *again));
 }
@@ -473,7 +488,8 @@ static void test_other_slots()
   const BlockId re = p.rekey(*w.lib.get(h), RekeyContext(w.lib, nullptr, nullptr));
   test_assert(re.local.hi == (w.id(h).local.hi ^ 1) && re.local.lo == w.id(h).local.lo);
   BlockProvider t = w.rt.ext<BlockTypeRegistry>().provider(kThing);
-  test_assert(!t.hasSerialize() && !t.hasDeserialize() && !t.hasDuplicate() && !t.hasRekey());
+  test_assert(!t.hasSerialize() && !t.hasDeserialize() && !t.hasDuplicate() &&
+              !t.hasRekey());
 }
 
 /* A provider with one of the two. */
@@ -482,8 +498,12 @@ template <bool Write> struct HalfProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &, RefVisitor &) const {}
-  void destroy(const Datablock &) {}
+  void foreachRef(const Datablock &, RefVisitor &) const
+  {
+  }
+  void destroy(const Datablock &)
+  {
+  }
   Status serialize(const Datablock &, BlockWriter &) const
   {
     return Status();
@@ -494,14 +514,14 @@ template <bool Write> struct HalfProvider {
   }
   static lbt::Struct<HalfProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<HalfProvider>(Write ? "test::W" : "test::R", sizeof(HalfProvider));
+    auto *st = new lbt::Struct<HalfProvider>(Write ? "test::W" : "test::R",
+                                             sizeof(HalfProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     if constexpr (Write) {
       BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
-    }
-    else {
+    } else {
       BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
     }
     return st;
@@ -528,8 +548,10 @@ static void test_registry_rules()
   const auto half = [&](auto *p, const char *name) {
     return addType(rt, name, BlockStorage::Unspecified, p);
   };
-  test_assert(hasMsg(half(litestl::alloc::New<HalfProvider<true>>("p"), "t.W"), "both or neither"));
-  test_assert(hasMsg(half(litestl::alloc::New<HalfProvider<false>>("p"), "t.R"), "both or neither"));
+  test_assert(hasMsg(half(litestl::alloc::New<HalfProvider<true>>("p"), "t.W"),
+                     "both or neither"));
+  test_assert(hasMsg(half(litestl::alloc::New<HalfProvider<false>>("p"), "t.R"),
+                     "both or neither"));
   const auto docType = [&](const char *name, BlockStorage s) {
     return addType(rt, name, s, litestl::alloc::New<DocProvider>("p"));
   };
@@ -538,15 +560,18 @@ static void test_registry_rules()
   };
   test_assert(hasMsg(docType("t.1", BlockStorage::Transient), "Transient"));
   test_assert(hasMsg(thingType("t.2", BlockStorage::Payload), "no serialize"));
-  test_assert(docType("t.3", BlockStorage::Payload).ok() && docType("t.4", BlockStorage::Unspecified).ok());
+  test_assert(docType("t.3", BlockStorage::Payload).ok() &&
+              docType("t.4", BlockStorage::Unspecified).ok());
   test_assert(thingType("t.5", BlockStorage::Transient).ok() &&
               thingType("t.6", BlockStorage::Unspecified).ok());
   const auto storage = [&](const char *name) {
     return rt.ext<BlockTypeRegistry>().find(TypeId::of(name))->info.storage;
   };
-  test_assert(storage("t.4") == BlockStorage::Payload && storage("t.5") == BlockStorage::Transient &&
+  test_assert(storage("t.4") == BlockStorage::Payload &&
+              storage("t.5") == BlockStorage::Transient &&
               storage("t.6") == BlockStorage::Unspecified);
-  test_assert(!rt.ext<BlockTypeRegistry>().find(TypeId::of("t.1")) && rt.validateAll().ok());
+  test_assert(!rt.ext<BlockTypeRegistry>().find(TypeId::of("t.1")) &&
+              rt.validateAll().ok());
 }
 
 /* ---- a foreign provider ---- */
@@ -565,36 +590,30 @@ struct FakeHost : ForeignDispatcher {
     Doc *d = static_cast<Doc *>(b.clientData());
     if (strcmp(name, "data") == 0) {
       new (ret) void *(d);
-    }
-    else if (strcmp(name, "foreachRef") == 0) {
+    } else if (strcmp(name, "foreachRef") == 0) {
       if (d) {
         static_cast<RefVisitor *>(args[1])->visit(d->mesh);
       }
-    }
-    else if (strcmp(name, "destroy") == 0) {
+    } else if (strcmp(name, "destroy") == 0) {
       litestl::alloc::Delete(d);
-    }
-    else if (strcmp(name, "serialize") == 0) {
+    } else if (strcmp(name, "serialize") == 0) {
       BlockWriter &out = *static_cast<BlockWriter *>(args[1]);
       out.bytes().i64(d->number);
       out.ref(d->mesh);
       new (ret) Status();
-    }
-    else if (strcmp(name, "deserialize") == 0) {
+    } else if (strcmp(name, "deserialize") == 0) {
       BlockReader &in = *static_cast<BlockReader *>(args[1]);
       d = litestl::alloc::New<Doc>("Doc");
       d->number = in.bytes().i64();
       in.ref(d->mesh);
       in.setData(d);
       new (ret) Status();
-    }
-    else if (strcmp(name, "duplicate") == 0) {
+    } else if (strcmp(name, "duplicate") == 0) {
       Doc *copy = litestl::alloc::New<Doc>("Doc");
       copy->number = d->number;
       static_cast<BlockCopy *>(args[1])->setData(copy);
       new (ret) Status();
-    }
-    else if (strcmp(name, "rekey") == 0) {
+    } else if (strcmp(name, "rekey") == 0) {
       BlockId id = b.id();
       id.local.lo = 77;
       if (!static_cast<const RekeyContext *>(args[1])->isFree(id)) {
@@ -610,15 +629,17 @@ static void test_foreign()
 {
   Runtime rt;
   FakeHost host;
-  const char *slots[] = {"data",      "foreachRef",  "destroy",  "serialize",
-                         "deserialize", "duplicate", "rekey"};
-  test_assert(registerForeign<BlockProvider>(rt, "test.Js#provider", &host, nullptr, slots).ok());
+  const char *slots[] = {
+      "data", "foreachRef", "destroy", "serialize", "deserialize", "duplicate", "rekey"};
+  test_assert(
+      registerForeign<BlockProvider>(rt, "test.Js#provider", &host, nullptr, slots).ok());
   int jsObject = 1;
   BlockProvider p = query<BlockProvider>(rt, TypeId::of("test.Js#provider"), &jsObject);
   BlockTypeInfo info;
   info.name = "test.Js";
   info.client = ClientId::of(kCoredccClient);
-  test_assert(rt.ext<BlockTypeRegistry>().add(info, Owned<BlockProvider>(p, nullptr)).ok());
+  test_assert(
+      rt.ext<BlockTypeRegistry>().add(info, Owned<BlockProvider>(p, nullptr)).ok());
   Library lib(&rt);
   lib.setAuditRelations(true);
   Doc *d = litestl::alloc::New<Doc>("Doc");
@@ -629,13 +650,17 @@ static void test_foreign()
   test_assert(payload.ok() && payload->refs.size() == 1);
   Result<BlockHandle> back = lib.create(TypeId::of("test.Js"), "back", nullptr);
   test_assert(back.ok() && readPayload(lib, *back, *payload).ok());
-  test_assert(doc(lib, *back)->number == 12 && doc(lib, *back)->mesh.target == lib.get(*h)->id());
+  test_assert(doc(lib, *back)->number == 12 &&
+              doc(lib, *back)->mesh.target == lib.get(*h)->id());
   BlockCopy copy;
   test_assert(p.duplicate(*lib.get(*h), copy).ok());
-  test_assert(PayloadAccess::data(copy) && static_cast<Doc *>(PayloadAccess::data(copy))->number == 12);
+  test_assert(PayloadAccess::data(copy) &&
+              static_cast<Doc *>(PayloadAccess::data(copy))->number == 12);
   litestl::alloc::Delete(static_cast<Doc *>(PayloadAccess::data(copy)));
   const auto odd = [](const void *, const BlockId &id) { return (id.local.lo & 1) != 0; };
-  const auto even = [](const void *, const BlockId &id) { return (id.local.lo & 1) == 0; };
+  const auto even = [](const void *, const BlockId &id) {
+    return (id.local.lo & 1) == 0;
+  };
   test_assert(p.rekey(*lib.get(*h), RekeyContext(lib, nullptr, odd)).local.lo == 77);
   test_assert(p.rekey(*lib.get(*h), RekeyContext(lib, nullptr, even)).local.lo == 78);
 
@@ -649,8 +674,8 @@ static void test_foreign()
 
 /* ---- hostile input ---- */
 
-/* Any bytes and any table: no crash, the record has data or it doesn't, and time and memory
- * stay bounded. */
+/* Any bytes and any table: no crash, the record has data or it doesn't, and time and
+ * memory stay bounded. */
 static void test_fuzz()
 {
   World w;
@@ -687,8 +712,9 @@ static void test_fuzz()
     BlockPayload bad = *p;
     for (uint32_t e = 1 + rng.below(4); e > 0; e--) {
       const int at = int(rng.below(uint32_t(bad.bytes.size())));
-      bad.bytes[at] = rng.below(3) == 0 ? 0xff : rng.below(2) ? uint8_t(rng.below(13)) :
-                                                                uint8_t(rng.next());
+      bad.bytes[at] = rng.below(3) == 0 ? 0xff
+                      : rng.below(2)    ? uint8_t(rng.below(13))
+                                        : uint8_t(rng.next());
     }
     const BlockHandle e = emptyDoc(w.lib, "e");
     const size_t before = litestl::alloc::getMemorySize();
@@ -734,7 +760,8 @@ static void test_fuzz()
     const BlockHandle e = emptyDoc(w.lib, "dense");
     const size_t before = litestl::alloc::getMemorySize();
     test_assert(dense.ok() && readPayload(w.lib, e, *dense).ok());
-    test_assert(litestl::alloc::getMemorySize() - before < 100 * size_t(dense->bytes.size()));
+    test_assert(litestl::alloc::getMemorySize() - before <
+                100 * size_t(dense->bytes.size()));
   }
   test_assert(w.lib.collect().ok() && w.valid());
 }

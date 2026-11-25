@@ -1,5 +1,5 @@
-/* Several Libraries with one executor: the scene's commands, undone or redone through another one's
- * Context, or when their own is gone, are refused and change nothing. */
+/* Several Libraries with one executor: the scene's commands, undone or redone through
+ * another one's Context, or when their own is gone, are refused and change nothing. */
 #include "command_doc.h"
 
 test_init;
@@ -29,10 +29,11 @@ struct Documents : CommandDoc {
       o->channels = trs->defaults();
       must(two->createWithId(TypeId::of(kObjectType), idOf(h), "other", o).status());
     }
-    Result<BlockHandle> s = two->createWithId(TypeId::of(kSceneType),
-                                              idOf(scene),
-                                              "other",
-                                              litestl::alloc::New<Scene>("coredcc::Scene"));
+    Result<BlockHandle> s =
+        two->createWithId(TypeId::of(kSceneType),
+                          idOf(scene),
+                          "other",
+                          litestl::alloc::New<Scene>("coredcc::Scene"));
     must(s.status());
     two->setFlag(*s, BlockFlags::Root, true);
     for (BlockHandle h : {top, mid}) {
@@ -83,10 +84,11 @@ std::vector<Case> cases()
        [](Documents &d) {
          Result<BlockHandle> h = newObject(*d.lib, "loose", kTrsTransform);
          must(h.status());
-         must(d.two->createWithId(TypeId::of(kObjectType),
-                                  d.idOf(*h),
-                                  "other",
-                                  litestl::alloc::New<Object>("coredcc::Object", &d.rt))
+         must(d.two
+                  ->createWithId(TypeId::of(kObjectType),
+                                 d.idOf(*h),
+                                 "other",
+                                 litestl::alloc::New<Object>("coredcc::Object", &d.rt))
                   .status());
          d.ok(kLinkCommand, {{"object", d.ptr(*h)}});
        }},
@@ -94,13 +96,18 @@ std::vector<Case> cases()
       {kSetActiveCommand,
        [](Documents &d) { d.ok(kSetActiveCommand, {{"object", d.ptr(d.top)}}); }},
       {kSelectCommand,
-       [](Documents &d) { d.ok(kSelectCommand, {{"mode", PropValue::ofString("NONE")}}); }},
+       [](Documents &d) {
+         d.ok(kSelectCommand, {{"mode", PropValue::ofString("NONE")}});
+       }},
       {kAddObjectCommand, [](Documents &d) { d.ok(kAddObjectCommand); }},
       {kSetParentCommand,
-       [](Documents &d) { d.ok(kSetParentCommand, {{"parent", PropValue::nullPointer()}}); }},
+       [](Documents &d) {
+         d.ok(kSetParentCommand, {{"parent", PropValue::nullPointer()}});
+       }},
       {kSetTransformTypeCommand,
        [](Documents &d) {
-         d.ok(kSetTransformTypeCommand, {{"type", PropValue::ofString(kMatrixTransform)}});
+         d.ok(kSetTransformTypeCommand,
+              {{"type", PropValue::ofString(kMatrixTransform)}});
        }},
       {kSetRotationModeCommand,
        [](Documents &d) {
@@ -109,9 +116,10 @@ std::vector<Case> cases()
       {kApplyDeltaCommand,
        [](Documents &d) {
          d.ok(kApplyDeltaCommand,
-              {{"vector", PropValue::ofComponents(
-                              PropValue::Type::Vec3,
-                              std::initializer_list<double>{1.0, 2.0, 3.0}.begin())}});
+              {{"vector",
+                PropValue::ofComponents(
+                    PropValue::Type::Vec3,
+                    std::initializer_list<double>{1.0, 2.0, 3.0}.begin())}});
        }},
       {kDragDeltaCommand, [](Documents &d) { d.drag(); }},
       {kDeleteObjectsCommand, [](Documents &d) { d.ok(kDeleteObjectsCommand); }},
@@ -197,7 +205,8 @@ void testDrag()
   v.channels = &defaults;
   must(changes.write(*d.ctx, d.top, v));
   const std::string now = d.describe();
-  test_assert(says(changes.write(*d.in2, d.two->find(d.idOf(d.mid)), v), "in another Library"));
+  test_assert(
+      says(changes.write(*d.in2, d.two->find(d.idOf(d.mid)), v), "in another Library"));
   test_assert(says(changes.rewrite(*d.in2, 0, defaults), "in another Library"));
   test_assert(says(changes.redo(*d.in2), "in another Library"));
   changes.undo(*d.in2);

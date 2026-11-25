@@ -1,9 +1,9 @@
 #include "coredcc/command/executor.h"
 
 #include "coredcc/api/resolve.h"
+#include "coredcc/base/text.h"
 #include "coredcc/command/block_commands.h"
 #include "coredcc/command/last_used.h"
-#include "coredcc/base/text.h"
 #include "coredcc/command/literal.h"
 #include "coredcc/lib/library.h"
 #include "coredcc/parse/invocation.h"
@@ -19,9 +19,10 @@ namespace {
 /* Points ctx's command bags and path prefix at one record for the length of a slot
  * call, restoring the outer ones after: sub-commands nest. */
 class BagScope {
- public:
+public:
   BagScope(Context &ctx, CommandRecord &rec)
-      : ctx_(ctx), inputs_(ctx.inputs()), outputs_(ctx.outputs()), prefix_(ctx, rec.prefix())
+      : ctx_(ctx), inputs_(ctx.inputs()), outputs_(ctx.outputs()),
+        prefix_(ctx, rec.prefix())
   {
     ctx.setCommandBags(&rec.inputs(), &rec.outputs());
   }
@@ -30,7 +31,7 @@ class BagScope {
     ctx_.setCommandBags(inputs_, outputs_);
   }
 
- private:
+private:
   Context &ctx_;
   const PropertyBag *inputs_;
   PropertyBag *outputs_;
@@ -39,7 +40,7 @@ class BagScope {
 
 /* Marks a slot call other than exec, so the slot can't call back into the executor. */
 class SlotScope {
- public:
+public:
   explicit SlotScope(int &depth) : depth_(depth)
   {
     depth_++;
@@ -49,13 +50,13 @@ class SlotScope {
     depth_--;
   }
 
- private:
+private:
   int &depth_;
 };
 
 /* Binds a Context with no executor to `ex` for one call. */
 class Binding {
- public:
+public:
   Binding(Context &ctx, CommandExecutor *ex) : ctx_(ctx)
   {
     if (!ctx.executor()) {
@@ -77,7 +78,7 @@ class Binding {
                                "the Context belongs to another executor");
   }
 
- private:
+private:
   Context &ctx_;
   bool bound_ = false;
   bool ok_ = false;
@@ -85,9 +86,8 @@ class Binding {
 
 Status combine(const Status &first, const char *joint, const Status &second)
 {
-  return Status::error(first.code(), (std::string(first.message()) + joint +
-                                      second.message())
-                                         .c_str());
+  return Status::error(first.code(),
+                       (std::string(first.message()) + joint + second.message()).c_str());
 }
 
 /* def.newInputs() with the caller's set values copied in. */
@@ -98,10 +98,10 @@ Result<PropertyBag> conformInputs(const CommandDef &def, const PropertyBag &give
     const char *name = given.def(i).apiName().c_str();
     const int at = bag.indexOf(name);
     if (at < 0) {
-      return Status::error(StatusCode::InvalidArgument,
-                           ("'" + std::string(def.name().c_str()) + "' has no input '" +
-                            name + "'")
-                               .c_str());
+      return Status::error(
+          StatusCode::InvalidArgument,
+          ("'" + std::string(def.name().c_str()) + "' has no input '" + name + "'")
+              .c_str());
     }
     if (!given.wasSet(i)) {
       continue;
@@ -120,8 +120,11 @@ Result<PropertyBag> conformInputs(const CommandDef &def, const PropertyBag &give
 
 /* ---- CommandRecord ---- */
 
-CommandRecord::CommandRecord(const CommandDef *def, Owned<Command> cmd, PropertyBag inputs)
-    : def_(def), cmd_(std::move(cmd)), inputs_(std::move(inputs)), outputs_(def->newOutputs())
+CommandRecord::CommandRecord(const CommandDef *def,
+                             Owned<Command> cmd,
+                             PropertyBag inputs)
+    : def_(def), cmd_(std::move(cmd)), inputs_(std::move(inputs)),
+      outputs_(def->newOutputs())
 {
 }
 
@@ -161,8 +164,8 @@ void CommandRecord::undo(Context &ctx)
   cmd_.get().undo(ctx);
 }
 
-/* `s`, with a sticky error set by the slot call folded in: a failed foreign slot only sets
- * the sticky error, and returns an ok Status. */
+/* `s`, with a sticky error set by the slot call folded in: a failed foreign slot only
+ * sets the sticky error, and returns an ok Status. */
 static Status withSticky(Context &ctx, Status s)
 {
   Runtime &rt = ctx.runtime();
@@ -239,7 +242,7 @@ namespace {
 
 /* Marks the history as inside a record's slot; nested calls are refused. */
 class HistoryCall {
- public:
+public:
   explicit HistoryCall(bool &flag) : flag_(flag)
   {
     CDCC_CHECK(!flag_, "LinearHistory called from inside one of its records' slots");
@@ -250,7 +253,7 @@ class HistoryCall {
     flag_ = false;
   }
 
- private:
+private:
   bool &flag_;
 };
 
@@ -285,7 +288,9 @@ void LinearHistory::push(RecordPtr rec)
 {
   HistoryCall call(inCall_);
   truncateRedo();
-  if (headFoldable_ && cursor_ > floor_ && rec->command().hasFold() && rec->subCount() == 0) {
+  if (headFoldable_ && cursor_ > floor_ && rec->command().hasFold() &&
+      rec->subCount() == 0)
+  {
     CommandRecord *head = entries_[cursor_ - 1];
     const uint64_t key = rec->command().foldKey();
     if (key != 0 && head->subCount() == 0 && head->command().hasFold() &&
@@ -366,7 +371,8 @@ Status LinearHistory::undo(Context &ctx)
   CommandRecord *rec = entries_[--cursor_];
   rec->undo(ctx);
   if (!stray && rt.hasStickyError()) {
-    /* Undo can't be rolled back, and what it left is unknown: redoing over it isn't safe. */
+    /* Undo can't be rolled back, and what it left is unknown: redoing over it isn't safe.
+     */
     const std::string note = "undo of '" + std::string(rec->def().name().c_str()) +
                              "' failed, so it and the commands after it were dropped";
     truncateRedo();
@@ -441,7 +447,8 @@ uint64_t LinearHistory::memoryUsed() const
 Status LinearHistory::validate() const
 {
   if (cursor_ < 0 || cursor_ > int(entries_.size()) || floor_ < 0 || floor_ > cursor_) {
-    return Status::error(StatusCode::Internal, "LinearHistory: cursor or floor out of range");
+    return Status::error(StatusCode::Internal,
+                         "LinearHistory: cursor or floor out of range");
   }
   uint64_t total = 0;
   for (const CommandRecord *r : entries_) {
@@ -458,13 +465,15 @@ Status LinearHistory::validate() const
 
 /* ---- CommandExecutor ---- */
 
-CommandExecutor::CommandExecutor(Runtime *rt, UndoHistory *history) : rt_(*rt), history_(history)
+CommandExecutor::CommandExecutor(Runtime *rt, UndoHistory *history)
+    : rt_(*rt), history_(history)
 {
 }
 
 CommandExecutor::~CommandExecutor()
 {
-  CDCC_CHECK(stack_.size() == 0 && slotDepth_ == 0, "CommandExecutor destroyed while a command runs");
+  CDCC_CHECK(stack_.size() == 0 && slotDepth_ == 0,
+             "CommandExecutor destroyed while a command runs");
   if (open_) {
     /* Cancel: leave neither the live edit nor the collection block behind. A sticky
      * error from the undo stays pending for the next caller. */
@@ -491,16 +500,16 @@ Status CommandExecutor::busy(const char *what) const
 Status CommandExecutor::refuseNested(const char *what)
 {
   if (running() || slotDepth_ > 0) {
-    return Status::error(StatusCode::FailedPrecondition,
-                         (std::string(what) + " inside a command: only exec may call runSub")
-                             .c_str());
+    return Status::error(
+        StatusCode::FailedPrecondition,
+        (std::string(what) + " inside a command: only exec may call runSub").c_str());
   }
   if (rt_.hasStickyError()) {
     Status stray = rt_.takeStickyError();
-    return Status::error(StatusCode::FailedPrecondition,
-                         (std::string(what) + ": an earlier error was never collected: " +
-                          stray.message())
-                             .c_str());
+    return Status::error(
+        StatusCode::FailedPrecondition,
+        (std::string(what) + ": an earlier error was never collected: " + stray.message())
+            .c_str());
   }
   return Status();
 }
@@ -545,8 +554,9 @@ Result<RecordPtr> CommandExecutor::start(Context &ctx,
         SlotScope slot(slotDepth_);
         cmd.get().discard();
       }
-      return Status::error(address.status().code(),
-                           (std::string("the path prefix: ") + address.status().message()).c_str());
+      return Status::error(
+          address.status().code(),
+          (std::string("the path prefix: ") + address.status().message()).c_str());
     }
     prefix = std::move(address).value();
   }
@@ -559,8 +569,8 @@ Result<RecordPtr> CommandExecutor::start(Context &ctx,
     }
     cmd = std::move(made).value();
   }
-  RecordPtr rec(litestl::alloc::New<CommandRecord>("coredcc::CommandRecord", &def,
-                                                   std::move(cmd), std::move(bag).value()));
+  RecordPtr rec(litestl::alloc::New<CommandRecord>(
+      "coredcc::CommandRecord", &def, std::move(cmd), std::move(bag).value()));
   rec->rt_ = &rt_;
   rec->fromFactory_ = fromFactory;
   rec->prefix_ = std::move(prefix);
@@ -612,22 +622,22 @@ Result<PropertyBag> CommandExecutor::finish(Context &, RecordPtr rec)
     SlotScope slot(slotDepth_);
     if (!history_ || def.has(CommandFlags::NoUndo)) {
       rec->discard();
-    }
-    else if (def.has(CommandFlags::UndoBarrier)) {
+    } else if (def.has(CommandFlags::UndoBarrier)) {
       rec->discard();
       history_->pushBarrier();
-    }
-    else {
+    } else {
       history_->push(std::move(rec));
     }
   }
   if (rt_.hasStickyError()) {
     /* From the history's upkeep (memSize, folding, discarding old entries). */
     Status s = rt_.takeStickyError();
-    return Status::error(s.code(), ("'" + std::string(def.name().c_str()) +
-                                    "' ran and was recorded, but the history's upkeep "
-                                    "failed: " + s.message())
-                                       .c_str());
+    return Status::error(s.code(),
+                         ("'" + std::string(def.name().c_str()) +
+                          "' ran and was recorded, but the history's upkeep "
+                          "failed: " +
+                          s.message())
+                             .c_str());
   }
   return outputs;
 }
@@ -644,10 +654,10 @@ Result<PropertyBag> CommandExecutor::runInstance(Context &ctx,
     return busy(def.name().c_str());
   }
   if (def.has(CommandFlags::Interactive)) {
-    return Status::error(StatusCode::FailedPrecondition,
-                         ("'" + std::string(def.name().c_str()) +
-                          "' is interactive: use beginInteractive")
-                             .c_str());
+    return Status::error(
+        StatusCode::FailedPrecondition,
+        ("'" + std::string(def.name().c_str()) + "' is interactive: use beginInteractive")
+            .c_str());
   }
   Binding bind(ctx, this);
   CDCC_TRY(bind.status());
@@ -659,12 +669,14 @@ Result<PropertyBag> CommandExecutor::runInstance(Context &ctx,
   return finish(ctx, std::move(rec).value());
 }
 
-Result<PropertyBag> CommandExecutor::run(Context &ctx, const CommandDef &def, PropertyBag inputs)
+Result<PropertyBag>
+CommandExecutor::run(Context &ctx, const CommandDef &def, PropertyBag inputs)
 {
   return runInstance(ctx, def, Owned<Command>(), std::move(inputs));
 }
 
-Result<PropertyBag> CommandExecutor::run(Context &ctx, std::string_view id, PropertyBag inputs)
+Result<PropertyBag>
+CommandExecutor::run(Context &ctx, std::string_view id, PropertyBag inputs)
 {
   const CommandDef *def = rt_.ext<CommandRegistry>().find(id);
   if (!def) {
@@ -696,12 +708,14 @@ Status CommandExecutor::canRun(Context &ctx, const CommandDef &def, PropertyBag 
   return collect(Status());
 }
 
-Result<PropertyBag> CommandExecutor::runSub(Context &ctx, Owned<Command> cmd, const CommandDef &def)
+Result<PropertyBag>
+CommandExecutor::runSub(Context &ctx, Owned<Command> cmd, const CommandDef &def)
 {
   return subRun(ctx, def, std::move(cmd), def.newInputs());
 }
 
-Result<PropertyBag> CommandExecutor::runSub(Context &ctx, const CommandDef &def, PropertyBag inputs)
+Result<PropertyBag>
+CommandExecutor::runSub(Context &ctx, const CommandDef &def, PropertyBag inputs)
 {
   return subRun(ctx, def, Owned<Command>(), std::move(inputs));
 }
@@ -713,10 +727,10 @@ Result<PropertyBag> CommandExecutor::subRun(Context &ctx,
 {
   CDCC_TRY(rt_.busyIfEvaluating("runSub"));
   if (!running() || slotDepth_ > 0) {
-    return Status::error(StatusCode::FailedPrecondition,
-                         ("runSub(" + std::string(def.name().c_str()) +
-                          ") outside a command's exec")
-                             .c_str());
+    return Status::error(
+        StatusCode::FailedPrecondition,
+        ("runSub(" + std::string(def.name().c_str()) + ") outside a command's exec")
+            .c_str());
   }
   if (int(stack_.size()) >= kMaxNesting) {
     return Status::error(StatusCode::OutOfRange,
@@ -739,7 +753,8 @@ Status CommandExecutor::undo(Context &ctx)
 {
   CDCC_TRY(rt_.busyIfEvaluating("undo"));
   if (open_ && !running() && slotDepth_ == 0) {
-    return cancel(ctx); /* before the stray-error check: cancel collects the live phase's */
+    return cancel(
+        ctx); /* before the stray-error check: cancel collects the live phase's */
   }
   CDCC_TRY(refuseNested("undo"));
   if (!history_) {
@@ -759,7 +774,8 @@ Status CommandExecutor::redo(Context &ctx)
 {
   CDCC_TRY(rt_.busyIfEvaluating("redo"));
   if (open_ && !running() && slotDepth_ == 0) {
-    return cancel(ctx); /* before the stray-error check: cancel collects the live phase's */
+    return cancel(
+        ctx); /* before the stray-error check: cancel collects the live phase's */
   }
   CDCC_TRY(refuseNested("redo"));
   if (!history_) {
@@ -790,9 +806,10 @@ Status CommandExecutor::rerunHead(Context &ctx, PropertyBag newInputs)
   const CommandDef &def = head->def();
   const std::string id = def.name().c_str();
   if (def.has(CommandFlags::Interactive)) {
-    return Status::error(StatusCode::FailedPrecondition,
-                         ("rerunHead: '" + id + "' is interactive; its values came from the drag")
-                             .c_str());
+    return Status::error(
+        StatusCode::FailedPrecondition,
+        ("rerunHead: '" + id + "' is interactive; its values came from the drag")
+            .c_str());
   }
   if (!head->fromFactory()) {
     return Status::error(StatusCode::FailedPrecondition,
@@ -814,9 +831,11 @@ Status CommandExecutor::rerunHead(Context &ctx, PropertyBag newInputs)
   }
   if (Status u = collect(Status()); !u.ok()) {
     discardRecord(*old);
-    return Status::error(u.code(), ("rerunHead: undoing the previous run failed, and it was "
-                                    "dropped: " + std::string(u.message()))
-                                       .c_str());
+    return Status::error(u.code(),
+                         ("rerunHead: undoing the previous run failed, and it was "
+                          "dropped: " +
+                          std::string(u.message()))
+                             .c_str());
   }
 
   Result<PropertyBag> out = [&] {
@@ -844,8 +863,9 @@ Status CommandExecutor::rerunHead(Context &ctx, PropertyBag newInputs)
   return collect(out.status());
 }
 
-Status CommandExecutor::revertHead(Context &ctx,
-                                   litestl::util::function_ref<bool(CommandRecord &rec)> which)
+Status
+CommandExecutor::revertHead(Context &ctx,
+                            litestl::util::function_ref<bool(CommandRecord &rec)> which)
 {
   CDCC_TRY(rt_.busyIfEvaluating("revertHead"));
   CDCC_TRY(refuseNested("revertHead"));
@@ -869,7 +889,8 @@ Status CommandExecutor::revertHead(Context &ctx,
   return Status();
 }
 
-Status CommandExecutor::beginInteractive(Context &ctx, const CommandDef &def, PropertyBag inputs)
+Status
+CommandExecutor::beginInteractive(Context &ctx, const CommandDef &def, PropertyBag inputs)
 {
   CDCC_TRY(rt_.busyIfEvaluating("beginInteractive"));
   CDCC_TRY(refuseNested("beginInteractive"));
@@ -877,8 +898,9 @@ Status CommandExecutor::beginInteractive(Context &ctx, const CommandDef &def, Pr
     return busy(def.name().c_str());
   }
   if (!def.has(CommandFlags::Interactive)) {
-    return Status::error(StatusCode::FailedPrecondition,
-                         ("'" + std::string(def.name().c_str()) + "' isn't interactive").c_str());
+    return Status::error(
+        StatusCode::FailedPrecondition,
+        ("'" + std::string(def.name().c_str()) + "' isn't interactive").c_str());
   }
   Binding bind(ctx, this);
   CDCC_TRY(bind.status());
@@ -911,7 +933,8 @@ Status CommandExecutor::updateInteractive(
 {
   CDCC_TRY(rt_.busyIfEvaluating("updateInteractive"));
   if (running() || slotDepth_ > 0) {
-    return Status::error(StatusCode::FailedPrecondition, "updateInteractive inside a command");
+    return Status::error(StatusCode::FailedPrecondition,
+                         "updateInteractive inside a command");
   }
   if (!open_) {
     return Status::error(StatusCode::FailedPrecondition,
@@ -931,15 +954,18 @@ Status CommandExecutor::commit(Context &ctx)
     return Status::error(StatusCode::FailedPrecondition, "commit inside a command");
   }
   if (!open_) {
-    return Status::error(StatusCode::FailedPrecondition, "commit: no interactive command");
+    return Status::error(StatusCode::FailedPrecondition,
+                         "commit: no interactive command");
   }
   if (rt_.hasStickyError()) {
     /* The live phase failed: what it left applied is unknown, so undo it all. */
     Status live = rt_.takeStickyError();
     Status c = cancel(ctx);
-    Status s = Status::error(live.code(), ("commit: the live edit failed, so the command "
-                                           "was cancelled: " + std::string(live.message()))
-                                              .c_str());
+    Status s = Status::error(live.code(),
+                             ("commit: the live edit failed, so the command "
+                              "was cancelled: " +
+                              std::string(live.message()))
+                                 .c_str());
     return c.ok() ? s : combine(s, "; also: ", c);
   }
   Binding bind(ctx, this);
@@ -961,7 +987,8 @@ Status CommandExecutor::cancel(Context &ctx)
     return Status::error(StatusCode::FailedPrecondition, "cancel inside a command");
   }
   if (!open_) {
-    return Status::error(StatusCode::FailedPrecondition, "cancel: no interactive command");
+    return Status::error(StatusCode::FailedPrecondition,
+                         "cancel: no interactive command");
   }
   Binding bind(ctx, this);
   CDCC_TRY(bind.status());
@@ -981,7 +1008,8 @@ Status CommandExecutor::cancel(Context &ctx)
 
 /* ---- invocation ---- */
 
-Result<PropertyBag> inputsFromInvocation(Context &ctx, const CommandDef &def, const Invocation &inv)
+Result<PropertyBag>
+inputsFromInvocation(Context &ctx, const CommandDef &def, const Invocation &inv)
 {
   Runtime &rt = ctx.runtime();
   PropertyBag bag = def.newInputs();
@@ -997,8 +1025,9 @@ Result<PropertyBag> inputsFromInvocation(Context &ctx, const CommandDef &def, co
         continue;
       }
       const PropertyDef in = bag.resolvedDef(i);
-      Result<PropValue> v = in.kind() == PropKind::Pointer ? parsePointer(ctx, in, arg.value) :
-                                                             parseLiteral(rt, in, arg.value);
+      Result<PropValue> v = in.kind() == PropKind::Pointer
+                                ? parsePointer(ctx, in, arg.value)
+                                : parseLiteral(rt, in, arg.value);
       if (!v.ok()) {
         return v.status();
       }
@@ -1009,10 +1038,8 @@ Result<PropertyBag> inputsFromInvocation(Context &ctx, const CommandDef &def, co
 }
 
 /* What `ctx`'s executor needs for `invocation`. */
-static Result<PropertyBag> bagFor(Context &ctx,
-                                  const char *what,
-                                  const Invocation &inv,
-                                  const CommandDef *&def)
+static Result<PropertyBag>
+bagFor(Context &ctx, const char *what, const Invocation &inv, const CommandDef *&def)
 {
   if (!ctx.executor()) {
     return Status::error(StatusCode::FailedPrecondition,
@@ -1040,7 +1067,8 @@ Result<PropertyBag> invoke(Context &ctx, std::string_view invocation)
   return ctx.executor()->run(ctx, *def, std::move(inputs).value());
 }
 
-Result<PropertyBag> invokeAt(Context &ctx, const Path &prefix, std::string_view invocation)
+Result<PropertyBag>
+invokeAt(Context &ctx, const Path &prefix, std::string_view invocation)
 {
   PrefixScope scope(ctx, prefix.size() > 0 ? &prefix : nullptr);
   return invoke(ctx, invocation);
@@ -1050,8 +1078,8 @@ Status canInvoke(Context &ctx, const Invocation &invocation)
 {
   const CommandDef *def = nullptr;
   Result<PropertyBag> inputs = bagFor(ctx, "canInvoke", invocation, def);
-  return inputs.ok() ? ctx.executor()->canRun(ctx, *def, std::move(inputs).value()) :
-                       inputs.status();
+  return inputs.ok() ? ctx.executor()->canRun(ctx, *def, std::move(inputs).value())
+                     : inputs.status();
 }
 
 Status canInvoke(Context &ctx, std::string_view invocation)

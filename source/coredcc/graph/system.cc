@@ -8,8 +8,8 @@ using litestl::util::Map;
 
 GraphSystem::GraphSystem(Runtime *rt) : rt_(*rt), clients_(rt->ext<ClientRegistry>())
 {
-  connection_ = rt_.ext<ChangeBus>().addChangeListener(
-      [this](const BusChange &c) { changed(c); });
+  connection_ =
+      rt_.ext<ChangeBus>().addChangeListener([this](const BusChange &c) { changed(c); });
 }
 
 BlockVersionPtr GraphSystem::follow(BlockId id, ChangeAspects aspects)
@@ -56,8 +56,7 @@ void GraphSystem::changed(const BusChange &change)
     touch(GraphEditNote());
     versions_.clear(); /* each gets a new version when it is next asked for */
     pruneAt_ = kPrune;
-  }
-  else if (owner->kind == OwnerKey::Kind::Block) {
+  } else if (owner->kind == OwnerKey::Kind::Block) {
     GraphEditNote e;
     e.kind = GraphEditNote::Kind::Block;
     e.block = clients_.canonical(owner->block);
@@ -88,8 +87,7 @@ void GraphSystem::note(const GraphEditNote &edit)
 {
   if (journal_.size() < kJournal) {
     journal_.append(edit);
-  }
-  else {
+  } else {
     journal_[int(end_ % kJournal)] = edit;
   }
   end_++;

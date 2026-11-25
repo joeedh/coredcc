@@ -1,5 +1,5 @@
-/* What an instance says about its nodes without evaluating: reports, values that were computed
- * on the way, and what it takes; and dropping what a node keeps. */
+/* What an instance says about its nodes without evaluating: reports, values that were
+ * computed on the way, and what it takes; and dropping what a node keeps. */
 #include "coredcc/graph/evaluator.h"
 
 #include "coredcc/lib/library.h"
@@ -24,21 +24,20 @@ const Frame *Evaluator::frameAt(const NodePath &path) const
     const GraphTopology::Node &n = f->topo->nodes[at];
     if (n.role == NodeRole::Foreach) {
       const KernelState *k = f->kernels[at];
-      Element *const *e = k && element < int(path.elements.size()) ?
-                              k->foreach->cached.lookup_ptr(path.elements[element]) :
-                              nullptr;
+      Element *const *e = k && element < int(path.elements.size())
+                              ? k->foreach->cached.lookup_ptr(path.elements[element])
+                              : nullptr;
       element++;
       f = e ? (*e)->frame : nullptr;
-    }
-    else {
+    } else {
       f = n.group >= 0 ? f->groups[n.group].child : nullptr;
     }
   }
   return f && f->topo ? f : nullptr;
 }
 
-/* The pass of which what is in a frame holds together, or 0. An element's are the passes of
- * its runs. */
+/* The pass of which what is in a frame holds together, or 0. An element's are the passes
+ * of its runs. */
 uint64_t Evaluator::standingPass(const Frame &f) const
 {
   if (f.top->element) {
@@ -87,7 +86,8 @@ GraphValue Evaluator::peek(const SocketPath &path) const
   if (i < 0 && iface && f == root_.get()) {
     Status status;
     const GraphDef *def = findDef(status);
-    const InterfaceSocket *s = def ? def->interfaceSocket(SocketSide::Output, key) : nullptr;
+    const InterfaceSocket *s =
+        def ? def->interfaceSocket(SocketSide::Output, key) : nullptr;
     i = s ? f->topo->inputIndex(n, s->key().c_str()) : -1;
   }
   return i >= 0 ? peekInput(*f, n.inBegin + i) : GraphValue();
@@ -108,8 +108,8 @@ GraphValue Evaluator::peekOutput(const Frame &f, int node, int output) const
   const char *key = f.topo->outputs[n.outBegin + output].key.c_str();
   if (isOneStep(n.role)) {
     const KernelState *k = f.kernels[node];
-    return k && !k->error && output < int(k->outputs.size()) ? k->outputs[output].value :
-                                                               GraphValue();
+    return k && !k->error && output < int(k->outputs.size()) ? k->outputs[output].value
+                                                             : GraphValue();
   }
   if (n.role == NodeRole::Group) {
     const Frame::Group &g = f.groups[n.group];
@@ -132,10 +132,12 @@ GraphValue Evaluator::peekOutput(const Frame &f, int node, int output) const
       }
     }
     const int at = c->topo->find(inner.node);
-    const int o = at >= 0 ? c->topo->outputIndex(c->topo->nodes[at], inner.key.c_str()) : -1;
+    const int o =
+        at >= 0 ? c->topo->outputIndex(c->topo->nodes[at], inner.key.c_str()) : -1;
     return o >= 0 ? peekOutput(*c, at, o) : GraphValue();
   }
-  /* A graph.input: what is at the group node, in the table's row, or set on the instance. */
+  /* A graph.input: what is at the group node, in the table's row, or set on the instance.
+   */
   if (f.element) {
     for (const Element::Input &in : f.element->inputs) {
       if (in.column && strcmp(interfaceKey(in.id).c_str(), key) == 0) {
@@ -154,9 +156,10 @@ GraphValue Evaluator::peekOutput(const Frame &f, int node, int output) const
   if (def && def == f.def && def->serial() == f.defSerial) {
     const Vector<InterfaceSocket> &list = def->interfaceSockets(SocketSide::Input);
     for (int i = 0; i < int(list.size()); i++) {
-      const SocketType *type = strcmp(list[i].key().c_str(), key) == 0 ?
-                                   rt_.ext<SocketTypeRegistry>().find(list[i].typeName.c_str()) :
-                                   nullptr;
+      const SocketType *type =
+          strcmp(list[i].key().c_str(), key) == 0
+              ? rt_.ext<SocketTypeRegistry>().find(list[i].typeName.c_str())
+              : nullptr;
       if (type) {
         return external(i, *type).value;
       }
@@ -190,7 +193,8 @@ static void addKernel(GraphMemory &m, const KernelState &k)
     addValue(m, o.value);
   }
   if (const Trace::Blocks *b = k.trace.more.get()) {
-    m.bytes += sizeof(*b) + heapBytes(b->params) + heapBytes(b->blocks) + heapBytes(b->queries);
+    m.bytes +=
+        sizeof(*b) + heapBytes(b->params) + heapBytes(b->blocks) + heapBytes(b->queries);
   }
 }
 
@@ -265,10 +269,10 @@ static bool worse(NodeReport::State a, NodeReport::State b)
 
 static NodeReport::State stateOf(const KernelState &k)
 {
-  return !k.visited      ? NodeReport::State::NotEvaluated :
-         !k.error        ? NodeReport::State::Ok :
-         k.inputFailed   ? NodeReport::State::InputFailed :
-                           NodeReport::State::Failed;
+  return !k.visited      ? NodeReport::State::NotEvaluated
+         : !k.error      ? NodeReport::State::Ok
+         : k.inputFailed ? NodeReport::State::InputFailed
+                         : NodeReport::State::Failed;
 }
 
 NodeReport Evaluator::report(const NodePath &path) const
@@ -303,8 +307,7 @@ NodeReport Evaluator::report(const NodePath &path) const
         inside.append(e.frame);
       });
     }
-  }
-  else if (const int group = f->topo->nodes[at].group; group >= 0) {
+  } else if (const int group = f->topo->nodes[at].group; group >= 0) {
     const Frame::Group &g = f->groups[group];
     r.current = stands(*f, g.pass);
     if (g.child) {

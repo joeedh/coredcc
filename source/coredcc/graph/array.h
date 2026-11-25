@@ -9,12 +9,14 @@
 
 namespace coredcc::graph {
 
-/** Elements on the heap, as many as `reset` said and no more. 16 bytes when empty, where a
- * Vector has room for elements. Their addresses don't change. */
+/** Elements on the heap, as many as `reset` said and no more. 16 bytes when empty, where
+ * a Vector has room for elements. Their addresses don't change. */
 template <class T> class Array {
- public:
+public:
   Array() = default;
-  Array(Array &&b) noexcept : data_(std::move(b.data_)), size_(std::exchange(b.size_, 0)) {}
+  Array(Array &&b) noexcept : data_(std::move(b.data_)), size_(std::exchange(b.size_, 0))
+  {
+  }
   Array &operator=(Array &&b) noexcept
   {
     data_ = std::move(b.data_);
@@ -60,7 +62,7 @@ template <class T> class Array {
     return data_.get() + size_;
   }
 
- private:
+private:
   std::unique_ptr<T[]> data_;
   int size_ = 0;
 };

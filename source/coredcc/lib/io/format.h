@@ -21,9 +21,10 @@
  *   blob: u32, 0 for no bytes, else an index into DATA plus 1; each is used at most once
  *   extension: u32 length, and fields: u32 tag, u32 length, bytes; the tags ascend
  *
- * The extension is for what later versions add to a record. A build keeps the fields it doesn't
- * know and writes them back, so they hold no indices into the file. A field whose tag has the
- * top bit is critical: a build that doesn't know it doesn't read the block's data.
+ * The extension is for what later versions add to a record. A build keeps the fields it
+ * doesn't know and writes them back, so they hold no indices into the file. A field whose
+ * tag has the top bit is critical: a build that doesn't know it doesn't read the block's
+ * data.
  *
  * Integer and tag values here are the file format: they never change meaning.
  */
@@ -86,7 +87,8 @@ inline constexpr size_t kRecordBytes = 65;
 inline constexpr size_t kNameBytes = 5;
 inline constexpr size_t kBlobBytes = 17;
 
-/** What a load charges per item against LoadLimits::maxBytes, on top of the item's bytes. */
+/** What a load charges per item against LoadLimits::maxBytes, on top of the item's bytes.
+ */
 inline constexpr uint64_t kRecordCost = sizeof(Datablock) + 640;
 inline constexpr uint64_t kAttachmentCost = sizeof(OpaqueAttachment) * 2 + 128;
 inline constexpr uint64_t kRowCost = sizeof(RefCell) * 7;
@@ -103,8 +105,8 @@ template <class T, int N> T *last(litestl::util::Vector<T, N> &v)
   return v.data() + v.size();
 }
 
-/** Whether a record's extension, which was checked, has a critical field this build doesn't
- * know. Version 1 knows none. */
+/** Whether a record's extension, which was checked, has a critical field this build
+ * doesn't know. Version 1 knows none. */
 bool hasCriticalField(std::span<const uint8_t> extension);
 /** Reads the fields. Fails `in` for damaged ones. */
 void readExtension(BytesReader &in, bool &critical);

@@ -18,7 +18,7 @@ namespace coredcc {
  * are invalidated by add().
  */
 class PropertyBag {
- public:
+public:
   /** Adds a property after validating its def. Names are unique. */
   Status add(PropertyDef def);
 
@@ -61,7 +61,7 @@ class PropertyBag {
    * facades, and never write them (a recorded command's inputs are read again later). */
   static const litestl::binding::types::Struct<PropertyBag> *defineBindings();
 
- private:
+private:
   struct Entry {
     PropertyDef def;
     PropValue value;

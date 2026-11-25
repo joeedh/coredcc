@@ -1,5 +1,6 @@
-/* Which of the things near a pixel comes first: pickScene with any options, against the rule applied to
- * every shape on its own, and cases where it is known what a user means. */
+/* Which of the things near a pixel comes first: pickScene with any options, against the
+ * rule applied to every shape on its own, and cases where it is known what a user means.
+ */
 #include "pick_doc.h"
 
 test_init;
@@ -52,11 +53,11 @@ std::vector<Shape1> everyShape(PickDoc &d,
       s.hit = sink.kept()[0].hit;
       s.hit.object = objects[size_t(place)];
       s.place = place;
-      s.dimension = p.kind == Kind::Point                            ? 0 :
-                    p.kind == Kind::Segment                          ? 1 :
-                    p.kind == Kind::Triangle || !s.hit.thin          ? 2 :
-                    lengthOf(p.q[0] - p.q[1]) > 0.0                  ? 1 :
-                                                                       0;
+      s.dimension = p.kind == Kind::Point                     ? 0
+                    : p.kind == Kind::Segment                 ? 1
+                    : p.kind == Kind::Triangle || !s.hit.thin ? 2
+                    : lengthOf(p.q[0] - p.q[1]) > 0.0         ? 1
+                                                              : 0;
       out.push_back(s);
     }
   }
@@ -64,7 +65,8 @@ std::vector<Shape1> everyShape(PickDoc &d,
 }
 
 /* The rule of detail::rankPicks, by looking for the next one again and again. */
-std::vector<Shape1> ranked(std::vector<Shape1> all, const ViewMath &view, const PickOptions &o)
+std::vector<Shape1>
+ranked(std::vector<Shape1> all, const ViewMath &view, const PickOptions &o)
 {
   double depth = std::numeric_limits<double>::infinity(), behind = depth;
   if (o.occlusion) {
@@ -167,7 +169,8 @@ void testRule()
       c.zFar = r.coin() ? 1000.0 : c.zNear + r.range(1.0, 8.0);
       c.dpiScale = r.coin() ? 1.0 : 2.0;
       const ViewMath view = viewOf(c);
-      const double x = std::round(r.range(600.0, 1400.0)), y = std::round(r.range(300.0, 800.0));
+      const double x = std::round(r.range(600.0, 1400.0)),
+                   y = std::round(r.range(300.0, 800.0));
       PickOptions o;
       o.radius = double(r.below(4)) * 10.0;
       o.shapeRadius = 6.0;
@@ -191,7 +194,10 @@ void testRule()
         for (BlockHandle h : objects) {
           given += d.geo(d.lib->find(d.obj(h).data.target())).given;
         }
-        expect(same(hits, want), mode == 0 ? "all shapes" : mode == 1 ? "from the BVH" : "from the ray");
+        expect(same(hits, want),
+               mode == 0   ? "all shapes"
+               : mode == 1 ? "from the BVH"
+                           : "from the ray");
         singles += o.maxHits == 1 && hits.size() == 1;
         rays += mode == 2 && o.maxHits == 1 && hits.size() == 1 && !hits[0].thin;
         fewer += mode == 0 && o.maxHits == 1 && given < 12 * 25 / 2;
@@ -200,10 +206,12 @@ void testRule()
         groups[s.group]++;
         hidden += s.group != 0 && s.hit.thin;
       }
-      several += o.everyDomain && want.size() > 1 && want[0].hit.object == want[1].hit.object;
+      several +=
+          o.everyDomain && want.size() > 1 && want[0].hit.object == want[1].hit.object;
     }
   }
-  printf("%d thin, %d covering, %d near; %d thin hidden; %d with two domains first; %d single, %d of "
+  printf("%d thin, %d covering, %d near; %d thin hidden; %d with two domains first; %d "
+         "single, %d of "
          "them surfaces found by rays, %d that asked half of the objects\n",
          groups[0],
          groups[1],
@@ -248,8 +256,8 @@ void testMeant()
   const ViewMath view = viewOf(ViewCase());
   const ViewPoint p = view.project(double3());
   const double pixel = view.pixelSizeAt(double3());
-  /* A mesh seen from the front: at a vertex, its faces cover the pixel, and the vertex is meant. A
-   * second vertex is on the other side of it, right under the cursor. */
+  /* A mesh seen from the front: at a vertex, its faces cover the pixel, and the vertex is
+   * meant. A second vertex is on the other side of it, right under the cursor. */
   for (double tilt : {0.0, 0.7, 1.0}) {
     PickDoc d;
     std::vector<Prim> prims;
@@ -268,7 +276,8 @@ void testMeant()
     /* By domain. */
     o.domains = 1u << int(ElementDomain::Edge);
     hits = d.picks(view, p.x, p.y, o);
-    test_assert(hits.size() == 1 && hits[0].element == 3 && std::fabs(hits[0].distance - 5.0) < 0.1);
+    test_assert(hits.size() == 1 && hits[0].element == 3 &&
+                std::fabs(hits[0].distance - 5.0) < 0.1);
     o.domains = 1u << int(ElementDomain::Face);
     hits = d.picks(view, p.x, p.y, o);
     test_assert(hits.size() == 1 && hits[0].element < 2 && hits[0].covers());
@@ -277,7 +286,8 @@ void testMeant()
     hits = d.picks(view, p.x, p.y, o);
     test_assert(hits.size() == 3 && hits[0].element == 2 && hits[1].element == 3 &&
                 hits[2].covers());
-    /* The vertex behind the faces, only without occlusion: also if faces aren't wanted. */
+    /* The vertex behind the faces, only without occlusion: also if faces aren't wanted.
+     */
     o.everyDomain = false;
     o.domains = 1u << int(ElementDomain::Point);
     o.radius = 2.0;
@@ -329,7 +339,8 @@ void testPixels()
     test_assert(hits.size() == 1 && std::fabs(hits[0].distance - 1.0) < 0.01);
     test_assert(lengthOf(hits[0].point) < 1e-9);
     hits = d.picks(view, p.x, p.y - 15.5 * dpi, o);
-    test_assert(hits.size() == 1 && hits[0].object == line && std::fabs(hits[0].distance - 1.5) < 0.01);
+    test_assert(hits.size() == 1 && hits[0].object == line &&
+                std::fabs(hits[0].distance - 1.5) < 0.01);
     test_assert(std::fabs(hits[0].u - 0.5) < 1e-6 && lengthOf(hits[0].normal) == 0.0);
     test_assert(d.picks(view, p.x, p.y - 14.5 * dpi, o).size() == 0);
   }
@@ -368,13 +379,15 @@ void testPixelSize()
         const double step = size * 1e-6;
         moved[axis] += step;
         const ViewPoint to = view.project(transformPoint(world, moved));
-        g[axis] = ((to.x - at.x) * std::cos(angle) + (to.y - at.y) * std::sin(angle)) / step;
+        g[axis] =
+            ((to.x - at.x) * std::cos(angle) + (to.y - at.y) * std::sin(angle)) / step;
       }
       reach = lengthOf(g) * size / c.dpiScale;
       least = std::fmin(least, reach);
       most = std::fmax(most, reach);
     }
-    expect(least > 0.999 && (least < 1.01 || most > 100.0), "the shadow of a ball with a pixel's size");
+    expect(least > 0.999 && (least < 1.01 || most > 100.0),
+           "the shadow of a ball with a pixel's size");
   }
   test_assert(known > 300);
   /* Flattened. */
@@ -382,7 +395,8 @@ void testPixelSize()
   flat.col[0] = double3();
   const PickCursor cursor(viewOf(ViewCase()), 1000.0, 500.0, within(5.0));
   const PickQuery q(cursor, solve::affine(flat, double3()));
-  test_assert(q.pixelSizeAt(double3()) == std::numeric_limits<double>::infinity() && !q.hasRay());
+  test_assert(q.pixelSizeAt(double3()) == std::numeric_limits<double>::infinity() &&
+              !q.hasRay());
 }
 
 /* ---- what a hit says ---- */
@@ -395,7 +409,8 @@ void testHit()
     const ViewCase c = randomView(r);
     const ViewMath view = viewOf(c);
     const int kind = int(r.below(3));
-    const mat4d world = solve::affine(randomLinear(r, kind), c.eye + (c.target - c.eye) * 3.0);
+    const mat4d world =
+        solve::affine(randomLinear(r, kind), c.eye + (c.target - c.eye) * 3.0);
     const double *m = world;
     const double3 x(m[0], m[1], m[2]), y(m[4], m[5], m[6]), z(m[8], m[9], m[10]);
     const bool mirror = x.cross(y).dot(z) < 0.0;
@@ -412,8 +427,7 @@ void testHit()
     PickSink sink(q);
     if (triangle) {
       sink.triangle(a, b, e);
-    }
-    else {
+    } else {
       sink.capsule(a, b, 0.1);
     }
     if (!sink.any()) {
@@ -423,7 +437,8 @@ void testHit()
     const double3 ray = view.rayFromPixel(at.x, at.y).dir;
     if (triangle) {
       const double3 wa = transformPoint(world, a);
-      const double3 ab = transformPoint(world, b) - wa, ac = transformPoint(world, e) - wa;
+      const double3 ab = transformPoint(world, b) - wa,
+                    ac = transformPoint(world, e) - wa;
       double3 n = ab.cross(ac);
       if (lengthOf(n) < 1e-3 || std::fabs(n.dot(ray)) < 1e-2 * lengthOf(n)) {
         continue; /* edge on */
@@ -432,7 +447,8 @@ void testHit()
       mirrored += mirror;
       n = n * ((mirror ? -1.0 : 1.0) / lengthOf(n));
       expect(lengthOf(hit.normal - n) < 1e-9, "the normal of a triangle");
-      expect(std::fabs(hit.u - u) < 1e-5 && std::fabs(hit.v - v) < 1e-5, "u and v of a triangle");
+      expect(std::fabs(hit.u - u) < 1e-5 && std::fabs(hit.v - v) < 1e-5,
+             "u and v of a triangle");
       expect(hit.backFacing == (n.dot(ray) > 0.0), "which side of a triangle");
       back += hit.backFacing;
       continue;
@@ -442,12 +458,14 @@ void testHit()
       continue;
     }
     solids++;
-    expect(!hit.backFacing && hit.normal.dot(ray) < 1e-6, "a solid is entered from outside");
+    expect(!hit.backFacing && hit.normal.dot(ray) < 1e-6,
+           "a solid is entered from outside");
     /* Nothing of the solid is past the tangent plane at the point. */
     const double3 axis[2] = {transformPoint(world, a), transformPoint(world, b)};
     const double3 local(hit.normal.dot(x), hit.normal.dot(y), hit.normal.dot(z));
     for (const double3 &end : axis) {
-      expect(hit.normal.dot(end - hit.point) + 0.1 * lengthOf(local) < 1e-6, "the normal of a solid");
+      expect(hit.normal.dot(end - hit.point) + 0.1 * lengthOf(local) < 1e-6,
+             "the normal of a solid");
     }
   }
   test_assert(faces > 300 && solids > 100 && back > 50 && mirrored > 50);
@@ -457,9 +475,11 @@ void testHit()
   const PickQuery q(cursor, identity());
   PickSink around(q), beside(q);
   around.sphere(double3(0, 0, 10), 1.0);
-  test_assert(around.any() && lengthOf(around.best().normal) == 0.0 && !around.best().backFacing);
+  test_assert(around.any() && lengthOf(around.best().normal) == 0.0 &&
+              !around.best().backFacing);
   beside.sphere(double3(0.2, 0, 0), 0.1);
-  test_assert(beside.any() && !beside.best().covers() && lengthOf(beside.best().normal) == 0.0);
+  test_assert(beside.any() && !beside.best().covers() &&
+              lengthOf(beside.best().normal) == 0.0);
 }
 
 /* ---- cases of the rule ---- */
@@ -507,11 +527,14 @@ void testOptions()
   d.evaluate();
   Vector<PickHit> hits;
   test_assert(d.tryPick(d.view, 0, 0, PickOptions(), hits).ok());
-  const double bad[] = {-1.0, std::numeric_limits<double>::infinity(),
+  const double bad[] = {-1.0,
+                        std::numeric_limits<double>::infinity(),
                         std::numeric_limits<double>::quiet_NaN()};
   for (double v : bad) {
-    for (double PickOptions::*field : {&PickOptions::radius, &PickOptions::shapeRadius,
-                                       &PickOptions::thinRadius, &PickOptions::slope})
+    for (double PickOptions::*field : {&PickOptions::radius,
+                                       &PickOptions::shapeRadius,
+                                       &PickOptions::thinRadius,
+                                       &PickOptions::slope})
     {
       PickOptions o;
       o.*field = v;
@@ -554,7 +577,8 @@ void testCases()
     }
   }
   {
-    /* What isn't wanted is in front of the first object's hit, but the second one's comes before. */
+    /* What isn't wanted is in front of the first object's hit, but the second one's comes
+     * before. */
     OrthoDoc d;
     std::vector<Prim> prims;
     quad(prims, double3(0, 0, 5), 1.0, 0.0);
@@ -568,8 +592,8 @@ void testCases()
     test_assert(hits.size() == 1 && hits[0].object == second);
   }
   {
-    /* A thin shape is hidden by what isn't wanted and is found later: a surface that is nearer to the
-     * cursor comes first then. */
+    /* A thin shape is hidden by what isn't wanted and is found later: a surface that is
+     * nearer to the cursor comes first then. */
     OrthoDoc d;
     d.add({vertex(double3(-2.0 * d.pixel, 0, 0)), vertex(double3(2, 2, 6))});
     std::vector<Prim> prims;
@@ -611,7 +635,8 @@ void testCases()
       PickOptions o;
       o.maxHits = max;
       const Vector<PickHit> hits = d.at(o);
-      test_assert(int(hits.size()) == (max ? 1 : 20) && hits[0].object == objects[up ? 19 : 0]);
+      test_assert(int(hits.size()) == (max ? 1 : 20) &&
+                  hits[0].object == objects[up ? 19 : 0]);
       int given = 0;
       for (BlockHandle h : objects) {
         Geo &g = d.geo(d.lib->find(d.obj(h).data.target()));
@@ -643,13 +668,17 @@ void testLimits()
     const ViewPoint at = view.project(double3());
     const PickCursor cursor(view, at.x, at.y, within(10.0));
     const PickQuery all(cursor, identity());
-    test_assert(inside(all, -9.99) && inside(all, -10.01) == infinite && !inside(all, 9.95));
+    test_assert(inside(all, -9.99) && inside(all, -10.01) == infinite &&
+                !inside(all, 9.95));
     test_assert(all.limitDepth() > 1e300 && all.surfaceRadiusDevicePixels() == 20.0);
-    test_assert(infinite ? all.ray().tMax > 1e300 : std::fabs(all.ray().tMax - 19.9) < 1e-6);
+    test_assert(infinite ? all.ray().tMax > 1e300
+                         : std::fabs(all.ray().tMax - 19.9) < 1e-6);
     /* The near plane is at z = 9.9. */
     const PickQuery some(cursor, identity(), 5.0, false);
-    test_assert(inside(some, 4.91) && !inside(some, 4.89) && std::fabs(some.ray().tMax - 5.0) < 1e-6);
-    test_assert(some.radiusDevicePixels() == 20.0 && some.surfaceRadiusDevicePixels() == 0.0);
+    test_assert(inside(some, 4.91) && !inside(some, 4.89) &&
+                std::fabs(some.ray().tMax - 5.0) < 1e-6);
+    test_assert(some.radiusDevicePixels() == 20.0 &&
+                some.surfaceRadiusDevicePixels() == 0.0);
     PickSink sink(some);
     sink.point(double3(0, 0, 4.89));
     const double beside = 3.0 * view.pixelSizeAt(double3(0, 0, 5));
@@ -662,8 +691,8 @@ void testLimits()
     test_assert(near.any());
     const PickQuery late(cursor, identity(), 25.0);
     test_assert(inside(late, -10.01) == infinite && !inside(late, -15.2));
-    test_assert(infinite ? std::fabs(late.ray().tMax - 25.0) < 1e-6 :
-                           std::fabs(late.ray().tMax - 19.9) < 1e-6);
+    test_assert(infinite ? std::fabs(late.ray().tMax - 25.0) < 1e-6
+                         : std::fabs(late.ray().tMax - 19.9) < 1e-6);
   }
 }
 
@@ -682,8 +711,10 @@ void testBox()
       const ViewMath view = viewOf(c);
       for (int k = 0; k < 4; k++) {
         const ViewPoint at = view.project(double3());
-        const PickCursor cursor(
-            view, at.x + (k & 1 ? 7.0 : -7.0), at.y + (k & 2 ? 5.0 : -5.0), PickOptions());
+        const PickCursor cursor(view,
+                                at.x + (k & 1 ? 7.0 : -7.0),
+                                at.y + (k & 2 ? 5.0 : -5.0),
+                                PickOptions());
         const PickQuery q(cursor, identity());
         PickSink sink(q);
         sink.box(box);

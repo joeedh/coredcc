@@ -59,8 +59,9 @@ Result<litestl::util::Vector<BlockHandle>> blocksInput(Context &ctx)
   for (const BlockId &id : *ids) {
     const BlockHandle h = lib->find(id);
     if (!h) {
-      return Status::error(StatusCode::FailedPrecondition,
-                           ("blocks: no such block " + formatBlockId(ctx.runtime(), id)).c_str());
+      return Status::error(
+          StatusCode::FailedPrecondition,
+          ("blocks: no such block " + formatBlockId(ctx.runtime(), id)).c_str());
     }
     if (!seen.lookup_ptr(h)) {
       seen.add(h, true);
@@ -68,7 +69,8 @@ Result<litestl::util::Vector<BlockHandle>> blocksInput(Context &ctx)
     }
   }
   if (out.size() == 0) {
-    return Status::error(StatusCode::FailedPrecondition, "block, blocks: no block is named");
+    return Status::error(StatusCode::FailedPrecondition,
+                         "block, blocks: no block is named");
   }
   return out;
 }
@@ -134,7 +136,8 @@ struct RenameBlock {
   }
   static lbt::Struct<RenameBlock> *defineBindings()
   {
-    auto *st = new lbt::Struct<RenameBlock>("coredcc::RenameBlockCommand", sizeof(RenameBlock));
+    auto *st =
+        new lbt::Struct<RenameBlock>("coredcc::RenameBlockCommand", sizeof(RenameBlock));
     BIND_BLOCK_EDIT(st);
     return st;
   }
@@ -159,13 +162,15 @@ struct UnlinkRef {
     }
     Library &lib = *ctx.library();
     const int64_t at = ctx.inputs()->get("index")->asInt();
-    if (const std::string name = ctx.inputs()->get("attachment")->asString().c_str(); !name.empty())
+    if (const std::string name = ctx.inputs()->get("attachment")->asString().c_str();
+        !name.empty())
     {
       attachment = detail::typeNamed(name);
     }
     const litestl::util::Vector<RefCell> *rows = lib.refTable(*h, attachment);
     if (!rows || at < 0 || at >= int64_t(rows->size())) {
-      return Status::error(StatusCode::OutOfRange, "index: the block has no such reference");
+      return Status::error(StatusCode::OutOfRange,
+                           "index: the block has no such reference");
     }
     index = int(at);
     before = (*rows)[index].target;
@@ -181,11 +186,12 @@ struct UnlinkRef {
     }
     const Datablock *b = (*lib)->get(block.get());
     if (b && !(*lib)->refTable(block.get(), attachment)) {
-      return Status::error(
-          StatusCode::FailedPrecondition,
-          ("'" + std::string(b->name().c_str()) + "' has been read since its reference was cut, so "
-           "its references are its provider's: clear the history when placeholders are resolved")
-              .c_str());
+      return Status::error(StatusCode::FailedPrecondition,
+                           ("'" + std::string(b->name().c_str()) +
+                            "' has been read since its reference was cut, so "
+                            "its references are its provider's: clear the history when "
+                            "placeholders are resolved")
+                               .c_str());
     }
     CDCC_TRY((*lib)->relinkRef(block.get(), index, to, attachment));
     ctx.runtime().ext<ChangeBus>().notify(OwnerKey::ofBlock(block.id()), "references");

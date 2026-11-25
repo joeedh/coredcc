@@ -30,13 +30,15 @@ struct PathNode {
  * is atomic: PathPtrs may cross threads, the cache itself may not.
  */
 class PathPtr {
- public:
+public:
   PathPtr() = default;
   PathPtr(const PathPtr &b) : n_(b.n_)
   {
     retain();
   }
-  PathPtr(PathPtr &&b) noexcept : n_(std::exchange(b.n_, nullptr)) {}
+  PathPtr(PathPtr &&b) noexcept : n_(std::exchange(b.n_, nullptr))
+  {
+  }
   PathPtr &operator=(const PathPtr &b)
   {
     PathPtr tmp(b);
@@ -77,10 +79,12 @@ class PathPtr {
     return n_ ? n_->refs.load() : 0;
   }
 
- private:
+private:
   friend class PathCache;
   /** Adopts one reference. */
-  explicit PathPtr(detail::PathNode *n) : n_(n) {}
+  explicit PathPtr(detail::PathNode *n) : n_(n)
+  {
+  }
   void retain();
   void release();
 
@@ -92,7 +96,7 @@ class PathPtr {
  * (`rt.ext<PathCache>()`). Not thread-safe. Failed parses are not cached.
  */
 class PathCache {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.PathCache";
   static constexpr int kDefaultCapacity = 1024;
 
@@ -126,7 +130,7 @@ class PathCache {
 
   Status validate() const;
 
- private:
+private:
   void evictOne();
   void unlink(detail::PathNode *n);
   void pushNewest(detail::PathNode *n);

@@ -47,7 +47,8 @@ Result<Owned<GraphKernel>> makeKernel(Runtime &rt, std::string_view implName)
   {
     CDCC_TRY((registerImpl<GraphKernel, Impl>(rt, implName)));
   }
-  return own<GraphKernel>(rt, implName, litestl::alloc::New<Impl>("coredcc::GraphKernel"));
+  return own<GraphKernel>(
+      rt, implName, litestl::alloc::New<Impl>("coredcc::GraphKernel"));
 }
 
 /** A kernel that is one function. */
@@ -130,18 +131,18 @@ struct NodeParamDef {
 
 enum class NodeTypeFlags : uint32_t {
   None = 0,
-  /** Its nodes write to something outside the graph, which a program that evaluates it does
-   * from their outputs (GraphDef::forEachNode(flags) finds them). */
+  /** Its nodes write to something outside the graph, which a program that evaluates it
+   * does from their outputs (GraphDef::forEachNode(flags) finds them). */
   OutputAdapter = 1 << 0,
   /**
    * The kernel may run on any thread, and at the same time as itself and others. Nothing
-   * does so yet: kernels run one at a time on the main thread, and one without the flag always
-   * will. A kernel that has it
+   * does so yet: kernels run one at a time on the main thread, and one without the flag
+   * always will. A kernel that has it
    * - keeps no state of its own, or guards it;
    * - reads `userData` only, and only what nothing writes during an evaluation;
    * - doesn't use `library()`, `runtime()`, payloads that alias blocks, or scripts;
-   * - calls useBlock, paramBlock, queryBlock and alias only before it does anything long, as
-   *   those may wait for the main thread.
+   * - calls useBlock, paramBlock, queryBlock and alias only before it does anything long,
+   * as those may wait for the main thread.
    */
   ThreadSafe = 1 << 1,
 };
@@ -206,14 +207,14 @@ struct NodeType {
  * by one that is derived from their name, as properties are.
  */
 class NodeTypeDef {
- public:
+public:
   /** `name` is dotted identifiers, e.g. "my.scale". */
   explicit NodeTypeDef(std::string_view name);
   NodeTypeDef &uiName(std::string_view s);
   NodeTypeDef &flags(NodeTypeFlags f);
-  /** 1, unless set. Raise it when nodes of the type in files need a migration: a socket or
-   * param that has another name or meaning now. Nodes keep the version they were made with
-   * (GraphNode::typeVersion), in files too. */
+  /** 1, unless set. Raise it when nodes of the type in files need a migration: a socket
+   * or param that has another name or meaning now. Nodes keep the version they were made
+   * with (GraphNode::typeVersion), in files too. */
   NodeTypeDef &version(uint32_t v);
   NodeTypeDef &input(PropertyDef def);
   NodeTypeDef &payloadInput(std::string_view name,
@@ -230,7 +231,8 @@ class NodeTypeDef {
   {
     return name_;
   }
-  /** What was given to `input` or `param` under that name, to change it; null if none was. */
+  /** What was given to `input` or `param` under that name, to change it; null if none
+   * was. */
   PropertyDef *inputDef(std::string_view name);
   PropertyDef *paramDef(std::string_view name);
   /** Sets the uiName of a socket; false if there is none of that name. */
@@ -240,7 +242,7 @@ class NodeTypeDef {
   /** Bound without members: scripts use bind/'s facades. */
   static const litestl::binding::types::Struct<NodeTypeDef> *defineBindings();
 
- private:
+private:
   friend class NodeTypeRegistry;
   struct Input {
     litestl::util::string name;
@@ -273,20 +275,20 @@ inline constexpr const char *kGraphForeachType = "graph.foreach";
 
 /**
  * Node types by name. A Runtime extension, created with the built-in ones: `graph.input`,
- * `graph.output`, `graph.group` and `graph.foreach`, `value.<socket type>` (a constant, in
- * its `value` param), `math.float`, `vec.combine`, `vec.separate` and `mat4.multiply`, and
- * those for tables (graph/foreach.h):
+ * `graph.output`, `graph.group` and `graph.foreach`, `value.<socket type>` (a constant,
+ * in its `value` param), `math.float`, `vec.combine`, `vec.separate` and `mat4.multiply`,
+ * and those for tables (graph/foreach.h):
  * - `elements.range`: `count` elements, with the columns `index` and `factor` (0 to 1);
  * - `elements.count`;
  * - `elements.value.<socket type>`: the value of a column at an index;
  * - `elements.rename`: renames a column;
  * - `elements.combine`: a's rows, with b's columns.
  *
- * Types can't be removed, and only their kernels replaced. Registering is Busy while a graph evaluates, and
- * counts as an edit, so nodes waiting for the type evaluate again.
+ * Types can't be removed, and only their kernels replaced. Registering is Busy while a
+ * graph evaluates, and counts as an edit, so nodes waiting for the type evaluate again.
  */
 class NodeTypeRegistry {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.NodeTypeRegistry";
 
   explicit NodeTypeRegistry(Runtime *rt);
@@ -298,14 +300,16 @@ class NodeTypeRegistry {
    * Registers a type. Everything is checked before anything changes: names are unique
    * identifiers other than `length` and `active`, defs are valid, socket types exist, a
    * Pointer param names its target struct, there are no Collection params, no dynamic
-   * defs and no Optional inputs, the version isn't 0, and there is a kernel and an output.
+   * defs and no Optional inputs, the version isn't 0, and there is a kernel and an
+   * output.
    */
   Result<const NodeType *> add(NodeTypeDef def);
   /**
-   * Replaces the kernel of a registered type by that of `def`, for code that is reloaded. All
-   * nodes of the type run again when they are needed. FailedPrecondition unless the rest
-   * says the same as the type: the names, types and order of sockets and params, the items of
-   * enums, and the version. Texts, ranges and defaults aren't compared, and stay the type's.
+   * Replaces the kernel of a registered type by that of `def`, for code that is reloaded.
+   * All nodes of the type run again when they are needed. FailedPrecondition unless the
+   * rest says the same as the type: the names, types and order of sockets and params, the
+   * items of enums, and the version. Texts, ranges and defaults aren't compared, and stay
+   * the type's.
    */
   Status replaceKernel(NodeTypeDef def);
   /** What replaceKernel would say of `def`, but for its kernel. */
@@ -331,7 +335,7 @@ class NodeTypeRegistry {
   }
   Status validate() const;
 
- private:
+private:
   /** A type made of `def`, without its kernel. Owned by the caller (alloc::Delete). */
   Result<NodeType *> build(const NodeTypeDef &def, bool replaces = false) const;
   Result<const NodeType *> store(NodeType *type);

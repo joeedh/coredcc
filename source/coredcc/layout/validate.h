@@ -12,9 +12,9 @@
 namespace coredcc {
 
 enum class LayoutSeverity : uint8_t {
-  /** It can't be checked: it goes through a struct that isn't registered (yet), or names a key
-   * that a dynamic def may have. Or a tool's command needs something of the frontend, or the
-   * text is of a newer version and has what this one skipped. */
+  /** It can't be checked: it goes through a struct that isn't registered (yet), or names
+   * a key that a dynamic def may have. Or a tool's command needs something of the
+   * frontend, or the text is of a newer version and has what this one skipped. */
   Warning,
   /** It can't work. */
   Error,
@@ -35,22 +35,20 @@ inline constexpr int kMaxLayoutIssues = 1000;
 /**
  * Checks what `layout` names, in a Context whose root is a `root` struct, without one:
  * - a Prop's path is a value, a pointer, a component, an enum key or a length;
- * - a container's path is a struct, or a pointer (its target is meant). A Custom's path may be
- *   anything;
+ * - a container's path is a struct, or a pointer (its target is meant). A Custom's path
+ * may be anything;
  * - conditions are Bools, enum keys, pointers, lengths or Strings;
- * - a Tool's command is registered, and has the inputs it gives, which take the literals. A
- *   pointer's path is checked from the prefix, which is the Tool's `path` if it has one, and for the
- *   input's struct.
- *   An Interactive command is a Warning: a frontend begins it with beginInteractive. So is a
- *   Private one, which isn't meant for users;
+ * - a Tool's command is registered, and has the inputs it gives, which take the literals.
+ * A pointer's path is checked from the prefix, which is the Tool's `path` if it has one,
+ * and for the input's struct. An Interactive command is a Warning: a frontend begins it
+ * with beginInteractive. So is a Private one, which isn't meant for users;
  * - a ToolOptions' command is registered, and the root has the last-used inputs.
  *
- * Paths are checked by StaticResolver, so a path that fits one of the structs a pointer can have
- * is fine. Call it when all structs and commands are registered.
+ * Paths are checked by StaticResolver, so a path that fits one of the structs a pointer
+ * can have is fine. Call it when all structs and commands are registered.
  */
-litestl::util::Vector<LayoutIssue> validateLayout(Runtime &rt,
-                                                  StructId root,
-                                                  const Layout &layout);
+litestl::util::Vector<LayoutIssue>
+validateLayout(Runtime &rt, StructId root, const Layout &layout);
 
 /** Whether none of `issues` is an Error. */
 bool layoutIsValid(const litestl::util::Vector<LayoutIssue> &issues);

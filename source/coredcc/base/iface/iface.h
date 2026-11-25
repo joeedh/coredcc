@@ -65,9 +65,10 @@ struct IfaceTable;
  * error as the Runtime's sticky error.
  */
 class ForeignDispatcher {
- public:
+public:
   virtual ~ForeignDispatcher() = default;
-  virtual Status call(const IfaceTable &table, void *self, int slot, void **args, void *ret) = 0;
+  virtual Status
+  call(const IfaceTable &table, void *self, int slot, void **args, void *ret) = 0;
 };
 
 enum class IfaceFlags : uint32_t {
@@ -133,7 +134,9 @@ struct IfaceTable {
  */
 struct IfaceRef {
   IfaceRef() = default;
-  IfaceRef(const IfaceTable *table, void *self) : table_(table), self_(self) {}
+  IfaceRef(const IfaceTable *table, void *self) : table_(table), self_(self)
+  {
+  }
 
   explicit operator bool() const
   {
@@ -150,13 +153,14 @@ struct IfaceRef {
   /** The implementation object if it is a T (checked by litestl type key), else null. */
   template <class T> T *as() const
   {
-    if (!table_ || !table_->implDesc || table_->implDesc->typeKey != lbt::typeKeyOf<T>()) {
+    if (!table_ || !table_->implDesc || table_->implDesc->typeKey != lbt::typeKeyOf<T>())
+    {
       return nullptr;
     }
     return static_cast<T *>(self_);
   }
 
- private:
+private:
   const IfaceTable *table_ = nullptr;
   void *self_ = nullptr;
 };
@@ -190,14 +194,16 @@ template <class I> SlotRef slotOf(const char *name)
 
 /* By-value parameters are passed through by const reference: args[i] only needs an
  * address, so a second copy would be wasted. */
-template <class P> using FwdParam = std::conditional_t<std::is_reference_v<P>, P, const P &>;
+template <class P>
+using FwdParam = std::conditional_t<std::is_reference_v<P>, P, const P &>;
 
 /** Checks, in debug builds, that `slot` belongs to the table's interface. */
 inline void checkSlot(const IfaceRef &ref, SlotRef slot)
 {
   CDCC_ASSERT(ref.table() != nullptr, "calling a null interface");
-  CDCC_ASSERT(slot.index >= 0 && slot.index < int(ref.table()->thunks.size()),
-              "slot index out of range: a derived interface without CDCC_INTERFACE_EXTENDS?");
+  CDCC_ASSERT(
+      slot.index >= 0 && slot.index < int(ref.table()->thunks.size()),
+      "slot index out of range: a derived interface without CDCC_INTERFACE_EXTENDS?");
   CDCC_ASSERT(ref.table()->ifaceDesc->methods[slot.index] == slot.method,
               "slot belongs to another interface: a derived interface without "
               "CDCC_INTERFACE_EXTENDS?");
@@ -265,7 +271,8 @@ template <auto M> struct Fwd : FwdOf<decltype(M)>::type {};
 
 template <class I> lbt::Struct<I> *newInterfaceStruct(const char *name)
 {
-  static_assert(std::is_base_of_v<IfaceRef, I>, "an interface derives from coredcc::IfaceRef");
+  static_assert(std::is_base_of_v<IfaceRef, I>,
+                "an interface derives from coredcc::IfaceRef");
   static_assert(sizeof(I) == sizeof(IfaceRef), "an interface has no data members");
   auto *st = new lbt::Struct<I>(name, sizeof(I));
   st->isInterface = true;
@@ -277,7 +284,8 @@ template <class I> lbt::Struct<I> *newInterfaceStruct(const char *name)
 /** Single-base inheritance: Base's slots come first, so slot indices coincide. */
 template <class I, class Base> lbt::Struct<I> *newDerivedInterfaceStruct(const char *name)
 {
-  static_assert(std::is_base_of_v<Base, I>, "CDCC_INTERFACE_EXTENDS: I must derive from Base");
+  static_assert(std::is_base_of_v<Base, I>,
+                "CDCC_INTERFACE_EXTENDS: I must derive from Base");
   lbt::Struct<I> *st = newInterfaceStruct<I>(name);
   for (lbt::Method *m : ifaceDesc<Base>()->methods) {
     st->addMethod(m);
@@ -332,11 +340,12 @@ template <class... I> struct IfaceList {};
 
 /** Whether the implementation provides optional slot `mname`. */
 #define CDCC_HAS(mname)                                                                  \
-  (static_cast<const ::coredcc::IfaceRef *>(this)->table()->hasSlot(CDCC_SLOT(mname).index))
+  (static_cast<const ::coredcc::IfaceRef *>(this)->table()->hasSlot(                     \
+      CDCC_SLOT(mname).index))
 
 #define CDCC_INTERFACE_IMPL_(T, NAME, BASE, NEW_STRUCT)                                  \
   using Self = T;                                                                        \
-  /** The concatenated base interface, or void. */                                      \
+  /** The concatenated base interface, or void. */                                       \
   using CdccBase = BASE;                                                                 \
   static constexpr const char *ifaceName = NAME;                                         \
   static ::litestl::binding::types::Struct<T> *defineBindings()                          \

@@ -46,8 +46,7 @@ Status addData(const Library &lib, Copied &copied)
     Result<ObjectRead> r = readObject(lib, copied.blocks[i]);
     if (r.ok()) {
       copied.add(detail::liveBlock(lib, r->info.data));
-    }
-    else if (lib.query<Transformable>(copied.blocks[i])) {
+    } else if (lib.query<Transformable>(copied.blocks[i])) {
       return detail::about(lib, copied.blocks[i], r.status());
     }
   }
@@ -102,7 +101,9 @@ Result<Vector<BlockHandle>> copy(Context &ctx, const Copied &copied)
 
 /* Everything that they do is a sub-command's. */
 struct Composite {
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   Status redo(Context &)
   {
     return Status();
@@ -111,7 +112,9 @@ struct Composite {
   {
     return sizeof(*this);
   }
-  void discard() {}
+  void discard()
+  {
+  }
 };
 
 #define BIND_COMPOSITE(st)                                                               \

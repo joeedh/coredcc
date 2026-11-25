@@ -1,9 +1,10 @@
 #pragma once
 
 /** \file
- * A block's payload as named entries, so that a newer build can add some without making the payload
- * unreadable. An entry that a build doesn't know, or whose value it can't use, is kept as it is and
- * written again. Of two with one name, the later counts: kept ones are written first.
+ * A block's payload as named entries, so that a newer build can add some without making
+ * the payload unreadable. An entry that a build doesn't know, or whose value it can't
+ * use, is kept as it is and written again. Of two with one name, the later counts: kept
+ * ones are written first.
  */
 
 #include "coredcc/lib/block_io.h"
@@ -24,11 +25,12 @@ BlockEntry refField(const char *name, std::span<const RefCell> cells);
 bool isValueField(const BlockEntry &e, const char *name, PropValue::Type type);
 /** Whether the entry has this name and references, and nothing more. */
 bool isRefField(const BlockEntry &e, const char *name);
-/** Sets the cell's target from an entry with one reference. The cell keeps its own kind. */
+/** Sets the cell's target from an entry with one reference. The cell keeps its own kind.
+ */
 bool takeRef(const BlockEntry &e, const char *name, RefCell &cell);
 
-/** Reads the entries that one BlockWriter::entries() call wrote, gives each to `take`, and keeps
- * those for which it is false. */
+/** Reads the entries that one BlockWriter::entries() call wrote, gives each to `take`,
+ * and keeps those for which it is false. */
 template <class Take>
 void readFields(BlockReader &in, litestl::util::Vector<BlockEntry> &kept, Take &&take)
 {

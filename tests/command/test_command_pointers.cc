@@ -21,12 +21,16 @@ struct TakePointers {
     }
     return Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<TakePointers> *defineBindings()
   {
     auto *st = new lbt::Struct<TakePointers>("test::TakePointers", sizeof(TakePointers));
@@ -40,7 +44,8 @@ struct PointerWorld {
   PointerWorld()
   {
     CommandDef def("test.take");
-    def.input(PropertyDef::pointerProp("any", StructId()).access(PropAccess::SaveLastValue))
+    def.input(
+           PropertyDef::pointerProp("any", StructId()).access(PropAccess::SaveLastValue))
         .input(PropertyDef::pointerProp("base", kIdBase))
         .input(PropertyDef::pointerProp("brush", kBrush))
         .output(PropertyDef::pointerProp("any", StructId()))
@@ -108,7 +113,8 @@ static void test_invocations()
   /* LastUsed doesn't keep them. */
   test_assert(!p.got("any", "any='objects[0]'").isNull() && p.got("any", "").isNull());
   /* A reference needn't resolve: that is the command's business. */
-  test_assert(!p.got("any", "any='@block(x, 00000000000000000000000000000009)'").isNull());
+  test_assert(
+      !p.got("any", "any='@block(x, 00000000000000000000000000000009)'").isNull());
 
   const auto refused = [&](const char *args, StatusCode code, const char *why) {
     Result<PropertyBag> r = p.run(args);
@@ -120,17 +126,23 @@ static void test_invocations()
   };
   test_assert(refused("any='objcts[0]'", StatusCode::NotFound, "objcts"));
   test_assert(refused("any='objects['", StatusCode::InvalidArgument, "offset"));
-  test_assert(refused("any='tool.strength'", StatusCode::InvalidArgument, "neither a struct nor"));
-  test_assert(refused("any='objects'", StatusCode::InvalidArgument, "neither a struct nor"));
-  test_assert(refused("any='objects[0].location[1]'", StatusCode::InvalidArgument, "neither"));
+  test_assert(refused(
+      "any='tool.strength'", StatusCode::InvalidArgument, "neither a struct nor"));
+  test_assert(
+      refused("any='objects'", StatusCode::InvalidArgument, "neither a struct nor"));
+  test_assert(
+      refused("any='objects[0].location[1]'", StatusCode::InvalidArgument, "neither"));
   test_assert(refused("any='@block(x'", StatusCode::InvalidArgument, "reference:"));
   test_assert(refused("any=objects", StatusCode::InvalidArgument, "quoted"));
   test_assert(refused("any=3", StatusCode::InvalidArgument, "quoted"));
   test_assert(refused("any=('a')", StatusCode::InvalidArgument, "single value"));
-  test_assert(refused("brush='objects[0]'", StatusCode::TypeMismatch, "another struct type"));
-  test_assert(refused("base='@owner(tool) : Tool'", StatusCode::TypeMismatch, "another struct"));
+  test_assert(
+      refused("brush='objects[0]'", StatusCode::TypeMismatch, "another struct type"));
+  test_assert(
+      refused("base='@owner(tool) : Tool'", StatusCode::TypeMismatch, "another struct"));
   /* An unaddressed pointer has no reference to give. */
-  test_assert(refused("any='tool.activeBrushNoAddress'", StatusCode::Unsupported, "address"));
+  test_assert(
+      refused("any='tool.activeBrushNoAddress'", StatusCode::Unsupported, "address"));
 }
 
 static void test_prefix()
@@ -170,11 +182,14 @@ static void test_literals()
                   .code() == StatusCode::Unsupported);
   /* A literal isn't resolved, so a datapath isn't one. */
   Result<Invocation> inv = parseInvocation("x(a='objects[0]' b=3)");
-  test_assert(hasMsg(parseLiteral(rt, def, inv->args[0].value).status(), "p: reference:"));
-  test_assert(hasMsg(parseLiteral(rt, def, inv->args[1].value).status(), "a quoted reference"));
-  test_assert(hasMsg(parseLiteral(rt, PropertyDef::collectionProp("c", kMod), inv->args[0].value)
-                         .status(),
-                     "no literal form"));
+  test_assert(
+      hasMsg(parseLiteral(rt, def, inv->args[0].value).status(), "p: reference:"));
+  test_assert(
+      hasMsg(parseLiteral(rt, def, inv->args[1].value).status(), "a quoted reference"));
+  test_assert(
+      hasMsg(parseLiteral(rt, PropertyDef::collectionProp("c", kMod), inv->args[0].value)
+                 .status(),
+             "no literal form"));
 }
 
 int main()

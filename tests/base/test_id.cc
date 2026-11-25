@@ -19,8 +19,10 @@ static_assert(detail::fnv1a64("foobar") == 0x85944171f73967e8ull);
 
 // The domain tag is hashed before the name, so domains never share ids.
 static_assert(hashId(IdDomain::Type, "x") == detail::fnv1a64("type:x"));
-static_assert(TypeId::of("coredcc.Spatial").value != InterfaceId::of("coredcc.Spatial").value);
-static_assert(InterfaceId::of("coredcc.Spatial").value != ClientId::of("coredcc.Spatial").value);
+static_assert(TypeId::of("coredcc.Spatial").value !=
+              InterfaceId::of("coredcc.Spatial").value);
+static_assert(InterfaceId::of("coredcc.Spatial").value !=
+              ClientId::of("coredcc.Spatial").value);
 
 int main()
 {

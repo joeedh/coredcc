@@ -9,8 +9,8 @@
  *   in place of a `Result<T>`.
  * - Misuse from a script (the wrong value type, an index out of range, a call that
  *   would reenter the history) is an error result. It never aborts.
- * - What is bound refuses strings with a NUL (bind/checked.h): strings, names and keys can't
- *   hold one.
+ * - What is bound refuses strings with a NUL (bind/checked.h): strings, names and keys
+ * can't hold one.
  * - Facades never set the Runtime's sticky error: a failure is in what they return.
  *
  * **Inside a script command's slots** the facades that change the document are
@@ -18,7 +18,8 @@
  * - `setValue` and `invoke` only in `exec`, where they run as sub-commands;
  * - `writeValue` only in `exec`, `undo` and `redo`;
  * - `undo` and `redo` never;
- * - reads anywhere but in a graph kernel (graph_facades.h), where all that takes a Context is Busy.
+ * - reads anywhere but in a graph kernel (graph_facades.h), where all that takes a
+ * Context is Busy.
  *
  * Outside any script slot (a script's top level) every facade is allowed.
  */
@@ -36,7 +37,8 @@ namespace coredcc::script {
 
 using litestl::util::string;
 
-/* ---- result structs: a Status, and a value that is meaningful only when it is ok ---- */
+/* ---- result structs: a Status, and a value that is meaningful only when it is ok ----
+ */
 
 struct BoolResult {
   Status status;
@@ -88,10 +90,8 @@ PropValue makeVec4(double x, double y, double z, double w);
 /** A rotation, xyzw. */
 PropValue makeQuat(double x, double y, double z, double w);
 /** A matrix of four Vec4 columns. */
-ValueResult makeMat4(const PropValue &a,
-                     const PropValue &b,
-                     const PropValue &c,
-                     const PropValue &d);
+ValueResult
+makeMat4(const PropValue &a, const PropValue &b, const PropValue &c, const PropValue &d);
 /** Flags by their bits. */
 PropValue makeFlags(int64_t bits);
 PropValue makeNullPointer();
@@ -102,8 +102,10 @@ ValueResult makePointer(Context &ctx, const string &text);
 BoolResult readBool(const PropValue &v);
 IntResult readInt(const PropValue &v);
 FloatResult readFloat(const PropValue &v);
-/** units::format and units::parse. `family` is a name, as in a meta's `unit`; "" is None. */
-StringResult formatUnit(double value, const string &family, const string &unit, int32_t precision);
+/** units::format and units::parse. `family` is a name, as in a meta's `unit`; "" is None.
+ */
+StringResult
+formatUnit(double value, const string &family, const string &unit, int32_t precision);
 FloatResult parseUnit(const string &text, const string &family, const string &unit);
 StringResult readString(const PropValue &v);
 /** Component `i` of a Float, vector, Mat4 or Quat; OutOfRange past componentCount(). */
@@ -134,12 +136,13 @@ ValueResult outputGet(Context &ctx, const string &name);
 
 /* ---- datapaths and commands ---- */
 
-/** What `path` is (bind/meta.h's pathKindName), or the resolver's error, with suggestions. */
+/** What `path` is (bind/meta.h's pathKindName), or the resolver's error, with
+ * suggestions. */
 StringResult resolvePath(Context &ctx, const string &path);
 /** pathMeta's JSON (bind/meta.h). */
 StringResult pathMeta(Context &ctx, const string &path);
-/** `v`, read from `path`, by name: an Enum's key, or a Flags' keys joined by '|'. NotFound for a
- * number without an item, InvalidArgument for another kind of value. */
+/** `v`, read from `path`, by name: an Enum's key, or a Flags' keys joined by '|'.
+ * NotFound for a number without an item, InvalidArgument for another kind of value. */
 StringResult valueKeys(Context &ctx, const string &path, const PropValue &v);
 ValueResult getValue(Context &ctx, const string &path);
 /** The value at `path` as text, in the active scene's units (api/format.h). */
@@ -154,11 +157,15 @@ ValueResult parseValue(Context &ctx, const string &path, const string &text);
 Status setValue(Context &ctx, const string &path, const PropValue &value);
 /** A new gesture, for setValueGesture. Not from a kernel. */
 IntResult beginGesture(Context &ctx);
-/** Takes back what the gesture's sets did, as far as they are the last commands. Not from a slot. */
+/** Takes back what the gesture's sets did, as far as they are the last commands. Not from
+ * a slot. */
 Status cancelGesture(Context &ctx, int64_t gesture);
-/** As setValue; calls with one `gesture`, from beginGesture, on one member fold into one undo
- * step. */
-Status setValueGesture(Context &ctx, const string &path, const PropValue &value, int64_t gesture);
+/** As setValue; calls with one `gesture`, from beginGesture, on one member fold into one
+ * undo step. */
+Status setValueGesture(Context &ctx,
+                       const string &path,
+                       const PropValue &value,
+                       int64_t gesture);
 /** The raw write, not recorded: for a command's exec and undo, on state they capture
  * themselves. Don't set one member through both setValue and writeValue in a command. */
 Status writeValue(Context &ctx, const string &path, const PropValue &value);

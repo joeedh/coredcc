@@ -27,7 +27,8 @@ namespace graph {
 struct Origin {
   enum class Kind : uint8_t {
     None,
-    /** An output of a kernel node: `a` its frame's serial, `b` the node, `c` the output. */
+    /** An output of a kernel node: `a` its frame's serial, `b` the node, `c` the output.
+     */
     Kernel,
     /** A literal: `a` the frame's serial, `b` the node, `c` the hash of the key. */
     Literal,
@@ -51,10 +52,10 @@ struct Origin {
   bool operator==(const Origin &) const = default;
 };
 
-/** The socket types a value crosses, as small numbers: equal chains have equal numbers, so
- * comparing and extending one is O(1) however long it is. */
+/** The socket types a value crosses, as small numbers: equal chains have equal numbers,
+ * so comparing and extending one is O(1) however long it is. */
 class TypeChains {
- public:
+public:
   static constexpr int kEmpty = -1;
   /** `chain` with `type` after it. */
   int extend(int chain, const SocketType *type);
@@ -64,7 +65,7 @@ class TypeChains {
     return size_t(ids_.size()) * (sizeof(Key) + sizeof(int));
   }
 
- private:
+private:
   struct Key {
     int chain = 0;
     const SocketType *type = nullptr;
@@ -126,8 +127,8 @@ struct Trace {
 
   /** What most kernels have none of. */
   struct Blocks {
-    /** The target of each Pointer param's cell. A Library may write a cell, so paramVersion
-     * doesn't tell. */
+    /** The target of each Pointer param's cell. A Library may write a cell, so
+     * paramVersion doesn't tell. */
     litestl::util::Vector<BlockId, 1> params;
     litestl::util::Vector<BlockDep, 1> blocks;
     litestl::util::Vector<QueryDep, 1> queries;
@@ -143,19 +144,20 @@ struct Trace {
   }
   std::span<const BlockId> paramBlocks() const
   {
-    return more ? std::span<const BlockId>(more->params.data(), size_t(more->params.size())) :
-                  std::span<const BlockId>();
+    return more ? std::span<const BlockId>(more->params.data(),
+                                           size_t(more->params.size()))
+                : std::span<const BlockId>();
   }
 };
 
-/** Collects the blocks and queries of many traces in one, each as it was first seen: if it
- * moves before the last of them, that is out of date, as it must be. */
+/** Collects the blocks and queries of many traces in one, each as it was first seen: if
+ * it moves before the last of them, that is out of date, as it must be. */
 class DepSet {
- public:
+public:
   void clear();
   void add(const Trace &from, Trace &to);
 
- private:
+private:
   struct QueryKey {
     BlockHandle handle;
     uint64_t iface = 0;
@@ -180,7 +182,7 @@ class DepSet {
 
 /** Finds blocks, as they are now. */
 class BlockReader {
- public:
+public:
   BlockReader(Runtime &rt, LibraryRef lib);
   BlockDep read(BlockId id, ChangeAspects aspects) const;
   QueryDep read(BlockHandle h, InterfaceId iface) const;
@@ -191,7 +193,7 @@ class BlockReader {
     return lib_.get();
   }
 
- private:
+private:
   Runtime &rt_;
   GraphSystem &system_;
   LibraryRef lib_;
@@ -199,12 +201,14 @@ class BlockReader {
 
 /** Gives a kernel its blocks, and records them in a trace. */
 class BlockRecorder final : public ExecBlocks {
- public:
-  BlockRecorder(const BlockReader &reader, Trace &trace) : reader_(reader), trace_(trace) {}
+public:
+  BlockRecorder(const BlockReader &reader, Trace &trace) : reader_(reader), trace_(trace)
+  {
+  }
   BlockUse useBlock(BlockId id, ChangeAspects aspects) override;
   IfaceRef queryBlock(BlockHandle h, InterfaceId iface) override;
 
- private:
+private:
   const BlockReader &reader_;
   Trace &trace_;
 };

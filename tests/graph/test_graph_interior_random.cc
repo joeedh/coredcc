@@ -1,7 +1,7 @@
 /*
- * Random edits of graphs with interior links, against a naive evaluator, which looks up the
- * source of every input in the expanded graph. GraphDef::link must refuse a link exactly if
- * it makes a cycle there.
+ * Random edits of graphs with interior links, against a naive evaluator, which looks up
+ * the source of every input in the expanded graph. GraphDef::link must refuse a link
+ * exactly if it makes a cycle there.
  */
 #include "fuzz.h"
 #include "graph_fixture.h"
@@ -38,7 +38,9 @@ struct World {
   {
     test_assert(registerGraphBlocks(rt).ok());
     NodeTypeDef s("t.sum");
-    s.input(PropertyDef::floatProp("a")).input(PropertyDef::floatProp("b")).output("value", "float");
+    s.input(PropertyDef::floatProp("a"))
+        .input(PropertyDef::floatProp("b"))
+        .output("value", "float");
     addType<sum>(rt, s, "t.sum");
   }
 };
@@ -62,14 +64,17 @@ struct Naive {
   const GraphDef &root;
   std::map<std::string, Answer> memo;
 
-  explicit Naive(const GraphDef &r) : root(r) {}
+  explicit Naive(const GraphDef &r) : root(r)
+  {
+  }
 
   const GraphDef *defAt(const Path &path) const
   {
     const GraphDef *d = &root;
     for (NodeId id : path) {
       const GraphNode *n = d ? d->node(id) : nullptr;
-      d = n && n->type() && n->type()->role == NodeRole::Group ? d->groupTarget(*n) : nullptr;
+      d = n && n->type() && n->type()->role == NodeRole::Group ? d->groupTarget(*n)
+                                                               : nullptr;
     }
     return d;
   }
@@ -86,9 +91,9 @@ struct Naive {
     const GraphNode *n = d.node(node);
     const GraphLink *l = n ? n->linkInto(key) : nullptr;
     return l && d.findSocket(*l->from, SocketSide::Output, l->fromKey.c_str()) &&
-                   d.findSocket(*n, SocketSide::Input, key) ?
-               l :
-               nullptr;
+                   d.findSocket(*n, SocketSide::Input, key)
+               ? l
+               : nullptr;
   }
 
   /* A place a value comes from: an input socket, a kernel's output, or a fixed answer. */
@@ -106,25 +111,26 @@ struct Naive {
     const GraphNode &n = *d.node(node);
     Source s;
     switch (n.type()->role) {
-      case NodeRole::Kernel:
-        s = Source{path, node, "", false, true, {}};
-        return s;
-      case NodeRole::Input: {
-        if (!path.empty()) {
-          Path up = path;
-          up.pop_back();
-          return Source{up, path.back(), key, true, false, {}};
-        }
-        for (const InterfaceSocket &i : d.interfaceSockets(SocketSide::Input)) {
-          if (key == i.key().c_str()) {
-            s.fixed.value = i.defaultValue.isNone() ? typeOf(i.typeName.c_str()).defaultValue :
-                                                      *GraphValue::fromProp(i.defaultValue);
-          }
-        }
-        return s;
+    case NodeRole::Kernel:
+      s = Source{path, node, "", false, true, {}};
+      return s;
+    case NodeRole::Input: {
+      if (!path.empty()) {
+        Path up = path;
+        up.pop_back();
+        return Source{up, path.back(), key, true, false, {}};
       }
-      default:
-        break;
+      for (const InterfaceSocket &i : d.interfaceSockets(SocketSide::Input)) {
+        if (key == i.key().c_str()) {
+          s.fixed.value = i.defaultValue.isNone()
+                              ? typeOf(i.typeName.c_str()).defaultValue
+                              : *GraphValue::fromProp(i.defaultValue);
+        }
+      }
+      return s;
+    }
+    default:
+      break;
     }
     const GraphDef *target = d.groupTarget(n);
     Path in = path;
@@ -188,8 +194,7 @@ struct Naive {
       if (std::optional<Source> s = input(v.path, v.node, v.key)) {
         out.push_back(*s);
       }
-    }
-    else if (v.kernel) {
+    } else if (v.kernel) {
       for (const char *k : {"a", "b"}) {
         out.push_back(Source{v.path, v.node, k, true, false, {}});
       }
@@ -234,23 +239,19 @@ struct Naive {
     Answer a;
     if (onCycle(v)) {
       a.error = StatusCode::FailedPrecondition;
-    }
-    else if (v.kernel) {
+    } else if (v.kernel) {
       const Answer x = eval(Source{v.path, v.node, "a", true, false, {}});
       const Answer y = eval(Source{v.path, v.node, "b", true, false, {}});
       if (x.error || y.error) {
         a = x.error ? x : y;
-      }
-      else if (x.value.asFloat() <= -100) {
+      } else if (x.value.asFloat() <= -100) {
         a.error = StatusCode::OutOfRange;
         a.origin = v.path;
         a.origin.push_back(v.node);
-      }
-      else {
+      } else {
         a.value = GraphValue::ofFloat(x.value.asFloat() + y.value.asFloat());
       }
-    }
-    else {
+    } else {
       const GraphDef &d = *defAt(v.path);
       const GraphNode &n = *d.node(v.node);
       const SocketType &type =
@@ -258,17 +259,19 @@ struct Naive {
       const std::optional<Source> s = input(v.path, v.node, v.key);
       if (s) {
         a = eval(*s);
-      }
-      else {
+      } else {
         a.value = d.literalValue(n, v.key, type);
       }
       if (!a.error && !type.holds(a.value)) {
         GraphValue out;
-        test_assert(root.runtime()
-                        .ext<SocketTypeRegistry>()
-                        .convert(*root.runtime().ext<SocketTypeRegistry>().typeOf(a.value), type,
-                                 a.value, out)
-                        .ok());
+        test_assert(
+            root.runtime()
+                .ext<SocketTypeRegistry>()
+                .convert(*root.runtime().ext<SocketTypeRegistry>().typeOf(a.value),
+                         type,
+                         a.value,
+                         out)
+                .ok());
         a.value = out;
       }
     }
@@ -281,7 +284,9 @@ struct Naive {
   {
     d.forEachNode([&](const GraphNode &n) {
       fn(path, n);
-      if (const GraphDef *t = n.type()->role == NodeRole::Group ? d.groupTarget(n) : nullptr) {
+      if (const GraphDef *t =
+              n.type()->role == NodeRole::Group ? d.groupTarget(n) : nullptr)
+      {
         path.push_back(n.id());
         forEach(*t, path, fn);
         path.pop_back();
@@ -297,7 +302,8 @@ struct Naive {
         found = found || onCycle(Source{p, n.id(), s.key.c_str(), true, false, {}});
       }
       for (const GraphLink *l : n.linksIn()) {
-        found = found || (l->toKey.c_str()[0] == '@' && working(*defAt(p), n.id(), l->toKey.c_str()) &&
+        found = found || (l->toKey.c_str()[0] == '@' &&
+                          working(*defAt(p), n.id(), l->toKey.c_str()) &&
                           onCycle(Source{p, n.id(), l->toKey.c_str(), true, false, {}}));
       }
     });
@@ -354,7 +360,8 @@ struct Fuzz {
       const GraphDef *in = t;
       while (true) {
         const GraphNode &m = *in->nodeAt(below(in->nodeCount()));
-        const GraphDef *next = m.type()->role == NodeRole::Group ? in->groupTarget(m) : nullptr;
+        const GraphDef *next =
+            m.type()->role == NodeRole::Group ? in->groupTarget(m) : nullptr;
         path += std::to_string(m.id().value);
         if (next && below(2)) {
           path += "/";
@@ -372,8 +379,10 @@ struct Fuzz {
   void link(int index)
   {
     GraphDef &d = *defs[index].def;
-    const GraphNode &a = *d.nodeAt(below(d.nodeCount())), &b = *d.nodeAt(below(d.nodeCount()));
-    const std::string from = socketOf(d, a, SocketSide::Output), to = socketOf(d, b, SocketSide::Input);
+    const GraphNode &a = *d.nodeAt(below(d.nodeCount())),
+                    &b = *d.nodeAt(below(d.nodeCount()));
+    const std::string from = socketOf(d, a, SocketSide::Output),
+                      to = socketOf(d, b, SocketSide::Input);
     if (from.empty() || to.empty()) {
       return;
     }
@@ -414,13 +423,17 @@ struct Fuzz {
   {
     std::vector<LinkState> out;
     d.forEachLink([&](const GraphLink &l) { out.push_back(GraphDef::stateOf(l)); });
-    std::sort(out.begin(), out.end(),
-              [](const LinkState &a, const LinkState &b) { return a.id < b.id; });
+    std::sort(out.begin(), out.end(), [](const LinkState &a, const LinkState &b) {
+      return a.id < b.id;
+    });
     return out;
   }
   static bool sameLinks(const std::vector<LinkState> &a, const std::vector<LinkState> &b)
   {
-    return std::equal(a.begin(), a.end(), b.begin(), b.end(),
+    return std::equal(a.begin(),
+                      a.end(),
+                      b.begin(),
+                      b.end(),
                       [](const LinkState &x, const LinkState &y) {
                         return x.id == y.id && x.from == y.from && x.to == y.to &&
                                strcmp(x.fromKey.c_str(), y.fromKey.c_str()) == 0 &&
@@ -439,8 +452,12 @@ struct Fuzz {
     std::vector<Spec> specs;
     bool twice = false;
     for (int i = 0, n = 1 + below(5); i < n; i++) {
-      const GraphNode &a = *d.nodeAt(below(d.nodeCount())), &b = *d.nodeAt(below(d.nodeCount()));
-      Spec s{a.id(), b.id(), socketOf(d, a, SocketSide::Output), socketOf(d, b, SocketSide::Input)};
+      const GraphNode &a = *d.nodeAt(below(d.nodeCount())),
+                      &b = *d.nodeAt(below(d.nodeCount()));
+      Spec s{a.id(),
+             b.id(),
+             socketOf(d, a, SocketSide::Output),
+             socketOf(d, b, SocketSide::Input)};
       if (s.from.empty() || s.to.empty()) {
         continue;
       }
@@ -464,10 +481,12 @@ struct Fuzz {
     const Status status = d.linkAll(list, ids);
     totals.batches++;
     if (status.ok()) {
-      test_assert(!twice && ids.size() == list.size() && (before || !Naive(d).hasCycle()));
+      test_assert(!twice && ids.size() == list.size() &&
+                  (before || !Naive(d).hasCycle()));
       for (size_t i = 0; i < specs.size(); i++) {
         const GraphLink *l = d.link(ids[int(i)]);
-        test_assert(l && l->from->id() == specs[i].a && l->fromKey.c_str() == specs[i].from &&
+        test_assert(l && l->from->id() == specs[i].a &&
+                    l->fromKey.c_str() == specs[i].from &&
                     d.node(specs[i].b)->linkInto(specs[i].to) == l);
       }
       return;
@@ -511,67 +530,68 @@ struct Fuzz {
     const GraphNode &n = *d.nodeAt(below(d.nodeCount()));
     const SocketInfos ins = d.sockets(n, SocketSide::Input);
     switch (below(14)) {
-      case 0:
-        if (d.nodeCount() < 9) {
-          add(d, "t.sum");
-        }
-        return;
-      case 1:
-      case 2:
-        if (d.nodeCount() < 9 && index + 1 < kDefs) {
-          const NodeId id = add(d, "graph.group");
-          test_assert(d.setGroup(id, defs[index + 1 + below(kDefs - index - 1)].id).ok());
-        }
-        return;
-      case 3:
-        if (below(3) == 0 && d.nodeCount() > 2) {
-          test_assert(d.removeNode(n.id()).ok());
-        }
-        return;
-      case 4:
-        if (n.linksIn().size()) {
-          test_assert(d.unlink(n.linksIn()[below(int(n.linksIn().size()))]->id).ok());
-        }
-        return;
-      case 5:
-      case 6:
-        if (ins.size()) {
-          const std::string k = ins[below(int(ins.size()))].key.c_str();
-          d.setLiteral(n.id(), k, PropValue::ofFloat(below(25) ? below(5) : -100)).ignore();
-        }
-        return;
-      case 7: {
-        const SocketSide side = below(2) ? SocketSide::Input : SocketSide::Output;
-        const auto &list = d.interfaceSockets(side);
-        if (list.size() < 3 && below(2)) {
-          d.addInterface(side, std::to_string(gen()), "float").status().ignore();
-        }
-        else if (list.size()) {
-          const int64_t id = list[below(int(list.size()))].id;
-          (below(2) ? d.setInterfaceType(id, below(2) ? "int" : "float") : d.moveInterface(id, 0)).ignore();
-          if (below(6) == 0) {
-            test_assert(d.removeInterface(id).ok());
-          }
-        }
-        return;
+    case 0:
+      if (d.nodeCount() < 9) {
+        add(d, "t.sum");
       }
-      case 8:
-        if (n.type()->role == NodeRole::Group && index + 1 < kDefs) {
-          const int target = index + 1 + below(kDefs - index - 1);
-          test_assert(d.setGroup(n.id(), below(5) ? defs[target].id : BlockId()).ok());
+      return;
+    case 1:
+    case 2:
+      if (d.nodeCount() < 9 && index + 1 < kDefs) {
+        const NodeId id = add(d, "graph.group");
+        test_assert(d.setGroup(id, defs[index + 1 + below(kDefs - index - 1)].id).ok());
+      }
+      return;
+    case 3:
+      if (below(3) == 0 && d.nodeCount() > 2) {
+        test_assert(d.removeNode(n.id()).ok());
+      }
+      return;
+    case 4:
+      if (n.linksIn().size()) {
+        test_assert(d.unlink(n.linksIn()[below(int(n.linksIn().size()))]->id).ok());
+      }
+      return;
+    case 5:
+    case 6:
+      if (ins.size()) {
+        const std::string k = ins[below(int(ins.size()))].key.c_str();
+        d.setLiteral(n.id(), k, PropValue::ofFloat(below(25) ? below(5) : -100)).ignore();
+      }
+      return;
+    case 7: {
+      const SocketSide side = below(2) ? SocketSide::Input : SocketSide::Output;
+      const auto &list = d.interfaceSockets(side);
+      if (list.size() < 3 && below(2)) {
+        d.addInterface(side, std::to_string(gen()), "float").status().ignore();
+      } else if (list.size()) {
+        const int64_t id = list[below(int(list.size()))].id;
+        (below(2) ? d.setInterfaceType(id, below(2) ? "int" : "float")
+                  : d.moveInterface(id, 0))
+            .ignore();
+        if (below(6) == 0) {
+          test_assert(d.removeInterface(id).ok());
         }
-        return;
-      case 9:
-        if (below(4) == 0) {
-          const Graph &g = defs[1 + below(kDefs - 1)];
-          const bool live = w.lib.get(g.h)->state() == BlockState::Live;
-          (live ? w.lib.markDeleted(g.h) : w.lib.restoreFromHistory(g.h)).ignore();
-        }
-        return;
-      case 10:
-        return linkMany(index);
-      default:
-        return link(index);
+      }
+      return;
+    }
+    case 8:
+      if (n.type()->role == NodeRole::Group && index + 1 < kDefs) {
+        const int target = index + 1 + below(kDefs - index - 1);
+        test_assert(d.setGroup(n.id(), below(5) ? defs[target].id : BlockId()).ok());
+      }
+      return;
+    case 9:
+      if (below(4) == 0) {
+        const Graph &g = defs[1 + below(kDefs - 1)];
+        const bool live = w.lib.get(g.h)->state() == BlockState::Live;
+        (live ? w.lib.markDeleted(g.h) : w.lib.restoreFromHistory(g.h)).ignore();
+      }
+      return;
+    case 10:
+      return linkMany(index);
+    default:
+      return link(index);
     }
   }
 
@@ -588,16 +608,20 @@ struct Fuzz {
       totals.errors += e.error.has_value();
       if (ok && e.error == StatusCode::FailedPrecondition) {
         totals.cycles++;
-      }
-      else if (ok && e.error) {
+      } else if (ok && e.error) {
         ok = error->origin.node == e.origin.back() &&
              error->origin.groups.size() == e.origin.size() - 1 &&
-             std::equal(e.origin.begin(), e.origin.end() - 1, error->origin.groups.begin());
+             std::equal(
+                 e.origin.begin(), e.origin.end() - 1, error->origin.groups.begin());
       }
       if (!ok && good) {
-        printf("%s.%s: %s, expected %s %g\n", p.node.toString().c_str(), p.key.c_str(),
-               st.toString().c_str(), e.error ? statusCodeName(*e.error) : "Ok",
-               !e.error && e.value.type() == GraphValue::Type::Float ? e.value.asFloat() : 0);
+        printf("%s.%s: %s, expected %s %g\n",
+               p.node.toString().c_str(),
+               p.key.c_str(),
+               st.toString().c_str(),
+               e.error ? statusCodeName(*e.error) : "Ok",
+               !e.error && e.value.type() == GraphValue::Type::Float ? e.value.asFloat()
+                                                                     : 0);
       }
       good &= ok;
     };
@@ -612,7 +636,8 @@ struct Fuzz {
       np.node = n.id();
       const GraphDef &d = *naive.defAt(p);
       for (const SocketInfo &s : d.sockets(n, SocketSide::Output)) {
-        compare(SocketPath::of(np, s.key.c_str()), naive.eval(naive.output(p, n.id(), s.key.c_str())));
+        compare(SocketPath::of(np, s.key.c_str()),
+                naive.eval(naive.output(p, n.id(), s.key.c_str())));
       }
       for (const SocketInfo &s : d.sockets(n, SocketSide::Input)) {
         compare(SocketPath::of(np, s.key.c_str(), SocketSide::Input),
@@ -667,9 +692,20 @@ int main(int argc, char **argv)
     }
     test_assert(ok);
   }
-  printf("seeds %d to %d: %d edits, %d links (%d interior, %d refused), %d batches (%d refused), "
+  printf("seeds %d to %d: %d edits, %d links (%d interior, %d refused), %d batches (%d "
+         "refused), "
          "%d pulls, %d errors, %d of cycles, %d full passes\n",
-         first, first + count - 1, t.edits, t.links, t.interior, t.refused, t.batches,
-         t.batchesRefused, t.pulls, t.errors, t.cycles, t.fullPasses);
+         first,
+         first + count - 1,
+         t.edits,
+         t.links,
+         t.interior,
+         t.refused,
+         t.batches,
+         t.batchesRefused,
+         t.pulls,
+         t.errors,
+         t.cycles,
+         t.fullPasses);
   return test_end();
 }

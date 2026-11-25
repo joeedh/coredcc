@@ -29,8 +29,7 @@ struct MadeBlocks {
     Result<Library *> l = detail::libraryOf(ctx, lib);
     if (l.ok()) {
       created.undo(**l);
-    }
-    else {
+    } else {
       ctx.runtime().setStickyError(l.status());
     }
   }
@@ -70,8 +69,8 @@ struct DuplicateBlock {
     }
     Library &lib = *ctx.library();
     made.lib = lib.ref();
-    Result<IdMap> ids =
-        duplicateBlocks(lib, std::span<const BlockHandle>(from->data(), size_t(from->size())));
+    Result<IdMap> ids = duplicateBlocks(
+        lib, std::span<const BlockHandle>(from->data(), size_t(from->size())));
     if (!ids.ok()) {
       return ids.status();
     }
@@ -112,7 +111,8 @@ struct DuplicateBlock {
   }
 };
 
-/* What appendUndo asks for, and the answer. The spans are the caller's: exec runs at once. */
+/* What appendUndo asks for, and the answer. The spans are the caller's: exec runs at
+ * once. */
 struct AppendRequest {
   std::span<const uint8_t> bytes;
   const AppendOptions *options = nullptr;
@@ -148,8 +148,7 @@ struct AppendBlocks {
     for (int i = 0; i < int(blocks.size()); i++) {
       if (i < int(r->report.records)) {
         made.created.add(lib, blocks[i]);
-      }
-      else {
+      } else {
         missing.append(HistoryBlock(lib, blocks[i]));
       }
     }
@@ -175,7 +174,8 @@ struct AppendBlocks {
   }
   static lbt::Struct<AppendBlocks> *defineBindings()
   {
-    auto *st = new lbt::Struct<AppendBlocks>("coredcc::AppendCommand", sizeof(AppendBlocks));
+    auto *st =
+        new lbt::Struct<AppendBlocks>("coredcc::AppendCommand", sizeof(AppendBlocks));
     BIND_MAKER(st);
     return st;
   }
@@ -183,14 +183,14 @@ struct AppendBlocks {
 
 } // namespace
 
-Result<AppendResult> appendUndo(Context &ctx,
-                                std::span<const uint8_t> bytes,
-                                const AppendOptions &options)
+Result<AppendResult>
+appendUndo(Context &ctx, std::span<const uint8_t> bytes, const AppendOptions &options)
 {
   Runtime &rt = ctx.runtime();
   CommandExecutor *ex = ctx.executor();
   if (!ex) {
-    return Status::error(StatusCode::FailedPrecondition, "appendUndo: the Context has no executor");
+    return Status::error(StatusCode::FailedPrecondition,
+                         "appendUndo: the Context has no executor");
   }
   CDCC_TRY(detail::registerLibraryCommands(rt));
   const CommandDef *def = rt.ext<CommandRegistry>().find(kAppendCommand);
@@ -199,13 +199,15 @@ Result<AppendResult> appendUndo(Context &ctx,
   request->bytes = bytes;
   request->options = &options;
   impl->request = request;
-  Result<Owned<Command>> cmd = own<Command>(rt, std::string(kAppendCommand) + "#impl", impl);
+  Result<Owned<Command>> cmd =
+      own<Command>(rt, std::string(kAppendCommand) + "#impl", impl);
   if (!cmd.ok()) {
     return cmd.status();
   }
   Result<PropertyBag> out =
-      ex->running() ? ex->runSub(ctx, std::move(cmd).value(), *def) :
-                      ex->runInstance(ctx, *def, std::move(cmd).value(), def->newInputs());
+      ex->running()
+          ? ex->runSub(ctx, std::move(cmd).value(), *def)
+          : ex->runInstance(ctx, *def, std::move(cmd).value(), def->newInputs());
   if (!out.ok()) {
     return out.status();
   }

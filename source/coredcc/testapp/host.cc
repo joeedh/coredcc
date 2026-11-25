@@ -30,8 +30,8 @@ namespace testapp {
 using namespace coredcc;
 namespace lbt = litestl::binding::types;
 
-/* The context root: `count`, `strength`, and one member of each other value kind, with the
- * items (items.h). */
+/* The context root: `count`, `strength`, and one member of each other value kind, with
+ * the items (items.h). */
 struct Data {
   int count = 0;
   double strength = 0.5;
@@ -68,8 +68,9 @@ CollectionAccessor graphsAccessor()
   CollectionAccessor c;
   c.length = [](const PointerRef &, Context &ctx) {
     int64_t n = 0;
-    ctx.library()->forEach(
-        [&](BlockHandle h, const Datablock &) { n += graphDefOf(*ctx.library(), h) != nullptr; });
+    ctx.library()->forEach([&](BlockHandle h, const Datablock &) {
+      n += graphDefOf(*ctx.library(), h) != nullptr;
+    });
     return n;
   };
   c.at = [find](const PointerRef &, Context &ctx, int64_t i) {
@@ -92,7 +93,7 @@ CollectionAccessor graphsAccessor()
  * Scripts get one of these instead of separate objects, whose GC order is undefined.
  */
 class Host {
- public:
+public:
   explicit Host(bool items) : lib_(&rt_), ctx_(makeContext(items))
   {
     ctx_.setExecutor(&ex_);
@@ -138,7 +139,7 @@ class Host {
     return st;
   }
 
- private:
+private:
   Context makeContext(bool items)
   {
     registerItems(rt_);
@@ -148,12 +149,16 @@ class Host {
     ApiRegistry &reg = rt_.ext<ApiRegistry>();
     ApiStruct s("TestApp");
     s.addField(PropertyDef::intProp("count"), &Data::count);
-    s.addField(PropertyDef::floatProp("strength").range(0, 1).icon("bolt").description("How strong"),
+    s.addField(PropertyDef::floatProp("strength")
+                   .range(0, 1)
+                   .icon("bolt")
+                   .description("How strong"),
                &Data::strength);
     s.addField(PropertyDef::boolProp("enabled"), &Data::enabled);
     s.addField(PropertyDef::stringProp("label"), &Data::label);
     s.addField(PropertyDef::vecProp("offset", 3), &Data::offset);
-    s.addField(PropertyDef::enumProp("mode").item("OBJECT", 0).item("EDIT", 1), &Data::mode);
+    s.addField(PropertyDef::enumProp("mode").item("OBJECT", 0).item("EDIT", 1),
+               &Data::mode);
     s.addField(PropertyDef::flagsProp("flags")
                    .item("SELECT", 1, "Select", "Can be selected", "cursor")
                    .item("HIDE", 2)
@@ -172,7 +177,9 @@ class Host {
     s.addField(PropertyDef::enumProp("focus").item("NONE", 0).ui(
                    PropUi{false, true, SliderStyle::Default, false}),
                &Data::focus)
-        .dynamic([](PropertyDef &d, const PointerRef &, Context &ctx) { addItemKeys(d, ctx); });
+        .dynamic([](PropertyDef &d, const PointerRef &, Context &ctx) {
+          addItemKeys(d, ctx);
+        });
     rt_.ext<LastUsedStore>().addCollectionTo(s);
     CDCC_CHECK(registerSceneCommands(rt_).ok(), "testapp: registering scenes");
     PointerAccessor scene;
@@ -184,8 +191,9 @@ class Host {
     addEvaluated(s);
     CDCC_CHECK(reg.add(std::move(s)).ok(), "testapp: registering the root struct");
     Data *data = &data_;
-    CDCC_CHECK(reg.addRuntimeOwner("testapp", kData, [data]() { return (void *)data; }).ok(),
-               "testapp: registering the root owner");
+    CDCC_CHECK(
+        reg.addRuntimeOwner("testapp", kData, [data]() { return (void *)data; }).ok(),
+        "testapp: registering the root owner");
     return Context(&rt_, &lib_, reg.runtimeOwner("testapp"));
   }
 
@@ -262,7 +270,8 @@ litestl::binding::BindingManager *manager()
     script::addBindings(mgr);
     mgr->add(litestl::binding::Bind<Host>());
     BIND_FUNCTION(mgr, "testapp::create", testapp::create, MARGS()).returnsOwned();
-    BIND_FUNCTION(mgr, "testapp::createEmpty", testapp::createEmpty, MARGS()).returnsOwned();
+    BIND_FUNCTION(mgr, "testapp::createEmpty", testapp::createEmpty, MARGS())
+        .returnsOwned();
     BIND_FUNCTION(mgr, "testapp::nudge", testapp::nudge, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::context", testapp::context, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::historySize", testapp::historySize, MARGS("h"));

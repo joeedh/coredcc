@@ -18,9 +18,12 @@ void testTables()
   test_assert(!(t == table({1, 2}, {{"a", {1, 2}}})));
   test_assert(!(t == table({1, 2, 3}, {{"a", {1, 2}}, {"b", {3, 4}}})));
   test_assert(hasCode(table({1, 1}, {}).validate(), StatusCode::InvalidArgument));
-  test_assert(hasCode(table({1, 2}, {{"a", {1}}}).validate(), StatusCode::InvalidArgument));
-  test_assert(hasCode(table({1}, {{"a", {1, 2}}}).validate(), StatusCode::InvalidArgument));
-  test_assert(hasCode(table({1}, {{"a", {1}}, {"a", {1}}}).validate(), StatusCode::InvalidArgument));
+  test_assert(
+      hasCode(table({1, 2}, {{"a", {1}}}).validate(), StatusCode::InvalidArgument));
+  test_assert(
+      hasCode(table({1}, {{"a", {1, 2}}}).validate(), StatusCode::InvalidArgument));
+  test_assert(hasCode(table({1}, {{"a", {1}}, {"a", {1}}}).validate(),
+                      StatusCode::InvalidArgument));
   Elements big = t;
   big.keys.append(3);
   test_assert(PayloadTraits<Elements>::bytes(big) > PayloadTraits<Elements>::bytes(t));
@@ -46,7 +49,8 @@ void testInputs()
   test_assert(l.is({}, {{"sum", {}}, {"c2", {}}}, 0));
   l.set(table({}, {}));
   test_assert(l.is({}, {{"sum", {}}, {"c2", {}}}, 0));
-  /* Columns, the node's own inputs (here the interface's default 0), columns of no input. */
+  /* Columns, the node's own inputs (here the interface's default 0), columns of no input.
+   */
   l.set(table({7, 8}, {{"a", {1, 2}}, {"other", {5, 6}}}));
   test_assert(l.is({7, 8}, {{"sum", {1, 2}}, {"c2", {0, 0}}}, 4));
   l.set(table({7, 8}, {{"a", {1, 2}}, {"b", {10, 20}}}));
@@ -56,7 +60,8 @@ void testInputs()
   test_assert(l.is({7, 8}, {{"sum", {11, 22}}, {"c2", {0, 0}}}, 0));
   l.set(table({7, 8}, {{"a", {1, 2}}}));
   test_assert(l.is({7, 8}, {{"sum", {101, 102}}, {"c2", {0, 0}}}, 2));
-  l.set(table({7, 8}, {{"a", {1, 2}}, {"b", {100, 100}}})); /* another source, same value */
+  l.set(
+      table({7, 8}, {{"a", {1, 2}}, {"b", {100, 100}}})); /* another source, same value */
   test_assert(l.is({7, 8}, {{"sum", {101, 102}}, {"c2", {0, 0}}}, 2));
   /* A link, and the root's input. */
   const NodeId in = l.in;
@@ -87,22 +92,28 @@ void testInputs()
   test_assert(l.fails(StatusCode::TypeMismatch, {2}, "element 2: column 'a': "));
 
   /* Bad tables run nothing. */
-  for (const Elements &bad : {table({1, 2, 1}, {{"a", {9, 9, 9}}}), table({1}, {{"a", {1, 2}}})}) {
+  for (const Elements &bad :
+       {table({1, 2, 1}, {{"a", {9, 9, 9}}}), table({1}, {{"a", {1, 2}}})})
+  {
     const uint64_t runs = l.inst.totalRuns();
     l.set(bad);
     test_assert(l.fails(StatusCode::InvalidArgument, {}, ""));
-    test_assert(strcmp(l.error()->socket.c_str(), "elements") == 0 && l.inst.totalRuns() == runs);
+    test_assert(strcmp(l.error()->socket.c_str(), "elements") == 0 &&
+                l.inst.totalRuns() == runs);
     l.root.def->setLabel(l.node, "x").ignore();
     w.rt.touch();
-    test_assert(l.fails(StatusCode::InvalidArgument, {}, "") && l.inst.totalRuns() == runs);
+    test_assert(l.fails(StatusCode::InvalidArgument, {}, "") &&
+                l.inst.totalRuns() == runs);
     test_assert(l.root.def->setLiteral(l.node, key(l.b), PropValue::ofFloat(1)).ok());
-    test_assert(l.fails(StatusCode::InvalidArgument, {}, "") && l.inst.totalRuns() == runs);
+    test_assert(l.fails(StatusCode::InvalidArgument, {}, "") &&
+                l.inst.totalRuns() == runs);
     test_assert(l.root.def->setLiteral(l.node, key(l.b), PropValue::ofFloat(100)).ok());
   }
 
   /* Interface edits of the def: the sockets and columns follow. */
   l.set(table({1}, {{"a", {1}}, {"b", {2}}}));
-  test_assert(l.is({1}, {{"sum", {3}}, {"c2", {9}}}, 1)); /* c2 is kept through the errors */
+  test_assert(
+      l.is({1}, {{"sum", {3}}, {"c2", {9}}}, 1)); /* c2 is kept through the errors */
   test_assert(l.inner.def->setInterfaceName(l.b, "B").ok());
   test_assert(l.is({1}, {{"sum", {101}}, {"c2", {9}}}, 1));
   test_assert(l.inner.def->moveInterface(l.b, 0).ok());
@@ -115,7 +126,8 @@ void testInputs()
   const NodeId out = l.innerOut;
   test_assert(l.evaluate().ok() && *l.column("more") == GraphValue::ofVec3(0, 0, 0));
   connect(*l.inner.def, l.add, "value", out, key(more));
-  test_assert(l.evaluate().ok() && *l.column("more") == GraphValue::ofVec3(101, 101, 101));
+  test_assert(l.evaluate().ok() &&
+              *l.column("more") == GraphValue::ofVec3(101, 101, 101));
   test_assert(l.inner.def->removeNode(out).ok()); /* no output node: defaults */
   test_assert(l.is({1}, {{"total", {0}}, {"more", {}}}, 0));
 }
@@ -126,21 +138,28 @@ void testRuns()
   World w;
   Loop l(w);
   l.set(table({1, 2, 3}, {{"a", {1, 2, 3}}}));
-  test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 6) && l.ran() == 1);
-  test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 0) && l.ran() == 0);
+  test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 6) &&
+              l.ran() == 1);
+  test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 0) &&
+              l.ran() == 0);
   /* Edits elsewhere don't even visit the elements. */
   const NodeId other = add(*l.root.def, "math.float");
   w.rt.touch();
   newThing(w.lib, "unused", 1);
-  test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 0) && l.ran() == 0);
+  test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 0) &&
+              l.ran() == 0);
   test_assert(l.root.def->setLiteral(other, "a", PropValue::ofFloat(1)).ok());
   test_assert(l.inner.def->setLabel(l.add, "label").ok());
-  test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 0) && l.ran() == 0);
-  /* An equal table, one value, a new key, another order, a key that goes and comes back. */
+  test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 0) &&
+              l.ran() == 0);
+  /* An equal table, one value, a new key, another order, a key that goes and comes back.
+   */
   l.set(table({1, 2, 3}, {{"a", {1, 2, 3}}}));
-  test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 0) && l.ran() == 0);
+  test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 0) &&
+              l.ran() == 0);
   l.set(table({1, 2, 3}, {{"a", {1, 5, 3}}}));
-  test_assert(l.is({1, 2, 3}, {{"sum", {1, 5, 3}}, {"c2", {0, 0, 0}}}, 1) && l.ran() == 1);
+  test_assert(l.is({1, 2, 3}, {{"sum", {1, 5, 3}}, {"c2", {0, 0, 0}}}, 1) &&
+              l.ran() == 1);
   l.set(table({1, 2, 9, 3}, {{"a", {1, 5, 7, 3}}}));
   test_assert(l.is({1, 2, 9, 3}, {{"sum", {1, 5, 7, 3}}, {"c2", {0, 0, 0, 0}}}, 2));
   l.set(table({3, 9, 2, 1}, {{"a", {3, 7, 5, 1}}}));
@@ -148,7 +167,8 @@ void testRuns()
   l.set(table({3, 2, 1}, {{"a", {3, 5, 1}}}));
   test_assert(l.is({3, 2, 1}, {{"sum", {3, 5, 1}}, {"c2", {0, 0, 0}}}, 0));
   l.set(table({3, 9, 2}, {{"a", {3, 7, 5}}}));
-  test_assert(l.is({3, 9, 2}, {{"sum", {3, 7, 5}}, {"c2", {0, 0, 0}}}, 2)); /* 9 was evicted */
+  test_assert(
+      l.is({3, 9, 2}, {{"sum", {3, 7, 5}}, {"c2", {0, 0, 0}}}, 2)); /* 9 was evicted */
   l.set(table({1, 2, 3}, {{"a", {1, 2, 3}}}));
   test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {0, 0, 0}}}, 3));
 
@@ -157,8 +177,10 @@ void testRuns()
   test_assert(l.is({1, 2, 3}, {{"sum", {1, 2, 3}}, {"c2", {4, 4, 4}}}, 3));
   test_assert(l.inner.def->setInterfaceDefault(l.b, PropValue::ofFloat(10)).ok());
   test_assert(l.is({1, 2, 3}, {{"sum", {11, 12, 13}}, {"c2", {4, 4, 4}}}, 3));
-  test_assert(l.inner.def->setLiteral(l.square, "b", PropValue::ofFloat(1)).ok()); /* linked */
-  test_assert(l.is({1, 2, 3}, {{"sum", {11, 12, 13}}, {"c2", {4, 4, 4}}}, 0) && l.ran() == 1);
+  test_assert(
+      l.inner.def->setLiteral(l.square, "b", PropValue::ofFloat(1)).ok()); /* linked */
+  test_assert(l.is({1, 2, 3}, {{"sum", {11, 12, 13}}, {"c2", {4, 4, 4}}}, 0) &&
+              l.ran() == 1);
   test_assert(l.inner.def->setParam(l.square, "op", PropValue::ofEnum(0)).ok());
   test_assert(l.is({1, 2, 3}, {{"sum", {11, 12, 13}}, {"c2", {4, 4, 4}}}, 3)); /* 2 + 2 */
   const NodeId unused = add(*l.inner.def, "math.float");
@@ -177,7 +199,8 @@ void testRuns()
   test_assert(l.is({1, 2, 3}, {{"sum", {11, 12, 14}}, {"c2", {4, 4, 4}}}, 1));
   /* Both at once: the skip for unchanged rows mustn't hide the edit. */
   l.set(table({1, 2, 3}, {{"a", {1, 2, 5}}}));
-  test_assert(l.inner.def->setParam(l.square, "op", PropValue::ofEnum(1)).ok()); /* 2 - 2 */
+  test_assert(
+      l.inner.def->setParam(l.square, "op", PropValue::ofEnum(1)).ok()); /* 2 - 2 */
   test_assert(l.is({1, 2, 3}, {{"sum", {11, 12, 15}}, {"c2", {0, 0, 0}}}, 4));
 
   /* A group inside: its def, deleting it, and restoring it. */
@@ -203,7 +226,8 @@ void testRuns()
   test_assert(l.is({1, 2, 3}, {{"sum", {12, 13, 16}}, {"c2", {0, 0, 0}}}, 0));
   /* Other data under the group's id: the content is as new as it was, but another. */
   test_assert(w.lib.markDeleted(g.h).ok() && w.lib.destroyFromHistory(g.h).ok());
-  GraphDef *again = litestl::alloc::New<GraphDef>("coredcc::GraphDef", &w.rt, &w.lib, g.id);
+  GraphDef *again =
+      litestl::alloc::New<GraphDef>("coredcc::GraphDef", &w.rt, &w.lib, g.id);
   test_assert(again->addInterface(SocketSide::Output, "o", "float", -1, go).ok());
   test_assert(w.lib.reviveAs(TypeId::of(kGraphDefType), g.id, "deep", again).ok());
   test_assert(l.is({1, 2, 3}, {{"sum", {0, 0, 0}}, {"c2", {0, 0, 0}}}, 0));
@@ -277,7 +301,8 @@ void testAspects()
   const NodeId one = add(*l.inner.def, "t.part"), two = add(*l.inner.def, "t.part");
   for (NodeId n : {one, two}) {
     test_assert(l.inner.def->setParam(n, "thing", toThing(id)).ok());
-    test_assert(l.inner.def->setParam(n, "aspects", PropValue::ofInt(n == one ? 1 : 2)).ok());
+    test_assert(
+        l.inner.def->setParam(n, "aspects", PropValue::ofInt(n == one ? 1 : 2)).ok());
   }
   connect(*l.inner.def, one, "value", l.add, "a");
   connect(*l.inner.def, two, "value", l.add, "b");
@@ -324,7 +349,8 @@ void testGroupRefs()
     test_assert(g[i].def->setParam(v, "value", PropValue::ofFloat(i + 1)).ok());
     connect(*g[i].def, v, "value", out, key(o[i]));
   }
-  /* Three groups, of 0, 1 and 0. The third's becomes 1, which is in the list of defs already. */
+  /* Three groups, of 0, 1 and 0. The third's becomes 1, which is in the list of defs
+   * already. */
   NodeId n[3];
   for (int i = 0; i < 3; i++) {
     n[i] = add(*l.inner.def, "graph.group");
@@ -333,7 +359,8 @@ void testGroupRefs()
   connect(*l.inner.def, n[2], key(o[0]), l.innerOut, key(l.sum));
   l.set(table({5}, {}));
   test_assert(l.is({5}, {{"sum", {1}}, {"c2", {0}}}, 2));
-  w.lib.writeRef(const_cast<RefCell &>(l.inner.def->node(n[2])->group()), g[1].id).ignore();
+  w.lib.writeRef(const_cast<RefCell &>(l.inner.def->node(n[2])->group()), g[1].id)
+      .ignore();
   test_assert(l.is({5}, {{"sum", {0}}, {"c2", {0}}}, 0)); /* it has no such socket */
 
   NodeTypeDef t("t.pins");
@@ -345,7 +372,8 @@ void testGroupRefs()
   g_lib = &w.lib;
   g_block = l.inner.id;
   l.set(table({1, 2, 3}, {{"a", {0, 10, 20}}}));
-  test_assert(l.is({1, 2, 3}, {{"sum", {1, 11, 21}}, {"c2", {0, 0, 0}}}, 6)); /* one pin */
+  test_assert(
+      l.is({1, 2, 3}, {{"sum", {1, 11, 21}}, {"c2", {0, 0, 0}}}, 6)); /* one pin */
   test_assert(w.lib.get(l.inner.h)->pins(PinKind::Host) == 0);
 }
 
@@ -366,26 +394,33 @@ void testMaxCached()
   w.rt.touch();
   test_assert(l.is({1, 2, 3, 4, 5}, all, 0) && l.ran() == 0);
   l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 7, 3, 4, 5}}}));
-  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 5}}, {"c2", {0, 0, 0, 0, 0}}}, 1));
+  test_assert(
+      l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 5}}, {"c2", {0, 0, 0, 0, 0}}}, 1));
   l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 7, 3, 4, 8}}}));
-  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 8}}, {"c2", {0, 0, 0, 0, 0}}}, 1));
+  test_assert(
+      l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 8}}, {"c2", {0, 0, 0, 0, 0}}}, 1));
   NodeReport report = l.inst.report(at({}, l.node));
   test_assert(report.elements == 5 && report.cachedElements == 2);
   /* 5 comes first: 2 loses its state, and 5 gets one when it runs. No row differs. */
   l.set(table({1, 5, 2, 3, 4}, {{"a", {1, 8, 7, 3, 4}}}));
-  test_assert(l.is({1, 5, 2, 3, 4}, {{"sum", {1, 8, 7, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 0));
+  test_assert(
+      l.is({1, 5, 2, 3, 4}, {{"sum", {1, 8, 7, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 0));
   report = l.inst.report(at({}, l.node));
-  test_assert(report.elements == 5 && report.cachedElements == 1 && l.inst.elementCount() == 1);
+  test_assert(report.elements == 5 && report.cachedElements == 1 &&
+              l.inst.elementCount() == 1);
   l.set(table({1, 5, 2, 3, 4}, {{"a", {1, 9, 7, 3, 4}}}));
-  test_assert(l.is({1, 5, 2, 3, 4}, {{"sum", {1, 9, 7, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 2));
+  test_assert(
+      l.is({1, 5, 2, 3, 4}, {{"sum", {1, 9, 7, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 2));
   test_assert(l.inst.elementCount() == 2);
   l.set(table({1, 2, 5, 3, 4}, {{"a", {1, 7, 9, 3, 4}}}));
-  test_assert(l.is({1, 2, 5, 3, 4}, {{"sum", {1, 7, 9, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 0));
+  test_assert(
+      l.is({1, 2, 5, 3, 4}, {{"sum", {1, 7, 9, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 0));
   /* A row gone, a new one, and one that changed. */
   l.set(table({1, 6, 5, 4}, {{"a", {1, 7, 9, 5}}}));
   test_assert(l.is({1, 6, 5, 4}, {{"sum", {1, 7, 9, 5}}, {"c2", {0, 0, 0, 0}}}, 2 + 1));
   l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 7, 3, 4, 8}}}));
-  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 8}}, {"c2", {0, 0, 0, 0, 0}}}, 2 + 3));
+  test_assert(
+      l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 8}}, {"c2", {0, 0, 0, 0, 0}}}, 2 + 3));
   /* None, and all. */
   test_assert(setMax(0) && l.evaluate().ok());
   l.set(five);

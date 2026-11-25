@@ -1,4 +1,5 @@
-/* Drags with a delta for each object, pivots, nudges that are one step, and drags that did nothing. */
+/* Drags with a delta for each object, pivots, nudges that are one step, and drags that
+ * did nothing. */
 #include "command_doc.h"
 
 #include "coredcc/api/ref_text.h"
@@ -28,7 +29,8 @@ ApplyDelta *beginDrag(CommandDoc &d)
 Status update(CommandDoc &d, const Vector<TransformDelta> &deltas)
 {
   return d.ex->updateInteractive(*d.ctx, [&](Context &c, Command &cmd) {
-    return cmd.as<ApplyDelta>()->update(c, std::span(deltas.data(), size_t(deltas.size())));
+    return cmd.as<ApplyDelta>()->update(c,
+                                        std::span(deltas.data(), size_t(deltas.size())));
   });
 }
 
@@ -48,8 +50,8 @@ void testEach()
         if (i & 1) {
           doc->obj(h).setTransformType(kFbxTransform);
         }
-        doc->obj(h).channels = i & 1 ? fbxChannels(same, t, 0, double3(1, 2, 1), 0.5) :
-                                       trsChannels(same, t, double3(1, 1, 1), 3.0);
+        doc->obj(h).channels = i & 1 ? fbxChannels(same, t, 0, double3(1, 2, 1), 0.5)
+                                     : trsChannels(same, t, double3(1, 1, 1), 3.0);
         (doc == &d ? all : others).append(h);
         if (i > 4) {
           doc->setParent(h, (doc == &d ? all : others)[i - 3]);
@@ -97,7 +99,8 @@ void testEach()
       }
       const Result<TransformState> start = drag->startState(*d.ctx, i);
       test_assert(start.ok() && sameBits(*start, one.stateOf(others[at])));
-      const Result<TransformState> above = computeParentState(*one.lib, others[at], one.sc().time());
+      const Result<TransformState> above =
+          computeParentState(*one.lib, others[at], one.sc().time());
       test_assert(above.ok() && sameBits(*above, drag->startParent(i)));
     }
     for (int i = 0; i < drag->count(); i++) {
@@ -108,16 +111,17 @@ void testEach()
       const TransformDelta &t = deltas[i];
       one.select({others[at]});
       const BlockId id = one.idOf(others[at]);
-      PropertyBag out = one.ok(kApplyDeltaCommand,
-                               {{"kind", PropValue::ofEnum(int64_t(t.kind))},
-                                {"vector", PropValue::ofVec3(t.vector[0], t.vector[1], t.vector[2])},
-                                {"axis", PropValue::ofVec3(t.axis[0], t.axis[1], t.axis[2])},
-                                {"pivot", PropValue::ofVec3(t.pivot[0], t.pivot[1], t.pivot[2])},
-                                {"angle", PropValue::ofFloat(t.angle)},
-                                {"objects", PropValue::ofString(
-                                                formatBlockId(one.rt, id).c_str())}});
+      PropertyBag out =
+          one.ok(kApplyDeltaCommand,
+                 {{"kind", PropValue::ofEnum(int64_t(t.kind))},
+                  {"vector", PropValue::ofVec3(t.vector[0], t.vector[1], t.vector[2])},
+                  {"axis", PropValue::ofVec3(t.axis[0], t.axis[1], t.axis[2])},
+                  {"pivot", PropValue::ofVec3(t.pivot[0], t.pivot[1], t.pivot[2])},
+                  {"angle", PropValue::ofFloat(t.angle)},
+                  {"objects", PropValue::ofString(formatBlockId(one.rt, id).c_str())}});
       test_assert(out.get("skipped")->asInt() == 0);
-      const double e = difference(d.stateOf(all[at]).world, one.stateOf(others[at]).world);
+      const double e =
+          difference(d.stateOf(all[at]).world, one.stateOf(others[at]).world);
       test_assert(e < 1e-9);
     }
     must(d.ex->commit(*d.ctx));
@@ -162,8 +166,8 @@ void testPivot()
     const TransformState parent = chain(r, t, int(r.below(3)), 2.0, true);
     const ChannelBlock c = trsChannels(r, *t.trs, r.scale(2, true), 3.0);
     const Result<double3> p = transformPivot(*t.trs, EvalCtx(c), parent);
-    test_assert(p.ok() &&
-                lengthOf(*p - solve::translationOf(eval(*t.trs, c, parent).world)) == 0.0);
+    test_assert(p.ok() && lengthOf(*p - solve::translationOf(
+                                            eval(*t.trs, c, parent).world)) == 0.0);
 
     /* The point of an FBX node that stays where it is, whatever its rotation. */
     ChannelBlock f = fbxChannels(r, *t.fbx, fbx::kRSrs, r.scale(2, true), 1.0);
@@ -194,7 +198,8 @@ void testPivot()
   p = computePivot(*d.lib, a, 0.0);
   test_assert(p.ok() && lengthOf(*p - double3(11, 7, 7)) == 0.0);
   d.obj(a).setTransformType("test.none");
-  test_assert(computePivot(*d.lib, a, 0.0).status().code() == StatusCode::FailedPrecondition);
+  test_assert(computePivot(*d.lib, a, 0.0).status().code() ==
+              StatusCode::FailedPrecondition);
   test_assert(!computePivot(*d.lib, d.shapeBlock("s", 1.0), 0.0).ok());
 
   /* A model's own, and its error. */
@@ -222,7 +227,8 @@ void testPivot()
     {
       auto *st = new lbt::Struct<Pivoted>("test::Pivoted", sizeof(Pivoted));
       BIND_STRUCT_METHOD(st, evaluate, MARGS("ctx", "parent"));
-      BIND_STRUCT_METHOD(st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
+      BIND_STRUCT_METHOD(
+          st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
       BIND_STRUCT_METHOD(st, pivot, MARGS("ctx", "parent"));
       return st;
     }
@@ -231,19 +237,23 @@ void testPivot()
   must(registerImpl<TransformModel, Pivoted>(d.rt, "test.pivoted#impl"));
   Pivoted *model = litestl::alloc::New<Pivoted>("Pivoted");
   model->rt = &d.rt;
-  Result<Owned<TransformModel>> owned = own<TransformModel>(d.rt, "test.pivoted#impl", model);
+  Result<Owned<TransformModel>> owned =
+      own<TransformModel>(d.rt, "test.pivoted#impl", model);
   must(owned.status());
   TransformTypeInfo info;
   info.name = "test.pivoted";
   info.channels.append(PropertyDef::floatProp("x"));
-  must(d.rt.ext<TransformRegistry>().add(std::move(info), std::move(owned).value()).status());
+  must(d.rt.ext<TransformRegistry>()
+           .add(std::move(info), std::move(owned).value())
+           .status());
   d.obj(a).setTransformType("test.pivoted");
   d.obj(a).channels = ChannelBlock(1);
   d.obj(a).channels.set(0, 3.0);
   p = computePivot(*d.lib, a, 2.0);
   test_assert(p.ok() && lengthOf(*p - double3(13, 0, 2)) == 0.0);
   d.obj(a).channels.set(0, -3.0);
-  test_assert(isError(computePivot(*d.lib, a, 2.0).status(), StatusCode::Internal, "pivot"));
+  test_assert(
+      isError(computePivot(*d.lib, a, 2.0).status(), StatusCode::Internal, "pivot"));
   test_assert(!d.rt.hasStickyError());
 }
 
@@ -256,8 +266,9 @@ void testNudges()
   d.select({a, b});
   const std::string start = d.describe();
   const auto nudge = [&](int64_t gesture, double x) {
-    d.ok(kApplyDeltaCommand,
-         {{"vector", PropValue::ofVec3(x, 0, 0)}, {"gesture", PropValue::ofInt(gesture)}});
+    d.ok(
+        kApplyDeltaCommand,
+        {{"vector", PropValue::ofVec3(x, 0, 0)}, {"gesture", PropValue::ofInt(gesture)}});
     return d.history->size();
   };
   const int64_t g = int64_t(beginGesture(d.rt)), g2 = int64_t(beginGesture(d.rt));

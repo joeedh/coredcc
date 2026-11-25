@@ -4,7 +4,8 @@
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
-const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::CommandFlags>::bind()
+const litestl::binding::BindingBase *
+litestl::binding::Binder<coredcc::CommandFlags>::bind()
 {
   using coredcc::CommandFlags;
   static types::Enum *e = nullptr;

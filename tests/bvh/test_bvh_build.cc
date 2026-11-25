@@ -53,8 +53,10 @@ template <class S> void build(const Boxes<S> &src, const char *what, int leafSiz
 
 template <class S> void testExtremes()
 {
-  const S big = (std::numeric_limits<S>::max)(), den = std::numeric_limits<S>::denorm_min();
-  const S inf = std::numeric_limits<S>::infinity(), nan = std::numeric_limits<S>::quiet_NaN();
+  const S big = (std::numeric_limits<S>::max)(),
+          den = std::numeric_limits<S>::denorm_min();
+  const S inf = std::numeric_limits<S>::infinity(),
+          nan = std::numeric_limits<S>::quiet_NaN();
   Rand r(21);
 
   Boxes<S> src;
@@ -159,9 +161,11 @@ template <class S> void testScale()
     }
     Bvh<S> other;
     test_assert(other.build(scaled, opts).ok());
-    test_assert(memcmp(tree.order().data(), other.order().data(),
+    test_assert(memcmp(tree.order().data(),
+                       other.order().data(),
                        tree.order().size() * sizeof(int)) == 0);
-    test_assert(tree.nodes().size() == other.nodes().size() && tree.cost() == other.cost());
+    test_assert(tree.nodes().size() == other.nodes().size() &&
+                tree.cost() == other.cost());
   }
 }
 
@@ -202,7 +206,8 @@ void testSize()
   test_assert(bvh.build(Huge{(int64_t(1) << 32) + 1}).code() == StatusCode::OutOfRange);
   test_assert(bvh.build(Unsigned()).code() == StatusCode::OutOfRange);
   test_assert(bvh.build(Huge{-1}).code() == StatusCode::InvalidArgument);
-  test_assert(bvh.refit(Huge{(int64_t(1) << 32) + 1}).code() == StatusCode::FailedPrecondition);
+  test_assert(bvh.refit(Huge{(int64_t(1) << 32) + 1}).code() ==
+              StatusCode::FailedPrecondition);
   test_assert(bvh.size() == 1 && bvh.nodes().size() == 1);
 }
 
@@ -225,7 +230,8 @@ void testOptions()
     opts.bins = bins;
     test_assert(bvh.build(Boxes<float>(), opts).code() == StatusCode::InvalidArgument);
   }
-  test_assert(bvh.size() == kept && treeProblem(bvh, src, BvhOptions().leafSize) == nullptr);
+  test_assert(bvh.size() == kept &&
+              treeProblem(bvh, src, BvhOptions().leafSize) == nullptr);
   BvhOptions opts;
   opts.leafSize = (std::numeric_limits<int>::max)();
   test_assert(bvh.build(src, opts).ok() && bvh.nodes().size() == 1);

@@ -50,7 +50,8 @@ struct GraphProvider {
   }
   static lbt::Struct<GraphProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<GraphProvider>("coredcc::GraphProvider", sizeof(GraphProvider));
+    auto *st =
+        new lbt::Struct<GraphProvider>("coredcc::GraphProvider", sizeof(GraphProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));

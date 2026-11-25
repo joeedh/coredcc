@@ -17,7 +17,16 @@ Status constant(NodeExecContext &ctx)
   return ctx.setOutput(0, std::move(v).value());
 }
 
-enum class FloatOp : int { Add, Subtract, Multiply, Divide, Power, Minimum, Maximum, Modulo };
+enum class FloatOp : int {
+  Add,
+  Subtract,
+  Multiply,
+  Divide,
+  Power,
+  Minimum,
+  Maximum,
+  Modulo
+};
 
 Status mathFloat(NodeExecContext &ctx)
 {
@@ -25,30 +34,30 @@ Status mathFloat(NodeExecContext &ctx)
   const double b = ctx.input(1).asFloat();
   double r = 0;
   switch (FloatOp(ctx.param("op")->asEnum())) {
-    case FloatOp::Add:
-      r = a + b;
-      break;
-    case FloatOp::Subtract:
-      r = a - b;
-      break;
-    case FloatOp::Multiply:
-      r = a * b;
-      break;
-    case FloatOp::Divide:
-      r = a / b;
-      break;
-    case FloatOp::Power:
-      r = std::pow(a, b);
-      break;
-    case FloatOp::Minimum:
-      r = std::fmin(a, b);
-      break;
-    case FloatOp::Maximum:
-      r = std::fmax(a, b);
-      break;
-    case FloatOp::Modulo:
-      r = std::fmod(a, b);
-      break;
+  case FloatOp::Add:
+    r = a + b;
+    break;
+  case FloatOp::Subtract:
+    r = a - b;
+    break;
+  case FloatOp::Multiply:
+    r = a * b;
+    break;
+  case FloatOp::Divide:
+    r = a / b;
+    break;
+  case FloatOp::Power:
+    r = std::pow(a, b);
+    break;
+  case FloatOp::Minimum:
+    r = std::fmin(a, b);
+    break;
+  case FloatOp::Maximum:
+    r = std::fmax(a, b);
+    break;
+  case FloatOp::Modulo:
+    r = std::fmod(a, b);
+    break;
   }
   return ctx.setOutput(0, GraphValue::ofFloat(r));
 }
@@ -93,7 +102,8 @@ void detail::addValueNodes(Runtime &rt, NodeTypeRegistry &reg)
 {
   const SocketTypeRegistry &sockets = rt.ext<SocketTypeRegistry>();
   for (const char *type :
-       {"bool", "int", "float", "vec2", "vec3", "vec4", "mat4", "quat", "string"}) {
+       {"bool", "int", "float", "vec2", "vec3", "vec4", "mat4", "quat", "string"})
+  {
     const std::string name = std::string("value.") + type;
     NodeTypeDef def(name);
     def.uiName(type).param(sockets.find(type)->literalDef("value")).output("value", type);

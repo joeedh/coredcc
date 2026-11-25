@@ -17,19 +17,21 @@ Result<TypeId> AttachmentTypeRegistry::add(AttachmentTypeInfo info,
 {
   const std::string what = "attachment type '" + std::string(info.name.c_str()) + "'";
   if (!provider) {
-    return Status::error(StatusCode::InvalidArgument, (what + " has no provider").c_str());
+    return Status::error(StatusCode::InvalidArgument,
+                         (what + " has no provider").c_str());
   }
   if (provider->hasSerialize() != provider->hasDeserialize()) {
     return Status::error(
         StatusCode::InvalidArgument,
-        (what + " has one of serialize and deserialize: it needs both or neither").c_str());
+        (what + " has one of serialize and deserialize: it needs both or neither")
+            .c_str());
   }
   const bool canSave = provider->hasSerialize();
   if (info.storage == (canSave ? BlockStorage::Transient : BlockStorage::Payload)) {
-    return Status::error(
-        StatusCode::InvalidArgument,
-        (what + (canSave ? " is Transient, but has serialize" : " is Payload, but has no serialize"))
-            .c_str());
+    return Status::error(StatusCode::InvalidArgument,
+                         (what + (canSave ? " is Transient, but has serialize"
+                                          : " is Payload, but has no serialize"))
+                             .c_str());
   }
   if (canSave) {
     info.storage = BlockStorage::Payload;
@@ -43,11 +45,13 @@ Result<TypeId> AttachmentTypeRegistry::add(AttachmentTypeInfo info,
     return id.status();
   }
   if (byId_.lookup_ptr(id->value)) {
-    return Status::error(StatusCode::AlreadyExists, (what + " is already registered").c_str());
+    return Status::error(StatusCode::AlreadyExists,
+                         (what + " is already registered").c_str());
   }
   const BlockTypeRegistry *blocks = rt_.findExt<BlockTypeRegistry>();
   if (blocks && blocks->find(*id)) {
-    return Status::error(StatusCode::AlreadyExists, (what + ": a block type has this name").c_str());
+    return Status::error(StatusCode::AlreadyExists,
+                         (what + ": a block type has this name").c_str());
   }
   Entry *e = litestl::alloc::New<Entry>("coredcc::AttachmentTypeRegistry::Entry");
   e->info = std::move(info);
@@ -67,7 +71,8 @@ const AttachmentTypeRegistry::Entry *AttachmentTypeRegistry::find(TypeId type) c
 Status AttachmentTypeRegistry::validate() const
 {
   if (int(byId_.size()) != int(entries_.size())) {
-    return Status::error(StatusCode::Internal, "AttachmentTypeRegistry: index and list differ");
+    return Status::error(StatusCode::Internal,
+                         "AttachmentTypeRegistry: index and list differ");
   }
   for (const Entry *e : entries_) {
     if (find(e->id) != e || !e->provider || !rt_.nameOf(e->id)) {

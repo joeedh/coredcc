@@ -34,8 +34,12 @@ struct ToolChecks::Core {
   std::vector<Tool> tools;
 };
 
-RunInputs::RunInputs() : core_(std::make_shared<Core>()) {}
-ToolChecks::ToolChecks() : core_(std::make_shared<Core>()) {}
+RunInputs::RunInputs() : core_(std::make_shared<Core>())
+{
+}
+ToolChecks::ToolChecks() : core_(std::make_shared<Core>())
+{
+}
 
 template <class T> static litestl::binding::types::Struct<T> *shared(const char *name)
 {
@@ -71,7 +75,8 @@ Status runInputsSet(const RunInputs &inputs, const string &name, const PropValue
 
 /* ---- preparing ---- */
 
-/* `values` into the bag: those of dynamic inputs last, as the others may decide about them. */
+/* `values` into the bag: those of dynamic inputs last, as the others may decide about
+ * them. */
 static Status setInputs(const CommandDef &def, const RunInputs &inputs, PropertyBag &bag)
 {
   for (bool dynamic : {false, true}) {
@@ -96,10 +101,8 @@ struct Prepared {
   PropertyBag inputs;
 };
 
-static Result<Prepared> prepare(Context &ctx,
-                                const string &id,
-                                const RunInputs &inputs,
-                                bool lastUsed)
+static Result<Prepared>
+prepare(Context &ctx, const string &id, const RunInputs &inputs, bool lastUsed)
 {
   const CommandRegistry &commands = ctx.runtime().ext<CommandRegistry>();
   Prepared out;
@@ -125,7 +128,8 @@ static Result<CommandExecutor *> executorOf(Context &ctx, const char *what)
 }
 
 /* `fn()` under `prefix`. */
-template <class Fn> static auto under(Context &ctx, const string &prefix, Fn fn) -> decltype(fn())
+template <class Fn>
+static auto under(Context &ctx, const string &prefix, Fn fn) -> decltype(fn())
 {
   if (prefix.size() == 0) {
     PrefixScope scope(ctx, nullptr);
@@ -170,7 +174,8 @@ Status canRunAt(Context &ctx,
   CDCC_TRY(executorOf(ctx, "canRun").status());
   return under(ctx, prefix, [&]() -> Status {
     Result<Prepared> p = prepare(ctx, id, inputs, lastUsed);
-    return p.ok() ? ctx.executor()->canRun(ctx, *p->def, std::move(p->inputs)) : p.status();
+    return p.ok() ? ctx.executor()->canRun(ctx, *p->def, std::move(p->inputs))
+                  : p.status();
   });
 }
 
@@ -185,7 +190,8 @@ ToolChecks newToolChecks()
   return ToolChecks();
 }
 
-IntResult toolChecksAdd(const ToolChecks &tools, const string &prefix, const string &invocation)
+IntResult
+toolChecksAdd(const ToolChecks &tools, const string &prefix, const string &invocation)
 {
   ToolChecks::Core::Tool tool;
   if (prefix.size() > 0) {
@@ -224,8 +230,7 @@ StringResult toolChecksRun(Context &ctx, const ToolChecks &tools)
     out.beginArray().integer(int64_t(i));
     if (s.ok()) {
       out.null();
-    }
-    else {
+    } else {
       out.string(answer);
     }
     out.endArray();
@@ -247,8 +252,8 @@ Status beginInteractiveAt(Context &ctx,
   CDCC_TRY(executorOf(ctx, "beginInteractive").status());
   return under(ctx, prefix, [&]() -> Status {
     Result<Prepared> p = prepare(ctx, id, inputs, lastUsed);
-    return p.ok() ? ctx.executor()->beginInteractive(ctx, *p->def, std::move(p->inputs)) :
-                    p.status();
+    return p.ok() ? ctx.executor()->beginInteractive(ctx, *p->def, std::move(p->inputs))
+                  : p.status();
   });
 }
 
@@ -269,7 +274,9 @@ Status writeInteractive(Context &ctx, const string &path, const PropValue &value
 {
   CDCC_TRY(slotGate(ctx, "writeInteractive", {}));
   CDCC_TRY(executorOf(ctx, "writeInteractive").status());
-  auto write = [&](Context &c, Command &) { return coredcc::setValue(c, view(path), value); };
+  auto write = [&](Context &c, Command &) {
+    return coredcc::setValue(c, view(path), value);
+  };
   return ctx.executor()->updateInteractive(ctx, write);
 }
 
@@ -298,7 +305,8 @@ static Result<CommandRecord *> last(Context &ctx, const char *what)
     return ex.status();
   }
   CommandRecord *head = (*ex)->history() ? (*ex)->history()->head() : nullptr;
-  const bool can = head && head->fromFactory() && !head->def().has(CommandFlags::Interactive);
+  const bool can =
+      head && head->fromFactory() && !head->def().has(CommandFlags::Interactive);
   return can ? head : nullptr;
 }
 
@@ -313,7 +321,8 @@ StringResult lastCommandId(Context &ctx)
 
 static Status noLast()
 {
-  return error(StatusCode::FailedPrecondition, "there is no command that can be run again");
+  return error(StatusCode::FailedPrecondition,
+               "there is no command that can be run again");
 }
 
 BagResult lastCommandInputs(Context &ctx)

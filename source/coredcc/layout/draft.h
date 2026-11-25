@@ -20,7 +20,8 @@ struct DraftAttr {
   /** In the text: the attribute, and its value. */
   size_t offset = 0;
   size_t valueOffset = 0;
-  /** The value is in the text as it is, so an offset in the one is an offset in the other. */
+  /** The value is in the text as it is, so an offset in the one is an offset in the
+   * other. */
   bool verbatim = false;
 };
 
@@ -65,8 +66,8 @@ Result<LayoutAttrId> attrOf(LayoutKind kind, std::string_view name);
 /** [A-Za-z_], and [0-9.-] if it isn't the first. */
 bool isXmlNameChar(char c, bool first);
 bool isXmlName(std::string_view s);
-/** The first byte that is a control character (but tab and line ends), U+FFFE, U+FFFF or not
- * UTF-8; s.size() if there is none. `what` says what it is. */
+/** The first byte that is a control character (but tab and line ends), U+FFFE, U+FFFF or
+ * not UTF-8; s.size() if there is none. `what` says what it is. */
 size_t firstBadByte(std::string_view s, const char *&what);
 /** joinLayoutPath as text. `prefix` is canonical text from the root. */
 Result<std::string> joinPathText(const std::string &prefix,

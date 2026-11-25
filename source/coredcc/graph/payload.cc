@@ -21,7 +21,9 @@ size_t thisThread()
 
 } // namespace
 
-PayloadBox::PayloadBox(TypeId type) : type_(type), thread_(thisThread()) {}
+PayloadBox::PayloadBox(TypeId type) : type_(type), thread_(thisThread())
+{
+}
 
 PayloadBox::PayloadBox(TypeId type, litestl::util::Vector<LibraryPin, 1> pins)
     : type_(type), thread_(thisThread()), pins_(std::move(pins))
@@ -38,8 +40,8 @@ bool PayloadBox::pinsAlive() const
   return true;
 }
 
-Result<litestl::util::Vector<LibraryPin, 1>> pinAliased(Library &lib,
-                                                        std::span<const BlockHandle> blocks)
+Result<litestl::util::Vector<LibraryPin, 1>>
+pinAliased(Library &lib, std::span<const BlockHandle> blocks)
 {
   if (blocks.empty()) {
     return Status::error(StatusCode::InvalidArgument, "makeAlias: no blocks");
@@ -57,7 +59,8 @@ Result<litestl::util::Vector<LibraryPin, 1>> pinAliased(Library &lib,
     const BlockTypeRegistry::Entry *type =
         lib.runtime().ext<BlockTypeRegistry>().find(b->type());
     if (type && type->info.storage == BlockStorage::Transient) {
-      return Status::error(StatusCode::Unsupported, (name + "is of a Transient type").c_str());
+      return Status::error(StatusCode::Unsupported,
+                           (name + "is of a Transient type").c_str());
     }
     pins.append(LibraryPin(lib, h));
   }

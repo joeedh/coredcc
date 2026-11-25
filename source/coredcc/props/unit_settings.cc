@@ -20,7 +20,8 @@ void broadcastRate(int64_t &num, int64_t &den)
   const int64_t thousandths = num * (1000 / den);
   for (int64_t step : {24, 30}) {
     for (int64_t base = step; base <= 240; base += step) {
-      /* base * 1000 / 1001, rounded to three decimals and to two. 1001 is odd, so no ties. */
+      /* base * 1000 / 1001, rounded to three decimals and to two. 1001 is odd, so no
+       * ties. */
       const int64_t three = (base * 2000000 + 1001) / 2002,
                     two = (base * 200000 + 1001) / 2002 * 10;
       if (thousandths == three || thousandths == two) {
@@ -44,7 +45,8 @@ void reduce(int64_t &num, int64_t &den)
 Result<FrameRate> FrameRate::of(int64_t num, int64_t den)
 {
   if (num < 1 || den < 1) {
-    return Status::error(StatusCode::InvalidArgument, "a frame rate is a positive fraction");
+    return Status::error(StatusCode::InvalidArgument,
+                         "a frame rate is a positive fraction");
   }
   reduce(num, den);
   if (num > kMax || den > kMax || num * 1000 < den) {
@@ -65,10 +67,10 @@ FrameRate FrameRate::nearest(double fps)
   }
   fps = fps < 0.001 ? 0.001 : (fps > kMax ? double(kMax) : fps);
   /*
-   * fps is a / b exactly: 53 bits over at most 2^62. Euclid's algorithm gives the fractions that
-   * are nearest to it for their size. A fraction within the limits whose double is fps is one of
-   * them (Legendre's theorem), and the last one within the limits: two of those differ by 1e-12 of
-   * their value or more.
+   * fps is a / b exactly: 53 bits over at most 2^62. Euclid's algorithm gives the
+   * fractions that are nearest to it for their size. A fraction within the limits whose
+   * double is fps is one of them (Legendre's theorem), and the last one within the
+   * limits: two of those differ by 1e-12 of their value or more.
    */
   int exponent = 0;
   int64_t a = int64_t(std::ldexp(std::frexp(fps, &exponent), 53));
@@ -144,27 +146,27 @@ Status UnitSettings::setDisplayIndex(UnitFamily family, int index)
 Status UnitSettings::setDisplayUnit(UnitFamily family, std::string_view text)
 {
   const int i = findUnit(family, text);
-  return i < 0 ? units::detail::unknownUnit(family, text, *this) : setDisplayIndex(family, i);
+  return i < 0 ? units::detail::unknownUnit(family, text, *this)
+               : setDisplayIndex(family, i);
 }
 
 /* ---- text ---- */
 
 namespace units {
 
-std::string format(double baseValue,
-                   UnitFamily family,
-                   const UnitSettings &settings,
-                   int precision)
+std::string
+format(double baseValue, UnitFamily family, const UnitSettings &settings, int precision)
 {
   const Unit u = settings.displayUnit(family);
   /* By the fraction: a whole number of frames is one again. */
-  const double v = UnitSettings::isFrame(family, settings.displayIndex(family)) ?
-                       baseValue * settings.rate.num() / settings.rate.den() :
-                       baseValue / u.scale;
+  const double v = UnitSettings::isFrame(family, settings.displayIndex(family))
+                       ? baseValue * settings.rate.num() / settings.rate.den()
+                       : baseValue / u.scale;
   return detail::formatNumber(v, u, precision);
 }
 
-Result<double> parse(std::string_view text, UnitFamily family, const UnitSettings &settings)
+Result<double>
+parse(std::string_view text, UnitFamily family, const UnitSettings &settings)
 {
   Result<detail::Typed> t = detail::parseNumber(text);
   if (!t.ok()) {
@@ -177,9 +179,9 @@ Result<double> parse(std::string_view text, UnitFamily family, const UnitSetting
       return detail::unknownUnit(family, t->unit, settings);
     }
   }
-  const double v = UnitSettings::isFrame(family, i) ?
-                       t->number * settings.rate.den() / settings.rate.num() :
-                       t->number * settings.unitAt(family, i).scale;
+  const double v = UnitSettings::isFrame(family, i)
+                       ? t->number * settings.rate.den() / settings.rate.num()
+                       : t->number * settings.unitAt(family, i).scale;
   return detail::finite(v, text);
 }
 

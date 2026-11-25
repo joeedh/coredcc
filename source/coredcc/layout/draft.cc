@@ -51,8 +51,13 @@ template <class... K> constexpr uint32_t bits(K... k)
 }
 
 constexpr uint32_t kAll = (1u << (uint32_t(Kind::Custom) + 1)) - 1;
-constexpr uint32_t kTexts = bits(Kind::Panel, Kind::Tab, Kind::Prop, Kind::Tool,
-                                 Kind::ToolOptions, Kind::Label, Kind::Custom);
+constexpr uint32_t kTexts = bits(Kind::Panel,
+                                 Kind::Tab,
+                                 Kind::Prop,
+                                 Kind::Tool,
+                                 Kind::ToolOptions,
+                                 Kind::Label,
+                                 Kind::Custom);
 
 struct AttrInfo {
   const char *name;
@@ -63,9 +68,18 @@ struct AttrInfo {
 /* By LayoutAttrId. */
 constexpr AttrInfo kAttrs[] = {
     {"version", Form::Version, bit(Kind::Layout)},
-    {"path", Form::Path,
-     bits(Kind::Layout, Kind::Column, Kind::Row, Kind::Panel, Kind::Tabs, Kind::Tab, Kind::Prop,
-          Kind::Tool, Kind::ToolOptions, Kind::Custom)},
+    {"path",
+     Form::Path,
+     bits(Kind::Layout,
+          Kind::Column,
+          Kind::Row,
+          Kind::Panel,
+          Kind::Tabs,
+          Kind::Tab,
+          Kind::Prop,
+          Kind::Tool,
+          Kind::ToolOptions,
+          Kind::Custom)},
     {"label", Form::Text, kTexts},
     {"icon", Form::Text, kTexts},
     {"description", Form::Text, kTexts},
@@ -117,15 +131,18 @@ Status tooMany(const std::string &what)
 
 /* The checks of one layout. */
 class Checker {
- public:
-  Checker(std::vector<DraftNode> &nodes, DraftFault &fault) : nodes_(nodes), fault_(fault) {}
+public:
+  Checker(std::vector<DraftNode> &nodes, DraftFault &fault) : nodes_(nodes), fault_(fault)
+  {
+  }
 
   bool run()
   {
     if (nodes_.size() > size_t(LayoutLimits::kMaxNodes)) {
-      return fail(LayoutLimits::kMaxNodes, nodes_[LayoutLimits::kMaxNodes].offset,
-                  tooMany("there are more than " + std::to_string(LayoutLimits::kMaxNodes) +
-                          " elements"));
+      return fail(LayoutLimits::kMaxNodes,
+                  nodes_[LayoutLimits::kMaxNodes].offset,
+                  tooMany("there are more than " +
+                          std::to_string(LayoutLimits::kMaxNodes) + " elements"));
     }
     depth_.resize(nodes_.size());
     prefix_.resize(nodes_.size());
@@ -137,7 +154,7 @@ class Checker {
     return true;
   }
 
- private:
+private:
   bool fail(int node, size_t offset, Status s)
   {
     fault_.node = node;
@@ -150,8 +167,10 @@ class Checker {
   {
     std::string what = (a.id == Id::Free ? a.name : layoutAttrName(a.id)) + ": ";
     /* The parsers of paths and invocations say it themselves. */
-    what = std::string_view(s.message()).starts_with(what) ? s.message() : what + s.message();
-    return fail(node, a.valueOffset + (a.verbatim ? inner : 0),
+    what = std::string_view(s.message()).starts_with(what) ? s.message()
+                                                           : what + s.message();
+    return fail(node,
+                a.valueOffset + (a.verbatim ? inner : 0),
                 Status::error(s.code(), what.c_str()));
   }
 
@@ -159,8 +178,10 @@ class Checker {
   {
     const DraftNode &n = nodes_[i];
     if ((n.kind == Kind::Layout) != (i == 0)) {
-      return fail(i, n.offset, invalid(i == 0 ? "the root isn't a <layout>" :
-                                                "only the root is a <layout>"));
+      return fail(
+          i,
+          n.offset,
+          invalid(i == 0 ? "the root isn't a <layout>" : "only the root is a <layout>"));
     }
     if (i == 0) {
       depth_[i] = 1;
@@ -169,16 +190,19 @@ class Checker {
     DraftNode &p = nodes_[n.parent];
     depth_[i] = depth_[n.parent] + 1;
     if (depth_[i] > LayoutLimits::kMaxDepth) {
-      return fail(i, n.offset, tooMany("the elements are nested more than " +
-                                       std::to_string(LayoutLimits::kMaxDepth) + " deep"));
+      return fail(i,
+                  n.offset,
+                  tooMany("the elements are nested more than " +
+                          std::to_string(LayoutLimits::kMaxDepth) + " deep"));
     }
     if (!info(p.kind).container) {
       return fail(i, n.offset, invalid("a " + element(p.kind) + " can't hold elements"));
     }
     if ((p.kind == Kind::Tabs) != (n.kind == Kind::Tab)) {
-      return fail(i, n.offset, invalid(n.kind == Kind::Tab ?
-                                           "a <tab> must be in a <tabs>" :
-                                           "a <tabs> holds only <tab> elements"));
+      return fail(i,
+                  n.offset,
+                  invalid(n.kind == Kind::Tab ? "a <tab> must be in a <tabs>"
+                                              : "a <tabs> holds only <tab> elements"));
     }
     if (p.find(Id::Text)) {
       return fail(i, n.offset, invalid("text and elements can't be mixed"));
@@ -190,17 +214,20 @@ class Checker {
   {
     DraftNode &n = nodes_[i];
     if (n.attrs.size() > size_t(LayoutLimits::kMaxAttrs)) {
-      return fail(i, n.attrs[LayoutLimits::kMaxAttrs].offset,
-                  tooMany("an element has more than " + std::to_string(LayoutLimits::kMaxAttrs) +
-                          " attributes"));
+      return fail(i,
+                  n.attrs[LayoutLimits::kMaxAttrs].offset,
+                  tooMany("an element has more than " +
+                          std::to_string(LayoutLimits::kMaxAttrs) + " attributes"));
     }
     std::sort(n.attrs.begin(), n.attrs.end(), [](const DraftAttr &a, const DraftAttr &b) {
       return a.id != b.id ? a.id < b.id : a.name < b.name;
     });
     for (const DraftAttr &a : n.attrs) {
       if (!layout_detail::mayHave(n.kind, a.id)) {
-        return fail(i, a.offset,
-                    invalid("a " + element(n.kind) + " has no '" + layoutAttrName(a.id) + "'"));
+        return fail(
+            i,
+            a.offset,
+            invalid("a " + element(n.kind) + " has no '" + layoutAttrName(a.id) + "'"));
       }
       if (a.id == Id::Free && !layout_detail::isXmlName(a.name)) {
         return fail(i, a.offset, invalid("'" + a.name + "' isn't an attribute's name"));
@@ -212,10 +239,12 @@ class Checker {
     if (const Id need = info(n.kind).required; need != Id::Free) {
       const DraftAttr *a = n.find(need);
       if (!a || a->value.empty()) {
-        return fail(i, n.offset,
-                    invalid("a " + element(n.kind) + " needs " +
-                            (need == Id::Label ? "text" : "'" + std::string(layoutAttrName(need)) +
-                                                              "'")));
+        return fail(
+            i,
+            n.offset,
+            invalid("a " + element(n.kind) + " needs " +
+                    (need == Id::Label ? "text"
+                                       : "'" + std::string(layoutAttrName(need)) + "'")));
       }
     }
     if (const DraftAttr *a = n.find(Id::Id)) {
@@ -229,7 +258,8 @@ class Checker {
   bool form(int i, const DraftAttr &a)
   {
     const char *bad = nullptr;
-    if (const size_t at = layout_detail::firstBadByte(a.value, bad); at < a.value.size()) {
+    if (const size_t at = layout_detail::firstBadByte(a.value, bad); at < a.value.size())
+    {
       return failIn(i, a, at, invalid(bad));
     }
     const Form form = kAttrs[int(a.id)].form;
@@ -260,21 +290,24 @@ class Checker {
     return parent < 0 ? "/" : prefix_[parent];
   }
 
-  /* The path in the value from `skip` on, joined with the prefix around node i, as text. */
+  /* The path in the value from `skip` on, joined with the prefix around node i, as text.
+   */
   bool join(int i, const DraftAttr &a, size_t skip, std::string &out)
   {
     size_t at = 0;
-    Result<std::string> p =
-        layout_detail::joinPathText(around(i),
-                                    std::string_view(a.value).substr(skip), &at);
+    Result<std::string> p = layout_detail::joinPathText(
+        around(i), std::string_view(a.value).substr(skip), &at);
     if (!p.ok()) {
       return failIn(i, a, skip + at, p.status());
     }
     out = std::move(*p);
     if (out.size() > LayoutLimits::kMaxPathBytes) {
-      return failIn(i, a, 0, tooMany("it is longer than " +
-                                     std::to_string(LayoutLimits::kMaxPathBytes) +
-                                     " bytes, with the prefixes around it"));
+      return failIn(i,
+                    a,
+                    0,
+                    tooMany("it is longer than " +
+                            std::to_string(LayoutLimits::kMaxPathBytes) +
+                            " bytes, with the prefixes around it"));
     }
     return total(i, a.offset, out.size());
   }
@@ -284,7 +317,9 @@ class Checker {
   {
     joined_ += size;
     return joined_ <= LayoutLimits::kMaxJoinedBytes ||
-           fail(i, offset, tooMany("the paths, with the prefixes around them, are more than 2 MiB"));
+           fail(i,
+                offset,
+                tooMany("the paths, with the prefixes around them, are more than 2 MiB"));
   }
 
   bool paths(int i)
@@ -357,7 +392,8 @@ bool isKindName(std::string_view name, LayoutKind &out)
 
 bool isReservedName(std::string_view name)
 {
-  return std::find(std::begin(kReserved), std::end(kReserved), name) != std::end(kReserved);
+  return std::find(std::begin(kReserved), std::end(kReserved), name) !=
+         std::end(kReserved);
 }
 
 std::vector<std::string_view> kindNames()
@@ -398,8 +434,8 @@ Result<LayoutAttrId> attrOf(LayoutKind kind, std::string_view name)
   if (kind == Kind::Custom || isData(name)) {
     return Id::Free;
   }
-  Status s = invalid(known ? "a " + element(kind) + " has no '" + std::string(name) + "'" :
-                             "there is no attribute '" + std::string(name) + "'");
+  Status s = invalid(known ? "a " + element(kind) + " has no '" + std::string(name) + "'"
+                           : "there is no attribute '" + std::string(name) + "'");
   suggest.addTo(s);
   return s;
 }
@@ -442,15 +478,15 @@ size_t firstBadByte(std::string_view s, const char *&what)
   return s.size();
 }
 
-Result<std::string> joinPathText(const std::string &prefix,
-                                 std::string_view path,
-                                 size_t *errorOffset)
+Result<std::string>
+joinPathText(const std::string &prefix, std::string_view path, size_t *errorOffset)
 {
   Result<Path> own = joinLayoutPath(Path(), path, errorOffset);
   if (!own.ok()) {
     return own.status();
   }
-  return own->fromRoot ? own->toString() : prefix + (prefix == "/" ? "" : ".") + own->toString();
+  return own->fromRoot ? own->toString()
+                       : prefix + (prefix == "/" ? "" : ".") + own->toString();
 }
 
 } // namespace layout_detail
@@ -492,7 +528,8 @@ Result<Layout> LayoutAssembler::assemble(std::vector<DraftNode> nodes, DraftFaul
       if (form == Form::Path || form == Form::Condition) {
         const std::string_view text = a.value;
         Result<Path> path = joinLayoutPath(
-            out.paths_[around], text.substr(form == Form::Condition && text[0] == '!' ? 1 : 0));
+            out.paths_[around],
+            text.substr(form == Form::Condition && text[0] == '!' ? 1 : 0));
         CDCC_CHECK(path.ok(), "the Checker took a path that isn't one");
         to.joined = uint32_t(out.paths_.size());
         out.paths_.append(std::move(path).value());
@@ -516,11 +553,15 @@ Result<Layout> LayoutAssembler::assemble(std::vector<DraftNode> nodes, DraftFaul
     }
     i = i < 0 ? -1 : next[i];
   }
-  std::sort(out.skipped_.data(), out.skipped_.data() + out.skipped_.size(),
-            [](const LayoutSkipped &a, const LayoutSkipped &b) { return a.offset < b.offset; });
-  std::sort(out.byId_.data(), out.byId_.data() + out.byId_.size(), [&out](int32_t a, int32_t b) {
-    return std::string_view(out.text(a, Id::Id)) < out.text(b, Id::Id);
-  });
+  std::sort(
+      out.skipped_.data(),
+      out.skipped_.data() + out.skipped_.size(),
+      [](const LayoutSkipped &a, const LayoutSkipped &b) { return a.offset < b.offset; });
+  std::sort(out.byId_.data(),
+            out.byId_.data() + out.byId_.size(),
+            [&out](int32_t a, int32_t b) {
+              return std::string_view(out.text(a, Id::Id)) < out.text(b, Id::Id);
+            });
   for (int j = 0; j < count; j++) {
     LayoutNode &n = out.nodes_[place[j]];
     n.firstChild = first[j] < 0 ? -1 : place[first[j]];

@@ -53,9 +53,9 @@ void Dependents::setSource(Frame &f, int input, const Vertex &source, KernelStat
 {
   InputLink &l = f.links[input];
   l.frame = &f;
-  l.move(kernel       ? &kernel->consumers :
-         source.frame ? &source.frame->links[source.index].consumers :
-                        nullptr);
+  l.move(kernel         ? &kernel->consumers
+         : source.frame ? &source.frame->links[source.index].consumers
+                        : nullptr);
 }
 
 /* ---- frames ---- */
@@ -77,11 +77,9 @@ void Dependents::removeFrame(Frame &f)
   }
   if (f.prevOfDef) {
     f.prevOfDef->nextOfDef = f.nextOfDef;
-  }
-  else if (f.nextOfDef) {
+  } else if (f.nextOfDef) {
     frames_.add_overwrite(f.defSerial, f.nextOfDef);
-  }
-  else {
+  } else {
     frames_.remove(f.defSerial);
   }
 }
@@ -96,7 +94,9 @@ void Dependents::setBlocks(KernelState &k, ClientRegistry &clients)
   const auto block = [&](int i) {
     return clients.canonical(i < used ? t->blocks[i].id : t->queries[i - used].id);
   };
-  const auto aspects = [&](int i) { return i < used ? t->blocks[i].aspects : kAllAspects; };
+  const auto aspects = [&](int i) {
+    return i < used ? t->blocks[i].aspects : kAllAspects;
+  };
   bool same = n == k.blockLinks.size();
   for (int i = 0; same && i < n; i++) {
     same = k.blockLinks[i].block == block(i) && k.blockLinks[i].aspects == aspects(i);
@@ -128,11 +128,9 @@ void Dependents::unlink(BlockLink &l)
   }
   if (l.prev) {
     l.prev->next = l.next;
-  }
-  else if (l.next) {
+  } else if (l.next) {
     blocks_.add_overwrite(l.block, l.next);
-  }
-  else {
+  } else {
     blocks_.remove(l.block);
   }
 }

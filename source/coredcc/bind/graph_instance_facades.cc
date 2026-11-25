@@ -24,22 +24,23 @@ namespace lbt = litestl::binding::types;
 ValueResult detail::toScript(const char *what, const string &name, const GraphValue &v)
 {
   if (v.type() == GraphValue::Type::Payload) {
-    return failed<ValueResult>(error(StatusCode::Unsupported,
-                                     std::string(what) + " '" + name.c_str() +
-                                         "' is a payload, which scripts can't read (nodePass "
-                                         "passes it on)"));
+    return failed<ValueResult>(
+        error(StatusCode::Unsupported,
+              std::string(what) + " '" + name.c_str() +
+                  "' is a payload, which scripts can't read (nodePass "
+                  "passes it on)"));
   }
   return ok<ValueResult>(v.toProp());
 }
 
 /* A script's value for a socket. */
-Result<GraphValue> detail::fromScript(const SocketType &type,
-                                     const string &name,
-                                     const PropValue &value)
+Result<GraphValue>
+detail::fromScript(const SocketType &type, const string &name, const PropValue &value)
 {
   if (!type.hasLiteral()) {
-    return error(StatusCode::Unsupported, std::string("'") + name.c_str() + "' is a payload (" +
-                                              type.name.c_str() + "), which scripts can't make");
+    return error(StatusCode::Unsupported,
+                 std::string("'") + name.c_str() + "' is a payload (" +
+                     type.name.c_str() + "), which scripts can't make");
   }
   Result<PropValue> v = coerce(type.literalDef(view(name)), value);
   return v.ok() ? GraphValue::fromProp(*v) : Result<GraphValue>(v.status());
@@ -55,8 +56,9 @@ Result<BlockId> detail::graphAt(Context &ctx, const string &path)
   StableRef ref;
   if (r->kind == ResolvedPath::Kind::Struct) {
     ref = r->canonical;
-  }
-  else if (r->kind == ResolvedPath::Kind::Member && r->member->def().kind() == PropKind::Pointer) {
+  } else if (r->kind == ResolvedPath::Kind::Member &&
+             r->member->def().kind() == PropKind::Pointer)
+  {
     Result<PropValue> v = coredcc::getValue(ctx, view(path));
     if (!v.ok()) {
       return v.status();
@@ -66,7 +68,8 @@ Result<BlockId> detail::graphAt(Context &ctx, const string &path)
   const Library *lib = ctx.library();
   const bool block = ref.owner.kind == OwnerKey::Kind::Block && ref.key.size() == 0;
   if (!block || !lib || !graphDefOf(*lib, lib->find(ref.owner.block))) {
-    return error(StatusCode::InvalidArgument, std::string("'") + path.c_str() + "' isn't a graph");
+    return error(StatusCode::InvalidArgument,
+                 std::string("'") + path.c_str() + "' isn't a graph");
   }
   return ref.owner.block;
 }
@@ -82,7 +85,8 @@ struct TimeLimit {
   bool over() const
   {
     return milliseconds > 0 &&
-           std::chrono::duration<double, std::milli>(Clock::now() - start).count() >= milliseconds;
+           std::chrono::duration<double, std::milli>(Clock::now() - start).count() >=
+               milliseconds;
   }
 };
 
@@ -105,7 +109,7 @@ namespace {
 /* The Runtime's script instances, which it takes along: a script's GC may drop the last
  * handle only after the Runtime is gone. */
 class ScriptGraphs {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.script.ScriptGraphs";
   explicit ScriptGraphs(Runtime *rt)
   {
@@ -134,11 +138,12 @@ class ScriptGraphs {
     return n;
   }
 
- private:
+private:
   std::vector<std::weak_ptr<ScriptGraph::Core>> cores_;
 };
 
-Result<std::shared_ptr<GraphInstance>> instanceOf(const ScriptGraph &graph, const char *what)
+Result<std::shared_ptr<GraphInstance>> instanceOf(const ScriptGraph &graph,
+                                                  const char *what)
 {
   if (!graph.core() || !graph.core()->instance) {
     return error(StatusCode::FailedPrecondition,
@@ -148,7 +153,8 @@ Result<std::shared_ptr<GraphInstance>> instanceOf(const ScriptGraph &graph, cons
 }
 
 /* The same for calls that look at what the instance has. */
-Result<std::shared_ptr<GraphInstance>> idleInstance(const ScriptGraph &graph, const char *what)
+Result<std::shared_ptr<GraphInstance>> idleInstance(const ScriptGraph &graph,
+                                                    const char *what)
 {
   Result<std::shared_ptr<GraphInstance>> inst = instanceOf(graph, what);
   if (inst.ok()) {
@@ -158,7 +164,8 @@ Result<std::shared_ptr<GraphInstance>> idleInstance(const ScriptGraph &graph, co
 }
 
 /* An instance about to evaluate. */
-Result<std::shared_ptr<GraphInstance>> startedInstance(const ScriptGraph &graph, const char *what)
+Result<std::shared_ptr<GraphInstance>> startedInstance(const ScriptGraph &graph,
+                                                       const char *what)
 {
   Result<std::shared_ptr<GraphInstance>> inst = idleInstance(graph, what);
   if (inst.ok()) {
@@ -193,7 +200,8 @@ Result<const GraphValue *> valueOf(const Watch &w, const char *what)
     return v;
   }
   CDCC_TRY(w.inst->status(w.socket));
-  return error(StatusCode::FailedPrecondition, std::string(what) + ": it wasn't evaluated yet");
+  return error(StatusCode::FailedPrecondition,
+               std::string(what) + ": it wasn't evaluated yet");
 }
 
 TableResult tableOf(const GraphValue &v, const string &name)
@@ -201,8 +209,8 @@ TableResult tableOf(const GraphValue &v, const string &name)
   if (v.type() != GraphValue::Type::Payload ||
       (v.asPayload() && v.asPayload().type() != payloadTypeId<Elements>()))
   {
-    return failed<TableResult>(
-        error(StatusCode::TypeMismatch, std::string("'") + name.c_str() + "' isn't a table"));
+    return failed<TableResult>(error(
+        StatusCode::TypeMismatch, std::string("'") + name.c_str() + "' isn't a table"));
   }
   return ok<TableResult>(ScriptTable(v.asPayload()));
 }
@@ -217,8 +225,9 @@ Result<SocketPath> socketOf(const string &node, const string &socket, bool input
   if (!path.ok()) {
     return path.status();
   }
-  return SocketPath::of(
-      std::move(path).value(), view(socket), input ? SocketSide::Input : SocketSide::Output);
+  return SocketPath::of(std::move(path).value(),
+                        view(socket),
+                        input ? SocketSide::Input : SocketSide::Output);
 }
 
 string errorText(const GraphError *e)
@@ -229,7 +238,8 @@ string errorText(const GraphError *e)
   std::string text = e->status.toString().c_str();
   if (e->origin.node) {
     text += " (node " + e->origin.toString();
-    text += e->socket.size() > 0 ? std::string(", input '") + e->socket.c_str() + "')" : ")";
+    text +=
+        e->socket.size() > 0 ? std::string(", input '") + e->socket.c_str() + "')" : ")";
   }
   return string(text.c_str());
 }
@@ -237,14 +247,14 @@ string errorText(const GraphError *e)
 const char *stateName(NodeReport::State s)
 {
   switch (s) {
-    case NodeReport::State::NotEvaluated:
-      return "NotEvaluated";
-    case NodeReport::State::Ok:
-      return "Ok";
-    case NodeReport::State::Failed:
-      return "Failed";
-    case NodeReport::State::InputFailed:
-      break;
+  case NodeReport::State::NotEvaluated:
+    return "NotEvaluated";
+  case NodeReport::State::Ok:
+    return "Ok";
+  case NodeReport::State::Failed:
+    return "Failed";
+  case NodeReport::State::InputFailed:
+    break;
   }
   return "InputFailed";
 }
@@ -284,7 +294,8 @@ Status graphSetInput(const ScriptGraph &graph, const string &name, const PropVal
   const ScriptGraph::Core &core = *graph.core();
   const Library *lib = core.lib.get();
   const GraphDef *def = lib ? graphDefOf(*lib, lib->find(core.graph)) : nullptr;
-  const InterfaceSocket *s = def ? def->interfaceSocket(SocketSide::Input, view(name)) : nullptr;
+  const InterfaceSocket *s =
+      def ? def->interfaceSocket(SocketSide::Input, view(name)) : nullptr;
   const SocketType *type =
       s ? core.rt->ext<SocketTypeRegistry>().find(s->typeName.c_str()) : nullptr;
   if (!type) { /* the instance says which of these is wrong */
@@ -324,7 +335,8 @@ string graphErrorText(const ScriptGraph &graph, const string &output)
   return errorText((*inst)->error(SocketPath::output(view(output))));
 }
 
-Status graphSetInputTable(const ScriptGraph &graph, const string &name, const ScriptTable &table)
+Status
+graphSetInputTable(const ScriptGraph &graph, const string &name, const ScriptTable &table)
 {
   Result<std::shared_ptr<GraphInstance>> inst = instanceOf(graph, "graphSetInputTable");
   if (!inst.ok()) {
@@ -336,7 +348,8 @@ Status graphSetInputTable(const ScriptGraph &graph, const string &name, const Sc
 
 TableResult graphEvaluateTable(const ScriptGraph &graph, const string &output)
 {
-  Result<std::shared_ptr<GraphInstance>> inst = startedInstance(graph, "graphEvaluateTable");
+  Result<std::shared_ptr<GraphInstance>> inst =
+      startedInstance(graph, "graphEvaluateTable");
   if (!inst.ok()) {
     return failed<TableResult>(inst.status());
   }
@@ -392,7 +405,9 @@ StringResult graphUpdate(const ScriptGraph &graph)
     sockets.append(socket);
   }
   litestl::util::Vector<int> moved;
-  if (Status s = (*inst)->evaluate({sockets.data(), size_t(sockets.size())}, moved); !s.ok()) {
+  if (Status s = (*inst)->evaluate({sockets.data(), size_t(sockets.size())}, moved);
+      !s.ok())
+  {
     return failed<StringResult>(std::move(s));
   }
   JsonWriter out;
@@ -420,8 +435,8 @@ ValueResult graphWatchValue(const ScriptGraph &graph, int64_t watch)
     return failed<ValueResult>(w.status());
   }
   Result<const GraphValue *> v = valueOf(*w, "graphWatchValue");
-  return v.ok() ? detail::toScript("watch", string("value"), **v) :
-                  failed<ValueResult>(v.status());
+  return v.ok() ? detail::toScript("watch", string("value"), **v)
+                : failed<ValueResult>(v.status());
 }
 
 TableResult graphWatchTable(const ScriptGraph &graph, int64_t watch)
@@ -441,20 +456,22 @@ ValueResult graphWatchLastGood(const ScriptGraph &graph, int64_t watch)
     return failed<ValueResult>(w.status());
   }
   const GraphValue *v = w->inst->lastGood(w->socket);
-  return v ? detail::toScript("watch", string("value"), *v) : ok<ValueResult>(PropValue());
+  return v ? detail::toScript("watch", string("value"), *v)
+           : ok<ValueResult>(PropValue());
 }
 
 IntResult graphWatchChangedAt(const ScriptGraph &graph, int64_t watch)
 {
   Result<Watch> w = watchOf(graph, "graphWatchChangedAt", watch);
-  return w.ok() ? ok<IntResult>(int64_t(w->inst->changedAt(w->socket))) :
-                  failed<IntResult>(w.status());
+  return w.ok() ? ok<IntResult>(int64_t(w->inst->changedAt(w->socket)))
+                : failed<IntResult>(w.status());
 }
 
 BoolResult graphWatchIsCurrent(const ScriptGraph &graph, int64_t watch)
 {
   Result<Watch> w = watchOf(graph, "graphWatchIsCurrent", watch);
-  return w.ok() ? ok<BoolResult>(w->inst->isCurrent(w->socket)) : failed<BoolResult>(w.status());
+  return w.ok() ? ok<BoolResult>(w->inst->isCurrent(w->socket))
+                : failed<BoolResult>(w.status());
 }
 
 string graphWatchErrorText(const ScriptGraph &graph, int64_t watch)
@@ -479,13 +496,12 @@ static Result<GraphValue> peekAt(const ScriptGraph &graph,
   return path.ok() ? (*inst)->peek(*path) : Result<GraphValue>(path.status());
 }
 
-ValueResult graphPeek(const ScriptGraph &graph,
-                      const string &node,
-                      const string &socket,
-                      bool input)
+ValueResult
+graphPeek(const ScriptGraph &graph, const string &node, const string &socket, bool input)
 {
   Result<GraphValue> v = peekAt(graph, "graphPeek", node, socket, input);
-  return v.ok() ? detail::toScript("socket", socket, *v) : failed<ValueResult>(v.status());
+  return v.ok() ? detail::toScript("socket", socket, *v)
+                : failed<ValueResult>(v.status());
 }
 
 TableResult graphPeekTable(const ScriptGraph &graph,

@@ -10,7 +10,9 @@ namespace coredcc_test {
 
 struct SplitMix64 {
   uint64_t state;
-  explicit SplitMix64(uint64_t seed) : state(seed) {}
+  explicit SplitMix64(uint64_t seed) : state(seed)
+  {
+  }
   uint64_t next()
   {
     state += 0x9E3779B97F4A7C15ull;

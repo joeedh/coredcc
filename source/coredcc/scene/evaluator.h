@@ -47,7 +47,8 @@ struct SceneMember {
   int type = -1;
   int dataType = -1;
   bool member = false;
-  /** Whether the block's data, and the data block's, was null; every evaluation compares it. */
+  /** Whether the block's data, and the data block's, was null; every evaluation compares
+   * it. */
   bool isNull = false;
   bool dataIsNull = false;
   CapMode transformable = CapMode::None;
@@ -75,9 +76,9 @@ struct BatchItem {
   EvalStatus status = EvalStatus::Ok;
 };
 
-/** Where the memory of an object was in the last evaluation: its record, its data, the record and data of
- * its data block, and its channels, which are outside of an Object with more than 16. Only ever
- * prefetched: evaluating is mostly waiting for memory. */
+/** Where the memory of an object was in the last evaluation: its record, its data, the
+ * record and data of its data block, and its channels, which are outside of an Object
+ * with more than 16. Only ever prefetched: evaluating is mostly waiting for memory. */
 struct PrefetchHint {
   uintptr_t at[5] = {};
 };
@@ -92,14 +93,15 @@ struct LookupKey {
 };
 
 class SceneEvaluator {
- public:
+public:
   Scene::Counters counters;
   Scene::Changes changes;
   SceneBvh bvh;
   const litestl::util::Vector<BlockHandle> none;
 
-  /** Evaluates, and makes the results the last ones if they differ, with their BVH. Opens the EvaluationScope;
-   * the no-collect is the caller's. The first foreign exception goes to `foreign`. */
+  /** Evaluates, and makes the results the last ones if they differ, with their BVH. Opens
+   * the EvaluationScope; the no-collect is the caller's. The first foreign exception goes
+   * to `foreign`. */
   Status run(const Scene &scene, const Library &lib, bool &changed, Status &foreign);
   /** Of the last results. */
   std::span<const BlockHandle> children(BlockHandle h) const;
@@ -111,7 +113,7 @@ class SceneEvaluator {
     return stores_[front_];
   }
 
- private:
+private:
   enum class Pass { Same, Changed, Stale };
   /** Writes the back store, if anything differs from the front one. */
   Pass evaluateAll(const Scene &scene, const Library &lib, Status &foreign);
@@ -126,7 +128,8 @@ class SceneEvaluator {
   Box3d boundsOf(Runtime &rt, const SceneMember &m, Spatial &sp, Status &foreign);
   void keepBoxes(const Library &lib);
   void forgetBoxes();
-  /** Evaluates those of a level whose types have evaluateMany, in order_[from, to), into batch_. */
+  /** Evaluates those of a level whose types have evaluateMany, in order_[from, to), into
+   * batch_. */
   void evaluateLevel(const Library &lib,
                      int from,
                      int to,
@@ -137,10 +140,8 @@ class SceneEvaluator {
   bool stillValid(const Scene &scene, const Library &lib) const;
   void lookUp(const Scene &scene, const Library &lib);
   /** `before` is what was found for it last time, if anything. */
-  SceneMember memberFor(const Library &lib,
-                        BlockHandle h,
-                        bool inScene,
-                        const SceneMember *before);
+  SceneMember
+  memberFor(const Library &lib, BlockHandle h, bool inScene, const SceneMember *before);
   int typeFor(const Library &lib, TypeId type);
   void sortByParent();
   void sortByDepth();
@@ -158,14 +159,17 @@ class SceneEvaluator {
   litestl::util::Map<BlockId, int> boxOf_;
   litestl::util::Vector<KeptBox> boxes_;
   ScopedConnection changeListener_;
-  /** Moves when members or parents may be others; and what it was for the last results. */
+  /** Moves when members or parents may be others; and what it was for the last results.
+   */
   uint64_t lookups_ = 0;
   uint64_t frontLookups_ = 0;
-  /** children(): the handles, and where those of each place begin; the roots are the last. */
+  /** children(): the handles, and where those of each place begin; the roots are the
+   * last. */
   mutable litestl::util::Vector<BlockHandle> children_;
   mutable litestl::util::Vector<int> firstChild_;
   mutable uint64_t childrenOf_ = ~uint64_t(0);
-  /** recorded(), at an epoch and a version. A loop over the paths asks for it at each step. */
+  /** recorded(), at an epoch and a version. A loop over the paths asks for it at each
+   * step. */
   mutable litestl::util::Vector<BlockHandle> recorded_;
   mutable uint64_t recordedEpoch_ = 0;
   mutable uint64_t recordedVersion_ = 0;

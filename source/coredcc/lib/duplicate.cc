@@ -16,14 +16,16 @@ namespace {
 Status naming(const Datablock &b, const Status &s)
 {
   return Status::error(
-      s.code(), ("duplicating '" + std::string(b.name().c_str()) + "': " + s.message()).c_str());
+      s.code(),
+      ("duplicating '" + std::string(b.name().c_str()) + "': " + s.message()).c_str());
 }
 
 class Duplicator {
- public:
+public:
   explicit Duplicator(Library &lib)
       : lib_(lib), rt_(lib.runtime()), types_(rt_.ext<BlockTypeRegistry>()),
-        attachments_(rt_.ext<AttachmentTypeRegistry>()), filler_(lib, report_, UINT64_MAX, 0)
+        attachments_(rt_.ext<AttachmentTypeRegistry>()),
+        filler_(lib, report_, UINT64_MAX, 0)
   {
   }
 
@@ -38,7 +40,7 @@ class Duplicator {
     return s;
   }
 
- private:
+private:
   struct Copy {
     BlockHandle from;
     BlockHandle to;
@@ -76,7 +78,8 @@ class Duplicator {
         return id;
       }
     }
-    return Status::error(StatusCode::Internal, "the GUID source keeps returning ids in use");
+    return Status::error(StatusCode::Internal,
+                         "the GUID source keeps returning ids in use");
   }
 
   static Status sticky(Runtime &rt, Status s)
@@ -84,10 +87,10 @@ class Duplicator {
     return rt.hasStickyError() ? rt.takeStickyError() : s;
   }
 
-  /* Through the provider's `duplicate`. The record comes first, so the data always has one. */
-  Result<BlockHandle> duplicate(const Datablock &b,
-                                const BlockTypeRegistry::Entry &type,
-                                BlockId id)
+  /* Through the provider's `duplicate`. The record comes first, so the data always has
+   * one. */
+  Result<BlockHandle>
+  duplicate(const Datablock &b, const BlockTypeRegistry::Entry &type, BlockId id)
   {
     PlaceholderInfo info;
     info.name = b.name();
@@ -103,7 +106,8 @@ class Duplicator {
     Status s = sticky(rt_, p.duplicate(b, out));
     void *data = detail::PayloadAccess::data(out);
     if (s.ok() && !data) {
-      s = Status::error(StatusCode::Internal, "duplicate succeeded without calling setData");
+      s = Status::error(StatusCode::Internal,
+                        "duplicate succeeded without calling setData");
     }
     CDCC_TRY(filler_.setData(*made, data, std::move(s)));
     return made;
@@ -120,8 +124,7 @@ class Duplicator {
     const BlockTypeRegistry::Entry *type = types_.find(b.type());
     if (b.state() == BlockState::Live && type->provider->hasDuplicate()) {
       made = duplicate(b, *type, *id);
-    }
-    else {
+    } else {
       PlaceholderInfo info;
       info.name = b.name();
       info.sourceName = b.sourceStored() ? b.sourceName() : string();
@@ -133,17 +136,16 @@ class Duplicator {
         info.typeName = type->info.name;
         info.payload = std::move(payload).value();
         copy.unread = true;
-      }
-      else if (b.state() == BlockState::Placeholder &&
-               b.placeholderReason() == PlaceholderReason::MissingType)
+      } else if (b.state() == BlockState::Placeholder &&
+                 b.placeholderReason() == PlaceholderReason::MissingType)
       {
         info.typeName = b.placeholderType();
         info.payload = b.placeholderData();
-      }
-      else {
+      } else {
         return Status::error(
             StatusCode::FailedPrecondition,
-            (std::string("it is ") + blockStateName(b.state()) + ", without its data").c_str());
+            (std::string("it is ") + blockStateName(b.state()) + ", without its data")
+                .c_str());
       }
       made = lib_.addPlaceholder(*id, std::move(info));
       if (made.ok()) {
@@ -185,9 +187,10 @@ class Duplicator {
       if (copy) {
         filler_.addAttachment(c.to, type, copy);
       }
-      status = sticky(rt_, copy ? Status() :
-                                  Status::error(StatusCode::Internal,
-                                                "an attachment's copy gave no data"));
+      status = sticky(rt_,
+                      copy ? Status()
+                           : Status::error(StatusCode::Internal,
+                                           "an attachment's copy gave no data"));
     });
     return status.ok() ? status : naming(*lib_.get(c.from), status);
   }
@@ -196,7 +199,8 @@ class Duplicator {
   {
     for (BlockHandle h : made_) {
       Status s = lib_.foreachRef(h, [this](RefCell &cell) {
-        const BlockId to = cell.isNull() ? BlockId() : ids_.find(clients().canonical(cell.target));
+        const BlockId to =
+            cell.isNull() ? BlockId() : ids_.find(clients().canonical(cell.target));
         if (!to.isNull()) {
           cell.target = to;
         }

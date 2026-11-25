@@ -24,7 +24,8 @@ double element(const mat4d &m, int row, int col)
 
 double4 rowOf(const mat4d &m, int row)
 {
-  return double4(element(m, row, 0), element(m, row, 1), element(m, row, 2), element(m, row, 3));
+  return double4(
+      element(m, row, 0), element(m, row, 1), element(m, row, 2), element(m, row, 3));
 }
 
 double dot4(const double4 &a, const double4 &b)
@@ -73,7 +74,8 @@ double sign(double v)
 
 Status bad(const char *what)
 {
-  return Status::error(StatusCode::InvalidArgument, (std::string("View: ") + what).c_str());
+  return Status::error(StatusCode::InvalidArgument,
+                       (std::string("View: ") + what).c_str());
 }
 
 double nearDepthOf(const View &v)
@@ -127,14 +129,13 @@ void clean(View &v)
   }
   if (v.ortho) {
     round(3, 2, std::fabs(element(v.proj, 2, 2)));
-  }
-  else {
+  } else {
     round(3, 3, std::fabs(element(v.proj, 2, 3)));
   }
 }
 
-/* A perspective projection's depth at distance d before the eye is `a + b / d`. This is how far `a`
- * is from the far plane's depth. */
+/* A perspective projection's depth at distance d before the eye is `a + b / d`. This is
+ * how far `a` is from the far plane's depth. */
 double farGap(const View &v)
 {
   const double a = element(v.proj, 2, 2) / element(v.proj, 3, 2);
@@ -152,8 +153,10 @@ Status checkPerspectiveDepth(const View &v)
   const double a = element(v.proj, 2, 2) * sign(element(v.proj, 3, 2)) / k;
   const double b = element(v.proj, 2, 3) / k;
   if ((b > 0.0) != v.reversedZ) {
-    return bad(v.reversedZ ? "reversedZ, but the projection's depth increases with distance" :
-                             "the projection's depth decreases with distance: reversedZ is missing");
+    return bad(
+        v.reversedZ
+            ? "reversedZ, but the projection's depth increases with distance"
+            : "the projection's depth decreases with distance: reversedZ is missing");
   }
   const double zNear = b / (nearDepthOf(v) - a);
   if (!(zNear > 0.0) || !bvh::finite(zNear)) {
@@ -209,8 +212,8 @@ Status checkView(View &v)
     return bad("the projection's depth depends on x or y (an oblique near plane)");
   }
   if (v.ortho ? !(w[2] == 0.0 && w[3] > 0.0) : !(w[2] != 0.0 && w[3] == 0.0)) {
-    return bad(v.ortho ? "ortho, but the projection isn't orthographic" :
-                       "the projection isn't a perspective one: ortho is missing");
+    return bad(v.ortho ? "ortho, but the projection isn't orthographic"
+                       : "the projection isn't a perspective one: ortho is missing");
   }
   if (v.ortho && v.infiniteFar) {
     return bad("an orthographic view has no infinite far plane");
@@ -219,15 +222,17 @@ Status checkView(View &v)
     CDCC_TRY(checkPerspectiveDepth(v));
   }
 
-  /* Normalized device coordinates (x right, y up, depth away from the eye) are left-handed.
-   * The projection is block triangular, so its determinant's sign is exact. */
+  /* Normalized device coordinates (x right, y up, depth away from the eye) are
+   * left-handed. The projection is block triangular, so its determinant's sign is exact.
+   */
   const double xy = element(v.proj, 0, 0) * element(v.proj, 1, 1) -
                     element(v.proj, 0, 1) * element(v.proj, 1, 0);
-  const double orientation = sign(linearSign(v.view)) * sign(xy) * sign(z[2] * w[3] - z[3] * w[2]) *
-                             (v.reversedZ ? -1.0 : 1.0);
+  const double orientation = sign(linearSign(v.view)) * sign(xy) *
+                             sign(z[2] * w[3] - z[3] * w[2]) * (v.reversedZ ? -1.0 : 1.0);
   if (orientation != (v.handedness == Handedness::Right ? -1.0 : 1.0)) {
-    return bad(v.ortho ? "the matrices contradict handedness (or reversedZ, or the image is mirrored)" :
-                       "the matrices contradict handedness (or the image is mirrored)");
+    return bad(v.ortho ? "the matrices contradict handedness (or reversedZ, or the image "
+                         "is mirrored)"
+                       : "the matrices contradict handedness (or the image is mirrored)");
   }
   return Status();
 }
@@ -281,10 +286,10 @@ Status ViewMath::set(const View &given)
   }
   const double4 &cx = m.clip_[0], &cy = m.clip_[1], &cz = m.clip_[2], &cw = m.clip_[3];
   m.nearView_ = v.reversedZ ? cw - cz : v.depth == DepthRange::ZeroToOne ? cz : cw + cz;
-  m.farView_ = farAtInfinity(v) ? double4(0.0, 0.0, 0.0, 1.0) :
-               !v.reversedZ     ? cw - cz :
-               v.depth == DepthRange::ZeroToOne ? cz :
-                                                  cw + cz;
+  m.farView_ = farAtInfinity(v)                   ? double4(0.0, 0.0, 0.0, 1.0)
+               : !v.reversedZ                     ? cw - cz
+               : v.depth == DepthRange::ZeroToOne ? cz
+                                                  : cw + cz;
   m.nearPlane_ = planeToLocal(v.view, m.nearView_);
   m.farPlane_ = planeToLocal(v.view, m.farView_);
   m.nearScale_ = 1.0 / length3(m.nearPlane_);
@@ -330,7 +335,8 @@ ViewPoint ViewMath::project(const double3 &p) const
 double4 ViewMath::unprojectToView(double x, double y, double depth) const
 {
   const double *vp = view_.viewport;
-  const double4 ndc((x - vp[0]) / vp[2] * 2.0 - 1.0, 1.0 - (y - vp[1]) / vp[3] * 2.0, depth, 1.0);
+  const double4 ndc(
+      (x - vp[0]) / vp[2] * 2.0 - 1.0, 1.0 - (y - vp[1]) / vp[3] * 2.0, depth, 1.0);
   const double4 h = transformHomogeneous(invProj_, ndc);
   double terms = 0.0;
   for (int c = 0; c < 4; c++) {
@@ -347,7 +353,9 @@ Result<double3> ViewMath::unproject(double x, double y, double depth) const
 {
   const double4 v = unprojectToView(x, y, depth);
   const double3 p = transformPoint(invView_, double3(v[0], v[1], v[2]));
-  if (!valid_ || v[3] == 0.0 || !bvh::finite(p[0]) || !bvh::finite(p[1]) || !bvh::finite(p[2])) {
+  if (!valid_ || v[3] == 0.0 || !bvh::finite(p[0]) || !bvh::finite(p[1]) ||
+      !bvh::finite(p[2]))
+  {
     return Status::error(StatusCode::FailedPrecondition,
                          "unproject: no point of the view has this depth");
   }
@@ -356,7 +364,8 @@ Result<double3> ViewMath::unproject(double x, double y, double depth) const
 
 Ray ViewMath::rayFromPixel(double x, double y) const
 {
-  const double4 a = unprojectToView(x, y, nearDepth_), b = unprojectToView(x, y, midDepth_);
+  const double4 a = unprojectToView(x, y, nearDepth_),
+                b = unprojectToView(x, y, midDepth_);
   Ray ray;
   ray.origin = transformPoint(invView_, double3(a[0], a[1], a[2]));
   ray.dir = transformVector(invView_, double3(b[0] - a[0], b[1] - a[1], b[2] - a[2]));

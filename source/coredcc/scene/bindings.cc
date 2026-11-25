@@ -5,7 +5,8 @@
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
-const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::SetWorldMode>::bind()
+const litestl::binding::BindingBase *
+litestl::binding::Binder<coredcc::SetWorldMode>::bind()
 {
   using coredcc::SetWorldMode;
   static types::Enum *e = nullptr;
@@ -76,7 +77,8 @@ lbt::Struct<TransformState> *TransformState::defineBindings()
   static lbt::Struct<TransformState> *st = nullptr;
   if (!st) {
     litestl::alloc::PermanentGuard guard;
-    st = new lbt::Struct<TransformState>("coredcc::TransformState", sizeof(TransformState));
+    st = new lbt::Struct<TransformState>("coredcc::TransformState",
+                                         sizeof(TransformState));
     BIND_STRUCT_DEFAULT_CONSTRUCTOR(st);
     BIND_STRUCT_COPY_CONSTRUCTOR(st);
     BIND_STRUCT_MEMBER(st, world);
@@ -92,7 +94,8 @@ lbt::Struct<ChannelEntries> *ChannelEntries::defineBindings()
   static lbt::Struct<ChannelEntries> *st = nullptr;
   if (!st) {
     litestl::alloc::PermanentGuard guard;
-    st = new lbt::Struct<ChannelEntries>("coredcc::ChannelEntries", sizeof(ChannelEntries));
+    st = new lbt::Struct<ChannelEntries>("coredcc::ChannelEntries",
+                                         sizeof(ChannelEntries));
     BIND_STRUCT_METHOD(st, get, MARGS("name"));
     BIND_STRUCT_METHOD(st, set, MARGS("name", "value"));
     BIND_STRUCT_METHOD(st, remove, MARGS("name"));
@@ -117,7 +120,8 @@ lbt::Struct<TransformDelta> *TransformDelta::defineBindings()
   static lbt::Struct<TransformDelta> *st = nullptr;
   if (!st) {
     litestl::alloc::PermanentGuard guard;
-    st = new lbt::Struct<TransformDelta>("coredcc::TransformDelta", sizeof(TransformDelta));
+    st = new lbt::Struct<TransformDelta>("coredcc::TransformDelta",
+                                         sizeof(TransformDelta));
     BIND_STRUCT_DEFAULT_CONSTRUCTOR(st);
     BIND_STRUCT_COPY_CONSTRUCTOR(st);
     BIND_STRUCT_MEMBER(st, basis);

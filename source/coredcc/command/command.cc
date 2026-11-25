@@ -95,18 +95,16 @@ CommandRegistry::~CommandRegistry()
 
 namespace {
 
-Status checkBag(const std::string &cmd,
-                const char *what,
-                const CommandDef &def,
-                bool inputs)
+Status
+checkBag(const std::string &cmd, const char *what, const CommandDef &def, bool inputs)
 {
   PropertyBag bag;
   const int n = inputs ? def.inputCount() : def.outputCount();
   for (int i = 0; i < n; i++) {
     Status s = bag.add(inputs ? def.inputDef(i) : def.outputDef(i));
     if (!s.ok()) {
-      return Status::error(s.code(),
-                           ("command '" + cmd + "' " + what + ": " + s.message()).c_str());
+      return Status::error(
+          s.code(), ("command '" + cmd + "' " + what + ": " + s.message()).c_str());
     }
   }
   return Status();
@@ -125,10 +123,10 @@ Status CommandRegistry::checkDef(const CommandDef &def) const
     const size_t dot = name.find('.', start);
     const std::string_view part = std::string_view(name).substr(start, dot - start);
     if (!isIdentifier(part)) {
-      return Status::error(StatusCode::InvalidArgument,
-                           ("command '" + name +
-                            "': not a dotted identifier (like 'mesh.extrude')")
-                               .c_str());
+      return Status::error(
+          StatusCode::InvalidArgument,
+          ("command '" + name + "': not a dotted identifier (like 'mesh.extrude')")
+              .c_str());
     }
     if (dot == std::string::npos) {
       break;
@@ -141,8 +139,9 @@ Status CommandRegistry::checkDef(const CommandDef &def) const
   }
   const char *taken = rt_.nameOf(CommandId::of(name));
   if (taken && name != taken) {
-    return Status::error(StatusCode::AlreadyExists,
-                         ("command '" + name + "': its id collides with '" + taken + "'").c_str());
+    return Status::error(
+        StatusCode::AlreadyExists,
+        ("command '" + name + "': its id collides with '" + taken + "'").c_str());
   }
   CDCC_TRY(checkBag(name, "input", def, true));
   return checkBag(name, "output", def, false);
@@ -155,16 +154,18 @@ Status CommandRegistry::checkSlots(const CommandDef &def,
 {
   const std::string name = def.name().c_str();
   if (def.has(CommandFlags::Interactive) && !hasRedo) {
-    return Status::error(StatusCode::InvalidArgument,
-                         ("command '" + name +
-                          "': an Interactive command needs a redo slot (exec can't replay a drag)")
-                             .c_str());
+    return Status::error(
+        StatusCode::InvalidArgument,
+        ("command '" + name +
+         "': an Interactive command needs a redo slot (exec can't replay a drag)")
+            .c_str());
   }
   if (hasFoldKey != hasFoldFrom) {
-    return Status::error(StatusCode::InvalidArgument,
-                         ("command '" + name +
-                          "': foldKey and foldFrom come together: implement both or neither")
-                             .c_str());
+    return Status::error(
+        StatusCode::InvalidArgument,
+        ("command '" + name +
+         "': foldKey and foldFrom come together: implement both or neither")
+            .c_str());
   }
   return Status();
 }
@@ -192,7 +193,8 @@ Result<const CommandDef *> CommandRegistry::add(CommandDef def)
     return table->hasSlot(detail::slotOf<Command>(slot).index);
   };
   CDCC_TRY(checkSlots(def, has("redo"), has("foldKey"), has("foldFrom")));
-  CommandDef *stored = litestl::alloc::New<CommandDef>("coredcc::CommandDef", std::move(def));
+  CommandDef *stored =
+      litestl::alloc::New<CommandDef>("coredcc::CommandDef", std::move(def));
   defs_.append(stored);
   byId_.add(id->value, stored);
   return static_cast<const CommandDef *>(stored);
@@ -225,7 +227,8 @@ Status detail::unknownInput(const CommandDef &def, const InvocationArg &arg)
 {
   Status err = Status::error(StatusCode::NotFound,
                              (std::string(def.name().c_str()) + " has no input '" +
-                              arg.name.c_str() + "' (at offset " + std::to_string(arg.offset) + ")")
+                              arg.name.c_str() + "' (at offset " +
+                              std::to_string(arg.offset) + ")")
                                  .c_str());
   Suggester sg(arg.name.c_str());
   for (int i = 0; i < def.inputCount(); i++) {

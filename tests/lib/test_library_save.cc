@@ -1,7 +1,7 @@
-/* Saving a library: round trips against a deep comparison, golden bytes, equal bytes for equal
- * libraries, what is saved, and random libraries. */
-#include "io_fixture.h"
+/* Saving a library: round trips against a deep comparison, golden bytes, equal bytes for
+ * equal libraries, what is saved, and random libraries. */
 #include "fuzz.h"
+#include "io_fixture.h"
 
 #include "library_golden.h"
 
@@ -15,7 +15,8 @@ using namespace coredcc_test;
 
 namespace {
 
-BlockPayload payload(uint32_t version, Bytes bytes, std::initializer_list<RefCell> refs = {})
+BlockPayload
+payload(uint32_t version, Bytes bytes, std::initializer_list<RefCell> refs = {})
 {
   BlockPayload p;
   p.version = version;
@@ -68,26 +69,33 @@ bool roundTrips(IoWorld &w, const Bytes &bytes)
     fprintf(stderr, "load: %s\n", s.message());
     return false;
   }
-  return sameLibraries(w.lib, r.lib) && r.lib.validate().ok() && sameBytes(r.save(), bytes);
+  return sameLibraries(w.lib, r.lib) && r.lib.validate().ok() &&
+         sameBytes(r.save(), bytes);
 }
 
-/* Two slots, two attachments, an aliased client's placeholder, every kind of reference. */
+/* Two slots, two attachments, an aliased client's placeholder, every kind of reference.
+ */
 void buildGolden(IoWorld &w, bool reversed = false)
 {
   BlockHandle a, b, c;
   const auto makeA = [&]() { a = w.doc(1, "\xC3\xA9"); };
   const auto makeB = [&]() { b = w.doc(2, "b", kAcmeDoc); };
-  const auto makeC = [&]() { c = placeholder(w, cid(3, ClientId::of("old.acme")), "gone.Type", "c",
-                                             PlaceholderReason::MissingType,
-                                             payload(9, bytesOf({1, 2, 3}),
-                                                     {cell(RefKind::Strong, cid(1)),
-                                                      cell(RefKind::Weak, cid(77)),
-                                                      cell(RefKind::OptStrong)}),
-                                             "there.cdcc"); };
+  const auto makeC = [&]() {
+    c = placeholder(w,
+                    cid(3, ClientId::of("old.acme")),
+                    "gone.Type",
+                    "c",
+                    PlaceholderReason::MissingType,
+                    payload(9,
+                            bytesOf({1, 2, 3}),
+                            {cell(RefKind::Strong, cid(1)),
+                             cell(RefKind::Weak, cid(77)),
+                             cell(RefKind::OptStrong)}),
+                    "there.cdcc");
+  };
   if (reversed) {
     makeC(), makeB(), makeA();
-  }
-  else {
+  } else {
     makeA(), makeB(), makeC();
   }
   w.link(a, b, a);
@@ -99,10 +107,13 @@ void buildGolden(IoWorld &w, bool reversed = false)
   const auto slots = [&](int which) {
     if (which == 0) {
       test_assert(w.lib.setSlot(a, kDoc, 5, cid(2, kAcme), RefKind::OptStrong).ok());
-    }
-    else {
-      test_assert(w.lib.setSlot(a, TypeId{0xABCDEF}, -1, cid(3, ClientId::of("old.acme")),
-                                RefKind::Weak)
+    } else {
+      test_assert(w.lib
+                      .setSlot(a,
+                               TypeId{0xABCDEF},
+                               -1,
+                               cid(3, ClientId::of("old.acme")),
+                               RefKind::Weak)
                       .ok());
     }
   };
@@ -162,13 +173,17 @@ static void test_golden()
     LoadReport report;
     test_assert(w.load(unhex(kLibraryGolden), &report).ok());
     test_assert(w.lib.size() == 4 && report.blocks.size() == 4);
-    test_assert(report.missingType == 1 && report.missingBlock == 1 && report.issues.total == 1);
-    const BlockHandle a = w.at(1), b = w.at(2, kAcme), c = w.at(3, ClientId::of("old.acme"));
+    test_assert(report.missingType == 1 && report.missingBlock == 1 &&
+                report.issues.total == 1);
+    const BlockHandle a = w.at(1), b = w.at(2, kAcme),
+                      c = w.at(3, ClientId::of("old.acme"));
     test_assert(a && b && c && w.at(50));
     const Doc *d = w.data(a);
-    test_assert(d->number == 10 && d->mesh.target == w.id(b) && d->parent.target == w.id(a));
+    test_assert(d->number == 10 && d->mesh.target == w.id(b) &&
+                d->parent.target == w.id(a));
     test_assert(d->mesh.kind == RefKind::Strong && d->parent.kind == RefKind::Weak);
-    test_assert(d->entries.size() == 1 && d->entries[0].refs[0].kind == RefKind::OptStrong);
+    test_assert(d->entries.size() == 1 &&
+                d->entries[0].refs[0].kind == RefKind::OptStrong);
     test_assert(*d->bag.get("size") == PropValue::ofFloat(0.5));
     test_assert(w.lib.get(a)->flags() == BlockFlags::Root);
     test_assert(w.lib.get(b)->flags() == BlockFlags::FakeUser);
@@ -194,13 +209,25 @@ static void test_round_trip()
   const BlockHandle a = w.doc(1, "");
   const BlockHandle b = w.doc(2, "two", kAcmeDoc);
   const BlockHandle host = w.doc(3, "hosted");
-  const BlockHandle gone = placeholder(w, cid(4), "x.Gone", "gone", PlaceholderReason::MissingType,
-                                       payload(1, Bytes(), {cell(RefKind::Strong, cid(6))}));
-  const BlockHandle hosted = placeholder(w, cid(5, kAcme), "x.Host", "host",
-                                         PlaceholderReason::MissingBlock,
-                                         payload(4, Bytes(), {cell(RefKind::Strong, cid(1))}), "f");
-  const BlockHandle missing = placeholder(w, cid(6), "", "", PlaceholderReason::MissingBlock);
-  const BlockHandle slotted = placeholder(w, cid(7), "", "", PlaceholderReason::MissingBlock);
+  const BlockHandle gone =
+      placeholder(w,
+                  cid(4),
+                  "x.Gone",
+                  "gone",
+                  PlaceholderReason::MissingType,
+                  payload(1, Bytes(), {cell(RefKind::Strong, cid(6))}));
+  const BlockHandle hosted =
+      placeholder(w,
+                  cid(5, kAcme),
+                  "x.Host",
+                  "host",
+                  PlaceholderReason::MissingBlock,
+                  payload(4, Bytes(), {cell(RefKind::Strong, cid(1))}),
+                  "f");
+  const BlockHandle missing =
+      placeholder(w, cid(6), "", "", PlaceholderReason::MissingBlock);
+  const BlockHandle slotted =
+      placeholder(w, cid(7), "", "", PlaceholderReason::MissingBlock);
   test_assert(w.lib.setSlot(slotted, kNote, 0, cid(1), RefKind::Weak).ok());
   w.root(a);
   w.root(slotted);
@@ -236,7 +263,9 @@ static void test_round_trip()
   test_assert(r.load(bytes, &loaded).ok() && sameLibraries(w.lib, r.lib));
   /* The Detached block is a MissingBlock that the host fills under its old id. */
   const BlockHandle again = r.lib.find(w.id(host));
-  test_assert(r.lib.createWithId(kDoc, w.id(host), "hosted", litestl::alloc::New<Doc>("Doc")).ok());
+  test_assert(
+      r.lib.createWithId(kDoc, w.id(host), "hosted", litestl::alloc::New<Doc>("Doc"))
+          .ok());
   test_assert(r.lib.get(again)->state() == BlockState::Live);
   test_assert(loaded.missingType == 1 && loaded.missingBlock == 4);
 
@@ -309,7 +338,8 @@ static void test_alias()
   placeholder(w, cid(3, ClientId::of("old.acme")), "gone.Type", "c");
   const Bytes bytes = w.save();
   test_assert(!w.rt.nameOf(ClientId::of("old.acme")));
-  /* A client name nobody registered is written as its id, and one a file had as its name. */
+  /* A client name nobody registered is written as its id, and one a file had as its name.
+   */
   IoWorld r;
   const char *aliases[] = {"old.acme"};
   test_assert(r.rt.ext<ClientRegistry>().registerClient("new.acme", aliases).ok());
@@ -319,8 +349,9 @@ static void test_alias()
   IoWorld r2;
   test_assert(r2.load(renamed).ok());
   test_assert(!r2.rt.nameOf(ClientId::of("new.acme")));
-  test_assert(strcmp(r2.lib.fileNames().nameOf(IdDomain::Client, ClientId::of("new.acme").value),
-                     "new.acme") == 0);
+  test_assert(
+      strcmp(r2.lib.fileNames().nameOf(IdDomain::Client, ClientId::of("new.acme").value),
+             "new.acme") == 0);
   test_assert(sameBytes(r2.save(), renamed));
 }
 
@@ -334,12 +365,18 @@ static void test_deleted_targets()
   w.root(a);
   w.root(del);
   const BlockId ids[3] = {w.id(del), w.id(det), cid(99)};
-  const BlockHandle gone = placeholder(
-      w, cid(4), "x.Gone", "gone", PlaceholderReason::MissingType,
-      payload(1, Bytes(),
-              {cell(RefKind::OptStrong, ids[0]), cell(RefKind::OptStrong, ids[1]),
-               cell(RefKind::OptStrong, ids[2]), cell(RefKind::Strong, ids[0]),
-               cell(RefKind::Weak, ids[0])}));
+  const BlockHandle gone = placeholder(w,
+                                       cid(4),
+                                       "x.Gone",
+                                       "gone",
+                                       PlaceholderReason::MissingType,
+                                       payload(1,
+                                               Bytes(),
+                                               {cell(RefKind::OptStrong, ids[0]),
+                                                cell(RefKind::OptStrong, ids[1]),
+                                                cell(RefKind::OptStrong, ids[2]),
+                                                cell(RefKind::Strong, ids[0]),
+                                                cell(RefKind::Weak, ids[0])}));
   test_assert(w.lib.markDeleted(del).ok() && w.lib.onHostDestroyed(ids[1]).ok());
   for (int i = 0; i < 3; i++) {
     w.addOptEntry(a, ids[i]);
@@ -359,14 +396,16 @@ static void test_deleted_targets()
   const auto &entries = r.data(ra)->entries;
   test_assert(entries[0].refs[0].isNull() && entries[1].refs[0].target == ids[1] &&
               entries[2].refs[0].isNull());
-  test_assert(r.lib.slot(ra, kDoc, 0)->isNull() && r.lib.slot(ra, kDoc, 1)->target == ids[1] &&
+  test_assert(r.lib.slot(ra, kDoc, 0)->isNull() &&
+              r.lib.slot(ra, kDoc, 1)->target == ids[1] &&
               r.lib.slot(ra, kDoc, 2)->isNull());
   test_assert(r.lib.slot(ra, kDoc, 10)->target == ids[0] &&
               r.lib.slot(ra, kDoc, 11)->target == ids[2]);
   const auto &rows = r.lib.get(r.at(4))->placeholderData().refs;
   test_assert(rows.size() == 5 && rows[0].isNull() && rows[1].target == ids[1] &&
               rows[2].isNull() && rows[3].target == ids[0] && rows[4].target == ids[0]);
-  /* The Strong ones got a record, which undoing the delete's session can't: a new file. */
+  /* The Strong ones got a record, which undoing the delete's session can't: a new file.
+   */
   test_assert(r.at(2) && r.lib.get(r.at(2))->state() == BlockState::Placeholder);
   test_assert(!r.at(99)); /* only OptStrong and Weak */
   (void)gone;
@@ -450,7 +489,8 @@ static void test_what_is_saved()
   test_assert(report.blocks == 4);
   IoWorld r3;
   test_assert(r3.load(bytes).ok() && r3.lib.size() == 5 && !r3.at(2));
-  test_assert(r3.at(3) && r3.lib.slot(r3.at(4), kDoc, 1) && r3.lib.attachment(r3.at(5), kNote));
+  test_assert(r3.at(3) && r3.lib.slot(r3.at(4), kDoc, 1) &&
+              r3.lib.attachment(r3.at(5), kNote));
   test_assert(sameBytes(r3.save(), bytes));
   Knows k;
   k.note = false;
@@ -475,25 +515,29 @@ static void test_transient()
   test_assert(w.lib.writeRef(t->owner, w.id(through)).ok());
   test_assert(w.lib.writeRef(t->material, w.id(both)).ok());
   /* Not reachable: not reported. */
-  test_assert(w.lib.create(kTransient, "loose", litestl::alloc::New<Thing>("Thing")).ok());
+  test_assert(
+      w.lib.create(kTransient, "loose", litestl::alloc::New<Thing>("Thing")).ok());
   test_assert(w.lib.attach(root, kBare, &w).ok());
   SaveReport report;
   const Bytes bytes = w.save(&report);
   test_assert(report.blocks == 3 && report.hostPinned.size() == 0);
   test_assert(report.transient.size() == 1 && report.transient[0] == *th);
-  test_assert(report.throughTransient.size() == 1 && report.throughTransient[0] == through);
+  test_assert(report.throughTransient.size() == 1 &&
+              report.throughTransient[0] == through);
   IoWorld r;
   test_assert(r.load(bytes).ok() && r.lib.size() == 4);
   const BlockHandle missing = r.lib.find(tid);
   test_assert(r.lib.get(missing)->placeholderReason() == PlaceholderReason::MissingBlock);
   test_assert(r.data(r.at(1))->entries[1].refs[0].target == tid); /* not nulled */
   /* The host adopts it under its stable id. */
-  test_assert(r.lib.createWithId(kTransient, tid, "cache", litestl::alloc::New<Thing>("T")).ok());
+  test_assert(
+      r.lib.createWithId(kTransient, tid, "cache", litestl::alloc::New<Thing>("T")).ok());
   test_assert(r.lib.resolveRef(r.data(r.at(1))->mesh) == missing);
   /* The report starts empty each time. */
   IoWorld empty;
   empty.save(&report);
-  test_assert(report.blocks == 0 && report.transient.size() == 0 && report.throughTransient.size() == 0);
+  test_assert(report.blocks == 0 && report.transient.size() == 0 &&
+              report.throughTransient.size() == 0);
 }
 
 static void test_save_fails()
@@ -509,20 +553,23 @@ static void test_save_fails()
   w.root(loose2);
   Result<Bytes> r = saveLibrary(w.lib);
   test_assert(r.status().code() == StatusCode::FailedPrecondition);
-  test_assert(hasMsg(r.status(), "Transient: test.Thing") && !strstr(r.status().message(), ", "));
+  test_assert(hasMsg(r.status(), "Transient: test.Thing") &&
+              !strstr(r.status().message(), ", "));
   for (BlockHandle h : {loose, loose2}) {
     w.lib.setFlag(h, BlockFlags::Root, false);
   }
 
   w.docs.fault = DocFault::Error;
   r = saveLibrary(w.lib);
-  test_assert(r.status().code() == StatusCode::Unsupported && hasMsg(r.status(), "saving 'a': not"));
+  test_assert(r.status().code() == StatusCode::Unsupported &&
+              hasMsg(r.status(), "saving 'a': not"));
   w.docs.fault = DocFault::Sticky;
   test_assert(hasMsg(saveLibrary(w.lib).status(), "saving 'a': serialize threw"));
   w.docs.fault = DocFault::None;
   w.note(a, 1, BlockId());
   w.notes.fault = DocFault::Error;
-  test_assert(hasMsg(saveLibrary(w.lib).status(), "attachment 'test.Note': no notes today"));
+  test_assert(
+      hasMsg(saveLibrary(w.lib).status(), "attachment 'test.Note': no notes today"));
   w.notes.fault = DocFault::None;
   w.notes.failForeach = true;
   test_assert(hasMsg(saveLibrary(w.lib).status(), "saving 'a': note foreachRef threw"));
@@ -588,38 +635,47 @@ static void test_random()
       }
       return s;
     };
-    const ClientId clients[] = {ClientId::of(kCoredccClient), kAcme, ClientId(),
-                                ClientId{rng.next()}};
+    const ClientId clients[] = {
+        ClientId::of(kCoredccClient), kAcme, ClientId(), ClientId{rng.next()}};
     const int count = 1 + int(rng.below(30));
     for (int i = 0; i < count; i++) {
-      const BlockId id{clients[rng.below(4)], LocalId{rng.below(2) ? rng.next() : 0, rng.next() | 1}};
+      const BlockId id{clients[rng.below(4)],
+                       LocalId{rng.below(2) ? rng.next() : 0, rng.next() | 1}};
       if (w.lib.find(id)) {
         continue;
       }
       BlockHandle h;
       const bool live = id.client == clients[0] || id.client == clients[1];
       switch (live ? rng.below(4) : 2 + rng.below(2)) {
-        case 0:
-        case 1: {
-          Doc *d = litestl::alloc::New<Doc>("Doc");
-          d->bag = makeDocBag(w.docs);
-          d->number = int64_t(rng.next());
-          h = *w.lib.createWithId(id.client == kAcme ? kAcmeDoc : kDoc, id, name(), d);
-          break;
+      case 0:
+      case 1: {
+        Doc *d = litestl::alloc::New<Doc>("Doc");
+        d->bag = makeDocBag(w.docs);
+        d->number = int64_t(rng.next());
+        h = *w.lib.createWithId(id.client == kAcme ? kAcmeDoc : kDoc, id, name(), d);
+        break;
+      }
+      case 2: {
+        Bytes b;
+        for (uint32_t n = rng.below(2) ? rng.below(1500) : 0; n > 0; n--) {
+          b.append(uint8_t(rng.below(rng.below(2) ? 256 : 2)));
         }
-        case 2: {
-          Bytes b;
-          for (uint32_t n = rng.below(2) ? rng.below(1500) : 0; n > 0; n--) {
-            b.append(uint8_t(rng.below(rng.below(2) ? 256 : 2)));
-          }
-          h = placeholder(w, id, ("x" + name()).c_str(), name().c_str(),
-                          PlaceholderReason::MissingType,
-                          payload(uint32_t(rng.next()), std::move(b)), name().c_str());
-          break;
-        }
-        default:
-          h = placeholder(w, id, ("y" + name()).c_str(), name().c_str(),
-                          PlaceholderReason::MissingBlock, payload(uint32_t(rng.next()), Bytes()));
+        h = placeholder(w,
+                        id,
+                        ("x" + name()).c_str(),
+                        name().c_str(),
+                        PlaceholderReason::MissingType,
+                        payload(uint32_t(rng.next()), std::move(b)),
+                        name().c_str());
+        break;
+      }
+      default:
+        h = placeholder(w,
+                        id,
+                        ("y" + name()).c_str(),
+                        name().c_str(),
+                        PlaceholderReason::MissingBlock,
+                        payload(uint32_t(rng.next()), Bytes()));
       }
       ids.append(w.id(h));
       blocks.append(h);
@@ -637,16 +693,21 @@ static void test_random()
         d.parent.target = target();
         for (uint32_t n = rng.below(4); n > 0; n--) {
           const BlockId t = target();
-          d.entries.append(t.isNull() ? entryOf(name().c_str(), PropValue::ofInt(int64_t(rng.next())))
-                                      : entryOf(name().c_str(), pointerTo(t, "k"),
-                                                RefKind(rng.below(3))));
+          d.entries.append(
+              t.isNull()
+                  ? entryOf(name().c_str(), PropValue::ofInt(int64_t(rng.next())))
+                  : entryOf(name().c_str(), pointerTo(t, "k"), RefKind(rng.below(3))));
         }
       }
       for (uint32_t n = rng.below(4); n > 0; n--) {
         const TypeId ns = rng.below(2) ? kDoc : TypeId{rng.next() | 1};
         const BlockId t = target();
-        test_assert(w.lib.setSlot(h, ns, int64_t(rng.next()), t,
-                                  t.isNull() ? RefKind::OptStrong : RefKind(rng.below(3)))
+        test_assert(w.lib
+                        .setSlot(h,
+                                 ns,
+                                 int64_t(rng.next()),
+                                 t,
+                                 t.isNull() ? RefKind::OptStrong : RefKind(rng.below(3)))
                         .ok());
       }
       if (rng.below(3) == 0) {
@@ -688,8 +749,10 @@ static void test_scale()
   const Bytes bytes = w.save();
   IoWorld r;
   LoadReport report;
-  test_assert(r.load(bytes, &report).ok() && r.lib.size() == n && report.issues.total == 0);
-  const double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+  test_assert(r.load(bytes, &report).ok() && r.lib.size() == n &&
+              report.issues.total == 0);
+  const double s =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
   test_assert(s < 60);
 }
 

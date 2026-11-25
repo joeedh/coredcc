@@ -13,7 +13,8 @@ namespace {
 
 Status noBlock(const char *op)
 {
-  return Status::error(StatusCode::NotFound, (std::string(op) + ": no such block").c_str());
+  return Status::error(StatusCode::NotFound,
+                       (std::string(op) + ": no such block").c_str());
 }
 
 } // namespace
@@ -28,8 +29,9 @@ Result<BlockHandle> Library::addPlaceholder(BlockId id, PlaceholderInfo info)
   }
   const bool noType = info.typeName.size() == 0;
   if (noType && info.reason == PlaceholderReason::MissingType) {
-    return Status::error(StatusCode::InvalidArgument,
-                         "addPlaceholder: a MissingType placeholder needs its type's name");
+    return Status::error(
+        StatusCode::InvalidArgument,
+        "addPlaceholder: a MissingType placeholder needs its type's name");
   }
   Result<BlockHandle> h =
       addRecord(detail::typeNamed(info.typeName.c_str()), id, info.name.c_str(), nullptr);
@@ -83,15 +85,17 @@ Status Library::relinkRef(BlockHandle h, int index, BlockId target, TypeId attac
   auto *rows = const_cast<Vector<RefCell> *>(refTable(h, attachment));
   if (!rows) {
     const std::string name = "relinkRef: block '" + std::string(b->name_.c_str()) + "' ";
-    return attachment ?
-               Status::error(StatusCode::NotFound,
-                             (name + "has no opaque attachment of this type").c_str()) :
-               Status::error(StatusCode::FailedPrecondition,
-                             (name + "is " + blockStateName(b->state_) + ", not a placeholder")
-                                 .c_str());
+    return attachment
+               ? Status::error(StatusCode::NotFound,
+                               (name + "has no opaque attachment of this type").c_str())
+               : Status::error(
+                     StatusCode::FailedPrecondition,
+                     (name + "is " + blockStateName(b->state_) + ", not a placeholder")
+                         .c_str());
   }
   if (index < 0 || index >= int(rows->size())) {
-    return Status::error(StatusCode::OutOfRange, "relinkRef: no such row in the ref table");
+    return Status::error(StatusCode::OutOfRange,
+                         "relinkRef: no such row in the ref table");
   }
   RefCell &row = (*rows)[index];
   row.target = target.isNull() ? target : clients_.canonical(target);

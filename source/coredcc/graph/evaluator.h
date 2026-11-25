@@ -42,17 +42,17 @@ struct ElementsMap;
 Status unknownType();
 
 /**
- * Pulls sockets. A call walks the vertices the requested sockets depend on, depth first on
- * an explicit stack, and computes each when everything below it is done. Vertices on a
+ * Pulls sockets. A call walks the vertices the requested sockets depend on, depth first
+ * on an explicit stack, and computes each when everything below it is done. Vertices on a
  * cycle (strongly connected components of more than one, by Tarjan's algorithm) fail
  * instead. What was computed under one key (see `Key`) stands until the key moves.
  *
- * When it moves, the GraphSystem's journal says which edits moved it. If it knows them all,
- * the vertices they touch and everything that depends on those lose their state, and the
- * rest stands; else nothing does (incremental.cc).
+ * When it moves, the GraphSystem's journal says which edits moved it. If it knows them
+ * all, the vertices they touch and everything that depends on those lose their state, and
+ * the rest stands; else nothing does (incremental.cc).
  */
 class Evaluator {
- public:
+public:
   /** Groups and elements nested deeper than this fail. The root is at depth 0. */
   static constexpr int kMaxDepth = 64;
 
@@ -83,7 +83,8 @@ class Evaluator {
     uint64_t layout = 0;
   };
 
-  Status evaluate(std::span<const SocketPath> sockets, litestl::util::Vector<Status> &results);
+  Status evaluate(std::span<const SocketPath> sockets,
+                  litestl::util::Vector<Status> &results);
   const Pulled *result(const SocketPath &socket) const;
   /** Whether nothing `p` depends on can have moved since. */
   bool isCurrent(const Pulled &p) const;
@@ -92,7 +93,8 @@ class Evaluator {
   /* prepared sockets */
   Result<SocketHandle> prepare(const SocketPath &socket);
   Status release(SocketHandle h);
-  Status evaluate(std::span<const SocketHandle> sockets, litestl::util::Vector<int> &moved);
+  Status evaluate(std::span<const SocketHandle> sockets,
+                  litestl::util::Vector<int> &moved);
   /** Null for a handle that isn't valid. */
   const Pulled *result(SocketHandle h) const;
   Status setInput(std::string_view name, GraphValue v);
@@ -128,7 +130,7 @@ class Evaluator {
   }
   uint64_t totalRuns = 0;
 
- private:
+private:
   /** What a request leads to: a vertex, or a result without one. */
   struct Request {
     Vertex vertex;
@@ -199,12 +201,16 @@ class Evaluator {
   Frame *child(Frame &f, int group, ErrorPtr &error);
   /** Whether a node of `f` can evaluate `def`, its target. */
   Status checkGroup(const Frame &f, const GraphNode &node, const GraphDef *def) const;
-  /** Notes which inputs of `c`, and of the groups in it, others replace (graph/interior.h). */
+  /** Notes which inputs of `c`, and of the groups in it, others replace
+   * (graph/interior.h). */
   void setReplaced(Frame &f, int group, Frame &c);
   Frame *newFrame(Frame &parent, const GraphNode &node, GraphDef *def);
   void setOverBudget(const Frame &f, NodeId node);
   KernelState &kernel(Frame &f, int node);
-  ErrorPtr makeError(const Frame &f, NodeId node, Status status, std::string_view socket = {}) const;
+  ErrorPtr makeError(const Frame &f,
+                     NodeId node,
+                     Status status,
+                     std::string_view socket = {}) const;
 
   /* the walk */
   Request find(const SocketPath &socket);
@@ -241,7 +247,8 @@ class Evaluator {
   /** Whether anything but the table moved since the last run; notes the new state. */
   bool worldMoved(Frame &f, int node, KernelState &k, const GraphDef &def);
   ErrorPtr runElements(Frame &f, int node, KernelState &k, GraphDef &def, bool newTable);
-  /** Sets an element's inputs to a row of the table. `same` becomes false if any moved. */
+  /** Sets an element's inputs to a row of the table. `same` becomes false if any moved.
+   */
   Status setRow(Element &e, const ElementsMap &map, int row, bool &same);
   /** Evaluates an element's outputs. */
   ErrorPtr runElement(Frame &f, int node, KernelState &k, Element &e);
@@ -249,7 +256,8 @@ class Evaluator {
   void failCycle(const litestl::util::Vector<Vertex> &members);
 
   void store(Pulled &p, const Request &r, Status &status);
-  /** Whether the defs have the socket. True where a group fails, so that it can't be known. */
+  /** Whether the defs have the socket. True where a group fails, so that it can't be
+   * known. */
   bool exists(const SocketPath &socket) const;
   /** Drops results of sockets that are gone. */
   void pruneResults();
@@ -285,8 +293,8 @@ class Evaluator {
   };
   litestl::util::Vector<Prepared> prepared_;
   litestl::util::Vector<uint32_t> freePrepared_;
-  /** GraphSystem::structureVersion, and the Library's epoch (a write of a group's cell moves
-   * only that), when results_ was last pruned. */
+  /** GraphSystem::structureVersion, and the Library's epoch (a write of a group's cell
+   * moves only that), when results_ was last pruned. */
   uint64_t prunedStructure_ = 0;
   uint64_t prunedEpoch_ = 0;
 

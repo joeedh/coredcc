@@ -1,5 +1,5 @@
-/* Graphs in datapaths: the structs coredcc.GraphDef, GraphNode, GraphLink, GraphSocket and
- * GraphInterface, and those of each node type. */
+/* Graphs in datapaths: the structs coredcc.GraphDef, GraphNode, GraphLink, GraphSocket
+ * and GraphInterface, and those of each node type. */
 #include "coredcc/graph/api.h"
 
 #include "coredcc/api/struct.h"
@@ -73,15 +73,16 @@ ApiStruct &readOnly(ApiStruct &st,
 
 /* ---- pointers to blocks ---- */
 
-/* What a pointer member shows for a cell: the block's root, or null when it isn't Live, or
- * is the graph's own block (which only a direct write of the cell can make it). */
+/* What a pointer member shows for a cell: the block's root, or null when it isn't Live,
+ * or is the graph's own block (which only a direct write of the cell can make it). */
 PointerRef blockRef(const GraphDef &def, const RefCell &cell)
 {
   const Library *lib = def.library();
   const ClientRegistry &clients = def.runtime().ext<ClientRegistry>();
   PointerRef r;
   if (!lib || cell.isNull() ||
-      (!def.self().isNull() && clients.canonical(cell.target) == clients.canonical(def.self())))
+      (!def.self().isNull() &&
+       clients.canonical(cell.target) == clients.canonical(def.self())))
   {
     return r;
   }
@@ -144,7 +145,9 @@ ValueAccessor::Stored saveValues(const GraphNode &n, bool param, const std::stri
 CollectionAccessor nodesAccessor()
 {
   CollectionAccessor c;
-  c.length = [](const PointerRef &self, Context &) { return int64_t(graphOf(self).nodeCount()); };
+  c.length = [](const PointerRef &self, Context &) {
+    return int64_t(graphOf(self).nodeCount());
+  };
   c.at = [](const PointerRef &self, Context &, int64_t i) {
     return nodeRef(graphOf(self).nodeAt(int(i)));
   };
@@ -173,14 +176,16 @@ CollectionAccessor linksAccessor()
 {
   CollectionAccessor c;
   const StructId type = StructId::of(kLinkStruct);
-  c.length = [](const PointerRef &self, Context &) { return int64_t(graphOf(self).linkCount()); };
+  c.length = [](const PointerRef &self, Context &) {
+    return int64_t(graphOf(self).linkCount());
+  };
   c.at = [type](const PointerRef &self, Context &, int64_t i) {
     return inside(const_cast<GraphLink *>(graphOf(self).linkAt(int(i))), type);
   };
   c.lookup = [type](const PointerRef &self, Context &, const KeySegment &key) {
-    const GraphLink *l = key.kind == KeySegment::Kind::Handle ?
-                             graphOf(self).link(LinkId{key.handle}) :
-                             nullptr;
+    const GraphLink *l = key.kind == KeySegment::Kind::Handle
+                             ? graphOf(self).link(LinkId{key.handle})
+                             : nullptr;
     return inside(const_cast<GraphLink *>(l), type);
   };
   c.keyOf = [](const PointerRef &, Context &, const PointerRef &item) {
@@ -291,8 +296,8 @@ CollectionAccessor socketsAccessor()
   c.keyOf = [](const PointerRef &, Context &, const PointerRef &item) {
     const std::string key = addressOf(item).key.c_str();
     const int64_t id = key[0] == '#' ? std::strtoll(key.c_str() + 1, nullptr, 10) : 0;
-    return id > 0 && key == interfaceKey(id).c_str() ? KeySegment::ofHandle(id) :
-                                                       KeySegment::stringKey(key);
+    return id > 0 && key == interfaceKey(id).c_str() ? KeySegment::ofHandle(id)
+                                                     : KeySegment::stringKey(key);
   };
   c.itemStruct = StructId::of(kSocketStruct);
   return c;
@@ -376,7 +381,8 @@ void addSocketStructs(ApiRegistry &reg, const SocketType &type)
     return s.def->setInterfaceDefault(s.id, v);
   };
   def.save = [](const PointerRef &self, Context &) {
-    const PropValue stored = static_cast<const InterfaceSocket *>(self.data)->defaultValue;
+    const PropValue stored =
+        static_cast<const InterfaceSocket *>(self.data)->defaultValue;
     ValueAccessor::Stored out;
     out.restore = [stored](const PointerRef &to, Context &) {
       const InterfaceSocket &s = *static_cast<const InterfaceSocket *>(to.data);
@@ -420,7 +426,8 @@ ApiStruct graphStruct()
     const GraphDef &def = graphOf(self);
     Library *lib = def.library();
     if (!lib || def.self().isNull()) {
-      return Status::error(StatusCode::FailedPrecondition, "a standalone graph has no name");
+      return Status::error(StatusCode::FailedPrecondition,
+                           "a standalone graph has no name");
     }
     return lib->rename(lib->find(def.self()), v.asString().c_str());
   };
@@ -447,7 +454,9 @@ ApiStruct nodeStruct()
     return text(nodeOf(self).typeName());
   });
   ValueAccessor label;
-  label.get = [](const PointerRef &self, Context &) { return text(nodeOf(self).label()); };
+  label.get = [](const PointerRef &self, Context &) {
+    return text(nodeOf(self).label());
+  };
   label.set = [](const PointerRef &self, Context &, const PropValue &v) {
     return nodeOf(self).def().setLabel(nodeOf(self).id(), v.asString().c_str());
   };
@@ -458,7 +467,8 @@ ApiStruct nodeStruct()
     return PropValue::ofComponents(PropValue::Type::Vec2, c);
   };
   position.set = [](const PointerRef &self, Context &, const PropValue &v) {
-    return nodeOf(self).def().setPosition(nodeOf(self).id(), v.component(0), v.component(1));
+    return nodeOf(self).def().setPosition(
+        nodeOf(self).id(), v.component(0), v.component(1));
   };
   st.add(PropertyDef::vecProp("position", 2), std::move(position));
   return st;
@@ -477,15 +487,16 @@ ApiStruct linkStruct()
   readOnly(st, PropertyDef::intProp("from"), [link](const PointerRef &self, Context &) {
     return PropValue::ofInt(link(self).from->id().value);
   });
-  readOnly(st, PropertyDef::stringProp("fromSocket"), [link](const PointerRef &self, Context &) {
-    return text(link(self).fromKey);
-  });
+  readOnly(
+      st,
+      PropertyDef::stringProp("fromSocket"),
+      [link](const PointerRef &self, Context &) { return text(link(self).fromKey); });
   readOnly(st, PropertyDef::intProp("to"), [link](const PointerRef &self, Context &) {
     return PropValue::ofInt(link(self).to->id().value);
   });
-  readOnly(st, PropertyDef::stringProp("toSocket"), [link](const PointerRef &self, Context &) {
-    return text(link(self).toKey);
-  });
+  readOnly(st,
+           PropertyDef::stringProp("toSocket"),
+           [link](const PointerRef &self, Context &) { return text(link(self).toKey); });
   PropertyDef error = PropertyDef::stringProp("error");
   error.description("Why the link doesn't work, or nothing if it does");
   readOnly(st, std::move(error), [link](const PointerRef &self, Context &) {
@@ -519,14 +530,17 @@ ApiStruct interfaceStruct()
     return *static_cast<const InterfaceSocket *>(self.data);
   };
   ValueAccessor name;
-  name.get = [socket](const PointerRef &self, Context &) { return text(socket(self).name); };
+  name.get = [socket](const PointerRef &self, Context &) {
+    return text(socket(self).name);
+  };
   name.set = [socket](const PointerRef &self, Context &, const PropValue &v) {
     return socket(self).def->setInterfaceName(socket(self).id, v.asString().c_str());
   };
   st.add(PropertyDef::stringProp("name"), std::move(name));
-  readOnly(st, PropertyDef::stringProp("type"), [socket](const PointerRef &self, Context &) {
-    return text(socket(self).typeName);
-  });
+  readOnly(
+      st, PropertyDef::stringProp("type"), [socket](const PointerRef &self, Context &) {
+        return text(socket(self).typeName);
+      });
   return st;
 }
 
@@ -554,7 +568,9 @@ ApiStruct paramsStruct(const NodeType &type)
         ref.type = target.type;
         return def.setParam(nodeOf(self).id(), name, PropValue::ofPointer(ref));
       };
-      a.cell = [name](const PointerRef &self, Context &) { return paramCell(nodeOf(self), name); };
+      a.cell = [name](const PointerRef &self, Context &) {
+        return paramCell(nodeOf(self), name);
+      };
       a.target = p.def.target()->target;
       st.addPointer(p.def, std::move(a));
       continue;
@@ -615,8 +631,8 @@ void addPart(ApiStruct &st, const char *name, StructId type)
 
 StructId graphNodeStruct(const GraphNode &node)
 {
-  return node.type() ? structOf(kGraphNodeStruct, node.typeName().c_str()) :
-                       StructId::of(kGraphNodeStruct);
+  return node.type() ? structOf(kGraphNodeStruct, node.typeName().c_str())
+                     : StructId::of(kGraphNodeStruct);
 }
 
 void detail::addGraphStructs(Runtime &rt)
@@ -667,7 +683,8 @@ Status detail::addNodeStructs(Runtime &rt, const NodeType &type)
     };
     a.set = [](const PointerRef &self, Context &, const PointerRef &target) {
       Result<BlockId> block = blockOf(nodeOf(self).def(), target);
-      return block.ok() ? nodeOf(self).def().setGroup(nodeOf(self).id(), *block) : block.status();
+      return block.ok() ? nodeOf(self).def().setGroup(nodeOf(self).id(), *block)
+                        : block.status();
     };
     a.cell = [](const PointerRef &self, Context &) {
       return const_cast<RefCell *>(&nodeOf(self).group());

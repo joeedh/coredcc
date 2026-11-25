@@ -7,7 +7,10 @@
 
 namespace coredcc::detail {
 
-Status writeStored(Context &ctx, BlockHandle h, const StoredFields &fields, const StoredObject &v)
+Status writeStored(Context &ctx,
+                   BlockHandle h,
+                   const StoredFields &fields,
+                   const StoredObject &v)
 {
   if (fields.parent) {
     CDCC_TRY(writeParent(ctx, h, v.parent));
@@ -17,8 +20,7 @@ Status writeStored(Context &ctx, BlockHandle h, const StoredFields &fields, cons
   }
   if (fields.type) {
     CDCC_TRY(writeTransformType(ctx, h, v.type, v.channels));
-  }
-  else if (fields.channels) {
+  } else if (fields.channels) {
     CDCC_TRY(writeTransform(ctx, h, v.channels));
   }
   if (!fields.locks) {
@@ -57,7 +59,8 @@ void PendingWrites::add(Library &lib,
     mine.lib = lib.ref();
     libraries_.append(std::move(mine));
     p = &libraries_[int(libraries_.size()) - 1];
-    lib.addReviveListener([this](Library &l, BlockHandle h) { flush(l, l.get(h)->id()); });
+    lib.addReviveListener(
+        [this](Library &l, BlockHandle h) { flush(l, l.get(h)->id()); });
   }
   Entry *e = nullptr;
   for (Entry &x : p->entries) {

@@ -55,19 +55,19 @@ Status split(NodeExecContext &ctx)
 Status bad(NodeExecContext &ctx)
 {
   switch (ctx.param("mode")->asInt()) {
-    case 1:
-      return ctx.setOutput("x", GraphValue::ofFloat(1)); /* not y */
-    case 2:
-      ctx.setOutput("x", GraphValue::ofInt(1)).ignore();
-      break;
-    case 3:
-      ctx.runtime().setStickyError(Status::error(StatusCode::Cancelled, "thrown"));
-      break;
-    case 4:
-      ctx.runtime().setStickyError(Status::error(StatusCode::Cancelled, "thrown"));
-      return Status::error(StatusCode::Unsupported, "returned");
-    default:
-      break;
+  case 1:
+    return ctx.setOutput("x", GraphValue::ofFloat(1)); /* not y */
+  case 2:
+    ctx.setOutput("x", GraphValue::ofInt(1)).ignore();
+    break;
+  case 3:
+    ctx.runtime().setStickyError(Status::error(StatusCode::Cancelled, "thrown"));
+    break;
+  case 4:
+    ctx.runtime().setStickyError(Status::error(StatusCode::Cancelled, "thrown"));
+    return Status::error(StatusCode::Unsupported, "returned");
+  default:
+    break;
   }
   ctx.setOutput("x", GraphValue::ofFloat(double(ctx.param("mode")->asInt()))).ignore();
   return ctx.setOutput("y", GraphValue::ofFloat(2));
@@ -101,7 +101,8 @@ Status readUser(NodeExecContext &ctx)
 void addTypes(Runtime &rt)
 {
   SocketTypeRegistry &sockets = rt.ext<SocketTypeRegistry>();
-  test_assert(sockets.addPayloadType<Mesh>().ok() && sockets.addPayloadType<Cloud>().ok());
+  test_assert(sockets.addPayloadType<Mesh>().ok() &&
+              sockets.addPayloadType<Cloud>().ok());
   NodeTypeDef s("t.sum");
   s.input(PropertyDef::floatProp("a"))
       .input(PropertyDef::floatProp("b").defaultValue(PropValue::ofFloat(10)))
@@ -114,7 +115,9 @@ void addTypes(Runtime &rt)
   b.param(PropertyDef::intProp("mode")).output("x", "float").output("y", "float");
   addType<bad>(rt, b, "t.bad");
   NodeTypeDef m("t.mesh");
-  m.input(PropertyDef::intProp("n")).output("mesh", "test.Mesh").output("cloud", "test.Cloud");
+  m.input(PropertyDef::intProp("n"))
+      .output("mesh", "test.Mesh")
+      .output("cloud", "test.Cloud");
   addType<makeMesh>(rt, m, "t.mesh");
   NodeTypeDef c("t.countMesh");
   c.payloadInput("mesh", "test.Mesh").output("n", "int");
@@ -174,7 +177,9 @@ PropValue fl(double v)
 struct Runs {
   GraphInstance &g;
   uint64_t last;
-  explicit Runs(GraphInstance &i) : g(i), last(i.totalRuns()) {}
+  explicit Runs(GraphInstance &i) : g(i), last(i.totalRuns())
+  {
+  }
   int take()
   {
     const uint64_t now = g.totalRuns();
@@ -199,7 +204,8 @@ void testIncremental()
   GraphInstance g(&w.rt, nullptr, &def);
   Runs runs(g);
   test_assert(!g.value(out(q)) && !g.isCurrent(out(q)) && g.changedAt(out(q)) == 0);
-  test_assert(num(g, out(q)) == 11 && runs.take() == 5); /* not `other`: it wasn't asked for */
+  test_assert(num(g, out(q)) == 11 &&
+              runs.take() == 5); /* not `other`: it wasn't asked for */
   test_assert(g.isCurrent(out(q)) && !g.isCurrent(out(s)) && !g.value(out(s)));
   test_assert(num(g, out(s)) == 0 && num(g, out(q)) == 11 && runs.take() == 0);
 
@@ -213,8 +219,10 @@ void testIncremental()
   test_assert(def.setParam(a, "value", fl(3)).ok()); /* the same again */
   test_assert(num(g, out(q)) == 11 && runs.take() == 1);
 
-  /* Two sources of one node change: one run. A source that nobody asks for doesn't run. */
-  test_assert(def.setParam(a, "value", fl(1)).ok() && def.setParam(b, "value", fl(2)).ok());
+  /* Two sources of one node change: one run. A source that nobody asks for doesn't run.
+   */
+  test_assert(def.setParam(a, "value", fl(1)).ok() &&
+              def.setParam(b, "value", fl(2)).ok());
   test_assert(num(g, out(s)) == 3 && runs.take() == 3);
   test_assert(num(g, out(q)) == 11 && runs.take() == 0); /* s is 3 again */
   test_assert(num(g, out(other)) == 12 && runs.take() == 1);
@@ -230,9 +238,12 @@ void testIncremental()
 
   /* Literals: only of the input that reads it, and only if it isn't linked. */
   const LinkId l = def.node(s)->linkInto("b")->id;
-  test_assert(def.unlink(l).ok() && num(g, out(s)) == 11 && runs.take() == 1); /* default 10 */
-  test_assert(def.setLiteral(s, "b", fl(5)).ok() && num(g, out(s)) == 6 && runs.take() == 1);
-  test_assert(def.setLiteral(s, "a", fl(5)).ok() && num(g, out(s)) == 6 && runs.take() == 0);
+  test_assert(def.unlink(l).ok() && num(g, out(s)) == 11 &&
+              runs.take() == 1); /* default 10 */
+  test_assert(def.setLiteral(s, "b", fl(5)).ok() && num(g, out(s)) == 6 &&
+              runs.take() == 1);
+  test_assert(def.setLiteral(s, "a", fl(5)).ok() && num(g, out(s)) == 6 &&
+              runs.take() == 0);
   test_assert(def.setLiteral(s, "b", PropValue()).ok() && num(g, out(s)) == 11);
   test_assert(runs.take() == 1 && def.setLiteral(s, "b", fl(1)).ok());
   /* Replaced by a link whose value is the same: the source is another, so it runs. */
@@ -256,9 +267,12 @@ void testIncremental()
   test_assert(def.setLiteral(other, "a", fl(4)).ok() && num(g, out(other)) == 4);
 
   /* Many sockets in one call, unknown ones among them. */
-  const SocketPath paths[] = {
-      out(s), out(q, "nothing"), out(NodeId{7}), SocketPath::of(q, "a", SocketSide::Input),
-      SocketPath::output("nothing"), SocketPath::of(at(q, {s}), "value")};
+  const SocketPath paths[] = {out(s),
+                              out(q, "nothing"),
+                              out(NodeId{7}),
+                              SocketPath::of(q, "a", SocketSide::Input),
+                              SocketPath::output("nothing"),
+                              SocketPath::of(at(q, {s}), "value")};
   litestl::util::Vector<Status> results;
   test_assert(g.evaluate(paths, results).ok() && results.size() == 6);
   test_assert(results[0].ok() && results[3].ok());
@@ -271,7 +285,8 @@ void testIncremental()
   GraphInstance fresh(&w.rt, nullptr, &def);
   test_assert(num(fresh, out(q)) == num(g, out(q)));
   runs.take();
-  test_assert(g.clear().ok() && !g.value(out(q)) && num(g, out(q)) == 11 && runs.take() > 0);
+  test_assert(g.clear().ok() && !g.value(out(q)) && num(g, out(q)) == 11 &&
+              runs.take() > 0);
 }
 
 void testParts()
@@ -304,7 +319,8 @@ void testParts()
   user = 5; /* not a dependency */
   w.rt.touch();
   test_assert(num(g, out(u, "n")) == 4);
-  test_assert(g.report(at(u)).runs == 1 && g.report(at(u)).state == NodeReport::State::Ok);
+  test_assert(g.report(at(u)).runs == 1 &&
+              g.report(at(u)).state == NodeReport::State::Ok);
   test_assert(g.report(at(u)).seconds >= 0);
   test_assert(g.report(at(NodeId{3})).state == NodeReport::State::NotEvaluated);
   test_assert(g.report(at(u, {u})).runs == 0);
@@ -336,7 +352,8 @@ void testErrors()
   test_assert(hasCode(g.evaluate(out(g2)), StatusCode::OutOfRange) && runs.take() == 0);
   test_assert(g.error(out(g2))->origin == at(f) && g.error(out(g2))->socket.size() == 0);
   test_assert(strcmp(g.error(out(g2))->status.message(), "a is -5") == 0);
-  test_assert(*g.lastGood(out(g2)) == GraphValue::ofFloat(22) && g.changedAt(out(g2)) > g1At);
+  test_assert(*g.lastGood(out(g2)) == GraphValue::ofFloat(22) &&
+              g.changedAt(out(g2)) > g1At);
   test_assert(g.report(at(f)).state == NodeReport::State::Failed);
   test_assert(g.report(at(g1)).state == NodeReport::State::InputFailed);
   test_assert(g.report(at(g1)).error.origin == at(f) && g.report(at(g1)).runs == 1);
@@ -352,17 +369,20 @@ void testErrors()
   test_assert(def.setParam(a, "value", fl(-6)).ok());
   test_assert(!g.evaluate(out(g2)).ok() && runs.take() == 2);
   test_assert(g.changedAt(out(g2)) > stays); /* another message */
-  test_assert(!g.isCurrent(out(f)) && strcmp(g.error(out(f))->status.message(), "a is -5") == 0);
+  test_assert(!g.isCurrent(out(f)) &&
+              strcmp(g.error(out(f))->status.message(), "a is -5") == 0);
 
   /* Back to the old value: f and those below are out of error, so they move. */
   const uint64_t before = g.changedAt(out(g2));
   test_assert(def.setParam(a, "value", fl(1)).ok());
-  test_assert(num(g, out(g2)) == 22 && g.changedAt(out(g2)) > before && !g.error(out(g2)));
+  test_assert(num(g, out(g2)) == 22 && g.changedAt(out(g2)) > before &&
+              !g.error(out(g2)));
   test_assert(num(g, out(f)) == 11 && g.report(at(g1)).state == NodeReport::State::Ok);
 
   /* The first failing input, in input order, whichever was evaluated first. */
   const NodeId both = add(def, "t.sum"), f2 = add(def, "t.sum");
-  test_assert(def.setLiteral(f2, "a", fl(-9)).ok() && def.setParam(a, "value", fl(-5)).ok());
+  test_assert(def.setLiteral(f2, "a", fl(-9)).ok() &&
+              def.setParam(a, "value", fl(-5)).ok());
   connect(def, f2, "value", both, "a");
   connect(def, f, "value", both, "b");
   test_assert(!g.evaluate(out(f)).ok() && !g.evaluate(out(both)).ok());
@@ -380,20 +400,24 @@ void testErrors()
     int mode;
     StatusCode code;
     const char *message;
-  } cases[] = {{1, StatusCode::Internal, "the kernel didn't set output 'y'"},
-               {2, StatusCode::Internal, "output 'x' is a float, but was set to a Int value"},
-               {3, StatusCode::Cancelled, "thrown"},
-               {4, StatusCode::Unsupported, "returned"}};
+  } cases[] = {
+      {1, StatusCode::Internal, "the kernel didn't set output 'y'"},
+      {2, StatusCode::Internal, "output 'x' is a float, but was set to a Int value"},
+      {3, StatusCode::Cancelled, "thrown"},
+      {4, StatusCode::Unsupported, "returned"}};
   for (const auto &c : cases) {
     test_assert(def.setParam(b, "mode", PropValue::ofInt(c.mode)).ok());
     test_assert(hasCode(g.evaluate(out(b, "x")), c.code));
     test_assert(strcmp(g.error(out(b, "x"))->status.message(), c.message) == 0);
     test_assert(!w.rt.hasStickyError() && g.error(out(b, "x"))->origin == at(b));
-    test_assert(*g.lastGood(out(b, "x")) == GraphValue::ofFloat(0)); /* nothing committed */
+    test_assert(*g.lastGood(out(b, "x")) ==
+                GraphValue::ofFloat(0)); /* nothing committed */
   }
-  test_assert(def.setParam(b, "mode", PropValue::ofInt(7)).ok() && num(g, out(b, "x")) == 7);
+  test_assert(def.setParam(b, "mode", PropValue::ofInt(7)).ok() &&
+              num(g, out(b, "x")) == 7);
 
-  /* A socket of an unknown type: of a group whose graph is gone, only the snapshot is left. */
+  /* A socket of an unknown type: of a group whose graph is gone, only the snapshot is
+   * left. */
   NodeState lost;
   lost.id = NodeId{77};
   lost.typeName = "graph.group";
@@ -420,7 +444,8 @@ void testErrors()
   results.append(Status());
   const SocketPath path = out(b, "x");
   test_assert(hasCode(g.evaluate({&path, 1}, results), StatusCode::FailedPrecondition));
-  test_assert(results.size() == 0 && hasCode(w.rt.takeStickyError(), StatusCode::Internal));
+  test_assert(results.size() == 0 &&
+              hasCode(w.rt.takeStickyError(), StatusCode::Internal));
 
   /* A type that isn't registered (yet). */
   NodeState s;
@@ -435,7 +460,9 @@ void testErrors()
   test_assert(hasCode(g.evaluate(out(g1)), StatusCode::NotFound));
   test_assert(g.error(out(g1))->origin == at(s.id));
   NodeTypeDef late("late.sum");
-  late.input(PropertyDef::floatProp("a")).input(PropertyDef::floatProp("b")).output("value", "float");
+  late.input(PropertyDef::floatProp("a"))
+      .input(PropertyDef::floatProp("b"))
+      .output("value", "float");
   addType<sum>(w.rt, late, "late.sum");
   test_assert(num(g, out(g1)) == 18); /* 11 + 7 */
 }
@@ -470,13 +497,15 @@ void testGroups()
   test_assert(alone.isCurrent(SocketPath::output("sum")));
   test_assert(in.setInterfaceDefault(ib, fl(5)).ok()); /* hidden by the set value */
   test_assert(num(alone, SocketPath::output("sum")) == 6 && runs.take() == 0);
-  test_assert(hasCode(alone.setInput("b", GraphValue::ofInt(1)), StatusCode::TypeMismatch));
+  test_assert(
+      hasCode(alone.setInput("b", GraphValue::ofInt(1)), StatusCode::TypeMismatch));
   const Status unknown = alone.setInput("bb", GraphValue::ofInt(1));
   test_assert(hasCode(unknown, StatusCode::NotFound));
   test_assert(alone.setInput("b", GraphValue()).ok());
   test_assert(num(alone, SocketPath::output("sum")) == 5 && runs.take() == 1);
   test_assert(num(alone, SocketPath::of(input, key(ib))) == 5);
-  test_assert(num(alone, SocketPath::of(s, "b", SocketSide::Input)) == 5 && runs.take() == 0);
+  test_assert(num(alone, SocketPath::of(s, "b", SocketSide::Input)) == 5 &&
+              runs.take() == 0);
   test_assert(alone.setInput("b", GraphValue::ofFloat(6)).ok());
   test_assert(in.setInterfaceType(ib, "int").ok()); /* now it doesn't hold */
   test_assert(num(alone, SocketPath::output("pass")) == 0);
@@ -485,7 +514,8 @@ void testGroups()
   test_assert(in.setInterfaceDefault(ib, fl(5)).ok()); /* it went with the type */
 
   /* Two groups of it, with state of their own. */
-  const NodeId g1 = add(o, "graph.group"), g2 = add(o, "graph.group"), v = add(o, "value.float");
+  const NodeId g1 = add(o, "graph.group"), g2 = add(o, "graph.group"),
+               v = add(o, "value.float");
   test_assert(o.setGroup(g1, inner.id).ok() && o.setGroup(g2, inner.id).ok());
   connect(o, v, "value", g1, key(ia));
   connect(o, g1, key(sumOut), g2, key(ia));
@@ -498,14 +528,17 @@ void testGroups()
   test_assert(num(g, SocketPath::of(at(s, {g1}), "value")) == 5);
   test_assert(num(g, SocketPath::of(at(s, {g2}), "a", SocketSide::Input)) == 5);
   test_assert(num(g, SocketPath::of(at(input, {g2}), key(ia))) == 5 && gr.take() == 0);
-  test_assert(hasCode(g.evaluate(SocketPath::of(at(s, {v}), "value")), StatusCode::NotFound));
+  test_assert(
+      hasCode(g.evaluate(SocketPath::of(at(s, {v}), "value")), StatusCode::NotFound));
   test_assert(o.setParam(v, "value", fl(1)).ok() && num(g, last) == 11 && gr.take() == 3);
 
   /* A literal on a group hides the interface's default, and only its readers run. */
   test_assert(o.setLiteral(g1, key(ib), fl(7)).ok());
   test_assert(num(g, last) == 15 && gr.take() == 2); /* 8 + 7 */
-  test_assert(in.setInterfaceDefault(ib, fl(9)).ok() && num(g, last) == 15 && gr.take() == 0);
-  test_assert(o.setLiteral(g1, key(ia), fl(3)).ok() && num(g, last) == 15 && gr.take() == 0);
+  test_assert(in.setInterfaceDefault(ib, fl(9)).ok() && num(g, last) == 15 &&
+              gr.take() == 0);
+  test_assert(o.setLiteral(g1, key(ia), fl(3)).ok() && num(g, last) == 15 &&
+              gr.take() == 0);
   test_assert(o.setLiteral(g1, key(ib), PropValue()).ok() && num(g, last) == 19);
   gr.take();
 
@@ -521,7 +554,8 @@ void testGroups()
   /* Interface changes: what an input resolves to changes with no edit of its own def. */
   test_assert(o.setLiteral(g1, key(ib), fl(9)).ok() && num(g, last) == 19);
   gr.take();
-  test_assert(in.removeInterface(pass).ok()); /* g2.b is now unlinked: the default, also 9 */
+  test_assert(
+      in.removeInterface(pass).ok()); /* g2.b is now unlinked: the default, also 9 */
   test_assert(num(g, last) == 19 && gr.take() == 1);
   test_assert(o.setLiteral(g1, key(ib), PropValue()).ok());
   test_assert(in.setInterfaceDefault(ib, fl(2)).ok() && num(g, last) == 5);
@@ -529,7 +563,8 @@ void testGroups()
   test_assert(num(g, last) == 5);
   gr.take();
   test_assert(in.moveInterface(pass, 1).ok() && num(g, last) == 5 && gr.take() == 0);
-  test_assert(in.setInterfaceName(pass, "Pass").ok() && num(g, last) == 5 && gr.take() == 0);
+  test_assert(in.setInterfaceName(pass, "Pass").ok() && num(g, last) == 5 &&
+              gr.take() == 0);
 
   /* A literal that isn't of its socket's type any more counts as unset. */
   test_assert(o.unlink(o.node(g2)->linkInto(key(ib))->id).ok() && num(g, last) == 5);
@@ -541,10 +576,12 @@ void testGroups()
   test_assert(in.setInterfaceDefault(ib, fl(2)).ok() && num(g, last) == 5.5);
   /* Two literals of one insert have one version; which one is read still counts. */
   test_assert(o.unlink(o.node(g1)->linkInto(key(ia))->id).ok());
-  test_assert(o.setLiteral(g1, key(ia), fl(1)).ok() && o.setLiteral(g1, key(ib), fl(30)).ok());
+  test_assert(o.setLiteral(g1, key(ia), fl(1)).ok() &&
+              o.setLiteral(g1, key(ib), fl(30)).ok());
   const NodeState both = o.stateOf(*o.node(g1));
   const LinkState fromG1 = GraphDef::stateOf(*o.node(g1)->linksOut()[0]);
-  test_assert(o.removeNode(g1).ok() && o.insertNode(both).ok() && o.insertLink(fromG1).ok());
+  test_assert(o.removeNode(g1).ok() && o.insertNode(both).ok() &&
+              o.insertLink(fromG1).ok());
   test_assert(num(g, last) == 33.5);
   const LinkState sb = GraphDef::stateOf(*in.node(s)->linkInto("b"));
   test_assert(in.unlink(sb.id).ok());
@@ -560,22 +597,26 @@ void testGroups()
   /* Deleting the def, and bringing it back. */
   test_assert(w.lib.markDeleted(inner.h).ok());
   test_assert(hasCode(g.evaluate(last), StatusCode::NotFound));
-  test_assert(g.error(last)->origin == at(g2) && *g.lastGood(last) == GraphValue::ofFloat(5));
+  test_assert(g.error(last)->origin == at(g2) &&
+              *g.lastGood(last) == GraphValue::ofFloat(5));
   test_assert(g.report(at(g2)).state == NodeReport::State::Failed);
   test_assert(hasCode(alone.evaluate(SocketPath::output("sum")), StatusCode::NotFound));
-  test_assert(w.lib.restoreFromHistory(inner.h).ok() && num(g, last) == 5 && gr.take() == 0);
+  test_assert(w.lib.restoreFromHistory(inner.h).ok() && num(g, last) == 5 &&
+              gr.take() == 0);
   test_assert(g.report(at(g2)).state == NodeReport::State::Ok);
   test_assert(num(alone, SocketPath::output("sum")) == 6); /* 0 + 6, set above */
 
   /* Another def, and none. */
   const Graph copy = newGraph(w.lib, "copy");
   const int64_t ia2 = *copy.def->addInterface(SocketSide::Input, "a", "float", -1, ia);
-  test_assert(copy.def->addInterface(SocketSide::Output, "sum", "float", -1, sumOut).ok());
+  test_assert(
+      copy.def->addInterface(SocketSide::Output, "sum", "float", -1, sumOut).ok());
   const NodeId cin = add(*copy.def, "graph.input"), cout = add(*copy.def, "graph.output");
   connect(*copy.def, cin, key(ia2), cout, key(sumOut));
   test_assert(o.setGroup(g1, copy.id).ok() && num(g, last) == 3); /* 1 + the default 2 */
   test_assert(o.setGroup(g1, BlockId()).ok());
-  test_assert(hasCode(g.evaluate(last), StatusCode::NotFound) && g.error(last)->origin == at(g1));
+  test_assert(hasCode(g.evaluate(last), StatusCode::NotFound) &&
+              g.error(last)->origin == at(g1));
   test_assert(o.setGroup(g1, inner.id).ok() && num(g, last) == 5 && g.frameCount() == 2);
   test_assert(o.removeNode(g1).ok() && num(g, last) == 2 && g.frameCount() == 1);
 
@@ -589,7 +630,8 @@ void testGroups()
   test_assert(o.setLiteral(g2, key(ia), PropValue()).ok() && num(g, last) == 2);
 
   /* Outputs of a def without an output node, and unlinked ones. */
-  test_assert(in.unlink(in.node(output)->linkInto(key(sumOut))->id).ok() && num(g, last) == 0);
+  test_assert(in.unlink(in.node(output)->linkInto(key(sumOut))->id).ok() &&
+              num(g, last) == 0);
   test_assert(in.setLiteral(output, key(sumOut), fl(8)).ok() && num(g, last) == 8);
   test_assert(in.removeNode(output).ok() && num(g, last) == 0);
   test_assert(num(alone, SocketPath::output("sum")) == 0);
@@ -614,7 +656,8 @@ void testConversions()
   const int64_t b = addSocket(in, SocketSide::Output, "b", "float");
   const NodeId input = add(in, "graph.input"), output = add(in, "graph.output");
   connect(in, input, key(a), output, key(b));
-  const NodeId v = add(o, "value.float"), group = add(o, "graph.group"), s = add(o, "t.sum");
+  const NodeId v = add(o, "value.float"), group = add(o, "graph.group"),
+               s = add(o, "t.sum");
   test_assert(o.setGroup(group, inner.id).ok());
   connect(o, v, "value", group, key(a));
   connect(o, group, key(b), s, "a");
@@ -624,7 +667,8 @@ void testConversions()
   test_assert(num(g, out(s)) == 12.75);
   runs.take();
   /* The types crossed are part of what an input reads: float -> int -> float. */
-  test_assert(in.setInterfaceType(a, "int").ok() && num(g, out(s)) == 12 && runs.take() == 1);
+  test_assert(in.setInterfaceType(a, "int").ok() && num(g, out(s)) == 12 &&
+              runs.take() == 1);
   test_assert(num(g, SocketPath::of(group, key(a), SocketSide::Input)) == 2);
   test_assert(in.setInterfaceType(b, "int").ok() && num(g, out(s)) == 12);
   runs.take();
@@ -640,7 +684,9 @@ void testConversions()
   test_assert(o.unlink(o.node(group)->linkInto(key(a))->id).ok());
   test_assert(hasCode(g.evaluate(out(s)), StatusCode::TypeMismatch));
   test_assert(g.error(out(s))->origin == at(output, {group}));
-  test_assert(w.rt.ext<SocketTypeRegistry>().addConversion("test.Mesh", "float", meshToFloat).ok());
+  test_assert(w.rt.ext<SocketTypeRegistry>()
+                  .addConversion("test.Mesh", "float", meshToFloat)
+                  .ok());
   test_assert(hasCode(g.evaluate(out(s)), StatusCode::FailedPrecondition));
   test_assert(strcmp(g.error(out(s))->status.message(), "no mesh") == 0);
   const NodeId m = add(o, "t.mesh");

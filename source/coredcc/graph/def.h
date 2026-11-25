@@ -32,8 +32,8 @@ class Library;
 struct GraphTopology;
 struct GraphReach;
 
-/** Ids of nodes and links are random, 1 to 2^52-1 (so they fit a JS number), and unique in
- * their def. They never change, through undo, save and load. */
+/** Ids of nodes and links are random, 1 to 2^52-1 (so they fit a JS number), and unique
+ * in their def. They never change, through undo, save and load. */
 struct NodeId {
   int64_t value = 0;
   bool isNull() const
@@ -102,8 +102,8 @@ struct InterfaceSocket {
 
 /** `#<id>`. */
 litestl::util::string interfaceKey(int64_t id);
-/** Whether an interface socket may have that name: it isn't empty, and doesn't look like a
- * socket key (`#<id>`, or an interior one). */
+/** Whether an interface socket may have that name: it isn't empty, and doesn't look like
+ * a socket key (`#<id>`, or an interior one). */
 bool isInterfaceName(std::string_view name);
 
 /** A value set on a node: a param or a literal. */
@@ -150,7 +150,7 @@ struct GraphSocketAddress {
 /** A node. Read it here, change it through its GraphDef. Its address is stable while it
  * exists. */
 class GraphNode {
- public:
+public:
   ~GraphNode();
   GraphDef &def() const
   {
@@ -245,7 +245,7 @@ class GraphNode {
     return prev_;
   }
 
- private:
+private:
   friend class GraphDef;
   friend class GraphDefReader;
 
@@ -274,7 +274,8 @@ class GraphNode {
   mutable SocketInfos outputs_;
   /** The interface version the sockets are from. */
   mutable uint64_t socketsVersion_ = 0;
-  /** Their indices by key, where they are an interface's and there are more than kScan. */
+  /** Their indices by key, where they are an interface's and there are more than kScan.
+   */
   mutable std::unique_ptr<litestl::util::Map<detail::SocketKey, int>> inputIndex_;
   mutable std::unique_ptr<litestl::util::Map<detail::SocketKey, int>> outputIndex_;
   /** Node order. */
@@ -323,8 +324,8 @@ struct LinkState {
 struct LinkDiagnostic {
   LinkId link;
   Status status;
-  /** Whether an end is an interior socket (graph/interior.h): such links go stale when a node
-   * inside goes, so a program that makes them removes them. */
+  /** Whether an end is an interior socket (graph/interior.h): such links go stale when a
+   * node inside goes, so a program that makes them removes them. */
   bool interior = false;
 };
 
@@ -353,18 +354,18 @@ inline LibraryRef libraryRef(Library *lib)
  * don't keep blocks alive, because no block reports them. Edits of a block's def notify
  * the ChangeBus.
  *
- * **Links** name sockets by key. A link to a socket that doesn't exist (an interface input
- * was removed, say) is kept and ignored, and listed in diagnostics(). An input has at most
- * one link. To make many, use linkAll, which checks for cycles once. A program that makes
- * graphs it knows are right may use insertLink, which checks nothing: instances check for
- * cycles too, so a wrong graph gives errors and no more.
+ * **Links** name sockets by key. A link to a socket that doesn't exist (an interface
+ * input was removed, say) is kept and ignored, and listed in diagnostics(). An input has
+ * at most one link. To make many, use linkAll, which checks for cycles once. A program
+ * that makes graphs it knows are right may use insertLink, which checks nothing:
+ * instances check for cycles too, so a wrong graph gives errors and no more.
  *
  * **Edits** are Busy while a graph evaluates. They stamp versions, which is how instances
  * see them; nothing is pushed to instances. Several defs may use each other through group
  * nodes; a def can't reach itself.
  */
 class GraphDef {
- public:
+public:
   /** Sockets a side of the interface may have. */
   static constexpr int kMaxInterface = 4096;
   /** Links a group node may have that use interior keys. */
@@ -408,9 +409,9 @@ class GraphDef {
   {
     return interfaceVersion_;
   }
-  /** Moves when an edit of the def may have changed what its group nodes and Pointer params
-   * refer to, or which nodes have some. A Library may write the references too (a block was
-   * replaced): that moves Library::epoch only. */
+  /** Moves when an edit of the def may have changed what its group nodes and Pointer
+   * params refer to, or which nodes have some. A Library may write the references too (a
+   * block was replaced): that moves Library::epoch only. */
   uint64_t refsVersion() const
   {
     return refsVersion_;
@@ -428,8 +429,8 @@ class GraphDef {
   }
   const GraphNode *node(NodeId id) const;
   const GraphLink *link(LinkId id) const;
-  /** The node at `index`, 0 to nodeCount() - 1, in node order: the order nodes were added in,
-   * with those that undo brought back where they were. */
+  /** The node at `index`, 0 to nodeCount() - 1, in node order: the order nodes were added
+   * in, with those that undo brought back where they were. */
   const GraphNode *nodeAt(int index) const;
   /** Calls fn(const GraphNode &), in node order. */
   template <class Fn> void forEachNode(Fn &&fn) const
@@ -438,8 +439,9 @@ class GraphDef {
       fn(static_cast<const GraphNode &>(*n));
     }
   }
-  /** The same, for the nodes whose type has all of `flags`, at the cost of those whose type has
-   * any. Not of nodes in groups: their defs have their own. `fn` can't edit the def. */
+  /** The same, for the nodes whose type has all of `flags`, at the cost of those whose
+   * type has any. Not of nodes in groups: their defs have their own. `fn` can't edit the
+   * def. */
   template <class Fn> void forEachNode(NodeTypeFlags flags, Fn &&fn) const
   {
     if (flags == NodeTypeFlags::None) {
@@ -473,23 +475,21 @@ class GraphDef {
    * or the group isn't there. */
   const SocketInfos &sockets(const GraphNode &node, SocketSide side) const;
   /** A node's socket by key, interior ones (graph/interior.h) included. */
-  std::optional<SocketInfo> findSocket(const GraphNode &node,
-                                       SocketSide side,
-                                       std::string_view key) const;
+  std::optional<SocketInfo>
+  findSocket(const GraphNode &node, SocketSide side, std::string_view key) const;
   /** The def a group node evaluates; null if it has none or its block isn't Live. */
   GraphDef *groupTarget(const GraphNode &node) const;
-  /** The effective value of a param: the one set, or the default. None for a pointer or an
-   * unknown param. */
+  /** The effective value of a param: the one set, or the default. None for a pointer or
+   * an unknown param. */
   PropValue paramValue(const GraphNode &node, std::string_view name) const;
-  /** The value input `key`, of that type, has while it isn't linked: the literal in use, or
-   * the default of the node's type or its group's interface. */
-  GraphValue literalValue(const GraphNode &node,
-                          std::string_view key,
-                          const SocketType &type) const;
+  /** The value input `key`, of that type, has while it isn't linked: the literal in use,
+   * or the default of the node's type or its group's interface. */
+  GraphValue
+  literalValue(const GraphNode &node, std::string_view key, const SocketType &type) const;
   /** Whether a literal is in use there. */
   bool usesLiteral(const GraphNode &node, std::string_view key) const;
-  /** Links that don't work, in the order of their ids. Valid until the next edit of anything;
-   * kept while nothing that they depend on changes. */
+  /** Links that don't work, in the order of their ids. Valid until the next edit of
+   * anything; kept while nothing that they depend on changes. */
   const litestl::util::Vector<LinkDiagnostic> &diagnostics() const;
   /** The diagnostic of a link, or null if it works. */
   const LinkDiagnostic *diagnostic(LinkId link) const;
@@ -498,8 +498,8 @@ class GraphDef {
   NodeState stateOf(const GraphNode &node) const;
   static LinkState stateOf(const GraphLink &link);
 
-  /** An id that nothing in the def has, for insertNode, insertLink and addInterface: to paste
-   * what was copied, with its links. */
+  /** An id that nothing in the def has, for insertNode, insertLink and addInterface: to
+   * paste what was copied, with its links. */
   int64_t newId();
 
   /* ---- nodes ---- */
@@ -508,7 +508,8 @@ class GraphDef {
    * second `graph.output`. */
   Result<NodeId> addNode(std::string_view type);
   /** A node with a given id and content, whether or not its type is registered.
-   * AlreadyExists if the id is taken. Refused if its group would make the def recursive. */
+   * AlreadyExists if the id is taken. Refused if its group would make the def recursive.
+   */
   Status insertNode(const NodeState &state);
   /** Removes a node and its links. */
   Status removeNode(NodeId id);
@@ -516,20 +517,20 @@ class GraphDef {
   Status setLabel(NodeId id, std::string_view label);
   Status setPosition(NodeId id, double x, double y);
   /**
-   * Sets an extra: a named value that a client keeps on a node, such as its color or size in
-   * an editor. It is saved and copied with the node, and doesn't affect evaluation. Use dotted
-   * names (`editor.color`), so that clients don't collide. None removes it. Unsupported for a
-   * pointer, and InvalidArgument for an empty name.
+   * Sets an extra: a named value that a client keeps on a node, such as its color or size
+   * in an editor. It is saved and copied with the node, and doesn't affect evaluation.
+   * Use dotted names (`editor.color`), so that clients don't collide. None removes it.
+   * Unsupported for a pointer, and InvalidArgument for an empty name.
    */
   Status setExtra(NodeId id, std::string_view name, const PropValue &value);
-  /** Sets a param, coerced to its def. None resets it to its default. A Pointer param takes
-   * a pointer to a block, other than this def's own. */
+  /** Sets a param, coerced to its def. None resets it to its default. A Pointer param
+   * takes a pointer to a block, other than this def's own. */
   Status setParam(NodeId id, std::string_view name, const PropValue &value);
-  /** Sets the value an input has while it isn't linked, coerced to the socket's type. None
-   * resets it. Payload inputs have no literal (Unsupported). */
+  /** Sets the value an input has while it isn't linked, coerced to the socket's type.
+   * None resets it. Payload inputs have no literal (Unsupported). */
   Status setLiteral(NodeId id, std::string_view input, const PropValue &value);
-  /** Puts a literal in or out of use, keeping its value while it isn't. One that was never
-   * set starts with the value the input has. */
+  /** Puts a literal in or out of use, keeping its value while it isn't. One that was
+   * never set starts with the value the input has. */
   Status useLiteral(NodeId id, std::string_view input, bool on);
   /** Sets the def a group node evaluates; null for none. InvalidArgument if the def would
    * reach itself. */
@@ -537,14 +538,16 @@ class GraphDef {
 
   /* ---- links ---- */
 
-  /** Links an output to an input, replacing the input's link. The keys of a group node may
-   * be interior ones (graph/interior.h). NotFound if a socket doesn't exist, TypeMismatch
-   * without a conversion, InvalidArgument if it would make a cycle, OutOfRange for too many
-   * interior ones. The cost is that of looking for a cycle; with interior keys, that of
-   * finding out what depends on what in the group's def, for every link. */
+  /** Links an output to an input, replacing the input's link. The keys of a group node
+   * may be interior ones (graph/interior.h). NotFound if a socket doesn't exist,
+   * TypeMismatch without a conversion, InvalidArgument if it would make a cycle,
+   * OutOfRange for too many interior ones. The cost is that of looking for a cycle; with
+   * interior keys, that of finding out what depends on what in the group's def, for every
+   * link. */
   Result<LinkId> link(SocketRef from, SocketRef to);
-  /** Makes all links, or none. The checks are those of `link`, but the graph is searched for
-   * cycles once. InvalidArgument too if two go to one input. `ids` gets the new links'. */
+  /** Makes all links, or none. The checks are those of `link`, but the graph is searched
+   * for cycles once. InvalidArgument too if two go to one input. `ids` gets the new
+   * links'. */
   Status linkAll(std::span<const LinkSpec> links, litestl::util::Vector<LinkId> &ids);
   /** A link with a given id. The nodes must exist and the input must be free. Sockets,
    * types and cycles aren't checked: the evaluator reports them. */
@@ -574,8 +577,10 @@ class GraphDef {
 
   /** insertNode, without the check for recursion. */
   Status restoreNode(const NodeState &state);
-  /** Replaces what is stored for a param or (not `param`) a literal. Versions are ignored. */
-  Status restoreValues(NodeId id, bool param, std::string_view name, const NodeValues &values);
+  /** Replaces what is stored for a param or (not `param`) a literal. Versions are
+   * ignored. */
+  Status
+  restoreValues(NodeId id, bool param, std::string_view name, const NodeValues &values);
   /** Replaces the extra of a name, by at most one. */
   Status restoreExtra(NodeId id, std::string_view name, const NodeExtras &values);
   /** Sets the target of a Pointer param, or of the group (an empty name). */
@@ -595,7 +600,7 @@ class GraphDef {
   /** Checks that nodes, links and indices agree. */
   Status validate() const;
 
- private:
+private:
   friend class GraphNode;
   friend class GraphDefReader;
   friend class GraphReachBuilder;
@@ -603,7 +608,8 @@ class GraphDef {
 
   Status busy(const char *what) const;
   Result<GraphNode *> find(NodeId id, const char *what) const;
-  /** Stamps an edit of a param or literal; `announce` follows once the data is changed. */
+  /** Stamps an edit of a param or literal; `announce` follows once the data is changed.
+   */
   uint64_t stampNode(NodeId node);
   /** Stamps an edit of anything else. `links`: see GraphEditNote::Kind::Links. */
   uint64_t stamp(bool structural, bool links = false);
@@ -614,8 +620,8 @@ class GraphDef {
   /** Puts the node after `after`, or first. */
   void attachNode(GraphNode *n, GraphNode *after);
   void detachNode(GraphNode *n);
-  /** Makes the node's references those of its type's Pointer params: of the strength the type
-   * says, with null ones for those it hasn't. Unchanged while there is no type. */
+  /** Makes the node's references those of its type's Pointer params: of the strength the
+   * type says, with null ones for those it hasn't. Unchanged while there is no type. */
   void matchParamRefs(GraphNode *n);
   /** After a type was registered. */
   void typeAdded(const NodeType &type);
@@ -629,12 +635,16 @@ class GraphDef {
                        int index);
   Status writeParamRef(GraphNode *n, std::string_view name, bool weak, BlockId target);
   /** The type of an input that has literals. */
-  Result<const SocketType *> literalType(const GraphNode &n, std::string_view input, int &index) const;
+  Result<const SocketType *>
+  literalType(const GraphNode &n, std::string_view input, int &index) const;
   InterfaceSocket *findInterface(int64_t id, SocketSide *side = nullptr);
   Status checkInterfaceName(SocketSide side, std::string_view name, int64_t except) const;
 
   /** Everything `link` checks but cycles. */
-  Status checkLink(const SocketRef &from, const SocketRef &to, GraphNode *&a, GraphNode *&b) const;
+  Status checkLink(const SocketRef &from,
+                   const SocketRef &to,
+                   GraphNode *&a,
+                   GraphNode *&b) const;
   /** Whether a link would be more than kMaxInteriorLinks. */
   static Status checkInterior(const GraphNode &from,
                               std::string_view fromKey,

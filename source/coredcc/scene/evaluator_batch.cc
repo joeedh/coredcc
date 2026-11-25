@@ -64,7 +64,8 @@ lbt::Struct<TransformBatch> *TransformBatch::defineBindings()
   static lbt::Struct<TransformBatch> *st = nullptr;
   if (!st) {
     litestl::alloc::PermanentGuard guard;
-    st = new lbt::Struct<TransformBatch>("coredcc::TransformBatch", sizeof(TransformBatch));
+    st = new lbt::Struct<TransformBatch>("coredcc::TransformBatch",
+                                         sizeof(TransformBatch));
     BIND_STRUCT_METHOD(st, count, MARGS());
     BIND_STRUCT_METHOD(st, channelCount, MARGS());
     BIND_STRUCT_METHOD(st, time, MARGS());
@@ -138,8 +139,9 @@ void SceneEvaluator::evaluateLevel(const Library &lib,
       group->type = type;
       group->batch = std::make_unique<TransformBatch>(type->channelCount(), time);
     }
-    const EvalCtx ctx = provider ? EvalCtx(scratch_, time, overrides_.values, overrides_.mask) :
-                                   EvalCtx(scratch_, time);
+    const EvalCtx ctx = provider
+                            ? EvalCtx(scratch_, time, overrides_.values, overrides_.mask)
+                            : EvalCtx(scratch_, time);
     group->batch->add(ctx, parentOf(i));
     group->members.append(i);
     batch_[i].info = info;
@@ -158,10 +160,11 @@ void SceneEvaluator::evaluateLevel(const Library &lib,
     for (int k = 0; k < int(g.members.size()); k++) {
       BatchItem &item = batch_[g.members[k]];
       item.done = true;
-      item.status = !s.ok()                           ? EvalStatus::ModelFailed :
-                    !g.batch->states()[k].finite() ? EvalStatus::Invalid :
-                                                     EvalStatus::Ok;
-      item.state = item.status == EvalStatus::Ok ? g.batch->states()[k] : parentOf(g.members[k]);
+      item.status = !s.ok()                          ? EvalStatus::ModelFailed
+                    : !g.batch->states()[k].finite() ? EvalStatus::Invalid
+                                                     : EvalStatus::Ok;
+      item.state =
+          item.status == EvalStatus::Ok ? g.batch->states()[k] : parentOf(g.members[k]);
     }
   }
 }

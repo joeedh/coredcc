@@ -113,7 +113,7 @@ using CommandFactory = litestl::util::function<Result<Owned<Command>>(Runtime &r
 
 /** A declared command. Register it with CommandRegistry, which makes it immutable. */
 class CommandDef {
- public:
+public:
   /** `id` is dotted, e.g. "mesh.extrude". */
   explicit CommandDef(std::string_view id);
 
@@ -190,7 +190,7 @@ class CommandDef {
   /** Bound opaque, for bind/'s builder facades (newCommandDef and the def* calls). */
   static const litestl::binding::types::Struct<CommandDef> *defineBindings();
 
- private:
+private:
   CommandId id_;
   litestl::util::string name_;
   litestl::util::string uiName_;
@@ -205,10 +205,12 @@ class CommandDef {
 
 /** Registered commands. A Runtime extension. */
 class CommandRegistry {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.CommandRegistry";
 
-  explicit CommandRegistry(Runtime *rt) : rt_(*rt) {}
+  explicit CommandRegistry(Runtime *rt) : rt_(*rt)
+  {
+  }
   ~CommandRegistry();
   CommandRegistry(const CommandRegistry &) = delete;
   CommandRegistry &operator=(const CommandRegistry &) = delete;
@@ -225,7 +227,8 @@ class CommandRegistry {
   Status checkDef(const CommandDef &def) const;
   /** add's checks on the implementation's slots, from which of them it has: an
    * Interactive command needs `redo`, and `foldKey` comes with `foldFrom`. */
-  static Status checkSlots(const CommandDef &def, bool hasRedo, bool hasFoldKey, bool hasFoldFrom);
+  static Status
+  checkSlots(const CommandDef &def, bool hasRedo, bool hasFoldKey, bool hasFoldFrom);
   const CommandDef *find(CommandId id) const;
   const CommandDef *find(std::string_view id) const;
   /** NotFound for `id`, with suggestions. */
@@ -241,7 +244,7 @@ class CommandRegistry {
 
   Status validate() const;
 
- private:
+private:
   Runtime &rt_;
   litestl::util::Vector<CommandDef *> defs_;
   litestl::util::Map<uint64_t, CommandDef *> byId_;
@@ -258,7 +261,8 @@ Status unknownInput(const CommandDef &def, const InvocationArg &arg);
  * Registers Impl as a Command implementation and a def whose factory makes a
  * default-constructed Impl. For native commands; foreign ones pass their own factory.
  */
-template <class Impl> Result<const CommandDef *> addNativeCommand(Runtime &rt, CommandDef def);
+template <class Impl>
+Result<const CommandDef *> addNativeCommand(Runtime &rt, CommandDef def);
 
 } // namespace coredcc
 
@@ -266,7 +270,8 @@ template <class Impl> Result<const CommandDef *> addNativeCommand(Runtime &rt, C
 
 namespace coredcc {
 
-template <class Impl> Result<const CommandDef *> addNativeCommand(Runtime &rt, CommandDef def)
+template <class Impl>
+Result<const CommandDef *> addNativeCommand(Runtime &rt, CommandDef def)
 {
   const std::string impl = std::string(def.name().c_str()) + "#impl";
   /* Check first: a failed add after registerImpl would leave the impl name taken. */
@@ -286,7 +291,8 @@ template <class Impl> Result<const CommandDef *> addNativeCommand(Runtime &rt, C
     }
     return false;
   };
-  if (Status s = CommandRegistry::checkSlots(def, has("redo"), has("foldKey"), has("foldFrom"));
+  if (Status s =
+          CommandRegistry::checkSlots(def, has("redo"), has("foldKey"), has("foldFrom"));
       !s.ok())
   {
     return s;

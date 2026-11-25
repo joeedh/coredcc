@@ -45,16 +45,16 @@ struct NumericMeta {
   /** Decimals shown, 0 to 15. */
   int precision = 3;
   UnitFamily unit = UnitFamily::None;
-  /** What to show values in: a unit of the family (units::findUnit), or empty for its base unit.
-   * Values are in the base unit all the same. */
+  /** What to show values in: a unit of the family (units::findUnit), or empty for its
+   * base unit. Values are in the base unit all the same. */
   litestl::util::string displayUnit;
 
   /** displayUnit's symbol, or the base unit's. Empty for a family without units. */
   const char *displaySymbol() const;
 };
 
-/** The name of component `i` for a UI: "X", "Y", "Z" and "W" of vectors and quaternions, "R", "G",
- * "B" and "A" of colors. Null for others, as a Mat4's. */
+/** The name of component `i` for a UI: "X", "Y", "Z" and "W" of vectors and quaternions,
+ * "R", "G", "B" and "A" of colors. Null for others, as a Mat4's. */
 const char *componentName(PropKind kind, PropSubtype subtype, int i);
 
 /** Enum and Flags properties. Flags items are single bits. */
@@ -94,7 +94,7 @@ using PropDynamicFn = litestl::util::function<void(PropertyDef &def, const void 
  * error). validate() checks the whole def, and registries call it.
  */
 class PropertyDef {
- public:
+public:
   PropertyDef(PropKind kind, std::string_view apiName);
 
   static PropertyDef boolProp(std::string_view name)
@@ -233,12 +233,12 @@ class PropertyDef {
   /**
    * Checks the def: an identifier apiName, ordered ranges with the soft range inside
    * the hard one, precision 0-15, a unit that the subtype can have (a Distance is a
-   * Length), enum items with unique identifier keys and unique values (single bits for Flags, at
-   * least one item), and a default value that coerce() accepts unchanged.
+   * Length), enum items with unique identifier keys and unique values (single bits for
+   * Flags, at least one item), and a default value that coerce() accepts unchanged.
    */
   Status validate() const;
 
- private:
+private:
   PropKind kind_;
   litestl::util::string apiName_;
   litestl::util::string uiName_;

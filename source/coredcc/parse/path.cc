@@ -45,11 +45,11 @@ uint64_t Path::computeHash() const
     if (s.kind == SegmentKind::Index || s.kind == SegmentKind::HandleKey) {
       h = detail::fnv1a64(
           std::string_view(reinterpret_cast<const char *>(&s.index), sizeof(s.index)), h);
-    }
-    else {
+    } else {
       /* Length first, so a key holding a kind byte can't mimic two segments. */
       const uint64_t n = strlen(s.text.c_str());
-      h = detail::fnv1a64(std::string_view(reinterpret_cast<const char *>(&n), sizeof(n)), h);
+      h = detail::fnv1a64(std::string_view(reinterpret_cast<const char *>(&n), sizeof(n)),
+                          h);
       h = detail::fnv1a64(s.text.c_str(), h);
     }
   }
@@ -62,28 +62,28 @@ std::string Path::toString() const
   for (int i = 0; i < size(); i++) {
     const PathSegment &s = segments[i];
     switch (s.kind) {
-      case SegmentKind::Member:
-        if (i > 0) {
-          out += '.';
-        }
-        out += s.text.c_str();
-        break;
-      case SegmentKind::Index:
-        out += '[' + std::to_string(s.index) + ']';
-        break;
-      case SegmentKind::StringKey:
-        out += '[';
-        appendQuoted(out, s.text.c_str());
-        out += ']';
-        break;
-      case SegmentKind::HandleKey:
-        out += "[#" + std::to_string(s.index) + ']';
-        break;
-      case SegmentKind::EnumKey:
-        out += '[';
-        out += s.text.c_str();
-        out += ']';
-        break;
+    case SegmentKind::Member:
+      if (i > 0) {
+        out += '.';
+      }
+      out += s.text.c_str();
+      break;
+    case SegmentKind::Index:
+      out += '[' + std::to_string(s.index) + ']';
+      break;
+    case SegmentKind::StringKey:
+      out += '[';
+      appendQuoted(out, s.text.c_str());
+      out += ']';
+      break;
+    case SegmentKind::HandleKey:
+      out += "[#" + std::to_string(s.index) + ']';
+      break;
+    case SegmentKind::EnumKey:
+      out += '[';
+      out += s.text.c_str();
+      out += ']';
+      break;
     }
   }
   return out;
@@ -120,26 +120,22 @@ bool parseSubscript(Lexer &lx, Path &out, Failure &fail, size_t start)
       return false;
     }
     out.segments.append(indexed(SegmentKind::Index, v, start));
-  }
-  else if (c == '#') {
+  } else if (c == '#') {
     lx.eat('#');
     int64_t v = 0;
     if (!lx.int64(v, fail)) {
       return false;
     }
     out.segments.append(indexed(SegmentKind::HandleKey, v, start));
-  }
-  else if (c == '"' || c == '\'') {
+  } else if (c == '"' || c == '\'') {
     std::string key;
     if (!lx.quoted(key, fail)) {
       return false;
     }
     out.segments.append(named(SegmentKind::StringKey, key, start));
-  }
-  else if (lx.identifier(ident)) {
+  } else if (lx.identifier(ident)) {
     out.segments.append(named(SegmentKind::EnumKey, ident, start));
-  }
-  else {
+  } else {
     fail = lx.failHere("expected an index, a quoted key, '#handle' or a key, got " +
                        lx.describeHere());
     return false;
@@ -176,13 +172,11 @@ bool parseInto(Lexer &lx, Path &out, Failure &fail)
         return false;
       }
       out.segments.append(named(SegmentKind::Member, name, start));
-    }
-    else if (lx.eat('[')) {
+    } else if (lx.eat('[')) {
       if (!parseSubscript(lx, out, fail, start)) {
         return false;
       }
-    }
-    else {
+    } else {
       fail = lx.failHere("expected '.' or '[', got " + lx.describeHere());
       return false;
     }

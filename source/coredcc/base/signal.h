@@ -25,7 +25,7 @@ struct SignalStateBase {
  * disconnecting then does nothing.
  */
 class Connection {
- public:
+public:
   Connection() = default;
   Connection(std::weak_ptr<detail::SignalStateBase> state, uint64_t id)
       : state_(std::move(state)), id_(id)
@@ -45,17 +45,21 @@ class Connection {
     return s && s->connected(id_);
   }
 
- private:
+private:
   std::weak_ptr<detail::SignalStateBase> state_;
   uint64_t id_ = 0;
 };
 
 /** Disconnects on destruction. Move-only. */
 class ScopedConnection {
- public:
+public:
   ScopedConnection() = default;
-  ScopedConnection(Connection c) : c_(std::move(c)) {}
-  ScopedConnection(ScopedConnection &&b) noexcept : c_(std::exchange(b.c_, Connection())) {}
+  ScopedConnection(Connection c) : c_(std::move(c))
+  {
+  }
+  ScopedConnection(ScopedConnection &&b) noexcept : c_(std::exchange(b.c_, Connection()))
+  {
+  }
   ScopedConnection &operator=(ScopedConnection &&b) noexcept
   {
     if (this != &b) {
@@ -84,7 +88,7 @@ class ScopedConnection {
     return std::exchange(c_, Connection());
   }
 
- private:
+private:
   Connection c_;
 };
 
@@ -99,10 +103,12 @@ class ScopedConnection {
  * Single-threaded, like the rest of coredcc's public API.
  */
 template <typename... Args> class Signal {
- public:
+public:
   using Fn = litestl::util::function<void(Args...)>;
 
-  Signal() : state_(std::make_shared<State>()) {}
+  Signal() : state_(std::make_shared<State>())
+  {
+  }
   Signal(const Signal &) = delete;
   Signal &operator=(const Signal &) = delete;
   ~Signal()
@@ -155,7 +161,7 @@ template <typename... Args> class Signal {
     }
   }
 
- private:
+private:
   struct Slot {
     uint64_t id;
     std::shared_ptr<Fn> fn;

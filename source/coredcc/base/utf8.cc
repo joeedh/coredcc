@@ -17,7 +17,8 @@ size_t utf8SequenceLength(std::string_view s, size_t at)
   if (lead < 0xC2 || lead > 0xF4 || s.size() - at < n) {
     return 0;
   }
-  /* The second byte's range excludes overlong forms, surrogates and what is past U+10FFFF. */
+  /* The second byte's range excludes overlong forms, surrogates and what is past
+   * U+10FFFF. */
   const uint8_t second = uint8_t(s[at + 1]);
   const uint8_t low = lead == 0xE0 ? 0xA0 : lead == 0xF0 ? 0x90 : 0x80;
   const uint8_t high = lead == 0xED ? 0x9F : lead == 0xF4 ? 0x8F : 0xBF;

@@ -167,8 +167,8 @@ struct SetProperty {
   static RefCell *cellOf(Context &ctx, const ResolvedPath &rp)
   {
     const bool has = rp.kind == ResolvedPath::Kind::Member &&
-                     rp.member->kind() == MemberKind::Pointer && rp.member->pointer().cell &&
-                     ctx.library();
+                     rp.member->kind() == MemberKind::Pointer &&
+                     rp.member->pointer().cell && ctx.library();
     return has ? rp.member->pointer().cell(rp.ptr, ctx) : nullptr;
   }
   static ValueAccessor::Stored stored(Context &ctx, const ResolvedPath &rp)
@@ -213,12 +213,14 @@ struct SetProperty {
   {
     const StableRef *r = v.tryPointer();
     const Datablock *b = l.get(l.find(target));
-    return r && r->owner.kind == OwnerKey::Kind::Block && b && b->state() == BlockState::Live;
+    return r && r->owner.kind == OwnerKey::Kind::Block && b &&
+           b->state() == BlockState::Live;
   }
 
   static lbt::Struct<SetProperty> *defineBindings()
   {
-    auto *st = new lbt::Struct<SetProperty>("coredcc::SetPropertyCommand", sizeof(SetProperty));
+    auto *st =
+        new lbt::Struct<SetProperty>("coredcc::SetPropertyCommand", sizeof(SetProperty));
     BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
@@ -236,7 +238,9 @@ constexpr const char *kImpl = "core.setProperty#impl";
 /* The last gesture's id. */
 struct Gestures {
   static constexpr const char *kExtName = "coredcc.Gestures";
-  explicit Gestures(Runtime *) {}
+  explicit Gestures(Runtime *)
+  {
+  }
   uint64_t last = 0;
 };
 
@@ -256,7 +260,8 @@ Result<const CommandDef *> setPropertyDef(Runtime &rt)
 
 } // namespace
 
-Status setValueUndo(Context &ctx, const Path &path, const PropValue &value, uint64_t gestureId)
+Status
+setValueUndo(Context &ctx, const Path &path, const PropValue &value, uint64_t gestureId)
 {
   Result<ResolvedPath> rp = resolveForWrite(ctx, path);
   if (!rp.ok()) {
@@ -283,10 +288,10 @@ Status setValueUndo(Context &ctx, const Path &path, const PropValue &value, uint
     return cmd.status();
   }
   /* Inside a command's exec it is one of that command's sub-commands. */
-  Result<PropertyBag> out = ex->running()
-                                ? ex->runSub(ctx, std::move(cmd).value(), **def)
-                                : ex->runInstance(ctx, **def, std::move(cmd).value(),
-                                                  (*def)->newInputs());
+  Result<PropertyBag> out =
+      ex->running()
+          ? ex->runSub(ctx, std::move(cmd).value(), **def)
+          : ex->runInstance(ctx, **def, std::move(cmd).value(), (*def)->newInputs());
   return out.ok() ? Status() : out.status();
 }
 
@@ -304,7 +309,8 @@ bool isGesture(const Runtime &rt, uint64_t gestureId)
 Status cancelGesture(Context &ctx, uint64_t gestureId)
 {
   if (!isGesture(ctx.runtime(), gestureId)) {
-    return Status::error(StatusCode::InvalidArgument, "cancelGesture: not beginGesture's id");
+    return Status::error(StatusCode::InvalidArgument,
+                         "cancelGesture: not beginGesture's id");
   }
   if (!ctx.executor()) {
     return Status::error(StatusCode::FailedPrecondition,
@@ -316,7 +322,10 @@ Status cancelGesture(Context &ctx, uint64_t gestureId)
   });
 }
 
-Status setValueUndo(Context &ctx, std::string_view path, const PropValue &value, uint64_t gestureId)
+Status setValueUndo(Context &ctx,
+                    std::string_view path,
+                    const PropValue &value,
+                    uint64_t gestureId)
 {
   Result<PathPtr> p = ctx.runtime().ext<PathCache>().get(path);
   if (!p.ok()) {

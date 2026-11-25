@@ -25,12 +25,16 @@ struct Evaluates {
     }
     return ctx.executor()->runSub(ctx, *add, add->newInputs()).status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<Evaluates> *defineBindings()
   {
     auto *st = new lbt::Struct<Evaluates>("test::Evaluates", sizeof(Evaluates));
@@ -53,7 +57,8 @@ static void test_run_undo_redo()
     test_assert(invoke(s.ctx, "test.add()").status().code() == StatusCode::Busy);
     test_assert(s.ex.undo(s.ctx).code() == StatusCode::Busy);
     test_assert(s.ex.redo(s.ctx).code() == StatusCode::Busy);
-    test_assert(s.ex.revertHead(s.ctx, [](CommandRecord &) { return true; }).code() == StatusCode::Busy);
+    test_assert(s.ex.revertHead(s.ctx, [](CommandRecord &) { return true; }).code() ==
+                StatusCode::Busy);
     test_assert(s.history.undo(s.ctx).code() == StatusCode::Busy);
     test_assert(s.history.redo(s.ctx).code() == StatusCode::Busy);
     test_assert(s.ex.beginInteractive(s.ctx, *s.drag, s.drag->newInputs()).code() ==
@@ -73,8 +78,10 @@ static void test_rerun_head()
     EvaluationScope scope(s.w.rt);
     test_assert(s.ex.rerunHead(s.ctx, s.add->newInputs()).code() == StatusCode::Busy);
   }
-  test_assert(count(s.ctx) == before && s.history.head() != nullptr && s.history.size() == 1);
-  test_assert(s.ex.rerunHead(s.ctx, s.add->newInputs()).ok() && count(s.ctx) == before - 2);
+  test_assert(count(s.ctx) == before && s.history.head() != nullptr &&
+              s.history.size() == 1);
+  test_assert(s.ex.rerunHead(s.ctx, s.add->newInputs()).ok() &&
+              count(s.ctx) == before - 2);
 }
 
 /* undo and redo cancel an open interactive command: from a kernel they must not reach
@@ -96,7 +103,8 @@ static void test_interactive_stays_open()
   }
   test_assert(s.w.tool.strength == 0.875 && !s.w.rt.hasStickyError());
   test_assert(s.w.lib.collect().status().code() == StatusCode::Busy); /* still held */
-  test_assert(s.ex.undo(s.ctx).ok() && !s.ex.interactiveOpen() && s.w.tool.strength == 0.5);
+  test_assert(s.ex.undo(s.ctx).ok() && !s.ex.interactiveOpen() &&
+              s.w.tool.strength == 0.5);
   test_assert(s.w.lib.collect().ok());
 }
 

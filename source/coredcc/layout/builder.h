@@ -22,11 +22,11 @@ class LayoutBuilder;
 
 /**
  * A node being built, and where its children go. Children may be added to any node at any
- * time; they keep the order they were added in. Valid while its builder is. Mistakes (a child
- * in a Prop, a path that doesn't parse) are finish()'s to report.
+ * time; they keep the order they were added in. Valid while its builder is. Mistakes (a
+ * child in a Prop, a path that doesn't parse) are finish()'s to report.
  */
 class LayoutScope {
- public:
+public:
   LayoutScope column();
   LayoutScope row();
   LayoutScope panel(std::string_view label);
@@ -68,9 +68,11 @@ class LayoutScope {
     return index_;
   }
 
- private:
+private:
   friend class LayoutBuilder;
-  LayoutScope(LayoutBuilder &b, int index) : b_(&b), index_(index) {}
+  LayoutScope(LayoutBuilder &b, int index) : b_(&b), index_(index)
+  {
+  }
 
   LayoutBuilder *b_;
   int index_;
@@ -78,10 +80,10 @@ class LayoutScope {
 
 /** Builds one Layout. */
 class LayoutBuilder {
- public:
+public:
   LayoutBuilder();
-  /** Starts with the nodes of `layout`, whose scopes are at() its indices: to add to it, or to set
-   * attributes. */
+  /** Starts with the nodes of `layout`, whose scopes are at() its indices: to add to it,
+   * or to set attributes. */
   explicit LayoutBuilder(const Layout &layout);
   ~LayoutBuilder();
   LayoutBuilder(const LayoutBuilder &) = delete;
@@ -95,11 +97,11 @@ class LayoutBuilder {
   LayoutScope at(int node);
   /** The node with this `id` now, or -1. */
   int findId(std::string_view id) const;
-  /** The layout, or what is wrong with it, as the parser would say. The first mistake counts.
-   * The builder starts again, and its scopes are invalid. */
+  /** The layout, or what is wrong with it, as the parser would say. The first mistake
+   * counts. The builder starts again, and its scopes are invalid. */
   Result<Layout> finish();
 
- private:
+private:
   friend class LayoutScope;
   struct State;
   int add(int parent, LayoutKind kind);

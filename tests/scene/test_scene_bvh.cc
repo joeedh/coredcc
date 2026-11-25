@@ -1,4 +1,5 @@
-/* SceneBvh, and what pickScene answers when things change between an evaluation and a pick. */
+/* SceneBvh, and what pickScene answers when things change between an evaluation and a
+ * pick. */
 #include "pick_doc.h"
 
 test_init;
@@ -32,7 +33,8 @@ void testSceneGoes()
   Vector<PickHit> hits;
   must(d.tryPick(view, p.x, p.y, within(5.0), hits));
   test_assert(deleted.ok() && calls == 2 && hits.size() == 2);
-  test_assert(isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::NotFound));
+  test_assert(
+      isError(d.tryPick(view, p.x, p.y, within(5.0), hits), StatusCode::NotFound));
 }
 
 /* ---- changes after an evaluation ---- */
@@ -43,16 +45,20 @@ void testChanges()
   const ViewMath view = viewOf(ViewCase());
   const ViewPoint p = view.project(double3()), q = view.project(double3(3.0, 0.0, 0.0));
   const BlockHandle data = d.geoBlock("ball", {ball(double3(), 0.5)});
-  const BlockHandle a = d.placed("a", identity(), data), b = d.placed("b", identity(), data);
-  const BlockHandle c = d.placed("c", identity(), d.geoBlock("other", {ball(double3(), 0.4)}));
+  const BlockHandle a = d.placed("a", identity(), data),
+                    b = d.placed("b", identity(), data);
+  const BlockHandle c =
+      d.placed("c", identity(), d.geoBlock("other", {ball(double3(), 0.4)}));
   d.evaluate();
   test_assert(d.picks(view, p.x, p.y, within(1.0)).size() == 3);
 
   /* Moved: the answer is for what was drawn. */
   d.obj(a).channels.set(matrix_transform::kTranslation, 3.0);
-  test_assert(d.picks(view, p.x, p.y, within(1.0)).size() == 3 && d.picks(view, q.x, q.y, within(1.0)).size() == 0);
+  test_assert(d.picks(view, p.x, p.y, within(1.0)).size() == 3 &&
+              d.picks(view, q.x, q.y, within(1.0)).size() == 0);
   d.evaluate();
-  test_assert(d.picks(view, p.x, p.y, within(1.0)).size() == 2 && d.picks(view, q.x, q.y, within(1.0)).size() == 1);
+  test_assert(d.picks(view, p.x, p.y, within(1.0)).size() == 2 &&
+              d.picks(view, q.x, q.y, within(1.0)).size() == 1);
   /* Unlinked, and new ones. */
   must(d.sc().remove(*d.lib, d.idOf(b)).status());
   const BlockHandle late = d.placed("late", identity(), data);
@@ -87,7 +93,8 @@ void testChanges()
   void *old = d.slot(other).data;
   d.slot(other).data = &moved;
   hits = d.picks(view, p.x, p.y, within(1.0));
-  test_assert(hits.size() == 1 && std::fabs(hits[0].point[2] - 0.3) < 1e-9 && moved.given == 1);
+  test_assert(hits.size() == 1 && std::fabs(hits[0].point[2] - 0.3) < 1e-9 &&
+              moved.given == 1);
   d.slot(other).data = nullptr;
   test_assert(d.picks(view, p.x, p.y, within(1.0)).size() == 0);
   d.slot(other).data = old;
@@ -118,7 +125,8 @@ void testMembers()
   const ChannelBlock good = d.obj(child).channels;
   d.obj(child).channels = ChannelBlock(2);
   d.evaluate();
-  test_assert(d.statusOf(child) == EvalStatus::Invalid && !d.result(child).bounds.empty());
+  test_assert(d.statusOf(child) == EvalStatus::Invalid &&
+              !d.result(child).bounds.empty());
   test_assert(d.picks(view, p.x, p.y, within(1.0)).size() == 0);
   d.obj(child).channels = good;
   d.evaluate();
@@ -164,8 +172,9 @@ void testBvh()
     int there = 0;
     /* A region without planes is everything. */
     must(b.boxes().region({}, [&](int i) {
-      ok = ok && d.result(b.object(i)).bounds.contains(
-                     solve::translationOf(d.result(b.object(i)).state.world));
+      ok = ok &&
+           d.result(b.object(i))
+               .bounds.contains(solve::translationOf(d.result(b.object(i)).state.world));
       there++;
       return true;
     }));

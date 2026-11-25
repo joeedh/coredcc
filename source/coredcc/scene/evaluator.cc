@@ -1,9 +1,9 @@
 #include "coredcc/scene/evaluator.h"
 
-#include "coredcc/scene/pending_writes.h"
 #include "coredcc/api/change_bus.h"
 #include "coredcc/base/iface/registry.h"
 #include "coredcc/lib/pin.h"
+#include "coredcc/scene/pending_writes.h"
 
 #include <algorithm>
 #include <utility>
@@ -70,7 +70,8 @@ CapMode modeFor(const Library &lib,
   const Datablock *b = lib.get(h);
   if (b && b->hasFlag(BlockFlags::HasOverrides)) {
     bool overridden = false;
-    lib.forEachOverride(h, [&](InterfaceId id, const IfaceRef &) { overridden |= id == iface; });
+    lib.forEachOverride(
+        h, [&](InterfaceId id, const IfaceRef &) { overridden |= id == iface; });
     if (overridden) {
       return CapMode::Dynamic;
     }
@@ -83,13 +84,13 @@ CapMode modeFor(const Library &lib,
 
 /* The interface, for a block whose data is `data` now. */
 template <class I>
-I get(const Library &lib, CapMode mode, const IfaceTable *table, BlockHandle h, void *data)
+I get(
+    const Library &lib, CapMode mode, const IfaceTable *table, BlockHandle h, void *data)
 {
   I out;
   if (mode == CapMode::Table) {
     static_cast<IfaceRef &>(out) = IfaceRef(table, data);
-  }
-  else if (mode == CapMode::Dynamic) {
+  } else if (mode == CapMode::Dynamic) {
     out = lib.query<I>(h);
   }
   return out;
@@ -159,7 +160,8 @@ SceneMember SceneEvaluator::memberFor(const Library &lib,
   const SceneBlockType t = types_[m.type];
   void *data = dataOf(lib, h, t);
   m.isNull = data == nullptr;
-  m.transformable = modeFor(lib, h, kTransformableId, t.transformable, t.hasQuery, m.isNull);
+  m.transformable =
+      modeFor(lib, h, kTransformableId, t.transformable, t.hasQuery, m.isNull);
   m.spatial = modeFor(lib, h, kSpatialId, t.spatial, t.hasQuery, m.isNull);
   const auto tr = get<Transformable>(lib, m.transformable, t.transformable, h, data);
   if (!takeError(rt, ignored) && tr) {
@@ -176,7 +178,8 @@ SceneMember SceneEvaluator::memberFor(const Library &lib,
     m.dataType = typeFor(lib, lib.get(m.data)->type());
     const SceneBlockType dt = types_[m.dataType];
     m.dataIsNull = dataOf(lib, m.data, dt) == nullptr;
-    m.dataSpatial = modeFor(lib, m.data, kSpatialId, dt.spatial, dt.hasQuery, m.dataIsNull);
+    m.dataSpatial =
+        modeFor(lib, m.data, kSpatialId, dt.spatial, dt.hasQuery, m.dataIsNull);
     takeError(rt, ignored);
   }
   return m;
@@ -209,7 +212,8 @@ void SceneEvaluator::lookUp(const Scene &scene, const Library &lib)
   /* Parents. This adds those that aren't members to the end, so theirs are found too. */
   for (int i = 0; i < int(members_.size()); i++) {
     const SceneMember *was = before(members_[i].handle);
-    const BlockHandle hint = was && was->parent >= 0 ? old[was->parent].handle : BlockHandle();
+    const BlockHandle hint =
+        was && was->parent >= 0 ? old[was->parent].handle : BlockHandle();
     if (const BlockHandle p = liveBlock(lib, members_[i].parentId, hint)) {
       const int known = index->find(p);
       const int parent = known >= 0 ? known : add(p, false);
@@ -226,8 +230,8 @@ void SceneEvaluator::lookUp(const Scene &scene, const Library &lib)
   lookups_++;
 }
 
-/* A block has bounds that are kept if its type implements Invalidation and nothing stands in for its
- * Spatial. */
+/* A block has bounds that are kept if its type implements Invalidation and nothing stands
+ * in for its Spatial. */
 void SceneEvaluator::keepBoxes(const Library &lib)
 {
   boxOf_.clear();
@@ -236,7 +240,8 @@ void SceneEvaluator::keepBoxes(const Library &lib)
     const bool own = m.dataSpatial == CapMode::None;
     const BlockHandle h = own ? m.handle : m.data;
     const int type = own ? m.type : m.dataType;
-    if ((own ? m.spatial : m.dataSpatial) != CapMode::Table || !types_[type].invalidation) {
+    if ((own ? m.spatial : m.dataSpatial) != CapMode::Table || !types_[type].invalidation)
+    {
       continue;
     }
     const BlockId id = lib.get(h)->id();
@@ -258,7 +263,10 @@ void SceneEvaluator::forgetBoxes()
 }
 
 /* A change while it is asked counts: it is asked again next time. */
-Box3d SceneEvaluator::boundsOf(Runtime &rt, const SceneMember &m, Spatial &sp, Status &foreign)
+Box3d SceneEvaluator::boundsOf(Runtime &rt,
+                               const SceneMember &m,
+                               Spatial &sp,
+                               Status &foreign)
 {
   if (m.box >= 0 && boxes_[m.box].valid) {
     return boxes_[m.box].box;
@@ -387,8 +395,8 @@ bool SceneEvaluator::stillValid(const Scene &scene, const Library &lib) const
   if (int(objects.size()) != inScene_) {
     return false;
   }
-  /* Whether `id` still names `h`, or for a null `h` still nothing that is Live. A record keeps
-   * its id, and an alias renames the two together. */
+  /* Whether `id` still names `h`, or for a null `h` still nothing that is Live. A record
+   * keeps its id, and an alias renames the two together. */
   const auto sameTarget = [&](const BlockId &id, BlockHandle h) {
     return h ? live(lib, h) != nullptr : !liveBlock(lib, id);
   };
@@ -402,7 +410,8 @@ bool SceneEvaluator::stillValid(const Scene &scene, const Library &lib) const
     if (modeFor(lib, h, kTransformableId, t.transformable, t.hasQuery, m.isNull) !=
             m.transformable ||
         modeFor(lib, h, kSpatialId, t.spatial, t.hasQuery, m.isNull) != m.spatial ||
-        !sameTarget(m.parentId, m.parent >= 0 ? members_[m.parent].handle : BlockHandle()) ||
+        !sameTarget(m.parentId,
+                    m.parent >= 0 ? members_[m.parent].handle : BlockHandle()) ||
         !sameTarget(m.dataId, m.data))
     {
       return false;
@@ -446,9 +455,8 @@ EvalStatus SceneEvaluator::evaluateOne(const Library &lib,
   return evaluateObject(rt, type, ctx, parent, out, foreign);
 }
 
-SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
-                                                 const Library &lib,
-                                                 Status &foreign)
+SceneEvaluator::Pass
+SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &foreign)
 {
   Runtime &rt = lib.runtime();
   const TransformRegistry &types = rt.ext<TransformRegistry>();
@@ -483,7 +491,8 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
       while (levelEnd < n && members_[order_[levelEnd]].depth == m.depth) {
         levelEnd++;
       }
-      evaluateLevel(lib, k, levelEnd, provider, time, differs ? out.objects : old.objects, foreign);
+      evaluateLevel(
+          lib, k, levelEnd, provider, time, differs ? out.objects : old.objects, foreign);
     }
     if (k + kPrefetchAhead < n) {
       const PrefetchHint &ahead = hints_[order_[k + kPrefetchAhead]];
@@ -508,22 +517,22 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
     if ((data == nullptr) != m.isNull) {
       return Pass::Stale;
     }
-    const TransformState &parent = m.parent < 0 || cyclic_[i] ? root :
-                                   differs ? out.objects[m.parent].state :
-                                             old.objects[m.parent].state;
+    const TransformState &parent = m.parent < 0 || cyclic_[i] ? root
+                                   : differs ? out.objects[m.parent].state
+                                             : old.objects[m.parent].state;
     e.member = m.member;
     e.parent = cyclic_[i] ? -1 : m.parent;
     e.data = m.data;
     info = ObjectInfo();
     const bool batched = batching && batch_[i].done;
-    const auto tr = batched ? Transformable() :
-                              get<Transformable>(
-                                  lib, m.transformable, t.transformable, m.handle, data);
+    const auto tr =
+        batched
+            ? Transformable()
+            : get<Transformable>(lib, m.transformable, t.transformable, m.handle, data);
     bool failed = takeError(rt, foreign);
     if (batched) {
       info = batch_[i].info;
-    }
-    else if (tr && !failed) {
+    } else if (tr && !failed) {
       tr.read(info, scratch_);
       failed = takeError(rt, foreign);
       members_[i].transformType = info.transformType;
@@ -532,24 +541,21 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
     if (failed) {
       e.status = EvalStatus::ModelFailed;
       e.state = parent;
-    }
-    else if (info.parent != m.parentId || info.data != m.dataId) {
+    } else if (info.parent != m.parentId || info.data != m.dataId) {
       return Pass::Stale;
-    }
-    else if (batched) {
+    } else if (batched) {
       e.state = batch_[i].state;
-      e.status = batch_[i].status == EvalStatus::Ok && cyclic_[i] ? EvalStatus::Cycle :
-                                                                    batch_[i].status;
-    }
-    else if (!tr) {
+      e.status = batch_[i].status == EvalStatus::Ok && cyclic_[i] ? EvalStatus::Cycle
+                                                                  : batch_[i].status;
+    } else if (!tr) {
       e.status = EvalStatus::NoTransform;
       e.state = root;
-    }
-    else {
+    } else {
       if (!lastType || lastType->id() != info.transformType) {
         lastType = types.find(info.transformType);
       }
-      e.status = evaluateOne(lib, m.handle, provider, lastType, time, parent, e.state, foreign);
+      e.status =
+          evaluateOne(lib, m.handle, provider, lastType, time, parent, e.state, foreign);
       if (e.status == EvalStatus::Ok && cyclic_[i]) {
         e.status = EvalStatus::Cycle;
       }
@@ -582,8 +588,7 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
     if (!others) {
       if (!e.same(old.objects[i])) {
         differing_.append(i);
-      }
-      else if (!differs) {
+      } else if (!differs) {
         continue;
       }
       if (!differs) {
@@ -600,23 +605,27 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
   return differs ? Pass::Changed : Pass::Same;
 }
 
-Status SceneEvaluator::run(const Scene &scene, const Library &lib, bool &changed, Status &foreign)
+Status SceneEvaluator::run(const Scene &scene,
+                           const Library &lib,
+                           bool &changed,
+                           Status &foreign)
 {
   EvaluationScope scope(lib.runtime());
   const LookupKey key = keyOf(lib);
   if (!changeListener_.connected()) {
-    changeListener_ = lib.runtime().ext<ChangeBus>().addChangeListener([this](const BusChange &c) {
-      constexpr ChangeAspects kBounds =
-          ChangeAspects(InvalidateKinds::Topology) | ChangeAspects(InvalidateKinds::Positions);
-      if (!c.owner) {
-        forgetBoxes();
-      }
-      else if (c.owner->kind == OwnerKey::Kind::Block && (c.aspects & kBounds) != 0) {
-        if (const int *box = boxOf_.lookup_ptr(c.owner->block)) {
-          boxes_[*box].valid = false;
-        }
-      }
-    });
+    changeListener_ =
+        lib.runtime().ext<ChangeBus>().addChangeListener([this](const BusChange &c) {
+          constexpr ChangeAspects kBounds = ChangeAspects(InvalidateKinds::Topology) |
+                                            ChangeAspects(InvalidateKinds::Positions);
+          if (!c.owner) {
+            forgetBoxes();
+          } else if (c.owner->kind == OwnerKey::Kind::Block &&
+                     (c.aspects & kBounds) != 0) {
+            if (const int *box = boxOf_.lookup_ptr(c.owner->block)) {
+              boxes_[*box].valid = false;
+            }
+          }
+        });
     forgetBoxes();
   }
   if (!valid_ || key != key_) {
@@ -645,9 +654,9 @@ Status SceneEvaluator::run(const Scene &scene, const Library &lib, bool &changed
         front_ = 1 - front_;
         frontLookups_ = lookups_;
       }
-      return changed || !bvh.valid() ?
-                 bvh.update(stores_[front_], lib.runtime().ext<SceneSettings>().bvh) :
-                 Status();
+      return changed || !bvh.valid()
+                 ? bvh.update(stores_[front_], lib.runtime().ext<SceneSettings>().bvh)
+                 : Status();
     }
     if (attempt == 0) {
       counters.rebuilds++;
@@ -675,9 +684,11 @@ Status evaluateScene(Context &ctx, BlockHandle h, EvaluateResult *result)
     return Status::error(StatusCode::Busy, "evaluateScene: the library is busy");
   }
   if (rt.hasStickyError()) {
-    return Status::error(StatusCode::FailedPrecondition, "evaluateScene: an error is pending");
+    return Status::error(StatusCode::FailedPrecondition,
+                         "evaluateScene: an error is pending");
   }
-  rt.ext<detail::PendingWrites>().flush(*lib); /* what couldn't be written when its object came back */
+  rt.ext<detail::PendingWrites>().flush(
+      *lib); /* what couldn't be written when its object came back */
   Scene *scene = Scene::of(*lib, h);
   if (!scene) {
     return Status::error(StatusCode::NotFound, "evaluateScene: no such scene");

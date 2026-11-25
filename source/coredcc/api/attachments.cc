@@ -33,7 +33,8 @@ template <class Fn> void eachAttachment(const PointerRef &self, Context &ctx, Fn
 
 PointerRef pointerTo(const Item &item)
 {
-  return item.type ? PointerRef{item.data, item.type->info.dataStruct, OwnerKey()} : PointerRef();
+  return item.type ? PointerRef{item.data, item.type->info.dataStruct, OwnerKey()}
+                   : PointerRef();
 }
 
 } // namespace
@@ -80,8 +81,9 @@ void addAttachments(ApiStruct &st)
     });
     return key;
   };
-  st.addCollection(PropertyDef::collectionProp("attachments", StructId::of("coredcc.Attachment")),
-                   std::move(a));
+  st.addCollection(
+      PropertyDef::collectionProp("attachments", StructId::of("coredcc.Attachment")),
+      std::move(a));
 }
 
 } // namespace coredcc

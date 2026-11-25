@@ -8,7 +8,8 @@
 
 namespace coredcc::detail {
 
-SceneQuery::SceneQuery(Context &ctx, BlockHandle scene, const char *what) : rt_(ctx.runtime())
+SceneQuery::SceneQuery(Context &ctx, BlockHandle scene, const char *what)
+    : rt_(ctx.runtime())
 {
   status_ = begin(ctx, scene, what);
   if (status_.ok()) {
@@ -46,9 +47,9 @@ Status SceneQuery::begin(Context &ctx, BlockHandle scene, const char *what)
   if (!scene_) {
     return error(StatusCode::NotFound, "no such scene");
   }
-  return scene_->bvh().valid() ?
-             Status() :
-             error(StatusCode::FailedPrecondition, "the scene hasn't been evaluated");
+  return scene_->bvh().valid()
+             ? Status()
+             : error(StatusCode::FailedPrecondition, "the scene hasn't been evaluated");
 }
 
 bool SceneQuery::thrown()
@@ -86,7 +87,8 @@ Spatial SceneQuery::spatial(BlockHandle h, const PickFilter &filter)
   {
     return Spatial();
   }
-  Spatial s = info.data.isNull() ? Spatial() : lib_->query<Spatial>(lib_->find(info.data));
+  Spatial s =
+      info.data.isNull() ? Spatial() : lib_->query<Spatial>(lib_->find(info.data));
   if (thrown()) {
     return Spatial();
   }

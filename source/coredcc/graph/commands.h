@@ -8,15 +8,16 @@
  * - `graph.link(graph from=<Int> fromSocket=<String> to=<Int> toSocket=<String>)`, output
  *   `link`.
  * - `graph.unlink(graph link=<Int>)`
- * - `graph.interface.add(graph side=<INPUT|OUTPUT> name=<String> type=<String> index=<Int>)`,
- *   output `socket`. `index` -1, the default, adds it last.
+ * - `graph.interface.add(graph side=<INPUT|OUTPUT> name=<String> type=<String>
+ * index=<Int>)`, output `socket`. `index` -1, the default, adds it last.
  * - `graph.interface.remove(graph socket=<Int>)`
  * - `graph.interface.move(graph socket=<Int> index=<Int>)`
  * - `graph.interface.setType(graph socket=<Int> type=<String>)`
  *
  * Nodes, links and interface sockets are named by their ids. Params, literals, labels,
  * positions, the group of a node, and the names and defaults of the interface are set
- * through datapaths (graph/api.h). runGraphEdit (graph/ops.h) makes many edits in one step.
+ * through datapaths (graph/api.h). runGraphEdit (graph/ops.h) makes many edits in one
+ * step.
  */
 
 #include "coredcc/graph/ops.h"

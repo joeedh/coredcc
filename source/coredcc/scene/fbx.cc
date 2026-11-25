@@ -1,5 +1,6 @@
-/* FBX's node transform, after Autodesk's "Transformations" SDK sample. The parent's global
- * rotation is carried in TransformState: the sample decomposes it, which loses reflections. */
+/* FBX's node transform, after Autodesk's "Transformations" SDK sample. The parent's
+ * global rotation is carried in TransformState: the sample decomposes it, which loses
+ * reflections. */
 #include "coredcc/scene/models.h"
 
 #include "litestl/binding/binding.h"
@@ -41,14 +42,16 @@ Node readNode(const EvalCtx &ctx)
   n.post = eulerOf(readVec3(ctx, fbx::kPostRotation), EulerOrder::XYZ);
   n.order = EulerOrder(ctx.enumChannel(fbx::kRotationOrder, 6));
   n.inherit = ctx.enumChannel(fbx::kInheritType, 3);
-  n.rotation = n.pre * eulerOf(readVec3(ctx, fbx::kRotation), n.order) * n.post.conjugated();
+  n.rotation =
+      n.pre * eulerOf(readVec3(ctx, fbx::kRotation), n.order) * n.post.conjugated();
   return n;
 }
 
 /* The local translation without `translation`, for a rotation and a scale. */
 double3 pivotOffset(const Node &n, const quatd &rotation, const double3 &scale)
 {
-  const double3 inner = n.scalingOffset - n.rotationPivot + n.scalingPivot - n.scalingPivot * scale;
+  const double3 inner =
+      n.scalingOffset - n.rotationPivot + n.scalingPivot - n.scalingPivot * scale;
   return n.rotationOffset + n.rotationPivot + rotation.rotate(inner);
 }
 
@@ -58,7 +61,8 @@ Linear inherited(const Node &n, const TransformState &parent)
   if (n.inherit == fbx::kRSrs) {
     return Linear::identity();
   }
-  Linear a = Linear::of(parent.rotation.normalized().conjugated()) * Linear::of(parent.world);
+  Linear a =
+      Linear::of(parent.rotation.normalized().conjugated()) * Linear::of(parent.world);
   if (n.inherit == fbx::kRrs) {
     for (int i = 0; i < 3; i++) {
       const double s = parent.localScale[i];
@@ -71,8 +75,8 @@ Linear inherited(const Node &n, const TransformState &parent)
 /* What comes before the node's rotation. */
 Linear before(const Node &n, const TransformState &parent)
 {
-  return n.inherit == fbx::kRSrs ? Linear::of(parent.world) :
-                                   Linear::of(parent.rotation.normalized());
+  return n.inherit == fbx::kRSrs ? Linear::of(parent.world)
+                                 : Linear::of(parent.rotation.normalized());
 }
 
 /* The node's world axes: its linear part without its scale. */
@@ -81,7 +85,10 @@ Linear axesOf(const Node &n, const quatd &rotation, const TransformState &parent
   return before(n, parent) * Linear::of(rotation) * inherited(n, parent);
 }
 
-void writeRotation(const Node &n, const double3 &hint, const quatd &rotation, ChannelBlock &out)
+void writeRotation(const Node &n,
+                   const double3 &hint,
+                   const quatd &rotation,
+                   ChannelBlock &out)
 {
   const quatd r = (n.pre.conjugated() * rotation * n.post).normalized();
   writeVec3(out, fbx::kRotation, nearestEuler(r, n.order, hint));
@@ -99,11 +106,12 @@ TransformState Fbx::evaluate(const EvalCtx &ctx, const TransformState &parent) c
                     n.scale);
 }
 
-/* The rotation pivot. With the inherit types that don't turn within the parent's scale, its own
- * rotation channels turn the node about another point. */
+/* The rotation pivot. With the inherit types that don't turn within the parent's scale,
+ * its own rotation channels turn the node about another point. */
 double3 Fbx::pivot(const EvalCtx &ctx, const TransformState &parent) const
 {
-  const double3 local = readVec3(ctx, fbx::kTranslation) + readVec3(ctx, fbx::kRotationOffset) +
+  const double3 local = readVec3(ctx, fbx::kTranslation) +
+                        readVec3(ctx, fbx::kRotationOffset) +
                         readVec3(ctx, fbx::kRotationPivot);
   return litestl::math::transformPoint(parent.world, local);
 }
@@ -119,16 +127,18 @@ Status Fbx::setWorld(const EvalCtx &current,
     return singularParent();
   }
   const Node n = readNode(current);
-  const Linear x = n.inherit == fbx::kRSrs ?
-                       solver.linear(Linear::of(target)) :
-                       Linear::of(parent.rotation.normalized().conjugated()) * Linear::of(target);
+  const Linear x =
+      n.inherit == fbx::kRSrs
+          ? solver.linear(Linear::of(target))
+          : Linear::of(parent.rotation.normalized().conjugated()) * Linear::of(target);
   solve::RotationScale rs;
   if (!solve::rotationScale(x, inherited(n, parent), n.rotation, n.scale, rs)) {
     return unsolvable();
   }
   writeVec3(out,
             fbx::kTranslation,
-            solver.point(solve::translationOf(target)) - pivotOffset(n, rs.rotation, rs.scale));
+            solver.point(solve::translationOf(target)) -
+                pivotOffset(n, rs.rotation, rs.scale));
   writeVec3(out, fbx::kScaling, rs.scale);
   writeRotation(n, readVec3(current, fbx::kRotation), rs.rotation, out);
   return Status();
@@ -152,18 +162,17 @@ Status Fbx::applyDelta(const EvalCtx &base,
   if (delta.kind == DeltaKind::Rotate) {
     /* Exact, except where the parent's scale applies after the node's rotation. */
     const quatd up = parent.rotation.normalized();
-    const quatd turn = n.inherit == fbx::kRSrs ?
-                           turnUnder(delta, solver, Linear::of(parent.world)) :
-                           up.conjugated() * delta.rotation() * up;
+    const quatd turn = n.inherit == fbx::kRSrs
+                           ? turnUnder(delta, solver, Linear::of(parent.world))
+                           : up.conjugated() * delta.rotation() * up;
     rotation = (turn * n.rotation).normalized();
     writeRotation(n, hint, rotation, out);
-  }
-  else if (delta.kind == DeltaKind::Scale) {
+  } else if (delta.kind == DeltaKind::Scale) {
     if (mirrors(delta)) {
       const Linear m = mirrored(delta, before(n, parent) * Linear::of(rotation));
-      const Linear x = n.inherit == fbx::kRSrs ?
-                           solver.linear(m) :
-                           Linear::of(parent.rotation.normalized().conjugated()) * m;
+      const Linear x = n.inherit == fbx::kRSrs
+                           ? solver.linear(m)
+                           : Linear::of(parent.rotation.normalized().conjugated()) * m;
       bool turned = false;
       CDCC_TRY(takeMirror(x, rotation, scale, turned));
       if (turned) {
@@ -174,7 +183,8 @@ Status Fbx::applyDelta(const EvalCtx &base,
     writeVec3(out, fbx::kScaling, scale);
   }
   const double3 offset = pivotOffset(n, n.rotation, n.scale);
-  const double3 origin = litestl::math::transformPoint(parent.world, n.translation + offset);
+  const double3 origin =
+      litestl::math::transformPoint(parent.world, n.translation + offset);
   writeVec3(out,
             fbx::kTranslation,
             n.translation + solver.vector(shiftOf(delta, origin)) +
@@ -188,12 +198,14 @@ TransformTypeInfo fbxInfo()
   info.name = kFbxTransform;
   info.uiName = "FBX";
   const auto length = [&](const char *name) {
-    info.channels.append(
-        PropertyDef::vecProp(name, 3).subtype(PropSubtype::Distance).unit(UnitFamily::Length));
+    info.channels.append(PropertyDef::vecProp(name, 3)
+                             .subtype(PropSubtype::Distance)
+                             .unit(UnitFamily::Length));
   };
   const auto euler = [&](const char *name) {
-    info.channels.append(
-        PropertyDef::vecProp(name, 3).subtype(PropSubtype::Euler).unit(UnitFamily::Angle));
+    info.channels.append(PropertyDef::vecProp(name, 3)
+                             .subtype(PropSubtype::Euler)
+                             .unit(UnitFamily::Angle));
   };
   length("lclTranslation");
   euler("lclRotation");

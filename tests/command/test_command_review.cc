@@ -5,8 +5,8 @@
 #include "coredcc/parse/invocation.h"
 
 #include <climits>
-#include <cstring>
 #include <cmath>
+#include <cstring>
 #include <string>
 
 test_init;
@@ -44,7 +44,9 @@ struct Inc {
     g_memCalls++;
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   BIND_ALL(Inc, "review::Inc", )
 };
 
@@ -77,7 +79,9 @@ struct UndoRuns {
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   BIND_ALL(UndoRuns, "review::UndoRuns", BIND_STRUCT_METHOD(st, redo, MARGS("ctx")))
 };
 
@@ -92,12 +96,16 @@ struct SubThenFail {
     CDCC_TRY(runSubInc(ctx));
     return g_flag ? Status::error(StatusCode::Internal, "exec failed on redo") : Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   BIND_ALL(SubThenFail, "review::SubThenFail", )
 };
 
@@ -111,7 +119,9 @@ struct SubRedoFail {
   {
     return runSubInc(ctx);
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   Status redo(Context &)
   {
     return g_flag ? Status::error(StatusCode::Internal, "redo failed") : Status();
@@ -120,7 +130,9 @@ struct SubRedoFail {
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   BIND_ALL(SubRedoFail, "review::SubRedoFail", BIND_STRUCT_METHOD(st, redo, MARGS("ctx")))
 };
 
@@ -134,12 +146,16 @@ struct FoldSub {
   {
     return runSubInc(ctx);
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   uint64_t foldKey() const
   {
     return 78;
@@ -163,12 +179,16 @@ struct StickyFail {
     ctx.runtime().setStickyError(Status::error(StatusCode::Internal, "late sticky"));
     return Status::error(StatusCode::InvalidArgument, "early");
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   BIND_ALL(StickyFail, "review::StickyFail", )
 };
 struct MemFail {
@@ -180,7 +200,9 @@ struct MemFail {
   {
     return Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     if (g_flag) {
@@ -188,7 +210,9 @@ struct MemFail {
     }
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   BIND_ALL(MemFail, "review::MemFail", )
 };
 
@@ -202,12 +226,16 @@ struct KeyOnly {
   {
     return Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   uint64_t foldKey() const
   {
     return 5;
@@ -225,12 +253,16 @@ struct SetsInside {
   {
     return setValueUndo(ctx, "tool.count", PropValue::ofInt(99));
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   BIND_ALL(SetsInside, "review::SetsInside", )
 };
 
@@ -247,12 +279,16 @@ struct Recurse {
     const CommandDef *self = ctx.runtime().ext<CommandRegistry>().find("review.recurse");
     return ctx.executor()->runSub(ctx, *self, self->newInputs()).status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   BIND_ALL(Recurse, "review::Recurse", )
 };
 
@@ -266,12 +302,13 @@ static BlockHandle makeRig(Setup &s, BlockHandle target)
   Runtime &rt = s.w.rt;
   if (!rt.ext<BlockTypeRegistry>().find(kRigType)) {
     test_assert((registerImpl<BlockProvider, RigProvider>(rt, "test.Rig#provider").ok()));
-    Result<Owned<BlockProvider>> p =
-        own<BlockProvider>(rt, "test.Rig#provider", litestl::alloc::New<RigProvider>("provider"));
+    Result<Owned<BlockProvider>> p = own<BlockProvider>(
+        rt, "test.Rig#provider", litestl::alloc::New<RigProvider>("provider"));
     BlockTypeInfo info;
     info.name = "test.Rig";
     info.client = ClientId::of(kCoredccClient);
-    test_assert(p.ok() && rt.ext<BlockTypeRegistry>().add(info, std::move(p).value()).ok());
+    test_assert(p.ok() &&
+                rt.ext<BlockTypeRegistry>().add(info, std::move(p).value()).ok());
   }
   Rig *rig = litestl::alloc::New<Rig>("Rig");
   Result<BlockHandle> h = s.w.lib.create(kRigType, "rig", rig);
@@ -318,9 +355,11 @@ static void test_failed_redo_rolls_back()
   {
     Setup s;
     addInc(s);
-    test_assert(addNativeCommand<SubThenFail>(s.w.rt, CommandDef("review.subThenFail")).ok());
+    test_assert(
+        addNativeCommand<SubThenFail>(s.w.rt, CommandDef("review.subThenFail")).ok());
     g_flag = false;
-    test_assert(s.ex.run(s.ctx, "review.subThenFail", PropertyBag()).ok() && s.w.tool.count == 5);
+    test_assert(s.ex.run(s.ctx, "review.subThenFail", PropertyBag()).ok() &&
+                s.w.tool.count == 5);
     test_assert(s.ex.undo(s.ctx).ok() && s.w.tool.count == 4);
     g_flag = true;
     test_assert(hasMsg(s.ex.redo(s.ctx), "exec failed on redo"));
@@ -330,7 +369,8 @@ static void test_failed_redo_rolls_back()
   {
     Setup s;
     addInc(s);
-    test_assert(addNativeCommand<SubRedoFail>(s.w.rt, CommandDef("review.subRedoFail")).ok());
+    test_assert(
+        addNativeCommand<SubRedoFail>(s.w.rt, CommandDef("review.subRedoFail")).ok());
     g_flag = false;
     test_assert(s.ex.run(s.ctx, "review.subRedoFail", PropertyBag()).ok());
     test_assert(s.ex.undo(s.ctx).ok() && s.w.tool.count == 4);
@@ -349,11 +389,13 @@ static void test_input_bags_are_checked()
   test_assert(r.code() == StatusCode::FailedPrecondition);
   PropertyBag wrong;
   test_assert(wrong.add(PropertyDef::intProp("bogus")).ok());
-  test_assert(s.ex.run(s.ctx, *s.add, wrong).status().code() == StatusCode::InvalidArgument);
+  test_assert(s.ex.run(s.ctx, *s.add, wrong).status().code() ==
+              StatusCode::InvalidArgument);
   PropertyBag typed;
   test_assert(typed.add(PropertyDef::stringProp("amount")).ok());
   test_assert(typed.set("amount", PropValue::ofString("x")).ok());
-  test_assert(s.ex.run(s.ctx, *s.add, typed).status().code() == StatusCode::InvalidArgument);
+  test_assert(s.ex.run(s.ctx, *s.add, typed).status().code() ==
+              StatusCode::InvalidArgument);
   test_assert(s.history.size() == 0 && s.w.tool.count == 4);
 }
 
@@ -363,7 +405,8 @@ static void test_rerun_head_refusals()
     Setup s; /* B3: a setValueUndo head */
     test_assert(setValueUndo(s.ctx, "tool.count", PropValue::ofInt(10)).ok());
     const CommandDef *def = s.w.rt.ext<CommandRegistry>().find(kSetPropertyCommand);
-    test_assert(s.ex.rerunHead(s.ctx, def->newInputs()).code() == StatusCode::FailedPrecondition);
+    test_assert(s.ex.rerunHead(s.ctx, def->newInputs()).code() ==
+                StatusCode::FailedPrecondition);
     test_assert(s.w.tool.count == 10 && s.history.size() == 1);
   }
   {
@@ -399,9 +442,11 @@ static void test_folding()
   }
   {
     Setup s; /* B15: the head shows the folded run's inputs */
-    const CommandDef *def = *addNativeCommand<Foldable>(
-        s.w.rt,
-        CommandDef("review.fold2").input(PropertyDef::intProp("key")).input(PropertyDef::intProp("amount")));
+    const CommandDef *def =
+        *addNativeCommand<Foldable>(s.w.rt,
+                                    CommandDef("review.fold2")
+                                        .input(PropertyDef::intProp("key"))
+                                        .input(PropertyDef::intProp("amount")));
     for (int64_t a : {1, 2, 3}) {
       PropertyBag in = def->newInputs();
       test_assert(in.set("key", PropValue::ofInt(5)).ok());
@@ -413,7 +458,8 @@ static void test_folding()
   }
   {
     Setup s; /* B13 */
-    Result<const CommandDef *> d = addNativeCommand<KeyOnly>(s.w.rt, CommandDef("review.keyOnly"));
+    Result<const CommandDef *> d =
+        addNativeCommand<KeyOnly>(s.w.rt, CommandDef("review.keyOnly"));
     test_assert(hasMsg(d.status(), "foldKey and foldFrom"));
   }
 }
@@ -422,7 +468,8 @@ static void test_sticky_errors()
 {
   {
     Setup s; /* B8a: both errors are reported, and nothing leaks */
-    test_assert(addNativeCommand<StickyFail>(s.w.rt, CommandDef("review.stickyFail")).ok());
+    test_assert(
+        addNativeCommand<StickyFail>(s.w.rt, CommandDef("review.stickyFail")).ok());
     Status a = s.ex.run(s.ctx, "review.stickyFail", PropertyBag()).status();
     test_assert(hasMsg(a, "early") && hasMsg(a, "late sticky"));
     test_assert(s.runAdd(1).ok());
@@ -433,7 +480,8 @@ static void test_sticky_errors()
     test_assert(setValue(s.ctx, "tool.strength", PropValue::ofFloat(0.9)).ok());
     s.w.rt.setStickyError(Status::error(StatusCode::Internal, "live-edit failure"));
     test_assert(hasMsg(s.ex.commit(s.ctx), "live-edit failure"));
-    test_assert(!s.ex.interactiveOpen() && s.history.size() == 0 && s.w.tool.strength == 0.5);
+    test_assert(!s.ex.interactiveOpen() && s.history.size() == 0 &&
+                s.w.tool.strength == 0.5);
     test_assert(s.w.lib.collect().ok() && s.runAdd(1).ok());
   }
   {
@@ -450,7 +498,8 @@ static void test_sticky_errors()
     Setup s; /* a stray one is named by the next top-level call, then gone */
     s.w.rt.setStickyError(Status::error(StatusCode::Internal, "from elsewhere"));
     Status a = s.runAdd(1).status();
-    test_assert(a.code() == StatusCode::FailedPrecondition && hasMsg(a, "from elsewhere"));
+    test_assert(a.code() == StatusCode::FailedPrecondition &&
+                hasMsg(a, "from elsewhere"));
     test_assert(s.runAdd(1).ok());
   }
 }
@@ -523,21 +572,25 @@ static void test_delete_cascade_states()
     BlockHandle rig = makeRig(s, s.w.meshes[0]);
     test_assert(s.ex.run(s.ctx, kDeleteBlockCommand, deleteInputs(s, rig, true)).ok());
     test_assert(deletePreview(s.w.lib, s.w.meshes[0]).size() == 1);
-    test_assert(s.ex.run(s.ctx, kDeleteBlockCommand, deleteInputs(s, s.w.meshes[0], false)).ok());
+    test_assert(
+        s.ex.run(s.ctx, kDeleteBlockCommand, deleteInputs(s, s.w.meshes[0], false)).ok());
   }
   {
     Setup s; /* B7: redo takes a Strong user added since, with cascade */
-    test_assert(s.ex.run(s.ctx, kDeleteBlockCommand, deleteInputs(s, s.w.meshes[0], true)).ok());
+    test_assert(
+        s.ex.run(s.ctx, kDeleteBlockCommand, deleteInputs(s, s.w.meshes[0], true)).ok());
     test_assert(s.ex.undo(s.ctx).ok());
     BlockHandle rig = makeRig(s, s.w.meshes[0]);
     test_assert(s.ex.redo(s.ctx).ok());
     test_assert(s.w.lib.get(rig)->state() == BlockState::InHistory);
     s.history.clear();
-    test_assert(!s.w.lib.get(s.w.meshes[0]) && !s.w.lib.get(rig) && !s.w.rt.hasStickyError());
+    test_assert(!s.w.lib.get(s.w.meshes[0]) && !s.w.lib.get(rig) &&
+                !s.w.rt.hasStickyError());
   }
   {
     Setup s; /* B7: without cascade the redo fails and is dropped */
-    test_assert(s.ex.run(s.ctx, kDeleteBlockCommand, deleteInputs(s, s.w.meshes[0], false)).ok());
+    test_assert(
+        s.ex.run(s.ctx, kDeleteBlockCommand, deleteInputs(s, s.w.meshes[0], false)).ok());
     test_assert(s.ex.undo(s.ctx).ok());
     BlockHandle rig = makeRig(s, s.w.meshes[0]);
     test_assert(hasMsg(s.ex.redo(s.ctx), "would now also delete rig"));
@@ -566,8 +619,10 @@ static void test_literal_edges()
     /* Rejected by the invocation lexer or by the literal, never clamped. */
     Result<Invocation> inv = parseInvocation(text);
     if (inv.ok()) {
-      const PropertyDef def = text[4] == '1' ? PropertyDef::floatProp("f") : PropertyDef::intProp("i");
-      test_assert(hasMsg(parseLiteral(rt, def, inv->args[0].value).status(), "out of range"));
+      const PropertyDef def =
+          text[4] == '1' ? PropertyDef::floatProp("f") : PropertyDef::intProp("i");
+      test_assert(
+          hasMsg(parseLiteral(rt, def, inv->args[0].value).status(), "out of range"));
     }
   }
 }
@@ -584,13 +639,16 @@ static void test_last_used_load_continues()
 static void test_registration_retry()
 {
   Setup s; /* B14 */
-  Status a = addNativeCommand<AddCount>(
-                 s.w.rt, CommandDef("review.dup").input(PropertyDef::intProp("a")).input(PropertyDef::intProp("a")))
+  Status a = addNativeCommand<AddCount>(s.w.rt,
+                                        CommandDef("review.dup")
+                                            .input(PropertyDef::intProp("a"))
+                                            .input(PropertyDef::intProp("a")))
                  .status();
   test_assert(!a.ok());
-  test_assert(addNativeCommand<AddCount>(s.w.rt, CommandDef("review.dup")
-                                                     .input(PropertyDef::intProp("amount"))
-                                                     .input(PropertyDef::intProp("mem")))
+  test_assert(addNativeCommand<AddCount>(s.w.rt,
+                                         CommandDef("review.dup")
+                                             .input(PropertyDef::intProp("amount"))
+                                             .input(PropertyDef::intProp("mem")))
                   .ok());
 }
 
@@ -610,7 +668,8 @@ static void test_set_value_undo_inside_exec()
   Setup s; /* design item 7 */
   test_assert(addNativeCommand<SetsInside>(s.w.rt, CommandDef("review.setsInside")).ok());
   test_assert(s.ex.run(s.ctx, "review.setsInside", PropertyBag()).ok());
-  test_assert(s.w.tool.count == 99 && s.history.size() == 1 && s.history.at(0).subCount() == 1);
+  test_assert(s.w.tool.count == 99 && s.history.size() == 1 &&
+              s.history.at(0).subCount() == 1);
   test_assert(s.ex.undo(s.ctx).ok() && s.w.tool.count == 4);
 }
 
@@ -636,7 +695,9 @@ struct GrandParent {
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   BIND_ALL(GrandParent, "review::GrandParent", )
 };
 
@@ -654,16 +715,20 @@ struct Counted {
   }
   Status canRun(Context &ctx) const
   {
-    return inputInt(ctx, "refuse") ? Status::error(StatusCode::FailedPrecondition, "refused")
-                                   : Status();
+    return inputInt(ctx, "refuse")
+               ? Status::error(StatusCode::FailedPrecondition, "refused")
+               : Status();
   }
   Status exec(Context &ctx)
   {
     key = inputInt(ctx, "key");
     mem = inputInt(ctx, "mem");
-    return inputInt(ctx, "fail") ? Status::error(StatusCode::Internal, "failed") : Status();
+    return inputInt(ctx, "fail") ? Status::error(StatusCode::Internal, "failed")
+                                 : Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return uint64_t(mem);
@@ -689,7 +754,8 @@ struct Counted {
 static void test_nested_sub_commands()
 {
   Setup s;
-  test_assert(addNativeCommand<GrandParent>(s.w.rt, CommandDef("review.grandparent")).ok());
+  test_assert(
+      addNativeCommand<GrandParent>(s.w.rt, CommandDef("review.grandparent")).ok());
   g_flag = false;
   test_assert(s.ex.run(s.ctx, "review.grandparent", PropertyBag()).ok());
   test_assert(s.w.tool.count == 15 && s.history.at(0).subCount() == 1);
@@ -698,7 +764,8 @@ static void test_nested_sub_commands()
   test_assert(g_log == "undo;undo;parent-undo;grandparent-undo;");
   g_log.clear();
   test_assert(s.ex.redo(s.ctx).ok() && s.w.tool.count == 15); /* re-exec at depth */
-  test_assert(g_log == "discard;discard;exec1;exec10;" && s.history.at(0).subCount() == 1);
+  test_assert(g_log == "discard;discard;exec1;exec10;" &&
+              s.history.at(0).subCount() == 1);
   /* A failure at the top rolls back every level, innermost last-run first. */
   test_assert(s.ex.undo(s.ctx).ok());
   g_flag = true;
@@ -713,11 +780,12 @@ static void test_nested_sub_commands()
 static void test_budget_across_a_barrier()
 {
   Setup s;
-  const CommandDef *barrier = *addNativeCommand<AddCount>(
-      s.w.rt, CommandDef("review.barrier")
-                  .flags(CommandFlags::UndoBarrier)
-                  .input(PropertyDef::intProp("amount"))
-                  .input(PropertyDef::intProp("mem")));
+  const CommandDef *barrier =
+      *addNativeCommand<AddCount>(s.w.rt,
+                                  CommandDef("review.barrier")
+                                      .flags(CommandFlags::UndoBarrier)
+                                      .input(PropertyDef::intProp("amount"))
+                                      .input(PropertyDef::intProp("mem")));
   test_assert(s.runAdd(1, 100).ok() && s.runAdd(1, 100).ok());
   test_assert(s.ex.run(s.ctx, *barrier, barrier->newInputs()).ok());
   test_assert(s.runAdd(1, 100).ok());
@@ -749,8 +817,10 @@ static void test_discard_exactly_once()
     };
     test_assert(!run(1, 0, 0, 0).ok() && g_discards == 1); /* canRun refused */
     test_assert(!run(0, 1, 0, 0).ok() && g_discards == 2); /* exec failed */
-    test_assert(run(0, 0, 5, 0).ok() && run(0, 0, 5, 0).ok() && g_discards == 3); /* fold */
-    test_assert(s.ex.undo(s.ctx).ok() && run(0, 0, 0, 0).ok() && g_discards == 4); /* truncation */
+    test_assert(run(0, 0, 5, 0).ok() && run(0, 0, 5, 0).ok() &&
+                g_discards == 3); /* fold */
+    test_assert(s.ex.undo(s.ctx).ok() && run(0, 0, 0, 0).ok() &&
+                g_discards == 4); /* truncation */
     PropertyBag again = def->newInputs();
     test_assert(s.ex.rerunHead(s.ctx, std::move(again)).ok() && g_discards == 5);
     PropertyBag bad = def->newInputs();
@@ -789,7 +859,9 @@ struct StickyInc : Inc {
   BIND_ALL(StickyInc, "review::StickyInc", )
 };
 struct StickyIncRedo : StickyInc {
-  BIND_ALL(StickyIncRedo, "review::StickyIncRedo", BIND_STRUCT_METHOD(st, redo, MARGS("ctx")))
+  BIND_ALL(StickyIncRedo,
+           "review::StickyIncRedo",
+           BIND_STRUCT_METHOD(st, redo, MARGS("ctx")))
 };
 /* foldKey without foldFrom. */
 struct HalfFold : Inc {
@@ -812,7 +884,8 @@ template <class T> static void checkStickyRedo(const char *id)
   g_stickyExec = g_stickyRedo = false;
   test_assert(!r.ok() && strstr(r.message(), "threw") != nullptr);
   /* Not redone, so nothing to undo: the cursor stayed put. */
-  test_assert(s.w.tool.count == start && !s.history.canUndo() && s.history.validate().ok());
+  test_assert(s.w.tool.count == start && !s.history.canUndo() &&
+              s.history.validate().ok());
   test_assert(!s.ex.undo(s.ctx).ok() && s.w.tool.count == start);
   test_assert(!s.w.rt.hasStickyError());
 }
@@ -829,19 +902,27 @@ static void test_failed_add_registers_nothing()
   Runtime &rt = s.w.rt;
   const int tables = rt.ifaces().tableCount();
   /* Interactive without redo; then the same id with a redo slot. */
-  test_assert(!addNativeCommand<Inc>(rt, CommandDef("review.live").flags(CommandFlags::Interactive)).ok());
+  test_assert(!addNativeCommand<Inc>(
+                   rt, CommandDef("review.live").flags(CommandFlags::Interactive))
+                   .ok());
   test_assert(rt.ifaces().tableCount() == tables);
-  test_assert(addNativeCommand<StickyIncRedo>(rt, CommandDef("review.live").flags(CommandFlags::Interactive)).ok());
+  test_assert(addNativeCommand<StickyIncRedo>(
+                  rt, CommandDef("review.live").flags(CommandFlags::Interactive))
+                  .ok());
   /* A lone foldKey; then the same id without it. */
   const int tables2 = rt.ifaces().tableCount();
   test_assert(!addNativeCommand<HalfFold>(rt, CommandDef("review.half")).ok());
   test_assert(rt.ifaces().tableCount() == tables2);
   test_assert(addNativeCommand<Inc>(rt, CommandDef("review.half")).ok());
   /* An id collision is refused before the implementation is registered. */
-  test_assert(rt.debugRegisterNameAs(IdDomain::Command, CommandId::of("review.collide").value, "review.other").ok());
+  test_assert(rt.debugRegisterNameAs(IdDomain::Command,
+                                     CommandId::of("review.collide").value,
+                                     "review.other")
+                  .ok());
   const int tables3 = rt.ifaces().tableCount();
   Status c = addNativeCommand<Inc>(rt, CommandDef("review.collide")).status();
-  test_assert(c.code() == StatusCode::AlreadyExists && rt.ifaces().tableCount() == tables3);
+  test_assert(c.code() == StatusCode::AlreadyExists &&
+              rt.ifaces().tableCount() == tables3);
 }
 
 /* A runaway command fails at the nesting cap and leaves the executor idle. */

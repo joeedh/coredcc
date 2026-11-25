@@ -24,7 +24,8 @@ Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target)
   return deletePreview(lib, std::span<const BlockHandle>(&target, 1));
 }
 
-Vector<BlockHandle> deletePreview(const Library &lib, std::span<const BlockHandle> targets)
+Vector<BlockHandle> deletePreview(const Library &lib,
+                                  std::span<const BlockHandle> targets)
 {
   Vector<BlockHandle> out;
   HandleSet in;
@@ -38,7 +39,8 @@ Vector<BlockHandle> deletePreview(const Library &lib, std::span<const BlockHandl
     add(h);
   }
   const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
-  /* A user of many (a scene) has its cells looked at once: the Strong users, by target. */
+  /* A user of many (a scene) has its cells looked at once: the Strong users, by target.
+   */
   litestl::util::Map<BlockId, HandleSet> strong;
   HandleSet scanned;
   for (int i = 0; i < int(out.size()); i++) {
@@ -53,18 +55,21 @@ Vector<BlockHandle> deletePreview(const Library &lib, std::span<const BlockHandl
         continue;
       }
       if (scanned.add(user, true)) {
-        lib.foreachRef(user, [&](RefCell &cell) {
-             if (cell.kind == RefKind::Strong && !cell.target.isNull()) {
-               const BlockId target = clients.canonical(cell.target);
-               if (!strong.lookup_ptr(target)) {
-                 strong.add(target, HandleSet());
-               }
-               strong.lookup_ptr(target)->add(user, true);
-             }
-           })
+        lib.foreachRef(user,
+                       [&](RefCell &cell) {
+                         if (cell.kind == RefKind::Strong && !cell.target.isNull()) {
+                           const BlockId target = clients.canonical(cell.target);
+                           if (!strong.lookup_ptr(target)) {
+                             strong.add(target, HandleSet());
+                           }
+                           strong.lookup_ptr(target)->add(user, true);
+                         }
+                       })
             .ignore(); /* a provider failure is sticky; the preview stays partial */
       }
-      if (const HandleSet *users = strong.lookup_ptr(gone); users && users->lookup_ptr(user)) {
+      if (const HandleSet *users = strong.lookup_ptr(gone);
+          users && users->lookup_ptr(user))
+      {
         add(user);
       }
     }
@@ -78,15 +83,15 @@ namespace {
 
 void destroyNow(Library &lib, const Vector<BlockHandle> &blocks)
 {
-  Status s =
-      lib.destroyFromHistory(std::span<const BlockHandle>(blocks.data(), size_t(blocks.size())));
+  Status s = lib.destroyFromHistory(
+      std::span<const BlockHandle>(blocks.data(), size_t(blocks.size())));
   if (!s.ok()) {
     lib.runtime().setStickyError(std::move(s));
   }
 }
 
-/* Destroys blocks that leave the history, but those that are gone or were recreated Live. A
- * failure has no caller to return to. */
+/* Destroys blocks that leave the history, but those that are gone or were recreated Live.
+ * A failure has no caller to return to. */
 void destroyDeleted(Library &lib, const Vector<BlockHandle> &blocks)
 {
   Vector<BlockHandle> deleted;
@@ -283,8 +288,9 @@ struct DeleteBlock {
     const Vector<BlockHandle> all =
         deletePreview(l, std::span<const BlockHandle>(asked->data(), size_t(targets)));
     if (int(all.size()) > targets && !ctx.inputs()->get("cascade")->asBool()) {
-      return Status::error(StatusCode::FailedPrecondition,
-                           ("deleting it would also delete " + names(l, all, targets)).c_str());
+      return Status::error(
+          StatusCode::FailedPrecondition,
+          ("deleting it would also delete " + names(l, all, targets)).c_str());
     }
     CDCC_TRY(deleteAll(l, all));
     take(l, all);
@@ -371,7 +377,8 @@ struct DeleteBlock {
   }
   static lbt::Struct<DeleteBlock> *defineBindings()
   {
-    auto *st = new lbt::Struct<DeleteBlock>("coredcc::DeleteBlockCommand", sizeof(DeleteBlock));
+    auto *st =
+        new lbt::Struct<DeleteBlock>("coredcc::DeleteBlockCommand", sizeof(DeleteBlock));
     BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
@@ -397,12 +404,16 @@ struct Purge {
     ctx.outputs()->set("count", PropValue::ofInt(*n)).ignore();
     return Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<Purge> *defineBindings()
   {
     auto *st = new lbt::Struct<Purge>("coredcc::PurgeCommand", sizeof(Purge));
@@ -434,7 +445,9 @@ Status registerBlockCommands(Runtime &rt)
   }
   if (!reg.find(kPurgeCommand)) {
     CommandDef purge(kPurgeCommand);
-    purge.uiName("Purge Unused").flags(CommandFlags::NoUndo).output(PropertyDef::intProp("count"));
+    purge.uiName("Purge Unused")
+        .flags(CommandFlags::NoUndo)
+        .output(PropertyDef::intProp("count"));
     Result<const CommandDef *> d = addNativeCommand<Purge>(rt, std::move(purge));
     if (!d.ok()) {
       return d.status();

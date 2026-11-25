@@ -1,5 +1,5 @@
-/* Aliasing payloads, and graphs, instances and blocks that outlive or are outlived by each
- * other. */
+/* Aliasing payloads, and graphs, instances and blocks that outlive or are outlived by
+ * each other. */
 #include "graph_fixture.h"
 
 #include "coredcc/graph/instance.h"
@@ -49,7 +49,8 @@ Status viewKernel(NodeExecContext &ctx)
   if (!use.data) {
     return Status::error(StatusCode::NotFound, "no thing");
   }
-  Result<PayloadRef> p = ctx.alias(View{static_cast<const Thing *>(use.data)}, use.handle);
+  Result<PayloadRef> p =
+      ctx.alias(View{static_cast<const Thing *>(use.data)}, use.handle);
   return p.ok() ? ctx.setOutput(0, GraphValue::ofPayload(*p)) : p.status();
 }
 
@@ -91,7 +92,8 @@ struct OwnerProvider {
   }
   static lbt::Struct<OwnerProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<OwnerProvider>("test::OwnerProvider", sizeof(OwnerProvider));
+    auto *st =
+        new lbt::Struct<OwnerProvider>("test::OwnerProvider", sizeof(OwnerProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
@@ -109,7 +111,8 @@ struct World {
   {
     addThings(rt);
     test_assert(registerGraphBlocks(rt).ok());
-    test_assert((registerImpl<BlockProvider, OwnerProvider>(rt, "test.Owner#provider").ok()));
+    test_assert(
+        (registerImpl<BlockProvider, OwnerProvider>(rt, "test.Owner#provider").ok()));
     for (const char *name : {"test.Owner", "test.Transient"}) {
       Result<Owned<BlockProvider>> p = own<BlockProvider>(
           rt, "test.Owner#provider", litestl::alloc::New<OwnerProvider>("provider"));
@@ -230,7 +233,8 @@ void testAlias()
   test_assert(lib.collect().ok());
 
   /* Detached: the host freed the data. */
-  Result<BlockHandle> d = lib.create(kThing, "d", litestl::alloc::New<Thing>("test::Thing"));
+  Result<BlockHandle> d =
+      lib.create(kThing, "d", litestl::alloc::New<Thing>("test::Thing"));
   Result<PayloadRef> q = makeAlias(View{w.thing(*d)}, lib, *d);
   test_assert(q.ok() && lib.onHostDestroyed(idOf(lib, *d)).ok());
   test_assert(!q->get<View>() && !q->mutate<View>() && q->bytes() == sizeof(View));
@@ -297,14 +301,16 @@ void testInstances()
     const BlockHandle h = newThing(*w.lib, "a", 3);
     test_assert(alone.setParam(v, "thing", pointerTo(idOf(*w.lib, h))).ok());
     GraphInstance other(&w.rt, w.lib.get(), &alone);
-    test_assert(other.evaluate(out(r)).ok() && other.evaluate(out(group, key(o).c_str())).ok());
+    test_assert(other.evaluate(out(r)).ok() &&
+                other.evaluate(out(group, key(o).c_str())).ok());
     test_assert(alone.library() == w.lib.get());
     w.lib = nullptr;
     test_assert(!alone.library());
     test_assert(hasCode(inst.evaluate(SocketPath::output("o")), StatusCode::NotFound));
     test_assert(*inst.lastGood(SocketPath::output("o")) == GraphValue::ofFloat(3));
     test_assert(hasCode(other.evaluate(out(r)), StatusCode::NotFound));
-    test_assert(hasCode(other.evaluate(out(group, key(o).c_str())), StatusCode::NotFound));
+    test_assert(
+        hasCode(other.evaluate(out(group, key(o).c_str())), StatusCode::NotFound));
     test_assert(alone.setLabel(r, "x").ok() && alone.removeNode(v).ok());
     test_assert(alone.validate().ok());
   }
@@ -352,7 +358,8 @@ void testDestroyedMidWalk()
   const NodeId r = add(*inner.def, "t.read"), iout = add(*inner.def, "graph.output");
   connect(*inner.def, r, "value", iout, key(o));
   const NodeId g1 = add(*outer.def, "graph.group"), g2 = add(*outer.def, "graph.group");
-  test_assert(outer.def->setGroup(g1, inner.id).ok() && outer.def->setGroup(g2, inner.id).ok());
+  test_assert(outer.def->setGroup(g1, inner.id).ok() &&
+              outer.def->setGroup(g2, inner.id).ok());
   GraphInstance inst(&w.rt, &lib, outer.id);
   int calls = 0;
   g_inKernel = [&]() {
@@ -385,7 +392,9 @@ void testDestroyedMidWalk()
   test_assert(out2.def->setGroup(g, in2.id).ok());
   GraphInstance j(&w.rt, &lib, out2.id);
   test_assert(j.evaluate(out(g, key(o1).c_str())).ok() && w.pins(in2.h) == 0);
-  g_inKernel = [&]() { test_assert(w.pins(in2.h) == 1 && w.pins(out2.h) == 1 && ++calls); };
+  g_inKernel = [&]() {
+    test_assert(w.pins(in2.h) == 1 && w.pins(out2.h) == 1 && ++calls);
+  };
   const int before = calls;
   test_assert(j.evaluate(out(g, key(o2).c_str())).ok() && calls == before + 1);
   test_assert(w.pins(in2.h) == 0 && w.pins(out2.h) == 0);
@@ -464,7 +473,8 @@ void testCollect()
   const NodeState state = outer.def->stateOf(*outer.def->node(g));
   test_assert(outer.def->removeNode(g).ok() && lib.usersOf(inner.h).size() == 0);
   test_assert(outer.def->insertNode(state).ok() && lib.usersOf(inner.h).size() == 1);
-  test_assert(*lib.collect() == 0 && outer.def->removeNode(g).ok() && *lib.collect() == 1);
+  test_assert(*lib.collect() == 0 && outer.def->removeNode(g).ok() &&
+              *lib.collect() == 1);
   test_assert(!lib.get(inner.h));
   /* The payload's pin goes only when the node has run without the block. */
   test_assert(outer.def->removeNode(v).ok() && *lib.collect() == 0);
@@ -486,9 +496,11 @@ void testOwnPinReplaced()
     g_view = *makeAlias(View{w.thing(h)}, lib, o);
     test_assert(inst->evaluate(out(r)).ok());
     g_view = PayloadRef();
-    test_assert(w.pins(o) == 1 && lib.markDeleted(o).ok() && lib.destroyFromHistory(o).ok());
+    test_assert(w.pins(o) == 1 && lib.markDeleted(o).ok() &&
+                lib.destroyFromHistory(o).ok());
     test_assert(lib.markDeleted(g.h).ok() && lib.destroyFromHistory(g.h).ok());
-    GraphDef *fresh = litestl::alloc::New<GraphDef>("coredcc::GraphDef", &w.rt, &lib, g.id);
+    GraphDef *fresh =
+        litestl::alloc::New<GraphDef>("coredcc::GraphDef", &w.rt, &lib, g.id);
     const NodeId other = add(*fresh, "t.read");
     test_assert(lib.reviveAs(TypeId::of(kGraphDefType), g.id, "g", fresh).ok());
     bool inside = false;
@@ -505,8 +517,8 @@ void testOwnPinReplaced()
   }
 }
 
-/* Destroying an instance lets go of the last pins of blocks: they are destroyed when all of
- * the instance is. */
+/* Destroying an instance lets go of the last pins of blocks: they are destroyed when all
+ * of the instance is. */
 void testInstancePins()
 {
   for (int which = 0; which < 3; which++) {
@@ -516,7 +528,8 @@ void testInstancePins()
     const BlockHandle owners[2] = {w.newOwner(), w.newOwner()};
     GraphDef def(&w.rt, &lib);
     const int64_t in = addSocket(def, SocketSide::Input, "in", "test.View");
-    const NodeId s = add(def, "t.shared"), r = add(def, "t.read"), io = add(def, "graph.input");
+    const NodeId s = add(def, "t.shared"), r = add(def, "t.read"),
+                 io = add(def, "graph.input");
     connect(def, s, "view", r, "view");
     auto inst = std::make_unique<GraphInstance>(&w.rt, &lib, &def);
     /* In two of: a kernel's outputs, the results, an input. */
@@ -540,7 +553,8 @@ void testInstancePins()
     }
     g_view = PayloadRef();
     for (BlockHandle o : owners) {
-      test_assert(w.pins(o) >= 1 && lib.markDeleted(o).ok() && lib.destroyFromHistory(o).ok());
+      test_assert(w.pins(o) >= 1 && lib.markDeleted(o).ok() &&
+                  lib.destroyFromHistory(o).ok());
       test_assert(lib.get(o));
     }
     g_ownersDestroyed = 0;

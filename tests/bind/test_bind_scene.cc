@@ -1,5 +1,5 @@
-/* Scenes for scripts, through a fake foreign host: transform types with a script's model, what
- * such a model may call, and the scene facades. */
+/* Scenes for scripts, through a fake foreign host: transform types with a script's model,
+ * what such a model may call, and the scene facades. */
 #include "../scene/command_doc.h"
 #include "fake_host.h"
 
@@ -32,8 +32,8 @@ PickOptions near(double radius)
   return o;
 }
 
-/* The "JS object" of a model for channels `radius` and `angle`: the location is the polar point
- * in the plane of x and y. */
+/* The "JS object" of a model for channels `radius` and `angle`: the location is the polar
+ * point in the plane of x and y. */
 struct Polar {
   bool throwEvaluate = false, throwSetWorld = false, refuse = false;
   bool hasDelta = false;
@@ -78,10 +78,10 @@ struct Polar {
       }
       const mat4d &target = *static_cast<const mat4d *>(args[1]);
       const TransformState &parent = *static_cast<const TransformState *>(args[2]);
-      const double3 p = solve::translationOf(target) -
-                        solve::translationOf(parent.world);
+      const double3 p = solve::translationOf(target) - solve::translationOf(parent.world);
       solve(p[0], p[1], *static_cast<ChannelBlock *>(args[4]));
-      new (ret) Status(refuse ? Status::error(StatusCode::Unsupported, "not there") : Status());
+      new (ret)
+          Status(refuse ? Status::error(StatusCode::Unsupported, "not there") : Status());
       return true;
     };
     o.methods["applyDelta"] = [this](void **args, void *ret, string *) {
@@ -146,7 +146,10 @@ void testRegistration()
     };
     const Case cases[] = {
         {"core.x", "evaluate setWorld", StatusCode::InvalidArgument, "reserved"},
-        {"core.transform.trs", "evaluate setWorld", StatusCode::InvalidArgument, "reserved"},
+        {"core.transform.trs",
+         "evaluate setWorld",
+         StatusCode::InvalidArgument,
+         "reserved"},
         {"", "evaluate setWorld", StatusCode::InvalidArgument, "dotted"},
         {"plain", "evaluate setWorld", StatusCode::InvalidArgument, "dotted"},
         {"a..b", "evaluate setWorld", StatusCode::InvalidArgument, "dotted"},
@@ -197,14 +200,16 @@ void testRegistration()
     refused(invalid, "m", channel("m", PropValue::identityMat4(), false));
     refused(invalid, "", channel("not a name", sc::makeInt(1), false));
     TransformTypeInfo *type = polarType("js.a");
-    test_assert(isError(sc::registerForeignTransformType(*d.ctx, *type, 0, "evaluate setWorld"),
-                        StatusCode::InvalidArgument,
-                        "handle"));
+    test_assert(
+        isError(sc::registerForeignTransformType(*d.ctx, *type, 0, "evaluate setWorld"),
+                StatusCode::InvalidArgument,
+                "handle"));
     {
       const EvaluationScope evaluating(d.rt);
       const fakehost::lf::Handle h = host.add(model.make());
-      test_assert(isError(sc::registerForeignTransformType(*d.ctx, *type, h, "evaluate setWorld"),
-                          StatusCode::Busy));
+      test_assert(
+          isError(sc::registerForeignTransformType(*d.ctx, *type, h, "evaluate setWorld"),
+                  StatusCode::Busy));
       test_assert(host.releasesOf(h) == 1 && nothingNew());
     }
 
@@ -227,8 +232,9 @@ void testRegistration()
     test_assert(st && st->memberCount() == 5);
 
     fakehost::lf::Handle again = 0;
-    test_assert(isError(registerPolar(d, host, model, "js.a", "evaluate setWorld", &again),
-                        StatusCode::AlreadyExists));
+    test_assert(
+        isError(registerPolar(d, host, model, "js.a", "evaluate setWorld", &again),
+                StatusCode::AlreadyExists));
     test_assert(host.releasesOf(again) == 1 && host.releasesOf(h) == 0);
     must(registerPolar(d, host, model, "js.b", "evaluate setWorld applyDelta"));
     test_assert(reg.find("js.b")->model().hasApplyDelta());
@@ -277,11 +283,13 @@ void testModel()
     d.evaluate();
     test_assert(isNear(d, a, 3, 4, 3));
     const sc::MatrixResult m = sc::worldMatrix(*d.ctx, str(textOf(d, a)));
-    test_assert(m.status.ok() && lengthOf(solve::translationOf(m.value) - double3(3, 4, 3)) < 1e-12);
+    test_assert(m.status.ok() &&
+                lengthOf(solve::translationOf(m.value) - double3(3, 4, 3)) < 1e-12);
     d.cycle(kApplyDeltaCommand,
             {{"vector", PropValue::ofVec3(1, 1, 0)},
-             {"objects", PropValue::ofString(
-                             sc::blockIdText(*d.ctx, str(textOf(d, a))).value.c_str())}});
+             {"objects",
+              PropValue::ofString(
+                  sc::blockIdText(*d.ctx, str(textOf(d, a))).value.c_str())}});
     d.evaluate();
     test_assert(isNear(d, a, 4, 5, 3) && model.deltas == 0);
 
@@ -306,11 +314,13 @@ void testModel()
                         "no channels"));
     model.throwSetWorld = false;
 
-    /* One that throws: the error is returned, its place is its parent's, and the rest is there. */
+    /* One that throws: the error is returned, its place is its parent's, and the rest is
+     * there. */
     const BlockHandle other = d.object("other", 7);
     model.throwEvaluate = true;
     const Status thrown = sc::evaluateScene(*d.ctx);
-    test_assert(isError(thrown, StatusCode::Internal, "no state") && !d.rt.hasStickyError());
+    test_assert(isError(thrown, StatusCode::Internal, "no state") &&
+                !d.rt.hasStickyError());
     ObjectEval e;
     test_assert(d.sc().evaluated(a, e) && e.status == EvalStatus::ModelFailed);
     test_assert(e.state.world[3][2] == 3 && d.isAt(other, 7));
@@ -452,7 +462,8 @@ void testCommandSlots()
       return true;
     };
     CommandDef *def = sc::newCommandDef("js.cmd");
-    must(sc::registerForeignCommand(ctx, *def, host.add(factory), "canRun exec undo memSize discard"));
+    must(sc::registerForeignCommand(
+        ctx, *def, host.add(factory), "canRun exec undo memSize discard"));
     litestl::alloc::Delete(def);
     const std::string before = CommandDoc::liveOnly(d.describe());
     const sc::BagResult ran = sc::invoke(ctx, "js.cmd");
@@ -505,25 +516,31 @@ void testFacades()
   };
   for (const Bad &b : bad) {
     test_assert(isError(sc::setScene(ctx, str(b.text)), b.code, "setScene: "));
-    test_assert(isError(sc::worldMatrix(ctx, str(b.text)).status, b.code, "worldMatrix: "));
-    test_assert(isError(sc::blockIdText(ctx, str(b.text)).status, b.code, "blockIdText: "));
+    test_assert(
+        isError(sc::worldMatrix(ctx, str(b.text)).status, b.code, "worldMatrix: "));
+    test_assert(
+        isError(sc::blockIdText(ctx, str(b.text)).status, b.code, "blockIdText: "));
   }
   test_assert(isError(sc::worldMatrix(ctx, "").status, StatusCode::InvalidArgument));
   test_assert(isError(sc::blockIdText(ctx, "").status, StatusCode::InvalidArgument));
-  test_assert(isError(sc::setScene(ctx, str(textOf(d, a))), StatusCode::InvalidArgument, "scene"));
+  test_assert(isError(
+      sc::setScene(ctx, str(textOf(d, a))), StatusCode::InvalidArgument, "scene"));
   std::string member = textOf(d, a);
   member.insert(member.find(')') + 1, ".x");
-  test_assert(isError(sc::worldMatrix(ctx, str(member)).status, StatusCode::InvalidArgument));
+  test_assert(
+      isError(sc::worldMatrix(ctx, str(member)).status, StatusCode::InvalidArgument));
   test_assert(ctx.scene() == second);
   test_assert(isError(sc::worldMatrix(ctx, str(textOf(d, second))).status,
                       StatusCode::FailedPrecondition));
-  test_assert(isText(sc::blockIdText(ctx, str(textOf(d, a))).value, formatBlockId(d.rt, d.idOf(a))));
+  test_assert(isText(sc::blockIdText(ctx, str(textOf(d, a))).value,
+                     formatBlockId(d.rt, d.idOf(a))));
 
   /* Not a member of the scene, and without any evaluation. */
   sc::MatrixResult m = sc::worldMatrix(ctx, str(textOf(d, a)));
   test_assert(m.status.ok() && solve::translationOf(m.value)[0] == 1);
   put(d.obj(a).channels, trs::kLocation, double3(8, 0, 0));
-  test_assert(solve::translationOf(sc::worldMatrix(ctx, str(textOf(d, a))).value)[0] == 8);
+  test_assert(solve::translationOf(sc::worldMatrix(ctx, str(textOf(d, a))).value)[0] ==
+              8);
 
   must(sc::setScene(ctx, ""));
   test_assert(!ctx.scene());
@@ -535,8 +552,10 @@ void testFacades()
 
   Context none(&d.rt, nullptr, PointerRef());
   test_assert(isError(sc::setScene(none, str(textOf(d, first))), StatusCode::NotFound));
-  test_assert(isError(sc::newScene(none, "x").status, StatusCode::FailedPrecondition, "executor"));
-  test_assert(isError(sc::worldMatrix(none, str(textOf(d, a))).status, StatusCode::NotFound));
+  test_assert(isError(
+      sc::newScene(none, "x").status, StatusCode::FailedPrecondition, "executor"));
+  test_assert(
+      isError(sc::worldMatrix(none, str(textOf(d, a))).status, StatusCode::NotFound));
   test_assert(isError(sc::evaluateScene(none), StatusCode::FailedPrecondition));
 
   double3 v = sc::vec3(1, 2, 3);
@@ -577,7 +596,8 @@ void testPick()
 
     View bad = viewOfXy();
     bad.viewport[2] = 0;
-    test_assert(sc::pick(ctx, bad, 65, 50, near(2)).status.code() == StatusCode::InvalidArgument);
+    test_assert(sc::pick(ctx, bad, 65, 50, near(2)).status.code() ==
+                StatusCode::InvalidArgument);
 
     /* A model that throws doesn't keep the others from being found. */
     must(registerPolar(d, host, model, "js.polar"));
@@ -585,7 +605,8 @@ void testPick()
     d.obj(off).channels = d.rt.ext<TransformRegistry>().find("js.polar")->defaults();
     model.throwEvaluate = true;
     r = sc::pick(ctx, viewOfXy(), 65, 50, near(2));
-    test_assert(isError(r.status, StatusCode::Internal, "no state") && !d.rt.hasStickyError());
+    test_assert(isError(r.status, StatusCode::Internal, "no state") &&
+                !d.rt.hasStickyError());
     test_assert(r.value.size() == 1 && isText(r.value.at(0).object, textOf(d, low)));
     model.throwEvaluate = false;
 
@@ -620,14 +641,22 @@ void testNul()
   const int scenes = d.lib->size();
   test_assert(isError(Checked<&sc::newScene>::call(ctx, nul).status, bad, "argument 2"));
   test_assert(isError(Checked<&sc::setScene>::call(ctx, nul), bad, "argument 2"));
-  test_assert(isError(Checked<&sc::worldMatrix>::call(ctx, nul).status, bad, "argument 2"));
-  test_assert(isError(Checked<&sc::blockIdText>::call(ctx, nul).status, bad, "argument 2"));
-  test_assert(isError(Checked<&sc::formatValue>::call(ctx, nul).status, bad, "argument 2"));
-  test_assert(isError(Checked<&sc::parseValue>::call(ctx, "scene", nul).status, bad, "argument 3"));
+  test_assert(
+      isError(Checked<&sc::worldMatrix>::call(ctx, nul).status, bad, "argument 2"));
+  test_assert(
+      isError(Checked<&sc::blockIdText>::call(ctx, nul).status, bad, "argument 2"));
+  test_assert(
+      isError(Checked<&sc::formatValue>::call(ctx, nul).status, bad, "argument 2"));
+  test_assert(isError(
+      Checked<&sc::parseValue>::call(ctx, "scene", nul).status, bad, "argument 3"));
   test_assert(d.lib->size() == scenes);
   TransformTypeInfo *info = sc::newTransformType("js.nul");
-  test_assert(isError(Checked<&sc::transformTypeUiName>::call(*info, nul), bad, "argument 2"));
-  test_assert(isError(Checked<&sc::transformChannel>::call(*info, nul, sc::makeFloat(1), false), bad, "argument 2"));
+  test_assert(
+      isError(Checked<&sc::transformTypeUiName>::call(*info, nul), bad, "argument 2"));
+  test_assert(
+      isError(Checked<&sc::transformChannel>::call(*info, nul, sc::makeFloat(1), false),
+              bad,
+              "argument 2"));
   test_assert(info->channels.size() == 0);
   {
     fakehost::Host host;

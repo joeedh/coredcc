@@ -41,7 +41,8 @@ static void test_grammar_forms()
   test_assert(*getValue(ctx, "objects[1].flags[HIDE]") == PropValue::ofBool(false));
 
   /* Component writes. */
-  test_assert(setValue(ctx, "objects[\"Sphere\"].location[1]", PropValue::ofFloat(2.5)).ok());
+  test_assert(
+      setValue(ctx, "objects[\"Sphere\"].location[1]", PropValue::ofFloat(2.5)).ok());
   test_assert(w.object(1).location[1] == 2.5f);
   test_assert(setValue(ctx, "objects[\"Sphere\"].location[0]", PropValue::ofInt(4)).ok());
   test_assert(w.object(1).location[0] == 4.0f);
@@ -66,9 +67,12 @@ static void test_errors()
   test_assert(r.status().suggestions().size() == 1 &&
               strcmp(r.status().suggestions()[0].c_str(), "location") == 0);
   test_assert(getValue(ctx, "objects[5].name").status().code() == StatusCode::OutOfRange);
-  test_assert(getValue(ctx, "objects[\"Nope\"].name").status().code() == StatusCode::NotFound);
-  test_assert(getValue(ctx, "objects[0].location[3]").status().code() == StatusCode::OutOfRange);
-  test_assert(getValue(ctx, "objects[0].mode[NOPE]").status().code() == StatusCode::NotFound);
+  test_assert(getValue(ctx, "objects[\"Nope\"].name").status().code() ==
+              StatusCode::NotFound);
+  test_assert(getValue(ctx, "objects[0].location[3]").status().code() ==
+              StatusCode::OutOfRange);
+  test_assert(getValue(ctx, "objects[0].mode[NOPE]").status().code() ==
+              StatusCode::NotFound);
   test_assert(!getValue(ctx, "objects[0].location.x").ok());
   test_assert(!getValue(ctx, "objects[0].location[0][0]").ok());
   test_assert(!getValue(ctx, "objects.length.x").ok());
@@ -76,11 +80,13 @@ static void test_errors()
   test_assert(getValue(ctx, "objects").status().code() == StatusCode::Unsupported);
   test_assert(!getValue(ctx, "objects[").ok()); /* a parse error */
   w.scene.active = -1;
-  test_assert(getValue(ctx, "objects.active.name").status().code() == StatusCode::NotFound);
+  test_assert(getValue(ctx, "objects.active.name").status().code() ==
+              StatusCode::NotFound);
   /* A null pointer reads as the null Pointer, and can't be walked. */
   test_assert(w.lib.writeRef(w.object(0).mesh, BlockId{}).ok());
   test_assert(*getValue(ctx, "objects[0].data") == PropValue::nullPointer());
-  test_assert(hasMsg(getValue(ctx, "objects[0].data.radius").status(), "pointer 'data' is null"));
+  test_assert(
+      hasMsg(getValue(ctx, "objects[0].data.radius").status(), "pointer 'data' is null"));
 }
 
 static void test_write_path()
@@ -116,7 +122,8 @@ static void test_write_path()
   meta = getMeta(ctx, "tool.pick");
   test_assert(meta.ok() && meta->numeric()->hardMax == 3);
   meta = getMeta(ctx, "objects.length");
-  test_assert(meta.ok() && meta->kind() == PropKind::Int && meta->hasAccess(PropAccess::ReadOnly));
+  test_assert(meta.ok() && meta->kind() == PropKind::Int &&
+              meta->hasAccess(PropAccess::ReadOnly));
   meta = getMeta(ctx, "objects[0].location[1]");
   test_assert(meta.ok() && meta->kind() == PropKind::Vec3);
 
@@ -141,7 +148,8 @@ static void test_canonical_paths()
   /* The hop through `data` is dropped: the mesh owns the member. */
   Result<StableRef> radius = canonicalize(ctx, P("objects.active.data.radius"));
   test_assert(radius.ok() && radius->owner == OwnerKey::ofBlock(w.meshId(0)));
-  test_assert(radius->key.size() == 1 && strcmp(radius->key[0].text.c_str(), "radius") == 0);
+  test_assert(radius->key.size() == 1 &&
+              strcmp(radius->key[0].text.c_str(), "radius") == 0);
 
   /* Runtime owners root their own members. */
   Result<StableRef> strength = canonicalize(ctx, P("tool.strength"));
@@ -166,7 +174,8 @@ static void test_canonical_paths()
   test_assert(scene.ok() && scene->owner == OwnerKey::ofBlock(w.objectId(1)) &&
               scene->key.size() == 0 && scene->type == kObject);
   Result<ResolvedPath> sp = resolve(ctx, *scene);
-  test_assert(sp.ok() && sp->kind == ResolvedPath::Kind::Struct && sp->ptr.data == &w.object(1));
+  test_assert(sp.ok() && sp->kind == ResolvedPath::Kind::Struct &&
+              sp->ptr.data == &w.object(1));
   StableRef wrongType = *scene;
   wrongType.type = kMesh;
   test_assert(resolve(ctx, wrongType).status().code() == StatusCode::TypeMismatch);
@@ -203,7 +212,8 @@ static void test_dangling_refs()
 
   /* A path through the deleted block. */
   test_assert(w.lib.writeRef(w.object(1).mesh, w.meshId(0)).ok());
-  test_assert(getValue(ctx, "objects[1].data.radius").status().code() == StatusCode::NotFound);
+  test_assert(getValue(ctx, "objects[1].data.radius").status().code() ==
+              StatusCode::NotFound);
 }
 
 static void test_pointer_writes()
@@ -218,7 +228,8 @@ static void test_pointer_writes()
   test_assert(w.lib.epoch() != epoch);
   /* The wrong struct type, and a non-Pointer value. */
   Result<PropValue> anObject = getValue(ctx, "objects[0]");
-  test_assert(setValue(ctx, "objects[1].data", *anObject).code() == StatusCode::TypeMismatch);
+  test_assert(setValue(ctx, "objects[1].data", *anObject).code() ==
+              StatusCode::TypeMismatch);
   test_assert(setValue(ctx, "objects[1].data", PropValue::ofInt(1)).code() ==
               StatusCode::TypeMismatch);
   /* Null clears it. */
@@ -243,7 +254,8 @@ static void test_prefix_and_batch()
   /* A pointer is its target. */
   ctx.setPrefix(*parsePath("objects[1].data"));
   test_assert(getValue(ctx, "radius").ok());
-  test_assert(canonicalize(ctx, *parsePath("radius"))->owner == OwnerKey::ofBlock(w.meshId(1)));
+  test_assert(canonicalize(ctx, *parsePath("radius"))->owner ==
+              OwnerKey::ofBlock(w.meshId(1)));
   w.object(1).mesh.target = BlockId();
   w.lib.noteRefsChanged();
   test_assert(getValue(ctx, "radius").status().code() == StatusCode::NotFound &&
@@ -287,7 +299,8 @@ static void test_registry_checks()
 {
   Runtime rt;
   ApiRegistry &reg = rt.ext<ApiRegistry>();
-  ValueAccessor getOnly{[](const PointerRef &, Context &) { return PropValue::ofInt(0); }, {}};
+  ValueAccessor getOnly{[](const PointerRef &, Context &) { return PropValue::ofInt(0); },
+                        {}};
 
   ApiStruct dup("Dup");
   dup.add(PropertyDef::intProp("a"), getOnly);
@@ -306,7 +319,9 @@ static void test_registry_checks()
   CollectionAccessor c;
   c.length = [](const PointerRef &, Context &) { return int64_t(0); };
   c.at = [](const PointerRef &, Context &, int64_t) { return PointerRef(); };
-  c.lookup = [](const PointerRef &, Context &, const KeySegment &) { return PointerRef(); };
+  c.lookup = [](const PointerRef &, Context &, const KeySegment &) {
+    return PointerRef();
+  };
   noKey.addCollection(PropertyDef::collectionProp("items", kObject), c);
   test_assert(hasMsg(reg.add(std::move(noKey)).status(), "keyOf"));
 
@@ -325,10 +340,13 @@ static void test_registry_checks()
 
   /* Runtime owners are unique by name. */
   int x = 0;
-  test_assert(reg.addRuntimeOwner("prefs", StructId::of("Ok"), [&x]() { return (void *)&x; }).ok());
-  test_assert(reg.addRuntimeOwner("prefs", StructId::of("Ok"), [&x]() { return (void *)&x; })
-                  .status()
-                  .code() == StatusCode::AlreadyExists);
+  test_assert(
+      reg.addRuntimeOwner("prefs", StructId::of("Ok"), [&x]() { return (void *)&x; })
+          .ok());
+  test_assert(
+      reg.addRuntimeOwner("prefs", StructId::of("Ok"), [&x]() { return (void *)&x; })
+          .status()
+          .code() == StatusCode::AlreadyExists);
   test_assert(reg.runtimeOwner("prefs").data == &x);
   test_assert(reg.runtimeOwner("none").isNull());
   test_assert(rt.validateAll().ok());
@@ -379,7 +397,8 @@ static void test_owner_crossings()
   /* A fixed nested struct keeps its hop; crossing into a block's non-root struct is
    * refused rather than given a canonical path naming the wrong struct (B1). */
   Result<StableRef> mod = canonicalize(ctx, P("objects[0].mod.strength"));
-  test_assert(mod.ok() && mod->owner == OwnerKey::ofBlock(w.objectId(0)) && mod->key.size() == 2);
+  test_assert(mod.ok() && mod->owner == OwnerKey::ofBlock(w.objectId(0)) &&
+              mod->key.size() == 2);
   test_assert(setValue(ctx, *resolve(ctx, *mod), PropValue::ofFloat(0.75)).ok());
   test_assert(w.object(0).mod.strength == 0.75);
   Result<ResolvedPath> bad = resolve(ctx, P("firstMod.strength"));
@@ -391,18 +410,21 @@ static void test_owner_crossings()
   Result<PropValue> old = getValue(ctx, "tool.activeBrush");
   test_assert(old.ok());
   const StableRef *a = old->tryPointer();
-  test_assert(a->key.size() == 2 && strcmp(a->key[1].text.c_str(), "A") == 0 && a->type == kBrush);
+  test_assert(a->key.size() == 2 && strcmp(a->key[1].text.c_str(), "A") == 0 &&
+              a->type == kBrush);
   Result<PropValue> b = getValue(ctx, "tool.brushes[1]");
   test_assert(setValue(ctx, "tool.activeBrush", *b).ok() && w.tool.activeBrush == 1);
   test_assert(setValue(ctx, "tool.activeBrush", *old).ok() && w.tool.activeBrush == 0);
   /* Paths through it canonicalize to the target, not the hop. */
   Result<StableRef> size = canonicalize(ctx, P("tool.activeBrush.size"));
-  test_assert(size.ok() && size->key.size() == 3 && strcmp(size->key[1].text.c_str(), "A") == 0);
+  test_assert(size.ok() && size->key.size() == 3 &&
+              strcmp(size->key[1].text.c_str(), "A") == 0);
   w.tool.activeBrush = 1;
   test_assert(setValue(ctx, *resolve(ctx, *size), PropValue::ofFloat(4)).ok());
   test_assert(w.tool.brushes[0].size == 4 && w.tool.brushes[1].size == 1);
   /* Without an address, reading or walking the settable pointer is Unsupported. */
-  test_assert(getValue(ctx, "tool.activeBrushNoAddress").status().code() == StatusCode::Unsupported);
+  test_assert(getValue(ctx, "tool.activeBrushNoAddress").status().code() ==
+              StatusCode::Unsupported);
   test_assert(getValue(ctx, "tool.activeBrushNoAddress.size").status().code() ==
               StatusCode::Unsupported);
 }
@@ -422,7 +444,8 @@ static void test_review_fixes()
   /* A getter of the wrong type is an error, never an abort (B7). */
   test_assert(getValue(ctx, "tool.broken").status().code() == StatusCode::Internal);
   test_assert(getValue(ctx, "tool.broken[0]").status().code() == StatusCode::Internal);
-  test_assert(setValue(ctx, "tool.broken[0]", PropValue::ofFloat(1)).code() == StatusCode::Internal);
+  test_assert(setValue(ctx, "tool.broken[0]", PropValue::ofFloat(1)).code() ==
+              StatusCode::Internal);
 
   /* A base-typed pointer walks into the subtype, and its values write back (D1). */
   test_assert(*getValue(ctx, "objects[0].anyData.radius") == PropValue::ofFloat(1));
@@ -465,12 +488,19 @@ static void test_bad_key_of()
   c.at = [&item](const PointerRef &, Context &, int64_t) {
     return PointerRef{&item, StructId::of("Item"), OwnerKey()};
   };
-  c.lookup = [](const PointerRef &, Context &, const KeySegment &) { return PointerRef(); };
-  c.keyOf = [](const PointerRef &, Context &, const PointerRef &) { return KeySegment(); };
-  root.addCollection(PropertyDef::collectionProp("bad", StructId::of("Item")), std::move(c));
+  c.lookup = [](const PointerRef &, Context &, const KeySegment &) {
+    return PointerRef();
+  };
+  c.keyOf = [](const PointerRef &, Context &, const PointerRef &) {
+    return KeySegment();
+  };
+  root.addCollection(PropertyDef::collectionProp("bad", StructId::of("Item")),
+                     std::move(c));
   test_assert(reg.add(std::move(root)).ok());
   int r = 0;
-  test_assert(reg.addRuntimeOwner("root", StructId::of("Root"), [&r]() { return (void *)&r; }).ok());
+  test_assert(
+      reg.addRuntimeOwner("root", StructId::of("Root"), [&r]() { return (void *)&r; })
+          .ok());
   Context ctx(&rt, nullptr, reg.runtimeOwner("root"));
   Result<PropValue> v = getValue(ctx, "bad[0].v");
   test_assert(v.status().code() == StatusCode::Internal && hasMsg(v.status(), "keyOf"));

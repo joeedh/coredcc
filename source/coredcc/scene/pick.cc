@@ -52,7 +52,8 @@ RegionQuery::RegionQuery(const ViewRegion &region, const mat4d &world)
       terms += std::fabs(m[12 + k] * p.n[k]);
     }
     planes_[i].n = double3(local[0], local[1], local[2]);
-    planes_[i].w = local[3] + terms * 1e-12; /* as the view's: rounding excludes nothing */
+    planes_[i].w =
+        local[3] + terms * 1e-12; /* as the view's: rounding excludes nothing */
   }
 }
 
@@ -90,7 +91,10 @@ bool PickOptions::valid() const
   return maxHits >= 0;
 }
 
-PickCursor::PickCursor(const ViewMath &view, double x, double y, const PickOptions &options)
+PickCursor::PickCursor(const ViewMath &view,
+                       double x,
+                       double y,
+                       const PickOptions &options)
     : view_(view), options_(options), x_(x), y_(y)
 {
   region_ = view.regionFromPixel(x, y, options.radius + options.shapeRadius);
@@ -115,8 +119,8 @@ PickQuery::PickQuery(const PickCursor &cursor,
                      const mat4d &world,
                      double limitDepth,
                      bool nearSurfaces)
-    : world_(world), worldDir_(cursor.ray_.dir), options_(cursor.options_), cursor_(&cursor),
-      radius_(cursor.options_.radius * cursor.view_.view().dpiScale),
+    : world_(world), worldDir_(cursor.ray_.dir), options_(cursor.options_),
+      cursor_(&cursor), radius_(cursor.options_.radius * cursor.view_.view().dpiScale),
       surfaceRadius_(nearSurfaces ? radius_ : 0.0), limitDepth_(limitDepth),
       dpiScale_(cursor.view_.view().dpiScale)
 {
@@ -140,9 +144,11 @@ PickQuery::PickQuery(const PickCursor &cursor,
   map_.front = planeToLocal(world, front);
   map_.back = planeToLocal(world, back);
 
-  /* The cofactors, and the determinant's sign: a mirrored object's normals still point outward. */
+  /* The cofactors, and the determinant's sign: a mirrored object's normals still point
+   * outward. */
   const double *m = world;
-  const double3 c[3] = {double3(m[0], m[1], m[2]), double3(m[4], m[5], m[6]), double3(m[8], m[9], m[10])};
+  const double3 c[3] = {
+      double3(m[0], m[1], m[2]), double3(m[4], m[5], m[6]), double3(m[8], m[9], m[10])};
   const double sign = c[0].dot(c[1].cross(c[2])) < 0.0 ? -1.0 : 1.0;
   for (int i = 0; i < 3; i++) {
     normalColumns_[i] = c[(i + 1) % 3].cross(c[(i + 2) % 3]) * sign;
@@ -177,14 +183,17 @@ double PickQuery::pixelSizeAt(const double3 &p) const
   const double area = gx.cross(gy).length();
   const double a = gx.dot(gx), b = gx.dot(gy), c = gy.dot(gy);
   const double large = std::sqrt(0.5 * (a + c) + std::hypot(0.5 * (a - c), b));
-  return area > 0.0 ? dpiScale_ * large / area : (std::numeric_limits<double>::infinity)();
+  return area > 0.0 ? dpiScale_ * large / area
+                    : (std::numeric_limits<double>::infinity)();
 }
 
 /* ---- ranking ---- */
 
 namespace detail {
 
-void rankPicks(const PickOptions &options, const Occluder &occluder, Vector<PickCandidate> &hits)
+void rankPicks(const PickOptions &options,
+               const Occluder &occluder,
+               Vector<PickCandidate> &hits)
 {
   /* What covers comes before the rest, since its distance is 0. */
   const auto group = [&](const PickCandidate &c) {
@@ -203,8 +212,8 @@ void rankPicks(const PickOptions &options, const Occluder &occluder, Vector<Pick
                      if (ga == 0 && a.dimension != b.dimension) {
                        return a.dimension < b.dimension;
                      }
-                     return a.hit.depth != b.hit.depth ? a.hit.depth < b.hit.depth :
-                                                         a.place < b.place;
+                     return a.hit.depth != b.hit.depth ? a.hit.depth < b.hit.depth
+                                                       : a.place < b.place;
                    });
   litestl::util::Map<uint64_t, char> seen;
   int n = 0;
@@ -267,13 +276,14 @@ void PickSink::take(const Found &f)
   }
 }
 
-/* Of each domain: the best surface, and the thin hits that no other one beats wherever the occluder
- * is. */
+/* Of each domain: the best surface, and the thin hits that no other one beats wherever
+ * the occluder is. */
 void PickSink::keep(const detail::PickCandidate &c)
 {
   const auto beats = [](const detail::PickCandidate &a, const detail::PickCandidate &b) {
     if (a.hit.distance != b.hit.distance) {
-      return a.hit.distance < b.hit.distance && (!a.hit.thin || a.hit.depth <= b.hit.depth);
+      return a.hit.distance < b.hit.distance &&
+             (!a.hit.thin || a.hit.depth <= b.hit.depth);
     }
     if (!a.hit.thin || a.dimension == b.dimension) {
       return a.hit.depth <= b.hit.depth;
@@ -415,8 +425,7 @@ void PickSink::box(const Box3d &box)
       if (side != 0) {
         triangle(c[side], c[side | u], c[side | u | v]);
         triangle(c[side], c[side | u | v], c[side | v]);
-      }
-      else {
+      } else {
         triangle(c[side], c[side | u | v], c[side | u]);
         triangle(c[side], c[side | v], c[side | u | v]);
       }
@@ -428,7 +437,10 @@ void PickSink::box(const Box3d &box)
 
 namespace {
 
-Status sizes(const char *what, const Vector<int32_t> &elements, const Vector<double> &values, int per)
+Status sizes(const char *what,
+             const Vector<int32_t> &elements,
+             const Vector<double> &values,
+             int per)
 {
   if (values.size() != elements.size() * size_t(per)) {
     return Status::error(StatusCode::InvalidArgument,
@@ -479,7 +491,8 @@ Status PickSink::triangles(int32_t domain,
   CDCC_TRY(sizes("triangles", elements, values, 9));
   for (int i = 0; i < int(elements.size()); i++) {
     element(domain, elements[i]);
-    triangle(pointAt(values, i * 9), pointAt(values, i * 9 + 3), pointAt(values, i * 9 + 6));
+    triangle(
+        pointAt(values, i * 9), pointAt(values, i * 9 + 3), pointAt(values, i * 9 + 6));
   }
   return Status();
 }

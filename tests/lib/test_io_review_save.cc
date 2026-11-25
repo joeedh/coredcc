@@ -1,5 +1,6 @@
 /* Regressions from the review of library IO, round 2, by the report's numbers
- * (docs/reports/feature-report-library-io-2026-11-24.md). Finding 3 is test_adopt.cc's. */
+ * (docs/reports/feature-report-library-io-2026-11-24.md). Finding 3 is test_adopt.cc's.
+ */
 #include "coredcc/lib/attachment.h"
 #include "coredcc/lib/duplicate.h"
 #include "coredcc/lib/pin.h"
@@ -25,7 +26,8 @@ struct Watch {
   std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
   double seconds() const
   {
-    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start)
+        .count();
   }
 };
 
@@ -51,7 +53,8 @@ static void test_attach()
   w.note(a, 1, BlockId());
   Note own;
   test_assert(w.lib.attach(a, kNote, &own).code() == StatusCode::AlreadyExists);
-  test_assert(w.lib.hasAttachment(a, kNote) && !w.lib.hasAttachment(BlockHandle(), kNote));
+  test_assert(w.lib.hasAttachment(a, kNote) &&
+              !w.lib.hasAttachment(BlockHandle(), kNote));
   OpaqueAttachment o;
   o.typeName = "test.Note";
   test_assert(w.lib.attachOpaque(a, o).code() == StatusCode::AlreadyExists);
@@ -76,9 +79,12 @@ static void test_storage()
   const Bytes bytes = w.save();
   test_assert(w.lib.attach(a, TypeId::of("test.Loose"), &w).ok());
   Status s = saveLibrary(w.lib).status();
-  test_assert(s.code() == StatusCode::FailedPrecondition &&
-              hasMsg(s, "these types neither serialize nor are Transient: attachment test.Loose"));
-  test_assert(w.lib.detach(a, TypeId::of("test.Loose")).ok() && sameBytes(w.save(), bytes));
+  test_assert(
+      s.code() == StatusCode::FailedPrecondition &&
+      hasMsg(s,
+             "these types neither serialize nor are Transient: attachment test.Loose"));
+  test_assert(w.lib.detach(a, TypeId::of("test.Loose")).ok() &&
+              sameBytes(w.save(), bytes));
   /* A type that contradicts itself isn't registered. */
   Runtime rt;
   NoteHost host;
@@ -92,13 +98,17 @@ static void test_storage()
         .add(info, std::move(own<AttachmentProvider>(rt, impl, provider)).value())
         .status();
   };
-  test_assert(hasMsg(add("t.A#p", BlockStorage::Transient, litestl::alloc::New<NoteProvider>("p")),
-                     "is Transient, but has serialize"));
-  test_assert(hasMsg(add("t.B#p", BlockStorage::Payload, litestl::alloc::New<BareProvider>("p")),
-                     "is Payload, but has no serialize"));
-  test_assert(add("t.C#p", BlockStorage::Payload, litestl::alloc::New<NoteProvider>("p")).ok());
+  test_assert(hasMsg(
+      add("t.A#p", BlockStorage::Transient, litestl::alloc::New<NoteProvider>("p")),
+      "is Transient, but has serialize"));
+  test_assert(
+      hasMsg(add("t.B#p", BlockStorage::Payload, litestl::alloc::New<BareProvider>("p")),
+             "is Payload, but has no serialize"));
+  test_assert(
+      add("t.C#p", BlockStorage::Payload, litestl::alloc::New<NoteProvider>("p")).ok());
   registerNote(rt, host);
-  test_assert(rt.ext<AttachmentTypeRegistry>().find(kNote)->info.storage == BlockStorage::Payload);
+  test_assert(rt.ext<AttachmentTypeRegistry>().find(kNote)->info.storage ==
+              BlockStorage::Payload);
 }
 
 /* ---- 6: what hangs on a Transient block ---- */
@@ -106,7 +116,8 @@ static void test_storage()
 static void test_transient()
 {
   IoWorld w;
-  const BlockHandle a = w.doc(1, "a"), through = w.doc(2, "through"), bare = w.doc(3, "bare");
+  const BlockHandle a = w.doc(1, "a"), through = w.doc(2, "through"),
+                    bare = w.doc(3, "bare");
   const BlockHandle t = transient(w, 10, "actor"), plain = transient(w, 11, "plain");
   const BlockHandle loose = transient(w, 12, "loose");
   w.root(a);
@@ -135,28 +146,29 @@ static void test_transient()
   /* Its references keep what they kept. */
   test_assert(*r.lib.collect() == 1 && r.at(2) && !r.at(3));
   test_assert(
-      r.lib.createWithId(kTransient, cid(10), "back", litestl::alloc::New<Thing>("T")).ok());
+      r.lib.createWithId(kTransient, cid(10), "back", litestl::alloc::New<Thing>("T"))
+          .ok());
   test_assert(r.lib.resolveRef(r.data(r.at(1))->entries[0].refs[0]) == rt);
   test_assert(static_cast<Note *>(r.lib.attachment(rt, kNote))->value == 4);
   test_assert(r.lib.slot(rt, kNote, 2)->target == cid(1));
 
-  /* A slot alone, an attachment (one nobody can read too), or a newer build's fields are enough. */
+  /* A slot alone, an attachment (one nobody can read too), or a newer build's fields are
+   * enough. */
   for (int what = 0; what < 3; what++) {
     IoWorld v;
     const BlockHandle h = transient(v, 10, "actor");
     v.root(h);
     if (what == 0) {
       test_assert(v.lib.setSlot(h, kNote, 2, BlockId(), RefKind::OptStrong).ok());
-    }
-    else if (what == 1) {
+    } else if (what == 1) {
       v.note(h, 4, BlockId());
-    }
-    else {
+    } else {
       OpaqueAttachment o;
       o.typeName = "x.Other";
       test_assert(v.lib.attachOpaque(h, o).ok());
     }
-    test_assert(v.save(&report).size() > 0 && report.blocks == 1 && report.transient.size() == 1);
+    test_assert(v.save(&report).size() > 0 && report.blocks == 1 &&
+                report.transient.size() == 1);
   }
   RawFile f;
   f.names[1] = "test.Transient";
@@ -166,7 +178,8 @@ static void test_transient()
   f.records.push_back(raw);
   IoWorld x;
   test_assert(x.load(f.file()).ok());
-  test_assert(x.lib.createWithId(kTransient, cid(1), "x", litestl::alloc::New<Thing>("T")).ok());
+  test_assert(
+      x.lib.createWithId(kTransient, cid(1), "x", litestl::alloc::New<Thing>("T")).ok());
   test_assert(x.save(&report).size() > 0 && report.blocks == 1);
 }
 
@@ -175,7 +188,8 @@ static void test_transient()
 static void test_host_pins()
 {
   IoWorld w;
-  const BlockHandle root = w.doc(1, "root"), pinned = w.doc(2, "pinned"), under = w.doc(3, "under");
+  const BlockHandle root = w.doc(1, "root"), pinned = w.doc(2, "pinned"),
+                    under = w.doc(3, "under");
   const BlockHandle both = w.doc(4, "both"), history = w.doc(5, "history");
   w.root(root);
   w.link(root, both);
@@ -230,7 +244,8 @@ static void test_source()
   LoadOptions options;
   options.sourceName = "C:/secret/path.cdcc";
   test_assert(w.load(bytes, nullptr, options).ok());
-  test_assert(source(w, cid(1)) == "C:/secret/path.cdcc" && source(w, cid(2)) == "stored.cdcc");
+  test_assert(source(w, cid(1)) == "C:/secret/path.cdcc" &&
+              source(w, cid(2)) == "stored.cdcc");
   test_assert(source(w, missing) == "C:/secret/path.cdcc");
   test_assert(sameBytes(w.save(), bytes));
   /* Nor does a copy have it, while what was stored is copied. */
@@ -241,7 +256,8 @@ static void test_source()
   /* Filling clears it, and it doesn't come back with a later save. */
   registerDoc(w.rt, w.docs);
   test_assert(detail::resolvePlaceholders(w.lib).ok() && source(w, cid(1)).empty());
-  test_assert(w.lib.createWithId(kAcmeDoc, missing, "x", litestl::alloc::New<Doc>("Doc")).ok());
+  test_assert(
+      w.lib.createWithId(kAcmeDoc, missing, "x", litestl::alloc::New<Doc>("Doc")).ok());
   test_assert(source(w, missing).empty());
   /* Taken back, it is there again. */
   Result<BlockHandle> kept = w.lib.unadopt(w.lib.find(missing));
@@ -253,7 +269,8 @@ static void test_source()
   Result<AppendResult> r = into.append(bytes, from);
   test_assert(r.ok() && source(into, r->ids.find(cid(1))) == "lib.cdcc");
   const Bytes saved = into.save();
-  const std::string text(reinterpret_cast<const char *>(saved.data()), size_t(saved.size()));
+  const std::string text(reinterpret_cast<const char *>(saved.data()),
+                         size_t(saved.size()));
   test_assert(!has(text, "lib.cdcc") && has(text, "stored.cdcc"));
 }
 
@@ -320,12 +337,13 @@ static void test_attachment_refs()
     w.notes.skipRef = true;
     SaveReport report;
     Result<Bytes> r = saveLibrary(w.lib, &report);
-    const char *what = "'a', attachment 'test.Note': foreachRef reports a reference that serialize";
+    const char *what =
+        "'a', attachment 'test.Note': foreachRef reports a reference that serialize";
     if (audit) {
       test_assert(r.status().code() == StatusCode::Internal && hasMsg(r.status(), what));
-    }
-    else {
-      test_assert(r.ok() && report.issues.total == 1 && has(issueText(report.issues), what));
+    } else {
+      test_assert(r.ok() && report.issues.total == 1 &&
+                  has(issueText(report.issues), what));
       test_assert(report.issues.first[0].block == cid(1));
     }
     w.notes.skipRef = false;
@@ -348,10 +366,12 @@ static void test_opaque()
   IoWorld r(k);
   test_assert(r.load(bytes).ok() && r.lib.hasAttachment(r.at(1), kNote));
   test_assert(r.lib.detachOpaque(r.at(1), kBare).status().code() == StatusCode::NotFound);
-  test_assert(r.lib.detachOpaque(BlockHandle(), kNote).status().code() == StatusCode::NotFound);
+  test_assert(r.lib.detachOpaque(BlockHandle(), kNote).status().code() ==
+              StatusCode::NotFound);
   test_assert(r.lib.usersOf(r.at(2)).size() == 1);
   Result<OpaqueAttachment> o = r.lib.detachOpaque(r.at(1), kNote);
-  test_assert(o.ok() && strcmp(o->typeName.c_str(), "test.Note") == 0 && o->payload.refs.size() == 1);
+  test_assert(o.ok() && strcmp(o->typeName.c_str(), "test.Note") == 0 &&
+              o->payload.refs.size() == 1);
   test_assert(!r.lib.hasAttachment(r.at(1), kNote) && r.lib.usersOf(r.at(2)).size() == 0);
   test_assert(r.lib.detachOpaque(r.at(1), kNote).status().code() == StatusCode::NotFound);
   test_assert(r.lib.attachOpaque(r.at(1), *o).ok() && r.lib.usersOf(r.at(2)).size() == 1);
@@ -505,7 +525,8 @@ static void test_load_cost()
       test_assert(w.lib.setSlot(h, kNote, 2, cid(700 + i), RefKind::Strong).ok());
       test_assert(w.lib.setSlot(h, kNote, 3, cid(800 + i), RefKind::Weak).ok());
     }
-    test_assert(w.lib.setSlot(w.at(1), kNote, 4, cid(2), RefKind::Strong).ok()); /* not missing */
+    test_assert(
+        w.lib.setSlot(w.at(1), kNote, 4, cid(2), RefKind::Strong).ok()); /* not missing */
     PlaceholderInfo info;
     info.typeName = "x.Gone";
     info.sourceName = "somewhere";
@@ -514,7 +535,8 @@ static void test_load_cost()
     }
     test_assert(w.lib.addPlaceholder(cid(300), info).ok());
     OpaqueAttachment o;
-    o.typeName = ("x." + std::string(large ? 900 : 5, 'o')).c_str(); /* names compress too */
+    o.typeName =
+        ("x." + std::string(large ? 900 : 5, 'o')).c_str(); /* names compress too */
     o.payload.bytes = bytesOf({1, 2, 3});
     test_assert(w.lib.attachOpaque(w.lib.find(cid(300)), o).ok());
     w.lib.noteRefsChanged();
@@ -558,7 +580,9 @@ static void test_load_cost()
 
 static void test_duplicate_fails()
 {
-  for (DocFault fault : {DocFault::LateSticky, DocFault::NoData, DocFault::Error, DocFault::Sticky}) {
+  for (DocFault fault :
+       {DocFault::LateSticky, DocFault::NoData, DocFault::Error, DocFault::Sticky})
+  {
     IoWorld w;
     const BlockHandle a = w.doc(1, "a"), b = w.doc(2, "b");
     w.link(a, b);
@@ -654,7 +678,8 @@ static void test_append_alias()
 
 static void test_client_names()
 {
-  const std::string one = "DfOQuVnD5x9129oU", other = "AjGW269UOJAMwZyS"; /* one FNV-1a hash */
+  const std::string one = "DfOQuVnD5x9129oU",
+                    other = "AjGW269UOJAMwZyS"; /* one FNV-1a hash */
   test_assert(ClientId::of(one) == ClientId::of(other));
   RawFile f;
   f.names = {one, "x.Type", other};
@@ -672,13 +697,15 @@ static void test_client_names()
   IoWorld known;
   test_assert(known.rt.ext<ClientRegistry>().registerClient(other).ok());
   s = known.load(f.file());
-  test_assert(s.code() == StatusCode::InvalidArgument && hasMsg(s, "has the id of 'AjGW"));
+  test_assert(s.code() == StatusCode::InvalidArgument &&
+              hasMsg(s, "has the id of 'AjGW"));
 }
 
 static void test_probe()
 {
   test_assert(detail::libio::probeMemory(1 << 20).ok());
-  test_assert(detail::libio::probeMemory(UINT64_MAX / 2).code() == StatusCode::OutOfRange);
+  test_assert(detail::libio::probeMemory(UINT64_MAX / 2).code() ==
+              StatusCode::OutOfRange);
 }
 
 int main()

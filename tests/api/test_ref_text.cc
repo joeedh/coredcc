@@ -46,9 +46,11 @@ static void test_format()
   r.key.append(KeySegment::stringKey("a \"b\"\\\n\xC3\xA9"));
   r.key.append(KeySegment::ofHandle(INT64_MAX));
   r.key.append(KeySegment::member("odd name"));
-  test_assert(formats(rt, r,
-                      "@block(coredcc, 0123456789abcdef0000000000000001).mods"
-                      "[\"a \\\"b\\\"\\\\\\n\xC3\xA9\"][#9223372036854775807].\"odd name\" : Mesh"));
+  test_assert(formats(
+      rt,
+      r,
+      "@block(coredcc, 0123456789abcdef0000000000000001).mods"
+      "[\"a \\\"b\\\"\\\\\\n\xC3\xA9\"][#9223372036854775807].\"odd name\" : Mesh"));
   StableRef tool;
   tool.owner = OwnerKey::ofRuntime(TypeId::of("owner:tool").value);
   tool.key.append(KeySegment::stringKey(""));
@@ -57,21 +59,25 @@ static void test_format()
   /* Names that aren't dotted identifiers are quoted, and ids without one are written. */
   for (const char *name : {"my client", "a..b", "1a", "a.", "#x"}) {
     test_assert(rt.ext<ClientRegistry>().registerClient(name).ok());
-    const std::string want = "@block(\"" + std::string(name) + "\", " + std::string(31, '0') + "1)";
+    const std::string want =
+        "@block(\"" + std::string(name) + "\", " + std::string(31, '0') + "1)";
     test_assert(formats(rt, blockRefOf(ClientId::of(name), 0, 1), want.c_str()));
   }
   test_assert(rt.ext<ClientRegistry>().registerClient("acme.tools_2").ok());
-  test_assert(formats(rt, blockRefOf(ClientId::of("acme.tools_2"), 0, 1),
+  test_assert(formats(rt,
+                      blockRefOf(ClientId::of("acme.tools_2"), 0, 1),
                       "@block(acme.tools_2, 00000000000000000000000000000001)"));
   StableRef unknown = blockRefOf(ClientId{0xabc}, 0, 2);
   unknown.type = StructId{0x1};
-  test_assert(formats(rt, unknown,
+  test_assert(formats(rt,
+                      unknown,
                       "@block(#0000000000000abc, 00000000000000000000000000000002)"
                       " : #0000000000000001"));
   StableRef noOwner;
   noOwner.owner = OwnerKey::ofRuntime(0xffffffffffffffff);
   test_assert(formats(rt, noOwner, "@owner(#ffffffffffffffff)"));
-  noOwner.owner = OwnerKey::ofRuntime(TypeId::of("test.Mesh").value); /* no owner's name */
+  noOwner.owner =
+      OwnerKey::ofRuntime(TypeId::of("test.Mesh").value); /* no owner's name */
   const std::string text = formatRef(rt, noOwner);
   test_assert(text.substr(0, 8) == "@owner(#" && *parseRef(rt, text) == noOwner);
 }
@@ -89,10 +95,12 @@ static void test_parse()
     return r;
   }();
   const std::string hex = "00000000000000ab0000000000000001";
-  for (const std::string &text : std::initializer_list<std::string>{
+  for (const std::string &text :
+       std::initializer_list<std::string>{
            "@block(coredcc, " + hex + ").m[#3][\"k\"] : Mesh",
            "@block(coredcc," + hex + ").m[#3]['k']:Mesh",
-           " \t@ block ( \"coredcc\" , 00000000000000AB0000000000000001 ) . m [ #3 ] [ 'k' ] : Mesh ",
+           " \t@ block ( \"coredcc\" , 00000000000000AB0000000000000001 ) . m [ #3 ] [ "
+           "'k' ] : Mesh ",
            "@block(coredcc, " + hex + ").'m'[#003][\"k\"] : 'Mesh'",
        })
   {
@@ -113,7 +121,8 @@ static void test_parse()
               ClientId::of("new.acme"));
   /* Without any client registered, names are still ids. */
   Runtime bare;
-  test_assert(parseRef(bare, "@block(x, " + hex + ")")->owner.block.client == ClientId::of("x"));
+  test_assert(parseRef(bare, "@block(x, " + hex + ")")->owner.block.client ==
+              ClientId::of("x"));
 
   struct Case {
     std::string text;
@@ -156,7 +165,10 @@ static void test_parse()
     size_t offset = 12345;
     Result<StableRef> r = parseRef(rt, c.text, &offset);
     if (r.ok() || offset != c.offset || !strstr(r.status().message(), c.why)) {
-      fprintf(stderr, "%.60s: %d, %s\n", c.text.c_str(), int(offset),
+      fprintf(stderr,
+              "%.60s: %d, %s\n",
+              c.text.c_str(),
+              int(offset),
               r.ok() ? "ok" : r.status().message());
       test_assert(false);
     }
@@ -168,8 +180,12 @@ static void test_resolves()
 {
   World w;
   Context ctx = w.context();
-  for (const char *path : {"objects[0]", "objects[\"Sphere\"].data", "tool", "tool.brushes[1]",
-                           "objects[0].mod", "tool.activeBrush"})
+  for (const char *path : {"objects[0]",
+                           "objects[\"Sphere\"].data",
+                           "tool",
+                           "tool.brushes[1]",
+                           "objects[0].mod",
+                           "tool.activeBrush"})
   {
     Result<PropValue> v = getValue(ctx, path);
     test_assert(v.ok());
@@ -186,7 +202,8 @@ static void test_fuzz()
 {
   World w;
   const std::string good =
-      "@block(\"a b\", 00000000000000ab0000000000000001).m[#3][\"k\\n\"] : #00000000000000ff";
+      "@block(\"a b\", 00000000000000ab0000000000000001).m[#3][\"k\\n\"] : "
+      "#00000000000000ff";
   SplitMix64 rng(3);
   int ok = 0;
   const char pool[] = "@()[].:,#\"'\\ \t0aZz_\x80\xff";
@@ -195,14 +212,14 @@ static void test_fuzz()
     for (uint32_t n = 1 + rng.below(4); n > 0; n--) {
       const size_t at = rng.below(uint32_t(s.size()));
       switch (rng.below(3)) {
-        case 0:
-          s[at] = pool[rng.below(sizeof(pool))];
-          break;
-        case 1:
-          s.erase(at, 1 + rng.below(4));
-          break;
-        default:
-          s.insert(at, 1, pool[rng.below(sizeof(pool))]);
+      case 0:
+        s[at] = pool[rng.below(sizeof(pool))];
+        break;
+      case 1:
+        s.erase(at, 1 + rng.below(4));
+        break;
+      default:
+        s.insert(at, 1, pool[rng.below(sizeof(pool))]);
       }
       if (s.empty()) {
         break;
@@ -233,7 +250,8 @@ static void test_block_ids()
   const BlockId unknown{ClientId{0xabc}, {3, 0}};
   test_assert(formatBlockId(rt, own) == "coredcc,0123456789abcdef0000000000000001");
   test_assert(formatBlockId(rt, odd) == "\"a b,c\",00000000000000000000000000000002");
-  test_assert(formatBlockId(rt, unknown) == "#0000000000000abc,00000000000000030000000000000000");
+  test_assert(formatBlockId(rt, unknown) ==
+              "#0000000000000abc,00000000000000030000000000000000");
   test_assert(formatBlockId(rt, BlockId()).empty() && parseBlockId(rt, " ")->isNull());
   for (const BlockId &id : {own, odd, unknown}) {
     test_assert(*parseBlockId(rt, formatBlockId(rt, id)) == id);
@@ -273,7 +291,8 @@ static void test_block_ids()
   test_assert(bad("coredcc," + hex + "1;;", 41, "a name"));
   test_assert(bad("@block(coredcc," + hex + "1)", 0, "a name"));
   size_t offset = 0;
-  test_assert(hasMsg(parseBlockId(rt, text, &offset).status(), "more than one") && offset == 40);
+  test_assert(hasMsg(parseBlockId(rt, text, &offset).status(), "more than one") &&
+              offset == 40);
   const std::string large(kMaxBlockIdsLength + 1, ' ');
   test_assert(hasMsg(parseBlockIds(rt, large).status(), "longer than"));
   test_assert(parseBlockIds(rt, std::string_view(large).substr(1)).ok());

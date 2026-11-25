@@ -128,14 +128,16 @@ static void test_attach_command()
   Notes *n = t.notes();
   test_assert(t.s.ex.undo(t.s.ctx).ok() && !t.notes() && t.host.alive == 1 && heard == 2);
   test_assert(t.s.ex.redo(t.s.ctx).ok() && t.notes() == n && heard == 3);
-  test_assert(t.run(kAttachCommand).code() == StatusCode::AlreadyExists && t.host.alive == 1);
+  test_assert(t.run(kAttachCommand).code() == StatusCode::AlreadyExists &&
+              t.host.alive == 1);
 
   /* Undone and dropped: the command's data goes. */
   test_assert(t.s.ex.undo(t.s.ctx).ok());
   t.s.history.clear();
   test_assert(t.host.alive == 0 && t.lib().get(t.block())->pins() == 0);
 
-  test_assert(hasMsg(t.run(kAttachCommand, "acme.nope"), "no attachment type 'acme.nope'"));
+  test_assert(
+      hasMsg(t.run(kAttachCommand, "acme.nope"), "no attachment type 'acme.nope'"));
   test_assert(t.run(kAttachCommand, "acme.bare").code() == StatusCode::Unsupported);
   t.host.noData = true;
   test_assert(hasMsg(t.run(kAttachCommand), "gave no data"));
@@ -185,17 +187,21 @@ static void test_attach_undo()
   test_assert(attachUndo(t.s.ctx, t.block(), kNotes, n).ok() && t.notes() == n);
   test_assert(t.s.history.size() == 1);
   /* A second one is refused, and destroyed. */
-  test_assert(attachUndo(t.s.ctx, t.block(), kNotes, make()).code() == StatusCode::AlreadyExists);
+  test_assert(attachUndo(t.s.ctx, t.block(), kNotes, make()).code() ==
+              StatusCode::AlreadyExists);
   test_assert(t.host.alive == 1 && t.notes() == n);
-  test_assert(attachUndo(t.s.ctx, BlockHandle(), kNotes, make()).code() == StatusCode::NotFound);
+  test_assert(attachUndo(t.s.ctx, BlockHandle(), kNotes, make()).code() ==
+              StatusCode::NotFound);
   test_assert(t.host.alive == 1);
   Context noEx(&t.s.w.rt, &t.lib(), PointerRef());
-  test_assert(attachUndo(noEx, t.block(), kNotes, make()).code() == StatusCode::FailedPrecondition);
+  test_assert(attachUndo(noEx, t.block(), kNotes, make()).code() ==
+              StatusCode::FailedPrecondition);
   test_assert(t.host.alive == 1);
   Notes stray;
   test_assert(attachUndo(t.s.ctx, t.block(), TypeId::of("nope"), &stray).code() ==
               StatusCode::InvalidArgument); /* not destroyed: nobody knows how */
-  test_assert(attachUndo(t.s.ctx, t.block(), kNotes, nullptr).code() == StatusCode::InvalidArgument);
+  test_assert(attachUndo(t.s.ctx, t.block(), kNotes, nullptr).code() ==
+              StatusCode::InvalidArgument);
   test_assert(t.s.ex.undo(t.s.ctx).ok() && !t.notes());
   test_assert(t.s.ex.redo(t.s.ctx).ok() && t.notes() == n);
   t.s.history.clear();
@@ -205,7 +211,8 @@ static void test_attach_undo()
   Result<void *> d = t.lib().detach(t.s.w.meshes[1], kNotes);
   test_assert(d.ok() && !t.s.ex.undo(t.s.ctx).ok());
   t.s.w.rt.takeStickyError().ignore();
-  AttachmentProvider p = t.s.w.rt.ext<AttachmentTypeRegistry>().find(kNotes)->provider.get();
+  AttachmentProvider p =
+      t.s.w.rt.ext<AttachmentTypeRegistry>().find(kNotes)->provider.get();
   p.destroy(*d);
   t.s.history.clear();
   test_assert(t.host.alive == 1);
@@ -214,7 +221,9 @@ static void test_attach_undo()
 static void test_paths()
 {
   AttSetup t;
-  const auto path = [](const char *rest) { return std::string("objects[\"Cube\"].attachments") + rest; };
+  const auto path = [](const char *rest) {
+    return std::string("objects[\"Cube\"].attachments") + rest;
+  };
   Context &ctx = t.s.ctx;
   test_assert(*getValue(ctx, path(".length")) == PropValue::ofInt(0));
   test_assert(t.run(kAttachCommand).ok());
@@ -228,7 +237,8 @@ static void test_paths()
   test_assert(rp.ok() && rp->canonical.owner == OwnerKey::ofBlock(t.s.w.objectId(0)));
   test_assert(rp.ok() && rp->canonical.key.size() == 3 &&
               strcmp(rp->canonical.key[1].text.c_str(), "acme.notes") == 0);
-  test_assert(!resolve(ctx, path("[1].x")).ok() && !resolve(ctx, path("[\"acme.bare\"]")).ok());
+  test_assert(!resolve(ctx, path("[1].x")).ok() &&
+              !resolve(ctx, path("[\"acme.bare\"]")).ok());
   test_assert(!resolve(ctx, path("[\"nope\"]")).ok());
   test_assert(t.s.ex.undo(ctx).ok() && t.notes()->x == 0);
   test_assert(t.s.ex.redo(ctx).ok() && t.notes()->x == 2);
@@ -253,14 +263,16 @@ static void test_blocks_by_id()
     const BlockId id = lib.get(first)->id();
     const auto replace = [&](BlockHandle h) {
       test_assert(lib.markDeleted(h).ok() && lib.destroyFromHistory(h).ok());
-      Result<BlockHandle> r = lib.reviveAs(kMeshType, id, "made", litestl::alloc::New<Mesh>("Mesh"));
+      Result<BlockHandle> r =
+          lib.reviveAs(kMeshType, id, "made", litestl::alloc::New<Mesh>("Mesh"));
       test_assert(r.ok());
       return *r;
     };
     const BlockHandle second = replace(first);
     test_assert(second != first);
     lib.pin(second, PinKind::History); /* another record's pin */
-    test_assert(s.ex.undo(s.ctx).ok() && lib.get(second)->state() == BlockState::InHistory);
+    test_assert(s.ex.undo(s.ctx).ok() &&
+                lib.get(second)->state() == BlockState::InHistory);
     test_assert(s.ex.redo(s.ctx).ok() && lib.get(second)->state() == BlockState::Live);
     test_assert(s.ex.undo(s.ctx).ok());
     test_assert(lib.restoreFromHistory(second).ok()); /* brought back behind its back */
@@ -294,10 +306,12 @@ static void test_blocks_by_id()
     test_assert(s.ex.run(s.ctx, kDeleteBlockCommand, std::move(in)).ok());
     test_assert(lib.get(first)->pins(PinKind::History) == 1);
     test_assert(lib.destroyFromHistory(first).ok());
-    Result<BlockHandle> second = lib.reviveAs(kMeshType, id, "m", litestl::alloc::New<Mesh>("Mesh"));
+    Result<BlockHandle> second =
+        lib.reviveAs(kMeshType, id, "m", litestl::alloc::New<Mesh>("Mesh"));
     test_assert(second.ok() && lib.markDeleted(*second).ok());
     test_assert(s.ex.undo(s.ctx).ok() && lib.get(*second)->state() == BlockState::Live);
-    test_assert(s.ex.redo(s.ctx).ok() && lib.get(*second)->state() == BlockState::InHistory);
+    test_assert(s.ex.redo(s.ctx).ok() &&
+                lib.get(*second)->state() == BlockState::InHistory);
     s.history.clear();
     test_assert(!lib.get(*second) && lib.validate().ok() && !s.w.rt.hasStickyError());
   }
@@ -317,17 +331,20 @@ static void test_drop_oldest()
   r.owner = OwnerKey::ofBlock(lib.get(h)->id());
   PropertyBag in = s.w.rt.ext<CommandRegistry>().find(kDeleteBlockCommand)->newInputs();
   test_assert(in.set("block", PropValue::ofPointer(r)).ok());
-  test_assert(s.ex.run(s.ctx, kDeleteBlockCommand, std::move(in)).ok() && s.history.size() == 2);
+  test_assert(s.ex.run(s.ctx, kDeleteBlockCommand, std::move(in)).ok() &&
+              s.history.size() == 2);
   s.history.setMemoryBudget(1);
   test_assert(s.history.size() == 1 && lib.get(h));
-  test_assert(s.ex.undo(s.ctx).ok() && lib.get(h) && lib.get(h)->state() == BlockState::Live);
+  test_assert(s.ex.undo(s.ctx).ok() && lib.get(h) &&
+              lib.get(h)->state() == BlockState::Live);
   test_assert(s.ex.redo(s.ctx).ok());
 
   /* A destroy that is refused reports through the sticky error. */
   s.w.rt.takeStickyError().ignore();
-  test_assert((registerImpl<BlockProvider, RigProvider>(s.w.rt, "test.Rig#provider").ok()));
-  Result<Owned<BlockProvider>> owned =
-      own<BlockProvider>(s.w.rt, "test.Rig#provider", litestl::alloc::New<RigProvider>("provider"));
+  test_assert(
+      (registerImpl<BlockProvider, RigProvider>(s.w.rt, "test.Rig#provider").ok()));
+  Result<Owned<BlockProvider>> owned = own<BlockProvider>(
+      s.w.rt, "test.Rig#provider", litestl::alloc::New<RigProvider>("provider"));
   BlockTypeInfo info;
   info.name = "test.Rig";
   info.client = ClientId::of(kCoredccClient);

@@ -35,8 +35,9 @@ uint8_t *BytesWriter::grow(size_t n)
     return nullptr;
   }
   if (n > max_ || size > max_ - n) {
-    fail(Status::error(StatusCode::OutOfRange,
-                       ("more than " + std::to_string(max_) + " bytes to write").c_str()));
+    fail(
+        Status::error(StatusCode::OutOfRange,
+                      ("more than " + std::to_string(max_) + " bytes to write").c_str()));
     return nullptr;
   }
   data_.resize<false>(size + n);
@@ -266,8 +267,7 @@ void BytesReader::numbers(void *to, size_t n, size_t size)
 {
   if (const uint8_t *p = take(n * size)) {
     detail::copyNumbers(to, p, n, size, detail::kSwapBytes);
-  }
-  else if (n > 0) {
+  } else if (n > 0) {
     memset(to, 0, n * size);
   }
 }
@@ -295,8 +295,8 @@ void BytesReader::fail(StatusCode code, const char *message)
   if (!status_.ok()) {
     return;
   }
-  status_ = Status::error(code,
-                          (std::string(message) + " (at byte " + std::to_string(at_) + ")").c_str());
+  status_ = Status::error(
+      code, (std::string(message) + " (at byte " + std::to_string(at_) + ")").c_str());
   at_ = bytes_.size();
 }
 

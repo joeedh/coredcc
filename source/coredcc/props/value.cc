@@ -18,32 +18,32 @@ using litestl::util::string;
 const char *propValueTypeName(PropValue::Type type)
 {
   switch (type) {
-    case PropValue::Type::None:
-      return "None";
-    case PropValue::Type::Bool:
-      return "Bool";
-    case PropValue::Type::Int:
-      return "Int";
-    case PropValue::Type::Float:
-      return "Float";
-    case PropValue::Type::String:
-      return "String";
-    case PropValue::Type::Vec2:
-      return "Vec2";
-    case PropValue::Type::Vec3:
-      return "Vec3";
-    case PropValue::Type::Vec4:
-      return "Vec4";
-    case PropValue::Type::Mat4:
-      return "Mat4";
-    case PropValue::Type::Quat:
-      return "Quat";
-    case PropValue::Type::Enum:
-      return "Enum";
-    case PropValue::Type::Flags:
-      return "Flags";
-    case PropValue::Type::Pointer:
-      return "Pointer";
+  case PropValue::Type::None:
+    return "None";
+  case PropValue::Type::Bool:
+    return "Bool";
+  case PropValue::Type::Int:
+    return "Int";
+  case PropValue::Type::Float:
+    return "Float";
+  case PropValue::Type::String:
+    return "String";
+  case PropValue::Type::Vec2:
+    return "Vec2";
+  case PropValue::Type::Vec3:
+    return "Vec3";
+  case PropValue::Type::Vec4:
+    return "Vec4";
+  case PropValue::Type::Mat4:
+    return "Mat4";
+  case PropValue::Type::Quat:
+    return "Quat";
+  case PropValue::Type::Enum:
+    return "Enum";
+  case PropValue::Type::Flags:
+    return "Flags";
+  case PropValue::Type::Pointer:
+    return "Pointer";
   }
   return "?";
 }
@@ -51,32 +51,32 @@ const char *propValueTypeName(PropValue::Type type)
 PropValue::Type valueTypeFor(PropKind kind)
 {
   switch (kind) {
-    case PropKind::Bool:
-      return PropValue::Type::Bool;
-    case PropKind::Int:
-      return PropValue::Type::Int;
-    case PropKind::Float:
-      return PropValue::Type::Float;
-    case PropKind::String:
-      return PropValue::Type::String;
-    case PropKind::Enum:
-      return PropValue::Type::Enum;
-    case PropKind::Flags:
-      return PropValue::Type::Flags;
-    case PropKind::Vec2:
-      return PropValue::Type::Vec2;
-    case PropKind::Vec3:
-      return PropValue::Type::Vec3;
-    case PropKind::Vec4:
-      return PropValue::Type::Vec4;
-    case PropKind::Mat4:
-      return PropValue::Type::Mat4;
-    case PropKind::Quat:
-      return PropValue::Type::Quat;
-    case PropKind::Pointer:
-      return PropValue::Type::Pointer;
-    case PropKind::Collection:
-      return PropValue::Type::None;
+  case PropKind::Bool:
+    return PropValue::Type::Bool;
+  case PropKind::Int:
+    return PropValue::Type::Int;
+  case PropKind::Float:
+    return PropValue::Type::Float;
+  case PropKind::String:
+    return PropValue::Type::String;
+  case PropKind::Enum:
+    return PropValue::Type::Enum;
+  case PropKind::Flags:
+    return PropValue::Type::Flags;
+  case PropKind::Vec2:
+    return PropValue::Type::Vec2;
+  case PropKind::Vec3:
+    return PropValue::Type::Vec3;
+  case PropKind::Vec4:
+    return PropValue::Type::Vec4;
+  case PropKind::Mat4:
+    return PropValue::Type::Mat4;
+  case PropKind::Quat:
+    return PropValue::Type::Quat;
+  case PropKind::Pointer:
+    return PropValue::Type::Pointer;
+  case PropKind::Collection:
+    return PropValue::Type::None;
   }
   return PropValue::Type::None;
 }
@@ -84,19 +84,19 @@ PropValue::Type valueTypeFor(PropKind kind)
 int valueComponentCount(PropValue::Type type)
 {
   switch (type) {
-    case PropValue::Type::Float:
-      return 1;
-    case PropValue::Type::Vec2:
-      return 2;
-    case PropValue::Type::Vec3:
-      return 3;
-    case PropValue::Type::Vec4:
-    case PropValue::Type::Quat:
-      return 4;
-    case PropValue::Type::Mat4:
-      return 16;
-    default:
-      return 0;
+  case PropValue::Type::Float:
+    return 1;
+  case PropValue::Type::Vec2:
+    return 2;
+  case PropValue::Type::Vec3:
+    return 3;
+  case PropValue::Type::Vec4:
+  case PropValue::Type::Quat:
+    return 4;
+  case PropValue::Type::Mat4:
+    return 16;
+  default:
+    return 0;
   }
 }
 
@@ -352,21 +352,21 @@ bool PropValue::operator==(const PropValue &b) const
     return false;
   }
   switch (type_) {
-    case Type::None:
-      return true;
-    case Type::Bool:
-      return b_ == b.b_;
-    case Type::Int:
-    case Type::Enum:
-      return i_ == b.i_;
-    case Type::Flags:
-      return u_ == b.u_;
-    case Type::String:
-      return strcmp(heap_->str.c_str(), b.heap_->str.c_str()) == 0;
-    case Type::Pointer:
-      return heap_->ref == b.heap_->ref;
-    default:
-      return memcmp(comps(), b.comps(), sizeof(double) * componentCount()) == 0;
+  case Type::None:
+    return true;
+  case Type::Bool:
+    return b_ == b.b_;
+  case Type::Int:
+  case Type::Enum:
+    return i_ == b.i_;
+  case Type::Flags:
+    return u_ == b.u_;
+  case Type::String:
+    return strcmp(heap_->str.c_str(), b.heap_->str.c_str()) == 0;
+  case Type::Pointer:
+    return heap_->ref == b.heap_->ref;
+  default:
+    return memcmp(comps(), b.comps(), sizeof(double) * componentCount()) == 0;
   }
 }
 
@@ -378,28 +378,28 @@ uint64_t PropValue::computeHash() const
     h = detail::fnv1a64(std::string_view(static_cast<const char *>(p), n), h);
   };
   switch (type_) {
-    case Type::None:
-      break;
-    case Type::Bool:
-      bytes(&b_, sizeof(b_));
-      break;
-    case Type::Int:
-    case Type::Enum:
-      bytes(&i_, sizeof(i_));
-      break;
-    case Type::Flags:
-      bytes(&u_, sizeof(u_));
-      break;
-    case Type::String:
-      bytes(heap_->str.c_str(), strlen(heap_->str.c_str()));
-      break;
-    case Type::Pointer: {
-      const uint64_t r = heap_->ref.computeHash();
-      bytes(&r, sizeof(r));
-      break;
-    }
-    default:
-      bytes(comps(), sizeof(double) * componentCount());
+  case Type::None:
+    break;
+  case Type::Bool:
+    bytes(&b_, sizeof(b_));
+    break;
+  case Type::Int:
+  case Type::Enum:
+    bytes(&i_, sizeof(i_));
+    break;
+  case Type::Flags:
+    bytes(&u_, sizeof(u_));
+    break;
+  case Type::String:
+    bytes(heap_->str.c_str(), strlen(heap_->str.c_str()));
+    break;
+  case Type::Pointer: {
+    const uint64_t r = heap_->ref.computeHash();
+    bytes(&r, sizeof(r));
+    break;
+  }
+  default:
+    bytes(comps(), sizeof(double) * componentCount());
   }
   return h;
 }
@@ -427,37 +427,37 @@ std::string PropValue::toString() const
 {
   std::string out;
   switch (type_) {
-    case Type::None:
-      return "None";
-    case Type::Bool:
-      return b_ ? "true" : "false";
-    case Type::Int:
-      return std::to_string(i_);
-    case Type::Enum:
-      return "#" + std::to_string(i_);
-    case Type::Flags: {
-      char buf[32];
-      snprintf(buf, sizeof(buf), "0x%" PRIx64, u_);
-      return buf;
-    }
-    case Type::String:
-      appendQuoted(out, heap_->str.c_str());
-      return out;
-    case Type::Pointer:
-      return heap_->ref.toString();
-    case Type::Float:
-      appendDouble(out, d_[0]);
-      return out;
-    default:
-      out += '(';
-      for (int i = 0; i < componentCount(); i++) {
-        if (i) {
-          out += ", ";
-        }
-        appendDouble(out, comps()[i]);
+  case Type::None:
+    return "None";
+  case Type::Bool:
+    return b_ ? "true" : "false";
+  case Type::Int:
+    return std::to_string(i_);
+  case Type::Enum:
+    return "#" + std::to_string(i_);
+  case Type::Flags: {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "0x%" PRIx64, u_);
+    return buf;
+  }
+  case Type::String:
+    appendQuoted(out, heap_->str.c_str());
+    return out;
+  case Type::Pointer:
+    return heap_->ref.toString();
+  case Type::Float:
+    appendDouble(out, d_[0]);
+    return out;
+  default:
+    out += '(';
+    for (int i = 0; i < componentCount(); i++) {
+      if (i) {
+        out += ", ";
       }
-      out += ')';
-      return out;
+      appendDouble(out, comps()[i]);
+    }
+    out += ')';
+    return out;
   }
 }
 

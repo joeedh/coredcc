@@ -16,13 +16,15 @@ bool isFloat(const GraphValue &v, double x)
 {
   const bool ok = v == GraphValue::ofFloat(x);
   if (!ok) {
-    printf("%s %g\n", graphValueTypeName(v.type()),
+    printf("%s %g\n",
+           graphValueTypeName(v.type()),
            v.type() == GraphValue::Type::Float ? v.asFloat() : 0.0);
   }
   return ok;
 }
 
-SocketPath socket(NodePath node, std::string_view key, SocketSide side = SocketSide::Output)
+SocketPath
+socket(NodePath node, std::string_view key, SocketSide side = SocketSide::Output)
 {
   return SocketPath::of(std::move(node), key, side);
 }
@@ -127,7 +129,8 @@ void testPeek()
   test_assert(i.peek(socket(at({n.group}, n.y), "value")).isNone());
   test_assert(i.peek(socket(at({n.group}, n.y), "a", SocketSide::Input)).isNone());
   test_assert(isFloat(i.peek(socket(at({}, n.a), "a", SocketSide::Input)), -100));
-  test_assert(i.clear().ok() && i.peek(socket(at({}, n.a), "a", SocketSide::Input)).isNone());
+  test_assert(i.clear().ok() &&
+              i.peek(socket(at({}, n.a), "a", SocketSide::Input)).isNone());
 
   /* Interior sockets that links use. */
   connect(*n.root.def, n.group, interior, n.c, "a");
@@ -150,7 +153,8 @@ void testPeekOverBudget()
   n.inst.setMaxFrames(1);
   const NodeId again = add(*n.root.def, kGraphGroupType);
   test_assert(n.root.def->setGroup(again, n.inner.id).ok());
-  const SocketPath both[] = {SocketPath::of(n.b, "value"), SocketPath::of(again, key(n.z))};
+  const SocketPath both[] = {SocketPath::of(n.b, "value"),
+                             SocketPath::of(again, key(n.z))};
   litestl::util::Vector<Status> results;
   test_assert(hasCode(n.inst.evaluate(both, results), StatusCode::OutOfRange));
   test_assert(n.inst.peek(socket(at({}, n.b), "a", SocketSide::Input)).isNone());
@@ -193,24 +197,29 @@ void testElements()
     p.elements.append(element);
     return p;
   };
-  auto peek = [&](int64_t element, NodeId node, std::string_view key,
+  auto peek = [&](int64_t element,
+                  NodeId node,
+                  std::string_view key,
                   SocketSide side = SocketSide::Output) {
     return l.inst.peek(socket(inside(element, node), key, side));
   };
-  test_assert(isFloat(peek(5, l.add, "value"), 11) && isFloat(peek(6, l.add, "value"), 12));
+  test_assert(isFloat(peek(5, l.add, "value"), 11) &&
+              isFloat(peek(6, l.add, "value"), 12));
   test_assert(isFloat(peek(6, l.add, "a", SocketSide::Input), 2));
-  test_assert(isFloat(peek(6, l.innerIn, key(l.a)), 2));     /* a column */
-  test_assert(isFloat(peek(6, l.innerIn, key(l.b)), 10));    /* the node's own */
+  test_assert(isFloat(peek(6, l.innerIn, key(l.a)), 2));  /* a column */
+  test_assert(isFloat(peek(6, l.innerIn, key(l.b)), 10)); /* the node's own */
   test_assert(isFloat(peek(6, NodeId(), key(l.sum)), 12));
   test_assert(peek(7, l.add, "value").isNone());
   test_assert(l.inst.peek(socket(at({l.node}, l.add), "value")).isNone()); /* which? */
-  test_assert(inside(5, l.add).toString() == std::to_string(l.node.value) + "/" +
-                                                 std::to_string(l.add.value) + "[5]");
-  test_assert(!(inside(5, l.add) == inside(6, l.add)) && inside(5, l.add) == inside(5, l.add));
+  test_assert(inside(5, l.add).toString() ==
+              std::to_string(l.node.value) + "/" + std::to_string(l.add.value) + "[5]");
+  test_assert(!(inside(5, l.add) == inside(6, l.add)) &&
+              inside(5, l.add) == inside(5, l.add));
 
   /* Reports. */
   NodeReport r = l.inst.report(inside(5, l.add));
-  test_assert(r.state == State::Ok && r.runs == 1 && r.current && r.totalSeconds >= r.seconds);
+  test_assert(r.state == State::Ok && r.runs == 1 && r.current &&
+              r.totalSeconds >= r.seconds);
   test_assert(l.inst.report(inside(7, l.add)).state == State::NotEvaluated);
   const NodeReport whole = l.inst.report(at({}, l.node));
   test_assert(whole.elements == 2 && whole.current && whole.memory.elements == 2);
@@ -223,12 +232,14 @@ void testElements()
   test_assert(!l.evaluate().ok() && l.error());
   test_assert(l.error()->origin == inside(6, l.add));
   r = l.inst.report(l.error()->origin);
-  test_assert(r.state == State::Failed && r.error.status.code() == StatusCode::OutOfRange);
+  test_assert(r.state == State::Failed &&
+              r.error.status.code() == StatusCode::OutOfRange);
   test_assert(r.error.origin.elements.size() == 0); /* as seen in the element */
   test_assert(peek(6, l.add, "value").isNone() && isFloat(peek(5, l.add, "value"), 11));
   test_assert(l.inst.report(inside(5, l.add)).current);
   test_assert(!l.inst.report(inside(7, l.add)).current);
-  test_assert(hasCode(l.inst.evaluate(socket(inside(5, l.add), "value")), StatusCode::NotFound));
+  test_assert(
+      hasCode(l.inst.evaluate(socket(inside(5, l.add), "value")), StatusCode::NotFound));
   test_assert(hasCode(l.inst.drop(inside(5, l.add)), StatusCode::Unsupported));
 
   /* One that wasn't reached since something else moved, though the foreach is current. */
@@ -282,7 +293,8 @@ void testNestedElements()
     }
     return l.inst.peek(socket(p, "a", SocketSide::Input));
   };
-  test_assert(isFloat(peek({4, 1}), 1) && isFloat(peek({5, 2}), 2) && isFloat(peek({5, 0}), 0));
+  test_assert(isFloat(peek({4, 1}), 1) && isFloat(peek({5, 2}), 2) &&
+              isFloat(peek({5, 0}), 0));
   test_assert(peek({4, 2}).isNone() && peek({2, 5}).isNone() && peek({5}).isNone());
   NodePath p = at({l.node, each}, sum);
   p.elements.append(5);
@@ -305,14 +317,15 @@ void testPeekLost()
   test_assert(i.evaluate(c).ok() && n.evaluate().ok());
   test_assert(isFloat(i.peek(inside), 1) && isFloat(i.peek(whole), 3));
   test_assert(n.w.lib.markDeleted(n.inner.h).ok());
-  test_assert(!n.evaluate().ok() && i.evaluate(c).ok()); /* a link from nowhere has the default */
+  test_assert(!n.evaluate().ok() &&
+              i.evaluate(c).ok()); /* a link from nowhere has the default */
   test_assert(i.peek(inside).isNone() && i.peek(whole).isNone());
   test_assert(n.w.lib.restoreFromHistory(n.inner.h).ok());
   test_assert(i.evaluate(c).ok() && isFloat(i.peek(inside), 1));
 }
 
-/* A group that contains itself, as only an undo record could have it: its frame is still that of
- * the graph it had, where nodes of the other may be found by id. */
+/* A group that contains itself, as only an undo record could have it: its frame is still
+ * that of the graph it had, where nodes of the other may be found by id. */
 void testPeekSelf(bool nested)
 {
   Nest n;
@@ -331,7 +344,8 @@ void testPeekSelf(bool nested)
     interior = "@" + std::to_string(leaf.value) + "/" + interior.substr(1);
   }
   connect(r, group, interior, n.c, "a");
-  const SocketPath c = SocketPath::of(n.c, "value"), inside = socket(at({}, group), interior);
+  const SocketPath c = SocketPath::of(n.c, "value"),
+                   inside = socket(at({}, group), interior);
   test_assert(i.evaluate(c).ok() && isFloat(i.peek(inside), 1));
   GraphDef &changed = nested ? *mid.def : r;
   const NodeId place = nested ? leaf : group;
@@ -439,10 +453,13 @@ void testDrop()
     last = i.totalRuns();
     return r;
   };
-  /* A node: it runs when it is needed, and what is below it, as it might give another value. */
-  test_assert(drop(at({}, n.a)).ok() && i.report(at({}, n.a)).state == State::NotEvaluated);
+  /* A node: it runs when it is needed, and what is below it, as it might give another
+   * value. */
+  test_assert(drop(at({}, n.a)).ok() &&
+              i.report(at({}, n.a)).state == State::NotEvaluated);
   test_assert(i.peek(SocketPath::of(n.a, "value")).isNone());
-  test_assert(isFloat(*i.value(SocketPath::output("out")), 13)); /* a result isn't the node's */
+  test_assert(
+      isFloat(*i.value(SocketPath::output("out")), 13)); /* a result isn't the node's */
   test_assert(n.evaluate().ok() && runs() == 2); /* a, and y, which gives what it did */
   test_assert(i.changedAt(SocketPath::output("out")) == stamp);
   test_assert(n.evaluate().ok() && runs() == 0);
@@ -453,7 +470,8 @@ void testDrop()
   /* Inside a group; twice; a node without a kernel. */
   test_assert(drop(at({n.group}, n.zNode)).ok() && drop(at({n.group}, n.zNode)).ok());
   test_assert(drop(at({}, n.rootInput)).ok());
-  test_assert(n.evaluate().ok() && runs() == 2 && isFloat(*i.value(SocketPath::output("out")), 13));
+  test_assert(n.evaluate().ok() && runs() == 2 &&
+              isFloat(*i.value(SocketPath::output("out")), 13));
 
   /* A group: its frames go, also those that only a removed node's link led to. */
   const GraphMemory before = i.memory();
@@ -477,7 +495,8 @@ void testDrop()
   connect(*n.root.def, n.group, key(plain), n.c, "a");
   const SocketPath c = SocketPath::of(n.c, "value");
   test_assert(i.evaluate(c).ok() && isFloat(*i.value(c), 10));
-  test_assert(drop(at({}, n.group)).ok() && i.setInput("in", GraphValue::ofFloat(11)).ok());
+  test_assert(drop(at({}, n.group)).ok() &&
+              i.setInput("in", GraphValue::ofFloat(11)).ok());
   test_assert(i.evaluate(c).ok() && isFloat(*i.value(c), 11));
   test_assert(i.setInput("in", GraphValue::ofFloat(10)).ok() && n.evaluate().ok());
 
@@ -489,7 +508,8 @@ void testDrop()
   test_assert(i.evaluate(p).ok() && isFloat(*i.value(p), 3));
   test_assert(drop(at({}, read)).ok() && n.evaluate().ok());
   const uint64_t edit = n.w.rt.lastEdit();
-  n.w.rt.ext<GraphSystem>().follow(idOf(n.w.lib, t), 1); /* so that a notification is an edit */
+  n.w.rt.ext<GraphSystem>().follow(idOf(n.w.lib, t),
+                                   1); /* so that a notification is an edit */
   n.w.thing(t).value = 4;
   n.w.notify(idOf(n.w.lib, t));
   test_assert(n.w.rt.lastEdit() > edit && i.isCurrent(SocketPath::output("out")));
@@ -502,9 +522,11 @@ void testDrop()
   World w;
   Loop l(w);
   l.set(table({1, 2}, {{"a", {1, 2}}}));
-  test_assert(l.is({1, 2}, {{"sum", {1, 2}}, {"c2", {0, 0}}}, 4) && l.inst.elementCount() == 2);
+  test_assert(l.is({1, 2}, {{"sum", {1, 2}}, {"c2", {0, 0}}}, 4) &&
+              l.inst.elementCount() == 2);
   const size_t payloads = l.inst.report(at({}, l.node)).memory.payloadBytes;
-  test_assert(payloads > 0 && l.inst.drop(at({}, l.node)).ok() && l.inst.elementCount() == 0);
+  test_assert(payloads > 0 && l.inst.drop(at({}, l.node)).ok() &&
+              l.inst.elementCount() == 0);
   const NodeReport dropped = l.inst.report(at({}, l.node));
   test_assert(dropped.memory.payloadBytes == 0 && dropped.elements == 0);
   test_assert(l.is({1, 2}, {{"sum", {1, 2}}, {"c2", {0, 0}}}, 4));

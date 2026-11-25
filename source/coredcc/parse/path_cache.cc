@@ -19,7 +19,9 @@ void PathPtr::release()
   n_ = nullptr;
 }
 
-PathCache::PathCache(Runtime *) {}
+PathCache::PathCache(Runtime *)
+{
+}
 
 PathCache::~PathCache()
 {
@@ -112,8 +114,11 @@ Status PathCache::validate() const
     prev = n;
     count++;
   }
-  if (prev != oldest_ || count != size_ || int(byHash_.size()) != size_ || size_ > capacity_) {
-    return Status::error(StatusCode::Internal, "PathCache: size, list and index disagree");
+  if (prev != oldest_ || count != size_ || int(byHash_.size()) != size_ ||
+      size_ > capacity_)
+  {
+    return Status::error(StatusCode::Internal,
+                         "PathCache: size, list and index disagree");
   }
   return Status();
 }

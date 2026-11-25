@@ -16,15 +16,16 @@
 namespace coredcc {
 
 /**
- * The value of a socket, 40 bytes. Numbers and vectors are inline. The components of a Mat4
- * are shared between its copies and never change, so copying one never allocates (copying a
- * Mat4 PropValue does), but making one does. Mat4 is column-major, Quat is xyzw.
+ * The value of a socket, 40 bytes. Numbers and vectors are inline. The components of a
+ * Mat4 are shared between its copies and never change, so copying one never allocates
+ * (copying a Mat4 PropValue does), but making one does. Mat4 is column-major, Quat is
+ * xyzw.
  *
  * `==` compares floats bitwise, as PropValue does (NaN equals itself), and payloads by
  * PayloadRef's `==`. The `as*` accessors abort on the wrong type.
  */
 class GraphValue {
- public:
+public:
   enum class Type : uint8_t {
     None,
     Bool,
@@ -39,7 +40,9 @@ class GraphValue {
     Payload,
   };
 
-  GraphValue() {}
+  GraphValue()
+  {
+  }
   GraphValue(const GraphValue &b);
   GraphValue(GraphValue &&b) noexcept;
   GraphValue &operator=(const GraphValue &b);
@@ -86,8 +89,8 @@ class GraphValue {
   const double *components() const;
   /** A payload value's reference, which may be null. */
   const PayloadRef &asPayload() const;
-  /** What it has outside of itself, for memory reports: components shared with copies count
-   * for each, a payload doesn't (PayloadRef::bytes). */
+  /** What it has outside of itself, for memory reports: components shared with copies
+   * count for each, a payload doesn't (PayloadRef::bytes). */
   size_t heapBytes() const;
   /** The payload's value, or null if this doesn't hold a T. */
   template <class T> const T *payload() const
@@ -101,7 +104,7 @@ class GraphValue {
     return !operator==(b);
   }
 
- private:
+private:
   struct Matrix;
   void reset();
   double *newMatrix();

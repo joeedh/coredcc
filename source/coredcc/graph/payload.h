@@ -42,7 +42,7 @@ namespace detail {
 
 /** A payload's refcount and type. The count isn't atomic. */
 class PayloadBox {
- public:
+public:
   explicit PayloadBox(TypeId type);
   /** An aliasing payload, of views into the data of the pinned blocks. */
   PayloadBox(TypeId type, litestl::util::Vector<LibraryPin, 1> pins);
@@ -72,11 +72,11 @@ class PayloadBox {
   virtual bool equal(const PayloadBox &b) const = 0;
   virtual size_t bytes() const = 0;
 
- protected:
+protected:
   virtual ~PayloadBox() = default;
   virtual void destroySelf() = 0;
 
- private:
+private:
   void checkThread() const;
   bool pinsAlive() const;
 
@@ -88,8 +88,10 @@ class PayloadBox {
 };
 
 template <class T> class PayloadBoxOf final : public PayloadBox {
- public:
-  explicit PayloadBoxOf(T v) : PayloadBox(payloadTypeId<T>()), value(std::move(v)) {}
+public:
+  explicit PayloadBoxOf(T v) : PayloadBox(payloadTypeId<T>()), value(std::move(v))
+  {
+  }
   PayloadBoxOf(T v, litestl::util::Vector<LibraryPin, 1> pins)
       : PayloadBox(payloadTypeId<T>(), std::move(pins)), value(std::move(v))
   {
@@ -107,8 +109,7 @@ template <class T> class PayloadBoxOf final : public PayloadBox {
     if constexpr (requires(const T &x) { PayloadTraits<T>::equal(x, x); }) {
       return b.type() == type() &&
              PayloadTraits<T>::equal(value, static_cast<const PayloadBoxOf &>(b).value);
-    }
-    else {
+    } else {
       return false;
     }
   }
@@ -124,7 +125,7 @@ template <class T> class PayloadBoxOf final : public PayloadBox {
 
   T value;
 
- protected:
+protected:
   void destroySelf() override
   {
     litestl::alloc::Delete(this);
@@ -139,7 +140,7 @@ template <class T> class PayloadBoxOf final : public PayloadBox {
  * a parallel_for may read the value `get` returned, but must not copy references.
  */
 class PayloadRef {
- public:
+public:
   PayloadRef() = default;
   PayloadRef(const PayloadRef &b) : box_(b.box_)
   {
@@ -147,7 +148,9 @@ class PayloadRef {
       box_->ref();
     }
   }
-  PayloadRef(PayloadRef &&b) noexcept : box_(std::exchange(b.box_, nullptr)) {}
+  PayloadRef(PayloadRef &&b) noexcept : box_(std::exchange(b.box_, nullptr))
+  {
+  }
   PayloadRef &operator=(PayloadRef b) noexcept
   {
     std::swap(box_, b.box_);
@@ -173,13 +176,13 @@ class PayloadRef {
    * whose blocks' data is gone (see makeAlias). Keep the PayloadRef, not the pointer. */
   template <class T> const T *get() const
   {
-    return box_ && box_->type() == payloadTypeId<T>() && box_->alive() ?
-               &static_cast<detail::PayloadBoxOf<T> *>(box_)->value :
-               nullptr;
+    return box_ && box_->type() == payloadTypeId<T>() && box_->alive()
+               ? &static_cast<detail::PayloadBoxOf<T> *>(box_)->value
+               : nullptr;
   }
   /** The value for writing: in place if this is the only reference, else a copy, which
-   * this then refers to. Null as for `get`, and for an aliasing payload, whose views are of
-   * the user's original data. */
+   * this then refers to. Null as for `get`, and for an aliasing payload, whose views are
+   * of the user's original data. */
   template <class T> T *mutate()
   {
     const T *now = get<T>();
@@ -187,8 +190,8 @@ class PayloadRef {
       return nullptr;
     }
     if (box_->refs() > 1) {
-      *this =
-          PayloadRef(litestl::alloc::New<detail::PayloadBoxOf<T>>("coredcc::Payload", *now));
+      *this = PayloadRef(
+          litestl::alloc::New<detail::PayloadBoxOf<T>>("coredcc::Payload", *now));
     }
     return &static_cast<detail::PayloadBoxOf<T> *>(box_)->value;
   }
@@ -212,11 +215,14 @@ class PayloadRef {
     return box_ == b.box_ || (box_ && b.box_ && box_->equal(*b.box_));
   }
 
- private:
+private:
   template <class T> friend PayloadRef makePayload(T value);
   template <class T>
-  friend Result<PayloadRef> makeAlias(T view, Library &lib, std::span<const BlockHandle> blocks);
-  explicit PayloadRef(detail::PayloadBox *box) : box_(box) {}
+  friend Result<PayloadRef>
+  makeAlias(T view, Library &lib, std::span<const BlockHandle> blocks);
+  explicit PayloadRef(detail::PayloadBox *box) : box_(box)
+  {
+  }
   detail::PayloadBox *box_ = nullptr;
 };
 
@@ -230,21 +236,22 @@ template <class T> PayloadRef makePayload(T value)
 
 namespace detail {
 /** The Host pins of an aliasing payload; see makeAlias for the errors. */
-Result<litestl::util::Vector<LibraryPin, 1>> pinAliased(Library &lib,
-                                                        std::span<const BlockHandle> blocks);
+Result<litestl::util::Vector<LibraryPin, 1>>
+pinAliased(Library &lib, std::span<const BlockHandle> blocks);
 } // namespace detail
 
 /**
  * An aliasing payload: `view` points into the data of `blocks`, which get a Host pin each
- * until the payload's last reference goes, so deleting one, or dropping it from the history,
- * doesn't free the data. Where it is freed anyway (the Library is destroyed, the host frees
- * a Detached block's data), `get` is null from then on. A pin doesn't keep the owner from
- * editing the data: what reads it through the payload also needs the block as a dependency.
- * For the same reason two aliasing payloads are equal only if they are the same object.
+ * until the payload's last reference goes, so deleting one, or dropping it from the
+ * history, doesn't free the data. Where it is freed anyway (the Library is destroyed, the
+ * host frees a Detached block's data), `get` is null from then on. A pin doesn't keep the
+ * owner from editing the data: what reads it through the payload also needs the block as
+ * a dependency. For the same reason two aliasing payloads are equal only if they are the
+ * same object.
  *
  * NotFound for a null handle and FailedPrecondition for a block that isn't Live;
- * Unsupported for a Transient block type. A block that keeps a payload aliasing itself (in
- * an instance it owns, say) is never collected.
+ * Unsupported for a Transient block type. A block that keeps a payload aliasing itself
+ * (in an instance it owns, say) is never collected.
  */
 template <class T>
 Result<PayloadRef> makeAlias(T view, Library &lib, std::span<const BlockHandle> blocks)

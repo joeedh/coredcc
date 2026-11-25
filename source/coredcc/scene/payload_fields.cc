@@ -31,7 +31,8 @@ static bool isNamed(const BlockEntry &e, const char *name)
 
 bool isValueField(const BlockEntry &e, const char *name, PropValue::Type type)
 {
-  return isNamed(e, name) && e.unknownTag == 0 && e.refs.size() == 0 && e.value.type() == type;
+  return isNamed(e, name) && e.unknownTag == 0 && e.refs.size() == 0 &&
+         e.value.type() == type;
 }
 
 bool isRefField(const BlockEntry &e, const char *name)

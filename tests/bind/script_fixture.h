@@ -29,7 +29,7 @@ struct Script {
   bool useSetValue = false; /* exec sets through setValue (a sub-command) */
   Status undoSetValue;      /* what setValue returned inside undo, when probed */
   bool probeUndo = false;
-  Context *ctx = nullptr;   /* for discard, which gets none */
+  Context *ctx = nullptr; /* for discard, which gets none */
   std::function<void()> onDiscard;
   /* From the review (tests/bind/test_bind_review.cc). */
   bool failCanRun = false;   /* canRun throws */
@@ -58,8 +58,9 @@ inline Obj commandObj(Script *s)
       *err = "canRun: Error: no";
       return false;
     }
-    return ok(ret, s->refuseCanRun ? Status::error(StatusCode::FailedPrecondition, "refused")
-                                   : Status());
+    return ok(ret,
+              s->refuseCanRun ? Status::error(StatusCode::FailedPrecondition, "refused")
+                              : Status());
   };
   o.methods["exec"] = [s, before](void **args, void *ret, string *err) {
     Context &ctx = *static_cast<Context *>(args[0]);
@@ -142,8 +143,13 @@ inline Obj factoryObj(Host &host, Script *s)
 inline constexpr const char *kCore = "canRun exec undo memSize discard";
 
 /* Registers command `id` (input `amount`, output `result`) with a new factory. */
-inline Status registerScript(Setup &s, Host &host, Script *sc_, const char *id, const char *slots,
-                             uint32_t flags = 0, fakehost::lf::Handle *factory = nullptr)
+inline Status registerScript(Setup &s,
+                             Host &host,
+                             Script *sc_,
+                             const char *id,
+                             const char *slots,
+                             uint32_t flags = 0,
+                             fakehost::lf::Handle *factory = nullptr)
 {
   CommandDef *def = sc::newCommandDef(id);
   test_assert(sc::defInput(*def, "amount", sc::makeInt(5)).ok());

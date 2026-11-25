@@ -64,7 +64,8 @@ Result<TransformState> StateCache::stateUnder(const ObjectRead &read,
   TransformState state;
   Status error;
   evaluateObject(lib_.runtime(), read.type, read.ctx(), parent, state, error);
-  return error.ok() ? Result<TransformState>(state) : Result<TransformState>(std::move(error));
+  return error.ok() ? Result<TransformState>(state)
+                    : Result<TransformState>(std::move(error));
 }
 
 Result<TransformState> StateCache::state(BlockHandle object)

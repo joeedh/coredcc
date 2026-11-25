@@ -1,12 +1,12 @@
-/* evaluateScene on many native objects, each with a data block that has bounds. Not a test: run it
- * on an idle machine, with the tool, which builds it first.
+/* evaluateScene on many native objects, each with a data block that has bounds. Not a
+ * test: run it on an idle machine, with the tool, which builds it first.
  *
  *   node tools/bench.mjs scene [-- [--count N] [--reps N] [--leaf N]]
  *
- * One line per case: the best, the median and the worst of the repetitions, in ms. The targets
- * (P3's exit criteria) are for 100,000 objects, and include what evaluateScene does to the
- * scene's BVH: 20 ms when nothing structural changed, 40 when the epoch moved and nothing
- * differs, 80 after a structural change. */
+ * One line per case: the best, the median and the worst of the repetitions, in ms. The
+ * targets (P3's exit criteria) are for 100,000 objects, and include what evaluateScene
+ * does to the scene's BVH: 20 ms when nothing structural changed, 40 when the epoch moved
+ * and nothing differs, 80 after a structural change. */
 #include "coredcc/api/resolve.h"
 #include "coredcc/lib/provider.h"
 #include "coredcc/scene/builtins.h"
@@ -40,7 +40,9 @@ struct Shape {
   {
     return 1;
   }
-  void closestElements(const NearQuery &, NearSink &) const {}
+  void closestElements(const NearQuery &, NearSink &) const
+  {
+  }
   static lbt::Struct<Shape> *defineBindings()
   {
     auto *st = new lbt::Struct<Shape>("bench::Shape", sizeof(Shape));
@@ -56,14 +58,17 @@ struct ShapeProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &, RefVisitor &) const {}
+  void foreachRef(const Datablock &, RefVisitor &) const
+  {
+  }
   void destroy(const Datablock &b)
   {
     litestl::alloc::Delete(static_cast<Shape *>(b.clientData()));
   }
   static lbt::Struct<ShapeProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<ShapeProvider>("bench::ShapeProvider", sizeof(ShapeProvider));
+    auto *st =
+        new lbt::Struct<ShapeProvider>("bench::ShapeProvider", sizeof(ShapeProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
@@ -110,11 +115,9 @@ int main(int argc, char **argv)
   for (int i = 1; i + 1 < argc; i += 2) {
     if (!strcmp(argv[i], "--count")) {
       count = std::max(atoi(argv[i + 1]), 2);
-    }
-    else if (!strcmp(argv[i], "--leaf")) {
+    } else if (!strcmp(argv[i], "--leaf")) {
       leaf = atoi(argv[i + 1]);
-    }
-    else if (!strcmp(argv[i], "--reps")) {
+    } else if (!strcmp(argv[i], "--reps")) {
       g_reps = std::max(atoi(argv[i + 1]), 1);
     }
   }
@@ -192,7 +195,8 @@ int main(int argc, char **argv)
   measure(
       "structural (a parent)",
       [&](int i) {
-        must(lib.writeRef(objects[count - 1]->parent.cell(), lib.get(all[i % (count / 2)])->id()));
+        must(lib.writeRef(objects[count - 1]->parent.cell(),
+                          lib.get(all[i % (count / 2)])->id()));
       },
       evaluate);
   measure(

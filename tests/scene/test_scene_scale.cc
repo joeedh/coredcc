@@ -1,5 +1,5 @@
-/* Scale deltas: mirrors, factors along other axes than the object's, and parents that are nearly flat.
- * What is expected comes from 3 by 3 matrices made here. */
+/* Scale deltas: mirrors, factors along other axes than the object's, and parents that are
+ * nearly flat. What is expected comes from 3 by 3 matrices made here. */
 #include "command_doc.h"
 
 #include <cmath>
@@ -84,9 +84,15 @@ M3 linearOf(const mat4d &m)
 M3 rotationOf(const quatd &q)
 {
   const double x = q[0], y = q[1], z = q[2], w = q[3];
-  const double rows[9] = {1 - 2 * (y * y + z * z), 2 * (x * y - z * w),     2 * (x * z + y * w),
-                          2 * (x * y + z * w),     1 - 2 * (x * x + z * z), 2 * (y * z - x * w),
-                          2 * (x * z - y * w),     2 * (y * z + x * w),     1 - 2 * (x * x + y * y)};
+  const double rows[9] = {1 - 2 * (y * y + z * z),
+                          2 * (x * y - z * w),
+                          2 * (x * z + y * w),
+                          2 * (x * y + z * w),
+                          1 - 2 * (x * x + z * z),
+                          2 * (y * z - x * w),
+                          2 * (x * z - y * w),
+                          2 * (y * z + x * w),
+                          1 - 2 * (x * x + y * y)};
   M3 r;
   for (int i = 0; i < 9; i++) {
     r.a[i / 3][i % 3] = rows[i];
@@ -145,8 +151,10 @@ struct Case {
 /* A TRS object for 0, and FBX ones with each inherit type. */
 Case caseOf(Rand &r, const Types &t, int type, const double3 &scale)
 {
-  return type == 0 ? Case{t.trs, int(trs::kScale), trsChannels(r, *t.trs, scale, 5.0)} :
-                     Case{t.fbx, int(fbx::kScaling), fbxChannels(r, *t.fbx, type - 1, scale, 2.0)};
+  return type == 0 ? Case{t.trs, int(trs::kScale), trsChannels(r, *t.trs, scale, 5.0)}
+                   : Case{t.fbx,
+                          int(fbx::kScaling),
+                          fbxChannels(r, *t.fbx, type - 1, scale, 2.0)};
 }
 
 TransformDelta scaleDelta(const quatd &basis, const double3 &vector)
@@ -171,14 +179,18 @@ double3 signs(int bits)
 }
 
 /* The whole matrix, translation and all. */
-void expectExact(const Case &c, const Result<ChannelBlock> &out, const TransformDelta &d,
-                 const TransformState &parent, double limit)
+void expectExact(const Case &c,
+                 const Result<ChannelBlock> &out,
+                 const TransformDelta &d,
+                 const TransformState &parent,
+                 double limit)
 {
   test_assert(out.ok());
   if (!out.ok()) {
     return;
   }
-  const TransformState from = eval(*c.type, c.base, parent), to = eval(*c.type, *out, parent);
+  const TransformState from = eval(*c.type, c.base, parent),
+                       to = eval(*c.type, *out, parent);
   const M3 want = wanted(d, linearOf(from.world));
   test_assert(distance(linearOf(to.world), want) <= limit * norm(want));
   const double3 arm = solve::translationOf(from.world) - d.pivot;
@@ -190,7 +202,8 @@ void expectExact(const Case &c, const Result<ChannelBlock> &out, const Transform
       place[i] += m.a[i][k] * arm[k];
     }
   }
-  test_assert(lengthOf(solve::translationOf(to.world) - place) <= 1e-11 * (50.0 + lengthOf(place)));
+  test_assert(lengthOf(solve::translationOf(to.world) - place) <=
+              1e-11 * (50.0 + lengthOf(place)));
 }
 
 /* ---- mirrors ---- */
@@ -203,12 +216,15 @@ void testMirrors(const Types &t)
     const double size = std::exp(r.range(-2, 2));
     TransformState p;
     if (i % 4) { /* rotated, mirrored and scaled uniformly */
-      ChannelBlock pc = trsChannels(r, *t.trs, double3(size, size, size) * signs(int(r.below(8))), 5.0);
+      ChannelBlock pc =
+          trsChannels(r, *t.trs, double3(size, size, size) * signs(int(r.below(8))), 5.0);
       p = eval(*t.trs, pc, chain(r, t, i % 2, 1.0, true));
     }
     Case c = caseOf(r, t, int(r.below(4)), r.scale(3.0, true));
-    /* Rrs divides by the parent's scale, and RrSs and Rrs go before it: all the same here. */
-    TransformDelta d = scaleDelta(r.rotation(), signs(int(r.below(8))) * r.range(0.2, 4.0));
+    /* Rrs divides by the parent's scale, and RrSs and Rrs go before it: all the same
+     * here. */
+    TransformDelta d =
+        scaleDelta(r.rotation(), signs(int(r.below(8))) * r.range(0.2, 4.0));
     d.pivot = r.vec(10.0);
     const Result<ChannelBlock> out = solveDelta(*c.type, EvalCtx(c.base), c.base, d, p);
     expectExact(c, out, d, p, 1e-12);
@@ -216,13 +232,17 @@ void testMirrors(const Types &t)
       /* The sizes of the scales are the base's, times the factor's. */
       const double k = std::fabs(d.vector[0]);
       for (int a = 0; a < 3; a++) {
-        const double was = std::fabs(c.base.get(c.scale + a)), is = std::fabs(out->get(c.scale + a));
+        const double was = std::fabs(c.base.get(c.scale + a)),
+                     is = std::fabs(out->get(c.scale + a));
         test_assert(std::fabs(is - was * k) <= 1e-12 * is);
       }
       /* Twice is nothing. */
       TransformDelta back = d;
-      back.vector = signs(int((d.vector[0] < 0) + 2 * (d.vector[1] < 0) + 4 * (d.vector[2] < 0))) / k;
-      const Result<ChannelBlock> again = solveDelta(*c.type, EvalCtx(*out), *out, back, p);
+      back.vector =
+          signs(int((d.vector[0] < 0) + 2 * (d.vector[1] < 0) + 4 * (d.vector[2] < 0))) /
+          k;
+      const Result<ChannelBlock> again =
+          solveDelta(*c.type, EvalCtx(*out), *out, back, p);
       test_assert(again.ok() && difference(eval(*c.type, *again, p).world,
                                            eval(*c.type, c.base, p).world) < 1e-10);
     }
@@ -231,9 +251,11 @@ void testMirrors(const Types &t)
   for (int i = 0; i < 200; i++) {
     Case c = caseOf(r, t, 0, r.scale(3.0, true));
     const TransformDelta d = scaleDelta(r.rotation(), signs(int(r.below(8))));
-    const ChannelBlock out = *solveDelta(*c.type, EvalCtx(c.base), c.base, d, TransformState());
+    const ChannelBlock out =
+        *solveDelta(*c.type, EvalCtx(c.base), c.base, d, TransformState());
     for (int a = 0; a < 3; a++) {
-      const double was = std::fabs(c.base.get(c.scale + a)), is = std::fabs(out.get(c.scale + a));
+      const double was = std::fabs(c.base.get(c.scale + a)),
+                   is = std::fabs(out.get(c.scale + a));
       test_assert(std::fabs(is - was) <= 4e-15 * was);
     }
   }
@@ -255,7 +277,8 @@ void testOwnAxes(const Types &t)
       const double want = c.base.get(c.scale + a) * factors[a];
       test_assert(std::fabs(out->get(c.scale + a) - want) <= 1e-11 * std::fabs(want));
     }
-    test_assert(out.ok() && std::fabs(eval(*c.type, *out, p).rotation.dot(own)) > 1.0 - 1e-12);
+    test_assert(out.ok() &&
+                std::fabs(eval(*c.type, *out, p).rotation.dot(own)) > 1.0 - 1e-12);
   }
 }
 
@@ -278,7 +301,8 @@ void testDrag(const Types &t)
       for (int a = 0; a < 3; a++) {
         test_assert(step <= -1 || out->get(trs::kRotationEuler + a) ==
                                       c.base.get(trs::kRotationEuler + a));
-        test_assert(step > 0 || step < -80 || std::fabs(out->get(trs::kScale + a)) <= 2.0);
+        test_assert(step > 0 || step < -80 ||
+                    std::fabs(out->get(trs::kScale + a)) <= 2.0);
         test_assert(step >= -1 || std::fabs(out->get(trs::kRotationEuler + a) -
                                             last.get(trs::kRotationEuler + a)) < 1e-9);
       }
@@ -296,14 +320,16 @@ void testDrag(const Types &t)
 
 /* ---- what can't be ---- */
 
-/* Factors along other axes: the sizes stay between the delta's, and the mirror is right. */
+/* Factors along other axes: the sizes stay between the delta's, and the mirror is right.
+ */
 void testOtherAxes(const Types &t)
 {
   Rand r(33);
   int exact = 0;
   for (int i = 0; i < 4000; i++) {
     const bool bent = i % 2 == 1;
-    const TransformState p = chain(r, t, bent ? 2 : int(r.below(3)), bent ? 2.0 : 1.0, true);
+    const TransformState p =
+        chain(r, t, bent ? 2 : int(r.below(3)), bent ? 2.0 : 1.0, true);
     Case c = caseOf(r, t, int(r.below(4)), r.scale(2.0, true));
     TransformDelta d = scaleDelta(r.rotation(), r.scale(3.0, true));
     d.pivot = r.vec(5.0);
@@ -330,8 +356,10 @@ void testSameAnswer(const Types &t)
   Rand r(37);
   for (int i = 0; i < 1000; i++) {
     const int inherit = int(r.below(3));
-    const TransformState p = inherit == fbx::kRSrs ? chain(r, t, 1, 2.0, true) : TransformState();
-    Case a{t.trs, int(trs::kScale), t.trs->defaults()}, b{t.fbx, int(fbx::kScaling), t.fbx->defaults()};
+    const TransformState p =
+        inherit == fbx::kRSrs ? chain(r, t, 1, 2.0, true) : TransformState();
+    Case a{t.trs, int(trs::kScale), t.trs->defaults()},
+        b{t.fbx, int(fbx::kScaling), t.fbx->defaults()};
     const double3 euler = r.vec(3), scale = r.scale(2.0, true);
     put(a.base, trs::kRotationEuler, euler);
     put(b.base, fbx::kRotation, euler);
@@ -342,7 +370,8 @@ void testSameAnswer(const Types &t)
     const Result<ChannelBlock> x = solveDelta(*a.type, EvalCtx(a.base), a.base, d, p),
                                y = solveDelta(*b.type, EvalCtx(b.base), b.base, d, p);
     test_assert(x.ok() && y.ok() &&
-                difference(eval(*a.type, *x, p).world, eval(*b.type, *y, p).world) < 1e-9);
+                difference(eval(*a.type, *x, p).world, eval(*b.type, *y, p).world) <
+                    1e-9);
   }
 }
 
@@ -356,14 +385,15 @@ void testTie(const Types &t)
     const TransformDelta d =
         scaleDelta(quatd(0, 0, std::sin(turn), std::cos(turn)), double3(-1, 1, 1));
     const ChannelBlock base = t.trs->defaults();
-    const Result<ChannelBlock> out = solveDelta(*t.trs, EvalCtx(base), base, d, TransformState());
+    const Result<ChannelBlock> out =
+        solveDelta(*t.trs, EvalCtx(base), base, d, TransformState());
     must(out.status());
     const double angle = out->get(trs::kRotationEuler + 2);
     test_assert(std::fabs(std::fabs(angle) - 2 * half) < 1e-9);
     want = i == -20 ? angle : want;
     test_assert(std::fabs(angle - want) < 1e-9);
-    const Result<ChannelBlock> solved =
-        solveWorld(*t.trs, EvalCtx(base), d.matrix(), TransformState(), SetWorldMode::Exact);
+    const Result<ChannelBlock> solved = solveWorld(
+        *t.trs, EvalCtx(base), d.matrix(), TransformState(), SetWorldMode::Exact);
     must(solved.status());
     solvedAngle = i == -20 ? solved->get(trs::kRotationEuler + 2) : solvedAngle;
     test_assert(std::fabs(solved->get(trs::kRotationEuler + 2) - solvedAngle) < 1e-9);
@@ -433,7 +463,8 @@ void testSecondAttempt()
   ChannelBlock base(1);
   base.set(0, 3.0);
   const auto solve = [&] {
-    return solveDelta(**type, EvalCtx(base), base, scaleDelta(quatd(), double3(2, 2, 1)), {});
+    return solveDelta(
+        **type, EvalCtx(base), base, scaleDelta(quatd(), double3(2, 2, 1)), {});
   };
   for (StatusCode code : {StatusCode::FailedPrecondition, StatusCode::Unsupported}) {
     m->answer = Status::error(code, "no");
@@ -441,7 +472,8 @@ void testSecondAttempt()
     test_assert(r.ok() && r->get(0) == 6.0);
   }
   m->throws = true;
-  test_assert(isError(solve().status(), StatusCode::Internal, "threw") && !d.rt.hasStickyError());
+  test_assert(isError(solve().status(), StatusCode::Internal, "threw") &&
+              !d.rt.hasStickyError());
 }
 
 /* Matrices hold anything. */
@@ -460,8 +492,9 @@ void testMatrix(const Types &t)
   }
 }
 
-/* Under a sheared parent a scale can be exact with another rotation: where the node's axes are the
- * right singular vectors of what the delta is in the parent's space, and its new ones the left. */
+/* Under a sheared parent a scale can be exact with another rotation: where the node's
+ * axes are the right singular vectors of what the delta is in the parent's space, and its
+ * new ones the left. */
 void testExactByRotation(const Types &t)
 {
   Rand r(35);
@@ -486,7 +519,8 @@ void testExactByRotation(const Types &t)
       w[(k % 3) * 4 + k / 3] = target.a[k / 3][k % 3];
     }
     Case c{t.trs, int(trs::kScale), t.trs->defaults()};
-    Result<ChannelBlock> base = solveWorld(*t.trs, EvalCtx(c.base), world, p, SetWorldMode::Exact);
+    Result<ChannelBlock> base =
+        solveWorld(*t.trs, EvalCtx(c.base), world, p, SetWorldMode::Exact);
     test_assert(base.ok());
     if (!base.ok()) {
       continue;
@@ -509,7 +543,8 @@ void testParents(const Types &t)
     for (const TransformType *type : {t.trs, t.fbx, t.matrix}) {
       const ChannelBlock c = type->defaults();
       const mat4d world = eval(*type, c, TransformState()).world;
-      const Result<ChannelBlock> a = solveWorld(*type, EvalCtx(c), world, p, SetWorldMode::Closest);
+      const Result<ChannelBlock> a =
+          solveWorld(*type, EvalCtx(c), world, p, SetWorldMode::Closest);
       TransformDelta d;
       d.vector = double3(1, 0, 0);
       const Result<ChannelBlock> b = solveDelta(*type, EvalCtx(c), c, d, p);
@@ -540,7 +575,8 @@ void testCommand()
   d.setParent(c, a);
   d.select({a});
   const mat4d was = d.stateOf(a).world, child = d.stateOf(c).world;
-  const Inputs mirror = {{"kind", PropValue::ofEnum(2)}, {"vector", PropValue::ofVec3(-1, 1, 1)}};
+  const Inputs mirror = {{"kind", PropValue::ofEnum(2)},
+                         {"vector", PropValue::ofVec3(-1, 1, 1)}};
   d.cycle(kApplyDeltaCommand, mirror);
   mat4d m;
   m.identity();

@@ -85,7 +85,8 @@ uint32_t rayTriangles(const RayQuery &q,
     }
     double lo[3], hi[3];
     for (int axis = 0; axis < 3; axis++) {
-      const double a = double(coords[axis][first + k]), b = double(coords[3 + axis][first + k]);
+      const double a = double(coords[axis][first + k]),
+                   b = double(coords[3 + axis][first + k]);
       const double c = double(coords[6 + axis][first + k]);
       lo[axis] = std::fmin(a, std::fmin(b, c));
       hi[axis] = std::fmax(a, std::fmax(b, c));
@@ -95,7 +96,8 @@ uint32_t rayTriangles(const RayQuery &q,
       out.t[k] = t;
       out.u[k] = ev[k] / det[k];
       out.v[k] = ew[k] / det[k];
-      /* dir . ((b - a) x (c - a)) is -det * dir[kz] (the axes are a right-handed cycle). */
+      /* dir . ((b - a) x (c - a)) is -det * dir[kz] (the axes are a right-handed cycle).
+       */
       out.back[k] = (det[k] < 0.0) == (q.dir[q.kz] > 0.0);
       hits |= 1u << k;
     }
@@ -108,8 +110,8 @@ template uint32_t rayTriangles<float>(
 template uint32_t rayTriangles<double>(
     const RayQuery &, const double *const[9], int, int, double, TriangleBlockHits &);
 
-/* The ray is taken relative to the solid: a point of it, in the world's coordinates, has their
- * rounding. */
+/* The ray is taken relative to the solid: a point of it, in the world's coordinates, has
+ * their rounding. */
 static bool sphere(
     const RayQuery &q, const double3 &c, double r, double limit, double &t, bool &inside)
 {
@@ -212,8 +214,9 @@ closestOnTriangle(const double3 &p, const double3 &a, const double3 &b, const do
   double3 best;
   double bestD = (std::numeric_limits<double>::infinity)();
   if (nn > 0.0) {
-    /* Inside the prism over the triangle: the projection onto its plane. A sliver's normal may be
-     * noise; the point is still one of the triangle's, but an edge may be nearer. */
+    /* Inside the prism over the triangle: the projection onto its plane. A sliver's
+     * normal may be noise; the point is still one of the triangle's, but an edge may be
+     * nearer. */
     const double3 ap = p - a;
     const double v = dot(ap.cross(ac), n), w = dot(ab.cross(ap), n);
     if (v >= 0.0 && w >= 0.0 && v + w <= nn) {

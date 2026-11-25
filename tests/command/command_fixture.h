@@ -119,7 +119,9 @@ struct Parent {
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<Parent> *defineBindings()
   {
     auto *st = new lbt::Struct<Parent>("test::Parent", sizeof(Parent));
@@ -139,12 +141,16 @@ struct Refuse {
     g_log += "refuse-exec;";
     return Status();
   }
-  void undo(Context &) {}
+  void undo(Context &)
+  {
+  }
   uint64_t memSize() const
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<Refuse> *defineBindings()
   {
     auto *st = new lbt::Struct<Refuse>("test::Refuse", sizeof(Refuse));
@@ -176,7 +182,9 @@ struct Foldable {
   {
     return 0;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   uint64_t foldKey() const
   {
     return uint64_t(key);
@@ -222,7 +230,9 @@ struct Drag {
   {
     return 16;
   }
-  void discard() {}
+  void discard()
+  {
+  }
   static lbt::Struct<Drag> *defineBindings()
   {
     auto *st = new lbt::Struct<Drag>("test::Drag", sizeof(Drag));
@@ -243,12 +253,15 @@ struct CreateMesh {
   Status exec(Context &ctx)
   {
     lib = ctx.library();
-    Result<BlockHandle> h = lib->create(kMeshType, "made", litestl::alloc::New<Mesh>("Mesh"));
+    Result<BlockHandle> h =
+        lib->create(kMeshType, "made", litestl::alloc::New<Mesh>("Mesh"));
     if (!h.ok()) {
       return h.status();
     }
     created.add(*lib, *h);
-    ctx.outputs()->set("block", PropValue::ofInt(int64_t(lib->get(*h)->id().local.lo))).ignore();
+    ctx.outputs()
+        ->set("block", PropValue::ofInt(int64_t(lib->get(*h)->id().local.lo)))
+        .ignore();
     return Status();
   }
   void undo(Context &)
@@ -320,19 +333,23 @@ struct Setup {
     ctx.setExecutor(&ex);
     Runtime &rt = w.rt;
     add = *addNativeCommand<AddCount>(
-        rt, CommandDef("test.add")
-                .input(PropertyDef::intProp("amount").defaultValue(PropValue::ofInt(1)))
-                .input(PropertyDef::intProp("mem"))
-                .input(PropertyDef::enumProp("mode").item("FAST", 0).item("SLOW", 1))
-                .output(PropertyDef::intProp("result")));
+        rt,
+        CommandDef("test.add")
+            .input(PropertyDef::intProp("amount").defaultValue(PropValue::ofInt(1)))
+            .input(PropertyDef::intProp("mem"))
+            .input(PropertyDef::enumProp("mode").item("FAST", 0).item("SLOW", 1))
+            .output(PropertyDef::intProp("result")));
     parent = *addNativeCommand<Parent>(
         rt, CommandDef("test.parent").input(PropertyDef::intProp("fail")));
     refuse = *addNativeCommand<Refuse>(rt, CommandDef("test.refuse"));
-    fold = *addNativeCommand<Foldable>(rt, CommandDef("test.fold").input(PropertyDef::intProp("key")));
-    drag = *addNativeCommand<Drag>(rt, CommandDef("test.drag").flags(CommandFlags::Interactive));
-    test_assert(addNativeCommand<CreateMesh>(
-                    rt, CommandDef("test.createMesh").output(PropertyDef::intProp("block")))
-                    .ok());
+    fold = *addNativeCommand<Foldable>(
+        rt, CommandDef("test.fold").input(PropertyDef::intProp("key")));
+    drag = *addNativeCommand<Drag>(
+        rt, CommandDef("test.drag").flags(CommandFlags::Interactive));
+    test_assert(
+        addNativeCommand<CreateMesh>(
+            rt, CommandDef("test.createMesh").output(PropertyDef::intProp("block")))
+            .ok());
     test_assert(registerBlockCommands(rt).ok() && registerBlockCommands(rt).ok());
     g_log.clear();
   }

@@ -80,8 +80,9 @@ bool Lexer::quoted(std::string &out, Failure &fail)
   out.clear();
   while (true) {
     if (atEnd()) {
-      fail = Failure{s_.size(), "unterminated string (opened at offset " +
-                                    std::to_string(start) + ")"};
+      fail =
+          Failure{s_.size(),
+                  "unterminated string (opened at offset " + std::to_string(start) + ")"};
       return false;
     }
     const char c = s_[pos_];
@@ -100,25 +101,24 @@ bool Lexer::quoted(std::string &out, Failure &fail)
     }
     const char e = peek(1);
     switch (e) {
-      case '\\':
-      case '"':
-      case '\'':
-        out += e;
-        break;
-      case 'n':
-        out += '\n';
-        break;
-      case 't':
-        out += '\t';
-        break;
-      default:
-        if (pos_ + 1 >= s_.size()) {
-          fail = Failure{s_.size(), "unterminated escape"};
-        }
-        else {
-          fail = failHere("unknown escape (allowed: \\\\ \\\" \\' \\n \\t)");
-        }
-        return false;
+    case '\\':
+    case '"':
+    case '\'':
+      out += e;
+      break;
+    case 'n':
+      out += '\n';
+      break;
+    case 't':
+      out += '\t';
+      break;
+    default:
+      if (pos_ + 1 >= s_.size()) {
+        fail = Failure{s_.size(), "unterminated escape"};
+      } else {
+        fail = failHere("unknown escape (allowed: \\\\ \\\" \\' \\n \\t)");
+      }
+      return false;
     }
     pos_ += 2;
   }
@@ -182,8 +182,7 @@ bool Lexer::number(std::string &text, bool &isInteger, Failure &fail)
       fail = Failure{start, "integer out of the int64 range"};
       return false;
     }
-  }
-  else {
+  } else {
     double v = 0.0;
     std::from_chars_result r = std::from_chars(num.data(), num.data() + num.size(), v);
     if (r.ec != std::errc() || r.ptr != num.data() + num.size() || !std::isfinite(v)) {
@@ -215,10 +214,10 @@ std::string Lexer::describeHere() const
 
 Status toStatus(const char *kind, const Failure &fail)
 {
-  return Status::error(StatusCode::InvalidArgument,
-                       (std::string(kind) + ": " + fail.what + " at offset " +
-                        std::to_string(fail.offset))
-                           .c_str());
+  return Status::error(
+      StatusCode::InvalidArgument,
+      (std::string(kind) + ": " + fail.what + " at offset " + std::to_string(fail.offset))
+          .c_str());
 }
 
 } // namespace coredcc::parse_detail

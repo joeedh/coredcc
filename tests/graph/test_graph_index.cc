@@ -1,4 +1,5 @@
-/* GraphDef: links in order, what is wrong with them, and what programs that rescan nodes go by. */
+/* GraphDef: links in order, what is wrong with them, and what programs that rescan nodes
+ * go by. */
 #include "edit_fixture.h"
 
 #include "coredcc/graph/interior.h"
@@ -71,16 +72,19 @@ void testOrder()
   test_assert(!def.diagnostic(LinkId{(int64_t(1) << 52) - 1}));
   test_assert(def.diagnostics()[0].link < def.diagnostics()[1].link);
   test_assert(!def.diagnostic(a)->interior);
-  Result<PropValue> text = d.get("graphs[\"g\"].links[#" + std::to_string(a.value) + "].error");
+  Result<PropValue> text =
+      d.get("graphs[\"g\"].links[#" + std::to_string(a.value) + "].error");
   test_assert(text.ok() && strstr(text->asString().c_str(), key(x).c_str()));
   /* Kept while nothing they depend on changes, and not when something does. */
   const LinkDiagnostic *at = def.diagnostics().data();
   test_assert(def.setLabel(nodes[9], "label").ok() && def.diagnostics().data() == at);
   test_assert(inner.def->addInterface(SocketSide::Output, "x", "float", -1, x).ok());
   test_assert(def.diagnostics().size() == 0);
-  test_assert(inner.def->setInterfaceType(x, "mat4").ok() && def.diagnostics().size() == 2);
+  test_assert(inner.def->setInterfaceType(x, "mat4").ok() &&
+              def.diagnostics().size() == 2);
   test_assert(hasCode(def.diagnostics()[0].status, StatusCode::TypeMismatch));
-  test_assert(d.lib.markDeleted(inner.h).ok() && def.diagnostics().size() == 2); /* last known */
+  test_assert(d.lib.markDeleted(inner.h).ok() &&
+              def.diagnostics().size() == 2); /* last known */
   test_assert(def.unlink(a).ok() && def.diagnostics().size() == 1 && !def.diagnostic(a));
   test_assert(def.unlink(b).ok() && def.diagnostics().size() == 0);
   /* Interior links say so, at either end. */
@@ -90,7 +94,8 @@ void testOrder()
   test_assert(def.setGroup(group, in2.id).ok());
   const LinkId from = connect(def, group, leafKey + ".value", nodes[9], "b");
   const LinkId to = connect(def, nodes[2], "value", group, leafKey + ".a");
-  test_assert(!def.diagnostic(from) && !def.diagnostic(to) && in2.def->removeNode(leaf).ok());
+  test_assert(!def.diagnostic(from) && !def.diagnostic(to) &&
+              in2.def->removeNode(leaf).ok());
   test_assert(def.diagnostic(from) && def.diagnostic(from)->interior);
   test_assert(def.diagnostic(to) && def.diagnostic(to)->interior);
 
@@ -116,7 +121,8 @@ void testVersions()
   out.param(PropertyDef::intProp("n")).flags(NodeTypeFlags::OutputAdapter);
   addType<nothing>(d.rt, out, "t.out");
   NodeTypeDef both("t.both");
-  both.output("x", "float").flags(NodeTypeFlags::OutputAdapter | NodeTypeFlags::ThreadSafe);
+  both.output("x", "float")
+      .flags(NodeTypeFlags::OutputAdapter | NodeTypeFlags::ThreadSafe);
   addType<nothing>(d.rt, both, "t.both");
 
   uint64_t refs = def.refsVersion();
@@ -144,14 +150,18 @@ void testVersions()
   test_assert(def.setPosition(a, 1, 2).ok() && !moved());
   test_assert(def.setParam(a, "thing", toThing(idOf(d.lib, h))).ok() && moved());
   test_assert(def.restoreRef(a, "thing", BlockId()).ok() && moved());
-  test_assert(def.removeNode(b).ok() && !moved() && count(NodeTypeFlags::OutputAdapter) == 1);
+  test_assert(def.removeNode(b).ok() && !moved() &&
+              count(NodeTypeFlags::OutputAdapter) == 1);
   const NodeState was = def.stateOf(*def.node(a));
-  test_assert(def.removeNode(a).ok() && moved() && count(NodeTypeFlags::OutputAdapter) == 0);
-  test_assert(def.restoreNode(was).ok() && moved() && count(NodeTypeFlags::OutputAdapter) == 1);
+  test_assert(def.removeNode(a).ok() && moved() &&
+              count(NodeTypeFlags::OutputAdapter) == 0);
+  test_assert(def.restoreNode(was).ok() && moved() &&
+              count(NodeTypeFlags::OutputAdapter) == 1);
   const NodeId group = add(def, kGraphGroupType);
   test_assert(moved() && def.setGroup(group, inner.id).ok() && moved());
   test_assert(def.restoreRef(group, "", BlockId()).ok() && moved());
-  test_assert(def.removeNode(group).ok() && moved() && def.removeNode(plain).ok() && !moved());
+  test_assert(def.removeNode(group).ok() && moved() && def.removeNode(plain).ok() &&
+              !moved());
   /* A type that comes late has flags and references. */
   NodeState late;
   late.id = NodeId{def.newId()};

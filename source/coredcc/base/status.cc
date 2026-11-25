@@ -17,28 +17,28 @@ struct Status::Rep {
 const char *statusCodeName(StatusCode code)
 {
   switch (code) {
-    case StatusCode::Ok:
-      return "Ok";
-    case StatusCode::InvalidArgument:
-      return "InvalidArgument";
-    case StatusCode::NotFound:
-      return "NotFound";
-    case StatusCode::AlreadyExists:
-      return "AlreadyExists";
-    case StatusCode::TypeMismatch:
-      return "TypeMismatch";
-    case StatusCode::OutOfRange:
-      return "OutOfRange";
-    case StatusCode::FailedPrecondition:
-      return "FailedPrecondition";
-    case StatusCode::Busy:
-      return "Busy";
-    case StatusCode::Cancelled:
-      return "Cancelled";
-    case StatusCode::Unsupported:
-      return "Unsupported";
-    case StatusCode::Internal:
-      return "Internal";
+  case StatusCode::Ok:
+    return "Ok";
+  case StatusCode::InvalidArgument:
+    return "InvalidArgument";
+  case StatusCode::NotFound:
+    return "NotFound";
+  case StatusCode::AlreadyExists:
+    return "AlreadyExists";
+  case StatusCode::TypeMismatch:
+    return "TypeMismatch";
+  case StatusCode::OutOfRange:
+    return "OutOfRange";
+  case StatusCode::FailedPrecondition:
+    return "FailedPrecondition";
+  case StatusCode::Busy:
+    return "Busy";
+  case StatusCode::Cancelled:
+    return "Cancelled";
+  case StatusCode::Unsupported:
+    return "Unsupported";
+  case StatusCode::Internal:
+    return "Internal";
   }
   return "Unknown";
 }
@@ -47,7 +47,8 @@ Status Status::error(StatusCode code, stringref message)
 {
   CDCC_CHECK(code != StatusCode::Ok, "Status::error needs an error code");
   Status s;
-  s.rep_ = litestl::alloc::New<Rep>("coredcc::Status", code, string(message), Vector<string>());
+  s.rep_ = litestl::alloc::New<Rep>(
+      "coredcc::Status", code, string(message), Vector<string>());
   return s;
 }
 

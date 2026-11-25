@@ -1,5 +1,5 @@
-/* What is kept between evaluate calls: after an edit, the vertices it touches and what depends
- * on them are stale, and the rest isn't looked at. And prepared sockets. */
+/* What is kept between evaluate calls: after an edit, the vertices it touches and what
+ * depends on them are stale, and the rest isn't looked at. And prepared sockets. */
 #include "coredcc/graph/evaluator.h"
 
 #include "coredcc/lib/library.h"
@@ -13,9 +13,11 @@ using litestl::util::Vector;
 /* ---- edits ---- */
 
 /* Whether the journal says all that happened between two keys. */
-static bool journalled(const Evaluator::Key &a, const Evaluator::Key &b, const GraphSystem &system)
+static bool
+journalled(const Evaluator::Key &a, const Evaluator::Key &b, const GraphSystem &system)
 {
-  return a.document.epoch == b.document.epoch && a.document.clients == b.document.clients &&
+  return a.document.epoch == b.document.epoch &&
+         a.document.clients == b.document.clients &&
          a.document.ifaceTables == b.document.ifaceTables && system.journalCurrent();
 }
 
@@ -52,17 +54,17 @@ bool Evaluator::anyConcerns(const Key &key) const
 bool Evaluator::concerns(const GraphEditNote &e) const
 {
   switch (e.kind) {
-    case GraphEditNote::Kind::All:
-      return true;
-    case GraphEditNote::Kind::Block: {
-      const BlockLink *l = deps_.kernelsOf(e.block);
-      while (l && !(l->aspects & e.aspects)) {
-        l = l->next;
-      }
-      return l != nullptr;
+  case GraphEditNote::Kind::All:
+    return true;
+  case GraphEditNote::Kind::Block: {
+    const BlockLink *l = deps_.kernelsOf(e.block);
+    while (l && !(l->aspects & e.aspects)) {
+      l = l->next;
     }
-    default:
-      return reaches(e.def);
+    return l != nullptr;
+  }
+  default:
+    return reaches(e.def);
   }
 }
 
@@ -136,38 +138,38 @@ bool Evaluator::absorb(const GraphEditNote &e)
     }
   };
   switch (e.kind) {
-    case GraphEditNote::Kind::Block:
-      for (const BlockLink *l = deps_.kernelsOf(e.block); l; l = l->next) {
-        if (l->aspects & e.aspects) {
-          markStale(Vertex{l->kernel->frame, l->kernel->index, true});
-        }
+  case GraphEditNote::Kind::Block:
+    for (const BlockLink *l = deps_.kernelsOf(e.block); l; l = l->next) {
+      if (l->aspects & e.aspects) {
+        markStale(Vertex{l->kernel->frame, l->kernel->index, true});
       }
-      return true;
-    case GraphEditNote::Kind::Node:
-      for (Frame *f = deps_.framesOf(e.def); f; f = f->nextOfDef) {
-        const int at = f->topo ? f->topo->find(NodeId{e.node}) : -1;
-        if (at < 0) {
-          continue; /* a new one */
-        }
-        const GraphTopology::Node &n = f->topo->nodes[at];
-        for (int i = 0; i < n.inCount; i++) {
-          markStale(Vertex{f, n.inBegin + i, false});
-        }
-        markStale(Vertex{f, at, true});
+    }
+    return true;
+  case GraphEditNote::Kind::Node:
+    for (Frame *f = deps_.framesOf(e.def); f; f = f->nextOfDef) {
+      const int at = f->topo ? f->topo->find(NodeId{e.node}) : -1;
+      if (at < 0) {
+        continue; /* a new one */
       }
-      markForeachs();
-      return true;
-    case GraphEditNote::Kind::Links:
-      if (interior_) {
-        return false; /* other defs' sockets may have come or gone */
+      const GraphTopology::Node &n = f->topo->nodes[at];
+      for (int i = 0; i < n.inCount; i++) {
+        markStale(Vertex{f, n.inBegin + i, false});
       }
-      for (Frame *f = deps_.framesOf(e.def); f; f = f->nextOfDef) {
-        markFrame(*f);
-      }
-      markForeachs();
-      return true;
-    default:
-      return false;
+      markStale(Vertex{f, at, true});
+    }
+    markForeachs();
+    return true;
+  case GraphEditNote::Kind::Links:
+    if (interior_) {
+      return false; /* other defs' sockets may have come or gone */
+    }
+    for (Frame *f = deps_.framesOf(e.def); f; f = f->nextOfDef) {
+      markFrame(*f);
+    }
+    markForeachs();
+    return true;
+  default:
+    return false;
   }
 }
 
@@ -208,7 +210,9 @@ void Evaluator::markStale(const Vertex &v)
         marks_.append(Vertex{&f, node, true});
       }
     }
-    for (InputLink *l = m.kernel ? k->consumers : f.links[m.index].consumers; l; l = l->next) {
+    for (InputLink *l = m.kernel ? k->consumers : f.links[m.index].consumers; l;
+         l = l->next)
+    {
       marks_.append(Vertex{l->frame, l->index(), false});
     }
   }
@@ -222,8 +226,7 @@ Result<SocketHandle> Evaluator::prepare(const SocketPath &socket)
   uint32_t at = uint32_t(prepared_.size());
   if (freePrepared_.size() > 0) {
     at = freePrepared_.pop_back();
-  }
-  else {
+  } else {
     prepared_.append(Prepared());
   }
   Prepared &p = prepared_[int(at)];

@@ -27,12 +27,14 @@ namespace coredcc {
  *   commands and inputs that no longer exist, so old files keep loading.
  */
 class LastUsedStore {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.LastUsedStore";
   /** The collection's name, which layouts expect. */
   static constexpr const char *kMember = "commandDefaults";
 
-  explicit LastUsedStore(Runtime *rt) : rt_(*rt) {}
+  explicit LastUsedStore(Runtime *rt) : rt_(*rt)
+  {
+  }
   ~LastUsedStore();
   LastUsedStore(const LastUsedStore &) = delete;
   LastUsedStore &operator=(const LastUsedStore &) = delete;
@@ -54,15 +56,15 @@ class LastUsedStore {
   /** Adds the `commandDefaults` collection (keyed by command id) to `root`. */
   void addCollectionTo(ApiStruct &root, std::string_view memberName = kMember);
 
-  /** The struct of `commandDefaults` items of `def`'s, which is registered on first use. Null
-   * unless addCollectionTo was called. */
+  /** The struct of `commandDefaults` items of `def`'s, which is registered on first use.
+   * Null unless addCollectionTo was called. */
   StructId itemStruct(const CommandDef &def);
   /** The parent of those structs. */
   static StructId baseStruct();
 
   Status validate() const;
 
- private:
+private:
   /* The command's inputs, of which those that are remembered are set. The bag is what a
    * `commandDefaults` item points to: dynamic inputs are resolved with it. */
   struct Entry : PropertyBag {

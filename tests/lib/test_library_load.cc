@@ -1,5 +1,5 @@
-/* Loading a library: types that are missing, newer or fail, names and aliases, Busy rules, and
- * resolvePlaceholders. Damaged files are test_library_hostile.cc's. */
+/* Loading a library: types that are missing, newer or fail, names and aliases, Busy
+ * rules, and resolvePlaceholders. Damaged files are test_library_hostile.cc's. */
 #include "io_fixture.h"
 
 #include "coredcc/lib/pin.h"
@@ -43,7 +43,8 @@ static void test_refused()
   test_assert(hasMsg(w.load(bytes), "already has records"));
   w.root(h);
   test_assert(w.lib.markDeleted(h).ok());
-  test_assert(w.load(bytes).code() == StatusCode::FailedPrecondition); /* undo may hold it */
+  test_assert(w.load(bytes).code() ==
+              StatusCode::FailedPrecondition); /* undo may hold it */
   test_assert(w.lib.destroyFromHistory(h).ok());
   {
     EvaluationScope scope(w.rt);
@@ -74,12 +75,14 @@ static void test_missing_types()
   test_assert(has(issueText(report.issues), "a: attachment 'test.Note': the type isn't"));
   test_assert(report.issues.first[0].block == cid(1));
   const Datablock &a = *w.lib.get(w.at(1));
-  test_assert(a.state() == BlockState::Placeholder && a.placeholderData().refs.size() >= 2);
+  test_assert(a.state() == BlockState::Placeholder &&
+              a.placeholderData().refs.size() >= 2);
   test_assert(strcmp(a.sourceName().c_str(), "scene.cdcc") == 0);
   /* No name went into the Runtime. */
   test_assert(!w.rt.nameOf(kDoc) && !w.rt.nameOf(kNote));
   test_assert(w.lib.fileNames().nameOf(IdDomain::Type, kDoc.value));
-  /* Nothing reachable is lost, and it saves as it was: where it came from isn't written. */
+  /* Nothing reachable is lost, and it saves as it was: where it came from isn't written.
+   */
   test_assert(sameBytes(w.save(), bytes));
   test_assert(*w.lib.collect() == 0);
   {
@@ -116,7 +119,8 @@ static void test_missing_types()
               w.lib.get(ha)->placeholderData().bytes.size() == 0);
   test_assert(w.data(ha)->number == 10 && w.lib.resolveRef(w.data(ha)->mesh) == w.at(2));
   registerNote(w.rt, w.notes);
-  test_assert(w.lib.attach(ha, kNote, &w).code() == StatusCode::AlreadyExists); /* opaque */
+  test_assert(w.lib.attach(ha, kNote, &w).code() ==
+              StatusCode::AlreadyExists); /* opaque */
   some = detail::resolvePlaceholders(w.lib);
   test_assert(some.ok() && some->blocks.size() == 1 && some->blocks[0] == ha);
   const Note *n = static_cast<const Note *>(w.lib.attachment(ha, kNote));
@@ -137,7 +141,8 @@ static void test_unreadable()
     LoadReport report;
     test_assert(w.load(bytes, &report).ok() && report.missingType == 3);
     test_assert(has(issueText(report.issues), "it was written by a newer version"));
-    test_assert(has(issueText(report.issues), "attachment 'test.Note' was written by a newer"));
+    test_assert(
+        has(issueText(report.issues), "attachment 'test.Note' was written by a newer"));
     test_assert(sameBytes(w.save(), bytes) && w.notes.alive == 0);
   }
   /* The record's client isn't the type's. */
@@ -182,7 +187,8 @@ static void test_unreadable()
     IoWorld w;
     LoadReport report;
     test_assert(w.load(f.file(), &report).ok());
-    test_assert(has(issueText(report.issues), "attachment 'test.Bare': the type isn't read"));
+    test_assert(
+        has(issueText(report.issues), "attachment 'test.Bare': the type isn't read"));
   }
   /* Every way a deserialize can fail leaves a placeholder with the same payload. */
   for (DocFault fault :
@@ -191,12 +197,13 @@ static void test_unreadable()
     IoWorld w;
     w.docs.fault = fault;
     LoadReport report;
-    test_assert(w.load(bytes, &report).ok() && report.missingType == 3 && report.issues.total == 3);
+    test_assert(w.load(bytes, &report).ok() && report.missingType == 3 &&
+                report.issues.total == 3);
     test_assert(w.docs.destroyed == (fault == DocFault::LeaveBytes ? 3 : 0));
-    const char *why = fault == DocFault::Error      ? "not today" :
-                      fault == DocFault::Sticky     ? "deserialize threw" :
-                      fault == DocFault::LeaveBytes ? "left over" :
-                                                      "without calling setData";
+    const char *why = fault == DocFault::Error        ? "not today"
+                      : fault == DocFault::Sticky     ? "deserialize threw"
+                      : fault == DocFault::LeaveBytes ? "left over"
+                                                      : "without calling setData";
     test_assert(has(issueText(report.issues), why) && !w.rt.hasStickyError());
     w.docs.fault = DocFault::None;
     test_assert(sameBytes(w.save(), bytes));
@@ -208,12 +215,15 @@ static void test_unreadable()
     IoWorld w;
     w.notes.fault = fault;
     LoadReport report;
-    test_assert(w.load(bytes, &report).ok() && report.missingType == 0 && report.issues.total == 1);
-    const char *why = fault == DocFault::Error  ? "'test.Note': no notes" :
-                      fault == DocFault::Sticky ? "'test.Note': note threw" :
-                                                  "'test.Note': the data ends too early";
+    test_assert(w.load(bytes, &report).ok() && report.missingType == 0 &&
+                report.issues.total == 1);
+    const char *why = fault == DocFault::Error ? "'test.Note': no notes"
+                      : fault == DocFault::Sticky
+                          ? "'test.Note': note threw"
+                          : "'test.Note': the data ends too early";
     test_assert(has(issueText(report.issues), why) && !w.rt.hasStickyError());
-    test_assert(w.notes.alive == 0 && w.notes.severed == (fault == DocFault::LeaveBytes ? 1 : 0));
+    test_assert(w.notes.alive == 0 &&
+                w.notes.severed == (fault == DocFault::LeaveBytes ? 1 : 0));
     test_assert(!w.lib.attachment(w.at(1), kNote));
     test_assert(sameBytes(w.save(), bytes));
   }
@@ -244,7 +254,8 @@ static void test_missing_blocks()
     IoWorld w;
     LoadReport report;
     test_assert(w.load(bytes, &report).ok());
-    test_assert(w.lib.size() == 4 && report.blocks.size() == 4 && report.missingBlock == 3);
+    test_assert(w.lib.size() == 4 && report.blocks.size() == 4 &&
+                report.missingBlock == 3);
     for (uint64_t n : {50, 52, 53}) {
       const Datablock &b = *w.lib.get(w.at(n));
       test_assert(b.placeholderReason() == PlaceholderReason::MissingBlock && !b.type());
@@ -269,7 +280,8 @@ static void test_missing_blocks()
     test_assert(s.code() == StatusCode::OutOfRange && hasMsg(s, "more than 3 records"));
     test_assert(w2.lib.size() == 0);
   }
-  /* A table whose kinds are out of date: what the provider reports counts, within the limit. */
+  /* A table whose kinds are out of date: what the provider reports counts, within the
+   * limit. */
   {
     IoWorld stale;
     const BlockHandle h = stale.doc(1, "stale");
@@ -290,7 +302,8 @@ static void test_missing_blocks()
       LoadReport report;
       LoadOptions options;
       options.limits.maxBlocks = 1;
-      test_assert(w.load(file, &report, options).ok() && !w.at(50) && report.missingBlock == 0);
+      test_assert(w.load(file, &report, options).ok() && !w.at(50) &&
+                  report.missingBlock == 0);
       test_assert(has(issueText(report.issues), "too many missing blocks"));
     }
     Knows k;
@@ -305,7 +318,8 @@ static void test_missing_blocks()
     RawFile f;
     f.names[1] = "test.Note2";
     f.records.push_back(RawRecord());
-    f.records[0].rows = {{detail::libio::kRowWeak, LocalId{7, 60}}}; /* a table out of date */
+    f.records[0].rows = {
+        {detail::libio::kRowWeak, LocalId{7, 60}}}; /* a table out of date */
     f.records[0].as = 1;
     f.records[0].slots = [](BytesWriter &out) {
       out.u32(1);
@@ -316,7 +330,8 @@ static void test_missing_blocks()
     IoWorld w;
     LoadReport report;
     test_assert(w.load(f.file(), &report).ok() && w.lib.size() == 1);
-    test_assert(report.issues.total == 1 && hasMsg(slotError(report), "a Strong slot that"));
+    test_assert(report.issues.total == 1 &&
+                hasMsg(slotError(report), "a Strong slot that"));
     const RefCell *s = w.lib.slot(w.at(1), TypeId::of("test.Note2"), 0);
     test_assert(s && s->isNull() && s->kind == RefKind::Strong);
   }
@@ -334,7 +349,8 @@ static void test_names()
     Status s = w.load(bytes);
     test_assert(s.code() == StatusCode::InvalidArgument);
     test_assert(hasMsg(s, "the name 'test.Doc' has the id of 'impostor'"));
-    test_assert(w.lib.size() == 0 && !w.lib.fileNames().nameOf(IdDomain::Type, kNote.value));
+    test_assert(w.lib.size() == 0 &&
+                !w.lib.fileNames().nameOf(IdDomain::Type, kNote.value));
   }
   {
     Knows k;
@@ -370,7 +386,8 @@ static void test_names()
     test_assert(w.load(f.file(), &report).ok() && w.at(1));
     test_assert(has(issueText(report.issues), "too many names to keep"));
     const TypeId ns = TypeId::of("x.Type");
-    test_assert(!w.lib.fileNames().nameOf(IdDomain::Type, ns.value)); /* unused in the file */
+    test_assert(
+        !w.lib.fileNames().nameOf(IdDomain::Type, ns.value)); /* unused in the file */
   }
 }
 
@@ -387,7 +404,12 @@ static void test_aliases()
       out.u32(1);
       out.u32(2);
       out.i64(0);
-      RawRecord::row(out, detail::libio::kRowStrong, LocalId{7, 1}, i == 0 ? 3 : i == 1 ? 4 : 1);
+      RawRecord::row(out,
+                     detail::libio::kRowStrong,
+                     LocalId{7, 1},
+                     i == 0   ? 3
+                     : i == 1 ? 4
+                              : 1);
     };
     f.records.push_back(std::move(r));
   }
@@ -396,18 +418,21 @@ static void test_aliases()
   const char *aliases[] = {"c.old1", "c.old2"};
   test_assert(w.rt.ext<ClientRegistry>().registerClient("c.now", aliases).ok());
   LoadReport report;
-  test_assert(w.load(bytes, &report).ok() && w.lib.size() == 3 && report.blocks.size() == 3);
+  test_assert(w.load(bytes, &report).ok() && w.lib.size() == 3 &&
+              report.blocks.size() == 3);
   BlockHandle h[3];
   for (int i = 0; i < 3; i++) {
     h[i] = report.blocks[i];
     test_assert(w.id(h[i]).client == ClientId::of("c.now"));
   }
   test_assert(w.id(h[1]) == cid(1, ClientId::of("c.now")));
-  test_assert(w.id(h[0]) != w.id(h[1]) && w.id(h[2]) != w.id(h[1]) && w.id(h[0]) != w.id(h[2]));
+  test_assert(w.id(h[0]) != w.id(h[1]) && w.id(h[2]) != w.id(h[1]) &&
+              w.id(h[0]) != w.id(h[2]));
   const auto slot = [&](BlockHandle b) {
     return w.lib.slot(b, TypeId::of("x.Type"), 0)->target;
   };
-  test_assert(slot(h[0]) == w.id(h[1]) && slot(h[1]) == w.id(h[2]) && slot(h[2]) == w.id(h[0]));
+  test_assert(slot(h[0]) == w.id(h[1]) && slot(h[1]) == w.id(h[2]) &&
+              slot(h[2]) == w.id(h[0]));
   int told = 0;
   for (const IoIssue &i : report.issues.first) {
     told += i.why.code() == StatusCode::AlreadyExists ? 1 : 0;
@@ -462,7 +487,8 @@ static void test_aliases()
   test_assert(s.code() == StatusCode::Internal && w3.lib.size() == 0);
   int calls = 0;
   w3.rt.setGuidSource([&calls]() { return LocalId{7, uint64_t(++calls < 3 ? 1 : 2)}; });
-  test_assert(w3.load(f.file()).ok() && w3.lib.size() == 2 && w3.at(2, ClientId::of("c.now")));
+  test_assert(w3.load(f.file()).ok() && w3.lib.size() == 2 &&
+              w3.at(2, ClientId::of("c.now")));
 }
 
 static void test_busy()
@@ -498,7 +524,8 @@ static void test_busy()
   test_assert(w.lib.get(w.at(1))->pins(PinKind::Host) == 1);
   pin.reset();
   w.docs.onDeserialize = nullptr;
-  /* What is deferred in a load waits for its end, also when a half-read block is destroyed. */
+  /* What is deferred in a load waits for its end, also when a half-read block is
+   * destroyed. */
   IoWorld w2;
   w2.docs.fault = DocFault::LeaveBytes;
   w2.docs.onDeserialize = [&](BlockReader &in) {
@@ -542,7 +569,8 @@ static void test_resolve_aliases()
   test_assert(w2.rt.ext<ClientRegistry>().registerClient("acme").ok());
   registerDoc(w2.rt, w2.docs, 1, "acme.Doc", kAcme);
   r = detail::resolvePlaceholders(w2.lib);
-  test_assert(r.ok() && r->blocks.size() == 0 && r->issues.total == 0 && r->missingType == 0);
+  test_assert(r.ok() && r->blocks.size() == 0 && r->issues.total == 0 &&
+              r->missingType == 0);
   test_assert(w2.lib.get(w2.at(5))->state() == BlockState::Placeholder);
 }
 

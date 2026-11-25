@@ -25,8 +25,8 @@ void writeGraphDef(const GraphDef &def, BlockWriter &out);
  *
  * What GraphDef's edits always keep is checked: ids, at most one link per input, links
  * between nodes that are there, at most one `graph.output`, unique names. Cycles and
- * recursions aren't: the evaluator reports them. A value of a type this build doesn't know
- * is Unsupported, and a type name with the id of another name is InvalidArgument.
+ * recursions aren't: the evaluator reports them. A value of a type this build doesn't
+ * know is Unsupported, and a type name with the id of another name is InvalidArgument.
  */
 GraphDef *readGraphDef(BlockReader &in, BlockId self);
 

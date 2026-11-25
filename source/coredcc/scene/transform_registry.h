@@ -21,14 +21,14 @@ struct TransformTypeInfo {
   litestl::util::string description;
   /**
    * Bool, Int, Float, Vec2 to Vec4, Enum and Quat; not dynamic. Their components are the
-   * channels, in order, and their defaults the initial values. Lengths that move the object must
-   * have subtype Distance: solveWorld's tolerance comes from their size.
+   * channels, in order, and their defaults the initial values. Lengths that move the
+   * object must have subtype Distance: solveWorld's tolerance comes from their size.
    */
   litestl::util::Vector<PropertyDef, 1> channels;
   /**
-   * Of the channels, in files. Raise it when a channel is renamed or means something else: then
-   * TransformModel::upgrade gets what older files have. Without that slot, an older file's channels
-   * are read by name. A newer file's aren't read, but kept.
+   * Of the channels, in files. Raise it when a channel is renamed or means something
+   * else: then TransformModel::upgrade gets what older files have. Without that slot, an
+   * older file's channels are read by name. A newer file's aren't read, but kept.
    */
   uint32_t version = 0;
 
@@ -37,7 +37,7 @@ struct TransformTypeInfo {
 
 /** A registered transform type. Lives as long as its Runtime. */
 class TransformType {
- public:
+public:
   TypeId id() const
   {
     return id_;
@@ -82,7 +82,7 @@ class TransformType {
     return *rt_;
   }
 
- private:
+private:
   friend class TransformRegistry;
   TypeId id_;
   litestl::util::string name_;
@@ -98,12 +98,13 @@ class TransformType {
 /**
  * Transform types by name. A Runtime extension.
  *
- * Adding one registers an ApiStruct with the type's name, whose parent is `kChannelsStruct`.
- * Its data is a ChannelBlock. Setting an Int outside +-2^53 is OutOfRange (a double can't hold
- * it); reads round like EvalCtx, and give an Enum's first item for a value that isn't one.
+ * Adding one registers an ApiStruct with the type's name, whose parent is
+ * `kChannelsStruct`. Its data is a ChannelBlock. Setting an Int outside +-2^53 is
+ * OutOfRange (a double can't hold it); reads round like EvalCtx, and give an Enum's first
+ * item for a value that isn't one.
  */
 class TransformRegistry {
- public:
+public:
   static constexpr const char *kExtName = "coredcc.TransformRegistry";
   static constexpr const char *kChannelsStruct = "coredcc.TransformChannels";
 
@@ -112,11 +113,11 @@ class TransformRegistry {
   TransformRegistry(const TransformRegistry &) = delete;
   TransformRegistry &operator=(const TransformRegistry &) = delete;
 
-  /** Why a type can't be added: a channel def, or a name that is taken (AlreadyExists). Busy while
-   * a scene or a graph evaluates. */
+  /** Why a type can't be added: a channel def, or a name that is taken (AlreadyExists).
+   * Busy while a scene or a graph evaluates. */
   Status canAdd(const TransformTypeInfo &info) const;
-  /** Registers a type and takes its model. Fails as canAdd does, leaving nothing behind. Posts that
-   * anything may have changed: there may be objects of the type already. */
+  /** Registers a type and takes its model. Fails as canAdd does, leaving nothing behind.
+   * Posts that anything may have changed: there may be objects of the type already. */
   Result<const TransformType *> add(TransformTypeInfo info, Owned<TransformModel> model);
   const TransformType *find(TypeId id) const;
   const TransformType *find(std::string_view name) const
@@ -138,7 +139,7 @@ class TransformRegistry {
     return *types_[i];
   }
 
- private:
+private:
   Runtime &rt_;
   litestl::util::Vector<TransformType *> types_;
   litestl::util::Map<uint64_t, TransformType *> byId_;
@@ -161,9 +162,9 @@ struct FixedChannels {
   }
 };
 
-/* The checked ways to call a model. All are FailedPrecondition while the Runtime has a sticky
- * error, and for a ChannelBlock of the wrong size; a foreign model's exception is returned, not
- * left as the sticky error. */
+/* The checked ways to call a model. All are FailedPrecondition while the Runtime has a
+ * sticky error, and for a ChannelBlock of the wrong size; a foreign model's exception is
+ * returned, not left as the sticky error. */
 
 /** The model's state, which needn't be finite. */
 Result<TransformState> evaluateTransform(const TransformType &type,
@@ -173,18 +174,19 @@ Result<TransformState> evaluateTransform(const TransformType &type,
 /**
  * Channels that put the object at `target`, an affine matrix.
  *
- * - `current` comes back unchanged, without asking the model, if it already gives the target.
- *   So an object's own world is always found.
- * - Exact: otherwise the model's answer is evaluated and compared: each column of the linear
- *   part within 1e-9 of its length (which refuses float matrices), and the translation within
- *   16 epsilon of the magnitudes that went into it. Beyond that it is FailedPrecondition. So are
- *   some targets under parents scaled very unequally at several levels, or along one axis by
- *   1e-7: use Closest.
+ * - `current` comes back unchanged, without asking the model, if it already gives the
+ * target. So an object's own world is always found.
+ * - Exact: otherwise the model's answer is evaluated and compared: each column of the
+ * linear part within 1e-9 of its length (which refuses float matrices), and the
+ * translation within 16 epsilon of the magnitudes that went into it. Beyond that it is
+ * FailedPrecondition. So are some targets under parents scaled very unequally at several
+ * levels, or along one axis by 1e-7: use Closest.
  * - Closest: only the translation is compared; shear is lost.
- * - A parent without an inverse is FailedPrecondition in both modes, and so is a result that
- *   isn't finite. A target with a scale of 0 is fine.
- * - Fixed channels (EvalCtx::isFixed) come back as they are stored, and the rest is what it would be
- *   without them. When one was in the way, Exact fails, and Closest doesn't compare the translation.
+ * - A parent without an inverse is FailedPrecondition in both modes, and so is a result
+ * that isn't finite. A target with a scale of 0 is fine.
+ * - Fixed channels (EvalCtx::isFixed) come back as they are stored, and the rest is what
+ * it would be without them. When one was in the way, Exact fails, and Closest doesn't
+ * compare the translation.
  */
 Result<ChannelBlock> solveWorld(const TransformType &type,
                                 const EvalCtx &current,
@@ -193,17 +195,17 @@ Result<ChannelBlock> solveWorld(const TransformType &type,
                                 SetWorldMode mode,
                                 FixedChannels *fixed = nullptr);
 
-/** Applies `delta`, the total since `base`. `nearTo` is the previous result of the interaction,
- * or base's channels: Euler angles stay continuous with it.
+/** Applies `delta`, the total since `base`. `nearTo` is the previous result of the
+ * interaction, or base's channels: Euler angles stay continuous with it.
  *
- * A scale that the channels can hold exactly (within 1e-9) is exact. So is a mirror (factors of 1 and
- * -1, or of one size), but under parents with shear. Other factors along other axes than the object's
- * would shear it: then its scales are multiplied by the sizes of the factors along its own axes,
- * after the mirror that their signs are.
+ * A scale that the channels can hold exactly (within 1e-9) is exact. So is a mirror
+ * (factors of 1 and -1, or of one size), but under parents with shear. Other factors
+ * along other axes than the object's would shear it: then its scales are multiplied by
+ * the sizes of the factors along its own axes, after the mirror that their signs are.
  *
- * Fixed channels come back as they are stored in `base`, and the rest is what it would be without them:
- * an object whose x is locked follows a translation along y. That isn't an error, also when nothing is
- * left to change. */
+ * Fixed channels come back as they are stored in `base`, and the rest is what it would be
+ * without them: an object whose x is locked follows a translation along y. That isn't an
+ * error, also when nothing is left to change. */
 Result<ChannelBlock> solveDelta(const TransformType &type,
                                 const EvalCtx &base,
                                 const ChannelBlock &nearTo,

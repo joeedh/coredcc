@@ -15,13 +15,16 @@ namespace coredcc {
 namespace lbt = litestl::binding::types;
 using litestl::util::Vector;
 
-Scene::Scene() : evaluator_(std::make_unique<detail::SceneEvaluator>()) {}
+Scene::Scene() : evaluator_(std::make_unique<detail::SceneEvaluator>())
+{
+}
 Scene::~Scene() = default;
 
 Scene *Scene::of(const Library &lib, BlockHandle h)
 {
   const Datablock *b = lib.get(h);
-  return b && b->type() == TypeId::of(kSceneType) ? static_cast<Scene *>(lib.data(h)) : nullptr;
+  return b && b->type() == TypeId::of(kSceneType) ? static_cast<Scene *>(lib.data(h))
+                                                  : nullptr;
 }
 
 /* ---- members ---- */
@@ -115,8 +118,9 @@ Status Scene::add(Library &lib, BlockHandle h, int index)
     return Status::error(StatusCode::NotFound, "Scene::add: no such block");
   }
   if (lookup(lib, b->id()) >= 0) {
-    return Status::error(StatusCode::AlreadyExists,
-                         ("'" + std::string(b->name().c_str()) + "' is in the scene").c_str());
+    return Status::error(
+        StatusCode::AlreadyExists,
+        ("'" + std::string(b->name().c_str()) + "' is in the scene").c_str());
   }
   RefCell cell(RefKind::OptStrong);
   CDCC_TRY(lib.writeRef(cell, b->id()));
@@ -162,8 +166,9 @@ Result<Vector<Scene::Place>> Scene::removeMany(Library &lib, std::span<const Blo
   /* One id, as undo has it for each step, needs no lookups. */
   const BlockId only = ids.size() == 1 ? clients.canonical(ids[0]) : BlockId();
   const auto isWanted = [&](const RefCell &c) {
-    return ids.size() == 1 ? c.target.local == only.local && clients.canonical(c.target) == only :
-                             wanted.lookup_ptr(clients.canonical(c.target)) != nullptr;
+    return ids.size() == 1
+               ? c.target.local == only.local && clients.canonical(c.target) == only
+               : wanted.lookup_ptr(clients.canonical(c.target)) != nullptr;
   };
   Vector<int> at;
   BlockId previous;
@@ -193,8 +198,7 @@ Result<Vector<Scene::Place>> Scene::removeMany(Library &lib, std::span<const Blo
   if (last && indexValid_ && indexCount_ == kept + 1) {
     index_.remove(clients.canonical(places[0].id)); /* the others are where they were */
     indexCount_ = kept;
-  }
-  else {
+  } else {
     indexValid_ = false;
   }
   lib.noteRefsChanged();
@@ -204,7 +208,9 @@ Result<Vector<Scene::Place>> Scene::removeMany(Library &lib, std::span<const Blo
 Status Scene::putBack(Library &lib, std::span<const Place> places)
 {
   const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
-  const auto canonical = [&](const BlockId &id) { return id.isNull() ? id : clients.canonical(id); };
+  const auto canonical = [&](const BlockId &id) {
+    return id.isNull() ? id : clients.canonical(id);
+  };
   struct Item {
     RefCell cell;
     BlockId previous;
@@ -213,18 +219,18 @@ Status Scene::putBack(Library &lib, std::span<const Place> places)
   };
   Status first;
   Vector<Item> items;
-  litestl::util::Map<BlockId, int> itemOf, behind; /* by its own id, and by the one before it */
+  litestl::util::Map<BlockId, int> itemOf,
+      behind; /* by its own id, and by the one before it */
   ensureFreshIndex(lib);
   for (const Place &p : places) {
     RefCell cell(RefKind::OptStrong);
     Status s;
     if (!lib.find(p.id)) {
       s = Status::error(StatusCode::NotFound, "Scene::putBack: no such block");
-    }
-    else if (lookup(lib, p.id) >= 0 || itemOf.lookup_ptr(canonical(p.id))) {
-      s = Status::error(StatusCode::AlreadyExists, "Scene::putBack: the block is in the scene");
-    }
-    else {
+    } else if (lookup(lib, p.id) >= 0 || itemOf.lookup_ptr(canonical(p.id))) {
+      s = Status::error(StatusCode::AlreadyExists,
+                        "Scene::putBack: the block is in the scene");
+    } else {
       s = lib.writeRef(cell, p.id);
     }
     if (!s.ok()) {
@@ -266,7 +272,9 @@ Status Scene::putBack(Library &lib, std::span<const Place> places)
   };
   int next = 0;
   for (const RefCell &c : cells_) {
-    for (; next < int(byIndex.size()) && items[byIndex[next]].index <= int(out.size()); next++) {
+    for (; next < int(byIndex.size()) && items[byIndex[next]].index <= int(out.size());
+         next++)
+    {
       put(byIndex[next]);
     }
     append(c);
@@ -294,8 +302,9 @@ Status Scene::addMany(Library &lib, std::span<const BlockHandle> blocks)
       return Status::error(StatusCode::NotFound, "Scene::add: no such block");
     }
     if (lookup(lib, b->id()) >= 0 || !seen.add(h, 0)) {
-      return Status::error(StatusCode::AlreadyExists,
-                           ("'" + std::string(b->name().c_str()) + "' is in the scene").c_str());
+      return Status::error(
+          StatusCode::AlreadyExists,
+          ("'" + std::string(b->name().c_str()) + "' is in the scene").c_str());
     }
   }
   for (BlockHandle h : blocks) {
@@ -468,7 +477,8 @@ struct SceneProvider {
   }
   static lbt::Struct<SceneProvider> *defineBindings()
   {
-    auto *st = new lbt::Struct<SceneProvider>("coredcc::SceneProvider", sizeof(SceneProvider));
+    auto *st =
+        new lbt::Struct<SceneProvider>("coredcc::SceneProvider", sizeof(SceneProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
@@ -521,7 +531,8 @@ CollectionAccessor collectionOf(bool selectedOnly)
 {
   using Handles = Vector<BlockHandle>;
   const auto list = [selectedOnly](const PointerRef &p, Context &ctx) -> const Handles & {
-    return selectedOnly ? self(p).selected(*ctx.library()) : self(p).objects(*ctx.library());
+    return selectedOnly ? self(p).selected(*ctx.library())
+                        : self(p).objects(*ctx.library());
   };
   CollectionAccessor c;
   c.itemStruct = StructId::of(kSceneObjectStruct);
@@ -535,7 +546,8 @@ CollectionAccessor collectionOf(bool selectedOnly)
     const Handles &l = list(p, ctx);
     return i >= 0 && i < int64_t(l.size()) ? blockRoot(ctx, l[int(i)]) : PointerRef();
   };
-  c.lookup = [selectedOnly, list](const PointerRef &p, Context &ctx, const KeySegment &key) {
+  c.lookup = [selectedOnly,
+              list](const PointerRef &p, Context &ctx, const KeySegment &key) {
     const Library *lib = ctx.library();
     if (!lib) {
       return PointerRef();
@@ -581,7 +593,8 @@ ApiStruct sceneStruct()
   };
   objects.activeMember = "activeObject";
   st.addCollection(PropertyDef::collectionProp("objects", object), std::move(objects));
-  st.addCollection(PropertyDef::collectionProp("selectedObjects", object), collectionOf(true));
+  st.addCollection(PropertyDef::collectionProp("selectedObjects", object),
+                   collectionOf(true));
 
   PointerAccessor active;
   active.target = object;
@@ -596,7 +609,8 @@ ApiStruct sceneStruct()
     if (target.owner.kind != OwnerKey::Kind::Block ||
         self(p).indexOf(lib, target.owner.block) < 0)
     {
-      return Status::error(StatusCode::FailedPrecondition, "the object isn't in the scene");
+      return Status::error(StatusCode::FailedPrecondition,
+                           "the object isn't in the scene");
     }
     return lib.writeRef(self(p).activeCell(), target.owner.block);
   };
@@ -604,7 +618,9 @@ ApiStruct sceneStruct()
   st.addPointer(PropertyDef::pointerProp("activeObject", object), std::move(active));
 
   ValueAccessor frame;
-  frame.get = [](const PointerRef &p, Context &) { return PropValue::ofFloat(self(p).frame); };
+  frame.get = [](const PointerRef &p, Context &) {
+    return PropValue::ofFloat(self(p).frame);
+  };
   frame.set = [](const PointerRef &p, Context &, const PropValue &v) {
     self(p).frame = v.asFloat();
     return Status();

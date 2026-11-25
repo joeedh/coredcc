@@ -56,8 +56,8 @@ Status noSocket(const GraphNode &n,
                 std::string_view key)
 {
   Status s = makeError(StatusCode::NotFound,
-                       "node '" + std::string(n.typeName().c_str()) + "' has no " + kind + " '" +
-                           std::string(key) + "'");
+                       "node '" + std::string(n.typeName().c_str()) + "' has no " + kind +
+                           " '" + std::string(key) + "'");
   Suggester sg(key);
   for (const SocketInfo &i : list) {
     sg.consider(i.key.c_str());
@@ -73,8 +73,7 @@ void store(NodeValues &list, std::string_view name, PropValue value, uint64_t ve
     if (name == list[i].name.c_str()) {
       if (value.isNone()) {
         list.remove_at(i);
-      }
-      else {
+      } else {
         list[i].value = std::move(value);
         list[i].version = version;
       }
@@ -131,17 +130,20 @@ Status GraphDef::restoreNode(const NodeState &state)
 {
   CDCC_TRY(busy("insertNode"));
   if (state.id.value <= 0 || state.id.value >= int64_t(1) << 52) {
-    return makeError(StatusCode::InvalidArgument, "insertNode: the id isn't in 1 to 2^52-1");
+    return makeError(StatusCode::InvalidArgument,
+                     "insertNode: the id isn't in 1 to 2^52-1");
   }
   if (idTaken(state.id.value)) {
     return makeError(StatusCode::AlreadyExists,
-                     "insertNode: the id " + std::to_string(state.id.value) + " is taken");
+                     "insertNode: the id " + std::to_string(state.id.value) +
+                         " is taken");
   }
   if (is(state.typeName, kGraphOutputType)) {
     bool found = false;
     forEachNode([&](const GraphNode &n) { found |= is(n.typeName(), kGraphOutputType); });
     if (found) {
-      return makeError(StatusCode::AlreadyExists, "a graph has at most one graph.output node");
+      return makeError(StatusCode::AlreadyExists,
+                       "a graph has at most one graph.output node");
     }
   }
   Library *lib = lib_.get();
@@ -183,10 +185,13 @@ Status GraphDef::restoreNode(const NodeState &state)
   }
   attachNode(n, after);
   matchParamRefs(n);
-  n->typeVersion_ = state.typeVersion ? state.typeVersion : n->type_ ? n->type_->version : 1;
+  n->typeVersion_ = state.typeVersion ? state.typeVersion
+                    : n->type_        ? n->type_->version
+                                      : 1;
   if (refs) {
     for (int i = 0; i < int(state.refs.size()); i++) {
-      lib->writeRef(n->refs_[i].cell, state.refs[i].target).ignore(); /* can't fail: checked */
+      lib->writeRef(n->refs_[i].cell, state.refs[i].target)
+          .ignore(); /* can't fail: checked */
     }
     if (isGroup) {
       lib->writeRef(n->group_, state.group).ignore();
@@ -298,8 +303,8 @@ Status GraphDef::setParam(NodeId id, std::string_view name, const PropValue &val
   const int i = type->paramIndex(name);
   if (i < 0) {
     Status s = makeError(StatusCode::NotFound,
-                         "node type '" + std::string(type->name.c_str()) + "' has no param '" +
-                             std::string(name) + "'");
+                         "node type '" + std::string(type->name.c_str()) +
+                             "' has no param '" + std::string(name) + "'");
     Suggester sg(name);
     for (const NodeParamDef &p : type->params) {
       sg.consider(p.def.apiName().c_str());
@@ -328,7 +333,8 @@ Status GraphDef::setParam(NodeId id, std::string_view name, const PropValue &val
   return Status();
 }
 
-Status GraphDef::setParamRef(GraphNode *n, const NodeParamDef &param, const PropValue &value)
+Status
+GraphDef::setParamRef(GraphNode *n, const NodeParamDef &param, const PropValue &value)
 {
   Library *lib = lib_.get();
   Result<PropValue> c = coerce(param.def, value);
@@ -344,7 +350,8 @@ Status GraphDef::setParamRef(GraphNode *n, const NodeParamDef &param, const Prop
                        where + "a def without a Library can't refer to blocks");
     }
     if (ref.owner.kind != OwnerKey::Kind::Block || ref.key.size() > 0) {
-      return makeError(StatusCode::InvalidArgument, where + "only whole blocks can be targets");
+      return makeError(StatusCode::InvalidArgument,
+                       where + "only whole blocks can be targets");
     }
     target = rt_.ext<ClientRegistry>().canonical(ref.owner.block);
     if (!self_.isNull() && target == rt_.ext<ClientRegistry>().canonical(self_)) {
@@ -355,7 +362,8 @@ Status GraphDef::setParamRef(GraphNode *n, const NodeParamDef &param, const Prop
   return writeParamRef(n, param.def.apiName().c_str(), param.weak, target);
 }
 
-Status GraphDef::writeParamRef(GraphNode *n, std::string_view name, bool weak, BlockId target)
+Status
+GraphDef::writeParamRef(GraphNode *n, std::string_view name, bool weak, BlockId target)
 {
   Library *lib = lib_.get();
   for (NodeBlockRef &r : n->refs_) {
@@ -374,9 +382,8 @@ Status GraphDef::writeParamRef(GraphNode *n, std::string_view name, bool weak, B
   return Status();
 }
 
-Result<const SocketType *> GraphDef::literalType(const GraphNode &n,
-                                                 std::string_view input,
-                                                 int &index) const
+Result<const SocketType *>
+GraphDef::literalType(const GraphNode &n, std::string_view input, int &index) const
 {
   const SocketInfos &list = sockets(n, SocketSide::Input);
   index = indexOfSocket(list, input);
@@ -390,7 +397,8 @@ Result<const SocketType *> GraphDef::literalType(const GraphNode &n,
   }
   if (!type->hasLiteral()) {
     return makeError(StatusCode::Unsupported,
-                     "input '" + std::string(input) + "' is a payload, which has no literal");
+                     "input '" + std::string(input) +
+                         "' is a payload, which has no literal");
   }
   return type;
 }
@@ -424,13 +432,11 @@ Status GraphDef::setLiteral(NodeId id, std::string_view input, const PropValue &
     if (old) {
       n->literals_.remove_at(int(old - n->literals_.data()));
     }
-  }
-  else if (old) {
+  } else if (old) {
     old->value = std::move(v);
     old->version = version;
     old->off = false;
-  }
-  else {
+  } else {
     n->literals_.append(NodeValue{lsString(input), std::move(v), version});
   }
   announce(false);
@@ -453,8 +459,7 @@ Status GraphDef::useLiteral(NodeId id, std::string_view input, bool on)
   if (NodeValue *old = findLiteral(n->literals_, input, **type)) {
     old->off = !on;
     old->version = stampNode(id);
-  }
-  else if (on) {
+  } else if (on) {
     PropValue v = literalValue(*n, input, **type).toProp();
     n->literals_.append(NodeValue{lsString(input), std::move(v), stampNode(id)});
   }
@@ -472,7 +477,8 @@ Status GraphDef::setGroup(NodeId id, BlockId def)
   GraphNode *n = *found;
   if (!isGroupType(n->typeName_)) {
     return makeError(StatusCode::TypeMismatch,
-                     "setGroup: node '" + std::string(n->typeName_.c_str()) + "' isn't a group");
+                     "setGroup: node '" + std::string(n->typeName_.c_str()) +
+                         "' isn't a group");
   }
   Library *lib = lib_.get();
   if (!def.isNull()) {
@@ -504,12 +510,14 @@ Status GraphDef::checkInterior(const GraphNode &from,
                                const GraphNode &to,
                                std::string_view toKey)
 {
-  const bool full = (isInteriorKey(fromKey) && from.interiorLinks_ >= kMaxInteriorLinks) ||
-                    (isInteriorKey(toKey) && to.interiorLinks_ >= kMaxInteriorLinks);
-  return full ? makeError(StatusCode::OutOfRange,
-                          "a group node has at most " + std::to_string(kMaxInteriorLinks) +
-                              " links to sockets inside it") :
-                Status();
+  const bool full =
+      (isInteriorKey(fromKey) && from.interiorLinks_ >= kMaxInteriorLinks) ||
+      (isInteriorKey(toKey) && to.interiorLinks_ >= kMaxInteriorLinks);
+  return full
+             ? makeError(StatusCode::OutOfRange,
+                         "a group node has at most " + std::to_string(kMaxInteriorLinks) +
+                             " links to sockets inside it")
+             : Status();
 }
 
 Status GraphDef::checkLink(const SocketRef &from,
@@ -540,16 +548,18 @@ Status GraphDef::checkLink(const SocketRef &from,
   }
   if (!types.canConvert(*fromType, *toType)) {
     return makeError(StatusCode::TypeMismatch,
-                     "there is no conversion from " + std::string(fromType->name.c_str()) +
-                         " to " + toType->name.c_str());
+                     "there is no conversion from " +
+                         std::string(fromType->name.c_str()) + " to " +
+                         toType->name.c_str());
   }
   return checkInterior(*a, from.key, *b, to.key);
 }
 
 static Status makesCycle(std::string_view from, std::string_view to)
 {
-  return makeError(StatusCode::InvalidArgument, "linking '" + std::string(from) + "' to '" +
-                                                    std::string(to) + "' would make a cycle");
+  return makeError(StatusCode::InvalidArgument,
+                   "linking '" + std::string(from) + "' to '" + std::string(to) +
+                       "' would make a cycle");
 }
 
 Result<LinkId> GraphDef::link(SocketRef from, SocketRef to)
@@ -590,8 +600,9 @@ Status GraphDef::linkAll(std::span<const LinkSpec> links, Vector<LinkId> &ids)
     }
     if (const GraphLink *old = b->linkInto(s.to.key)) {
       if (old->id.value < 0) {
-        status = makeError(StatusCode::InvalidArgument,
-                           "linkAll: two links go to input '" + std::string(s.to.key) + "'");
+        status =
+            makeError(StatusCode::InvalidArgument,
+                      "linkAll: two links go to input '" + std::string(s.to.key) + "'");
         break;
       }
       replaced.append(stateOf(*old));
@@ -641,7 +652,8 @@ Status GraphDef::insertLink(const LinkState &state)
     return a.ok() ? b.status() : a.status();
   }
   if (state.id.value <= 0 || state.id.value >= int64_t(1) << 52) {
-    return makeError(StatusCode::InvalidArgument, "insertLink: the id isn't in 1 to 2^52-1");
+    return makeError(StatusCode::InvalidArgument,
+                     "insertLink: the id isn't in 1 to 2^52-1");
   }
   if (idTaken(state.id.value)) {
     return makeError(StatusCode::AlreadyExists, "insertLink: the id is taken");
@@ -653,7 +665,8 @@ Status GraphDef::insertLink(const LinkState &state)
   }
   CDCC_TRY(checkInterior(**a, state.fromKey.c_str(), **b, state.toKey.c_str()));
   attachLink(state, *a, *b);
-  stamp(true, !isInteriorKey(state.fromKey.c_str()) && !isInteriorKey(state.toKey.c_str()));
+  stamp(true,
+        !isInteriorKey(state.fromKey.c_str()) && !isInteriorKey(state.toKey.c_str()));
   announce(true);
   return Status();
 }
@@ -675,11 +688,13 @@ Status GraphDef::unlink(LinkId id)
 
 /* ---- interface ---- */
 
-Status GraphDef::checkInterfaceName(SocketSide side, std::string_view name, int64_t except) const
+Status
+GraphDef::checkInterfaceName(SocketSide side, std::string_view name, int64_t except) const
 {
   if (!isInterfaceName(name)) {
-    return makeError(StatusCode::InvalidArgument,
-                     "an interface socket needs a name, which can't start with '#' or '@'");
+    return makeError(
+        StatusCode::InvalidArgument,
+        "an interface socket needs a name, which can't start with '#' or '@'");
   }
   const InterfaceSocket *twin = interfaceSocket(side, name);
   if (twin && twin->id != except) {
@@ -708,15 +723,16 @@ Result<int64_t> GraphDef::addInterface(SocketSide side,
   }
   Vector<InterfaceSocket> &list = side == SocketSide::Input ? ifaceIn_ : ifaceOut_;
   if (int(list.size()) >= kMaxInterface) {
-    return makeError(StatusCode::OutOfRange, "addInterface: a graph has at most " +
-                                                 std::to_string(kMaxInterface) +
-                                                 " sockets on a side");
+    return makeError(StatusCode::OutOfRange,
+                     "addInterface: a graph has at most " +
+                         std::to_string(kMaxInterface) + " sockets on a side");
   }
   if (index < -1 || index > int(list.size())) {
     return makeError(StatusCode::OutOfRange, "addInterface: the index is out of range");
   }
   if (id < 0 || id >= int64_t(1) << 52) {
-    return makeError(StatusCode::InvalidArgument, "addInterface: the id isn't in 1 to 2^52-1");
+    return makeError(StatusCode::InvalidArgument,
+                     "addInterface: the id isn't in 1 to 2^52-1");
   }
   if (id != 0 && idTaken(id)) {
     return makeError(StatusCode::AlreadyExists, "addInterface: the id is taken");
@@ -730,7 +746,9 @@ Result<int64_t> GraphDef::addInterface(SocketSide side,
   return out;
 }
 
-void GraphDef::insertInterface(Vector<InterfaceSocket> &list, InterfaceSocket socket, int index)
+void GraphDef::insertInterface(Vector<InterfaceSocket> &list,
+                               InterfaceSocket socket,
+                               int index)
 {
   socket.def = this;
   list.append(std::move(socket));
@@ -892,7 +910,8 @@ Status GraphDef::restoreExtra(NodeId id, std::string_view name, const NodeExtras
   while (at < int(list.size()) && name != list[at].name.c_str()) {
     at++;
   }
-  const bool refs = hasRefs(values) || (at < int(list.size()) && list[at].refs.size() > 0);
+  const bool refs =
+      hasRefs(values) || (at < int(list.size()) && list[at].refs.size() > 0);
   if (at < int(list.size())) {
     list.remove_at(at);
   }
@@ -924,8 +943,7 @@ Status GraphDef::restoreRef(NodeId id, std::string_view param, BlockId target)
     const NodeType *type = n->type();
     const int i = type ? type->paramIndex(param) : -1;
     CDCC_TRY(writeParamRef(n, param, i >= 0 && type->params[i].weak, target));
-  }
-  else if (lib) {
+  } else if (lib) {
     CDCC_TRY(lib->writeRef(n->group_, target));
   }
   n->paramVersion_ = refsVersion_ = group ? stamp(true) : stampNode(id);
@@ -933,12 +951,14 @@ Status GraphDef::restoreRef(NodeId id, std::string_view param, BlockId target)
   return Status();
 }
 
-Status GraphDef::restoreInterface(SocketSide side, const InterfaceSocket &socket, int index)
+Status
+GraphDef::restoreInterface(SocketSide side, const InterfaceSocket &socket, int index)
 {
   CDCC_TRY(busy("restoreInterface"));
   Vector<InterfaceSocket> &list = side == SocketSide::Input ? ifaceIn_ : ifaceOut_;
   if (idTaken(socket.id) || index < 0 || index > int(list.size())) {
-    return makeError(StatusCode::FailedPrecondition, "restoreInterface: its place is gone");
+    return makeError(StatusCode::FailedPrecondition,
+                     "restoreInterface: its place is gone");
   }
   InterfaceSocket s = socket;
   s.defaultVersion = rt_.touch();

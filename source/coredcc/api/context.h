@@ -49,11 +49,11 @@ struct PointerRef {
  *
  * A **path prefix** makes paths resolve from another struct than the root, as a panel
  * does to run against its own data (Blender's context override). It is a path, which is
- * resolved at each use, or a struct's address, which stays where it is. The sticky error is the
- * Runtime's; a Context has none of its own.
+ * resolved at each use, or a struct's address, which stays where it is. The sticky error
+ * is the Runtime's; a Context has none of its own.
  */
 class Context {
- public:
+public:
   /** A non-null root needs an owner (a runtime owner, usually): changes are posted by
    * owner, and canonical paths start at one. */
   Context(Runtime *rt, Library *lib, PointerRef root) : rt_(*rt), lib_(lib), root_(root)
@@ -83,11 +83,12 @@ class Context {
   }
 
   /**
-   * The active scene: a block of whatever type the host's scenes are, whose struct is then what the paths
-   * below `scene` go through; null for none. Evaluation, picking and the commands of `scene/` work
-   * with a `coredcc.Scene` only, and find no scene in another type's: see "A host's own scenes" in
-   * `docs/embedding.md`. Setting another bumps the ChangeBus's structural epoch.
-   * The handle isn't checked: the block may be deleted or detached later.
+   * The active scene: a block of whatever type the host's scenes are, whose struct is
+   * then what the paths below `scene` go through; null for none. Evaluation, picking and
+   * the commands of `scene/` work with a `coredcc.Scene` only, and find no scene in
+   * another type's: see "A host's own scenes" in `docs/embedding.md`. Setting another
+   * bumps the ChangeBus's structural epoch. The handle isn't checked: the block may be
+   * deleted or detached later.
    */
   BlockHandle scene() const
   {
@@ -95,16 +96,18 @@ class Context {
   }
   void setScene(BlockHandle scene);
 
-  /** The active scene's unit settings (api/format.h), or the defaults for one without them. */
+  /** The active scene's unit settings (api/format.h), or the defaults for one without
+   * them. */
   UnitSettings units();
 
-  /** Paths resolve from `prefix` (itself resolved from the root) until cleared. It names a
-   * struct, or a Pointer member, whose target is meant. */
+  /** Paths resolve from `prefix` (itself resolved from the root) until cleared. It names
+   * a struct, or a Pointer member, whose target is meant. */
   void setPrefix(Path prefix)
   {
     prefix_ = std::move(prefix);
   }
-  /** As above, from the struct at an address. `canonicalize(ctx, Path())` is the prefix's. */
+  /** As above, from the struct at an address. `canonicalize(ctx, Path())` is the
+   * prefix's. */
   void setPrefix(StableRef address)
   {
     prefix_ = std::move(address);
@@ -155,7 +158,7 @@ class Context {
     return prefix_;
   }
 
- private:
+private:
   friend class PrefixScope;
 
   Runtime &rt_;
@@ -170,11 +173,11 @@ class Context {
 
 /**
  * Sets a Context's path prefix, or clears it (null), for the length of a scope. With
- * `invoke`, it runs a layout's tool: its pointer arguments and the command see the prefix, and
- * so do the command's undo and redo later, at the address it had.
+ * `invoke`, it runs a layout's tool: its pointer arguments and the command see the
+ * prefix, and so do the command's undo and redo later, at the address it had.
  */
 class PrefixScope {
- public:
+public:
   PrefixScope(Context &ctx, std::nullptr_t) : ctx_(ctx), before_(ctx.prefix_)
   {
     ctx.clearPrefix();
@@ -187,7 +190,8 @@ class PrefixScope {
   {
     address ? ctx.setPrefix(*address) : ctx.clearPrefix();
   }
-  PrefixScope(Context &ctx, const Context::Prefix &prefix) : ctx_(ctx), before_(ctx.prefix_)
+  PrefixScope(Context &ctx, const Context::Prefix &prefix)
+      : ctx_(ctx), before_(ctx.prefix_)
   {
     ctx.prefix_ = prefix;
   }
@@ -198,7 +202,7 @@ class PrefixScope {
   PrefixScope(const PrefixScope &) = delete;
   PrefixScope &operator=(const PrefixScope &) = delete;
 
- private:
+private:
   Context &ctx_;
   Context::Prefix before_;
 };

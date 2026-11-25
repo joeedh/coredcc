@@ -1,7 +1,7 @@
 #pragma once
 
-/* A scene document with a data block type that has shapes (test.Geo), and the answer to a pick by
- * looping over all of them. */
+/* A scene document with a data block type that has shapes (test.Geo), and the answer to a
+ * pick by looping over all of them. */
 
 #include "pick_fixture.h"
 #include "scene_doc.h"
@@ -16,7 +16,8 @@ namespace scene_test {
 
 enum class Kind { Triangle, Capsule, Point, Segment };
 
-/* Coordinates of one shape: a triangle's corners, a capsule's or a segment's ends, or a point. */
+/* Coordinates of one shape: a triangle's corners, a capsule's or a segment's ends, or a
+ * point. */
 struct Prim {
   double3 q[3];
   double radius = 0.0;
@@ -29,16 +30,17 @@ struct Prim {
   }
   ElementDomain domain() const
   {
-    return kind == Kind::Triangle ? ElementDomain::Face :
-           kind == Kind::Point    ? ElementDomain::Point :
-                                    ElementDomain::Edge;
+    return kind == Kind::Triangle ? ElementDomain::Face
+           : kind == Kind::Point  ? ElementDomain::Point
+                                  : ElementDomain::Edge;
   }
 };
 
 struct Geo {
   std::vector<Prim> prims;
   Box3d box;
-  /* Gives the sinks only what is in the query's planes or radius, and what the ray hits first. */
+  /* Gives the sinks only what is in the query's planes or radius, and what the ray hits
+   * first. */
   bool useBvh = false;
   /* With it: no triangles but what the ray hits first, if no others are wanted. */
   bool useRay = false;
@@ -78,18 +80,18 @@ struct Geo {
     given++;
     sink.element(int32_t(p.domain()), i);
     switch (p.kind) {
-      case Kind::Triangle:
-        sink.triangle(p.q[0], p.q[1], p.q[2]);
-        break;
-      case Kind::Capsule:
-        sink.capsule(p.q[0], p.q[1], p.radius);
-        break;
-      case Kind::Point:
-        sink.point(p.q[0], p.pixels);
-        break;
-      case Kind::Segment:
-        sink.segment(p.q[0], p.q[1], p.pixels);
-        break;
+    case Kind::Triangle:
+      sink.triangle(p.q[0], p.q[1], p.q[2]);
+      break;
+    case Kind::Capsule:
+      sink.capsule(p.q[0], p.q[1], p.radius);
+      break;
+    case Kind::Point:
+      sink.point(p.q[0], p.pixels);
+      break;
+    case Kind::Segment:
+      sink.segment(p.q[0], p.q[1], p.pixels);
+      break;
     }
   }
 
@@ -116,10 +118,11 @@ struct Geo {
         return true;
       }
       const double3 &a = p.q[0];
-      const double3 at = p.kind == Kind::Triangle ?
-                             bvh::closestOnTriangle(query.point(), a, p.q[1], p.q[2]) :
-                         p.kind == Kind::Point ? a :
-                                                 bvh::closestOnSegment(query.point(), a, p.q[1]);
+      const double3 at = p.kind == Kind::Triangle
+                             ? bvh::closestOnTriangle(query.point(), a, p.q[1], p.q[2])
+                         : p.kind == Kind::Point
+                             ? a
+                             : bvh::closestOnSegment(query.point(), a, p.q[1]);
       if (useBvh && lengthOf(at - query.point()) > sink.radius()) {
         return true;
       }
@@ -289,8 +292,10 @@ struct Expected {
   bool depthKnown = true;
 };
 
-/** A triangle in the world: clipped to the near and the far plane, projected, its outline walked. */
-inline Expected expectTriangle(const ViewMath &view, const double3 (&w)[3], double x, double y)
+/** A triangle in the world: clipped to the near and the far plane, projected, its outline
+ * walked. */
+inline Expected
+expectTriangle(const ViewMath &view, const double3 (&w)[3], double x, double y)
 {
   Expected e;
   std::vector<std::pair<long double, long double>> outline;
@@ -309,7 +314,8 @@ inline Expected expectTriangle(const ViewMath &view, const double3 (&w)[3], doub
         in.push_back(a);
       }
       if ((da >= 0.0) != (db >= 0.0)) {
-        in.push_back(da >= 0.0 ? a + (b - a) * (da / (da - db)) : b + (a - b) * (db / (db - da)));
+        in.push_back(da >= 0.0 ? a + (b - a) * (da / (da - db))
+                               : b + (a - b) * (db / (db - da)));
       }
     }
     polygon = in;

@@ -114,9 +114,11 @@ void testNative()
   test_assert(src.calls == 3 && unchanged());
   src.wrongLengthAt = -1;
   src.sizeAnswer = -7;
-  test_assert(bvh.build(rt, ref(rt, src)).code() == StatusCode::InvalidArgument && unchanged());
+  test_assert(bvh.build(rt, ref(rt, src)).code() == StatusCode::InvalidArgument &&
+              unchanged());
   src.sizeAnswer = -1;
-  test_assert(bvh.build(rt, AnyBvhSource()).code() == StatusCode::InvalidArgument && unchanged());
+  test_assert(bvh.build(rt, AnyBvhSource()).code() == StatusCode::InvalidArgument &&
+              unchanged());
   BvhOptions bad;
   bad.leafSize = 0;
   test_assert(bvh.build(rt, ref(rt, src), bad).code() == StatusCode::InvalidArgument &&
@@ -124,7 +126,8 @@ void testNative()
   rt.setStickyError(Status::error(StatusCode::Internal, "earlier"));
   src.calls = 0;
   test_assert(bvh.build(rt, ref(rt, src)).code() == StatusCode::FailedPrecondition);
-  test_assert(src.calls == 0 && unchanged() && rt.takeStickyError().code() == StatusCode::Internal);
+  test_assert(src.calls == 0 && unchanged() &&
+              rt.takeStickyError().code() == StatusCode::Internal);
 
   src.boxes.clear();
   test_assert(bvh.build(rt, ref(rt, src)).ok() && bvh.boxes().bvh().size() == 0);
@@ -161,7 +164,8 @@ void testRefit()
   for (const auto &[first, count] :
        {std::pair{-1, 2}, std::pair{0, -1}, std::pair{8999, 2}, std::pair{9001, 0}})
   {
-    test_assert(bvh.refit(rt, ref(rt, src), first, count).code() == StatusCode::OutOfRange);
+    test_assert(bvh.refit(rt, ref(rt, src), first, count).code() ==
+                StatusCode::OutOfRange);
   }
   test_assert(src.calls == 2 && same());
 
@@ -180,14 +184,16 @@ void testRefit()
 
   /* What has to be done. */
   src.calls = 0;
-  test_assert(bvh.onInvalidate(rt, ref(rt, src), InvalidateKinds::Selection).ok() && same());
+  test_assert(bvh.onInvalidate(rt, ref(rt, src), InvalidateKinds::Selection).ok() &&
+              same());
   test_assert(src.calls == 0);
   test_assert(bvh.onInvalidate(rt, ref(rt, src), InvalidateKinds::Positions).ok());
   test_assert(src.calls == 3 && want.refit(direct(src)).ok() && same());
   test_assert(bvh.onInvalidate(rt, ref(rt, src), InvalidateKinds::Topology).ok());
   test_assert(src.calls == 6 && want.build(direct(src)).ok() && same());
   src.boxes.pop_back();
-  test_assert(bvh.refit(rt, ref(rt, src)).code() == StatusCode::FailedPrecondition && same());
+  test_assert(bvh.refit(rt, ref(rt, src)).code() == StatusCode::FailedPrecondition &&
+              same());
   src.calls = 0;
   test_assert(bvh.onInvalidate(rt, ref(rt, src), InvalidateKinds::Positions).ok());
   test_assert(src.calls == 3 && want.build(direct(src)).ok() && same());
@@ -208,7 +214,8 @@ void testNumbers()
   for (int i = 0; i < 500; i++) {
     src.boxes[i].max[0] += r.range(0.0, 1.0);
   }
-  test_assert(bvh.refitFrom(src.bounds(0, 500)).ok() && want.refit(direct(src)).ok() && same());
+  test_assert(bvh.refitFrom(src.bounds(0, 500)).ok() && want.refit(direct(src)).ok() &&
+              same());
   Vector<int32_t> some;
   Vector<double> values;
   for (int i = 490; i > 0; i -= 7) {
@@ -222,7 +229,8 @@ void testNumbers()
   /* Wrong lengths. */
   values.pop_back();
   all.pop_back();
-  test_assert(bvh.refitSome(some, values).code() == StatusCode::InvalidArgument && same());
+  test_assert(bvh.refitSome(some, values).code() == StatusCode::InvalidArgument &&
+              same());
   test_assert(bvh.refitFrom(all).code() == StatusCode::InvalidArgument && same());
   test_assert(bvh.buildFrom(all).code() == StatusCode::InvalidArgument && same());
 
@@ -292,7 +300,8 @@ void testForeign()
     sc::ForeignBindings &fb = rt.ext<sc::ForeignBindings>();
     const char *slots[] = {"size", "bounds"};
     test_assert(
-        (registerForeign<AnyBvhSource>(rt, "js.source", fb.dispatcher(), nullptr, slots).ok()));
+        (registerForeign<AnyBvhSource>(rt, "js.source", fb.dispatcher(), nullptr, slots)
+             .ok()));
 
     NativeSource data;
     fill(data, 9000);
@@ -319,8 +328,8 @@ void testForeign()
       return true;
     };
     const fakehost::lf::Handle h = host.add(std::move(obj));
-    const AnyBvhSource src =
-        query<AnyBvhSource>(rt, TypeId::of("js.source"), reinterpret_cast<void *>(uintptr_t(h)));
+    const AnyBvhSource src = query<AnyBvhSource>(
+        rt, TypeId::of("js.source"), reinterpret_cast<void *>(uintptr_t(h)));
     test_assert(bool(src));
 
     AnyBvh bvh;
@@ -345,7 +354,8 @@ void testForeign()
 void testBoxBinding()
 {
   const auto *st = Box3d::defineBindings();
-  test_assert(st == Box3d::defineBindings() && strcmp(st->name.c_str(), "coredcc::Box3d") == 0);
+  test_assert(st == Box3d::defineBindings() &&
+              strcmp(st->name.c_str(), "coredcc::Box3d") == 0);
   Box3d b;
   test_assert(b.empty());
   for (int a = 0; a < 3; a++) {

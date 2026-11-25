@@ -14,9 +14,10 @@ Status scaleKernel(NodeExecContext &ctx)
 {
   const BlockUse use = ctx.paramBlock("thing");
   const Thing *t = static_cast<const Thing *>(use.data);
-  return ctx.setOutput(0, GraphValue::ofFloat(ctx.input(0).asFloat() *
-                                              double(ctx.param("count")->asInt()) +
-                                              (t ? t->value : 0)));
+  return ctx.setOutput(
+      0,
+      GraphValue::ofFloat(ctx.input(0).asFloat() * double(ctx.param("count")->asInt()) +
+                          (t ? t->value : 0)));
 }
 
 void addTypes(Runtime &rt)
@@ -34,7 +35,8 @@ void addTypes(Runtime &rt)
 
 std::string path(const char *graph, NodeId n, const char *rest)
 {
-  return std::string("graphs[\"") + graph + "\"].nodes[#" + std::to_string(n.value) + "]" + rest;
+  return std::string("graphs[\"") + graph + "\"].nodes[#" + std::to_string(n.value) +
+         "]" + rest;
 }
 PropValue fl(double v)
 {
@@ -51,7 +53,8 @@ void testNodes()
   addTypes(d.rt);
   const Graph g = newGraph(d.lib, "g");
   GraphDef &def = *g.def;
-  const NodeId a = add(def, "t.scale"), b = add(def, "t.scale"), v = add(def, "value.float");
+  const NodeId a = add(def, "t.scale"), b = add(def, "t.scale"),
+               v = add(def, "value.float");
   const LinkId l = connect(def, v, "value", b, "a");
 
   /* The graph. */
@@ -64,7 +67,8 @@ void testNodes()
   test_assert(d.is("graphs[\"g\"].nodes[1].id", PropValue::ofInt(v.value)));
   test_assert(hasCode(d.get("graphs[\"g\"].nodes[2].id"), StatusCode::OutOfRange));
   test_assert(hasCode(d.get(path("g", a, ".id")), StatusCode::NotFound));
-  test_assert(d.set("graphs[\"g\"].name", str("h")).ok() && d.is("graphs[\"h\"].name", str("h")));
+  test_assert(d.set("graphs[\"g\"].name", str("h")).ok() &&
+              d.is("graphs[\"h\"].name", str("h")));
   test_assert(d.undo().ok() && d.is("graphs[\"g\"].name", str("g")));
 
   /* Labels: a key while only one node has it. */
@@ -72,21 +76,27 @@ void testNodes()
   test_assert(d.is("graphs[\"g\"].nodes[\"B\"].id", PropValue::ofInt(b.value)));
   test_assert(d.set(path("g", v, ".label"), str("B")).ok());
   test_assert(hasCode(d.get("graphs[\"g\"].nodes[\"B\"].id"), StatusCode::NotFound));
-  test_assert(d.undo().ok() && d.is("graphs[\"g\"].nodes[\"B\"].id", PropValue::ofInt(b.value)));
+  test_assert(d.undo().ok() &&
+              d.is("graphs[\"g\"].nodes[\"B\"].id", PropValue::ofInt(b.value)));
   /* The canonical path has the id. */
   Result<ResolvedPath> rp = resolve(d.ctx, "graphs[\"g\"].nodes[\"B\"].params.count");
   test_assert(rp.ok() && rp->canonical.owner == OwnerKey::ofBlock(g.id));
-  test_assert(rp->canonical.key.size() == 4 && rp->canonical.key[1] == KeySegment::ofHandle(b.value));
+  test_assert(rp->canonical.key.size() == 4 &&
+              rp->canonical.key[1] == KeySegment::ofHandle(b.value));
   test_assert(d.set(path("g", b, ".position[1]"), fl(4)).ok() && def.node(b)->y() == 4);
-  test_assert(d.undo().ok() && def.node(b)->y() == 0 && d.redo().ok() && def.node(b)->y() == 4);
-  test_assert(hasCode(d.set(path("g", b, ".type"), str("x")), StatusCode::FailedPrecondition));
+  test_assert(d.undo().ok() && def.node(b)->y() == 0 && d.redo().ok() &&
+              def.node(b)->y() == 4);
+  test_assert(
+      hasCode(d.set(path("g", b, ".type"), str("x")), StatusCode::FailedPrecondition));
 
   /* Links. */
   const std::string link = "graphs[\"g\"].links[#" + std::to_string(l.value) + "]";
   test_assert(d.is("graphs[\"g\"].links.length", PropValue::ofInt(1)));
   test_assert(d.is("graphs[\"g\"].links[0].id", PropValue::ofInt(l.value)));
-  test_assert(d.is(link + ".from", PropValue::ofInt(v.value)) && d.is(link + ".to", PropValue::ofInt(b.value)));
-  test_assert(d.is(link + ".fromSocket", str("value")) && d.is(link + ".toSocket", str("a")));
+  test_assert(d.is(link + ".from", PropValue::ofInt(v.value)) &&
+              d.is(link + ".to", PropValue::ofInt(b.value)));
+  test_assert(d.is(link + ".fromSocket", str("value")) &&
+              d.is(link + ".toSocket", str("a")));
   test_assert(hasCode(d.get("graphs[\"g\"].links[#1].id"), StatusCode::NotFound));
   test_assert(hasCode(d.get("graphs[\"g\"].links[\"x\"].id"), StatusCode::NotFound));
 
@@ -99,13 +109,17 @@ void testNodes()
   };
   test_assert(def.unlink(l).ok() && value() == 6);
   test_assert(d.is(path("g", b, ".params.count"), PropValue::ofInt(3)));
-  test_assert(d.is(path("g", b, ".inputs.a"), fl(2)) && d.is(path("g", b, ".params.maybe"), fl(0)));
-  test_assert(d.set(path("g", b, ".params.count"), PropValue::ofInt(100)).ok() && value() == 18);
+  test_assert(d.is(path("g", b, ".inputs.a"), fl(2)) &&
+              d.is(path("g", b, ".params.maybe"), fl(0)));
+  test_assert(d.set(path("g", b, ".params.count"), PropValue::ofInt(100)).ok() &&
+              value() == 18);
   test_assert(d.set(path("g", b, ".inputs.a"), fl(-1)).ok() && value() == 0);
-  test_assert(d.is(path("g", b, ".inputs.a"), fl(0)) && d.is(path("g", b, ".params.count"), PropValue::ofInt(9)));
+  test_assert(d.is(path("g", b, ".inputs.a"), fl(0)) &&
+              d.is(path("g", b, ".params.count"), PropValue::ofInt(9)));
   test_assert(d.set(path("g", b, ".params.mode[EXACT]"), PropValue::ofBool(true)).ok());
   test_assert(def.paramValue(*def.node(b), "mode") == PropValue::ofEnum(1));
-  test_assert(d.undo().ok() && d.undo().ok() && value() == 18 && d.undo().ok() && value() == 6);
+  test_assert(d.undo().ok() && d.undo().ok() && value() == 18 && d.undo().ok() &&
+              value() == 6);
   test_assert(d.redo().ok() && value() == 18);
   test_assert(hasCode(d.get(path("g", b, ".params.cuont")), StatusCode::NotFound));
   Result<PropertyDef> meta = getMeta(d.ctx, path("g", b, ".inputs.a"));
@@ -129,9 +143,11 @@ void testNodes()
   test_assert(d.rt.ext<ApiRegistry>().add(ApiStruct("coredcc.GraphInputs:t.taken")).ok());
   NodeTypeDef taken("t.taken");
   taken.output("value", "float");
-  Result<Owned<GraphKernel>> k = makeKernel<FnKernel<scaleKernel>>(d.rt, "t.scale#kernel");
+  Result<Owned<GraphKernel>> k =
+      makeKernel<FnKernel<scaleKernel>>(d.rt, "t.scale#kernel");
   taken.kernel(std::move(k).value());
-  test_assert(hasCode(d.rt.ext<NodeTypeRegistry>().add(std::move(taken)), StatusCode::AlreadyExists));
+  test_assert(hasCode(d.rt.ext<NodeTypeRegistry>().add(std::move(taken)),
+                      StatusCode::AlreadyExists));
   for (const char *part : {"coredcc.GraphNode:t.taken", "coredcc.GraphParams:t.taken"}) {
     test_assert(!d.rt.ext<ApiRegistry>().find(StructId::of(part)));
   }
@@ -157,21 +173,26 @@ void testInterface()
   test_assert(d.is(a + ".default", fl(0)) && d.set(a + ".default", fl(3)).ok());
   test_assert(in.interfaceSockets(SocketSide::Input)[0].defaultValue == fl(3));
   test_assert(hasCode(d.set(b + ".default", fl(3)), StatusCode::FailedPrecondition));
-  test_assert(d.set(a + ".name", str("A")).ok() && d.undo().ok() && d.is(a + ".default", fl(3)));
+  test_assert(d.set(a + ".name", str("A")).ok() && d.undo().ok() &&
+              d.is(a + ".default", fl(3)));
 
   /* A group's sockets: read-only until set. */
   const NodeId g = add(o, "graph.group");
   const std::string group = path("out", g, ".group");
-  test_assert(d.is(group, PropValue::nullPointer()) && d.is(path("out", g, ".sockets.length"), PropValue::ofInt(0)));
-  test_assert(d.set(group, pointerTo(inner)).ok() && o.node(g)->group().target == inner.id);
+  test_assert(d.is(group, PropValue::nullPointer()) &&
+              d.is(path("out", g, ".sockets.length"), PropValue::ofInt(0)));
+  test_assert(d.set(group, pointerTo(inner)).ok() &&
+              o.node(g)->group().target == inner.id);
   const std::string socket = path("out", g, ".sockets[\"a\"]");
   const std::string byId = path("out", g, ".sockets[#") + std::to_string(ia) + "]";
-  test_assert(d.is(socket + ".value", fl(3)) && d.is(byId + ".isSet", PropValue::ofBool(false)));
+  test_assert(d.is(socket + ".value", fl(3)) &&
+              d.is(byId + ".isSet", PropValue::ofBool(false)));
   test_assert(d.is(socket + ".name", str("a")) && d.is(socket + ".type", str("float")));
   /* Setting the value puts it in use, as one step. */
   test_assert(d.set(socket + ".value", fl(5)).ok() && d.is(socket + ".value", fl(5)));
   test_assert(d.is(socket + ".isSet", PropValue::ofBool(true)) && d.undo().ok());
-  test_assert(d.is(socket + ".isSet", PropValue::ofBool(false)) && d.is(socket + ".value", fl(3)));
+  test_assert(d.is(socket + ".isSet", PropValue::ofBool(false)) &&
+              d.is(socket + ".value", fl(3)));
   test_assert(d.redo().ok() && d.is(socket + ".isSet", PropValue::ofBool(true)));
   test_assert(d.undo().ok() && o.node(g)->literals().size() == 0);
   test_assert(d.set(socket + ".isSet", PropValue::ofBool(true)).ok());
@@ -194,23 +215,28 @@ void testInterface()
   /* Types: each has a literal of its own, and the interface's default goes with it. */
   test_assert(o.setLiteral(g, key(ia), fl(2.5)).ok() && is(2.5));
   test_assert(in.setInterfaceType(ia, "int").ok() && is(0));
-  test_assert(d.is(socket + ".type", str("int")) && d.is(socket + ".value", PropValue::ofInt(0)));
+  test_assert(d.is(socket + ".type", str("int")) &&
+              d.is(socket + ".value", PropValue::ofInt(0)));
   test_assert(d.is(a + ".default", PropValue::ofInt(0)));
   test_assert(o.setLiteral(g, key(ia), PropValue::ofInt(9)).ok() && is(9));
-  test_assert(d.is(socket + ".value", PropValue::ofInt(9)) && o.node(g)->literals().size() == 2);
+  test_assert(d.is(socket + ".value", PropValue::ofInt(9)) &&
+              o.node(g)->literals().size() == 2);
   test_assert(in.setInterfaceType(ia, "float").ok() && is(2.5));
   test_assert(o.setLiteral(g, key(ia), PropValue()).ok() && is(0));
-  test_assert(in.setInterfaceType(ia, "int").ok() && is(9) && in.setInterfaceType(ia, "bool").ok());
+  test_assert(in.setInterfaceType(ia, "int").ok() && is(9) &&
+              in.setInterfaceType(ia, "bool").ok());
   test_assert(d.is(socket + ".value", PropValue::ofBool(false)));
   /* Switched on and off, each time with its own version. */
-  test_assert(o.useLiteral(g, key(ia), true).ok() && o.setLiteral(g, key(ia), PropValue::ofBool(true)).ok());
+  test_assert(o.useLiteral(g, key(ia), true).ok() &&
+              o.setLiteral(g, key(ia), PropValue::ofBool(true)).ok());
   test_assert(is(1) && o.useLiteral(g, key(ia), false).ok() && is(0));
   test_assert(o.useLiteral(g, key(ia), true).ok() && is(1));
   test_assert(hasCode(o.useLiteral(g, "nothing", true), StatusCode::NotFound));
   test_assert(hasCode(o.useLiteral(NodeId{3}, key(ia), true), StatusCode::NotFound));
 
   /* While the group isn't there, the sockets last seen are read-only. */
-  test_assert(d.lib.markDeleted(inner.h).ok() && d.is(socket + ".isSet", PropValue::ofBool(true)));
+  test_assert(d.lib.markDeleted(inner.h).ok() &&
+              d.is(socket + ".isSet", PropValue::ofBool(true)));
   for (const char *member : {".isSet", ".value"}) {
     test_assert(hasCode(d.set(socket + member, PropValue::ofBool(false)),
                         StatusCode::FailedPrecondition));
@@ -225,7 +251,8 @@ void testInterface()
   test_assert(hasCode(d.get(path("in", input, ".sockets.length")), StatusCode::NotFound));
 }
 
-/* The canonical path of every socket leads back to it, also when its key isn't an interface's. */
+/* The canonical path of every socket leads back to it, also when its key isn't an
+ * interface's. */
 void testSocketKeys()
 {
   Doc d;
@@ -257,18 +284,30 @@ void testSocketKeys()
   checkAll(each, {"elements", key(e)});
   test_assert(d.is(path("out", each, ".sockets[\"elements\"].type"),
                    str(PayloadTraits<Elements>::name)));
-  test_assert(d.is(path("out", each, ".sockets[#") + std::to_string(e) + "].type", str("float")));
+  test_assert(
+      d.is(path("out", each, ".sockets[#") + std::to_string(e) + "].type", str("float")));
   /* What a file may say a lost group's sockets were. */
   NodeState s;
   s.id = NodeId{7};
   s.typeName = kGraphGroupType;
-  const std::string keys[] = {"a", "b", "#0", "#007", "#", "#-3", "#12x", "#99999999999999999999", "#5", "@1.a"};
+  const std::string keys[] = {
+      "a", "b", "#0", "#007", "#", "#-3", "#12x", "#99999999999999999999", "#5", "@1.a"};
   const char *names[] = {"b", "a", "x", "x", "x", "x", "x", "x", "x", "x"};
   for (int i = 0; i < 10; i++) {
     s.inputs.append(SocketInfo{keys[i].c_str(), names[i], "float"});
   }
   test_assert(outer.def->insertNode(s).ok());
-  checkAll(s.id, {keys[0], keys[1], keys[2], keys[3], keys[4], keys[5], keys[6], keys[7], keys[8], keys[9]});
+  checkAll(s.id,
+           {keys[0],
+            keys[1],
+            keys[2],
+            keys[3],
+            keys[4],
+            keys[5],
+            keys[6],
+            keys[7],
+            keys[8],
+            keys[9]});
   s.id = NodeId{8};
   s.inputs.clear();
   s.inputs.append(SocketInfo{"", "none", "float"});
@@ -296,7 +335,8 @@ void testPointers()
   test_assert(target() == id1 && d.is(thing, p1) && d.is(thing + ".value", fl(10)));
   test_assert(d.set(thing, p2).ok() && d.undo().ok() && target() == id1);
   test_assert(d.redo().ok() && target() == id2 && d.undo().ok());
-  test_assert(hasCode(d.set(thing, pointerTo(h)), StatusCode::TypeMismatch) && target() == id1);
+  test_assert(hasCode(d.set(thing, pointerTo(h)), StatusCode::TypeMismatch) &&
+              target() == id1);
   test_assert(d.set(thing, PropValue::nullPointer()).ok() && target().isNull());
   test_assert(d.undo().ok() && target() == id1);
 
@@ -310,7 +350,8 @@ void testPointers()
   /* The def's own block: refused before anything is written (a struct type that may be
    * anything, so that only the def can refuse it). */
   NodeTypeDef any("t.any");
-  any.param(PropertyDef::pointerProp("graph", StructId::of(kGraphDefType))).output("value", "float");
+  any.param(PropertyDef::pointerProp("graph", StructId::of(kGraphDefType)))
+      .output("value", "float");
   addType<scaleKernel>(d.rt, any, "t.any");
   const NodeId m = add(def, "t.any");
   const std::string own = path("g", m, ".params.graph");
@@ -334,7 +375,8 @@ void testPointers()
       },
       &redirect);
   def.foreachRef(v);
-  test_assert(d.is(own, PropValue::nullPointer()) && def.node(m)->blockTarget("graph") == g.id);
+  test_assert(d.is(own, PropValue::nullPointer()) &&
+              def.node(m)->blockTarget("graph") == g.id);
   test_assert(d.set(own, pointerTo(h)).ok() && d.undo().ok());
   test_assert(def.node(m)->blockTarget("graph") == g.id && d.redo().ok());
   test_assert(def.node(m)->blockTarget("graph") == h.id);
@@ -347,9 +389,9 @@ void testPointers()
   const NodeId q = add(def, "t.part");
   Result<ResolvedPath> inside = resolve(d.ctx, path("h", add(*h.def, "t.scale"), ""));
   test_assert(inside.ok());
-  test_assert(hasCode(d.set(path("g", q, ".params.node"),
-                            PropValue::ofPointer(inside->canonical)),
-                      StatusCode::InvalidArgument));
+  test_assert(hasCode(
+      d.set(path("g", q, ".params.node"), PropValue::ofPointer(inside->canonical)),
+      StatusCode::InvalidArgument));
   test_assert(def.node(q)->blockTarget("node").isNull());
 
   /* Groups. */
@@ -358,7 +400,8 @@ void testPointers()
   test_assert(hasCode(d.set(to, pointerTo(g)), StatusCode::InvalidArgument));
   test_assert(d.is(to, pointerTo(h)) && hasCode(d.set(to, p1), StatusCode::TypeMismatch));
   test_assert(d.lib.markDeleted(h.h).ok() && d.is(to, PropValue::nullPointer()));
-  test_assert(d.set(to, PropValue::nullPointer()).ok() && def.node(group)->group().isNull());
+  test_assert(d.set(to, PropValue::nullPointer()).ok() &&
+              def.node(group)->group().isNull());
   test_assert(d.undo().ok() && def.node(group)->group().target == h.id);
   test_assert(d.lib.restoreFromHistory(h.h).ok() && d.is(to, pointerTo(h)));
   test_assert(d.set(thing, p2).ok() && d.set(thing, p1).ok());
@@ -388,7 +431,8 @@ void testEmbedded()
   a.target = StructId::of(kGraphDefType);
   host.addPointer(PropertyDef::pointerProp("graph", a.target), std::move(a));
   test_assert(reg.add(std::move(host)).ok());
-  test_assert(reg.addRuntimeOwner("host", StructId::of("Host"), [&def]() { return &def; }).ok());
+  test_assert(
+      reg.addRuntimeOwner("host", StructId::of("Host"), [&def]() { return &def; }).ok());
   Context ctx(&d.rt, &d.lib, reg.runtimeOwner("host"));
   ctx.setExecutor(&d.executor);
   const std::string count = "graph.nodes[#" + std::to_string(n.value) + "].params.count";
@@ -399,7 +443,8 @@ void testEmbedded()
   test_assert(setValue(ctx, "graph.inputs[0].default", fl(2)).ok());
   test_assert(def.interfaceSocket(ia)->defaultValue == fl(2));
   test_assert(getValue(ctx, "graph.name")->asString().size() == 0);
-  test_assert(hasCode(setValue(ctx, "graph.name", str("x")), StatusCode::FailedPrecondition));
+  test_assert(
+      hasCode(setValue(ctx, "graph.name", str("x")), StatusCode::FailedPrecondition));
   d.history.clear();
 }
 

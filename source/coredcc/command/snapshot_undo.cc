@@ -27,7 +27,8 @@ Status SnapshotRegistry::add(std::string_view name, Owned<SnapshotProvider> prov
                          (what + " has no name or no implementation").c_str());
   }
   if (find(name)) {
-    return Status::error(StatusCode::AlreadyExists, (what + " is already registered").c_str());
+    return Status::error(StatusCode::AlreadyExists,
+                         (what + " is already registered").c_str());
   }
   Entry *e = litestl::alloc::New<Entry>("coredcc::SnapshotRegistry::Entry");
   e->name = name;
@@ -65,7 +66,8 @@ Status SnapshotRegistry::validate() const
   for (int i = 0; i < int(entries_.size()); i++) {
     for (int j = 0; j < i; j++) {
       if (entries_[i]->name == entries_[j]->name) {
-        return Status::error(StatusCode::Internal, "SnapshotRegistry: two providers of one name");
+        return Status::error(StatusCode::Internal,
+                             "SnapshotRegistry: two providers of one name");
       }
     }
     if (entries_[i]->name.empty() || !entries_[i]->provider) {
@@ -152,8 +154,11 @@ Status SnapshotUndo::restore(Context &ctx, const Blob &from)
   Vector<uint8_t> raw;
   detail::libio::Budget unbounded{UINT64_MAX};
   CDCC_TRY(detail::libio::unpack(
-      std::span<const uint8_t>(from.bytes.data(), size_t(from.bytes.size())), from.lz4, from.raw,
-      unbounded, raw));
+      std::span<const uint8_t>(from.bytes.data(), size_t(from.bytes.size())),
+      from.lz4,
+      from.raw,
+      unbounded,
+      raw));
   SnapshotProvider p = *found;
   Status s = p.restore(ctx, raw);
   if (rt.hasStickyError()) {
@@ -231,7 +236,8 @@ bool SnapshotUndo::foldFrom(SnapshotUndo &next)
 uint64_t SnapshotUndo::memSize() const
 {
   return sizeof(*this) + uint64_t(before_.bytes.size()) + uint64_t(after_.bytes.size()) +
-         (uint64_t(before_.targets.size()) + uint64_t(after_.targets.size())) * sizeof(HistoryBlock);
+         (uint64_t(before_.targets.size()) + uint64_t(after_.targets.size())) *
+             sizeof(HistoryBlock);
 }
 
 void SnapshotUndo::discard()

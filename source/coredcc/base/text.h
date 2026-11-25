@@ -23,7 +23,7 @@ int editDistance(std::string_view a, std::string_view b, int limit = 1 << 20);
  * three characters, and empty candidates, give none.
  */
 class Suggester {
- public:
+public:
   explicit Suggester(std::string_view name);
   void consider(std::string_view candidate);
   /** Adds the candidates to `status` as suggestions. */
@@ -33,7 +33,7 @@ class Suggester {
     return count_;
   }
 
- private:
+private:
   std::string name_;
   int limit_;
   int count_ = 0;

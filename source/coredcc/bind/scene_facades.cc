@@ -75,7 +75,8 @@ ValueResult newScene(Context &ctx, const string &name)
     return failed<ValueResult>(std::move(s));
   }
   Result<PropertyBag> out = detail::runCommand(ctx, *def, std::move(in));
-  return out.ok() ? ok<ValueResult>(*out->get("scene")) : failed<ValueResult>(out.status());
+  return out.ok() ? ok<ValueResult>(*out->get("scene"))
+                  : failed<ValueResult>(out.status());
 }
 
 Status setScene(Context &ctx, const string &scene)
@@ -125,7 +126,8 @@ static Result<const Scene *> placesOf(Context &ctx,
 {
   const Scene *scene = activeScene(ctx);
   if (!scene) {
-    return error(StatusCode::FailedPrecondition, std::string(what) + ": there is no scene");
+    return error(StatusCode::FailedPrecondition,
+                 std::string(what) + ": there is no scene");
   }
   const int32_t n = int32_t(scene->results().size());
   for (int32_t i = 0; all && i < n; i++) {
@@ -134,7 +136,8 @@ static Result<const Scene *> placesOf(Context &ctx,
   for (int32_t i : given) {
     if (all || i < 0 || i >= n) {
       return error(all ? StatusCode::InvalidArgument : StatusCode::OutOfRange,
-                   std::string(what) + (all ? ": both places and all" : ": no such place"));
+                   std::string(what) +
+                       (all ? ": both places and all" : ": no such place"));
     }
     out.append(i);
   }
@@ -239,18 +242,21 @@ MatrixResult worldMatrix(Context &ctx, const string &object)
     return failed<MatrixResult>(h.status());
   }
   const Scene *scene = activeScene(ctx);
-  Result<TransformState> s = computeState(*ctx.library(), *h, scene ? scene->time() : 0.0);
+  Result<TransformState> s =
+      computeState(*ctx.library(), *h, scene ? scene->time() : 0.0);
   return s.ok() ? ok<MatrixResult>(s->world) : failed<MatrixResult>(s.status());
 }
 
-PickResult pick(Context &ctx, const View &view, double x, double y, const PickOptions &options)
+PickResult
+pick(Context &ctx, const View &view, double x, double y, const PickOptions &options)
 {
   if (Status s = slotGate(ctx, "pick", {"exec"}); !s.ok()) {
     return failed<PickResult>(std::move(s));
   }
   const Scene *scene = activeScene(ctx);
   if (!scene) {
-    return failed<PickResult>(error(StatusCode::FailedPrecondition, "pick: there is no scene"));
+    return failed<PickResult>(
+        error(StatusCode::FailedPrecondition, "pick: there is no scene"));
   }
   ViewMath math;
   if (Status s = math.set(view); !s.ok()) {

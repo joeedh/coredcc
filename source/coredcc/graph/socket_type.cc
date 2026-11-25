@@ -22,24 +22,24 @@ PropertyDef SocketType::literalDef(std::string_view apiName) const
 {
   CDCC_CHECK(hasLiteral(), "literalDef: a payload socket has no literal");
   switch (valueType) {
-    case Type::Bool:
-      return PropertyDef::boolProp(apiName);
-    case Type::Int:
-      return PropertyDef::intProp(apiName);
-    case Type::String:
-      return PropertyDef::stringProp(apiName);
-    case Type::Vec2:
-      return PropertyDef::vecProp(apiName, 2);
-    case Type::Vec3:
-      return PropertyDef::vecProp(apiName, 3);
-    case Type::Vec4:
-      return PropertyDef::vecProp(apiName, 4);
-    case Type::Mat4:
-      return PropertyDef::mat4Prop(apiName);
-    case Type::Quat:
-      return PropertyDef::quatProp(apiName);
-    default:
-      return PropertyDef::floatProp(apiName);
+  case Type::Bool:
+    return PropertyDef::boolProp(apiName);
+  case Type::Int:
+    return PropertyDef::intProp(apiName);
+  case Type::String:
+    return PropertyDef::stringProp(apiName);
+  case Type::Vec2:
+    return PropertyDef::vecProp(apiName, 2);
+  case Type::Vec3:
+    return PropertyDef::vecProp(apiName, 3);
+  case Type::Vec4:
+    return PropertyDef::vecProp(apiName, 4);
+  case Type::Mat4:
+    return PropertyDef::mat4Prop(apiName);
+  case Type::Quat:
+    return PropertyDef::quatProp(apiName);
+  default:
+    return PropertyDef::floatProp(apiName);
   }
 }
 
@@ -68,11 +68,9 @@ Status toInt(const GraphValue &in, GraphValue &out)
   int64_t i = 0;
   if (x >= k63) {
     i = INT64_MAX;
-  }
-  else if (x < -k63) {
+  } else if (x < -k63) {
     i = INT64_MIN;
-  }
-  else if (!std::isnan(x)) {
+  } else if (!std::isnan(x)) {
     i = int64_t(x);
   }
   out = GraphValue::ofInt(i);
@@ -173,18 +171,20 @@ Result<SocketTypeRegistry::Entry *> SocketTypeRegistry::addEntry(SocketType type
 SocketTypeRegistry::Entry *SocketTypeRegistry::entry(std::string_view name) const
 {
   Entry *const *e = byId_.lookup_ptr(TypeId::of(idName(name)).value);
-  return e && name == (*e)->type.name.c_str() ? *e : nullptr; /* a file's can have its id */
+  return e && name == (*e)->type.name.c_str() ? *e
+                                              : nullptr; /* a file's can have its id */
 }
 
-Result<const SocketType *> SocketTypeRegistry::addPayload(const char *name, const void *typeKey)
+Result<const SocketType *> SocketTypeRegistry::addPayload(const char *name,
+                                                          const void *typeKey)
 {
   CDCC_TRY(rt_.busyIfEvaluating("addPayloadType"));
   if (const Entry *found = entry(name)) {
     if (found->typeKey != typeKey) {
-      return Status::error(StatusCode::AlreadyExists,
-                           (std::string("socket type '") + name +
-                            "' is registered for another type")
-                               .c_str());
+      return Status::error(
+          StatusCode::AlreadyExists,
+          (std::string("socket type '") + name + "' is registered for another type")
+              .c_str());
     }
     return &found->type;
   }
@@ -280,19 +280,21 @@ Status SocketTypeRegistry::convert(const SocketType &from,
     out = in;
     return Status();
   }
-  const SocketConvertFn *fn = conversions_.lookup_ptr(PairKey{from.id.value, to.id.value});
+  const SocketConvertFn *fn =
+      conversions_.lookup_ptr(PairKey{from.id.value, to.id.value});
   if (!fn) {
     return Status::error(StatusCode::TypeMismatch,
-                         (std::string("there is no conversion from ") + from.name.c_str() +
-                          " to " + to.name.c_str())
+                         (std::string("there is no conversion from ") +
+                          from.name.c_str() + " to " + to.name.c_str())
                              .c_str());
   }
   GraphValue v;
   CDCC_TRY((*fn)(in, v));
   if (!to.holds(v)) {
     return Status::error(StatusCode::Internal,
-                         (std::string("the conversion from ") + from.name.c_str() + " to " +
-                          to.name.c_str() + " gave a " + graphValueTypeName(v.type()))
+                         (std::string("the conversion from ") + from.name.c_str() +
+                          " to " + to.name.c_str() + " gave a " +
+                          graphValueTypeName(v.type()))
                              .c_str());
   }
   out = std::move(v);

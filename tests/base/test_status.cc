@@ -49,7 +49,8 @@ int main()
     test_assert(e.code() == StatusCode::NotFound);
     test_assert(e.suggestions().size() == 2);
     test_assert(strcmp(e.toString().c_str(),
-                "NotFound: no such path 'scene.objcts' (did you mean: scene.objects, scene.object?)") == 0);
+                       "NotFound: no such path 'scene.objcts' (did you mean: "
+                       "scene.objects, scene.object?)") == 0);
 
     Status copy = e;
     test_assert(strcmp(copy.toString().c_str(), e.toString().c_str()) == 0);

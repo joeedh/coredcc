@@ -1,8 +1,8 @@
 #pragma once
 
 /** \file
- * Undoable graph edits: GraphEdit makes them and GraphEditRecord keeps what their undo and
- * redo need. Commands compose these (graph/commands.h).
+ * Undoable graph edits: GraphEdit makes them and GraphEditRecord keeps what their undo
+ * and redo need. Commands compose these (graph/commands.h).
  */
 
 #include "coredcc/api/context.h"
@@ -67,16 +67,17 @@ struct GraphOp {
 };
 
 /**
- * The edits of one undo step, on one graph block. It finds the graph by its block's id each
- * time, so the block may have been replaced under it, and pins (PinKind::History) the block
- * and every block its edits removed, added or replaced a reference to, until `discard`.
+ * The edits of one undo step, on one graph block. It finds the graph by its block's id
+ * each time, so the block may have been replaced under it, and pins (PinKind::History)
+ * the block and every block its edits removed, added or replaced a reference to, until
+ * `discard`.
  */
 class GraphEditRecord {
- public:
+public:
   GraphEditRecord() = default;
 
-  /** Takes the edits back; a failure becomes the Runtime's sticky error. FailedPrecondition
-   * when the Library is gone, or `ctx` is of another. */
+  /** Takes the edits back; a failure becomes the Runtime's sticky error.
+   * FailedPrecondition when the Library is gone, or `ctx` is of another. */
   void undo(Context &ctx);
   /** Makes them again; a failure takes back what it did first. The same precondition. */
   Status redo(Context &ctx);
@@ -87,7 +88,7 @@ class GraphEditRecord {
     return int(ops_.size());
   }
 
- private:
+private:
   friend class GraphEdit;
 
   Result<GraphDef *> def(Context &ctx) const;
@@ -106,7 +107,7 @@ class GraphEditRecord {
  * checks and errors; one that fails changes and records nothing.
  */
 class GraphEdit {
- public:
+public:
   /** FailedPrecondition if `id` isn't a Live graph block of the Context's Library. */
   static Result<GraphEdit> begin(Context &ctx, BlockId id, GraphEditRecord &record);
 
@@ -143,7 +144,7 @@ class GraphEdit {
   Status setInterfaceName(int64_t id, std::string_view name);
   Status setInterfaceDefault(int64_t id, const PropValue &value);
 
- private:
+private:
   GraphEdit(GraphDef *def, Library *lib, GraphEditRecord *record)
       : def_(def), lib_(lib), record_(record)
   {
@@ -160,8 +161,8 @@ using GraphEditFn = litestl::util::function<Status(GraphEdit &)>;
 
 /**
  * Runs many edits of one graph as one undo step, named `name`, through the Context's
- * executor (as a sub-command inside another command's exec). If `fn` fails, what it did is
- * taken back and its error returned.
+ * executor (as a sub-command inside another command's exec). If `fn` fails, what it did
+ * is taken back and its error returned.
  */
 Status runGraphEdit(Context &ctx, BlockId graph, std::string_view name, GraphEditFn fn);
 

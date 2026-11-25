@@ -19,8 +19,10 @@ struct Failure {
 };
 
 class Lexer {
- public:
-  explicit Lexer(std::string_view text) : s_(text) {}
+public:
+  explicit Lexer(std::string_view text) : s_(text)
+  {
+  }
 
   size_t pos() const
   {
@@ -67,7 +69,7 @@ class Lexer {
   /** "unexpected 'x'", "unexpected NUL" or "unexpected end of input". */
   std::string describeHere() const;
 
- private:
+private:
   std::string_view s_;
   size_t pos_ = 0;
 };

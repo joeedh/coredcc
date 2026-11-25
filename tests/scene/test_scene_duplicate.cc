@@ -1,5 +1,5 @@
-/* core.object.duplicate and core.scene.duplicate, core.object.add with data and a place, and linking
- * several objects. */
+/* core.object.duplicate and core.scene.duplicate, core.object.add with data and a place,
+ * and linking several objects. */
 #include "io_doc.h"
 
 #include "coredcc/api/ref_text.h"
@@ -17,7 +17,8 @@ PropValue text(const std::string &s)
   return PropValue::ofString(s.c_str());
 }
 
-Vector<BlockHandle> handlesOf(CommandDoc &d, const PropertyBag &out, const char *name = "objects")
+Vector<BlockHandle>
+handlesOf(CommandDoc &d, const PropertyBag &out, const char *name = "objects")
 {
   Vector<BlockHandle> list;
   Result<Vector<BlockId>> ids = parseBlockIds(d.rt, out.get(name)->asString().c_str());
@@ -66,7 +67,8 @@ void testObjects()
     const bool children = r.coin(), select = r.coin();
     d.select({all[0]});
     must(d.lib->writeRef(d.sc().activeCell(), ids[0]));
-    /* What should be copied: the named ones, then what is below them, in the scene's order. */
+    /* What should be copied: the named ones, then what is below them, in the scene's
+     * order. */
     Vector<BlockHandle> want;
     const auto has = [&](BlockHandle h) {
       bool yes = false;
@@ -95,7 +97,8 @@ void testObjects()
                                {"children", PropValue::ofBool(children)},
                                {"select", PropValue::ofBool(select)}});
     const Vector<BlockHandle> copies = handlesOf(d, out);
-    test_assert(copies.size() == want.size() && out.get("count")->asInt() == int64_t(want.size()));
+    test_assert(copies.size() == want.size() &&
+                out.get("count")->asInt() == int64_t(want.size()));
     const Vector<BlockHandle> now = d.sc().objects(*d.lib);
     test_assert(int(now.size()) == members + int(want.size()));
     for (int i = 0; i < int(want.size()) && i < int(copies.size()); i++) {
@@ -104,7 +107,8 @@ void testObjects()
       test_assert(a.flags == b.flags && a.channels.get(0) == b.channels.get(0));
       test_assert(readObject(*d.lib, want[i])->info.locks ==
                   readObject(*d.lib, copies[i])->info.locks);
-      const BlockHandle p = d.lib->resolveRef(a.parent.cell()), q = d.lib->resolveRef(b.parent.cell());
+      const BlockHandle p = d.lib->resolveRef(a.parent.cell()),
+                        q = d.lib->resolveRef(b.parent.cell());
       int at = -1;
       for (int n = 0; n < int(want.size()); n++) {
         at = want[n] == p ? n : at;
@@ -115,15 +119,16 @@ void testObjects()
       test_assert(sameBits(d.stateOf(want[i]), d.stateOf(copies[i])));
     }
     const Vector<BlockHandle> selected = d.sc().selected(*d.lib);
-    test_assert(select ? selected.size() == copies.size() && selected[0] == copies[0] :
-                         selected.size() == 1 && selected[0] == all[0]);
+    test_assert(select ? selected.size() == copies.size() && selected[0] == copies[0]
+                       : selected.size() == 1 && selected[0] == all[0]);
     test_assert(d.sc().active(*d.lib) == (select ? copies[0] : want[0]));
   }
   test_assert(parents > 10 && outside > 10);
 
   /* Data: the same, or copies. Hosts' objects and data can't be copied. */
   IoDoc d;
-  const BlockHandle a = d.object("a", 1), b = d.object("b", 2), dataBlock = d.object("data", 0);
+  const BlockHandle a = d.object("a", 1), b = d.object("b", 2),
+                    dataBlock = d.object("data", 0);
   d.setData(a, dataBlock);
   d.setData(b, dataBlock);
   d.select({a, b});
@@ -142,8 +147,8 @@ void testObjects()
   d.select({a, h});
   test_assert(d.fails(kDuplicateObjectsCommand).code() == StatusCode::Unsupported);
   d.host(h).onRead = [&](ObjectInfo &) { d.rt.setStickyError(boom()); };
-  test_assert(d.fails(kDuplicateObjectsCommand, {{"linkData", PropValue::ofBool(false)}}).code() ==
-              StatusCode::Internal);
+  test_assert(d.fails(kDuplicateObjectsCommand, {{"linkData", PropValue::ofBool(false)}})
+                  .code() == StatusCode::Internal);
   d.host(h).onRead = nullptr;
   d.select({});
   test_assert(d.fails(kDuplicateObjectsCommand).code() == StatusCode::FailedPrecondition);
@@ -247,11 +252,13 @@ void testAdd()
   test_assert(d.sc().selected(*d.lib).size() == 1 && d.sc().selected(*d.lib)[0] == h &&
               d.sc().active(*d.lib) == h);
   int heard = 0;
-  ScopedConnection c = d.rt.ext<ChangeBus>().addChangeListener([&](const BusChange &change) {
-    heard += change.member == "selectedObjects" ? 1 : 0;
-  });
+  ScopedConnection c =
+      d.rt.ext<ChangeBus>().addChangeListener([&](const BusChange &change) {
+        heard += change.member == "selectedObjects" ? 1 : 0;
+      });
   d.undo();
-  test_assert(heard == 1 && d.sc().selected(*d.lib)[0] == p && d.sc().active(*d.lib) == p);
+  test_assert(heard == 1 && d.sc().selected(*d.lib)[0] == p &&
+              d.sc().active(*d.lib) == p);
   d.redo();
   test_assert(heard == 2);
   d.ok(kSelectCommand, {{"objects", text(idsOf(d, {p}))}});
@@ -274,7 +281,8 @@ void testAdd()
 void testLink()
 {
   CommandDoc d;
-  const BlockHandle a = d.loose("a"), b = d.loose("b"), c = d.object("c"), s = d.shapeBlock("s", 1.0);
+  const BlockHandle a = d.loose("a"), b = d.loose("b"), c = d.object("c"),
+                    s = d.shapeBlock("s", 1.0);
   for (BlockHandle h : {a, b}) {
     d.lib->setFlag(h, BlockFlags::FakeUser, true);
   }
@@ -291,8 +299,9 @@ void testLink()
   test_assert(d.fails(kLinkCommand, {{"objects", text("")}}).code() ==
               StatusCode::FailedPrecondition);
   test_assert(d.fails(kLinkCommand).code() == StatusCode::FailedPrecondition);
-  test_assert(d.fails(kLinkCommand, {{"objects", text(idsOf(d, {a}))}, {"object", d.ptr(b)}}).code() ==
-              StatusCode::InvalidArgument);
+  test_assert(
+      d.fails(kLinkCommand, {{"objects", text(idsOf(d, {a}))}, {"object", d.ptr(b)}})
+          .code() == StatusCode::InvalidArgument);
   d.cycle(kLinkCommand, {{"object", d.ptr(a)}});
   test_assert(d.sc().contains(*d.lib, a));
 }

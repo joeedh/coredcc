@@ -148,7 +148,8 @@ struct Puller {
     const bool ok = s.ok() && *inst.value(path) == GraphValue::ofFloat(value) &&
                     int(inst.totalRuns() - before) == runs;
     if (!ok) {
-      printf("%s, %g, %d runs\n", s.toString().c_str(),
+      printf("%s, %g, %d runs\n",
+             s.toString().c_str(),
              inst.value(path) ? inst.value(path)->asFloat() : 0,
              int(inst.totalRuns() - before));
     }
@@ -164,7 +165,8 @@ void testParams()
   const BlockId id1 = idOf(w.lib, h1), id2 = idOf(w.lib, h2);
   const NodeId n = add(def, "t.param");
   Puller p(w.rt, &w.lib, &def, n);
-  test_assert(p.is(-2, 1) && w.rt.ext<GraphSystem>().blockCount() == 0); /* null: no dep */
+  test_assert(p.is(-2, 1) &&
+              w.rt.ext<GraphSystem>().blockCount() == 0); /* null: no dep */
   test_assert(def.setParam(n, "thing", pointerTo(id1)).ok() && p.is(1, 1) && p.is(1, 0));
   test_assert(w.rt.ext<GraphSystem>().blockCount() == 1);
 
@@ -308,7 +310,8 @@ void testQueries()
   test_assert(p.is(7, 1));
   ThingScaled yours{8};
   test_assert(w.lib
-                  .setOverride(h, InterfaceId::of(Scaled::ifaceName),
+                  .setOverride(h,
+                               InterfaceId::of(Scaled::ifaceName),
                                query<Scaled>(w.rt, TypeId::of("test.Other"), &yours))
                   .ok());
   w.rt.touch();
@@ -447,7 +450,8 @@ void testLifetimes()
   test_assert(hasCode(i.evaluate({&p, 1}, results), StatusCode::NotFound));
   test_assert(hasCode(i.setInput("x", GraphValue()), StatusCode::NotFound));
   /* Made before the old one is freed, so it can't be at the same address. */
-  GraphDef *again = litestl::alloc::New<GraphDef>("coredcc::GraphDef", &w.rt, &w.lib, g.id);
+  GraphDef *again =
+      litestl::alloc::New<GraphDef>("coredcc::GraphDef", &w.rt, &w.lib, g.id);
   test_assert(w.lib.destroyFromHistory(g.h).ok());
   test_assert(hasCode(i.evaluate(p), StatusCode::NotFound));
   test_assert(*i.lastGood(p) == GraphValue::ofFloat(3) && !i.isCurrent(p));

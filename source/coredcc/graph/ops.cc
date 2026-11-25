@@ -18,7 +18,8 @@ using litestl::util::Vector;
 
 /* ---- GraphOp ---- */
 
-static Status insertAll(GraphDef &def, const NodeState &node, const Vector<LinkState, 1> &links)
+static Status
+insertAll(GraphDef &def, const NodeState &node, const Vector<LinkState, 1> &links)
 {
   CDCC_TRY(def.restoreNode(node));
   for (const LinkState &l : links) {
@@ -35,34 +36,34 @@ Status GraphOp::apply(GraphDef &def, bool forward) const
   const NodeId n{id};
   const PropValue &value = forward ? after : before;
   switch (kind) {
-    case Kind::Node:
-      return forward != inverse ? insertAll(def, *node, links) : def.removeNode(node->id);
-    case Kind::Link:
-      return forward != inverse ? def.insertLink(links[0]) : def.unlink(links[0].id);
-    case Kind::Label:
-      return def.setLabel(n, value.asString().c_str());
-    case Kind::Position:
-      return def.setPosition(n, value.component(0), value.component(1));
-    case Kind::Param:
-    case Kind::Literal:
-      return def.restoreValues(n, kind == Kind::Param, key.c_str(),
-                               forward ? valuesAfter : valuesBefore);
-    case Kind::Extra:
-      return def.restoreExtra(n, key.c_str(), forward ? extraAfter : extraBefore);
-    case Kind::Ref:
-      return def.restoreRef(n, key.c_str(), forward ? blockAfter : blockBefore);
-    case Kind::Interface:
-      return forward != inverse ? def.restoreInterface(side, *socket, indexAfter) :
-                                  def.removeInterface(id);
-    case Kind::MoveInterface:
-      return def.moveInterface(id, forward ? indexAfter : indexBefore);
-    case Kind::InterfaceType:
-      return forward ? def.setInterfaceType(id, after.asString().c_str()) :
-                       def.restoreInterfaceType(id, *socket);
-    case Kind::InterfaceName:
-      return def.setInterfaceName(id, value.asString().c_str());
-    case Kind::InterfaceDefault:
-      return def.restoreInterfaceDefault(id, value);
+  case Kind::Node:
+    return forward != inverse ? insertAll(def, *node, links) : def.removeNode(node->id);
+  case Kind::Link:
+    return forward != inverse ? def.insertLink(links[0]) : def.unlink(links[0].id);
+  case Kind::Label:
+    return def.setLabel(n, value.asString().c_str());
+  case Kind::Position:
+    return def.setPosition(n, value.component(0), value.component(1));
+  case Kind::Param:
+  case Kind::Literal:
+    return def.restoreValues(
+        n, kind == Kind::Param, key.c_str(), forward ? valuesAfter : valuesBefore);
+  case Kind::Extra:
+    return def.restoreExtra(n, key.c_str(), forward ? extraAfter : extraBefore);
+  case Kind::Ref:
+    return def.restoreRef(n, key.c_str(), forward ? blockAfter : blockBefore);
+  case Kind::Interface:
+    return forward != inverse ? def.restoreInterface(side, *socket, indexAfter)
+                              : def.removeInterface(id);
+  case Kind::MoveInterface:
+    return def.moveInterface(id, forward ? indexAfter : indexBefore);
+  case Kind::InterfaceType:
+    return forward ? def.setInterfaceType(id, after.asString().c_str())
+                   : def.restoreInterfaceType(id, *socket);
+  case Kind::InterfaceName:
+    return def.setInterfaceName(id, value.asString().c_str());
+  case Kind::InterfaceDefault:
+    return def.restoreInterfaceDefault(id, value);
   }
   return Status();
 }
@@ -70,12 +71,12 @@ Status GraphOp::apply(GraphDef &def, bool forward) const
 uint64_t memSizeOf(const PropValue &v)
 {
   switch (v.type()) {
-    case PropValue::Type::String:
-      return sizeof(v) + uint64_t(v.asString().size());
-    case PropValue::Type::Mat4:
-      return sizeof(v) + 16 * sizeof(double);
-    default:
-      return sizeof(v);
+  case PropValue::Type::String:
+    return sizeof(v) + uint64_t(v.asString().size());
+  case PropValue::Type::Mat4:
+    return sizeof(v) + 16 * sizeof(double);
+  default:
+    return sizeof(v);
   }
 }
 
@@ -100,7 +101,8 @@ static uint64_t extraSize(const NodeExtras &extras)
 uint64_t GraphOp::memSize() const
 {
   uint64_t n = sizeof(*this) + uint64_t(key.size());
-  n += memSizeOf(before) + memSizeOf(after) + memSizeOf(valuesBefore) + memSizeOf(valuesAfter);
+  n += memSizeOf(before) + memSizeOf(after) + memSizeOf(valuesBefore) +
+       memSizeOf(valuesAfter);
   n += uint64_t(links.size()) * 128;
   n += extraSize(extraBefore) + extraSize(extraAfter);
   if (node) {
@@ -354,8 +356,7 @@ Status GraphEdit::setParam(NodeId id, std::string_view name, const PropValue &va
     op.blockBefore = n->blockTarget(name);
     CDCC_TRY(def_->setParam(id, name, value));
     op.blockAfter = n->blockTarget(name);
-  }
-  else {
+  } else {
     op.kind = GraphOp::Kind::Param;
     if (n) {
       op.valuesBefore = named(n->params(), name);
@@ -367,7 +368,8 @@ Status GraphEdit::setParam(NodeId id, std::string_view name, const PropValue &va
   return Status();
 }
 
-template <class Fn> Status GraphEdit::literalEdit(NodeId id, std::string_view input, Fn &&fn)
+template <class Fn>
+Status GraphEdit::literalEdit(NodeId id, std::string_view input, Fn &&fn)
 {
   GraphOp op;
   op.kind = GraphOp::Kind::Literal;
@@ -409,10 +411,11 @@ Status GraphEdit::setGroup(NodeId id, BlockId block)
 
 static Status checkUndoable(const SocketRef &from, const SocketRef &to)
 {
-  return isInteriorKey(from.key) || isInteriorKey(to.key) ?
-             Status::error(StatusCode::InvalidArgument,
-                           "a graph that is edited with undo has no links of interior sockets") :
-             Status();
+  return isInteriorKey(from.key) || isInteriorKey(to.key)
+             ? Status::error(
+                   StatusCode::InvalidArgument,
+                   "a graph that is edited with undo has no links of interior sockets")
+             : Status();
 }
 
 Result<LinkId> GraphEdit::link(SocketRef from, SocketRef to)
@@ -609,8 +612,9 @@ struct RunGraphEdit {
 
   Status canRun(Context &) const
   {
-    return fn ? Status() :
-                Status::error(StatusCode::FailedPrecondition, "graph.edit: use runGraphEdit");
+    return fn ? Status()
+              : Status::error(StatusCode::FailedPrecondition,
+                              "graph.edit: use runGraphEdit");
   }
   Status exec(Context &ctx)
   {
@@ -643,7 +647,8 @@ struct RunGraphEdit {
   }
   static lbt::Struct<RunGraphEdit> *defineBindings()
   {
-    auto *st = new lbt::Struct<RunGraphEdit>("coredcc::GraphEditCommand", sizeof(RunGraphEdit));
+    auto *st =
+        new lbt::Struct<RunGraphEdit>("coredcc::GraphEditCommand", sizeof(RunGraphEdit));
     BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
@@ -664,7 +669,9 @@ Result<const CommandDef *> editDef(Runtime &rt)
     return d;
   }
   CommandDef def(kEditCommand);
-  def.uiName("Edit Graph").flags(CommandFlags::Private).input(PropertyDef::stringProp("name"));
+  def.uiName("Edit Graph")
+      .flags(CommandFlags::Private)
+      .input(PropertyDef::stringProp("name"));
   return addNativeCommand<RunGraphEdit>(rt, std::move(def));
 }
 
@@ -691,8 +698,8 @@ Status runGraphEdit(Context &ctx, BlockId graph, std::string_view name, GraphEdi
   PropertyBag in = (*def)->newInputs();
   CDCC_TRY(in.set("name", PropValue::ofString(name)));
   Result<PropertyBag> out =
-      ex->running() ? ex->runSub(ctx, std::move(cmd).value(), **def) :
-                      ex->runInstance(ctx, **def, std::move(cmd).value(), std::move(in));
+      ex->running() ? ex->runSub(ctx, std::move(cmd).value(), **def)
+                    : ex->runInstance(ctx, **def, std::move(cmd).value(), std::move(in));
   return out.ok() ? Status() : out.status();
 }
 

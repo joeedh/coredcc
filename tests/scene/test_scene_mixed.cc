@@ -1,5 +1,5 @@
-/* Commands on objects of which some can't be changed, aren't there, or have others below them that
- * don't follow; and cells that were written behind a scene's back. */
+/* Commands on objects of which some can't be changed, aren't there, or have others below
+ * them that don't follow; and cells that were written behind a scene's back. */
 #include "command_doc.h"
 
 #include "coredcc/api/ref_text.h"
@@ -35,7 +35,8 @@ void testDetached()
   const BlockId id = d.idOf(h);
   const auto hostX = [&] { return d.host(h).channels.get(0); };
   int revived = 0;
-  d.lib->addReviveListener([&](Library &l, BlockHandle b) { revived += &l == d.lib.get() && b == h; });
+  d.lib->addReviveListener(
+      [&](Library &l, BlockHandle b) { revived += &l == d.lib.get() && b == h; });
   d.select({a, h});
   d.ok(kApplyDeltaCommand, {{"vector", kStep}});
   must(d.lib->onHostDestroyed(id));
@@ -51,10 +52,8 @@ void testDetached()
   d.redo();
   test_assert(d.obj(a).channels.get(0) == 11.0 && waiting(d) == 1);
   int heard = 0;
-  const ScopedConnection listening =
-      d.rt.ext<ChangeBus>().addListener([&](const OwnerKey *owner) {
-        heard += owner && *owner == OwnerKey::ofBlock(id);
-      });
+  const ScopedConnection listening = d.rt.ext<ChangeBus>().addListener(
+      [&](const OwnerKey *owner) { heard += owner && *owner == OwnerKey::ofBlock(id); });
   must(d.lib->onHostRestored(id));
   test_assert(hostX() == 15.0 && waiting(d) == 0 && heard == 1);
   must(d.lib->onHostDestroyed(id));
@@ -89,7 +88,8 @@ void testDetached()
     d.undo();
     d.rt.setStickyError(Status::error(StatusCode::Internal, "before"));
     must(d.lib->onHostRestored(id));
-    test_assert(waiting(d) == 1 && strcmp(d.rt.takeStickyError().message(), "before") == 0);
+    test_assert(waiting(d) == 1 &&
+                strcmp(d.rt.takeStickyError().message(), "before") == 0);
     test_assert(hostX() == 15.0);
     if (evaluate) {
       d.evaluate();
@@ -154,7 +154,8 @@ void testDetachedDrag()
       must(d.lib->onHostRestored(id));
     }
     test_assert(d.obj(a).channels.get(0) == (outcome & 2 ? 1.0 : 3.0));
-    test_assert(d.host(h).channels.get(0) == (outcome & 2 ? 5.0 : 7.0) && waiting(d) == 0);
+    test_assert(d.host(h).channels.get(0) == (outcome & 2 ? 5.0 : 7.0) &&
+                waiting(d) == 0);
     if (!(outcome & 2)) {
       d.undo();
       test_assert(d.obj(a).channels.get(0) == 1.0 && d.host(h).channels.get(0) == 5.0);
@@ -162,8 +163,8 @@ void testDetachedDrag()
   }
 }
 
-/* Parents and types wait as well, and each field by itself. The types are coredcc's own here: deleted
- * behind the history's back. */
+/* Parents and types wait as well, and each field by itself. The types are coredcc's own
+ * here: deleted behind the history's back. */
 void testDetachedFields()
 {
   CommandDoc d;
@@ -185,7 +186,8 @@ void testDetachedFields()
   d.redo();
   d.redo();
   must(d.lib->restoreFromHistory(a));
-  test_assert(d.obj(a).transformTypeId() == d.matrix->id() && d.obj(a).parent.target() == d.idOf(p));
+  test_assert(d.obj(a).transformTypeId() == d.matrix->id() &&
+              d.obj(a).parent.target() == d.idOf(p));
   test_assert(xOf(d, a) == 1.0);
   d.redo();
   test_assert(xOf(d, a) == 11.0);
@@ -222,9 +224,9 @@ void testDetachedFields()
 void testSkips()
 {
   CommandDoc d;
-  const BlockHandle a = d.object("a", 1.0), flat = d.object("flat"), under = d.object("under", 1.0),
-                    odd = d.object("odd", 2.0), below = d.object("below", 3.0),
-                    shape = d.shapeBlock("shape", 1.0);
+  const BlockHandle a = d.object("a", 1.0), flat = d.object("flat"),
+                    under = d.object("under", 1.0), odd = d.object("odd", 2.0),
+                    below = d.object("below", 3.0), shape = d.shapeBlock("shape", 1.0);
   must(d.sc().add(*d.lib, shape));
   d.setParent(under, flat);
   d.setParent(below, odd);
@@ -233,14 +235,17 @@ void testSkips()
   d.select({a, under, odd, below, shape});
   PropertyBag out = d.cycle(kApplyDeltaCommand, {{"vector", kStep}});
   /* `below` moves by itself: the one above it doesn't. */
-  test_assert(out.get("skipped")->asInt() == 3 && xOf(d, a) == 11.0 && xOf(d, below) == 13.0);
+  test_assert(out.get("skipped")->asInt() == 3 && xOf(d, a) == 11.0 &&
+              xOf(d, below) == 13.0);
   for (BlockHandle h : {under, odd, shape}) {
     d.select({h});
     test_assert(d.fails(kApplyDeltaCommand, {{"vector", kStep}}).code() ==
                 StatusCode::FailedPrecondition);
   }
   d.select({shape});
-  for (const char *command : {kSetTransformTypeCommand, kSetRotationModeCommand, kSetParentCommand}) {
+  for (const char *command :
+       {kSetTransformTypeCommand, kSetRotationModeCommand, kSetParentCommand})
+  {
     test_assert(d.fails(command).code() == StatusCode::FailedPrecondition);
   }
   d.select({shape, under, a});
@@ -248,7 +253,8 @@ void testSkips()
   test_assert(out.get("skipped")->asInt() == 1 && d.obj(under).parent.target().isNull());
   d.undo();
   out = d.cycle(kSetRotationModeCommand, {{"mode", PropValue::ofEnum(2)}});
-  test_assert(out.get("skipped")->asInt() == 1 && d.obj(a).channels.get(trs::kRotationMode) == 2.0);
+  test_assert(out.get("skipped")->asInt() == 1 &&
+              d.obj(a).channels.get(trs::kRotationMode) == 2.0);
   /* In a drag: what can't follow stays at its last place. */
   const BlockHandle far = d.object("far", 1.0);
   d.setParent(far, flat);
@@ -296,11 +302,13 @@ void testSkips()
   };
   test_assert(isError(d.run(kApplyDeltaCommand).status(), StatusCode::Internal, "threw"));
   test_assert(isError(d.run(kSetParentCommand).status(), StatusCode::Internal, "threw"));
-  test_assert(isError(d.run(kSetTransformTypeCommand, {{"type", PropValue::ofString(kFbxTransform)}})
-                          .status(),
-                      StatusCode::Internal,
-                      "threw"));
-  test_assert(isError(d.run(kSetRotationModeCommand).status(), StatusCode::Internal, "threw"));
+  test_assert(isError(
+      d.run(kSetTransformTypeCommand, {{"type", PropValue::ofString(kFbxTransform)}})
+          .status(),
+      StatusCode::Internal,
+      "threw"));
+  test_assert(
+      isError(d.run(kSetRotationModeCommand).status(), StatusCode::Internal, "threw"));
   d.host(h).onRead = nullptr;
   test_assert(xOf(d, a) == a0);
 }
@@ -309,26 +317,30 @@ void testSkips()
 void testOutOfReach()
 {
   CommandDoc d;
-  const BlockHandle a = d.object("a", 1.0), b = d.object("b", 2.0), c = d.object("c", 3.0),
-                    h = d.hostObject("h", 4.0);
+  const BlockHandle a = d.object("a", 1.0), b = d.object("b", 2.0),
+                    c = d.object("c", 3.0), h = d.hostObject("h", 4.0);
   d.select({a, b, c, h});
   d.obj(a).flags = ObjectFlags::Hidden;
   d.obj(b).flags = ObjectFlags::Unselectable;
   d.host(h).info.flags = uint32_t(ObjectFlags::Hidden);
   d.ok(kApplyDeltaCommand, {{"vector", kStep}});
-  test_assert(xOf(d, a) == 1.0 && xOf(d, b) == 2.0 && xOf(d, c) == 13.0 && xOf(d, h) == 4.0);
+  test_assert(xOf(d, a) == 1.0 && xOf(d, b) == 2.0 && xOf(d, c) == 13.0 &&
+              xOf(d, h) == 4.0);
   test_assert(d.sc().selected(*d.lib).size() == 4);
   /* By name they are. */
   Vector<BlockId> ids;
   for (BlockHandle x : {a, b, h}) {
     ids.append(d.idOf(x));
   }
-  const PropValue named = PropValue::ofString(formatBlockIds(d.rt, {ids.data(), size_t(3)}).c_str());
+  const PropValue named =
+      PropValue::ofString(formatBlockIds(d.rt, {ids.data(), size_t(3)}).c_str());
   d.ok(kApplyDeltaCommand, {{"vector", kStep}, {"objects", named}});
-  test_assert(xOf(d, a) == 11.0 && xOf(d, b) == 12.0 && xOf(d, c) == 13.0 && xOf(d, h) == 14.0);
+  test_assert(xOf(d, a) == 11.0 && xOf(d, b) == 12.0 && xOf(d, c) == 13.0 &&
+              xOf(d, h) == 14.0);
   d.ok(kDeleteObjectsCommand);
   test_assert(d.sc().objects(*d.lib).size() == 3 && d.sc().selected(*d.lib).size() == 3);
-  test_assert(isError(d.fails(kDeleteObjectsCommand), StatusCode::FailedPrecondition, "hidden"));
+  test_assert(
+      isError(d.fails(kDeleteObjectsCommand), StatusCode::FailedPrecondition, "hidden"));
   d.obj(a).flags = ObjectFlags::None;
   d.ok(kDeleteObjectsCommand);
   test_assert(d.sc().objects(*d.lib).size() == 2);
@@ -348,13 +360,14 @@ void testBelow()
     d.setParent(h, parent);
     return h;
   };
-  const BlockHandle p = d.object("p"), g = d.object("g"), rrs = fbxChild("rrs", p, fbx::kRrs),
-                    under = d.object("under", 1.0), plain = fbxChild("plain", p, fbx::kRSrs);
+  const BlockHandle p = d.object("p"), g = d.object("g"),
+                    rrs = fbxChild("rrs", p, fbx::kRrs), under = d.object("under", 1.0),
+                    plain = fbxChild("plain", p, fbx::kRSrs);
   d.setParent(under, rrs);
   put(d.obj(p).channels, trs::kScale, double3(2, 2, 2));
   put(d.obj(g).channels, trs::kScale, double3(3, 3, 3));
-  const mat4d wp = d.stateOf(p).world, wr = d.stateOf(rrs).world, wu = d.stateOf(under).world,
-              wl = d.stateOf(plain).world;
+  const mat4d wp = d.stateOf(p).world, wr = d.stateOf(rrs).world,
+              wu = d.stateOf(under).world, wl = d.stateOf(plain).world;
   d.select({p});
   PropertyBag out = d.cycle(kSetParentCommand, {{"parent", d.ptr(g)}});
   test_assert(difference(d.stateOf(p).world, wp) < 1e-12);
@@ -364,7 +377,8 @@ void testBelow()
   test_assert(out.get("approximate")->asInt() == 2); /* rrs and under */
   d.undo();
   /* Without keepWorld they are meant to move. */
-  out = d.ok(kSetParentCommand, {{"parent", d.ptr(g)}, {"keepWorld", PropValue::ofBool(false)}});
+  out = d.ok(kSetParentCommand,
+             {{"parent", d.ptr(g)}, {"keepWorld", PropValue::ofBool(false)}});
   test_assert(out.get("approximate")->asInt() == 0);
   d.undo();
   /* A parent that isn't an object is the origin. */
@@ -403,17 +417,20 @@ void testBelow()
   /* Those that are named with it aren't below it. */
   d.select({p, rrs});
   out = d.ok(kSetParentCommand, {{"parent", d.ptr(g)}});
-  test_assert(out.get("approximate")->asInt() == 0 && difference(d.stateOf(rrs).world, wr) < 1e-12);
+  test_assert(out.get("approximate")->asInt() == 0 &&
+              difference(d.stateOf(rrs).world, wr) < 1e-12);
   d.undo();
 
-  /* Another type with the same matrix, but not the same rotation: a mirror is kept in the scale or
-   * not. And one that keeps both. */
+  /* Another type with the same matrix, but not the same rotation: a mirror is kept in the
+   * scale or not. And one that keeps both. */
   d.select({p});
-  out = d.cycle(kSetTransformTypeCommand, {{"type", PropValue::ofString(kMatrixTransform)}});
+  out = d.cycle(kSetTransformTypeCommand,
+                {{"type", PropValue::ofString(kMatrixTransform)}});
   test_assert(out.get("approximate")->asInt() == 0);
   d.undo();
   put(d.obj(p).channels, trs::kScale, double3(2, -2, -2));
-  out = d.cycle(kSetTransformTypeCommand, {{"type", PropValue::ofString(kMatrixTransform)}});
+  out = d.cycle(kSetTransformTypeCommand,
+                {{"type", PropValue::ofString(kMatrixTransform)}});
   test_assert(out.get("approximate")->asInt() == 2);
   d.undo();
 
@@ -426,10 +443,12 @@ void testBelow()
   /* Those that go with it don't count. */
   d.select({g, rrs});
   out = d.cycle(kDeleteObjectsCommand);
-  test_assert(out.get("approximate")->asInt() == 0); /* `under` is kept: it is a child of `rrs` */
+  test_assert(out.get("approximate")->asInt() ==
+              0); /* `under` is kept: it is a child of `rrs` */
 }
 
-/* A type that holds only a place: its answer is near, with the rotation and scale that were there. */
+/* A type that holds only a place: its answer is near, with the rotation and scale that
+ * were there. */
 struct PlaceOnly {
   TransformState evaluate(const EvalCtx &c, const TransformState &) const
   {
@@ -459,13 +478,15 @@ void testBelowNear()
 {
   CommandDoc d;
   must(registerImpl<TransformModel, PlaceOnly>(d.rt, "test.placeOnly"));
-  Result<Owned<TransformModel>> owned =
-      own<TransformModel>(d.rt, "test.placeOnly", litestl::alloc::New<PlaceOnly>("PlaceOnly"));
+  Result<Owned<TransformModel>> owned = own<TransformModel>(
+      d.rt, "test.placeOnly", litestl::alloc::New<PlaceOnly>("PlaceOnly"));
   must(owned.status());
   TransformTypeInfo info;
   info.name = "test.placeOnly";
   info.channels.append(PropertyDef::floatProp("x"));
-  must(d.rt.ext<TransformRegistry>().add(std::move(info), std::move(owned).value()).status());
+  must(d.rt.ext<TransformRegistry>()
+           .add(std::move(info), std::move(owned).value())
+           .status());
   d.addFnModel("test.sheared", [](const EvalCtx &, const TransformState &p) {
     TransformState s = p;
     s.world[1][0] = 0.5;
@@ -477,8 +498,8 @@ void testBelowNear()
   d.obj(below).channels.set(trs::kLocation + 1, 2.0);
   d.setParent(below, p);
   d.select({p});
-  PropertyBag out =
-      d.cycle(kSetTransformTypeCommand, {{"type", PropValue::ofString("test.placeOnly")}});
+  PropertyBag out = d.cycle(kSetTransformTypeCommand,
+                            {{"type", PropValue::ofString("test.placeOnly")}});
   test_assert(out.get("approximate")->asInt() == 2); /* `below` moved by 1 in x */
   test_assert(d.stateOf(below).world[3][0] == 1.0);
 }
@@ -554,8 +575,7 @@ void testBelowRandom()
       const double3 scale = r.coin() ? double3(s, s, s) : double3(s, -s, s);
       if (r.below(3) == 0) {
         o.channels = trsChannels(r, *d.trs, scale, 3.0);
-      }
-      else {
+      } else {
         o.setTransformType(kFbxTransform);
         o.channels = fbxChannels(r, *d.fbx, int(r.below(3)), scale, 1.0);
       }
@@ -578,8 +598,9 @@ void testBelowRandom()
     const BlockHandle x = all[r.below(14)], y = all[r.below(14)];
     d.select({x});
     Result<PropertyBag> out =
-        k % 2 ? d.run(kSetParentCommand, {{"parent", d.ptr(y)}}) :
-                d.run(kSetTransformTypeCommand, {{"type", PropValue::ofString(kMatrixTransform)}});
+        k % 2 ? d.run(kSetParentCommand, {{"parent", d.ptr(y)}})
+              : d.run(kSetTransformTypeCommand,
+                      {{"type", PropValue::ofString(kMatrixTransform)}});
     if (!out.ok()) {
       continue;
     }
@@ -600,14 +621,16 @@ void testBelowRandom()
 void testCells()
 {
   CommandDoc d;
-  const BlockHandle a = d.object("a"), b = d.object("b"), c = d.loose("c"), e = d.loose("e");
+  const BlockHandle a = d.object("a"), b = d.object("b"), c = d.loose("c"),
+                    e = d.loose("e");
   Scene &s = d.sc();
   const auto write = [&](int i, BlockHandle h) {
     must(d.lib->writeRef(const_cast<RefCell &>(s.cells()[i]), d.idOf(h)));
   };
   test_assert(s.contains(*d.lib, a) && !s.contains(*d.lib, c));
   write(0, c);
-  test_assert(s.contains(*d.lib, c) && !s.contains(*d.lib, a) && s.indexOf(*d.lib, c) == 0);
+  test_assert(s.contains(*d.lib, c) && !s.contains(*d.lib, a) &&
+              s.indexOf(*d.lib, c) == 0);
   test_assert(s.add(*d.lib, c).code() == StatusCode::AlreadyExists);
   /* A host's undo, that tells the Library. */
   const_cast<RefCell &>(s.cells()[0]).target = d.idOf(e);
@@ -626,7 +649,8 @@ void testCells()
   must(s.add(*d.lib, a));
   must(s.add(*d.lib, e));
   write(0, e);
-  test_assert(*s.remove(*d.lib, d.idOf(e)) == 0 && s.cells().size() == 1 && !s.contains(*d.lib, e));
+  test_assert(*s.remove(*d.lib, d.idOf(e)) == 0 && s.cells().size() == 1 &&
+              !s.contains(*d.lib, e));
   test_assert(s.indexOf(*d.lib, a) == 0);
   /* One that isn't known yet gets in twice, and counts once. */
   write(0, c);
@@ -648,7 +672,9 @@ void testCells()
 
 void testRegister()
 {
-  for (const char *taken : {"coredcc.EvaluatedScene", kSceneType, kObjectDataStruct, kObjectType}) {
+  for (const char *taken :
+       {"coredcc.EvaluatedScene", kSceneType, kObjectDataStruct, kObjectType})
+  {
     Runtime rt;
     ApiStruct st(taken);
     must(rt.ext<ApiRegistry>().add(std::move(st)).status());

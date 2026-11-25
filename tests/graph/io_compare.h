@@ -40,9 +40,10 @@ inline PropValue shown(const GraphDef &d, const GraphNode &n, const NodeValue &v
 inline bool sameSockets(const SocketInfos &a, const SocketInfos &b)
 {
   return a.size() == b.size() &&
-         std::equal(a.begin(), a.end(), b.begin(), [](const SocketInfo &x, const SocketInfo &y) {
-           return x.key == y.key && x.name == y.name && x.typeName == y.typeName;
-         });
+         std::equal(
+             a.begin(), a.end(), b.begin(), [](const SocketInfo &x, const SocketInfo &y) {
+               return x.key == y.key && x.name == y.name && x.typeName == y.typeName;
+             });
 }
 
 /* Their order means nothing. */
@@ -79,8 +80,8 @@ inline bool sameExtras(const NodeExtras &a, const NodeExtras &b, const IdMap *id
   return a.size() == b.size() && found == int(a.size());
 }
 
-/* Whether b is what a is, except for versions. With `ids`, b's references are to what those of
- * a became. */
+/* Whether b is what a is, except for versions. With `ids`, b's references are to what
+ * those of a became. */
 inline bool sameGraph(const GraphDef &a, const GraphDef &b, const IdMap *ids = nullptr)
 {
   const auto target = [ids](const BlockId &id) {
@@ -93,8 +94,9 @@ inline bool sameGraph(const GraphDef &a, const GraphDef &b, const IdMap *ids = n
       return differs("interface size", 0);
     }
     for (int i = 0; i < int(x.size()); i++) {
-      if (x[i].id != y[i].id || x[i].name != y[i].name || x[i].typeName != y[i].typeName ||
-          !(x[i].defaultValue == y[i].defaultValue) || y[i].def != &b || y[i].defaultVersion == 0)
+      if (x[i].id != y[i].id || x[i].name != y[i].name ||
+          x[i].typeName != y[i].typeName || !(x[i].defaultValue == y[i].defaultValue) ||
+          y[i].def != &b || y[i].defaultVersion == 0)
       {
         return differs("interface", x[i].id);
       }
@@ -111,7 +113,8 @@ inline bool sameGraph(const GraphDef &a, const GraphDef &b, const IdMap *ids = n
     {
       return differs("node", id);
     }
-    if (x.params().size() != y.params().size() || x.literals().size() != y.literals().size() ||
+    if (x.params().size() != y.params().size() ||
+        x.literals().size() != y.literals().size() ||
         x.blockRefs().size() != y.blockRefs().size() || y.paramVersion() == 0)
     {
       return differs("sizes", id);
@@ -135,11 +138,14 @@ inline bool sameGraph(const GraphDef &a, const GraphDef &b, const IdMap *ids = n
     }
     for (int k = 0; k < int(x.blockRefs().size()); k++) {
       const NodeBlockRef &v = x.blockRefs()[k], &w = y.blockRefs()[k];
-      if (v.name != w.name || v.cell.kind != w.cell.kind || target(v.cell.target) != w.cell.target) {
+      if (v.name != w.name || v.cell.kind != w.cell.kind ||
+          target(v.cell.target) != w.cell.target)
+      {
         return differs("reference", id);
       }
     }
-    if (target(x.group().target) != y.group().target || x.group().kind != y.group().kind) {
+    if (target(x.group().target) != y.group().target || x.group().kind != y.group().kind)
+    {
       return differs("group", id);
     }
     for (const SocketSide side : {SocketSide::Input, SocketSide::Output}) {
@@ -147,13 +153,17 @@ inline bool sameGraph(const GraphDef &a, const GraphDef &b, const IdMap *ids = n
         return differs("sockets", id);
       }
     }
-    if (x.linksIn().size() != y.linksIn().size() || x.linksOut().size() != y.linksOut().size()) {
+    if (x.linksIn().size() != y.linksIn().size() ||
+        x.linksOut().size() != y.linksOut().size())
+    {
       return differs("links", id);
     }
     for (const GraphLink *l : x.linksIn()) {
       const LinkState v = GraphDef::stateOf(*l);
       const GraphLink *other = b.link(v.id);
-      if (!other || other->to != &y || !y.linksIn().contains(const_cast<GraphLink *>(other))) {
+      if (!other || other->to != &y ||
+          !y.linksIn().contains(const_cast<GraphLink *>(other)))
+      {
         return differs("link", v.id.value);
       }
       const LinkState w = GraphDef::stateOf(*other);
