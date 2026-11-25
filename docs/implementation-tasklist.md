@@ -17,7 +17,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | done (litestl #4 B, #5 A, #6 C1 merged; C2 moves to P1f) | — |
 | 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | reviewed | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md); [script bindings](reports/feature-report-bind-2026-11-22.md); [TS spike](reports/feature-report-ts-spike-2026-11-22.md); [TA1](reports/feature-report-ta1-2026-11-23.md) |
 | 6 | [P2 library IO and layout](plans/2026-11-24-p2-layout-library-io.md) | P2 | 5 | reviewed | [library IO](reports/feature-report-library-io-2026-11-24.md); [layout](reports/feature-report-layout-2026-11-25.md) |
-| 7 | P3 objects, transforms and BVH | P3 | 5 | in progress | [objects and transforms](reports/feature-report-scene-2026-11-25.md); [BVH, View and picking](reports/feature-report-bvh-2026-11-25.md) |
+| 7 | [P3 objects, transforms and BVH](plans/2026-11-24-p3-objects-bvh.md) | P3 | 5 | reviewed; timings to be confirmed on an idle machine | [objects and transforms](reports/feature-report-scene-2026-11-25.md); [BVH, View and picking](reports/feature-report-bvh-2026-11-25.md) |
 | 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | todo | tools and overlay |
 | 9 | [P5 graph and instancing](plans/2026-11-24-p5-graph.md) | P5 | 5 | reviewed; benchmarks to be recorded on an idle machine | [graph](reports/feature-report-graph-2026-11-25.md) |
 | 10 | P5c scene evaluator | P5c | 7, 9 | todo | scene evaluator |
@@ -60,7 +60,7 @@ then.
   `SCCACHE_SERVER_PIPE`.
 
 ## Current focus
-- litestl #4-#6 and #8-#11 merged; coredcc pins litestl master `1c5b7df` (2026-11-24).
+- litestl #4-#6, #8-#11 and #14 merged; coredcc pins litestl master `e36c8fd` (2026-11-25).
 - P1 on master:
   - P1a (props) and P1b (parsers) are done and reviewed. The review's findings are
     fixed or tracked in `docs/reports/feature-report-props-parse-2026-11-21.md`.
@@ -81,7 +81,14 @@ then.
     (`source/coredcc/testapp`) and drives the spike's steps over CDP. It is the wasm-st
     ctest `testapp` (`pnpm install` in `apps/testapp` first, or it skips). Reviewed:
     `docs/reports/feature-report-ta1-2026-11-23.md`.
-  - The end of P1 (build cache, worktrees) is done (2026-11-24). P2, P3 and
-    P5 are being planned, in worktrees.
+  - The end of P1 (build cache, worktrees) is done (2026-11-24).
+- P2, P3 and P5 are on master and reviewed (2026-11-25). P4 and P5c are next, in worktrees.
+- Open after P3:
+  - Its timings on an idle machine. Provisional ones, on a busy machine, are under the targets but for
+    unlinking and linking again (63 to 90 ms, target 80).
+  - Whether the prefetch of channels (`b8e39eb`) stays: FBX is faster with it, but moving every root may
+    cost 1 ms more.
+  - wasm-mt-release: `test_base_id` fails, because `tests/support/node_env.js` uses `ENV`, which that
+    build leaves out. All BVH and scene tests pass there.
 - Test app TA0, TA1 and TA2 are done: build the wasm-st preset, then
   `cd apps/testapp && pnpm install && pnpm test`.
