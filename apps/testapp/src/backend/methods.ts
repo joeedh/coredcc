@@ -11,6 +11,7 @@ import * as cd from 'coredcc-gen/coredcc/functions'
 import type {Host} from 'coredcc-gen/testapp/Host'
 import * as ta from 'coredcc-gen/testapp/functions'
 import type {IBindingBackend} from '@litestl/typescript-runtime'
+import {installPanelMethods} from './panel_methods.ts'
 
 export type Register = (name: string, fn: (...args: any[]) => unknown) => void
 
@@ -47,6 +48,18 @@ class AddCount implements ScriptCommand {
   }
 }
 
+/** `testapp.weigh(by=1)`: adds `by` to the `weight` under the path prefix, as a panel's tool. */
+class Weigh implements ScriptCommand {
+  before = 0
+  exec(ctx: Context) {
+    this.before = cdcc.get(ctx, 'weight') as number
+    cdcc.write(ctx, 'weight', this.before + (cdcc.input(ctx, 'by') as number))
+  }
+  undo(ctx: Context) {
+    cdcc.write(ctx, 'weight', this.before)
+  }
+}
+
 /** A document: the host and the Session over its context. */
 interface Doc {
   host: Host
@@ -59,6 +72,7 @@ function openDoc(): Doc {
   const session = new Session(host, ta.context(host) as Context)
   try {
     cdcc.registerCommand(session.ctx, {id: 'testapp.addCount', inputs: {amount: 1}, outputs: {result: 0}}, AddCount)
+    cdcc.registerCommand(session.ctx, {id: 'testapp.weigh', inputs: {by: cdcc.float(1)}}, Weigh)
   } catch (e) {
     session[Symbol.dispose]()
     throw e
@@ -158,6 +172,7 @@ export function installMethods(register: Register, loaded: LoadedBackend, report
   /* Replaces the document. Returns the foreign handles left between the two: 0 unless a
    * script command leaked one. */
   method('reset', () => {
+    closePanel()
     if (doc) {
       doc.session[Symbol.dispose]()
       doc = undefined
@@ -171,7 +186,7 @@ export function installMethods(register: Register, loaded: LoadedBackend, report
     }
     return {foreignCountBetween: leftOver}
   })
-  /* `foreignCount` includes the page's own command factory: 1 with nothing else live. */
+  /* `foreignCount` includes the page's own command factories: 2 with nothing else live. */
   method('check', () => {
     const d = current()
     const st = ta.validate(d.host)
@@ -197,6 +212,12 @@ export function installMethods(register: Register, loaded: LoadedBackend, report
     )
     return true
   })
+  /* Changes `strength` in C++, behind the page's back. */
+  method('nudge', () => {
+    ta.nudge(current().host)
+    return true
+  })
+  const closePanel = installPanelMethods(method, ctx)
   /* Kills the module, for tests of how a dead backend is reported. */
   method('abortForTest', () => {
     ta.abortForTest()

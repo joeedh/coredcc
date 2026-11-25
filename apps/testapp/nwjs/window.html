@@ -6,10 +6,22 @@
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #202124; color: #e8eaed; }
     #viewport { display: block; width: 100%; height: 100%; }
+    #panel { position: absolute; top: 0; right: 0; width: 320px; max-height: 100%; overflow: auto;
+      font: 12px sans-serif; background: #2b2d31; }
+    #panel .node { margin: 2px 4px; }
+    #panel .row { display: flex; gap: 4px; }
+    #panel .prop { display: flex; gap: 6px; flex: 1; }
+    #panel .prop > .name { flex: 0 0 90px; }
+    #panel .holder input.field { width: 70px; }
+    #panel .tab:not(.chosen) { display: none; }
+    #panel .bar > .chosen { font-weight: bold; }
+    #panel .disabled { opacity: 0.6; }
+    #panel .error { outline: 1px solid #d55; }
   </style>
   <script type="module" src="../dist/app.js"></script>
 </head>
 <body>
   <canvas id="viewport"></canvas>
+  <div id="panel"></div>
 </body>
 </html>

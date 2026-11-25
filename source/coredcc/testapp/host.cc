@@ -9,6 +9,7 @@
 #include "coredcc/bind/manager.h"
 #include "coredcc/bind/path_reader.h"
 #include "coredcc/command/executor.h"
+#include "coredcc/command/last_used.h"
 #include "coredcc/graph/commands.h"
 #include "coredcc/graph/provider.h"
 #include "coredcc/lib/library.h"
@@ -153,6 +154,7 @@ class Host {
                     graphsAccessor());
     s.addField(PropertyDef::intProp("big"), &Data::big);
     addItemMembers(s, data_.active);
+    rt_.ext<LastUsedStore>().addCollectionTo(s);
     CDCC_CHECK(reg.add(std::move(s)).ok(), "testapp: registering the root struct");
     Data *data = &data_;
     CDCC_CHECK(reg.addRuntimeOwner("testapp", kData, [data]() { return (void *)data; }).ok(),

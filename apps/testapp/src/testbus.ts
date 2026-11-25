@@ -75,7 +75,7 @@ function registerCoreMethods(): void {
       browserPid: proc?.ppid,
       profile: argValue('user-data-dir'),
       ...backendReport,
-      build: 'ta1',
+      build: 'ta2',
       devicePixelRatio: window.devicePixelRatio,
       viewport: {width: window.innerWidth, height: window.innerHeight},
       adapter: adapterReport(),

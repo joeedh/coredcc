@@ -22,7 +22,7 @@ namespace coredcc {
  *   no longer accepts.
  * - The datapath sees them as `commandDefaults["mesh.extrude"].dist` once
  *   `addCollectionTo` has added that collection to the host's root struct. Reading an
- *   input that was never used gives its default.
+ *   input that was never used gives its default. Watchers see it change.
  * - `serialize` writes one invocation per line; `load` reads it back, skipping
  *   commands and inputs that no longer exist, so old files keep loading.
  */
@@ -64,6 +64,8 @@ class LastUsedStore {
     litestl::util::Vector<Value> values;
     const PropValue *find(std::string_view name) const;
   };
+  void changed();
+  void destroyEntries();
   Entry &entry(const CommandDef &def);
   const Entry *findEntry(const CommandDef &def) const;
   /** The per-command struct of commandDefaults items, registered on first use. */

@@ -1,5 +1,6 @@
 #include "coredcc/command/last_used.h"
 
+#include "coredcc/api/change_bus.h"
 #include "coredcc/base/text.h"
 #include "coredcc/command/executor.h"
 #include "coredcc/command/literal.h"
@@ -22,7 +23,7 @@ constexpr const char *kItemBase = "CommandDefaults";
 
 LastUsedStore::~LastUsedStore()
 {
-  clear();
+  destroyEntries();
 }
 
 const PropValue *LastUsedStore::Entry::find(std::string_view name) const
@@ -101,11 +102,15 @@ Status LastUsedStore::set(const CommandDef &def, std::string_view input, const P
   Entry &e = entry(def);
   for (Value &old : e.values) {
     if (input == old.name.c_str()) {
-      old.value = *v;
+      if (!(old.value == *v)) {
+        old.value = *v;
+        changed();
+      }
       return Status();
     }
   }
   e.values.append(Value{lsString(input), *v});
+  changed();
   return Status();
 }
 
@@ -113,10 +118,23 @@ void LastUsedStore::forget(const CommandDef &def)
 {
   if (Entry **e = byId_.lookup_ptr(def.id().value)) {
     (*e)->values.clear();
+    changed();
   }
 }
 
 void LastUsedStore::clear()
+{
+  destroyEntries();
+  changed();
+}
+
+void LastUsedStore::changed()
+{
+  /* Not a notify: the owner of the values is whatever root has the collection. */
+  rt_.ext<ChangeBus>().bumpEpoch();
+}
+
+void LastUsedStore::destroyEntries()
 {
   for (Entry *e : entries_) {
     litestl::alloc::Delete(e);

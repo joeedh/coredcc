@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<!-- The test app's property panel: each kind of widget, conditions, and tools. -->
+<layout>
+  <panel label="Document" id="document">
+    <prop path="label" id="label" label="Title"/>
+    <row>
+      <prop path="count" id="count"/>
+      <prop path="strength" id="strength" widget="slider"/>
+    </row>
+    <prop path="enabled" id="enabled"/>
+    <column enabledIf="enabled" id="whenEnabled">
+      <prop path="mode" id="mode"/>
+      <prop path="mode[EDIT]" id="editMode" showLabel="false"/>
+      <prop path="flags" id="flags" visibleIf="mode[EDIT]"/>
+    </column>
+    <label id="note" visibleIf="!enabled">Enable it to change the mode.</label>
+    <prop path="flags[HIDE]" id="hide" label="Hidden"/>
+    <prop path="offset" id="offset"/>
+    <prop path="offset[1]" id="offsetY"/>
+    <prop path="big" id="big"/>
+    <prop path="items.length" id="itemCount" label="Items"/>
+    <prop path="activeItem" id="activeItem"/>
+  </panel>
+  <tabs id="tabs">
+    <tab label="Active item" path="activeItem" id="itemTab">
+      <prop path="name" id="itemName"/>
+      <prop path="weight" id="weight"/>
+      <prop path="other" id="other"/>
+      <tool invocation="testapp.weigh(by=2)" id="weigh" enabledIf="/enabled">Weigh</tool>
+    </tab>
+    <tab label="Tools" id="toolTab">
+      <tool invocation="testapp.addCount(amount=3)" id="addThree"/>
+      <toolOptions target="testapp.addCount" id="addOptions"/>
+    </tab>
+  </tabs>
+  <separator/>
+  <custom tag="swatch" id="swatch" color="red">Swatch</custom>
+</layout>

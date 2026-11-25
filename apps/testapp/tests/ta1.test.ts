@@ -133,7 +133,7 @@ describe('TA1: the wasm-st backend over CDP', () => {
     assert.equal(await value('get', 'count'), 5)
     const c = await value('check')
     assert.equal(c.liveInstances, 2)
-    assert.equal(c.foreignCount, 3, "the page's factory and the two live instances")
+    assert.equal(c.foreignCount, 4, "the page's two factories and the two live instances")
   })
 
   step('undo and redo with nothing to do are FailedPrecondition', async () => {

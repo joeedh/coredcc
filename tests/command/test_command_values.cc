@@ -155,6 +155,27 @@ static void test_command_defaults_path()
   /* NoUndo: setValueUndo writes directly. */
   test_assert(setValueUndo(pc, "commandDefaults[\"test.add\"].amount", PropValue::ofInt(4)).ok());
   test_assert(s.history.size() == 1);
+  /* Watchers see a run, a write, and what is forgotten. */
+  ChangeBus &bus = rt.ext<ChangeBus>();
+  std::string seen;
+  Result<ScopedConnection> watch =
+      bus.watch(pc, "commandDefaults[\"test.add\"].amount",
+                [&](const PropValue &v, const Status &) { seen += v.toString() + ";"; });
+  test_assert(watch.ok() && bus.flush() == 0);
+  const CommandDef *add = rt.ext<CommandRegistry>().find("test.add");
+  LastUsedStore &store = rt.ext<LastUsedStore>();
+  test_assert(store.set(*add, "amount", PropValue::ofInt(6)).ok() && bus.flush() == 1);
+  const uint64_t epoch = bus.epoch();
+  test_assert(store.set(*add, "amount", PropValue::ofInt(6)).ok() && bus.epoch() == epoch);
+  test_assert(invoke(s.ctx, "test.add(amount=7)").ok() && bus.flush() == 1);
+  store.forget(*add);
+  test_assert(bus.flush() == 1);
+  test_assert(store.set(*add, "amount", PropValue::ofInt(8)).ok() && bus.flush() == 1);
+  store.clear();
+  test_assert(bus.flush() == 1);
+  test_assert(seen == "6;7;1;8;1;");
+  test_assert(setValue(pc, "commandDefaults[\"test.add\"].amount", PropValue::ofInt(4)).ok());
+  watch = Status::error(StatusCode::NotFound, "");
   test_assert(*getValue(pc, "commandDefaults.length") == PropValue::ofInt(rt.ext<CommandRegistry>().size()));
   Result<StableRef> c = canonicalize(pc, *parsePath("commandDefaults[\"test.add\"].mode"));
   test_assert(c.ok() && c->key.size() == 3);
