@@ -588,7 +588,8 @@ void testSettings()
   d.evaluate();
   test_assert(d.sc().bvh().valid() && d.sc().bvh().boxes().bvh().size() == 101);
   Runtime other;
-  test_assert(other.ext<SceneSettings>().bvh.leafSize == 8 && other.ext<SceneSettings>().bvh.parallel);
+  const BvhOptions &bvh = other.ext<SceneSettings>().bvh;
+  test_assert(bvh.leafSize == BvhOptions().leafSize && bvh.parallel);
 }
 
 } // namespace

@@ -19,14 +19,10 @@ struct SceneSettings {
   static constexpr const char *kExtName = "coredcc.SceneSettings";
 
   /** Of every SceneBvh, from its next build on. Without `parallel`, evaluateScene doesn't use
-   * litestl's task pool. The leaves are smaller than other trees': what is in them is a box each,
-   * and then an object. */
+   * litestl's task pool. */
   BvhOptions bvh;
 
-  explicit SceneSettings(Runtime *)
-  {
-    bvh.leafSize = 8;
-  }
+  explicit SceneSettings(Runtime *) {}
 };
 
 /** A BVH over the world bounds that evaluateScene found, which keeps it up to date. Members only,

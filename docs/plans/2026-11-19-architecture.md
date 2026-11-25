@@ -906,11 +906,10 @@ So:
     (`PickOptions`, and the P3 plan's implementation notes).
 
 ### Leaf size
-- The default is chosen by `tests/bench_bvh_leafsize.cc`.
-- It sweeps leaf sizes from 16 to 1024 against 10k, 1M and 10M triangles, capsule and
-  sphere sets, and ray and cone queries.
-- Results go in `docs/bvh-leafsize.md`.
-- The starting default is 128 until the benchmark has run.
+- The default is 8. `tools/bench-bvh.mjs` measures it.
+- It sweeps leaf sizes from 4 to 1024 against 10k, 1M and 10M triangles, capsule and
+  sphere sets, and ray, region, sphere overlap and nearest queries.
+- Results and the rule are in `docs/bvh-leafsize.md`. The starting default was 128.
 
 ### SceneBvh
 - A two-level scheme: a double-precision top level over object world bounds, which calls

@@ -192,7 +192,7 @@ template <class S> concept BvhSource = requires(const S &s, int i) {
   { s.size() } -> std::convertible_to<int>;
   { s.bounds(i) } -> std::same_as<Box3<typename S::Scalar>>;
 };
-struct BvhOptions { int leafSize = 128; int bins = 16; bool parallel = true; };
+struct BvhOptions { int leafSize = 8; int bins = 16; bool parallel = true; };  // 128 until it was measured
 
 template <BvhSource S> class Bvh {
   Status build(const S &src, BvhOptions opts = {});
@@ -278,6 +278,15 @@ struct AnyBvhSource : IfaceRef {
     larger on a tie.
 - **Confirmation only:** triangles at 10M with the winner and its two neighbours. A worst slowdown
   over 10% there is reported as "not confirmed".
+- **The result (2026-11-25, idle machine, `docs/bvh-leafsize.md`): 8,** by the fallback.
+  - No size is within 10% everywhere. 8's worst slowdown is the smallest: 1.31 native (nearest, 10k triangles; 4 has
+    1.31 too, and the larger is taken on a tie) and 1.27 in wasm. 16 has 1.94 and 1.29, and 128 10.07 and 4.12.
+  - **The confirmation failed:** at 10M triangles, 8's region queries take 1.15 times 16's. They are the
+    only ones that are over 10%.
+  - **Why it is 8 anyway:** the rule has one fallback, which is for this: no size is within 10% of the best for
+    all. The 10M set was only to confirm, and it doesn't name a better size: there 16 is 1.34 times 4
+    for nearest queries, and 1.23 times 8, which is worse than what 8 loses. A host with one kind of query
+    sets `BvhOptions::leafSize`.
 - `--quick` is 10k triangles and spheres, as a smoke test; `--wasm` runs in node without 10M.
 
 ## View (`draw/view.h`)
@@ -938,7 +947,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   `elementsInRegion(RegionQuery, domain)` is new and optional.
 - **SceneSettings** is a Runtime extension, not a member of Scene: how a host uses threads isn't part
   of a document.
-- **SceneBvh's leaf size** is 8. Measured with `bench_scene --leaf` on a busy machine (100,000 objects, best ms
+- **SceneBvh's leaf size** is 8 (it was its own setting, until 8 became the default of every tree). Measured with `bench_scene --leaf` on a busy machine (100,000 objects, best ms
   for 1,000 queries, leaf sizes 4, 8, 16, 32, 64): objects on a ray 0.94, 0.91, 0.94, 0.93, 1.13;
   objects near a point 2.4, 1.8, 1.9, 2.0, 2.5. Evaluation doesn't depend on it.
 - **A pick of 11,685 candidates** took 200 ms, found by the benchmark: the ranking's map had keys that all

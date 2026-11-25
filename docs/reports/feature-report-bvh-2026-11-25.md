@@ -114,5 +114,6 @@
 24. **The plan claimed long-double references.** *Corrected:* the kernels' oracles are geometric, and on
     Windows a long double is a double.
 25. **The benchmark ignored `sphereOverlap` and `nearest`.** *Fixed:* both are measured and count for the
-    leaf size. SceneBvh has its own (8; the plan's notes have the numbers).
+    leaf size. It has run since: 8 is the default of every tree
+    (`docs/bvh-leafsize.md`), and SceneBvh has none of its own any more.
 27. **CLAUDE.md is out of date.** *Not changed:* it is the user's file.

@@ -42,8 +42,8 @@ concept BvhSource = requires(const T &s, int i) {
 };
 
 struct BvhOptions {
-  /** The most primitives in a leaf, at least 1. */
-  int leafSize = 128;
+  /** The most primitives in a leaf, at least 1. The default is measured: docs/bvh-leafsize.md. */
+  int leafSize = 8;
   /** Candidate split planes per axis, 2 to 64. */
   int bins = 16;
   /** Use litestl's task pool. The result is the same either way, for any worker count. */

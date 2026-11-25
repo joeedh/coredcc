@@ -225,7 +225,7 @@ void testOptions()
     opts.bins = bins;
     test_assert(bvh.build(Boxes<float>(), opts).code() == StatusCode::InvalidArgument);
   }
-  test_assert(bvh.size() == kept && treeProblem(bvh, src, 128) == nullptr);
+  test_assert(bvh.size() == kept && treeProblem(bvh, src, BvhOptions().leafSize) == nullptr);
   BvhOptions opts;
   opts.leafSize = (std::numeric_limits<int>::max)();
   test_assert(bvh.build(src, opts).ok() && bvh.nodes().size() == 1);
