@@ -7,7 +7,10 @@
 
 #include "coredcc/bind/detail.h"
 
+#include "litestl/binding/foreign.h"
+
 #include <string>
+#include <tuple>
 #include <type_traits>
 
 namespace coredcc::script::detail {
@@ -28,13 +31,25 @@ template <class... A> int nulArgument(const A &...args)
   return found;
 }
 
-/** `F`, a facade, refusing strings with a NUL: what is bound for scripts. */
-template <auto F> struct Checked;
+/** `F`, a facade, refusing strings with a NUL: what is bound for scripts. If it owns a foreign
+ * handle, argument `Owned` (from 1), a refusal releases that, as `F` would. */
+template <auto F, int Owned = 0> struct Checked;
 
-template <class R, class... A, R (*F)(A...)> struct Checked<F> {
+template <class R, class... A, R (*F)(A...), int Owned> struct Checked<F, Owned> {
+  static void release(const A &...args)
+  {
+    if constexpr (Owned > 0) {
+      const auto handle = std::get<size_t(Owned) - 1>(std::tie(args...));
+      static_assert(std::is_same_v<decltype(handle), const litestl::binding::foreign::Handle>);
+      if (handle != 0) {
+        litestl::binding::foreign::release(handle);
+      }
+    }
+  }
   static R call(A... args)
   {
     if (const int i = nulArgument(args...)) {
+      release(args...);
       Status s = error(StatusCode::InvalidArgument,
                        "argument " + std::to_string(i) + ": a string can't hold a NUL");
       if constexpr (std::is_same_v<R, Status>) {
@@ -61,5 +76,8 @@ template <class R, class... A, R (*F)(A...)> struct Checked<F> {
       ->addFunction(::litestl::binding::types::makeFunction<                             \
                     &::coredcc::script::detail::Checked<&fn>::call>(qualifiedName))      \
       ->setArgNames(ARGNAMES)
+
+/** BIND_FACADE of a facade that takes over a foreign handle: argument `owned`, from 1. */
+#define BIND_OWNING_FACADE(mgr, qualifiedName, fn, owned, ARGNAMES)                        (mgr)                                                                                        ->addFunction(::litestl::binding::types::makeFunction<                                                 &::coredcc::script::detail::Checked<&fn, owned>::call>(                        qualifiedName))                                                                      ->setArgNames(ARGNAMES)
 
 } // namespace coredcc::script::detail

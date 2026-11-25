@@ -2,6 +2,8 @@
  * paths, failures, handle releases and the reentrancy guard (P1f step 4). */
 #include "script_fixture.h"
 
+#include "coredcc/bind/checked.h"
+
 #include "coredcc/lib/provider.h"
 
 #include <cstring>
@@ -36,6 +38,20 @@ static void test_registration_refusals()
       test_assert(rt.ifaces().tableCount() == tables);
       test_assert(rt.ext<CommandRegistry>().find("js.a") == nullptr);
       test_assert(host.releasesOf(f) == 1);
+    }
+    /* Refused before the facade runs: with the factory, all the same. */
+    {
+      using Entry = sc::detail::Checked<&sc::registerForeignCommand, 3>;
+      CommandDef *def = sc::newCommandDef("js.a");
+      sc::string nul(kCore);
+      nul += char(0);
+      const int live = host.live();
+      const fakehost::lf::Handle f = host.add({});
+      test_assert(Entry::call(s.ctx, *def, f, nul).code() == StatusCode::InvalidArgument);
+      test_assert(host.live() == live && host.releasesOf(f) == 1);
+      test_assert(Entry::call(s.ctx, *def, 0, nul).code() == StatusCode::InvalidArgument);
+      test_assert(host.releasesOf(0) == 0 && rt.ifaces().tableCount() == tables);
+      litestl::alloc::Delete(def);
     }
     /* No factory: nothing to release. */
     CommandDef *def = sc::newCommandDef("js.a");

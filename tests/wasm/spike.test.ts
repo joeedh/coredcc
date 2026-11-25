@@ -14,6 +14,10 @@ import {afterEach, beforeEach, describe, test} from 'node:test'
 
 import * as cdcc from 'coredcc-script'
 import {Ref, CommandFlags, ScriptError, Session, StatusCode, type Context, type ScriptCommand} from 'coredcc-script'
+import type {CommandDef} from 'coredcc-gen/coredcc/CommandDef'
+import * as cd from 'coredcc-gen/coredcc/functions'
+import type {NodeTypeDef} from 'coredcc-gen/coredcc/NodeTypeDef'
+import type {Status} from 'coredcc-gen/coredcc/Status'
 import type {Host} from 'coredcc-gen/testapp/Host'
 import * as spike from 'coredcc-gen/testapp/functions'
 
@@ -256,6 +260,23 @@ describe('coredcc wasm-st spike', () => {
       ['drop', () => graph.drop(nul)],
     ]
     for (const [what, call] of calls) assert.throws(call, refused, what)
+    /* So are slots, and the handle goes with them. */
+    const handles = backend.foreignCount()
+    const command = cd.newCommandDef('ts.nul') as CommandDef
+    const node = cd.newNodeType('ts.n') as NodeTypeDef
+    const entries: ((handle: number) => Status)[] = [
+      (handle) => cd.registerForeignCommand(ctx, command, handle, nul),
+      (handle) => cd.registerForeignNodeType(ctx, node, handle, nul),
+      (handle) => cd.replaceForeignNodeType(ctx, node, handle, nul),
+    ]
+    for (const entry of entries) {
+      const status = entry(backend.foreignHandle({}))
+      assert.match(status.message(), /NUL/)
+      status[Symbol.dispose]()
+      assert.equal(backend.foreignCount(), handles)
+    }
+    command[Symbol.dispose]()
+    node[Symbol.dispose]()
     /* An id is refused as one that isn't an identifier. */
     assert.throws(() => cdcc.registerCommand(ctx, {id: 'ts.' + nul}, Nothing), ScriptError)
     assert.equal(cdcc.get(ctx, 'label'), '')

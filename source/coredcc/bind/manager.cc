@@ -119,10 +119,11 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::defFlags", script::defFlags, MARGS("def", "flags"));
   BIND_FACADE(mgr, "coredcc::defInput", script::defInput, MARGS("def", "name", "defaultValue"));
   BIND_FACADE(mgr, "coredcc::defOutput", script::defOutput, MARGS("def", "name", "defaultValue"));
-  BIND_FACADE(mgr,
-              "coredcc::registerForeignCommand",
-              script::registerForeignCommand,
-              MARGS("ctx", "def", "factory", "slots"));
+  BIND_OWNING_FACADE(mgr,
+                     "coredcc::registerForeignCommand",
+                     script::registerForeignCommand,
+                     3,
+                     MARGS("ctx", "def", "factory", "slots"));
 }
 
 void addLayoutFacades(litestl::binding::BindingManager *mgr)
@@ -228,14 +229,16 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
               "coredcc::nodeTypeParam",
               script::nodeTypeParam,
               MARGS("def", "name", "defaultValue"));
-  BIND_FACADE(mgr,
-              "coredcc::registerForeignNodeType",
-              script::registerForeignNodeType,
-              MARGS("ctx", "def", "kernel", "slots"));
-  BIND_FACADE(mgr,
-              "coredcc::replaceForeignNodeType",
-              script::replaceForeignNodeType,
-              MARGS("ctx", "def", "kernel", "slots"));
+  BIND_OWNING_FACADE(mgr,
+                     "coredcc::registerForeignNodeType",
+                     script::registerForeignNodeType,
+                     3,
+                     MARGS("ctx", "def", "kernel", "slots"));
+  BIND_OWNING_FACADE(mgr,
+                     "coredcc::replaceForeignNodeType",
+                     script::replaceForeignNodeType,
+                     3,
+                     MARGS("ctx", "def", "kernel", "slots"));
   BIND_FACADE(mgr,
               "coredcc::nodeTypeSocketName",
               script::nodeTypeSocketName,
