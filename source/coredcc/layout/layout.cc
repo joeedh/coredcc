@@ -1,6 +1,7 @@
 #include "coredcc/layout/layout.h"
 
 #include "coredcc/base/assert.h"
+#include "coredcc/command/last_used.h"
 
 #include <cstring>
 #include <utility>
@@ -12,18 +13,9 @@ namespace {
 /* Joins text that LayoutAssembler checked. */
 void join(Path &to, std::string_view path)
 {
-  if (path[0] == '/') {
-    to.segments.clear();
-    path.remove_prefix(1);
-  }
-  if (path.empty()) {
-    return;
-  }
-  Result<Path> own = parsePath(path);
-  CDCC_CHECK(own.ok(), "a Layout holds a path that isn't one");
-  for (PathSegment &s : own->segments) {
-    to.segments.append(std::move(s));
-  }
+  Result<Path> joined = joinLayoutPath(to, path);
+  CDCC_CHECK(joined.ok(), "a Layout holds a path that isn't one");
+  to = std::move(joined).value();
 }
 
 } // namespace
@@ -83,7 +75,7 @@ int Layout::findId(std::string_view id) const
 Path Layout::prefixOf(int node) const
 {
   const int parent = nodes_[node].parent;
-  return parent < 0 ? Path() : effectivePath(parent);
+  return parent < 0 ? Path::root() : effectivePath(parent);
 }
 
 Path Layout::effectivePath(int node) const
@@ -99,10 +91,22 @@ Path Layout::effectivePath(int node) const
       }
     }
   }
-  Path out;
+  Path out = Path::root();
   while (count > 0) {
     join(out, chain[--count]->value.c_str());
   }
+  return out;
+}
+
+Path Layout::optionsPath(int node) const
+{
+  Path out = Path::root();
+  PathSegment s;
+  s.text = LastUsedStore::kMember;
+  out.segments.append(s);
+  s.kind = SegmentKind::StringKey;
+  s.text = text(node, LayoutAttrId::Target);
+  out.segments.append(std::move(s));
   return out;
 }
 
@@ -143,18 +147,8 @@ bool Layout::operator==(const Layout &b) const
 
 Result<Path> joinLayoutPath(const Path &prefix, std::string_view path, size_t *errorOffset)
 {
-  const bool fromRoot = !path.empty() && path[0] == '/';
-  if (fromRoot && path.size() == 1) {
-    return Path();
-  }
-  Result<Path> own = parsePath(path.substr(fromRoot ? 1 : 0), errorOffset);
-  if (!own.ok()) {
-    if (errorOffset && fromRoot) {
-      ++*errorOffset;
-    }
-    return own.status();
-  }
-  if (fromRoot) {
+  Result<Path> own = parsePath(path, errorOffset);
+  if (!own.ok() || own->fromRoot) {
     return own;
   }
   Path out = prefix;

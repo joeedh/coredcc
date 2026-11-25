@@ -244,7 +244,7 @@ class Checker {
     const int parent = nodes_[i].parent;
     size_t at = 0;
     Result<std::string> p =
-        layout_detail::joinPathText(parent < 0 ? std::string() : prefix_[parent],
+        layout_detail::joinPathText(parent < 0 ? "/" : prefix_[parent],
                                     std::string_view(a.value).substr(skip), &at);
     if (!p.ok()) {
       return failIn(i, a, skip + at, p.status());
@@ -415,7 +415,7 @@ Result<std::string> joinPathText(const std::string &prefix,
   if (!own.ok()) {
     return own.status();
   }
-  return prefix.empty() || path[0] == '/' ? own->toString() : prefix + "." + own->toString();
+  return own->fromRoot ? own->toString() : prefix + (prefix == "/" ? "" : ".") + own->toString();
 }
 
 } // namespace layout_detail

@@ -69,7 +69,8 @@ class ChangeBus {
   /** Changes waiting for the next flush. */
   int pendingCount() const;
 
-  /** Watches `path` from `ctx`, which must outlive the watcher. The current value is
+  /** Watches `path` from `ctx`, which must outlive the watcher, with the prefix that `ctx` has now.
+   * The current value is
    * read now and does not fire. `meta` runs, before `fn`, at a flush that finds another def:
    * the path leads to another member, or stopped or started resolving, or a dynamic hook gives
    * another range, say. */

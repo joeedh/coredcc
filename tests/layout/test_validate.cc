@@ -133,7 +133,8 @@ struct LayoutWorld {
 };
 
 const char *const kUnknown =
-    "it can't be checked: it goes through a struct that isn't registered";
+    "it can't be checked: it goes through a struct that isn't registered, or names a key that only "
+    "a dynamic def may have";
 
 } // namespace
 
@@ -227,6 +228,31 @@ static void test_tools()
   test_assert(w.one("<tool invocation='test.ad'/>",
                     "<tool> invocation: no command 'test.ad'", "invocation="));
   test_assert(w.suggestion("<tool invocation='test.ad'/>") == "test.add");
+  /* A pointer's path from the root, whatever is around it. */
+  test_assert(w.fine(tool("any='/objects[0]'"), "tool"));
+  test_assert(w.one(tool("brush='/tool.brushes[0]'"), std::string("<layout> path: ") + kUnknown,
+                    "path=", LayoutSeverity::Warning, "gone"));
+  test_assert(w.one(tool("base='/objcts[0]'"), std::string("<tool> invocation: ") +
+                    "no member 'objcts' in LayoutRoot (at offset 1)", "invocation=",
+                    LayoutSeverity::Error, "tool"));
+  /* What isn't for a button that invokes it, or not for users. */
+  test_assert(w.one("<tool invocation='test.drag'/>",
+                    "<tool> invocation: 'test.drag' is interactive: it is begun with "
+                    "beginInteractive, not invoked",
+                    "invocation=", LayoutSeverity::Warning));
+  test_assert(w.fine("<toolOptions target='test.drag'/>"));
+  test_assert(addNativeCommand<Nothing>(w.rt, CommandDef("test.own").flags(CommandFlags::Private)).ok());
+  const char *priv = "'test.own' is private: it isn't for users";
+  test_assert(w.one("<tool invocation='test.own'/>", std::string("<tool> invocation: ") + priv,
+                    "invocation=", LayoutSeverity::Warning));
+  test_assert(w.one("<toolOptions target='test.own'/>", std::string("<toolOptions> target: ") + priv,
+                    "target=", LayoutSeverity::Warning));
+  /* A root without the last-used inputs. */
+  const Vector<LayoutIssue> bare =
+      validateLayout(w.rt, kScene, *parseLayout("<layout><toolOptions target='test.add'/></layout>"));
+  test_assert(bare.size() == 1 && bare[0].severity == LayoutSeverity::Error &&
+              strstr(bare[0].status.message(),
+                     "the root needs LastUsedStore::addCollectionTo: no member 'commandDefaults'"));
   test_assert(w.one("<toolOptions target='test.ad'/>",
                     "<toolOptions> target: no command 'test.ad'", "target="));
   test_assert(w.one(tool("amout=3"), "<tool> invocation: test.take has no input 'amout' (at offset "

@@ -82,6 +82,10 @@ class Validator {
   {
     issue(node, a, LayoutSeverity::Error, s);
   }
+  void warning(int node, const LayoutAttr &a, const std::string &what)
+  {
+    issue(node, &a, LayoutSeverity::Warning, invalid(what));
+  }
   void unknown(int node, const LayoutAttr *a)
   {
     issue(node, a, LayoutSeverity::Warning,
@@ -171,9 +175,7 @@ class Validator {
           tool(i, a);
           break;
         case Id::Target:
-          if (!rt_.ext<CommandRegistry>().find(value)) {
-            error(i, &a, rt_.ext<CommandRegistry>().unknown(value));
-          }
+          options(i, a, value);
           break;
         default:
           break;
@@ -204,6 +206,35 @@ class Validator {
     }
   }
 
+  /* What a frontend has to know of a command that is there. */
+  void command(int i, const LayoutAttr &a, const CommandDef &def, bool runs)
+  {
+    const std::string name = std::string("'") + def.name().c_str() + "'";
+    if (def.has(CommandFlags::Private)) {
+      warning(i, a, name + " is private: it isn't for users");
+    }
+    if (runs && def.has(CommandFlags::Interactive)) {
+      warning(i, a, name + " is interactive: it is begun with beginInteractive, not invoked");
+    }
+  }
+
+  void options(int i, const LayoutAttr &a, std::string_view id)
+  {
+    const CommandDef *def = rt_.ext<CommandRegistry>().find(id);
+    if (!def) {
+      error(i, &a, rt_.ext<CommandRegistry>().unknown(id));
+      return;
+    }
+    command(i, a, *def, false);
+    if (canStart(root_)) {
+      Result<StaticStructs> r = resolver_.resolveStructs(root_, layout_.optionsPath(i));
+      if (!r.ok()) {
+        error(i, &a, invalid(std::string("the root needs LastUsedStore::addCollectionTo: ") +
+                             r.status().message()));
+      }
+    }
+  }
+
   void tool(int i, const LayoutAttr &a)
   {
     Result<Invocation> inv = parseInvocation(a.value.c_str());
@@ -217,6 +248,7 @@ class Validator {
       error(i, &a, commands.unknown(inv->command.c_str()));
       return;
     }
+    command(i, a, *def, true);
     for (const InvocationArg &arg : inv->args) {
       if (more_) {
         break;
@@ -244,14 +276,15 @@ class Validator {
       Result<StableRef> ref = parseRef(rt_, s);
       return ref.ok() ? coercePointer(rt_, in, std::move(*ref)).status() : ref.status();
     }
-    if (!canStart(around(i))) {
-      return Status();
-    }
     Result<Path> path = parsePath(s);
     if (!path.ok()) {
       return path.status();
     }
-    Result<StaticStructs> to = resolver_.resolveStructs(around(i), *path);
+    if (!canStart(path->fromRoot ? root_ : around(i))) {
+      return Status();
+    }
+    const StaticStructs &from = path->fromRoot ? root_ : around(i);
+    Result<StaticStructs> to = resolver_.resolveStructs(from, *path);
     if (!to.ok()) {
       return to.status();
     }
@@ -261,7 +294,7 @@ class Validator {
       fits |= rt_.ext<ApiRegistry>().isA(t, want);
     }
     if (!fits && to->unknown) {
-      if (!around(i).unknown) {
+      if (!from.unknown) {
         unknown(i, &a);
       }
       return Status();

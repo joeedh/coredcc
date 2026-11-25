@@ -243,7 +243,7 @@ export class Panel {
 
   /* The command's last-used inputs. */
   private toolOptions(e: Entry) {
-    const path = `commandDefaults[${JSON.stringify(e.node.target)}]`
+    const path = e.node.optionsPath!
     let members: string[]
     try {
       members = cdcc.meta(this.ctx, path).members ?? []

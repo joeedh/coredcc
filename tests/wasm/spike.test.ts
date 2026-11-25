@@ -224,7 +224,8 @@ describe('coredcc wasm-st spike', () => {
     const root = cdcc.parseLayout(xml)
     assert.equal(root.kind, 'layout')
     const [prop, tool] = root.children!
-    assert.equal(prop.effectivePath, 'items["Cube"].weight')
+    assert.equal(prop.effectivePath, '/items["Cube"].weight')
+    assert.equal(cdcc.get(ctx, prop.effectivePath), 1)
     assert.deepEqual(prop.enabledIf, {path: 'enabled', not: true})
     assert.equal(tool.label, 'Weigh')
     assert.equal(tool.prefix, 'items["Cube"]')

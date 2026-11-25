@@ -29,6 +29,8 @@ namespace coredcc {
 class LastUsedStore {
  public:
   static constexpr const char *kExtName = "coredcc.LastUsedStore";
+  /** The collection's name, which layouts expect. */
+  static constexpr const char *kMember = "commandDefaults";
 
   explicit LastUsedStore(Runtime *rt) : rt_(*rt) {}
   ~LastUsedStore();
@@ -50,7 +52,7 @@ class LastUsedStore {
   Status load(std::string_view text);
 
   /** Adds the `commandDefaults` collection (keyed by command id) to `root`. */
-  void addCollectionTo(ApiStruct &root, std::string_view memberName = "commandDefaults");
+  void addCollectionTo(ApiStruct &root, std::string_view memberName = kMember);
 
   Status validate() const;
 

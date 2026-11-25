@@ -141,9 +141,16 @@ class Context {
   /** Bound without members, so interface slots can take a Context&. */
   static const litestl::binding::types::Struct<Context> *defineBindings();
 
+  /** None, a path or an address. */
+  using Prefix = std::variant<std::monostate, Path, StableRef>;
+  /** Whichever it is, for a PrefixScope later. */
+  const Prefix &anyPrefix() const
+  {
+    return prefix_;
+  }
+
  private:
   friend class PrefixScope;
-  using Prefix = std::variant<std::monostate, Path, StableRef>;
 
   Runtime &rt_;
   Library *lib_;
@@ -173,6 +180,10 @@ class PrefixScope {
   PrefixScope(Context &ctx, const StableRef *address) : ctx_(ctx), before_(ctx.prefix_)
   {
     address ? ctx.setPrefix(*address) : ctx.clearPrefix();
+  }
+  PrefixScope(Context &ctx, const Context::Prefix &prefix) : ctx_(ctx), before_(ctx.prefix_)
+  {
+    ctx.prefix_ = prefix;
   }
   ~PrefixScope()
   {

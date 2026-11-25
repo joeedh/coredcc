@@ -159,11 +159,15 @@ class Layout {
   /** The node with this `id`, or -1. */
   int findId(std::string_view id) const;
 
-  /** The prefix that the node's own paths are relative to. Empty: the Context's root. */
+  /** The prefix that the node's own paths are relative to. Paths that a Layout gives are whole,
+   * and start with `/`: they don't use a Context's prefix. */
   Path prefixOf(int node) const;
   /** The node's `path`, joined: a property's, or the prefix of a container's children. With
-   * no `path`, its prefixOf. Empty: the Context's root. */
+   * no `path`, its prefixOf. */
   Path effectivePath(int node) const;
+  /** Of a ToolOptions: the struct of its command's last-used inputs, `/commandDefaults["id"]`.
+   * The Context's root needs LastUsedStore::addCollectionTo. */
+  Path optionsPath(int node) const;
   /** Its VisibleIf or EnabledIf, joined. False without one. */
   bool condition(int node, LayoutAttrId id, LayoutCondition &out) const;
 
@@ -186,7 +190,8 @@ Result<Path> joinLayoutPath(const Path &prefix,
  * The layout as JSON, for frontends that aren't C++. Each node is an object:
  * - `kind`: layoutKindName's;
  * - its attributes by name, the bools as booleans. A Custom's free ones are in `attrs`;
- * - `effectivePath` of a node with a `path`: the joined path, "" for the root;
+ * - `effectivePath` of a node with a `path`: the joined path. Joined paths start with `/`;
+ * - `optionsPath` of a ToolOptions: what has its command's inputs as members;
  * - `visibleIf` and `enabledIf`: objects with the joined `path`, and `not` if it is negated;
  * - `prefix` of a Tool or ToolOptions, unless it is the root;
  * - `children`, if there are any.

@@ -28,6 +28,8 @@ export interface LayoutNode {
   /** As written. */
   path?: string
   effectivePath?: string
+  /** Of a toolOptions: what has the inputs that its command last ran with as members. */
+  optionsPath?: string
   visibleIf?: LayoutCondition
   enabledIf?: LayoutCondition
   widget?: string

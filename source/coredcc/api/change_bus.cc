@@ -40,6 +40,7 @@ struct Watcher {
   bool live = true;
   Context *ctx = nullptr;
   Path path;
+  Context::Prefix prefix;
   std::shared_ptr<ChangeBus::WatchFn> fn;
   /** Null without one. */
   std::shared_ptr<ChangeBus::MetaFn> metaFn;
@@ -216,6 +217,7 @@ Result<ScopedConnection> ChangeBus::watch(Context &ctx,
   w.id = state_->nextId++;
   w.ctx = &ctx;
   w.path = path;
+  w.prefix = ctx.anyPrefix();
   w.fn = std::make_shared<WatchFn>(std::move(fn));
   if (meta) {
     w.metaFn = std::make_shared<MetaFn>(std::move(meta));
@@ -283,8 +285,12 @@ int ChangeBus::flush()
     const Meta metaBefore = st->watchers[i].meta;
     Context *ctx = st->watchers[i].ctx;
     const Path path = st->watchers[i].path;
-    Reading now = read(*ctx, path);
-    store(st->watchers[i], std::move(now));
+    {
+      const Context::Prefix prefix = st->watchers[i].prefix;
+      PrefixScope scope(*ctx, prefix);
+      Reading now = read(*ctx, path);
+      store(st->watchers[i], std::move(now));
+    }
     bool metaFired = false;
     if (!(st->watchers[i].meta == metaBefore)) {
       if (std::shared_ptr<MetaFn> metaFn = st->watchers[i].metaFn) {

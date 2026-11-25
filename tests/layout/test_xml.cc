@@ -103,27 +103,28 @@ static void test_golden()
 {
   test_assert(equals(
       json(kExample),
-      R"x({"kind":"layout","path":"objects.active","effectivePath":"objects.active","id":"root",)x"
+      R"x({"kind":"layout","path":"objects.active","effectivePath":"/objects.active","id":"root",)x"
       R"x("class":"wide dark","children":[)x"
-      R"x({"kind":"panel","path":"transform","effectivePath":"objects.active.transform",)x"
+      R"x({"kind":"panel","path":"transform","effectivePath":"/objects.active.transform",)x"
       R"x("label":"Transform","icon":"move","description":"Where it is","closed":true,"children":[)x"
-      R"x({"kind":"prop","path":"location","effectivePath":"objects.active.transform.location",)x"
+      R"x({"kind":"prop","path":"location","effectivePath":"/objects.active.transform.location",)x"
       R"x("label":"Loc","widget":"vector","expand":true,"showLabel":false},)x"
-      R"x({"kind":"prop","path":"/scene.frame","effectivePath":"scene.frame","icon":"clock",)x"
-      R"x("description":"d","visibleIf":{"path":"objects.active.transform.locked","not":true},)x"
-      R"x("enabledIf":{"path":"objects.active.transform.mode[EDIT]"},"iconsOnly":false},)x"
+      R"x({"kind":"prop","path":"/scene.frame","effectivePath":"/scene.frame","icon":"clock",)x"
+      R"x("description":"d","visibleIf":{"path":"/objects.active.transform.locked","not":true},)x"
+      R"x("enabledIf":{"path":"/objects.active.transform.mode[EDIT]"},"iconsOnly":false},)x"
       R"x({"kind":"row","expand":false,"children":[{"kind":"column","expand":true},)x"
       R"x({"kind":"separator"},{"kind":"separator","id":"s"}]},)x"
       R"x({"kind":"tool","label":"Clear <all>","invocation":"object.clear(what='LOC')",)x"
-      R"x("iconsOnly":true,"prefix":"objects.active.transform"},)x"
+      R"x("iconsOnly":true,"prefix":"/objects.active.transform"},)x"
       R"x({"kind":"tool","label":"L","icon":"i","invocation":"a.b",)x"
-      R"x("prefix":"objects.active.transform"},)x"
+      R"x("prefix":"/objects.active.transform"},)x"
       R"x({"kind":"toolOptions","label":"Extrude","target":"mesh.extrude",)x"
-      R"x("prefix":"objects.active.transform"}]},)x"
-      R"x({"kind":"tabs","path":"/","effectivePath":"","visibleIf":{"path":"a.b[2]"},"children":[)x"
-      R"x({"kind":"tab","path":"x['a\\'b']","effectivePath":"x[\"a'b\"]","label":"One",)x"
+      R"x("optionsPath":"/commandDefaults[\"mesh.extrude\"]",)x"
+      R"x("prefix":"/objects.active.transform"}]},)x"
+      R"x({"kind":"tabs","path":"/","effectivePath":"/","visibleIf":{"path":"/a.b[2]"},"children":[)x"
+      R"x({"kind":"tab","path":"x['a\\'b']","effectivePath":"/x[\"a'b\"]","label":"One",)x"
       R"x("children":[{"kind":"label","label":"Some text & more"}]},{"kind":"tab","label":"Two"}]},)x"
-      R"x({"kind":"custom","path":"brush","effectivePath":"objects.active.brush","label":"P",)x"
+      R"x({"kind":"custom","path":"brush","effectivePath":"/objects.active.brush","label":"P",)x"
       R"x("tag":"brush.preview","attrs":{"closed":"yes","size":"32","text":"t"},"children":[)x"
       R"x({"kind":"custom","tag":"brush-tip","attrs":{"a.b-c":"1"},"children":[)x"
       R"x({"kind":"label","label":"in it","icon":"i"}]},)x"
@@ -131,7 +132,7 @@ static void test_golden()
   test_assert(equals(json("<layout/>"), R"({"kind":"layout"})"));
   test_assert(equals(json("<layout><row path='a'/><tool invocation='x'/></layout>"),
                      R"({"kind":"layout","children":[{"kind":"row","path":"a",)"
-                     R"("effectivePath":"a"},{"kind":"tool","invocation":"x"}]})"));
+                     R"("effectivePath":"/a"},{"kind":"tool","invocation":"x"}]})"));
   test_assert(layoutToJson(Layout()) == R"({"kind":"layout"})" &&
               Layout() == parsed("<layout></layout>"));
 }
@@ -192,27 +193,27 @@ static void test_prefixes()
     return -1;
   };
   const auto text = [](const Path &p) { return p.toString(); };
-  test_assert(l.prefixOf(0).size() == 0 && text(l.effectivePath(0)) == "objects.active");
+  test_assert(l.prefixOf(0).size() == 0 && text(l.effectivePath(0)) == "/objects.active");
   const int loc = find("location"), frame = find("/scene.frame");
-  test_assert(text(l.prefixOf(loc)) == "objects.active.transform");
-  test_assert(text(l.effectivePath(loc)) == "objects.active.transform.location");
-  test_assert(text(l.effectivePath(frame)) == "scene.frame");
+  test_assert(text(l.prefixOf(loc)) == "/objects.active.transform");
+  test_assert(text(l.effectivePath(loc)) == "/objects.active.transform.location");
+  test_assert(text(l.effectivePath(frame)) == "/scene.frame");
   LayoutCondition c;
   test_assert(l.condition(frame, LayoutAttrId::VisibleIf, c) && c.negated &&
-              text(c.path) == "objects.active.transform.locked");
+              text(c.path) == "/objects.active.transform.locked");
   test_assert(l.condition(frame, LayoutAttrId::EnabledIf, c) && !c.negated &&
-              text(c.path) == "objects.active.transform.mode[EDIT]");
+              text(c.path) == "/objects.active.transform.mode[EDIT]");
   test_assert(!l.condition(loc, LayoutAttrId::EnabledIf, c));
   const int tabs = find("/");
   test_assert(l.effectivePath(tabs).size() == 0);
-  test_assert(l.condition(tabs, LayoutAttrId::VisibleIf, c) && text(c.path) == "a.b[2]");
+  test_assert(l.condition(tabs, LayoutAttrId::VisibleIf, c) && text(c.path) == "/a.b[2]");
   const int tab = find("x['a\\'b']");
   /* A label has no path of its own. */
-  test_assert(text(l.effectivePath(l.node(tab).firstChild)) == "x[\"a'b\"]");
+  test_assert(text(l.effectivePath(l.node(tab).firstChild)) == "/x[\"a'b\"]");
   size_t at = 0;
   Path prefix = *parsePath("a.b");
   test_assert(text(*joinLayoutPath(prefix, "c[1]")) == "a.b.c[1]");
-  test_assert(text(*joinLayoutPath(prefix, "/c")) == "c" &&
+  test_assert(text(*joinLayoutPath(prefix, "/c")) == "/c" &&
               joinLayoutPath(prefix, "/")->size() == 0);
   test_assert(!joinLayoutPath(prefix, "c.", &at).ok() && at == 2);
   test_assert(!joinLayoutPath(prefix, "/c.", &at).ok() && at == 3);
@@ -220,7 +221,7 @@ static void test_prefixes()
   test_assert(!joinLayoutPath(prefix, "[0]").ok());
   /* A condition of a container is outside of its own prefix. */
   const Layout own = parsed(R"(<layout path="a"><row path="b" visibleIf="c"/></layout>)");
-  test_assert(own.condition(1, LayoutAttrId::VisibleIf, c) && text(c.path) == "a.c");
+  test_assert(own.condition(1, LayoutAttrId::VisibleIf, c) && text(c.path) == "/a.c");
 }
 
 /* What is XML here, and isn't a mistake. */
@@ -436,8 +437,8 @@ static void test_limits()
     return "<layout path='" + std::string(size_t(outer), 'a') + "'><prop path='" +
            std::string(size_t(inner), 'b') + "'/></layout>";
   };
-  test_assert(parsed(path(1000, 23)).nodeCount() == 2);
-  test_assert(fails(path(1000, 24),
+  test_assert(parsed(path(1000, 22)).nodeCount() == 2);
+  test_assert(fails(path(1000, 23),
                     "path: it is longer than 1024 bytes, with the prefixes around it", 1, 1029,
                     over));
   test_assert(parseLayout(path(1025, 1)).status().code() == over);

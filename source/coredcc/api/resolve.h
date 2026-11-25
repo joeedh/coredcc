@@ -55,7 +55,7 @@ struct ResolvedPath {
   litestl::util::Vector<PathTouch, 4> touched;
 };
 
-/** Resolves `path` from the context root (or its prefix). Errors name the failing
+/** Resolves `path` from the context root, or from its prefix unless `path` starts with `/`. Errors name the failing
  * segment's offset and suggest members. */
 Result<ResolvedPath> resolve(Context &ctx, const Path &path);
 Result<ResolvedPath> resolve(Context &ctx, std::string_view path);

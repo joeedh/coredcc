@@ -57,8 +57,8 @@ bool is(const sc::StringResult &r, const char *want)
 static void test_json()
 {
   test_assert(is(sc::layoutJson("<layout path='a'><prop path='b' id='x'/></layout>"),
-                 "{\"kind\":\"layout\",\"path\":\"a\",\"effectivePath\":\"a\",\"children\":[{"
-                 "\"kind\":\"prop\",\"path\":\"b\",\"effectivePath\":\"a.b\",\"id\":\"x\"}]}"));
+                 "{\"kind\":\"layout\",\"path\":\"a\",\"effectivePath\":\"/a\",\"children\":[{"
+                 "\"kind\":\"prop\",\"path\":\"b\",\"effectivePath\":\"/a.b\",\"id\":\"x\"}]}"));
   sc::StringResult r = sc::layoutJson("<layout>\n  <prp/>\n</layout>");
   test_assert(r.status.code() == StatusCode::InvalidArgument && r.value.size() == 0 &&
               strstr(r.status.message(), "layout 2:3: ") && r.status.suggestions().size() > 0);

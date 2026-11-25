@@ -326,11 +326,12 @@ Result<ResolvedPath> walkPath(Walk &w, const Path &path, bool through = false)
   return w.finish(ResolvedPath::Kind::Struct, nullptr);
 }
 
-Result<Walk *> startAtRoot(Context &ctx, Walk &w)
+/* At the root, or where the prefix is, which a path from the root doesn't use. */
+Result<Walk *> startAtRoot(Context &ctx, Walk &w, bool fromRoot)
 {
   w.cur = ctx.root();
   w.owner = ctx.root().owner;
-  if (ctx.hasPrefix()) {
+  if (ctx.hasPrefix() && !fromRoot) {
     Walk pw{ctx, w.reg, ctx.root(), ctx.root().owner, {}, {}};
     Result<ResolvedPath> base = ctx.prefix() ? walkPath(pw, *ctx.prefix(), true) :
                                                resolve(ctx, *ctx.prefixAddress());
@@ -374,7 +375,7 @@ namespace {
 Result<ResolvedPath> resolvePath(Context &ctx, const Path &path, bool forWrite)
 {
   Walk w{ctx, ctx.runtime().ext<ApiRegistry>(), {}, {}, {}, {}};
-  Result<Walk *> started = startAtRoot(ctx, w);
+  Result<Walk *> started = startAtRoot(ctx, w, path.fromRoot);
   if (!started.ok()) {
     return started.status();
   }

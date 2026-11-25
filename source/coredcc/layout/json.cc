@@ -60,7 +60,10 @@ std::string writeNode(JsonWriter &out, const Layout &layout, int i, const std::s
   if (free) {
     out.endObject();
   }
-  if ((n.kind == LayoutKind::Tool || n.kind == LayoutKind::ToolOptions) && !around.empty()) {
+  if (n.kind == LayoutKind::ToolOptions) {
+    out.key("optionsPath").string(layout.optionsPath(i).toString());
+  }
+  if ((n.kind == LayoutKind::Tool || n.kind == LayoutKind::ToolOptions) && around != "/") {
     out.key("prefix").string(around);
   }
   return within;
@@ -71,7 +74,7 @@ std::string writeNode(JsonWriter &out, const Layout &layout, int i, const std::s
 std::string layoutToJson(const Layout &layout)
 {
   JsonWriter out;
-  std::vector<std::string> prefixes(1); /* of the open nodes' children, the root's parent first */
+  std::vector<std::string> prefixes{"/"}; /* of the open nodes' children, the root's parent first */
   int i = 0;
   while (true) {
     out.beginObject();

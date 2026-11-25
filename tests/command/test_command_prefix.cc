@@ -1,6 +1,8 @@
 /* A Context's path prefix goes with a run: its undo, its redo and its sub-commands see it. */
 #include "command_fixture.h"
 
+#include "coredcc/api/change_bus.h"
+
 test_init;
 
 namespace {
@@ -276,6 +278,43 @@ static void test_fold()
   test_assert(w.at(w.mesh1, "test.folder()").ok() && w.s.history.size() == 4);
 }
 
+/* A path that starts with `/` doesn't use the prefix. */
+static void test_from_root()
+{
+  PrefixWorld w;
+  Context &ctx = w.s.ctx;
+  PrefixScope scope(ctx, &w.mesh1);
+  test_assert(getValue(ctx, "/objects[1].data.radius")->asFloat() == getValue(ctx, "radius")->asFloat());
+  test_assert(!getValue(ctx, "objects[1].data.radius").ok() && !getValue(ctx, "/radius").ok());
+  test_assert(resolve(ctx, "/")->ptr.data == ctx.root().data);
+  test_assert(setValueUndo(ctx, "/tool.strength", PropValue::ofFloat(0.25)).ok());
+  test_assert(w.s.w.tool.strength == 0.25 && w.s.ex.undo(ctx).ok() && w.s.w.tool.strength == 0.5);
+  test_assert(w.s.ex.redo(ctx).ok() && w.s.w.tool.strength == 0.25);
+  /* A prefix can be one, too. */
+  const Path path = *parsePath("/objects[0].data");
+  PrefixScope other(ctx, &path);
+  test_assert(getValue(ctx, "radius").ok());
+}
+
+/* A watcher keeps the prefix it was made with. */
+static void test_watcher_prefix()
+{
+  PrefixWorld w;
+  Context &ctx = w.s.ctx;
+  ChangeBus &bus = w.s.w.rt.ext<ChangeBus>();
+  int under = 0, root = 0;
+  ScopedConnection a, b;
+  {
+    PrefixScope scope(ctx, &w.mesh1);
+    a = bus.watch(ctx, "radius", [&](const PropValue &, const Status &s) { under += s.ok(); }).value();
+  }
+  b = bus.watch(ctx, "tool.count", [&](const PropValue &, const Status &s) { root += s.ok(); }).value();
+  test_assert(setValue(ctx, "objects[1].data.radius", PropValue::ofFloat(7)).ok() && bus.flush() == 1);
+  test_assert(setValue(ctx, "tool.count", PropValue::ofInt(77)).ok());
+  PrefixScope scope(ctx, &w.mesh0);
+  test_assert(bus.flush() == 1 && under == 1 && root == 1 && *ctx.prefix() == w.mesh0);
+}
+
 /* What a prefix names may change outside the history: undo, redo and rerun are where the run
  * was. */
 static void test_repointed()
@@ -378,6 +417,8 @@ int main()
   test_subs();
   test_rerun();
   test_fold();
+  test_from_root();
+  test_watcher_prefix();
   test_repointed();
   test_fold_repointed();
   test_interactive();

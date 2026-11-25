@@ -25,7 +25,7 @@ bool PathSegment::operator==(const PathSegment &b) const
 
 bool Path::operator==(const Path &b) const
 {
-  if (segments.size() != b.segments.size()) {
+  if (segments.size() != b.segments.size() || fromRoot != b.fromRoot) {
     return false;
   }
   for (int i = 0; i < size(); i++) {
@@ -38,7 +38,7 @@ bool Path::operator==(const Path &b) const
 
 uint64_t Path::computeHash() const
 {
-  uint64_t h = detail::kFnvOffset;
+  uint64_t h = fromRoot ? detail::fnv1a64("/", detail::kFnvOffset) : detail::kFnvOffset;
   for (const PathSegment &s : segments) {
     const char k = char(s.kind);
     h = detail::fnv1a64(std::string_view(&k, 1), h);
@@ -58,7 +58,7 @@ uint64_t Path::computeHash() const
 
 std::string Path::toString() const
 {
-  std::string out;
+  std::string out = fromRoot ? "/" : "";
   for (int i = 0; i < size(); i++) {
     const PathSegment &s = segments[i];
     switch (s.kind) {
@@ -158,11 +158,16 @@ bool parseInto(Lexer &lx, Path &out, Failure &fail)
     fail = lx.failHere("empty path");
     return false;
   }
+  out.fromRoot = lx.eat('/');
+  if (out.fromRoot && lx.atEnd()) {
+    return true;
+  }
+  const size_t first = lx.pos();
   if (!lx.identifier(name)) {
     fail = lx.failHere("expected a member name, got " + lx.describeHere());
     return false;
   }
-  out.segments.append(named(SegmentKind::Member, name, 0));
+  out.segments.append(named(SegmentKind::Member, name, first));
   while (!lx.atEnd()) {
     const size_t start = lx.pos();
     if (lx.eat('.')) {

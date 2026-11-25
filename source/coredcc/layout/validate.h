@@ -13,7 +13,7 @@ namespace coredcc {
 
 enum class LayoutSeverity : uint8_t {
   /** It can't be checked: it goes through a struct that isn't registered (yet), or names a key
-   * that a dynamic def may have. */
+   * that a dynamic def may have. Or a tool's command needs something of the frontend. */
   Warning,
   /** It can't work. */
   Error,
@@ -39,7 +39,9 @@ inline constexpr int kMaxLayoutIssues = 1000;
  * - conditions are Bools or enum keys;
  * - a Tool's command is registered, and has the inputs it gives, which take the literals. A
  *   pointer's path is checked from the prefix, and for the input's struct;
- * - a ToolOptions' command is registered.
+ *   An Interactive command is a Warning: a frontend begins it with beginInteractive. So is a
+ *   Private one, which isn't meant for users;
+ * - a ToolOptions' command is registered, and the root has the last-used inputs.
  *
  * Paths are checked by StaticResolver, so a path that fits one of the structs a pointer can have
  * is fine. Call it when all structs and commands are registered.

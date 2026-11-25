@@ -104,6 +104,20 @@ static void test_errors()
   test_assert(failsAt("a\xC3\xA9", "byte 0xc3") == 1);
 }
 
+static void test_from_root()
+{
+  Path p = ok("/a[0].b");
+  test_assert(p.fromRoot && p.size() == 3 && p[0].offset == 1 && p[1].offset == 2);
+  test_assert(p.toString() == "/a[0].b" && ok("/a[0].b") == p);
+  Path other = ok("a[0].b");
+  test_assert(!other.fromRoot && !(other == p) && other.computeHash() != p.computeHash());
+  Path root = ok("/");
+  test_assert(root.fromRoot && root.size() == 0 && root.toString() == "/" && root == Path::root());
+  test_assert(!(root == Path()) && root.computeHash() != Path().computeHash());
+  test_assert(failsAt("//a") == 1 && failsAt("/.a") == 1 && failsAt("/[0]") == 1);
+  test_assert(failsAt("a/b") == 1 && failsAt("/a/b") == 2 && failsAt("/a.") == 3);
+}
+
 static void test_hash_and_equality()
 {
   test_assert(ok("a.b") == ok("a.b"));
@@ -181,6 +195,7 @@ int main()
   test_keys_and_escapes();
   test_errors();
   test_hash_and_equality();
+  test_from_root();
   test_cache();
   return test_end();
 }

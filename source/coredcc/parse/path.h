@@ -9,11 +9,12 @@
  *
  * Grammar, with no whitespace anywhere:
  *
- *     path    := member ( '.' member | '[' sub ']' )*
+ *     path    := [ '/' ] member ( '.' member | '[' sub ']' )* | '/'
  *     member  := [A-Za-z_][A-Za-z0-9_]*
  *     sub     := integer | quoted | '#' integer | member
  *     quoted  := '"' ... '"' | '\'' ... '\''   escapes: \\ \" \' \n \t
  *
+ * A leading `/` means the Context's root, whatever its prefix is; `/` alone is the root.
  * Integers are non-negative and must fit int64. NUL is never valid, raw or escaped.
  * `active` and `length` are ordinary members here; the resolver gives them meaning on
  * collections.
@@ -59,6 +60,8 @@ struct PathSegment {
 /** A parsed path. */
 struct Path {
   litestl::util::Vector<PathSegment> segments;
+  /** Starts with `/`: from the Context's root, also if it has a prefix. */
+  bool fromRoot = false;
 
   int size() const
   {
@@ -70,8 +73,15 @@ struct Path {
   }
   bool operator==(const Path &b) const;
   uint64_t computeHash() const;
+  /** The root, `/`. */
+  static Path root()
+  {
+    Path p;
+    p.fromRoot = true;
+    return p;
+  }
   /** The canonical spelling: string keys double-quoted, integers without leading zeros.
-   * parsePath(toString()) gives back an equal Path. */
+   * parsePath(toString()) gives back an equal Path, but for the empty one. */
   std::string toString() const;
 };
 

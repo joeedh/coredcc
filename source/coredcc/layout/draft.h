@@ -63,7 +63,7 @@ bool isXmlName(std::string_view s);
 /** The first byte that is a control character (but tab and line ends), U+FFFE, U+FFFF or not
  * UTF-8; s.size() if there is none. `what` says what it is. */
 size_t firstBadByte(std::string_view s, const char *&what);
-/** joinLayoutPath as text. `prefix` is canonical text. */
+/** joinLayoutPath as text. `prefix` is canonical text from the root. */
 Result<std::string> joinPathText(const std::string &prefix,
                                  std::string_view path,
                                  size_t *errorOffset = nullptr);
