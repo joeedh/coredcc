@@ -705,6 +705,26 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 - `foreignImplementable` has a reason per slot. It also refuses reference returns and owned
   pointers, which litestl's dispatch refuses on the call.
 
+### Step 5
+- **Needs litestl PR #14.**
+- `draw` depends on `bvh`, for `Ray` and `BvhPlane`.
+- **`validate()` checks handedness with one determinant:** normalized device coordinates (x right, y
+  up, depth away from the eye) are left-handed, so the sign of det(proj · view), flipped for
+  reversed depth, gives the world's. It also finds mirrored images and, in orthographic views, a
+  wrong `reversedZ`.
+- **Not decidable from the matrices,** and documented: a [0, 1] projection declared as [-1, 1]
+  (another near plane), and a float-precision projection with a distant far plane declared as
+  infinite or not.
+- **Refused:** oblique near planes (the depth row depending on x or y), and an orthographic
+  `infiniteFar`.
+- Clip and view transforms are applied one after the other, not as one matrix, and unprojecting
+  inverts them separately. Pixels are within 1e-3 px to offsets of 1e6 (tested).
+- The region's radius also grows by 1e-9: with the eye at the origin, a plane has no constant to
+  pad, and the mutant without it loses points.
+- **The grep test** finds `.inverse(` and `*=` in `draw/` and `scene/`. `Matrix * Vec` can't be told
+  from `Matrix * Matrix` by text; that stays with reviews.
+- Survivor: unproject's zero test at infinity. The inverse's entries cancel exactly in every test.
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms

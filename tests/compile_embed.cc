@@ -75,6 +75,7 @@
 #include "coredcc/layout/validate.h"
 #include "coredcc/layout/xml.h"
 #include "coredcc/lib/attachment.h"
+#include "coredcc/draw/view.h"
 #include "coredcc/lib/block.h"
 #include "coredcc/lib/bag_refs.h"
 #include "coredcc/lib/block_io.h"
@@ -178,6 +179,7 @@ int main()
     test_assert(coredcc::layoutToJson(*layout.finish()).size() > 0);
     test_assert(coredcc::parseLayout("<layout/>").ok());
     test_assert(!coredcc::AnyBvh().build(rt, coredcc::AnyBvhSource()).ok());
+    test_assert(!coredcc::ViewMath().set(coredcc::View()).ok());
     test_assert(rt.validateAll().ok());
   }
   return test_end();

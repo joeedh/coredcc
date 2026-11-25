@@ -13,6 +13,7 @@ coredcc_test(test_bvh_kernels SOURCES bvh/test_bvh_kernels.cc DEPS coredcc_bvh)
 coredcc_test(test_bvh_build SOURCES bvh/test_bvh_build.cc DEPS coredcc_bvh)
 coredcc_test(test_bvh_any_source SOURCES bvh/test_bvh_any_source.cc DEPS coredcc_bind coredcc_bvh)
 coredcc_test(test_bvh_queries SOURCES bvh/test_bvh_queries.cc DEPS coredcc_bvh)
+coredcc_test(test_draw_view SOURCES draw/test_view.cc DEPS coredcc_draw)
 coredcc_test(test_props_value SOURCES props/test_value.cc DEPS coredcc_props)
 coredcc_test(test_props_def SOURCES props/test_def.cc DEPS coredcc_props)
 coredcc_test(test_props_units SOURCES props/test_units.cc DEPS coredcc_props)
@@ -98,11 +99,14 @@ coredcc_test(test_bind_catalog SOURCES bind/test_bind_catalog.cc DEPS coredcc_bi
 coredcc_test(test_bind_graph SOURCES bind/test_bind_graph.cc DEPS coredcc_bind)
 coredcc_test(test_bind_graph_results SOURCES bind/test_bind_graph_results.cc DEPS coredcc_bind)
 if(WIN32)
-  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_bvh coredcc_command coredcc_layout
-                                  coredcc_graph)
+  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS
+    coredcc_bvh coredcc_draw coredcc_command coredcc_layout coredcc_graph)
 endif()
 
 add_subdirectory(bench)
+
+add_test(NAME matrix_ops COMMAND ${CMAKE_COMMAND} -DROOT=${PROJECT_SOURCE_DIR}
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/matrix_ops.cmake)
 
 # Compile-fail tests. Each also builds the same file without the define, which must succeed.
 if(COREDCC_WERROR)
