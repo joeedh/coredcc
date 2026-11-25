@@ -74,6 +74,9 @@ static void test_validate()
   test_assert(hasMsg(PropertyDef::floatProp("r").range(5, 1).validate(), "hard range"));
   test_assert(hasMsg(PropertyDef::floatProp("r").range(0, 1).softRange(0, 2).validate(),
                      "inside the hard range"));
+  test_assert(hasMsg(PropertyDef::floatProp("r").unit(UnitFamily::Length, "kg").validate(),
+                     "'kg' is no unit of Length"));
+  test_assert(PropertyDef::floatProp("r").unit(UnitFamily::Length, "mm").validate().ok());
   test_assert(hasMsg(PropertyDef::floatProp("r").precision(16).validate(), "precision"));
   test_assert(hasMsg(PropertyDef::enumProp("e").validate(), "at least one item"));
   test_assert(hasMsg(PropertyDef::enumProp("e").item("A", 0).item("A", 1).validate(),
@@ -89,6 +92,30 @@ static void test_validate()
   test_assert(hasMsg(
       PropertyDef::intProp("n").defaultValue(PropValue::ofString("x")).validate(),
       "is a String, not a Int"));
+}
+
+static void test_display()
+{
+  const auto shows = [](UnitFamily f, const char *unit, const char *want) {
+    const PropertyDef d = PropertyDef::floatProp("r").unit(f, unit);
+    return strcmp(d.numeric()->displaySymbol(), want) == 0;
+  };
+  test_assert(shows(UnitFamily::Length, "", "m") && shows(UnitFamily::Length, "millimeters", "mm"));
+  test_assert(shows(UnitFamily::None, "", "") && shows(UnitFamily::Length, "kg", "m"));
+  for (const char *name : {"None", "Length", "Angle", "Time", "Mass", "Factor"}) {
+    test_assert(unitFamilyOfName(name) && strcmp(unitFamilyName(*unitFamilyOfName(name)), name) == 0);
+  }
+  test_assert(!unitFamilyOfName("length") && !unitFamilyOfName(""));
+
+  const auto name = [](PropKind k, PropSubtype s, int i, const char *want) {
+    const char *got = componentName(k, s, i);
+    return want ? got && strcmp(got, want) == 0 : got == nullptr;
+  };
+  test_assert(name(PropKind::Vec2, PropSubtype::None, 0, "X") && name(PropKind::Vec2, PropSubtype::None, 2, nullptr));
+  test_assert(name(PropKind::Vec3, PropSubtype::Euler, 2, "Z") && name(PropKind::Quat, PropSubtype::None, 3, "W"));
+  test_assert(name(PropKind::Vec4, PropSubtype::Color, 3, "A") && name(PropKind::Vec3, PropSubtype::ColorGamma, 0, "R"));
+  test_assert(name(PropKind::Mat4, PropSubtype::None, 0, nullptr) && name(PropKind::Float, PropSubtype::None, 0, nullptr));
+  test_assert(name(PropKind::Vec3, PropSubtype::None, -1, nullptr));
 }
 
 static void test_coerce_numbers()
@@ -341,6 +368,7 @@ int main()
   test_ui_names();
   test_defaults_and_meta();
   test_validate();
+  test_display();
   test_coerce_numbers();
   test_coerce_vectors();
   test_coerce_enums();

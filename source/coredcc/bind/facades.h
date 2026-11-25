@@ -102,6 +102,9 @@ ValueResult makePointer(Context &ctx, const string &text);
 BoolResult readBool(const PropValue &v);
 IntResult readInt(const PropValue &v);
 FloatResult readFloat(const PropValue &v);
+/** units::format and units::parse. `family` is a name, as in a meta's `unit`; "" is None. */
+StringResult formatUnit(double value, const string &family, const string &unit, int32_t precision);
+FloatResult parseUnit(const string &text, const string &family, const string &unit);
 StringResult readString(const PropValue &v);
 /** Component `i` of a Float, vector, Mat4 or Quat; OutOfRange past componentCount(). */
 FloatResult readComponent(const PropValue &v, int32_t i);

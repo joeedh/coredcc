@@ -10,10 +10,12 @@
 #include "coredcc/command/set_property.h"
 #include "coredcc/graph/node_type.h"
 #include "coredcc/parse/invocation.h"
+#include "coredcc/props/units.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -224,6 +226,25 @@ StringResult pointerText(Context &ctx, const PropValue &v)
   const StableRef *ref = v.tryPointer();
   return ref ? ok<StringResult>(string(formatRef(ctx.runtime(), *ref).c_str())) :
                failed<StringResult>(wrongType(v, "Pointer"));
+}
+static Result<UnitFamily> familyOf(const string &name)
+{
+  const std::optional<UnitFamily> f = unitFamilyOfName(name.size() > 0 ? view(name) : "None");
+  return f ? Result<UnitFamily>(*f) :
+             error(StatusCode::InvalidArgument,
+                   std::string("'") + name.c_str() + "' is no unit family");
+}
+StringResult formatUnit(double value, const string &family, const string &unit, int32_t precision)
+{
+  Result<UnitFamily> f = familyOf(family);
+  return f.ok() ? ok<StringResult>(string(units::format(value, *f, view(unit), precision).c_str())) :
+                  failed<StringResult>(f.status());
+}
+FloatResult parseUnit(const string &text, const string &family, const string &unit)
+{
+  Result<UnitFamily> f = familyOf(family);
+  Result<double> v = f.ok() ? units::parse(view(text), *f, view(unit)) : f.status();
+  return v.ok() ? ok<FloatResult>(*v) : failed<FloatResult>(v.status());
 }
 string valueToString(const PropValue &v)
 {

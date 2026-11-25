@@ -620,6 +620,17 @@ Result<PropertyDef> getMeta(Context &ctx, const ResolvedPath &rp)
       if (rp.member->readOnly() || effectiveDef(ctx, rp).hasAccess(PropAccess::ReadOnly)) {
         d.access(PropAccess::ReadOnly);
       }
+      const PropertyDef whole = effectiveDef(ctx, rp);
+      const EnumItem *item = whole.enumMeta() ? whole.enumMeta()->findKey(rp.enumKey.c_str()) :
+                                                nullptr;
+      const PropValue &v = whole.defaultValue();
+      if (item && v.tryEnum()) {
+        d.defaultValue(PropValue::ofBool(v.asEnum() == item->value));
+      }
+      else if (item && v.tryFlags()) {
+        const uint64_t bit = uint64_t(item->value);
+        d.defaultValue(PropValue::ofBool((v.asFlags() & bit) == bit));
+      }
       return d;
     }
     default:

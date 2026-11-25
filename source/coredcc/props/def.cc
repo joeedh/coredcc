@@ -256,9 +256,29 @@ PropertyDef &PropertyDef::precision(int p)
   return *this;
 }
 
-PropertyDef &PropertyDef::unit(UnitFamily u)
+const char *NumericMeta::displaySymbol() const
+{
+  if (const units::Unit *u = units::findUnit(unit, displayUnit.c_str())) {
+    return u->symbol;
+  }
+  return units::unitsOf(unit).empty() ? "" : units::unitsOf(unit)[0].symbol;
+}
+
+const char *componentName(PropKind kind, PropSubtype subtype, int i)
+{
+  static constexpr const char *kAxes[] = {"X", "Y", "Z", "W"};
+  static constexpr const char *kColors[] = {"R", "G", "B", "A"};
+  if (kind == PropKind::Mat4 || i < 0 || i >= componentCount(kind) || componentCount(kind) < 2) {
+    return nullptr;
+  }
+  const bool color = subtype == PropSubtype::Color || subtype == PropSubtype::ColorGamma;
+  return color ? kColors[i] : kAxes[i];
+}
+
+PropertyDef &PropertyDef::unit(UnitFamily u, std::string_view display)
 {
   numericMut().unit = u;
+  numericMut().displayUnit = lsString(display);
   return *this;
 }
 
@@ -296,7 +316,7 @@ bool same(const NumericMeta &a, const NumericMeta &b)
 {
   return a.hardMin == b.hardMin && a.hardMax == b.hardMax && a.softMin == b.softMin &&
          a.softMax == b.softMax && a.step == b.step && a.precision == b.precision &&
-         a.unit == b.unit;
+         a.unit == b.unit && a.displayUnit == b.displayUnit;
 }
 
 bool same(const EnumMeta &a, const EnumMeta &b)
@@ -374,6 +394,10 @@ Status PropertyDef::validate() const
     }
     if (!(m->step >= 0)) {
       return fail("step must be >= 0");
+    }
+    if (m->displayUnit.size() > 0 && !units::findUnit(m->unit, m->displayUnit.c_str())) {
+      return fail(std::string("'") + m->displayUnit.c_str() + "' is no unit of " +
+                  unitFamilyName(m->unit));
     }
     if (kind_ == PropKind::Int && !(std::ceil(m->hardMin) <= std::floor(m->hardMax))) {
       return fail("the hard range holds no integer");

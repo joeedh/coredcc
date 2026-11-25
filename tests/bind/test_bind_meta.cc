@@ -52,7 +52,7 @@ void registerRich(Runtime &rt, Rich &rich)
                  .step(0.25)
                  .precision(2)
                  .subtype(PropSubtype::Distance)
-                 .unit(UnitFamily::Length)
+                 .unit(UnitFamily::Length, "centimeters")
                  .access(PropAccess::Animatable | PropAccess::NoUndo)
                  .ui(PropUi{false, true, SliderStyle::Slider, false})
                  .defaultValue(PropValue::ofFloat(1.5)),
@@ -136,7 +136,7 @@ static void test_members()
                      "\"icon\":\"drop\",\"subtype\":\"Distance\",\"access\":[\"NoUndo\","
                      "\"Animatable\"],\"ui\":{\"expand\":true,\"slider\":\"Slider\"},"
                      "\"hardMin\":-1,\"hardMax\":100,\"softMin\":0,\"softMax\":10,\"step\":0.25,"
-                     "\"precision\":2,\"unit\":\"Length\",\"default\":1.5}"));
+                     "\"precision\":2,\"unit\":\"Length\",\"displayUnit\":\"cm\",\"default\":1.5}"));
   test_assert(metaIs(m.ctx, "i",
                      "{\"kind\":\"Int\"," + at + "i\",\"struct\":\"Rich\",\"readOnly\":false,"
                      "\"name\":\"i\",\"uiName\":\"I\",\"access\":[],\"ui\":{},\"hardMin\":0,"
@@ -170,15 +170,22 @@ static void test_other_kinds()
   test_assert(metaIs(m.ctx, "v[1]",
                      "{\"kind\":\"Component\",\"canonical\":\"@owner(rich).v\","
                      "\"struct\":\"Rich\",\"component\":1,\"of\":\"Vec2\",\"readOnly\":false,"
-                     "\"name\":\"v\",\"uiName\":\"V\",\"access\":[],\"ui\":{},\"hardMin\":0,"
+                     "\"name\":\"v\",\"uiName\":\"Y\",\"access\":[],\"ui\":{},\"hardMin\":0,"
                      "\"hardMax\":1,\"softMin\":0,\"softMax\":1,\"precision\":3,"
-                     "\"default\":[0,0.5]}"));
+                     "\"default\":0.5}"));
   test_assert(metaIs(m.ctx, "e[A]",
                      "{\"kind\":\"EnumKey\",\"canonical\":\"@owner(rich).e\","
                      "\"struct\":\"Rich\",\"key\":\"A\",\"of\":\"Enum\",\"readOnly\":false,"
                      "\"name\":\"A\",\"uiName\":\"First\",\"description\":\"the first\","
                      "\"icon\":\"one\",\"access\":[],\"ui\":{},\"default\":false}"));
+  test_assert(hasField(m.ctx, "e[B]", "\"default\":true}"));
   test_assert(hasField(m.ctx, "flags[Y]", "\"of\":\"Flags\""));
+  test_assert(hasField(m.ctx, "flags[X]", "\"default\":true}") &&
+              hasField(m.ctx, "flags[Z]", "\"default\":false}"));
+  test_assert(hasField(m.ctx, "cam[NONE]", "\"default\":true}") &&
+              hasField(m.ctx, "cam[Cam1]", "\"default\":false}"));
+  test_assert(hasField(m.ctx, "v", "\"components\":[\"X\",\"Y\"]"));
+  test_assert(pathMeta(m.ctx, "v[0]")->find("components") == std::string::npos);
   test_assert(metaIs(scene, "objects.length",
                      "{\"kind\":\"Length\",\"canonical\":\"@owner(scene).objects\","
                      "\"struct\":\"Scene\",\"target\":\"Object\",\"readOnly\":true,"
@@ -271,6 +278,13 @@ static void test_facades()
   test_assert(kind(scene, "objects.length") == "Length" && kind(scene, "objects[0]") == "Struct");
   test_assert(sc::pathMeta(ctx, "e").status.ok() &&
               std::string(sc::pathMeta(ctx, "e").value.c_str()) == *pathMeta(ctx, "e"));
+  test_assert(std::string(sc::formatUnit(0.0125, "Length", "cm", 2).value.c_str()) == "1.25 cm");
+  test_assert(std::string(sc::formatUnit(0.5, "", "", 1).value.c_str()) == "0.5");
+  test_assert(sc::formatUnit(1, "Lenth", "", 1).status.code() == StatusCode::InvalidArgument);
+  test_assert(sc::parseUnit("2 mm", "Length", "cm").value == 0.002);
+  test_assert(sc::parseUnit("2", "Length", "cm").value == 0.02 && sc::parseUnit("2", "", "").value == 2);
+  test_assert(!sc::parseUnit("2 kg", "Length", "cm").status.ok());
+  test_assert(!sc::parseUnit("2", "nope", "").status.ok());
   test_assert(sc::pathMeta(ctx, "nope").status.code() == StatusCode::NotFound);
 
   const auto keys = [&](const char *path, const PropValue &v) {

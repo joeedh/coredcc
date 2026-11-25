@@ -315,6 +315,21 @@ describe('coredcc wasm-st UI', () => {
     assert.deepEqual([cdcc.get(ctx, cube), cdcc.get(ctx, ball)], [1, 7])
   })
 
+  test('numbers in units, and the parts of a vector', () => {
+    const length = {unit: 'Length', displayUnit: 'cm', precision: 1}
+    assert.equal(cdcc.formatNumber(0.0126, length), '1.3 cm')
+    assert.equal(cdcc.parseNumber('1.5', length), 0.015)
+    assert.equal(cdcc.parseNumber('2 m', length), 2)
+    assert.throws(() => cdcc.parseNumber('2 kg', length), fails(StatusCode.InvalidArgument, /kg/))
+    const strength = cdcc.meta(ctx, 'strength')
+    assert.equal(cdcc.formatNumber(0.25, strength), '0.25')
+    assert.equal(cdcc.parseNumber(' 0.25 ', strength), 0.25)
+    assert.deepEqual(cdcc.meta(ctx, 'offset').components, ['X', 'Y', 'Z'])
+    const y = cdcc.meta(ctx, 'offset[1]')
+    assert.deepEqual([y.uiName, y.default, y.component], ['Y', 0, 1])
+    assert.deepEqual([cdcc.meta(ctx, 'mode[OBJECT]').default, cdcc.meta(ctx, 'mode[EDIT]').default], [true, false])
+  })
+
   test('the typed calls are the plain ones', () => {
     const doc = cdcc.typed<Root, Commands>(ctx)
     assert.equal(doc.ctx, ctx)

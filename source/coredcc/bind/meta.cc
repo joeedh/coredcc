@@ -138,6 +138,7 @@ void writeNumeric(JsonWriter &out, const NumericMeta &n)
   out.key("precision").integer(n.precision);
   if (n.unit != UnitFamily::None) {
     out.key("unit").string(unitFamilyName(n.unit));
+    out.key("displayUnit").string(n.displaySymbol());
   }
 }
 
@@ -186,6 +187,11 @@ void writeStruct(JsonWriter &out, const ApiRegistry &reg, StructId id)
 
 } // namespace
 
+static void writeProperty(JsonWriter &out,
+                          const Runtime &rt,
+                          const PropertyDef &def,
+                          const PropValue &fallback);
+
 const char *pathKindName(const ResolvedPath &rp)
 {
   switch (rp.kind) {
@@ -204,6 +210,14 @@ const char *pathKindName(const ResolvedPath &rp)
 }
 
 void writePropertyMeta(JsonWriter &out, const Runtime &rt, const PropertyDef &def)
+{
+  writeProperty(out, rt, def, def.defaultValue());
+}
+
+static void writeProperty(JsonWriter &out,
+                          const Runtime &rt,
+                          const PropertyDef &def,
+                          const PropValue &fallback)
 {
   out.key("name").string(def.apiName().c_str());
   out.key("uiName").string(def.uiName().c_str());
@@ -226,9 +240,9 @@ void writePropertyMeta(JsonWriter &out, const Runtime &rt, const PropertyDef &de
   if (const TargetMeta *t = def.target()) {
     writeStructName(out, rt, "target", t->target);
   }
-  if (!def.defaultValue().isNone()) {
+  if (!fallback.isNone()) {
     out.key("default");
-    writeValue(out, rt, def, def.defaultValue());
+    writeValue(out, rt, def, fallback);
   }
 }
 
@@ -254,9 +268,16 @@ Result<std::string> pathMeta(Context &ctx, std::string_view path)
   if (!def.ok()) {
     return def.status();
   }
+  PropValue fallback = def->defaultValue();
   if (rp->kind == ResolvedPath::Kind::Component) {
     out.key("component").integer(rp->component);
     out.key("of").string(propKindName(def->kind()));
+    if (const char *name = componentName(def->kind(), def->subtype(), rp->component)) {
+      def->uiName(name);
+    }
+    if (rp->component < def->defaultValue().componentCount()) {
+      fallback = PropValue::ofFloat(def->defaultValue().component(rp->component));
+    }
   }
   else if (rp->kind == ResolvedPath::Kind::EnumKey) {
     out.key("key").string(rp->enumKey.c_str());
@@ -275,7 +296,16 @@ Result<std::string> pathMeta(Context &ctx, std::string_view path)
   if (rp->member->isDynamic()) {
     out.key("dynamic").boolean(true);
   }
-  writePropertyMeta(out, rt, *def);
+  if (const char *first = componentName(def->kind(), def->subtype(), 0);
+      first && rp->kind == ResolvedPath::Kind::Member)
+  {
+    out.key("components").beginArray();
+    for (int i = 0; i < componentCount(def->kind()); i++) {
+      out.string(componentName(def->kind(), def->subtype(), i));
+    }
+    out.endArray();
+  }
+  writeProperty(out, rt, *def, fallback);
   out.endObject();
   return out.take();
 }

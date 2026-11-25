@@ -9,6 +9,7 @@
 
 #include "coredcc/base/status.h"
 
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -18,6 +19,8 @@ namespace coredcc {
 enum class UnitFamily : uint8_t { None, Length, Angle, Time, Mass, Factor };
 
 const char *unitFamilyName(UnitFamily family);
+/** The family of that name, if there is one. */
+std::optional<UnitFamily> unitFamilyOfName(std::string_view name);
 
 namespace units {
 

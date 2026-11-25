@@ -111,7 +111,7 @@ static void test_same()
   test_assert(def().sameAs(def().dynamic([](PropertyDef &, const void *) {})));
   const std::vector<PropertyDef> others = {
       def().range(0, 2), def().range(-1, 1), def().softRange(0, 0.5), def().softRange(0.5, 1),
-      def().step(2), def().precision(1), def().unit(UnitFamily::Length), def().uiName("g"),
+      def().step(2), def().precision(1), def().unit(UnitFamily::Length), def().unit(UnitFamily::None, "x"), def().uiName("g"),
       def().description("e"), def().icon("j"), def().subtype(PropSubtype::Angle),
       def().access(PropAccess::ReadOnly), def().defaultValue(PropValue::ofFloat(0.5)),
       def().ui(PropUi{true, false, SliderStyle::Default, false}),

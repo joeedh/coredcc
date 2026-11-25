@@ -45,7 +45,17 @@ struct NumericMeta {
   /** Decimals shown, 0 to 15. */
   int precision = 3;
   UnitFamily unit = UnitFamily::None;
+  /** What to show values in: a unit of the family (units::findUnit), or empty for its base unit.
+   * Values are in the base unit all the same. */
+  litestl::util::string displayUnit;
+
+  /** displayUnit's symbol, or the base unit's. Empty for a family without units. */
+  const char *displaySymbol() const;
 };
+
+/** The name of component `i` for a UI: "X", "Y", "Z" and "W" of vectors and quaternions, "R", "G",
+ * "B" and "A" of colors. Null for others, as a Mat4's. */
+const char *componentName(PropKind kind, PropSubtype subtype, int i);
 
 /** Enum and Flags properties. Flags items are single bits. */
 struct EnumMeta {
@@ -138,7 +148,8 @@ class PropertyDef {
   PropertyDef &softRange(double softMin, double softMax);
   PropertyDef &step(double s);
   PropertyDef &precision(int p);
-  PropertyDef &unit(UnitFamily u);
+  /** `display` as NumericMeta::displayUnit. */
+  PropertyDef &unit(UnitFamily u, std::string_view display = {});
   /* Enum and Flags only. */
   PropertyDef &item(std::string_view key,
                     int64_t value,

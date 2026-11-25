@@ -72,6 +72,11 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::makePointer", script::makePointer, MARGS("ctx", "text"));
   BIND_FACADE(mgr, "coredcc::readBool", script::readBool, MARGS("v"));
   BIND_FACADE(mgr, "coredcc::readInt", script::readInt, MARGS("v"));
+  BIND_FACADE(mgr,
+              "coredcc::formatUnit",
+              script::formatUnit,
+              MARGS("value", "family", "unit", "precision"));
+  BIND_FACADE(mgr, "coredcc::parseUnit", script::parseUnit, MARGS("text", "family", "unit"));
   BIND_FACADE(mgr, "coredcc::readFloat", script::readFloat, MARGS("v"));
   BIND_FACADE(mgr, "coredcc::readString", script::readString, MARGS("v"));
   BIND_FACADE(mgr, "coredcc::readComponent", script::readComponent, MARGS("v", "i"));

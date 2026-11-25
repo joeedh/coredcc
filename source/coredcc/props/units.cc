@@ -27,6 +27,18 @@ const char *unitFamilyName(UnitFamily family)
   return "?";
 }
 
+std::optional<UnitFamily> unitFamilyOfName(std::string_view name)
+{
+  for (const UnitFamily f : {UnitFamily::None, UnitFamily::Length, UnitFamily::Angle,
+                             UnitFamily::Time, UnitFamily::Mass, UnitFamily::Factor})
+  {
+    if (name == unitFamilyName(f)) {
+      return f;
+    }
+  }
+  return std::nullopt;
+}
+
 namespace units {
 namespace {
 
