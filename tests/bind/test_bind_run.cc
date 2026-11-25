@@ -141,7 +141,7 @@ static void test_run()
   test_assert(!sc::runAt(ctx, "", "test.choose", inputs({{"mode", sc::makeString("SLOW").value}}), false)
                    .status.ok());
   /* Under a prefix, or not, whatever the Context's is. */
-  const Path tool = *parsePath("tool");
+  const Path tool = *parsePath("objects[0].data");
   PrefixScope scope(ctx, &tool);
   test_assert(hasMsg(sc::canRunAt(ctx, "", "test.dragRadius", inputs({}), true), "no member 'radius'"));
   test_assert(sc::canRunAt(ctx, "/objects[0].data", "test.dragRadius", inputs({}), true).ok());

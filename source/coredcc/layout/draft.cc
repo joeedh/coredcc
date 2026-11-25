@@ -202,9 +202,6 @@ class Checker {
         return fail(i, a.offset,
                     invalid("a " + element(n.kind) + " has no '" + layoutAttrName(a.id) + "'"));
       }
-      if (a.id == Id::Free && n.kind != Kind::Custom && !isData(a.name)) {
-        return fail(i, a.offset, invalid("a " + element(n.kind) + " has no '" + a.name + "'"));
-      }
       if (a.id == Id::Free && !layout_detail::isXmlName(a.name)) {
         return fail(i, a.offset, invalid("'" + a.name + "' isn't an attribute's name"));
       }

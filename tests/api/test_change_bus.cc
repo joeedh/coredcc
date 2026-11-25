@@ -454,6 +454,7 @@ static void test_pending()
       bus.notify(tool, "m" + std::to_string(i));
     }
     const bool past = n > ChangeBus::kMaxPending;
+    bus.notify(tool, "m" + std::to_string(n - 1));
     test_assert(bus.epoch() == epoch + past && bus.pendingCount() == (past ? 1 : n));
     w.tool.strength += 0.125f;
     test_assert(bus.flush() == (past ? 1 : 0) && bus.pendingCount() == 0 && bus.flush() == 0);

@@ -322,7 +322,8 @@ class Validator {
   const Layout &layout_;
   StaticResolver resolver_;
   StaticStructs root_;
-  /** Of a container, for the paths in it, and of a Tool, for its command's. Nothing, and not unknown, if it was wrong. */
+  /** Of a container, for the paths in it, and of a Tool, for its command's. Nothing, and not
+   * unknown, if it was wrong. */
   std::vector<StaticStructs> prefixes_;
   Vector<LayoutIssue> issues_;
   /** There are more than that: it stops. */

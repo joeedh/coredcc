@@ -6,6 +6,8 @@
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/bind/graph_facades.h"
 #include "coredcc/bind/manager.h"
+#include "coredcc/bind/path_reader.h"
+#include "coredcc/bind/run_facades.h"
 
 #include <functional>
 #include <memory>
@@ -335,6 +337,10 @@ void testGates()
              sc::graphSetInput(g.value, "in", sc::makeFloat(1)),
              sc::graphClearInput(g.value, "in"),
              sc::graphEvaluate(g.value, "out").status,
+             sc::readerRead(d.ctx, sc::newPathReader()),
+             sc::readerTake(d.ctx, sc::newPathReader(), true).status,
+             sc::interactiveId(d.ctx).status,
+             sc::runAt(d.ctx, "", "core.block.purge", sc::newRunInputs(), true).status,
              registerScale(d, host, "js.inside", scale)};
     };
     std::vector<Status> seen;
@@ -345,7 +351,7 @@ void testGates()
     };
     const int steps = d.history.size();
     test_assert(evaluate(8));
-    test_assert(seen.size() == 25);
+    test_assert(seen.size() == 29);
     for (size_t i = 0; i < seen.size(); i++) {
       if (!hasCode(seen[i], StatusCode::Busy)) {
         printf("facade %d\n", int(i));

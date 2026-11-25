@@ -283,14 +283,14 @@ describe('TA2: the panel of a layout', () => {
         <column id="active" path="activeItem" visibleIf="enabled"><prop id="w" path="weight"/></column>
         <row id="nine" path="items[9]"/><panel id="zero" path="items[0]"/>
         <toolOptions target="testapp.addCount"/>
-        <row id="wrong" path="activeItm"/><custom tag="x" id="custom" path="items[9]"/>
+        <row id="wrong" path="activeItm"/><row id="odd" path="items[9]" enabledIf="nope"/><custom tag="x" id="custom" path="items[9]"/>
         <label id="some" visibleIf="label">x</label><label id="none" visibleIf="!label">x</label>
         <label id="has" visibleIf="/activeItem">x</label><label id="lots" visibleIf="items.length">x</label>
       </layout>`,
     })
     const visible = async () => {
       const all = await nodes()
-      return ['active', 'nine', 'zero', 'wrong', 'custom', 'some', 'none', 'has', 'lots'].filter((id) => all.get(id)!.visible)
+      return ['active', 'nine', 'zero', 'wrong', 'odd', 'custom', 'some', 'none', 'has', 'lots'].filter((id) => all.get(id)!.visible)
     }
     await value('set', 'label', '')
     assert.deepEqual(await visible(), ['active', 'zero', 'wrong', 'custom', 'none', 'has', 'lots'])
@@ -506,7 +506,7 @@ describe('TA2: the panel of a layout', () => {
     })
     assert.deepEqual(issues.map((i: any) => [i.severity, i.node]), [['Error', 1], ['Error', 2]])
     assert.match((await node('a')).error!, /did you mean.*count/)
-    assert.match((await node('b')).reason!, /nope/)
+    assert.match((await nodes({flush: false})).get('b')!.reason!, /nope/)
     assert.match((await refused('panelClick', 'b')).message, /disabled/)
     await shows('c', 5)
     assert.match((await refused('panelSet', 'a', 1)).message, /no input/)

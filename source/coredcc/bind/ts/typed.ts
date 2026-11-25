@@ -114,7 +114,7 @@ type Bracket<P extends string> = P extends `["${infer K}"]${infer R}`
         : K extends `${bigint}`
           ? [K, R, 'index']
           : [K, R, 'name']
-      : never
+      : undefined
 
 /* What a struct (or any of several) has by the name. */
 type MemberOf<T, N extends string> = T extends unknown ? (N extends keyof T ? (N extends `$${string}` ? never : T[N]) : never) : never

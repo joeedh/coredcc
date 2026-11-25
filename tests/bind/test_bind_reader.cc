@@ -168,7 +168,7 @@ static void test_take()
   };
   for (const char *path : {"tool.free", "tool.locked", "objects[0].name", "objects[0].mode",
                            "objects[0].flags", "objects[0].location", "objects[0].data",
-                           "objects[0].mode[EDIT]", "objects.length"})
+                           "objects[0].mode[EDIT]", "objects.length", "tool.pick"})
   {
     add(r, path);
   }
@@ -182,13 +182,15 @@ static void test_take()
   test_assert(sc::flushChanges(ctx).value == 2);
   test_assert(is(take(false), "[[5,1,\"v\",[0,-0.5,0]],[6,1,\"p\",null]]") && is(take(false), "[]"));
   test_assert(sc::readerTakeChanged(r) == -1);
+  test_assert(sc::setValue(ctx, "tool.count", sc::makeInt(9)).ok());
+  test_assert(sc::flushChanges(ctx).value == 1 && is(take(false), "[[9,2,\"i\",0]]"));
   s.w.object(0).mesh.target = s.w.meshId(0);
   test_assert(sc::readerRead(ctx, r).ok());
   const StableRef mesh = getValue(ctx, "objects[0].data")->asPointer();
   const std::string want =
       "[[0,0,\"f\",0],[1,0,\"b\",false],[2,0,\"s\",\"Cube\"],[3,0,\"e\",0,\"OBJECT\"],"
       "[4,0,\"g\",0,[]],[5,0,\"v\",[0,-0.5,0]],[6,0,\"p\",\"" +
-      formatRef(ctx.runtime(), mesh) + "\"],[7,0,\"b\",false],[8,0,\"i\",2]]";
+      formatRef(ctx.runtime(), mesh) + "\"],[7,0,\"b\",false],[8,0,\"i\",2],[9,0,\"i\",0]]";
   test_assert(is(take(true), want.c_str()));
   /* What no item has, what JSON can't hold, and errors. */
   s.w.tool.free = -std::numeric_limits<double>::infinity();
@@ -207,7 +209,7 @@ static void test_take()
   const std::string code = std::to_string(int(StatusCode::OutOfRange));
   test_assert(gone.find("[3,3,\"!\"," + code + ",\"") != gone.npos);
   test_assert(gone.find("\"OutOfRange: ") != gone.npos);
-  test_assert(gone.find("[8,1,\"i\",0]]") != gone.npos && is(take(false), "[]"));
+  test_assert(gone.find("[8,1,\"i\",0]") != gone.npos && is(take(false), "[]"));
 }
 
 /* As many as a layout can have, in time. */

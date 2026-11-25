@@ -194,6 +194,7 @@ describe('coredcc wasm-st spike', () => {
     cdcc.cancelGesture(ctx, cancelled)
     assert.deepEqual([cdcc.get(ctx, 'strength'), cdcc.get(ctx, 'count')], [0.5, 0])
     assert.equal(cdcc.canRedo(ctx), false)
+    assert.throws(() => cdcc.cancelGesture(ctx, cancelled + 1), fails(StatusCode.InvalidArgument, /beginGesture/))
     for (const g of [0, -1, 1.5, NaN, 2 ** 60]) assert.throws(() => cdcc.set(ctx, 'strength', 1, g), TypeError)
   })
 

@@ -37,7 +37,7 @@ const odd: cdcc.Catalog = {
       name: 'Kinds',
       uiName: 'K',
       members: [
-        {...int('e'), kind: 'Enum', items: [{key: 'a"|never', value: 0, uiName: ''}]},
+        {...int('e'), kind: 'Enum', items: [{key: 'a"|never\'', value: 0, uiName: ''}]},
         {...int('none'), kind: 'Enum'},
         {...int('open'), kind: 'Enum', items: [], dynamic: true},
         {...int('openFlags'), kind: 'Flags', items: [{key: 'A', value: 1, uiName: ''}], dynamic: true},
@@ -49,6 +49,7 @@ const odd: cdcc.Catalog = {
         {...int('none2'), kind: 'Pointer', targets: []},
         {...int('maybe'), access: ['Optional', 'ReadOnly']},
         {...int('v'), kind: 'Vec2', readOnly: true},
+        {...int('fixed'), kind: 'Flags', readOnly: true, items: [{key: 'A', value: 1, uiName: ''}]},
         {...int('list'), kind: 'Collection', target: 'cycle', active: true},
         {...int('plain'), kind: 'Collection', target: 'Kinds', active: false},
         {...int('m'), kind: 'Mat4', readOnly: true},

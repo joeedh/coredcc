@@ -483,6 +483,7 @@ static void test_versions()
                            "<!-- c --></gone><prop path='a'/></row><tabs><nope/><tab id='t'/></tabs></layout>";
   test_assert(fails("<layout" + body, "there is no attribute 'foo'", 1, 9));
   test_assert(fails("<layout version='1'" + body, "there is no attribute 'foo'", 1, 21));
+  test_assert(fails("<layout foo='1' bar='2'/>", "there is no attribute 'foo'", 1, 9));
   for (const std::string &head : {"<layout version='2'", "<layout foo='1' version='2'"}) {
     const std::string rest = head.size() > 19 ? body.substr(8) : body;
     Result<Layout> r = parseLayout(head + rest);

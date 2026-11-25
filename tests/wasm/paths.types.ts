@@ -55,7 +55,7 @@ check<Equal<odd.a_b_2['x'], odd.Prop<'String'>>>(true)
 check<Equal<keyof odd.a_b_2, '$struct' | 'x' | '__proto__' | 'constructor' | 'odd "name"\n'>>(true)
 check<Equal<odd._3d, {readonly $struct: '3d'; c: odd.Prop<'Int'>}>>(true)
 check<Equal<odd.Anystring_2_2, odd.string_2 | odd.a_b | odd.a_b_2>>(true)
-check<Equal<odd.Kinds['e'], odd.Prop<'Enum', 'a"|never'>>>(true)
+check<Equal<odd.Kinds['e'], odd.Prop<'Enum', 'a"|never\''>>>(true)
 check<Equal<odd.Kinds['none'], odd.Prop<'Enum'>>>(true)
 check<Equal<odd.Kinds['open'], odd.Prop<'Enum', string>>>(true)
 check<Equal<odd.Kinds['openFlags'], odd.Prop<'Flags', (string & {}) | 'A'>>>(true)
@@ -95,6 +95,14 @@ check<Equal<WritableOf<TestApp['flags']>, readonly ('SELECT' | 'HIDE')[] | Int>>
 check<Equal<WritableOf<TestApp['items']>, never>>(true)
 check<Equal<WritableOf<odd.Kinds['maybe']>, never>>(true)
 check<Equal<WritableOf<odd.Kinds['new']>, Writable>>(true)
+check<Equal<WritableOf<odd.Kinds['list']>, never>>(true)
+check<Equal<WritableOf<At<odd.Kinds, 'v[0]'>>, never>>(true)
+check<Equal<WritableOf<At<odd.Kinds, 'fixed[A]'>>, never>>(true)
+check<Equal<ValueOf<At<odd.Kinds, 'fixed[A]'>>, boolean>>(true)
+/* The reason is in the type of the parameter. */
+check<Equal<At<TestApp, 'count.x'>['$no'], 'a value has no members'>>(true)
+check<Equal<At<TestApp, 'items.weight'>['$no'] extends `a collection has ${string}` ? 1 : 2, 1>>(true)
+check<Equal<At<TestApp, 'cuont'>['$no'], "no member 'cuont'">>(true)
 type OddCommand = odd.Commands['a"\'b']
 check<Equal<InputsOf<OddCommand>, {in?: Int; p?: RefTo<'a-b'> | null}>>(true)
 check<Equal<OutputsOf<OddCommand>, {o: Int | undefined}>>(true)
@@ -151,6 +159,8 @@ doc.get('count.x')
 doc.get('mode[NOPE]')
 // @ts-expect-error: not a key
 doc.get('mode[0]')
+// @ts-expect-error: not a key
+doc.get('focus[0]')
 // @ts-expect-error: a number
 doc.get('offset[x]')
 // @ts-expect-error: past the end of a path
