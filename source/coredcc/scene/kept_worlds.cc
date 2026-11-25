@@ -30,15 +30,15 @@ bool samePlace(const mat4d &a, const mat4d &b)
 bool inheritsOtherwise(const TransformState &a, const TransformState &b)
 {
   const double side = a.rotation.dot(b.rotation) < 0.0 ? -1.0 : 1.0;
-  double e = 0.0;
+  bool same = true;
   for (int i = 0; i < 4; i++) {
-    e = std::fmax(e, std::fabs(a.rotation[i] - side * b.rotation[i]));
+    same = same && std::fabs(a.rotation[i] - side * b.rotation[i]) <= 1e-9;
   }
   for (int i = 0; i < 3; i++) {
     const double size = std::fmax(std::fabs(a.localScale[i]), std::fabs(b.localScale[i]));
-    e = std::fmax(e, size > 0.0 ? std::fabs(a.localScale[i] - b.localScale[i]) / size : 0.0);
+    same = same && std::fabs(a.localScale[i] - b.localScale[i]) <= 1e-9 * size;
   }
-  return !(e <= 1e-9);
+  return !same;
 }
 
 Result<TransformState> StateCache::state(BlockHandle object)

@@ -27,6 +27,9 @@ Linear operator*(const Linear &a, const Linear &b);
 mat4d affine(const Linear &linear, const double3 &translation);
 double3 translationOf(const mat4d &m);
 
+/** Two rotations that are equally near to another, but for rounding: the first one counts. */
+inline constexpr double kSameNearness = 1e-9;
+
 struct RotationScale {
   quatd rotation;
   double3 scale;

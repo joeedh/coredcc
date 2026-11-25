@@ -656,7 +656,8 @@ Euler conversion and no matrix decompose. P0b fixes the quaternion type and adds
   - **Spatial** (v1): `closestElements(co, radius, domain)` for snapping, plus the
     pick queries in object space. This was called Pickable in the first draft.
   - **OverlayDrawable** (v1, coredcc's own capability): draws into a DrawList.
-  - **Elements** (v1): handles plus `topoStamp`.
+  - **ElementAccess** (v1): handles plus `topoStamp`. Elements in earlier drafts; the code has that name
+    for a graph payload.
   - **TransformableElements** (P4): like faberforge's `ITransDataType`.
   - **Symmetry** (P4): the transform and stroke tools need it.
   - **Attributes, Triangles, ActiveElement**: deferred until a client needs them.

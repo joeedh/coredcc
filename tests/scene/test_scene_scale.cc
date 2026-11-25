@@ -346,6 +346,31 @@ void testSameAnswer(const Types &t)
   }
 }
 
+/* Two mirrors are equally near: the first, also with rounding on either side of it. */
+void testTie(const Types &t)
+{
+  const double half = 0.785398163397448309616;
+  double want = 0.0, solvedAngle = 0.0;
+  for (int i = -20; i <= 20; i++) {
+    const double turn = (half + i * 1e-14) / 2;
+    const TransformDelta d =
+        scaleDelta(quatd(0, 0, std::sin(turn), std::cos(turn)), double3(-1, 1, 1));
+    const ChannelBlock base = t.trs->defaults();
+    const Result<ChannelBlock> out = solveDelta(*t.trs, EvalCtx(base), base, d, TransformState());
+    must(out.status());
+    const double angle = out->get(trs::kRotationEuler + 2);
+    test_assert(std::fabs(std::fabs(angle) - 2 * half) < 1e-9);
+    want = i == -20 ? angle : want;
+    test_assert(std::fabs(angle - want) < 1e-9);
+    const Result<ChannelBlock> solved =
+        solveWorld(*t.trs, EvalCtx(base), d.matrix(), TransformState(), SetWorldMode::Exact);
+    must(solved.status());
+    solvedAngle = i == -20 ? solved->get(trs::kRotationEuler + 2) : solvedAngle;
+    test_assert(std::fabs(solved->get(trs::kRotationEuler + 2) - solvedAngle) < 1e-9);
+  }
+  test_assert(want > 0.0 && std::fabs(std::fabs(solvedAngle) - 2 * half) < 1e-9);
+}
+
 /* A model that scales its one axis, and answers setWorld as it is told to. */
 struct OneAxis {
   Status answer;
@@ -542,6 +567,7 @@ int main()
     testDrag(t);
     testOtherAxes(t);
     testSameAnswer(t);
+    testTie(t);
     testMatrix(t);
     testExactByRotation(t);
     testParents(t);

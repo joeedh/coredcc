@@ -429,6 +429,93 @@ void testBelow()
   test_assert(out.get("approximate")->asInt() == 0); /* `under` is kept: it is a child of `rrs` */
 }
 
+/* A type that holds only a place: its answer is near, with the rotation and scale that were there. */
+struct PlaceOnly {
+  TransformState evaluate(const EvalCtx &c, const TransformState &) const
+  {
+    TransformState s;
+    s.world[3][0] = c.channel(0);
+    return s;
+  }
+  Status setWorld(const EvalCtx &,
+                  const mat4d &target,
+                  const TransformState &,
+                  SetWorldMode,
+                  ChannelBlock &out) const
+  {
+    out.set(0, solve::translationOf(target)[0]);
+    return Status();
+  }
+  static lbt::Struct<PlaceOnly> *defineBindings()
+  {
+    auto *st = new lbt::Struct<PlaceOnly>("test::PlaceOnly", sizeof(PlaceOnly));
+    BIND_STRUCT_METHOD(st, evaluate, MARGS("ctx", "parent"));
+    BIND_STRUCT_METHOD(st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
+    return st;
+  }
+};
+
+void testBelowNear()
+{
+  CommandDoc d;
+  must(registerImpl<TransformModel, PlaceOnly>(d.rt, "test.placeOnly"));
+  Result<Owned<TransformModel>> owned =
+      own<TransformModel>(d.rt, "test.placeOnly", litestl::alloc::New<PlaceOnly>("PlaceOnly"));
+  must(owned.status());
+  TransformTypeInfo info;
+  info.name = "test.placeOnly";
+  info.channels.append(PropertyDef::floatProp("x"));
+  must(d.rt.ext<TransformRegistry>().add(std::move(info), std::move(owned).value()).status());
+  d.addFnModel("test.sheared", [](const EvalCtx &, const TransformState &p) {
+    TransformState s = p;
+    s.world[1][0] = 0.5;
+    return s;
+  });
+  const BlockHandle p = d.object("p"), below = d.object("below", 1.0);
+  d.obj(p).setTransformType("test.sheared");
+  d.obj(p).channels = ChannelBlock(1);
+  d.obj(below).channels.set(trs::kLocation + 1, 2.0);
+  d.setParent(below, p);
+  d.select({p});
+  PropertyBag out =
+      d.cycle(kSetTransformTypeCommand, {{"type", PropValue::ofString("test.placeOnly")}});
+  test_assert(out.get("approximate")->asInt() == 2); /* `below` moved by 1 in x */
+  test_assert(d.stateOf(below).world[3][0] == 1.0);
+}
+
+void (*g_onFree)() = nullptr;
+CommandDoc *g_doc = nullptr;
+
+/* A Library that destroys blocks isn't written to. */
+void testPendingBusy()
+{
+  CommandDoc d;
+  const BlockHandle a = d.object("a", 1.0), gone = d.hostObject("gone", 2.0);
+  StoredFields fields;
+  fields.channels = true;
+  StoredObject v;
+  v.channels = d.trs->defaults();
+  v.channels.set(0, 9.0);
+  detail::PendingWrites &pending = d.rt.ext<detail::PendingWrites>();
+  pending.add(*d.lib, d.idOf(a), fields, v);
+  must(d.sc().remove(*d.lib, d.idOf(gone)).status());
+  g_doc = &d;
+  g_onFree = [] {
+    test_assert(g_doc->lib->busy());
+    g_doc->rt.ext<detail::PendingWrites>().flush(*g_doc->lib);
+    test_assert(waiting(*g_doc) == 1);
+  };
+  d.slot(gone).free = [](void *p) {
+    g_onFree();
+    delete static_cast<Host *>(p);
+  };
+  must(d.lib->markDeleted(gone));
+  must(d.lib->destroyFromHistory(gone));
+  test_assert(!d.lib->get(gone) && d.obj(a).channels.get(0) == 1.0 && waiting(d) == 1);
+  d.evaluate();
+  test_assert(d.obj(a).channels.get(0) == 9.0 && waiting(d) == 0);
+}
+
 void testInherits()
 {
   Rand r(43);
@@ -440,6 +527,10 @@ void testInherits()
   for (int i = 0; i < 4; i++) {
     b.rotation[i] = -a.rotation[i]; /* the same rotation */
   }
+  test_assert(!detail::inheritsOtherwise(a, b));
+  b.localScale[0] = NAN;
+  test_assert(detail::inheritsOtherwise(a, b));
+  b.localScale[0] = 1 + 1e-12;
   test_assert(!detail::inheritsOtherwise(a, b));
   b.localScale[2] = 1e-3;
   test_assert(detail::inheritsOtherwise(a, b));
@@ -588,6 +679,8 @@ int main()
   testSkips();
   testOutOfReach();
   testBelow();
+  testBelowNear();
+  testPendingBusy();
   testInherits();
   testBelowRandom();
   testCells();

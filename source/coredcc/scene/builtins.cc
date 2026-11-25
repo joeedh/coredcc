@@ -166,7 +166,7 @@ Status takeMirror(const Linear &x,
       return unsolvable();
     }
     const double nearness = std::fabs(rs.rotation.dot(current));
-    if (nearness > best + 1e-9) {
+    if (nearness > best + solve::kSameNearness) {
       best = nearness;
       turned = !sameRotation(rs.rotation, current);
       rotation = turned ? rs.rotation : current;

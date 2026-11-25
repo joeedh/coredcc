@@ -255,7 +255,7 @@ bool rotationScale(const Linear &x,
     }
     const auto nearness = [&](const Candidate &q) { return std::fabs(q.rotation.dot(current)); };
     if (!best || k.changes < best->changes ||
-        (k.changes == best->changes && nearness(k) > nearness(*best)))
+        (k.changes == best->changes && nearness(k) > nearness(*best) + kSameNearness))
     {
       best = &k;
     }

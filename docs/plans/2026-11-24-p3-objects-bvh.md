@@ -403,7 +403,7 @@ struct TransformModel : IfaceRef {
   Vector<int32_t>` (object space), optional `pick(const PickQuery &, PickSink &)`. Without `pick`
   the object answers with its bounds.
 - **`Invalidation`:** `invalidate(uint32 kinds)`.
-- **`Elements`:** `topoStamp`, `elementCount(domain)`, `positions(handles, domain) ->
+- **`ElementAccess`** (`Elements` in this plan's first version): `topoStamp`, `elementCount(domain)`, `positions(handles, domain) ->
   Vector<double>`.
 - `objectQuery<I>(lib, handle)` asks the data block first, then the object.
 - **`foreignImplementable` is extended:** a struct return needs bound default and copy
@@ -1039,7 +1039,16 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   whatever happens; `TransformRegistry::canAdd` refuses a NUL in a name; drags are documented with
   `updateInteractive`. Five mutations, all found (one by a static_assert).
 - **Renamed:** the capability `Elements` is `ElementAccess`, since graphs have a payload `Elements` (both
-  in master and in `compile_embed`). Architecture §8 still says Elements.
+  in master and in `compile_embed`). Architecture §8 has the new name.
+- **The six guards and ties** that the mutations left, afterwards:
+  - Equally near rotations: tested, also through `solveWorld`. `rotationScale` broke such ties by rounding and
+    has `takeMirror`'s rule now (`solve::kSameNearness`).
+  - An approximation that changes neither rotation nor scale, and a busy Library: tested.
+  - 0 / 0 in `inheritsOtherwise`: written without a division; NaN counts as different, tested.
+  - The two bounds of a frame rate's numbers in a file: argued. They guard a cast of a double that an int64
+    can't hold, which is undefined. Where it gives a value (x64, saturating wasm), `FrameRate::of` refuses
+    it, so only a sanitizer could see the difference.
+  - Eight mutations of what replaced them, all found.
 - **Deferred:** solving descendants that inherit FBX-style (17), a data matrix, instancing and sub-keys
   (18), `TransformModel::upgrade` from scripts (with 20, round 3).
 - **Mutations:** 155, each alone. 111 were found at first and 7 didn't compile. Of the 37 that survived, 8
