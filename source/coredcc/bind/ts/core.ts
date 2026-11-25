@@ -154,6 +154,19 @@ export function load(module: object, getManager = 'CDCC_GetManager', opts: {repl
  * one. */
 export const scriptSlots = {depth: 0}
 
+/* What goes with a session's context, before its host. */
+const owners = new WeakMap<Context, Set<Disposable>>()
+
+/** Disposes of `owned` with the session that `ctx` is of, at the latest. */
+export function disposeWith(ctx: Context, owned: Disposable) {
+  const set = owners.get(ctx)
+  if (!set) throw new Error("expected a session's context")
+  set.add(owned)
+}
+export function forget(ctx: Context, owned: Disposable) {
+  owners.get(ctx)?.delete(owned)
+}
+
 /**
  * A document's context, tied to the host object that owns it. The context keeps the
  * host alive, so GC can't free the document while the context is reachable, and
@@ -165,6 +178,7 @@ export class Session implements Disposable {
   constructor(host: Disposable, ctx: Context) {
     this.host = host
     this.ctx = ctx
+    owners.set(ctx, new Set())
     Object.defineProperty(ctx, '__host', {value: host, enumerable: false})
   }
   get disposed() {
@@ -174,6 +188,8 @@ export class Session implements Disposable {
   [Symbol.dispose]() {
     if (!this.host) return
     if (scriptSlots.depth > 0) throw new Error("Session: can't close the document from inside a command")
+    for (const owned of [...(owners.get(this.ctx) ?? [])]) owned[Symbol.dispose]()
+    owners.delete(this.ctx)
     ;(this.ctx as unknown as {ptr: number}).ptr = 0
     const host = this.host
     this.host = undefined
@@ -234,6 +250,19 @@ export function toJs(ctx: Context | undefined, v: PropValue): Value {
     }
     default:
       throw new TypeError(`toJs: a value of an unknown type (${v.type()})`)
+  }
+}
+
+/** As toJs, but an enum is its key, and flags their keys. A number without an item stays one. */
+export function toNamed(ctx: Context, path: string, v: PropValue): NamedValue {
+  const flags = v.type() === PropValueType.Flags
+  if (!flags && v.type() !== PropValueType.Enum) return toJs(ctx, v)
+  try {
+    const keys = take(cd.valueKeys(ctx, path, v), (s) => s)
+    return !flags ? keys : keys === '' ? [] : keys.split('|')
+  } catch (e) {
+    if (e instanceof ScriptError && e.code === StatusCode.NotFound) return toJs(ctx, v)
+    throw e
   }
 }
 

@@ -100,19 +100,20 @@ struct ChangeBus::State final : detail::SignalStateBase {
   uint64_t epoch = 0;
   uint64_t flushedEpoch = 0;
   int flushDepth = 0;
-  bool needsCompact = false;
+  /** Dead watchers, which go when they are half of the list: many go at a time. */
+  int dead = 0;
 
   void disconnect(uint64_t id) override
   {
     for (Watcher &w : watchers) {
       if (w.id == id && w.live) {
         w.live = false;
-        needsCompact = true;
+        w.fn.reset();
+        dead++;
+        break;
       }
     }
-    if (flushDepth == 0) {
-      compact();
-    }
+    compact();
   }
   bool connected(uint64_t id) const override
   {
@@ -125,7 +126,7 @@ struct ChangeBus::State final : detail::SignalStateBase {
   }
   void compact()
   {
-    if (!needsCompact) {
+    if (flushDepth > 0 || dead * 2 < int(watchers.size())) {
       return;
     }
     Vector<Watcher> kept;
@@ -135,7 +136,7 @@ struct ChangeBus::State final : detail::SignalStateBase {
       }
     }
     watchers = std::move(kept);
-    needsCompact = false;
+    dead = 0;
   }
 };
 
@@ -254,9 +255,7 @@ int ChangeBus::flush()
     fired++;
   }
   st->flushDepth--;
-  if (st->flushDepth == 0) {
-    st->compact();
-  }
+  st->compact();
   return fired;
 }
 

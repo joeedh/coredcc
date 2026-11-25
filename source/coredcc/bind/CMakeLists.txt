@@ -4,8 +4,10 @@ coredcc_library(coredcc_bind
     foreign_command.cc
     graph_facades.cc
     layout_facades.cc
+    library_facades.cc
     manager.cc
     meta.cc
+    path_reader.cc
   DEPS
     coredcc_graph
     coredcc_layout

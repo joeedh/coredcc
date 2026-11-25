@@ -50,6 +50,14 @@ struct ItemProvider {
     in.ref(item->other);
     return Status();
   }
+  BlockId rekey(const Datablock &imported, const RekeyContext &context) const
+  {
+    BlockId id{imported.id().client, LocalId{0, 1}};
+    while (!context.isFree(id)) {
+      id.local.lo++;
+    }
+    return id;
+  }
   static lbt::Struct<ItemProvider> *defineBindings()
   {
     auto *st = new lbt::Struct<ItemProvider>("testapp::ItemProvider", sizeof(ItemProvider));
@@ -58,6 +66,7 @@ struct ItemProvider {
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
+    BIND_STRUCT_METHOD(st, rekey, MARGS("imported", "context"));
     return st;
   }
 };

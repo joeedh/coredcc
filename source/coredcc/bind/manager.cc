@@ -4,6 +4,8 @@
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/bind/graph_facades.h"
 #include "coredcc/bind/layout_facades.h"
+#include "coredcc/bind/library_facades.h"
+#include "coredcc/bind/path_reader.h"
 #include "coredcc/command/command.h"
 
 #include "litestl/binding/binding.h"
@@ -38,6 +40,9 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<GraphKernel>());
   mgr->add(Bind<ScriptGraph>());
   mgr->add(Bind<GraphResult>());
+  mgr->add(Bind<PathReader>());
+  mgr->add(Bind<ScriptBytes>());
+  mgr->add(Bind<SaveResult>());
 }
 
 void addFacades(litestl::binding::BindingManager *mgr)
@@ -113,6 +118,34 @@ void addLayoutFacades(litestl::binding::BindingManager *mgr)
                 "coredcc::invokeAt",
                 script::invokeAt,
                 MARGS("ctx", "prefix", "invocation"));
+
+  BIND_FUNCTION(mgr, "coredcc::newPathReader", script::newPathReader, MARGS());
+  BIND_FUNCTION(mgr, "coredcc::readerAdd", script::readerAdd, MARGS("reader", "path"));
+  BIND_FUNCTION(mgr, "coredcc::readerCount", script::readerCount, MARGS("reader"));
+  BIND_FUNCTION(mgr, "coredcc::readerRead", script::readerRead, MARGS("ctx", "reader"));
+  BIND_FUNCTION(mgr, "coredcc::readerValue", script::readerValue, MARGS("reader", "i"));
+  BIND_FUNCTION(mgr, "coredcc::readerWatch", script::readerWatch, MARGS("ctx", "reader"));
+  BIND_FUNCTION(mgr, "coredcc::readerUnwatch", script::readerUnwatch, MARGS("reader"));
+  BIND_FUNCTION(mgr, "coredcc::readerTakeChanged", script::readerTakeChanged, MARGS("reader"));
+  BIND_FUNCTION(mgr, "coredcc::flushChanges", script::flushChanges, MARGS("ctx"));
+  BIND_FUNCTION(mgr, "coredcc::watchedCount", script::watchedCount, MARGS("ctx"));
+}
+
+void addLibraryFacades(litestl::binding::BindingManager *mgr)
+{
+  BIND_FUNCTION(mgr, "coredcc::bytesSize", script::bytesSize, MARGS("bytes"));
+  BIND_FUNCTION(mgr, "coredcc::bytesRead", script::bytesRead, MARGS("bytes", "offset", "out"));
+  BIND_FUNCTION(mgr, "coredcc::librarySave", script::librarySave, MARGS("ctx"));
+  BIND_FUNCTION(mgr,
+                "coredcc::libraryLoad",
+                script::libraryLoad,
+                MARGS("ctx", "bytes", "sourceName", "maxBytes", "maxBlocks"));
+  BIND_FUNCTION(mgr,
+                "coredcc::libraryAppend",
+                script::libraryAppend,
+                MARGS("ctx", "bytes", "sourceName", "maxBytes", "maxBlocks"));
+  BIND_FUNCTION(mgr, "coredcc::libraryResolve", script::libraryResolve, MARGS("ctx"));
+  BIND_FUNCTION(mgr, "coredcc::clearHistory", script::clearHistory, MARGS("ctx"));
 }
 
 void addGraphFacades(litestl::binding::BindingManager *mgr)
@@ -188,6 +221,7 @@ void addBindings(litestl::binding::BindingManager *mgr)
   addFacades(mgr);
   addGraphFacades(mgr);
   addLayoutFacades(mgr);
+  addLibraryFacades(mgr);
 }
 
 litestl::binding::BindingManager *bindings()

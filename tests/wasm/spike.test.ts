@@ -255,6 +255,114 @@ describe('coredcc wasm-st spike', () => {
     assert.throws(() => cdcc.invokeAt(ctx, '', tool.invocation!), fails(StatusCode.NotFound, /weight/))
   })
 
+  test('PathReader reads, watches, and goes with its session', () => {
+    const reader = new cdcc.PathReader(ctx, ['strength', 'mode', 'flags', 'items["Cone"].weight'])
+    assert.equal(reader.count, 4)
+    assert.throws(() => reader.value(0), fails(StatusCode.FailedPrecondition, /wasn't read/))
+    reader.read()
+    assert.equal(reader.value(0), 0.5)
+    assert.equal(reader.value(1), 0)
+    assert.equal(reader.value(1, {names: true}), 'OBJECT')
+    assert.deepEqual(reader.value(2, {names: true}), [])
+    assert.throws(() => reader.value(3), ScriptError)
+    assert.throws(() => reader.value(4), fails(StatusCode.OutOfRange, /path 4/))
+    assert.throws(() => reader.add('a..b'), ScriptError)
+    assert.throws(() => new cdcc.PathReader(ctx, ['count', 'a..b']), ScriptError)
+
+    reader.watch()
+    assert.equal(spike.watched(hostOf(ctx)), 4)
+    assert.equal(cdcc.flushChanges(ctx), 0)
+    cdcc.set(ctx, 'strength', 0.25)
+    cdcc.set(ctx, 'flags', ['HIDE'])
+    assert.equal(reader.value(0), 0.5)
+    assert.equal(cdcc.flushChanges(ctx), 2)
+    assert.deepEqual(reader.takeChanged(), [0, 2])
+    assert.deepEqual(reader.takeChanged(), [])
+    assert.deepEqual(reader.value(2, {names: true}), ['HIDE'])
+    /* A change made in C++. */
+    spike.nudge(hostOf(ctx))
+    assert.equal(cdcc.flushChanges(ctx), 1)
+    assert.equal(reader.value(0), 0.375)
+    reader.unwatch()
+    assert.equal(spike.watched(hostOf(ctx)), 0)
+
+    /* In a slot: reading, but not watching; a slot's context isn't a session's. */
+    let inSlot: unknown[] = []
+    class Slot implements ScriptCommand {
+      exec(c: Context) {
+        const tried = (fn: () => unknown) => {
+          try {
+            return fn()
+          } catch (e) {
+            return e instanceof ScriptError ? e.code : (e as Error).message
+          }
+        }
+        inSlot = [
+          tried(() => reader.read()),
+          tried(() => reader.watch()),
+          tried(() => cdcc.flushChanges(c)),
+          tried(() => new cdcc.PathReader(c, ['count'])),
+        ]
+      }
+      undo() {}
+    }
+    cdcc.registerCommand(ctx, {id: 'ts.slot'}, Slot)
+    cdcc.invoke(ctx, 'ts.slot()')
+    assert.deepEqual(inSlot, [undefined, StatusCode.Busy, StatusCode.Busy, "expected a session's context"])
+
+    /* Disposed of by hand, or with the session, before its host. */
+    const second = open()
+    const other = new cdcc.PathReader(second.ctx, ['count'])
+    other.watch()
+    other[Symbol.dispose]()
+    other[Symbol.dispose]()
+    assert.equal(spike.watched(hostOf(second.ctx)), 0)
+    assert.throws(() => other.read(), /disposed/)
+    const late = new cdcc.PathReader(second.ctx, ['count'])
+    late.watch()
+    second[Symbol.dispose]()
+    assert.throws(() => late.value(0), /disposed/)
+    assert.throws(() => new cdcc.PathReader(second.ctx, ['count']), /disposed/)
+  })
+
+  test('saves, loads, appends, with reports', () => {
+    cdcc.set(ctx, 'items["Cube"].weight', 7)
+    cdcc.set(ctx, 'items["Cube"].other', cdcc.get(ctx, 'items["Ball"]') as Ref)
+    const {bytes, report} = cdcc.saveLibrary(ctx)
+    assert.ok(bytes instanceof Uint8Array && bytes.length > 100)
+    assert.equal(report.blocks, 2)
+    assert.equal(report.issues.total, 0)
+
+    const host = spike.createEmpty() as Host
+    const empty = new Session(host, spike.context(host) as Context)
+    assert.equal(cdcc.get(empty.ctx, 'items.length'), 0)
+    assert.throws(() => cdcc.loadLibrary(empty.ctx, bytes.subarray(0, 40)), ScriptError)
+    assert.throws(() => cdcc.loadLibrary(empty.ctx, bytes, {maxBlocks: 1}), fails(StatusCode.OutOfRange, /./))
+    assert.throws(() => cdcc.loadLibrary(empty.ctx, bytes, {maxBytes: -1}), TypeError)
+    const loaded = cdcc.loadLibrary(empty.ctx, bytes, {sourceName: 'file', maxBytes: 1 << 20})
+    assert.equal(loaded.records, 2)
+    assert.deepEqual(loaded.blocks.first.map((b) => b.name), ['Cube', 'Ball'])
+    assert.equal(cdcc.get(empty.ctx, 'items["Cube"].other.name'), 'Ball')
+    assert.equal(cdcc.get(empty.ctx, 'items["Cube"].weight'), 7)
+    assert.deepEqual(cdcc.saveLibrary(empty.ctx).bytes, bytes)
+    assert.throws(() => cdcc.loadLibrary(empty.ctx, bytes), fails(StatusCode.FailedPrecondition, /records/))
+
+    /* Under new ids, as one step. */
+    const added = cdcc.appendLibrary(empty.ctx, bytes)
+    assert.deepEqual(added.ids.first.map((i) => [i.from.at(-1), i.to.at(-1)]), [['1', '3'], ['2', '4']])
+    assert.equal(cdcc.get(empty.ctx, 'items.length'), 4)
+    assert.equal((cdcc.get(empty.ctx, 'items[2].other') as Ref).text.includes(added.ids.first[1].to.split(',')[1]), true)
+    cdcc.undo(empty.ctx)
+    assert.equal(cdcc.get(empty.ctx, 'items.length'), 2)
+    cdcc.set(empty.ctx, 'count', 3)
+    assert.throws(() => cdcc.resolvePlaceholders(empty.ctx), fails(StatusCode.FailedPrecondition, /history/))
+    cdcc.clearHistory(empty.ctx)
+    assert.equal(cdcc.canUndo(empty.ctx), false)
+    assert.equal(cdcc.resolvePlaceholders(empty.ctx).blocks.total, 0)
+    validate(empty.ctx)
+    empty[Symbol.dispose]()
+  })
+
   test('3. undoes the set', () => {
     cdcc.set(ctx, 'strength', 0.75)
     assert.ok(cdcc.canUndo(ctx) && !cdcc.canRedo(ctx))

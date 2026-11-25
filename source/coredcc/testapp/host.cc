@@ -2,10 +2,12 @@
  * step 6"): one host object owning a Runtime, a Library, a small root struct, an
  * executor and a LinearHistory, bound with coredcc's bindings. The NW.js test app
  * (apps/testapp) and the TS spike (tests/wasm/spike.test.ts) both drive it. */
+#include "coredcc/api/change_bus.h"
 #include "coredcc/api/struct.h"
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/bind/graph_facades.h"
 #include "coredcc/bind/manager.h"
+#include "coredcc/bind/path_reader.h"
 #include "coredcc/command/executor.h"
 #include "coredcc/graph/commands.h"
 #include "coredcc/graph/provider.h"
@@ -85,7 +87,7 @@ CollectionAccessor graphsAccessor()
  */
 class Host {
  public:
-  Host() : lib_(&rt_), ctx_(makeContext())
+  explicit Host(bool items) : lib_(&rt_), ctx_(makeContext(items))
   {
     ctx_.setExecutor(&ex_);
   }
@@ -109,6 +111,12 @@ class Host {
   {
     return history_;
   }
+  /** A change to `strength` in C++, as a simulation would make. */
+  void nudge()
+  {
+    data_.strength += 0.125;
+    rt_.ext<ChangeBus>().notify(ctx_.root().owner, "strength");
+  }
   CommandExecutor &executor()
   {
     return ex_;
@@ -125,10 +133,12 @@ class Host {
   }
 
  private:
-  Context makeContext()
+  Context makeContext(bool items)
   {
     registerItems(rt_);
-    addItems(lib_);
+    if (items) {
+      addItems(lib_);
+    }
     ApiRegistry &reg = rt_.ext<ApiRegistry>();
     ApiStruct s("TestApp");
     s.addField(PropertyDef::intProp("count"), &Data::count);
@@ -160,15 +170,28 @@ class Host {
 
 Host *create()
 {
-  return litestl::alloc::New<Host>("testapp::Host");
+  return litestl::alloc::New<Host>("testapp::Host", true);
+}
+/** A document without blocks, to load into. */
+Host *createEmpty()
+{
+  return litestl::alloc::New<Host>("testapp::Host", false);
 }
 Context *context(Host &h)
 {
   return &h.context();
 }
+void nudge(Host &h)
+{
+  h.nudge();
+}
 int32_t historySize(Host &h)
 {
   return h.history().size();
+}
+int32_t watched(Host &h)
+{
+  return script::watchedCount(h.context());
 }
 int32_t graphInstances(Host &h)
 {
@@ -205,8 +228,11 @@ litestl::binding::BindingManager *manager()
     script::addBindings(mgr);
     mgr->add(litestl::binding::Bind<Host>());
     BIND_FUNCTION(mgr, "testapp::create", testapp::create, MARGS()).returnsOwned();
+    BIND_FUNCTION(mgr, "testapp::createEmpty", testapp::createEmpty, MARGS()).returnsOwned();
+    BIND_FUNCTION(mgr, "testapp::nudge", testapp::nudge, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::context", testapp::context, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::historySize", testapp::historySize, MARGS("h"));
+    BIND_FUNCTION(mgr, "testapp::watched", testapp::watched, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::graphInstances", testapp::graphInstances, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::liveInstances", testapp::liveInstances, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::validate", testapp::validate, MARGS("h"));

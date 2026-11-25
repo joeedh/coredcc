@@ -24,7 +24,6 @@ import type {Context} from 'coredcc-gen/coredcc/Context'
 import * as cd from 'coredcc-gen/coredcc/functions'
 import type {NodeExecContext} from 'coredcc-gen/coredcc/NodeExecContext'
 import type {PropValue} from 'coredcc-gen/coredcc/PropValue'
-import {PropValueType} from 'coredcc-gen/coredcc/PropValueType'
 import type {ScriptGraph} from 'coredcc-gen/coredcc/ScriptGraph'
 import type {Status} from 'coredcc-gen/coredcc/Status'
 import {StatusCode} from 'coredcc-gen/coredcc/StatusCode'
@@ -39,6 +38,7 @@ import {
   scriptSlots,
   take,
   toJs,
+  toNamed,
   withValue,
   type Disposable,
   type NamedValue,
@@ -50,6 +50,8 @@ export {CommandFlags, StatusCode}
 export type {Context}
 export {float, FloatValue, fromJs, load, Ref, ScriptError, Session, toJs, type NamedValue, type Value, type Writable} from './core.ts'
 export * from './layout.ts'
+export * from './library.ts'
+export * from './reader.ts'
 
 /* ---- datapaths and commands ---- */
 
@@ -102,17 +104,7 @@ export function meta(ctx: Context, path: string): PathMeta {
 export function get(ctx: Context, path: string): Value
 export function get(ctx: Context, path: string, opts: {names?: boolean}): NamedValue
 export function get(ctx: Context, path: string, opts: {names?: boolean} = {}): NamedValue {
-  return take(cd.getValue(ctx, path), (v) => {
-    const flags = v.type() === PropValueType.Flags
-    if (!opts.names || (!flags && v.type() !== PropValueType.Enum)) return toJs(ctx, v)
-    try {
-      const keys = take(cd.valueKeys(ctx, path, v), (s) => s)
-      return !flags ? keys : keys === '' ? [] : keys.split('|')
-    } catch (e) {
-      if (e instanceof ScriptError && e.code === StatusCode.NotFound) return toJs(ctx, v)
-      throw e
-    }
-  })
+  return take(cd.getValue(ctx, path), (v) => (opts.names ? toNamed(ctx, path, v) : toJs(ctx, v)))
 }
 /** An undoable set; from a command's exec, a sub-command. Sets of one member with the same
  * `gesture` (a positive integer: one slider drag) are one undo step. */
