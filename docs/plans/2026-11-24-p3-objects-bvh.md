@@ -879,7 +879,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   13.7 / 17.0; every root moved 17.1 / 22.1; epoch moved 20.7 / 23.0; a parent 63.8 / 80.1; unlink and
   link 56.0 / 79.0. A refit is about 5 ms of it, a build about 20. A pick takes 0.04 to 0.07 ms with 36
   candidates, and 14 to 24 ms with 7,000. The targets stay; they are recorded on an idle machine:
-  `bench_scene` (release, about 15 s).
+  `node tools/bench.mjs scene` (release, about 15 s); never run the program by itself.
 - **Mutations:** 95, each alone. The survivors:
   - the check that w is positive, and that GJK doesn't go on from three corners: both are for what is
     beyond double's precision;
@@ -1103,7 +1103,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   | chain of 4,000: setParent to none | 1,566 | 13 |
   | chain of 4,000: setTransformType | 4,003 | 11 |
   | chain of 4,000: delete every 2nd | 2,650 | 16 |
-  | evaluate, unchanged: TRS, FBX, Matrix (best) | 17, 25, 28 | 17, 22, 17 |
+  | evaluate, unchanged: TRS, FBX, Matrix (best; not reliable, see round 3) | 17, 25, 28 | 17, 22, 17 |
 
 - **Mutations:** 55 distinct ones, one at a time; 48 were found. Two survived in code that turned out not to be
   needed, which has been removed. The other five change nothing a caller sees: four break the index of members,
@@ -1130,8 +1130,31 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   version. Names that the type doesn't have are kept.
 - **Not done:** a membership interface for hosts' scenes (finding 15 is documented); solving for a delta that
   can't be had with the free channels by any other rule than dropping the fixed ones' changes.
-- **Benchmark** (`bench_scene`, 100,000 objects, best of 41, ms): unchanged 15, every root moved 17, epoch moved
-  21, structural 58. The targets are 20, 40 and 80.
+- **The benchmark numbers recorded here were wrong.** "Unchanged 15, every root moved 17, epoch moved 21,
+  structural 58" came from a `bench_scene.exe` that had not been built again: the benchmarks aren't in `all`. The
+  code of that commit (`80c9e6a`) took 20 to 24, 22 to 25, 27 to 29 and 74 to 87 ms in the coordinator's runs in turns, so it missed the targets
+  of 20 and 80.
+  - **Cause:** `Object` had grown to 2,152 bytes, 1.8 KB of it two nearly always empty lists for files. They are
+    in a part of their own now, and a `static_assert` keeps an Object at 384 bytes or less.
+  - **`tools/bench.mjs`** builds a benchmark before it runs it, and prints the commit and the link time.
+  - **New numbers, provisional.** Intel Core Ultra 9 386H, 2026-11-25, native-clang RelWithDebInfo, the programs
+    run in turns. The machine was **not** idle (another session used about 2 to 14 of its cores), so they don't
+    show that the exit criterion, which asks for an idle machine, is met.
+  - 100,000 objects, ms, the range of the rounds' bests. Before is `80c9e6a` (4 rounds, the last one disturbed).
+    After is without and with the prefetch of outside channels (5 rounds each, in turns with each other).
+
+    | Case (target) | Before | After, no prefetch | After, with prefetch |
+    |---|---|---|---|
+    | unchanged (20) | 21.2 to 28.0 | 13.8 to 15.4 | 14.1 to 15.4 |
+    | every root moved | 24.3 to 48.7 | 15.4 to 18.1 | 15.1 to 17.9 |
+    | epoch moved (40) | 29.6 to 86.5 | 20.6 to 22.1 | 20.5 to 23.0 |
+    | structural, a parent (80) | 95.8 to 176.3 | 60.1 to 64.5 | 58.1 to 68.7 |
+    | structural, unlink and link (80) | 89.2 to 111.8 | 63.2 to 89.8 | 63.8 to 85.5 |
+
+  - The medians of "every root moved" are 16.7 without and 17.8 with the prefetch. The noise is as large, so a
+    cost of about 1 ms isn't excluded.
+  - `bench_scene_commands --only types`, unchanged, medians of the rounds' bests (TRS, FBX, Matrix): `80c9e6a` 18.8,
+    24.4, 20.5 (14 rounds); without the prefetch 9.9, 16.8, 11.6 and with it 10.6, 13.4, 11.5 (7 rounds in turns).
 - **Mutations:** 140 distinct ones, one at a time: 122 were found. Nine survived in code that turned out not to be
   needed, which has been removed. The other nine change nothing a caller sees: some only make a kept list
   again, and some concern states that can't be reached.
@@ -1217,7 +1240,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 14. A flat array of doubles holds every channel kind exactly.
 15. `activeMember` changes no existing read, and only writes to `.active` that failed before.
 16. The `objects` text covers what TS and P2's layouts need.
-17. 20, 40 and 80 ms are met.
+17. 20, 40 and 80 ms are met. (Open: the recorded numbers were wrong, and the new ones are from a busy machine.)
 
 ## Risks
 - **PR D waits for the user.** Steps 5 to 12 can be written, not merged, without it.

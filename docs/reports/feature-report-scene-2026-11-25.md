@@ -134,6 +134,9 @@
       for it wasn't needed for that.
     - FBX leaves out zero rotations. It is still above 20 ms; the rest is its pivots, matrix products and the
       rotation itself.
+    *Correction:* it isn't known which build these numbers came from, as round 3's came from a program that had not
+    been built. The code of round 3 took 24 ms for FBX, above the target. The plan's round 3 section has the cause and
+    provisional new numbers from a busy machine (FBX 13.4).
 24. **Selected objects that are hidden or made unselectable later** were still transformed and deleted.
     *Decided:* they stay selected, so that showing them again brings the selection back, but commands that
     work on the selection leave them out. `objects` may name them. Documented in `commands.h`.
