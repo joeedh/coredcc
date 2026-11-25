@@ -137,7 +137,7 @@ describe('coredcc wasm-st UI', () => {
     cdcc.set(ctx, 'mode', 'EDIT')
     cdcc.set(ctx, 'strength', 0.25)
     cdcc.flushChanges(ctx)
-    const change = (index: number, value: unknown) => ({index, changed: true, metaChanged: false, value})
+    const change = (index: number, value: unknown) => ({index, changed: true, metaChanged: false, value, type: index === 0 ? 'Float' : 'Enum'})
     assert.deepEqual(reader.takeChanges({names: true}), [change(0, 0.25), change(1, 'EDIT')])
     assert.deepEqual(reader.takeChanges(), [])
     cdcc.set(ctx, 'mode', 'OBJECT')
@@ -150,6 +150,7 @@ describe('coredcc wasm-st UI', () => {
     assert.ok(all[3].error instanceof ScriptError && all[3].error.code === StatusCode.NotFound)
     assert.match(all[3].error.message, /^NotFound: no such item/)
     assert.match(all[3].error.detail, /^no such item/)
+    assert.deepEqual(all.map((c) => c.type), ['Float', 'Enum', 'Flags', 'None'])
     reader.unwatch()
     assert.equal(spike.watched(hostOf(ctx)), 0)
 
@@ -270,6 +271,38 @@ describe('coredcc wasm-st UI', () => {
     t.diagnostic(`took ${took.toFixed(1)} ms`)
     assert.ok(took < 500)
     reader[Symbol.dispose]()
+  })
+
+  test('conditions, and containers of what is gone', () => {
+    const reader = new cdcc.PathReader(ctx, [
+      'enabled', 'label', 'items.length', 'activeItem', 'mode[EDIT]', 'mode', 'strength', 'flags', 'items[9]', 'items[0]',
+    ])
+    const holds = () => {
+      reader.read()
+      return reader.takeAll({names: true}).map((c) => {
+        const on = cdcc.conditionHolds({path: ''}, c)
+        assert.equal(cdcc.conditionHolds({path: '', not: true}, c), c.error ? false : !on)
+        return on ? 1 : 0
+      })
+    }
+    const there = () => reader.takeAll().map((c) => (cdcc.containerIsThere(c) ? 1 : 0))
+    cdcc.write(ctx, 'enabled', false)
+    assert.deepEqual(holds(), [0, 0, 1, 0, 0, 0, 0, 0, 0, 1])
+    assert.deepEqual([there()[3], there()[8], there()[9]], [0, 0, 1])
+    cdcc.write(ctx, 'enabled', true)
+    cdcc.write(ctx, 'label', '0')
+    cdcc.write(ctx, 'mode', 'EDIT')
+    cdcc.write(ctx, 'flags', ['HIDE'])
+    cdcc.write(ctx, 'activeItem', cdcc.get(ctx, 'items["Ball"]') as cdcc.Ref)
+    assert.deepEqual(holds(), [1, 1, 1, 1, 1, 0, 0, 0, 0, 1])
+    assert.equal(there()[3], 1)
+    const unsupported = {index: 0, changed: true, metaChanged: false, type: 'None', value: undefined} as const
+    assert.ok(cdcc.containerIsThere({...unsupported, error: new ScriptError(StatusCode.Unsupported, '')}))
+    const empty = open()
+    const count = new cdcc.PathReader(empty.ctx, ['count'])
+    count.read()
+    assert.equal(cdcc.conditionHolds({path: ''}, count.takeAll()[0]), false) /* 0 */
+    empty[Symbol.dispose]()
   })
 
   test('run takes JS values, and canRun says why not', () => {

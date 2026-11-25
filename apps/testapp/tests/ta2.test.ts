@@ -17,6 +17,7 @@ interface NodeState {
   valueKind?: string
   value?: any
   error?: string
+  reason?: string
   children?: NodeState[]
 }
 
@@ -244,6 +245,7 @@ describe('TA2: the panel of a layout', () => {
 
   step('a tool runs under its prefix, and is undone under it', async () => {
     await value('set', 'activeItem', await value('get', 'items["Ball"]'))
+    assert.equal((await node('weigh')).reason, undefined)
     await value('panelClick', 'weigh')
     assert.equal(await value('get', 'items["Ball"].weight'), 3)
     await shows('weight', 3)
@@ -262,8 +264,42 @@ describe('TA2: the panel of a layout', () => {
     await value('set', 'enabled', true)
     await value('set', 'activeItem', null)
     await nodes()
-    await value('panelClick', 'weigh')
-    assert.ok((await node('weigh')).error)
+    assert.match((await node('weigh')).reason!, /null/)
+    assert.equal((await node('weigh')).error, undefined)
+    assert.match((await refused('panelClick', 'weigh')).message, /disabled/)
+    const title = `document.querySelector('#panel [data-id="weigh"] button').title`
+    assert.match((await app!.client.evaluate(title)).value, /null/)
+    await value('set', 'activeItem', await value('get', 'items["Ball"]'))
+    assert.equal((await node('weigh')).reason, undefined)
+    assert.equal((await app!.client.evaluate(title)).value, '')
+  })
+
+  step('a container of what is gone is hidden', async () => {
+    assert.equal((await node('itemTab')).visible, false)
+    await value('set', 'activeItem', await value('get', 'items["Ball"]'))
+    assert.equal((await node('itemTab')).visible, true)
+    await value('panel', {
+      xml: `<layout>
+        <column id="active" path="activeItem" visibleIf="enabled"><prop id="w" path="weight"/></column>
+        <row id="nine" path="items[9]"/><panel id="zero" path="items[0]"/>
+        <toolOptions target="testapp.addCount"/>
+        <row id="wrong" path="activeItm"/><custom tag="x" id="custom" path="items[9]"/>
+        <label id="some" visibleIf="label">x</label><label id="none" visibleIf="!label">x</label>
+        <label id="has" visibleIf="/activeItem">x</label><label id="lots" visibleIf="items.length">x</label>
+      </layout>`,
+    })
+    const visible = async () => {
+      const all = await nodes()
+      return ['active', 'nine', 'zero', 'wrong', 'custom', 'some', 'none', 'has', 'lots'].filter((id) => all.get(id)!.visible)
+    }
+    await value('set', 'label', '')
+    assert.deepEqual(await visible(), ['active', 'zero', 'wrong', 'custom', 'none', 'has', 'lots'])
+    await value('set', 'label', 'x')
+    await value('set', 'activeItem', null)
+    assert.deepEqual(await visible(), ['zero', 'wrong', 'custom', 'some', 'lots'])
+    await value('set', 'enabled', false)
+    await value('set', 'activeItem', await value('get', 'items["Cube"]'))
+    assert.deepEqual(await visible(), ['zero', 'wrong', 'custom', 'some', 'has', 'lots'])
   })
 
   step("a tool's options are its last-used inputs", async () => {
@@ -396,7 +432,7 @@ describe('TA2: the panel of a layout', () => {
     assert.match(html, /class="node tab" data-id="itemTab"/)
     assert.match(html, /<hr>/)
     assert.match(html, /<input class="slider" type="range" min="0" max="1"/)
-    assert.match(html, /data-tag="swatch" data-attr-color="red">Swatch</)
+    assert.match(html, /data-attr-color="red" data-tag="swatch">Swatch</)
   })
 
   step('a hidden tab has no button, and another one is chosen', async () => {
@@ -470,8 +506,8 @@ describe('TA2: the panel of a layout', () => {
     })
     assert.deepEqual(issues.map((i: any) => [i.severity, i.node]), [['Error', 1], ['Error', 2]])
     assert.match((await node('a')).error!, /did you mean.*count/)
-    await value('panelClick', 'b')
-    assert.match((await node('b')).error!, /nope/)
+    assert.match((await node('b')).reason!, /nope/)
+    assert.match((await refused('panelClick', 'b')).message, /disabled/)
     await shows('c', 5)
     assert.match((await refused('panelSet', 'a', 1)).message, /no input/)
   })

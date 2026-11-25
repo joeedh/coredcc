@@ -558,6 +558,10 @@ static void test_conditions()
   ref.owner = OwnerKey::ofRuntime(1);
   test_assert(holds(PropValue::ofPointer(ref)) && !holds(PropValue::nullPointer()));
   test_assert(!holds(PropValue()) && !holds(PropValue::ofFloat(1)));
+  test_assert(containerIsThere(PropValue::ofPointer(ref)));
+  test_assert(!containerIsThere(PropValue::nullPointer()));
+  test_assert(!containerIsThere(Status::error(StatusCode::NotFound, "none")));
+  test_assert(containerIsThere(Status::error(StatusCode::Unsupported, "no address")));
   for (const bool negated : {false, true}) {
     LayoutCondition c;
     c.negated = negated;

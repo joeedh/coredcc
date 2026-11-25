@@ -3,7 +3,7 @@
  * PathReader, and shows again what `flushChanges` finds changed.
  */
 import * as cdcc from 'coredcc-script'
-import type {Context, LayoutCondition, LayoutIssue, LayoutNode, NamedValue, PathMeta} from 'coredcc-script'
+import type {Context, LayoutCondition, LayoutIssue, LayoutNode, NamedValue, PathChange, PathMeta} from 'coredcc-script'
 import {scrub} from './scrub.ts'
 import {caption, InputError, makeWidget, type Widget, type WidgetHost} from './widgets.ts'
 
@@ -20,6 +20,8 @@ export interface NodeState {
   value?: unknown
   /** Why a prop has no value, or why the last write or run failed. */
   error?: string
+  /** Why a tool can't run now. */
+  reason?: string
   children?: NodeState[]
 }
 
@@ -33,6 +35,13 @@ interface Entry {
   enabled: boolean
   /** Its own condition, and that of what it is in. */
   enabledHere: boolean
+  /** Its visibleIf, and whether what its path names is there. */
+  wanted: boolean
+  there: boolean
+  /** Why a tool can't run now. */
+  reason?: string
+  /** Its button's title otherwise. */
+  title?: string
   path?: string
   meta?: PathMeta
   widget?: Widget
@@ -45,7 +54,10 @@ interface Entry {
   error?: string
 }
 
-type Shown = {value: NamedValue} | {error: string}
+type Show = (v: PathChange, newMeta: boolean) => void
+
+/* A Custom's path is the host's to decide about. */
+const containers = new Set(['layout', 'column', 'row', 'panel', 'tabs', 'tab'])
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -55,7 +67,13 @@ export class Panel {
   private readonly root: Entry
   private readonly reader: cdcc.PathReader
   /** By the reader's index. */
-  private readonly shows: ((v: Shown, newMeta: boolean) => void)[][] = []
+  private readonly shows: Show[][] = []
+  private last: PathChange[] = []
+  private readonly tools: cdcc.ToolChecks
+  /** By ToolChecks' index. */
+  private readonly toolEntries: Entry[] = []
+  /** In preorder, as the issues count nodes. */
+  private nodes = 0
   private readonly indices = new Map<string, number>()
   private readonly timer: ReturnType<typeof setInterval>
   /** The ids of the layout, and those made for the nodes without one. */
@@ -73,13 +91,16 @@ export class Panel {
     const layout = cdcc.parseLayout(xml)
     this.issues = cdcc.validateLayout(ctx, xml)
     this.reader = new cdcc.PathReader(ctx)
+    this.tools = new cdcc.ToolChecks(ctx)
     try {
       this.takeIds(layout)
       this.root = this.build(layout, undefined)
       this.reader.watch()
-      this.shows.forEach((_, i) => this.show(i, true))
+      for (const v of this.reader.takeAll({names: true})) this.show(v, true)
+      this.checkTools()
     } catch (e) {
       this.reader[Symbol.dispose]()
+      this.tools[Symbol.dispose]()
       throw e
     }
     container.replaceChildren(this.root.el)
@@ -96,14 +117,25 @@ export class Panel {
   dispose() {
     clearInterval(this.timer)
     this.reader[Symbol.dispose]()
+    this.tools[Symbol.dispose]()
     this.root.el.remove()
   }
 
   /** Shows what has changed. */
   refresh() {
     cdcc.flushChanges(this.ctx)
-    const metas = new Set(this.reader.takeChangedMeta())
-    for (const i of new Set([...this.reader.takeChanged(), ...metas])) this.show(i, metas.has(i))
+    for (const v of this.reader.takeChanges({names: true})) this.show(v, v.metaChanged)
+    this.checkTools()
+  }
+
+  /* What a tool's canRun looks at isn't known, so each is asked. */
+  private checkTools() {
+    for (const {index, reason} of this.tools.changed()) {
+      const e = this.toolEntries[index]
+      e.reason = reason
+      e.button!.title = reason ?? e.title ?? ''
+      this.applyEnabled(e)
+    }
   }
 
   state(): NodeState {
@@ -128,7 +160,10 @@ export class Panel {
   private build(node: LayoutNode, parent: Entry | undefined): Entry {
     const el = document.createElement('div')
     const id = node.id ?? this.newId(node.kind)
-    const e: Entry = {id, node, el, parent, children: [], enabled: true, enabledHere: true}
+    const e: Entry = {id, node, el, parent, children: [], enabled: true, enabledHere: true, wanted: true, there: true}
+    /* The props of a toolOptions aren't the layout's. */
+    const issues = this.issues.filter((i) => i.node === this.nodes && i.severity === 'Error')
+    if (parent?.node.kind !== 'toolOptions') this.nodes++
     el.className = ['node', node.kind, node.expand ? 'expand' : '', node.class ?? ''].filter((c) => c).join(' ')
     el.dataset.id = id
     if (node.description) el.title = node.description
@@ -166,8 +201,15 @@ export class Panel {
     if (node.kind !== 'tabs') for (const child of node.children ?? []) within.append(this.build(child, e).el)
     if (node.visibleIf) {
       this.condition(node.visibleIf, (on) => {
-        el.hidden = !on
-        e.shown?.()
+        e.wanted = on
+        this.applyVisible(e)
+      })
+    }
+    const own = node.path !== undefined && containers.has(node.kind)
+    if (own && !issues.some((i) => /^<\w+> path:/.test(i.message))) {
+      this.watch(node.effectivePath!, (v) => {
+        e.there = cdcc.containerIsThere(v)
+        this.applyVisible(e)
       })
     }
     if (node.enabledIf) {
@@ -237,10 +279,10 @@ export class Panel {
     }
     let current: NamedValue
     this.watch(path, (v, newMeta) => {
-      if ('error' in v) {
+      if (v.error) {
         e.widget = e.meta = undefined
-        e.error = v.error
-        holder.replaceChildren(v.error)
+        e.error = v.error.message
+        holder.replaceChildren(v.error.message)
       } else {
         current = v.value
         e.stale ||= newMeta
@@ -272,7 +314,9 @@ export class Panel {
       this.act(e, () => void cdcc.invokeAt(this.ctx, e.node.prefix ?? '', e.node.invocation!))
     )
     e.button = button
+    e.title = button.title
     e.el.append(button)
+    this.toolEntries[this.tools.add(e.node.prefix ?? '', e.node.invocation!)] = e
   }
 
   private commandName(id: string): string {
@@ -312,7 +356,7 @@ export class Panel {
 
   /* ---- showing ---- */
 
-  private watch(path: string, show: (v: Shown, newMeta: boolean) => void) {
+  private watch(path: string, show: Show) {
     let i = this.indices.get(path)
     if (i === undefined) {
       i = this.reader.add(path)
@@ -322,26 +366,24 @@ export class Panel {
     this.shows[i].push(show)
   }
 
-  private show(i: number, newMeta = false) {
-    let v: Shown
-    try {
-      v = {value: this.reader.value(i, {names: true})}
-    } catch (e) {
-      if (!(e instanceof cdcc.ScriptError)) throw e
-      v = {error: e.message}
-    }
-    for (const show of this.shows[i]) show(v, newMeta)
+  private show(v: PathChange, newMeta = false) {
+    this.last[v.index] = v
+    for (const show of this.shows[v.index]) show(v, newMeta)
   }
 
-  /* A condition without a value is false, also when it is negated. */
   private condition(c: LayoutCondition, apply: (on: boolean) => void) {
-    this.watch(c.path, (v) => apply('value' in v && (v.value === true) !== (c.not === true)))
+    this.watch(c.path, (v) => apply(cdcc.conditionHolds(c, v)))
+  }
+
+  private applyVisible(e: Entry) {
+    e.el.hidden = !(e.wanted && e.there)
+    e.shown?.()
   }
 
   private applyEnabled(e: Entry) {
     e.enabled = (e.parent?.enabled ?? true) && e.enabledHere
     e.el.classList.toggle('disabled', !e.enabled)
-    if (e.button && e.node.kind === 'tool') e.button.disabled = !e.enabled
+    if (e.button && e.node.kind === 'tool') e.button.disabled = !e.enabled || e.reason !== undefined
     for (const input of e.widget?.inputs.values() ?? []) {
       input.disabled = !e.enabled || e.meta?.readOnly === true
     }
@@ -363,7 +405,7 @@ export class Panel {
       this.refresh()
       /* A refused write, or one that was clamped, leaves what the user typed. */
       const i = e.path === undefined ? undefined : this.indices.get(e.path)
-      if (i !== undefined && e.widget) this.show(i)
+      if (i !== undefined && e.widget) this.show(this.last[i])
     } catch (err) {
       this.thrown = err
       throw err
@@ -383,6 +425,7 @@ export class Panel {
       if (inputs.length > 0) out.enabled = inputs.every((input) => !input.disabled)
     }
     if (e.error !== undefined) out.error = e.error
+    if (e.reason !== undefined) out.reason = e.reason
     if (e.children.length > 0) out.children = e.children.map((c) => this.stateOf(c))
     return out
   }

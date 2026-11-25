@@ -3,8 +3,10 @@
  */
 import type {Context} from 'coredcc-gen/coredcc/Context'
 import * as cd from 'coredcc-gen/coredcc/functions'
+import {StatusCode} from 'coredcc-gen/coredcc/StatusCode'
 
 import {take} from './core.ts'
+import type {PathChange} from './reader.ts'
 
 export type LayoutKind =
   | 'layout' | 'column' | 'row' | 'panel' | 'tabs' | 'tab' | 'prop' | 'tool' | 'toolOptions'
@@ -62,6 +64,21 @@ export interface LayoutIssue {
   code: string
   message: string
   suggestions?: string[]
+}
+
+/** Whether the condition holds, as layout.h's conditionHolds, given its path's value from a
+ * PathReader: of a Bool, a pointer, a number or a String. Without a value it doesn't. */
+export function conditionHolds(condition: LayoutCondition, path: PathChange): boolean {
+  if (path.error || path.type === 'None') return false
+  const plain = path.type === 'Bool' || path.type === 'Int' || path.type === 'String' || path.type === 'Pointer'
+  const on = plain && Boolean(path.value)
+  return on !== (condition.not === true)
+}
+/** Whether a container with a `path` is to be shown, given its effectivePath's value from a
+ * PathReader: see layout.h, "What isn't there". */
+export function containerIsThere(path: PathChange): boolean {
+  if (path.error) return path.error.code === StatusCode.Unsupported
+  return path.type !== 'Pointer' || path.value !== null
 }
 
 /** The layout in `xml`. Throws a ScriptError with the position if it isn't one. */

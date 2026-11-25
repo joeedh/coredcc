@@ -137,11 +137,14 @@ struct LayoutCondition {
   bool negated = false;
 };
 
-/** Whether a condition holds, or a container is there, whose path reads as `value`: of a Bool, a
- * pointer, a number or a String, as LayoutCondition says. Other values don't. */
+/** Whether a condition holds whose path reads as `value`: of a Bool, a pointer, a number or a
+ * String, as LayoutCondition says. Other values don't. */
 bool valueHolds(const PropValue &value);
 /** Whether the condition holds, if its path reads as `value`. */
 bool conditionHolds(const LayoutCondition &condition, const Result<PropValue> &value);
+/** Whether a container's own path names something, if reading its effectivePath gives `value`. A
+ * thing without an address can't be read (Unsupported), but it is there. */
+bool containerIsThere(const Result<PropValue> &value);
 
 /** What a layout may hold, from text and from the builder. */
 struct LayoutLimits {
@@ -178,7 +181,7 @@ struct LayoutLimits {
  * with that prefix, or with the Tool's own `path`, as the Context's.
  *
  * **What isn't there:** a container whose own `path` names nothing now (a null pointer, an item that
- * is gone: reading it gives null or an error) is to be hidden, as if its VisibleIf were false, unless
+ * is gone: containerIsThere) is to be hidden, as if its VisibleIf were false, unless
  * validateLayout has an Error about that path, which is to be shown. A Custom is the host's to
  * decide about. A Prop without a value shows why, and a Tool is disabled if canInvoke says so.
  */

@@ -31,6 +31,14 @@ bool conditionHolds(const LayoutCondition &condition, const Result<PropValue> &v
   return value.ok() && valueHolds(*value) != condition.negated;
 }
 
+bool containerIsThere(const Result<PropValue> &value)
+{
+  if (!value.ok()) {
+    return value.status().code() == StatusCode::Unsupported;
+  }
+  return value->type() != PropValue::Type::Pointer || !value->asPointer().isNull();
+}
+
 Layout::Layout()
 {
   nodes_.append(LayoutNode());

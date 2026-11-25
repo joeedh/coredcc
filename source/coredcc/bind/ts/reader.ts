@@ -20,6 +20,9 @@ import {
   type NamedValue,
 } from './core.ts'
 
+/** The types of values, as C++ has them; 'None' without a value. */
+export type ValueType = 'None' | 'Bool' | 'Int' | 'Float' | 'String' | 'Enum' | 'Flags' | 'Vector' | 'Pointer'
+
 /** What became of a path. */
 export interface PathChange {
   index: number
@@ -27,6 +30,8 @@ export interface PathChange {
   changed: boolean
   /** Whether its `meta` may have changed: make its widget again. */
   metaChanged: boolean
+  /** Of the value: an enum has the same in either form. */
+  type: ValueType
   value: NamedValue
   /** Why there is no value. */
   error?: ScriptError
@@ -34,11 +39,20 @@ export interface PathChange {
 
 type Entry = [index: number, what: number, kind: string, value: unknown, more?: unknown, text?: string]
 
+const types: Record<string, ValueType> = {
+  b: 'Bool', i: 'Int', f: 'Float', s: 'String', e: 'Enum', g: 'Flags', v: 'Vector', p: 'Pointer',
+}
 const floats: Record<string, number> = {nan: NaN, inf: Infinity, '-inf': -Infinity}
 const toFloat = (x: unknown) => (typeof x === 'string' ? floats[x] : (x as number))
 
 function decode([index, what, kind, value, more, text]: Entry, names: boolean): PathChange {
-  const out: PathChange = {index, changed: (what & 1) !== 0, metaChanged: (what & 2) !== 0, value: undefined}
+  const out: PathChange = {
+    index,
+    changed: (what & 1) !== 0,
+    metaChanged: (what & 2) !== 0,
+    type: types[kind] ?? 'None',
+    value: undefined,
+  }
   switch (kind) {
     case 'n':
       break
