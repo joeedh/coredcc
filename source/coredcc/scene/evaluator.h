@@ -29,6 +29,8 @@ struct SceneBlockType {
   const IfaceTable *spatial = nullptr;
   /** It implements Invalidation: bounds are kept. */
   bool invalidation = false;
+  /** coredcc.Object: the data is an Object. */
+  bool object = false;
 };
 
 /** What is looked up once for an object, and its place in the hierarchy. */
@@ -73,10 +75,11 @@ struct BatchItem {
   EvalStatus status = EvalStatus::Ok;
 };
 
-/** Where an object's memory was in the last evaluation: its record, its data, its data block's
- * record and data. Only ever prefetched: evaluating is mostly waiting for memory. */
+/** Where the memory of an object was in the last evaluation: its record, its data, the record and data of
+ * its data block, and its channels, which are outside of an Object with more than 16. Only ever
+ * prefetched: evaluating is mostly waiting for memory. */
 struct PrefetchHint {
-  uintptr_t at[4] = {};
+  uintptr_t at[5] = {};
 };
 
 /** What makes lookups stale. */

@@ -110,6 +110,8 @@ bool takeError(Runtime &rt, Status &foreign)
 
 /* A few objects' worth of work: enough for the memory to arrive. */
 constexpr int kPrefetchAhead = 8;
+/* Cache lines of each of PrefetchHint::at. */
+constexpr int kPrefetchLines[] = {3, 3, 3, 3, 4};
 
 LookupKey keyOf(const Library &lib)
 {
@@ -138,6 +140,7 @@ int SceneEvaluator::typeFor(const Library &lib, TypeId type)
   t.transformable = lib.runtime().ifaces().find(type, kTransformableId);
   t.spatial = lib.runtime().ifaces().find(type, kSpatialId);
   t.invalidation = lib.runtime().ifaces().find(type, kInvalidationId) != nullptr;
+  t.object = type == TypeId::of(kObjectType);
   types_.append(t);
   return int(types_.size()) - 1;
 }
@@ -483,9 +486,10 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
       evaluateLevel(lib, k, levelEnd, provider, time, differs ? out.objects : old.objects, foreign);
     }
     if (k + kPrefetchAhead < n) {
-      for (uintptr_t at : hints_[order_[k + kPrefetchAhead]].at) {
-        for (int line = 0; line < 3; line++) {
-          prefetch(at + uintptr_t(line * 64));
+      const PrefetchHint &ahead = hints_[order_[k + kPrefetchAhead]];
+      for (int a = 0; a < 5; a++) {
+        for (int line = 0; line < kPrefetchLines[a] && ahead.at[a]; line++) {
+          prefetch(ahead.at[a] + uintptr_t(line * 64));
         }
       }
     }
@@ -494,6 +498,13 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
     const SceneBlockType &t = types_[m.type];
     void *data = dataOf(lib, m.handle, t);
     hint.at[1] = reinterpret_cast<uintptr_t>(data);
+    hint.at[4] = 0;
+    if (t.object && data) {
+      const uintptr_t at =
+          reinterpret_cast<uintptr_t>(static_cast<const Object *>(data)->channels.data());
+      const bool inside = at - hint.at[1] < sizeof(Object);
+      hint.at[4] = inside ? 0 : at;
+    }
     if ((data == nullptr) != m.isNull) {
       return Pass::Stale;
     }
