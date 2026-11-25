@@ -801,9 +801,37 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 
   The sums meet the targets: 18 to 21, 25 to 28, and 62 to 83 (with a build, if a changed parent
   needs one). The numbers to record come from an idle machine, with step 9's SceneBvh.
-- **Mutations:** 86, each alone; those that survived and weren't redundant code (removed) got tests.
+- **Mutations:** 83, each alone; those that survived and weren't redundant code (removed) got tests.
   What survives: the places where `add` keeps the index instead of making it again (speed only),
   and the Live checks of revalidation, which null data shows too.
+
+### Step 8
+- **Needs litestl PR #14.**
+- **Files:** `commands.h membership_commands.cc transform_commands.cc object_changes.cc`.
+  `registerSceneCommands` registers the types, these commands and the block commands.
+- **Until step 10's `objects` input,** `core.scene.select` takes one `object`. `ALL` leaves out
+  hidden and unselectable objects, and naming an unselectable one fails. `core.scene.link` and
+  `setActive` take one, too.
+- **`keepWorld` solves exactly, then as well as it can** (shear is lost). The output
+  `approximate` counts the objects that couldn't be kept exactly. A singular parent fails.
+- **`core.object.add`'s `location` is in the world,** also under a parent.
+- **`ObjectChanges`** holds what a command changed, by id, with the values before and after. Undo
+  and redo write those, so nothing is computed again. `write` takes everything back when one
+  fails. An undo that fails for one object still writes the rest, and the first error becomes
+  the sticky one.
+- **`core.object.dragDelta`** is `applyDelta` as an Interactive command: `ApplyDelta::update` takes the
+  total delta since the start and works on the channels from then. Interactive commands can't
+  be run directly, hence two names for one implementation.
+- **An object on a cycle isn't skipped by `applyDelta`:** it has no parent.
+- **`core.object.delete`** looks for children in the whole Library. A child whose Transformable has no
+  `setParentId` is left alone and jumps. One that can't be placed (a singular parent, no solver)
+  only gets the new parent, and counts as approximate.
+  - **Deleting many is quadratic:** each `core.block.delete` asks `usersOf`, whose cache is made
+    again whenever the epoch moved. 500 objects of 2,000 take 68 ms, so 10,000 of 100,000 about a
+    minute. Deleting several blocks with one preview belongs in `core.block.delete`.
+- **Mutations:** 64, each alone. The survivors:
+  - the member that a change is posted for: the epoch moves as well, and makes the watchers read
+    everything again.
 
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.

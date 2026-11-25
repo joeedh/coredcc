@@ -60,6 +60,8 @@ void writeVec3(ChannelBlock &out, int32_t first, const double3 &v);
 PropertyDef orderEnum(const char *name);
 /** The Euler angles of `q` nearest to `hint`; non-finite hints count as 0. */
 double3 nearestEuler(const quatd &q, litestl::math::EulerOrder order, double3 hint);
+/** TRS channels with the same rotation in another mode. */
+ChannelBlock withRotationMode(const ChannelBlock &channels, int32_t mode);
 /** The state of a node from its parent, its linear part in the world and its local translation. */
 TransformState childState(const TransformState &parent,
                           const solve::Linear &world,

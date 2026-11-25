@@ -58,6 +58,14 @@ void writeRotation(const EvalCtx &ctx, const EvalCtx &hint, const quatd &q, Chan
 
 } // namespace
 
+ChannelBlock withRotationMode(const ChannelBlock &channels, int32_t mode)
+{
+  ChannelBlock out = channels;
+  out.set(trs::kRotationMode, mode);
+  writeRotation(EvalCtx(out), EvalCtx(channels), readRotation(EvalCtx(channels)), out);
+  return out;
+}
+
 TransformState Trs::evaluate(const EvalCtx &ctx, const TransformState &parent) const
 {
   const Node n = readNode(ctx);

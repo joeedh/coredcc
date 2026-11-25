@@ -6,10 +6,13 @@ coredcc_library(coredcc_scene
     evaluator.cc
     fbx.cc
     matrix.cc
+    membership_commands.cc
     object.cc
+    object_changes.cc
     scene.cc
     solve.cc
     transform.cc
+    transform_commands.cc
     transform_registry.cc
     trs.cc
   DEPS

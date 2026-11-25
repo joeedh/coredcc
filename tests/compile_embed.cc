@@ -102,6 +102,7 @@
 #include "coredcc/props/value_io.h"
 #include "coredcc/scene/builtins.h"
 #include "coredcc/scene/capabilities.h"
+#include "coredcc/scene/commands.h"
 #include "coredcc/scene/evaluated.h"
 #include "coredcc/scene/object.h"
 #include "coredcc/scene/scene.h"
