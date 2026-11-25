@@ -44,6 +44,16 @@ Unreal, coredcc is exactly one module, so they exist once.
   must be stable across sessions. `SaveReport` lists them, and the blocks only they lead to.
 - A type that was registered after a load reads its blocks with `resolvePlaceholders`.
 
+## Graphs
+- **Destroy order:** GraphInstances, then standalone GraphDefs, then the Library, then the Runtime. An
+  instance of a block may outlive the block: it evaluates to errors then, until it is back.
+- Payloads that a kernel made may outlive the Library. One that aliases a block's data is null then, so
+  `get()` can be null even for a value that was there.
+- A host that changes block data itself must call `ChangeBus::notify` with its owner, or graphs that read
+  it aren't evaluated again.
+- A program that evaluates graphs for the user's objects builds a standalone GraphDef around theirs, and
+  connects with interior sockets (`graph/interior.h`). `tests/graph/test_graph_scene.cc` is an example.
+
 ## Threading
 - The public API is single-threaded, on the host's main thread.
 - Foreign (JS) interface implementations are thread-affine. Parallel algorithms check
