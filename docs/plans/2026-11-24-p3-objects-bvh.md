@@ -593,7 +593,8 @@ Layering: `base` ← `bvh`, `draw`; `command`, `bvh`, `draw` ← `scene` ← `bi
 ## Tests
 - **BVH oracles:** every query against a brute-force loop, on random, clustered, coplanar,
   all-equal, long-thin and degenerate sets, leaf sizes 1 to 1024, float and double. Kernels
-  against long-double references. Watertightness is tested with rays **aimed** at edges and
+  against geometric oracles (a long double is a double on Windows, so it is no reference).
+  Watertightness is tested with rays **aimed** at edges and
   vertices, from outside too.
 - **Extremes:** centroids at 3e38f and 1e308, 1e160 boxes, denormal extents, NaN and infinity, 0
   and 1 primitives, `leafSize` 0.
@@ -908,6 +909,55 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 - NewScene and AddObject count what the history holds for them (`CreatedBlocks::memSize`).
 - Test: `test_scene_documents`. Mutations: 17; 16 are found, and the other one's code was redundant and
   is gone (ApplyDelta kept a Library of its own).
+
+### BVH, View and picking: the review's fixes
+- **Findings and resolutions:** `docs/reports/feature-report-bvh-2026-11-25.md`. Needs litestl PR #14.
+- **The ranking rule changed** (it was "ray hits before misses"):
+  1. Thin shapes (points, segments, and solids up to `thinRadius` pixels wide) that aren't behind the
+     occluder: by distance, then dimension, then depth.
+  2. What covers the cursor, by depth.
+  3. The rest, by distance, then depth.
+  - Why: a surface behind everything always covers the cursor, so under the old rule a radius did
+    nothing for a point, an edge or a hair over a filled background.
+  - The occluder is the frontmost surface under the cursor, of any domain, wanted or not. A thin shape
+    is behind it if it is deeper by more than `slope` times the reach at that depth. Without that slack,
+    half of a face's own edges and vertices would be behind the face.
+  - A hit's distance doesn't count its own pixel radius, so a 6-pixel dot covers 6 pixels.
+- **One hit of each object,** or with `everyDomain` of each domain. The sink keeps, per domain, what may
+  still be first, since it can't know the other objects' occluder yet.
+- **Front to back:** candidates are sorted by the depth at which the cursor's region enters their bounds.
+  With `maxHits` 1, each object's query has the best depth so far; what is thin and nearer to the cursor
+  isn't cut off by it.
+- **The `Spatial` slots:** `closestElements(NearQuery, NearSink)` instead of a vector of handles;
+  `elementsInRegion(RegionQuery, domain)` is new and optional.
+- **SceneSettings** is a Runtime extension, not a member of Scene: how a host uses threads isn't part
+  of a document.
+- **SceneBvh's leaf size** is 8. Measured with `bench_scene --leaf` on a busy machine (100,000 objects, best ms
+  for 1,000 queries, leaf sizes 4, 8, 16, 32, 64): objects on a ray 0.94, 0.91, 0.94, 0.93, 1.13;
+  objects near a point 2.4, 1.8, 1.9, 2.0, 2.5. Evaluation doesn't depend on it.
+- **A pick of 11,685 candidates** took 200 ms, found by the benchmark: the ranking's map had keys that all
+  collided. It takes about 35 ms now; one of 64 takes 0.12 ms.
+- **Numerics:** `nodeSlab` enlarges boxes by 1e-12 of their reach (how far from the origin, on any
+  axis); the kernels' rounding, measured far from the origin, is below a tenth of that. `keep` clamps a triangle's t to
+  its box. Spheres and capsules are computed relative to the ray's origin.
+- **Benchmark:** `sphereOverlap` and `nearest` are measured (`sphereNs`, `nearestNs`), and count for the
+  leaf-size rule.
+- **Deferred, until something needs them:**
+  - a source that borrows a host's indexed arrays, with positions and indices of its own types;
+  - cancelling a pick (maxHits 1 takes the reason away for hover);
+  - k-nearest, and nearest to a segment or ray;
+  - refits that repair the tree instead of only growing boxes (rotations).
+- **Not shown to matter, and gone:** the 1e-12 slack of `nearest`; `hasBack` in the outline (with a zero
+  matrix it made a solid past the far plane a hit; found by the new tests).
+- **Mutations:** about 250, each alone. Those that survive:
+  - work only: the sink keeping hits that others beat, and repeated work in builds;
+  - rounding only: the exact-zero clip distance, a capsule's end test in world coordinates, the
+    order of two limits that are equal up to the outward rounding of boxes, and which of several points
+    that tie on a clipped capsule is taken;
+  - defensive: a zero direction component's pad, refusing a triangle hit off its box, two index guards (an
+    out-of-bounds read), and the second clipped edge of a segment, which adds the same point.
+  - Code that turned out redundant is gone (the ranking's third group, an occlusion check, `keep` for
+    solids, checks that the BVH's own validation repeats).
 
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.

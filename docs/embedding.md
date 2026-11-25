@@ -152,6 +152,22 @@ Unreal, coredcc is exactly one module, so they exist once.
 - Foreign (JS) interface implementations are thread-affine. Parallel algorithms check
   the `threadAffine` flag and either run serially or gather foreign data on the main
   thread first.
+- **Queries of a `GeometryBvh`, `Bvh` or `AnyBvh` are const** and may run on several threads at once, but
+  not while it is built or refitted.
+- **coredcc uses litestl's task pool** (`parallel_for`) in these places, and nowhere else so far:
+  - BVH builds of more than 4,096 primitives and refits of more than 16,384 (a partial refit by the
+    leaves it touches). `BvhOptions::parallel = false` keeps one on the calling thread. A build that
+    already runs on a worker is serial.
+  - `evaluateScene`, for the scene's BVH only. `rt.ext<SceneSettings>().bvh.parallel = false` keeps it
+    off the pool; `leafSize` and `bins` are there too.
+
+## Picking
+- **Positions are in device pixels** (x and y of `rayFromPixel`, `regionFromRect` and `pickScene`), y
+  down. **Sizes are in logical pixels** (`PickOptions::radius`, `PickHit::distance`, the pixel radii of
+  a sink's points and segments), which are `View::dpiScale` device pixels. What is in device pixels all
+  the same says so (`radiusDevicePixels`).
+- `pickScene` answers for the last `evaluateScene`. A `pick` slot is called while nothing may change.
+- To find the first hit only, as a hover does, set `maxHits` to 1: objects behind it aren't asked.
 
 ## Interfaces across binary images
 Interface identity is per binary image. These are all statics or addresses inside the

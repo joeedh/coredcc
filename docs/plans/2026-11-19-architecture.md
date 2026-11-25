@@ -894,6 +894,10 @@ So:
   2. **Exact scoring in world or screen space.** Candidates are transformed back.
 - Every hit reports its world position, its depth and its **screen distance in pixels**.
   Picks across objects rank by `(screenDist, depth)`.
+  - Refined in P3: thin shapes (points, segments, narrow solids) that no surface hides rank by
+    `(screenDist, depth)`; then what covers the cursor by depth; then the rest. A surface under the
+    cursor always has a distance of 0, so the plain rule let nothing in front of it be picked
+    (`PickOptions`, and the P3 plan's implementation notes).
 
 ### Leaf size
 - The default is chosen by `tests/bench_bvh_leafsize.cc`.
