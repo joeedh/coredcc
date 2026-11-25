@@ -1,0 +1,12 @@
+coredcc_library(coredcc_graph
+  SOURCES
+    bindings.cc
+    builtin_nodes.cc
+    exec_context.cc
+    node_type.cc
+    payload.cc
+    socket_type.cc
+    value.cc
+  DEPS
+    coredcc_command
+)
