@@ -213,12 +213,18 @@ class NodeTypeRegistry {
   {
     return *types_[i];
   }
+  /** Moves with every registration. */
+  uint64_t stamp() const
+  {
+    return stamp_;
+  }
   Status validate() const;
 
  private:
   Result<const NodeType *> store(NodeType *type);
 
   Runtime &rt_;
+  uint64_t stamp_ = 0;
   litestl::util::Vector<NodeType *> types_;
   litestl::util::Map<uint64_t, NodeType *> byId_;
 };

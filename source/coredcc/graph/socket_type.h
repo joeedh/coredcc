@@ -87,6 +87,11 @@ class SocketTypeRegistry {
                  const GraphValue &in,
                  GraphValue &out) const;
 
+  /** Moves with every registration. */
+  uint64_t stamp() const
+  {
+    return stamp_;
+  }
   Status validate() const;
 
  private:
@@ -109,6 +114,7 @@ class SocketTypeRegistry {
   Entry *entry(std::string_view name) const;
 
   Runtime &rt_;
+  uint64_t stamp_ = 0;
   litestl::util::Vector<Entry *> types_;
   litestl::util::Map<uint64_t, Entry *> byId_;
   litestl::util::Map<PairKey, SocketConvertFn> conversions_;

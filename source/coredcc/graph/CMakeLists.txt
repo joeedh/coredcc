@@ -2,10 +2,15 @@ coredcc_library(coredcc_graph
   SOURCES
     bindings.cc
     builtin_nodes.cc
+    def.cc
+    def_edit.cc
     exec_context.cc
     node_type.cc
     payload.cc
+    provider.cc
+    reach.cc
     socket_type.cc
+    topology.cc
     value.cc
   DEPS
     coredcc_command

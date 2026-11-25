@@ -170,7 +170,8 @@ Result<const NodeType *> NodeTypeRegistry::store(NodeType *type)
     litestl::alloc::Delete(type);
     return id.status();
   }
-  type->stamp = rt_.touch();
+  stamp_ = rt_.touch();
+  type->stamp = stamp_;
   types_.append(type);
   byId_.add(id->value, type);
   return static_cast<const NodeType *>(type);

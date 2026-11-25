@@ -166,7 +166,7 @@ Result<SocketTypeRegistry::Entry *> SocketTypeRegistry::addEntry(SocketType type
   e->type = std::move(type);
   types_.append(e);
   byId_.add(e->type.id.value, e);
-  rt_.touch();
+  stamp_ = rt_.touch();
   return e;
 }
 
@@ -221,7 +221,7 @@ Status SocketTypeRegistry::addConversion(std::string_view from,
                           std::string(to) + " already")
                              .c_str());
   }
-  rt_.touch();
+  stamp_ = rt_.touch();
   return Status();
 }
 
