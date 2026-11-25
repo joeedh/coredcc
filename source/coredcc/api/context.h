@@ -10,6 +10,9 @@
 #include "coredcc/parse/path.h"
 #include "coredcc/props/ref.h"
 
+#include <optional>
+#include <utility>
+
 namespace litestl::binding::types {
 template <typename T> struct Struct;
 }
@@ -132,6 +135,42 @@ class Context {
   bool hasPrefix_ = false;
   const PropertyBag *inputs_ = nullptr;
   PropertyBag *outputs_ = nullptr;
+};
+
+/**
+ * Sets a Context's path prefix, or clears it (null), for the length of a scope. With
+ * `invoke`, it runs a layout's tool: its pointer arguments and the command see the prefix, and
+ * so do the command's undo and redo later.
+ */
+class PrefixScope {
+ public:
+  PrefixScope(Context &ctx, const Path *prefix) : ctx_(ctx)
+  {
+    if (const Path *before = ctx.prefix()) {
+      before_ = *before;
+    }
+    if (prefix) {
+      ctx.setPrefix(*prefix);
+    }
+    else {
+      ctx.clearPrefix();
+    }
+  }
+  ~PrefixScope()
+  {
+    if (before_) {
+      ctx_.setPrefix(std::move(*before_));
+    }
+    else {
+      ctx_.clearPrefix();
+    }
+  }
+  PrefixScope(const PrefixScope &) = delete;
+  PrefixScope &operator=(const PrefixScope &) = delete;
+
+ private:
+  Context &ctx_;
+  std::optional<Path> before_;
 };
 
 } // namespace coredcc

@@ -48,6 +48,7 @@ coredcc_test(test_command_blocks SOURCES command/test_command_blocks.cc DEPS cor
 coredcc_test(test_command_block_edits SOURCES command/test_command_block_edits.cc DEPS coredcc_command)
 coredcc_test(test_command_active SOURCES command/test_command_active.cc DEPS coredcc_command)
 coredcc_test(test_command_snapshot SOURCES command/test_command_snapshot.cc DEPS coredcc_command)
+coredcc_test(test_command_prefix SOURCES command/test_command_prefix.cc DEPS coredcc_command)
 coredcc_test(test_command_pointers SOURCES command/test_command_pointers.cc DEPS coredcc_command)
 coredcc_test(test_command_library SOURCES command/test_command_library.cc DEPS coredcc_command)
 coredcc_test(test_command_many SOURCES command/test_command_many.cc DEPS coredcc_command)

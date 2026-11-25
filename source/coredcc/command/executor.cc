@@ -14,12 +14,12 @@ using litestl::util::Vector;
 
 namespace {
 
-/* Points ctx's command bags (and executor) at one record for the length of a slot
+/* Points ctx's command bags and path prefix at one record for the length of a slot
  * call, restoring the outer ones after: sub-commands nest. */
 class BagScope {
  public:
   BagScope(Context &ctx, CommandRecord &rec)
-      : ctx_(ctx), inputs_(ctx.inputs()), outputs_(ctx.outputs())
+      : ctx_(ctx), inputs_(ctx.inputs()), outputs_(ctx.outputs()), prefix_(ctx, rec.prefix())
   {
     ctx.setCommandBags(&rec.inputs(), &rec.outputs());
   }
@@ -32,6 +32,7 @@ class BagScope {
   Context &ctx_;
   const PropertyBag *inputs_;
   PropertyBag *outputs_;
+  PrefixScope prefix_;
 };
 
 /* Marks a slot call other than exec, so the slot can't call back into the executor. */
@@ -282,7 +283,8 @@ void LinearHistory::push(RecordPtr rec)
     CommandRecord *head = entries_[cursor_ - 1];
     const uint64_t key = rec->command().foldKey();
     if (key != 0 && head->subCount() == 0 && head->command().hasFold() &&
-        head->command().foldKey() == key && head->command().foldFrom(rec->command()))
+        head->command().foldKey() == key && head->prefix_ == rec->prefix_ &&
+        head->command().foldFrom(rec->command()))
     {
       head->adoptBags(*rec);
       rec->discard();
@@ -537,6 +539,9 @@ Result<RecordPtr> CommandExecutor::start(Context &ctx,
   RecordPtr rec(litestl::alloc::New<CommandRecord>("coredcc::CommandRecord", &def,
                                                    std::move(cmd), std::move(bag).value()));
   rec->fromFactory_ = fromFactory;
+  if (ctx.prefix()) {
+    rec->prefix_ = *ctx.prefix();
+  }
   Status ok;
   {
     SlotScope slot(slotDepth_);
@@ -769,7 +774,10 @@ Status CommandExecutor::rerunHead(Context &ctx, PropertyBag newInputs)
                                        .c_str());
   }
 
-  Result<PropertyBag> out = run(ctx, def, std::move(fresh).value());
+  Result<PropertyBag> out = [&] {
+    PrefixScope prefix(ctx, old->prefix());
+    return run(ctx, def, std::move(fresh).value());
+  }();
   if (out.ok()) {
     discardRecord(*old);
     return Status();

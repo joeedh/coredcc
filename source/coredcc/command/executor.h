@@ -9,6 +9,7 @@
 #include "coredcc/command/command.h"
 
 #include <memory>
+#include <optional>
 #include <string_view>
 
 namespace coredcc {
@@ -75,6 +76,11 @@ class CommandRecord {
   {
     return fromFactory_;
   }
+  /** The path prefix it ran with, which undo and redo set too; null for none. */
+  const Path *prefix() const
+  {
+    return prefix_ ? &*prefix_ : nullptr;
+  }
   /** After a fold: the head shows the folded run's inputs and outputs. */
   void adoptBags(CommandRecord &from);
 
@@ -87,6 +93,8 @@ class CommandRecord {
   PropertyBag outputs_;
   litestl::util::Vector<CommandRecord *> subs_;
   bool fromFactory_ = false;
+  /** The Context's path prefix of the run, which every slot sees. */
+  std::optional<Path> prefix_;
   /** memSize() when the history took it, for the budget's running total. */
   uint64_t cachedSize_ = 0;
 };
@@ -126,7 +134,8 @@ class UndoHistory {
  * A cursor over a list of commands.
  * - Pushing truncates the redo side, discarding it.
  * - A push folds into the head only when the head is at the cursor, nothing has been
- *   undone or redone since it was pushed, and neither record has sub-commands.
+ *   undone or redone since it was pushed, neither record has sub-commands, and both ran with
+ *   the same path prefix.
  * - Past the memory budget the oldest commands are discarded; the newest always stays.
  *   A record's memSize is read when it is pushed or folded into, and after its undo and redo
  *   (what it holds changes); the budget is applied at the next push.
