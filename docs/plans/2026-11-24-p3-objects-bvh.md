@@ -1,6 +1,7 @@
 # P3: objects, transforms and BVH
 
-- Status: pressure-tested (2026-11-24) and changed; the record is at the end.
+- Status: pressure-tested twice (2026-11-24) and changed; the records are at the end. Steps 0 to 3
+  are done.
 - Branch: `p3-scene`, in the worktree `C:\dev\coredcc-p3-scene`.
 - Architecture: §8 (objects and transforms), §9 (BVH), §10 (View), §2a (interfaces), §14.
 - Feature reviews: **objects and transforms**, and **BVH**.
@@ -10,12 +11,12 @@
 | Phase | Owns |
 |---|---|
 | P2 | Value bytes; `BlockProvider`'s optional slots; **library lifetime** (pin kinds, deferred destruction of pinned blocks, `LibraryRef`, `LibraryPin`); attachments; `Library::rename`; snapshot undo and lz4; CreatedBlocks with BlockIds; `layout/`; TA2; `gen-paths`. Value bytes, slots, lifetime and the attachment registry are step A1, merged early. |
-| P3 | `scene/`, `bvh/`, `draw/View`, `EvalCtx`, `CollectionAccessor::setActive`, the Context scene slot, display units and frames. Its providers' `serialize` is its last large step. |
+| P3 | `scene/`, `bvh/`, `draw/View`, `EvalCtx`, `CollectionAccessor::activeMember`, the Context scene slot, display units and frames. Its providers' `serialize` is its last large step. |
 | P5 | `graph/`, the Runtime's global version counter, payloads, and **immediate change notification**: ChangeBus listeners, notify before the `update` hook, `notifyAll()`, EvaluationScope and its Busy rule (its step 1, merged early). GraphDef serialization is its last step. |
 | Shared files | `source/coredcc/CMakeLists.txt`, `tests/CMakeLists.txt`, the task list, `docs/debugging.md`, `docs/embedding.md`: small appended changes only. Task list: each phase edits its own row and focus lines. No phase edits `CLAUDE.md`. |
 
-- **`api/struct.h`** gets one optional field from P3 (`setActive`) and two from P2.
-- **`api/resolve.cc`'s `resolve()` isn't changed by P3** (see "setActive").
+- **`api/struct.h`** gets one optional field from P3 (`activeMember`) and two from P2.
+- **`api/resolve.cc`'s `resolve()` isn't changed by P3** (see "Setting the active item").
 - **`props/units.*`** are P3's. `props/def.cc` gets one check in `validate()`.
 
 ## Scope
@@ -25,7 +26,7 @@
   capabilities, Scene; BVH, its built-in sources, SceneBvh with two-phase queries; the
   leaf-size benchmark.
 - **Moved here from P4:** `draw/View` only. Picking reports screen distances, so it needs one.
-- **Deferred to P3 by earlier phases:** `CollectionAccessor::setActive` (lib and api review,
+- **Deferred to P3 by earlier phases:** setting a collection's active item (lib and api review,
   D2); the Context's scene slot (P1d; its ToolManager slot goes to P4); display units, the
   subtype/unit agreement check and frames (props review, D12).
 - **The litestl math PR ("PR D"),** planned for before P3 and never written.
@@ -113,8 +114,11 @@ after `X = (GR·GSM)⁻¹ · target`.)
 - **Rotation:** from orthonormal frames of the two most independent columns of `A`, and the
   same columns of `X · LS⁻¹`. No inverse of `A` is needed.
 - **Residual:** the largest relative error of a column of `LR·A` against `X·LS⁻¹`.
-- **Choice:** patterns with a residual below 1e-9 first; then the fewest sign changes from the
-  current channels; then the rotation nearest to the current one.
+- **Choice:** among the patterns whose residual is within 1e-9 of the smallest, the fewest sign
+  changes from the current channels, then the rotation nearest to the current one. The smallest
+  residual has to come first: a sheared target has none below 1e-9, and sign changes alone then
+  lose a mirror (2,000 of 2,000). With this rule none is lost for shears from 0 to 1, under
+  sheared parents too (`p3\closest.mjs`).
 - **Results** (all in `p3\e1.mjs`):
   - A node's own world, with random signs, depths 1 to 4 and mixed types: 0 of 40,000 refused,
     and its own channels come back to 1e-14. The first draft's method refused 29% to 76%.
@@ -126,6 +130,11 @@ after `X = (GR·GSM)⁻¹ · target`.)
   fail, and a node's own flattened world keeps its rotation to 6e-16.
 - **The residual equals the target's shear,** continuously. 1e-9 is a chosen threshold, not a gap
   in the data.
+- **The limit:** for TRS and RSrs, `A` is the identity and `P⁻¹ · target` is projected onto `LR·LS`.
+  With non-uniform scales at several levels that loses digits: at 0.01 to 100, 0, 20 and 457 of
+  8,000 random targets are refused under 1, 2 and 3 parents; at 1/1000 to 1000, 6, 1,160 and
+  4,051. (The 0 of 8,000 above is for RrSs and Rrs, whose `A` is known.) A child of one parent
+  scaled by 1e-7 along an axis: 463 of 3,000. An object's own world is found another way, below.
 - **Translation:** with two steps of iterative refinement, the residual is below
   1.0 · ε·(|P|·|t|) for parent conditions from 1e2 to 1e8. Without refinement it is 8,600 times
   that unit at 1e6.
@@ -330,12 +339,23 @@ struct TransformModel : IfaceRef {
   - Int and Enum channels outside ±2⁵³ are refused by their setter (OutOfRange). `coerce`
     clamps, so it can't do this.
 - **`setWorldOf(lib, object, target, mode, out)`** is what callers use.
-  - It computes the parent's state (below), calls the model, and **checks the result** by
+  - **The current channels come first:** if they already give the target (the check below), they
+    are returned unchanged, without calling the model. So an object's own world is always found,
+    with any scales, pivots, quaternion length or singular parent.
+  - Otherwise it calls the model with the parent's state (below), and **checks the result** by
     evaluating it: the linear part by the column residual (1e-9), the translation within
-    `16 ε · (|P|·|t| + |target t|)`. Beyond that it is FailedPrecondition, "not representable".
+    `16 ε · (|P|·L + |target t|)`. `L` is the sum of the magnitudes of the channels of subtype
+    Distance (translation, offsets, pivots), times 1 plus the largest local scale. Without the
+    pivots in `L`, 2,598 of 3,000 objects with pivots of 100 were refused; with them, none at
+    pivots up to 1e6. Beyond the bounds it is FailedPrecondition, "not representable".
   - `Closest` drops shear and keeps the translation. It checks only that the result is finite
     and that the translation holds.
-  - A singular parent is FailedPrecondition in both modes. A zero-scale *target* is fine.
+  - A parent that `tryInverse` refuses is FailedPrecondition in both modes. A zero-scale *target*
+    is fine.
+  - **Commands use `Closest`.** In the exact mode, unparenting a rotated child of a (1,2,1) parent
+    (residual 0.56) would fail, and so would a delete of many objects because of one. Exact is
+    for callers that need to know. Float32 matrices are refused by it (1,998 of 2,000): importers
+    use `Closest`.
 - **`TransformDelta {kind, basis (quatd), pivot, vector, axis, angle}`.** `basis` replaces a space
   enum: world, local, view and custom orientations are all bases.
   - **The delta is the total from `base`;** `near` is the previous result. Trs and Fbx pick the
@@ -401,7 +421,7 @@ struct TransformModel : IfaceRef {
   as its parent, flagged `MissingModel`.
 - ApiStruct: `name` (read-only; renaming is P2's command), `flags`, `parent`, `data`, `transform`
   (a fixed nested pointer, whose struct is the transform type's).
-  - `parent` and `data`, and Scene's active object, fill P2's `PointerAccessor::cell`, so undo
+  - `parent` and `data`, and Scene's `activeObject`, fill P2's `PointerAccessor::cell`, so undo
     keeps links to placeholders.
 - **Storage:** declared `BlockStorage::Transient` in the step that adds the type, and Payload in
   the serialize step. A type with neither fails every save (P2's A4).
@@ -420,45 +440,62 @@ struct TransformModel : IfaceRef {
   outside anyway (a host, undo, a file) is evaluated but not picked. Cycles found by `evaluate`
   (undo of two reparents, a file) get the identity parent and `EvalStatus::Cycle`.
 - **`evaluate(ctx)`:**
-  - opens P5's EvaluationScope, so setValue, executor entries, graph edits, `computeState` and
-    another `evaluate` are Busy, plus `beginNoCollect`;
+  - holds `beginNoCollect`, and calls `SceneEvaluator::run`, which opens P5's EvaluationScope:
+    setValue, executor entries, graph edits, `computeState` and another `evaluate` are Busy.
+    `evaluate` itself doesn't open it, because P5c's evaluator must set graph inputs and call
+    `GraphInstance::evaluate`, which are Busy inside one;
   - walks the hierarchy with an explicit stack, parents first; world boxes are the transform of
     the local box, rounded outward; then SceneBvh;
   - **writes to a second store and swaps it in at the end,** so a foreign slot that reads
     results sees the previous evaluation, complete.
 - **Lookups are cached per member:** handle, interface tables, parent index, topological order.
-  They are rebuilt when `Library::epoch()` or the cell list changes.
+  The cache is in the Scene's block data, so it goes with it, and a duplicate starts without one.
+  - **The key** is `Library::epoch()`, the interface registry's `tableCount()`, and
+    `ClientRegistry::generation()`: a later `registerImpl`, or an alias that makes a raw cell
+    resolve, doesn't move the epoch.
+  - **When the key changes, it is revalidated in place:** every member's lookups are made again
+    and compared, with the cell list. If they are equal, the order, the store and SceneBvh stay.
+    Selecting writes Weak cells, which moves the epoch, so this is the common case.
   - **Checked on every evaluate:** `Library::data()` is called again for every object and data
     block (hosts may move them), and `read`'s parent and data ids are compared with the cached
-    ones. Any difference rebuilds the cache and starts over, once.
-  - An interface that came from an override or from a provider's `queryInterface` isn't cached.
-  - P2's A1 makes `setOverride`, `attach` and their opposites bump the epoch. Until it merges,
-    an object with the HasOverrides flag isn't cached.
+    ones. A different id, or data that is null and wasn't (or the opposite), rebuilds the cache and
+    starts over. If that happens again in the same call, `evaluate` is FailedPrecondition and
+    keeps the last results: a slot answers differently each time.
+  - **Cached only when the table comes from the block's own type,** with non-null data. An
+    override isn't cached. Where the type has no table and its provider has `queryInterface`,
+    it is asked each time, also after a null answer.
+- **The store has its own handle-to-index map,** swapped with it. The Scene's map changes between
+  evaluations.
 - **Results:** `evaluated(handle, ObjectEval &out) -> bool` copies. Nothing hands out pointers
   into the store.
-- **By path:** a runtime owner `coredcc.evaluated` has a collection `objects` keyed like the
-  Scene's, with `world`, `bounds` and `status`, for the Context's scene.
+- **By path:** a runtime owner `coredcc.evaluated` has a collection `objects` keyed by the
+  object's BlockId, as P2's text (`objects["<client>,<32 hex>"]`), with `world`, `bounds` and `status`, for the Context's scene.
   `addEvaluated(ApiStruct &root)` puts it on a host's root. After the scope closes, `evaluate`
   calls `notify` on that owner if any result changed. Watchers then fire, no block is stamped as
   edited, and an object in several scenes has one answer. With no scene, or none evaluated, it
   is NotFound.
+  - The key isn't the handle: these items' addresses do contain it, and a handle names another
+    object after a reload.
+  - Results are compared bitwise.
 - **Seam for P5c:** `SceneEvaluator::run(Scene &, EvaluatedStore &)`, internal.
 - **The Context slot** is `setScene(BlockHandle)` and `scene()`; `activeScene(ctx)` resolves it.
+  `setScene` bumps the ChangeBus's structural epoch, so watchers of `evaluated` see the switch.
 
-### setActive
-- `CollectionAccessor` gains `setActive(self, ctx, item) -> Status` (a null item clears).
-- **`resolve()` is unchanged.** `objects.active` still resolves to the item, and is still
-  NotFound without one.
-- **`resolveActive(ctx, path)`** resolves everything before a trailing `.active` to `ActiveRef
-  {holder, member, collection StableRef}`, also when there is no item. `getActive` and
-  `setActive(ctx, ActiveRef, value)` check the type against the item struct, call the accessor,
-  notify, and bump the structural epoch.
-- The path forms of `getValue`, `setValue` and `setValueUndo` use it when a path ends in
-  `.active` of a collection with `setActive`. Undo is a private command
-  `core.collection.setActive`, which holds the collection's StableRef and the old and new items'
-  RefCells, not the item's address, and pins them with `PinKind::History`.
-- Files: `api/struct.h`, `api/active.{h,cc}`, `command/set_property.cc`, and the string overloads
-  in `api/resolve.cc`. P2's static resolver and `meta` see `.active` as today.
+### Setting the active item
+- **The active item is an ordinary settable Pointer member** of the collection's holder: Scene's
+  `activeObject`, a Weak cell, with `PointerAccessor::cell`. Its setter refuses an object that
+  isn't in the scene.
+- **`CollectionAccessor::activeMember`** (optional) is that member's name. **Writes** to a path that
+  ends in `.active` of such a collection go to the member: `resolveForWrite(ctx, path)` resolves
+  everything before `.active`, then the member of the holder. Otherwise it is `resolve()`. The
+  string forms of `setValue`, `setValueUndo` and SetProperty use it.
+- So undo, folding, links to blocks that aren't Live, watchers (of `activeObject`), NoUndo,
+  ReadOnly, Busy and text come from SetProperty. Nothing else is added.
+- **Reads are unchanged:** `objects.active` resolves to the item and is NotFound without one;
+  `getMeta` answers for the item.
+- A collection whose items live inside their owner names a member with its own `address`.
+- Files: `api/struct.h`, `api/resolve.{h,cc}` (one function), `command/set_property.cc`. P2's
+  static resolver and `meta` see `.active` as today.
 - **Keys:** `objects` uses the block handle, packed into an int64, as its key
   (`objects[#...]`), and `lookup` also takes a name (the first match). Items are roots of their
   own owner, so canonical addresses never contain the key.
@@ -492,14 +529,25 @@ struct TransformModel : IfaceRef {
      in scene order.
 - The object-space ray exists only if the object's matrix inverts. Otherwise the region's
   candidates are transformed to world and scored there.
-- **Spheres and capsules** are scored exactly, in pixels. The distance from the cursor to a
-  convex outline is the largest `n·p − h(n)` over directions `n`. A transformed sphere projects to
-  a conic, whose `h(n)` is a root of a quadratic in its dual conic. A capsule's outline is the
-  hull of its two ends, so `h` is the larger of the two. The search starts from 16 directions and
-  two seeds, then uses golden section.
-  - Checked against dense sampling under shear and perspective: within the sampling's coarseness
-    (0.65 px). `p3\e5.mjs`.
-  - A capsule that crosses the near plane falls back to its clipped axis, less `r·|Mᵀn|`.
+- **The interfaces are queried again for each candidate,** and one that isn't Live, or whose data is
+  null now, is skipped. Data evaluated earlier may have been freed or moved since.
+- **Spheres and capsules** are scored by the exact distance, in pixels, from the cursor to the
+  outline of the solid clipped by the near plane (`outline.{h,cc}`):
+  - **GJK in 2D** on the projected, clipped solid, which is convex. It ends when the certified
+    gap is under 0.01 px, or with 0 when the cursor is inside. 5 to 7 iterations.
+  - **The support point** in a screen direction `n` maximizes `n·(x, y) / w`. With the value `h` of
+    the last point, it is the point that maximizes the linear function `n·(X, Y) - h·W` (the rows
+    of the object-to-pixel matrix), repeated until `h` stops growing (2 or 3 times). Every point
+    has `w > 0` because of the clipping, so the eye plane needs no case.
+  - **The linear maximum over a clipped capsule is closed form:** the best of each end's ball cut by
+    the plane, and, where the plane crosses between them, the point where it cuts the line of
+    the two ends' support points for `g + λm` with `(g + λm)·(b - a) = 0`.
+  - An empty clipped solid is not a candidate.
+  - **Measured** (`p3\outline.mjs`, `p3\outline2.mjs`): against an independent minimizer on 393
+    solids, whole, crossing the near plane and crossing the eye plane, never more than 1e-4 px
+    above it, and 0 in 5 cases where the minimizer found no point inside (one checked by hand);
+    against GJK on the dual conics, on 36,000 whole capsules (the sets where the
+    search failed, sheared, orthographic), within 1e-5 px. 2.5 to 6.4 µs per candidate in JS.
 
 ## Units and frames (own small step, last)
 - **`UnitSettings`** (`props/unit_settings.h`): a display unit per family, fps as a rational, start
@@ -528,9 +576,9 @@ bvh/    box.h  ray.h  kernels.{h,cc}  bvh.h  build.h  sources.h  geometry_bvh.h
 draw/   view.{h,cc}  bindings.cc
 scene/  eval_ctx.h  transform.{h,cc}  solve.{h,cc}  transform_registry.{h,cc}  trs.cc  fbx.cc
         matrix.cc  capabilities.h  object.{h,cc}  scene.{h,cc}  evaluator.{h,cc}  evaluated.{h,cc}
-        scene_bvh.{h,cc}  pick.{h,cc}  conic.{h,cc}  api.cc  membership_commands.cc
+        scene_bvh.{h,cc}  pick.{h,cc}  outline.{h,cc}  api.cc  membership_commands.cc
         transform_commands.cc  commands.h  bindings.cc  builtins.{h,cc}
-api/    active.{h,cc}  format.{h,cc}
+api/    format.{h,cc}
 props/  unit_settings.h
 bind/   foreign_transform.{h,cc}
 tests/  bvh/  draw/  scene/  bench/
@@ -553,7 +601,9 @@ Layering: `base` ← `bvh`, `draw`; `command`, `bvh`, `draw` ← `scene` ← `bi
   sample's formulas. Its table (mixed types, sheared, signed and reflected chains, pivots) is
   committed. Mutation checks: dropping GSM, reordering it, and replacing `GR` with a decomposition
   must each fail.
-- **Solving:** a node's own world for every model, with signs, shear, zero scales and scales from
+- **Solving:** own worlds with pivots up to 1e6 and scales from 1/1000 to 1000 through three parents
+  (TRS too), with non-unit quaternions and scales of 1e-13, come back unchanged; `Closest` keeps
+  mirrors under shear; pivots in targets that aren't the object's own. A node's own world for every model, with signs, shear, zero scales and scales from
   1/1000 to 1000; unchanged channels; refusals; parent conditions to 1e8; translations at 1e10
   with a wrong rotation must be refused.
 - **Deltas:** total-angle drags to 720° with `near`, custom bases, gimbal lock.
@@ -564,9 +614,20 @@ Layering: `base` ← `bvh`, `draw`; `command`, `bvh`, `draw` ← `scene` ← `bi
   without `writeRef`; several scenes; quarantine mode on.
 - **Commands:** create a parent and parent to it in one step; `[A, B]` with A above B; delete of a
   parent and its child; `objects` text with bad, missing and repeated ids; undo and redo of each.
-- **setActive:** from no item, undo after reorder, clear, wrong type; every existing `.active`
-  path as before.
-- **Picking:** against a screen-space loop over every triangle, clipped to the near plane, for
+- **Scene cache, where the epoch doesn't move:** a provider's `queryInterface` from null to an
+  answer; `registerImpl` after the first evaluate; data that becomes null and comes back, while
+  Live; an alias registered later. Also: selection keeps the order and SceneBvh (counters);
+  `evaluated` after an unlink; a `read` whose parent differs each time; a duplicate and a new
+  Library; `setScene` and a watcher.
+- **Active item:** from no item, clear, wrong type, not a member; every existing `.active` read as
+  before; a member name that doesn't exist (`validate`). **Delete the active object, set another,
+  undo both; a Detached active object, then undo.** Gestures fold. An inner collection
+  (`tool.brushes`).
+- **Picking, analytic:** spheres and capsules against a minimizer over the solid, with ends offscreen,
+  at and across the near plane and the eye plane, near planes from 0.001, sheared and singular
+  matrices, perspective and ortho, and scores at each pixel around them.
+- **Pick after changes:** evaluate, delete, clear the history, pick; data moved by its host.
+- **Picking, triangles:** against a screen-space loop over every triangle, clipped to the near plane, for
   non-uniform, reflected, sheared and singular objects, in perspective and in ortho with the near
   plane behind the eye. The pressure test's thin-curve case.
 - **compile_embed** includes every new header. **wasm-st** runs all of it under node
@@ -582,7 +643,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 | 1 | `bvh/`: box, kernels, serial build, sources, queries, oracles | — |
 | 2 | Parallel build, refit, GeometryBvh, AnyBvhSource, bindings | 1 |
 | 3 | The benchmark and its command. **Mergeable here.** | 2 |
-| 4 | `setActive`, the Context scene slot, `foreignImplementable`'s return check. **Mergeable here.** | P2 A1 (`PinKind::History`) |
+| 4 | `activeMember`, the Context scene slot, `foreignImplementable`'s return check. **Mergeable here.** | P2 A2 (`PointerAccessor::cell`) |
 | 5 | `draw/View` | PR D |
 | 6 | EvalCtx, the registry, Trs, Fbx, Matrix, the solver, golden values | PR D |
 | 7 | Capabilities, Object, Scene, evaluate, results by path, API structs | 4, 6; P5 step 1 (EvaluationScope, notify); P2 A1 (`BlockStorage`, epoch bumps) |
@@ -592,9 +653,8 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 | 11 | `serialize`, `deserialize`, `duplicate`, `rekey` for Object and Scene; storage becomes Payload | 7; P2 A1 (A4 for the round-trip test) |
 | 12 | Units and frames | 7 |
 
-- **P5's step 1 is on master** (`537b3d2`). P2's A1 isn't yet. Step 4 can use today's `pin` until
-  it merges; step 7 waits for it, because a type without a storage decision breaks saves.
-- If A2 is late, `cell` is filled in step 11. If B1 is late, step 10's text input moves after 12.
+- **On master:** P5's step 1 (`537b3d2`), P2's A1 (`09fd77e`) and A2 (`f6dd789`).
+- If B1 is late, step 10's text input moves after 12.
 - Channels are serialized as `BlockEntry`s by name, beside the type's name; unread ones are kept.
 
 ## Implementation notes
@@ -628,15 +688,16 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 - **wasm-mt:** the four BVH tests pass in node.
 - **The leaf-size rule needs another look before the recorded run.** The build gets faster with
   every larger leaf size, so "within 10% of the fastest build" keeps only the largest sizes. In
-  the smoke runs (10k triangles, not a measurement) it chose 1024, whose queries were 10 times
-  slower than 16's. The tool follows the plan's rule and also prints the largest size within 10%
+  the smoke runs (10k triangles, not a measurement) it chose 1024 or 512, whose queries were 6 to 10
+  times slower than 16's. The tool follows the plan's rule and also prints the largest size within 10%
   of the best query time, which is the rule recommended instead.
 
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms
-  when nothing structural changed (SceneBvh refit included), and 80 ms after a structural
-  change.** A bench target measures both.
+  when nothing structural changed (SceneBvh refit included), 40 ms when the epoch moved and
+  nothing differs (a selection), and 80 ms after a structural change.** A bench target measures
+  all three.
 - The benchmark has run on an idle machine, `docs/bvh-leafsize.md` is committed, and the default
   follows from it.
 - FBX golden values and mutation checks; `setWorld` keeps every model's own world.
@@ -654,20 +715,20 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 5. Padded planes are conservative for every affine matrix up to offsets of 1e9.
 6. The near planes taken from the projection are right in every convention.
 7. `TransformState` is enough for every FBX type and for P5c.
-8. The sign search with the column residual keeps a node's own channels, zero scales included.
-9. The cache can't be stale in a way the per-evaluate checks miss.
+8. Current channels first keeps a node's own channels; the sign search finds representable targets
+   within the stated limits.
+9. The cache's key and per-evaluate checks cover every answer that can change.
 10. Writing to a second store makes every re-entrant read safe.
 11. `computeState` is enough for every command.
 12. The `coredcc.evaluated` owner can't loop with P5's versions.
-13. The conic distance is right when both ends are in front of the near plane.
+13. The outline distance is right for any clipped capsule, under any affine matrix.
 14. A flat array of doubles holds every channel kind exactly.
-15. `resolveActive` changes no existing path.
+15. `activeMember` changes no existing read, and only writes to `.active` that failed before.
 16. The `objects` text covers what TS and P2's layouts need.
-17. 20 and 80 ms are met.
+17. 20, 40 and 80 ms are met.
 
 ## Risks
 - **PR D waits for the user.** Steps 5 to 12 can be written, not merged, without it.
-- **Step 7 needs P2's A1.** It is P2's first step and merges early.
 - **Size:** 12 steps. P4 and P5c need 5 to 9; the rest can follow.
 - **The FBX rules are checked against a published sample, not the SDK.**
 - **Stateless models** can't keep caches; a spline rig would be a graph node writing overrides.
@@ -677,6 +738,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 ## Deviations from the architecture
 Recorded there when the phase is done:
 - decisions 1, 2, 5, 6, 8 and 9; `components()` replaced by TransformState;
+- `CollectionAccessor::setActive` is `activeMember`;
 - View moves from P4; `OverlayDrawable` is declared in P4;
 - §9: cone queries are region queries (no `coneFromPixel`); the concept has no `centroid(i)` and
   no per-query callbacks;
@@ -757,3 +819,44 @@ parts of this revision have not had a second pressure test, except where a measu
 - The FBX SDK; sculptcore, faberforge or UberTopo compiled against PR D; wasm-mt in a browser; the
   TS side of B11 and of `at`/`put`; the near-plane rules (reasoned; tested in step 5); whether
   contraction really breaks the triangle test; refit and SceneBvh times in the 20 ms target.
+
+## Second pressure test record (2026-11-24)
+A fresh agent tested the four pieces that were new in the revision. Its measurements were re-run
+(all reproduced), and its claims about the code were checked on `f6dd789`.
+
+### Survived
+- The dual conic's formula; RrSs and Rrs inversion; state changes and id comparison in the cache;
+  notifying `coredcc.evaluated` (with bitwise comparison).
+
+### Broke, and what changed
+- **The outline search missed narrow separating arcs** (545 of 1,616, reproduced), **gave nonsense for
+  spheres across the eye plane, and its near-plane fallback lost 23 of 31 near misses.** Replaced
+  by GJK, as it proposed. Its support function is different: see "Rejected".
+- **`Closest` lost mirrors** (2,000 of 2,000). Residual within 1e-9 of the smallest comes first.
+- **The translation check refused pivots** (2,598 of 3,000). The bound counts every Distance channel.
+- **TRS and RSrs under scaled parents were refused.** The current channels come first, and the claim
+  is limited to what holds.
+- **The commands' mode wasn't stated.** `Closest`.
+- **Four answers change while the epoch doesn't.** The key has `tableCount` and the client
+  generation; nullness of data is checked; `queryInterface` isn't cached, null or not.
+- **P5c's evaluator would have been Busy inside `evaluate`'s scope.** `run()` opens it.
+- **`pick` could use freed data.** It queries again.
+- **A selection cost a rebuild.** Revalidated in place, with a target (40 ms).
+- **Undo of the active object lost it, and couldn't name inner items; results disagreed.** An
+  ordinary Pointer member, named by `activeMember`.
+- **`setScene` didn't reach watchers; `evaluated` was keyed by a handle.** The epoch; BlockId text.
+- **Small:** the store's own map, the second difference, where the cache lives, the singular
+  threshold, non-unit quaternions, scales of 1e-13, float32 targets. Each is stated above.
+- **Euler near gimbal lock** (43% at 1e-7 with independent `atan2`): PR D already used the stable
+  form. Its tests now go from 1e-2 to 0 from lock, in all orders, and fail with the other form.
+- **Tests:** the missing ones are listed.
+
+### Rejected
+- **"GJK on the support function, with eye-plane and near-plane rules on whole end spheres."** The
+  dual conic's support only holds for solids wholly in front, so the others still need a second
+  method, and the proposed ones (clip the axis and add the cap disc) approximate. The support of
+  the clipped solid is closed form, so one method is exact for all of them. It costs about
+  twice as much per candidate.
+
+### Not verified
+- The 40 ms target; the near-plane clip in pixel space at offsets of 1e9.
