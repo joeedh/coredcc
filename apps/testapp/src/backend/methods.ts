@@ -217,6 +217,7 @@ export function installMethods(register: Register, loaded: LoadedBackend, report
     ta.nudge(current().host)
     return true
   })
+  method('watched', () => ta.watched(current().host))
   const closePanel = installPanelMethods(method, ctx)
   /* Kills the module, for tests of how a dead backend is reported. */
   method('abortForTest', () => {

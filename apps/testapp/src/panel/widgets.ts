@@ -203,10 +203,10 @@ function vectorWidget(meta: PathMeta, count: number, write: Write): Widget {
   }
 }
 
-/* A pointer as its text; "" for null. */
+/* A pointer as its text; "" is null. */
 function pointerWidget(write: Write): Widget {
   const root = element('span', 'widget')
-  const f = field(root, 'text', (text) => write(text.trim() === '' ? null : new Ref(text)))
+  const f = field(root, 'text', (text) => write(new Ref(text)))
   return {
     root,
     inputs: new Map([['', f.input]]),

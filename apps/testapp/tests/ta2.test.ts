@@ -77,6 +77,8 @@ describe('TA2: the panel of a layout', () => {
       }
       assert.equal(info.backend, process.env.COREDCC_TESTAPP_BACKEND ?? 'wasm-st', info.backendError)
       assert.equal(info.build, 'ta2')
+      await app.client.evaluate(`globalThis.errorsLogged = 0
+        { const was = console.error; console.error = (...a) => { errorsLogged++; was(...a) } }`)
     })
   )
   after(async () => {
@@ -128,8 +130,9 @@ describe('TA2: the panel of a layout', () => {
       ['mode', 'EDIT', 'mode', 1],
       ['editMode', false, 'mode[EDIT]', false],
       ['hide', true, 'flags', 2],
-      ['offset', 2.5, 'offset', [0, 0, 2.5], 2],
-      ['offsetY', -3, 'offset', [0, -3, 2.5]],
+      ['offset', 1.5, 'offset', [1.5, 0, 0], 0],
+      ['offset', 2.5, 'offset', [1.5, 0, 2.5], 2],
+      ['offsetY', -3, 'offset', [1.5, -3, 2.5]],
       ['big', '4611686018427387904', 'big', 2n ** 62n],
     ]
     let steps = 0
@@ -151,7 +154,7 @@ describe('TA2: the panel of a layout', () => {
     assert.deepEqual(await value('get', 'flags', {names: true}), ['SELECT', 'HIDE'])
     await shows('flags', ['SELECT', 'HIDE'])
     await shows('hide', true)
-    await shows('offset', [0, -3, 2.5])
+    await shows('offset', [1.5, -3, 2.5])
     await shows('big', 2n ** 62n)
     /* And each undo shows. */
     await value('undo')
@@ -189,7 +192,7 @@ describe('TA2: the panel of a layout', () => {
     assert.equal(n.error, undefined)
     await value('panelSet', 'other', (await value('get', 'items["Ball"]')).$ref)
     assert.equal(await value('get', 'activeItem.other.name'), 'Ball')
-    await value('panelSet', 'activeItem', '')
+    await value('panelSet', 'activeItem', ' ')
     assert.equal(await value('get', 'activeItem'), null)
     assert.equal((await node('itemName')).valueKind, undefined)
     /* Through a path that leads elsewhere now. */
@@ -216,6 +219,17 @@ describe('TA2: the panel of a layout', () => {
     await value('undo')
     assert.equal((await node('mode')).enabled, true)
     assert.equal((await node('itemCount')).enabled, true)
+    /* A widget that is made later, where it is disabled. */
+    await value('panel', {
+      xml: `<layout><column enabledIf="enabled"><prop id="w" path="activeItem.weight"/></column></layout>`,
+    })
+    await value('set', 'enabled', false)
+    await nodes()
+    await value('set', 'activeItem', await value('get', 'items["Cube"]'))
+    const w = await node('w')
+    assert.deepEqual([w.value, w.enabled], [1, false])
+    const html = (await app!.client.evaluate(`document.getElementById('panel').innerHTML`)).value
+    assert.match(html, /<input class="field" type="number" min="0" max="100"/)
   })
 
   step('a tool runs under its prefix, and is undone under it', async () => {
@@ -287,6 +301,7 @@ describe('TA2: the panel of a layout', () => {
     assert.match(html, /class="node tab chosen" data-id="toolTab"/)
     assert.match(html, /class="node tab" data-id="itemTab"/)
     assert.match(html, /<hr>/)
+    assert.match(html, /<input class="slider" type="range" min="0" max="1"/)
     assert.match(html, /data-tag="swatch" data-attr-color="red">Swatch</)
   })
 
@@ -310,8 +325,16 @@ describe('TA2: the panel of a layout', () => {
   })
 
   step('reset closes the panel with the document', async () => {
+    const watched = await value('watched')
+    assert.ok(watched > 10)
+    await value('panel', {file: 'testapp.xml'})
+    assert.equal(await value('watched'), watched, "the panel that was replaced doesn't watch")
     await value('reset')
+    assert.equal(await value('watched'), 0)
     assert.match((await refused('panelState')).message, /no panel/)
     assert.equal((await app!.client.evaluate(`document.getElementById('panel').innerHTML`)).value, '')
+    /* Nor does its timer go on. */
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    assert.equal((await app!.client.evaluate('globalThis.errorsLogged')).value, 0)
   })
 })
