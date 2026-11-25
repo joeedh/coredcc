@@ -2,6 +2,7 @@
 
 #include "coredcc/scene/evaluated.h"
 #include "coredcc/scene/object.h"
+#include "coredcc/scene/scene_bvh.h"
 
 #include "litestl/util/map.h"
 #include "litestl/util/vector.h"
@@ -112,6 +113,8 @@ class Scene {
     int rebuilds = 0;
   };
   const Counters &counters() const;
+  /** Over the bounds of the last evaluation. */
+  const SceneBvh &bvh() const;
 
   /** Every reference, for the provider. */
   template <class Fn> void foreachCell(Fn &&fn)

@@ -4,12 +4,13 @@
  *   bench_scene [--count N] [--reps N]
  *
  * One line per case: the best, the median and the worst of the repetitions, in ms. The targets
- * (P3's exit criteria, 100,000 objects) include SceneBvh; until evaluateScene refits one, the
- * refit of a BVH over the results' boxes is measured by itself. */
+ * (P3's exit criteria) are for 100,000 objects, and include what evaluateScene does to the
+ * scene's BVH: 20 ms when nothing structural changed, 40 when the epoch moved and nothing
+ * differs, 80 after a structural change. */
 #include "coredcc/api/resolve.h"
-#include "coredcc/bvh/geometry_bvh.h"
 #include "coredcc/lib/provider.h"
 #include "coredcc/scene/builtins.h"
+#include "coredcc/scene/pick.h"
 #include "coredcc/scene/scene.h"
 
 #include "litestl/util/alloc.h"
@@ -19,6 +20,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <vector>
 
 using namespace coredcc;
@@ -198,16 +200,25 @@ int main(int argc, char **argv)
       },
       evaluate);
 
-  BoxSource boxes;
-  for (BlockHandle h : all) {
-    ObjectEval e;
-    scene.evaluated(h, e);
-    boxes.append(e.bounds);
+  const SceneBvh::Counters &n = scene.bvh().counters();
+  printf("BVH: %d builds, %d refits\n", n.builds, n.refits);
+  View v;
+  v.viewport[2] = 1920.0;
+  v.viewport[3] = 1080.0;
+  v.view = litestl::math::lookAt(
+      double3(150.0, -100.0, 100.0), double3(150.0, 150.0, 0.0), double3(0.0, 0.0, 1.0));
+  v.proj = litestl::math::perspective(1.0, 16.0 / 9.0, 0.1, 10000.0, v.depth, false);
+  ViewMath view;
+  must(view.set(v));
+  for (double radius : {10.0, 200.0}) {
+    Vector<PickHit> hits;
+    size_t found = 0;
+    const std::string name = "pick, radius " + std::to_string(int(radius));
+    measure(name.c_str(), nothing, [&] {
+      must(pickScene(ctx, *sceneBlock, view, 960.0, 540.0, radius, {}, hits));
+      found = hits.size();
+    });
+    printf("  %d objects\n", int(found));
   }
-  GeometryBvh<BoxSource> bvh;
-  measure("BVH build", nothing, [&] { must(bvh.build(boxes)); });
-  measure("BVH refit", nothing, [&] {
-    must(bvh.onInvalidate(GeometryChange::Positions, boxes));
-  });
   return 0;
 }

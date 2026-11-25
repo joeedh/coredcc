@@ -833,6 +833,52 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   - the member that a change is posted for: the epoch moves as well, and makes the watchers read
     everything again.
 
+### Step 9
+- **Needs litestl PR #14.**
+- **Files:** `scene_bvh.{h,cc} pick.{h,cc} outline.{h,cc}`; tests `test_scene_outline`,
+  `test_scene_pick`, `test_scene_bvh`.
+- **`pickScene(ctx, scene, view, x, y, radius, filter, hits) -> Status`** instead of a Result: a
+  foreign exception is returned together with the hits of the other objects, as `evaluateScene`
+  does. The `pick` facade that evaluates first is a binding (step 10).
+- **One hit per object,** its best. A `PickSink` takes shapes (`point segment triangle sphere capsule
+  box`), each for the last `element(domain, element)`, and scores them. A block's `pick` only has to
+  find candidates, with the query's planes and its ray.
+- **Scoring is all in screen space,** so it needs no inverse, and a triangle or solid under a singular
+  matrix is nothing special. "A ray hit" is a shape that covers the cursor: a distance up to
+  1e-4 device pixels is 0. The ray is for the block's own BVH, and for the depth of a solid. If
+  there is none, or its hit isn't under the cursor (an inverse that is mostly noise), the
+  depth is that of a point of the solid under the cursor.
+- **Bounds that stand in for shapes are a surface,** not a solid: from inside a room, its far wall is
+  hit, so what is in the room comes first.
+- **`Unselectable` and `Hidden` are read now,** with the data block; matrices and bounds are the
+  evaluation's. A `pick` runs in an EvaluationScope, as `evaluateScene`'s capabilities do.
+- **SceneBvh is updated only when a result differs.** A refit that makes the tree cost more than twice
+  what it did when built is followed by a build. `GeometryBvh::refit` is new: a refit that doesn't
+  fall back.
+- **Two errors of the plan's GJK** were found by the near-singular matrices of the tests:
+  - where the direction is across the near plane, its part along the plane is rounding noise, and
+    put points on the wrong side of the plane (a flattened object);
+  - three points on a line gave a "covered" far from all of them. The weights' point is computed now.
+- **An error of step 3:** `closestOnTriangle` was wrong for points on the line of a triangle that has
+  no area but for rounding (off by up to the triangle's size). A sliver's edges are compared now.
+- **The oracle is a proof,** not a minimizer: the point that is found is in the solid, visible, and at
+  the distance; and Lagrange's bound for the line across it says that nothing is nearer. 3 million
+  capsules and 3 million corner sets pass (`COREDCC_TEST_SCALE=100`). Triangles, depths and what a
+  scene answers are also compared with a loop that clips and projects in the world.
+- **Measured on a busy machine** (best / median of 41, ms, 100,000 objects, SceneBvh included): unchanged
+  13.7 / 17.0; every root moved 17.1 / 22.1; epoch moved 20.7 / 23.0; a parent 63.8 / 80.1; unlink and
+  link 56.0 / 79.0. A refit is about 5 ms of it, a build about 20. A pick takes 0.04 to 0.07 ms with 36
+  candidates, and 14 to 24 ms with 7,000. The targets stay; they are recorded on an idle machine:
+  `bench_scene` (release, about 15 s).
+- **Mutations:** 95, each alone. The survivors:
+  - the check that w is positive, and that GJK doesn't go on from three corners: both are for what is
+    beyond double's precision;
+  - the order of a clipped edge's ends, which 1e-4 pixels hide;
+  - the condition that a segment has one edge: the second one adds the same point again;
+  - the checks that corners, and a radius, are finite, which later comparisons with NaN repeat;
+  - the ray for shapes that don't cover the cursor, which then misses;
+  - errors taken right after the first two interface calls: they are taken later as well.
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms

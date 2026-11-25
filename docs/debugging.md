@@ -140,6 +140,9 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   and posts the change for watchers.
 - **Commands and tools** that must not see old results use `computeState`, which reads the
   objects themselves.
+- **The same goes for picking:** `pickScene` answers for what was drawn. Objects that were added or
+  moved since are where they were. An object without bounds (no Spatial, or an empty
+  `localBounds`) can't be picked at all.
 
 ## Techniques
 

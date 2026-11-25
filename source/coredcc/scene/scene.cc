@@ -184,6 +184,11 @@ const Scene::Counters &Scene::counters() const
   return evaluator_->counters;
 }
 
+const SceneBvh &Scene::bvh() const
+{
+  return evaluator_->bvh;
+}
+
 /* ---- the block ---- */
 
 namespace {

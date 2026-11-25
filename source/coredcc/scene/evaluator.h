@@ -68,8 +68,9 @@ struct LookupKey {
 class SceneEvaluator {
  public:
   Scene::Counters counters;
+  SceneBvh bvh;
 
-  /** Evaluates, and makes the results the last ones if they differ. Opens the EvaluationScope;
+  /** Evaluates, and makes the results the last ones if they differ, with their BVH. Opens the EvaluationScope;
    * the no-collect is the caller's. The first foreign exception goes to `foreign`. */
   Status run(const Scene &scene, const Library &lib, bool &changed, Status &foreign);
 

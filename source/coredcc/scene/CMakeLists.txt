@@ -9,7 +9,10 @@ coredcc_library(coredcc_scene
     membership_commands.cc
     object.cc
     object_changes.cc
+    outline.cc
+    pick.cc
     scene.cc
+    scene_bvh.cc
     solve.cc
     transform.cc
     transform_commands.cc
@@ -18,4 +21,5 @@ coredcc_library(coredcc_scene
   DEPS
     coredcc_bvh
     coredcc_command
+    coredcc_draw
 )

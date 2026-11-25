@@ -9,6 +9,7 @@
 #include "coredcc/base/iface/iface.h"
 #include "coredcc/bvh/box.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/scene/pick.h"
 #include "coredcc/scene/transform.h"
 
 #include "litestl/util/vector.h"
@@ -92,6 +93,8 @@ enum class ElementDomain : int32_t { Point = 0, Edge = 1, Face = 2 };
  * - `localBounds`: a box around the geometry; empty for none.
  * - `domains`: bit d is set for each ElementDomain d it has.
  * - `closestElements`: the elements of a domain within `radius` of `co`, nearest first.
+ * - `pick` (optional): gives the sink the shapes that may be near a pixel. Without it, the bounds
+ *   are what can be picked. It may not change anything.
  */
 struct Spatial : IfaceRef {
   Box3d localBounds() const
@@ -108,12 +111,21 @@ struct Spatial : IfaceRef {
   {
     return CDCC_CALL(closestElements, co, radius, domain);
   }
+  bool hasPick() const
+  {
+    return CDCC_HAS(pick);
+  }
+  void pick(const PickQuery &query, PickSink &sink) const
+  {
+    CDCC_CALL(pick, query, sink);
+  }
 
   CDCC_INTERFACE(Spatial, "coredcc::Spatial")
   {
     BIND_STRUCT_METHOD(st, localBounds, MARGS());
     BIND_STRUCT_METHOD(st, domains, MARGS());
     BIND_STRUCT_METHOD(st, closestElements, MARGS("co", "radius", "domain"));
+    BIND_OPTIONAL_METHOD(st, pick, MARGS("query", "sink"));
   }
 };
 

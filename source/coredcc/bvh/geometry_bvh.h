@@ -66,14 +66,21 @@ template <class Source> class GeometryBvh {
     return Status();
   }
 
+  /** Takes the same primitives at other positions; see Bvh::refit. */
+  Status refit(const Source &src)
+  {
+    CDCC_TRY(bvh_.refit(src));
+    prims_ = src.permuted(bvh_.order());
+    return Status();
+  }
+
   /**
    * Takes the changed geometry: a refit when only positions changed, else a build (also
    * when the refit is refused). On an error the old one is kept.
    */
   Status onInvalidate(GeometryChange changes, const Source &src)
   {
-    if (!hasChange(changes, GeometryChange::Topology) && bvh_.refit(src).ok()) {
-      prims_ = src.permuted(bvh_.order());
+    if (!hasChange(changes, GeometryChange::Topology) && refit(src).ok()) {
       return Status();
     }
     return build(src, opts_);

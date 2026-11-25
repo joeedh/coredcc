@@ -105,7 +105,10 @@
 #include "coredcc/scene/commands.h"
 #include "coredcc/scene/evaluated.h"
 #include "coredcc/scene/object.h"
+#include "coredcc/scene/outline.h"
+#include "coredcc/scene/pick.h"
 #include "coredcc/scene/scene.h"
+#include "coredcc/scene/scene_bvh.h"
 #include "coredcc/scene/solve.h"
 #include "coredcc/scene/transform_registry.h"
 
