@@ -126,8 +126,8 @@ struct Stored {
   litestl::util::Vector<uint8_t> bytes;
 };
 
-/** Compresses when that is smaller. */
-Stored pack(std::span<const uint8_t> bytes);
+/** Compresses when that is smaller. `fast` trades size for a much faster lz4. */
+Stored pack(std::span<const uint8_t> bytes, bool fast = false);
 /**
  * Decompresses or copies `stored` into `out`. Charges the budget, and checks that the memory
  * is there before litestl's Vector, which doesn't check, asks for it. InvalidArgument for bytes

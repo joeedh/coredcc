@@ -37,6 +37,7 @@ coredcc_test(test_command_values SOURCES command/test_command_values.cc DEPS cor
 coredcc_test(test_command_blocks SOURCES command/test_command_blocks.cc DEPS coredcc_command)
 coredcc_test(test_command_block_edits SOURCES command/test_command_block_edits.cc DEPS coredcc_command)
 coredcc_test(test_command_active SOURCES command/test_command_active.cc DEPS coredcc_command)
+coredcc_test(test_command_snapshot SOURCES command/test_command_snapshot.cc DEPS coredcc_command)
 coredcc_test(test_command_library SOURCES command/test_command_library.cc DEPS coredcc_command)
 coredcc_test(test_command_attachments SOURCES command/test_command_attachments.cc DEPS coredcc_command)
 coredcc_test(test_command_review SOURCES command/test_command_review.cc DEPS coredcc_command)

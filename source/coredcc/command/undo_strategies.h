@@ -8,6 +8,7 @@
 
 #include "coredcc/base/iface/iface.h"
 #include "coredcc/base/status.h"
+#include "coredcc/lib/block.h"
 
 #include "litestl/util/function.h"
 #include "litestl/util/vector.h"
@@ -91,8 +92,10 @@ class DelegatedUndo {
 
 /**
  * Snapshot undo: a host-registered provider that captures and restores state as bytes.
- * Synchronous. The command stores the blob from before its exec. lz4 compression of
- * the blobs comes with library IO (P2).
+ * Synchronous. SnapshotUndo (snapshot_undo.h) is the command's side.
+ *
+ * - `foreachRef` (optional): visits a cell for each block that `blob` references, so undo
+ *   keeps those blocks. The cells are the provider's own; writes to them are ignored.
  */
 struct SnapshotProvider : IfaceRef {
   litestl::util::Vector<uint8_t> capture() const
@@ -103,11 +106,20 @@ struct SnapshotProvider : IfaceRef {
   {
     return CDCC_CALL(restore, blob);
   }
+  bool hasForeachRef() const
+  {
+    return CDCC_HAS(foreachRef);
+  }
+  void foreachRef(const litestl::util::Vector<uint8_t> &blob, RefVisitor &v) const
+  {
+    CDCC_CALL(foreachRef, blob, v);
+  }
 
   CDCC_INTERFACE(SnapshotProvider, "coredcc::SnapshotProvider")
   {
     BIND_STRUCT_METHOD(st, capture, MARGS());
     BIND_STRUCT_METHOD(st, restore, MARGS("blob"));
+    BIND_OPTIONAL_METHOD(st, foreachRef, MARGS("blob", "v"));
   }
 };
 

@@ -28,6 +28,7 @@
 #include "coredcc/command/library_commands.h"
 #include "coredcc/command/literal.h"
 #include "coredcc/command/set_property.h"
+#include "coredcc/command/snapshot_undo.h"
 #include "coredcc/command/undo_strategies.h"
 #include "coredcc/base/block_id.h"
 #include "coredcc/base/bytes.h"

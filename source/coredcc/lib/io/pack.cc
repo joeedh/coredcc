@@ -54,13 +54,15 @@ Status probeMemory(uint64_t bytes)
   return Status();
 }
 
-Stored pack(std::span<const uint8_t> bytes)
+Stored pack(std::span<const uint8_t> bytes, bool fast)
 {
   Stored s;
   s.raw = uint64_t(bytes.size());
   if (s.raw >= kCompressFrom && s.raw <= kMaxRaw) {
     Vector<uint8_t> packed;
-    const size_t n = sculptcore::io::compressBlock(bytes.data(), bytes.size(), packed);
+    const size_t n = sculptcore::io::compressBlock(
+        bytes.data(), bytes.size(), packed,
+        fast ? sculptcore::io::kFastCompressLevel : sculptcore::io::kDefaultCompressLevel);
     if (n > 0 && n < s.raw && plausibleLz4(s.raw, n)) {
       s.lz4 = true;
       s.bytes = copyOf(std::span<const uint8_t>(packed.data(), n)); /* not its worst case */

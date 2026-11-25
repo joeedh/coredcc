@@ -855,3 +855,18 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
 - **Duplicating a placeholder** copies a MissingType one's payload. InHistory and Detached blocks and
   missing blocks are FailedPrecondition: they have no data to copy.
 - FakeUser is copied. A duplicate runs no notification: the block is new, so nobody listens to it.
+
+### A6: snapshot undo (2026-11-24)
+- **Files:** `command/snapshot_undo.{h,cc}`; `SnapshotProvider::foreachRef` is in `undo_strategies.h`.
+- **`rollback` restores twice:** at once, and at the discard, which the executor does after it has
+  undone the sub-commands. A sub-command's undo may write the captured state's old values.
+- **A failed `end` in exec needs a `rollback` too**; SnapshotUndo doesn't do it, because an interactive
+  command's tool may go on after a failed `end`.
+- **A failed redo can leave a value from the middle of the step**, when a sub-command writes the
+  captured state itself: the executor undoes the sub-commands after the failure, and a nested
+  command isn't discarded until its parents are undone. The history drops the step.
+- `notifyAll` bumps the epoch, so `bumpEpoch` isn't called. A failed restore notifies as well.
+- **Pins on targets are for the blocks that have a record at the capture**, once per blob. A Context
+  without a Library pins nothing.
+- Blobs under 512 bytes are raw, and so are those that lz4 doesn't make smaller. A blob over lz4's
+  limit (about 2 GiB) is OutOfRange.

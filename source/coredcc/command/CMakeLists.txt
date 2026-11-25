@@ -11,6 +11,7 @@ coredcc_library(coredcc_command
     library_commands.cc
     literal.cc
     set_property.cc
+    snapshot_undo.cc
   DEPS
     coredcc_api
 )
