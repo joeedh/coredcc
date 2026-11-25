@@ -77,6 +77,9 @@ class SocketTypeRegistry {
   Status unknown(std::string_view name) const;
   /** The built-in type of a value type; null for None and Payload. */
   const SocketType *builtin(GraphValue::Type type) const;
+  /** The type of a value; null for None, a null payload and a payload that isn't
+   * registered. */
+  const SocketType *typeOf(const GraphValue &v) const;
 
   /** Whether a socket of `from` can feed one of `to`: the same type, or a conversion. */
   bool canConvert(const SocketType &from, const SocketType &to) const;

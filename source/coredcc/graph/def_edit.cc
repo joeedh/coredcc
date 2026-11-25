@@ -24,6 +24,11 @@ bool is(const string &a, const char *b)
   return strcmp(a.c_str(), b) == 0;
 }
 
+bool isGroupType(const string &name)
+{
+  return is(name, kGraphGroupType) || is(name, kGraphForeachType);
+}
+
 int findSocket(const SocketInfos &list, std::string_view key)
 {
   for (int i = 0; i < int(list.size()); i++) {
@@ -105,7 +110,7 @@ Result<NodeId> GraphDef::addNode(std::string_view type)
 
 Status GraphDef::insertNode(const NodeState &state)
 {
-  if (is(state.typeName, kGraphGroupType) && !state.group.isNull()) {
+  if (isGroupType(state.typeName) && !state.group.isNull()) {
     CDCC_TRY(checkRecursion(state.group));
   }
   return restoreNode(state);
@@ -129,7 +134,7 @@ Status GraphDef::restoreNode(const NodeState &state)
     }
   }
   Library *lib = lib_.get();
-  const bool isGroup = is(state.typeName, kGraphGroupType);
+  const bool isGroup = isGroupType(state.typeName);
   bool refs = isGroup && !state.group.isNull();
   for (const NodeState::Ref &r : state.refs) {
     refs |= !r.target.isNull();
@@ -447,7 +452,7 @@ Status GraphDef::setGroup(NodeId id, BlockId def)
     return found.status();
   }
   GraphNode *n = *found;
-  if (!is(n->typeName_, kGraphGroupType)) {
+  if (!isGroupType(n->typeName_)) {
     return makeError(StatusCode::TypeMismatch,
                      "setGroup: node '" + std::string(n->typeName_.c_str()) + "' isn't a group");
   }

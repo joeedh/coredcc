@@ -57,6 +57,9 @@ struct GraphError {
   NodePath origin;
   /** The input at fault (a conversion, a cycle), or "" for the node. */
   litestl::util::string socket;
+  /** If it is in elements of foreach nodes: their keys, the outermost first. The message
+   * has them too. */
+  litestl::util::Vector<int64_t, 1> elements;
   bool operator==(const GraphError &b) const;
 };
 
@@ -144,10 +147,14 @@ class GraphInstance {
   /** For kernels (NodeExecContext::userData). Not a dependency. */
   void setUserData(void *data);
   /** Groups an instance may hold (default 262,144), so a graph that doubles at each level
-   * fails instead of running out of memory. */
+   * fails instead of running out of memory. Each element of a foreach may have as many
+   * inside. It is also how many elements, of all its foreach nodes, have a state of their
+   * own: more than that share one, as those over `maxCached` do. */
   void setMaxFrames(int n);
-  /** Groups it holds. */
+  /** Groups it holds, not counting those inside elements. */
   int frameCount() const;
+  /** Elements of foreach nodes that have a state of their own. */
+  int elementCount() const;
   /** Kernel runs since it was made, for tests and profiling. */
   uint64_t totalRuns() const;
 

@@ -281,7 +281,7 @@ CollectionAccessor socketsAccessor()
 bool lost(const GraphSocketAddress &a)
 {
   const NodeType *type = a.node->type();
-  return type && type->role == NodeRole::Group && !a.node->def().groupTarget(*a.node);
+  return type && hasGroup(type->role) && !a.node->def().groupTarget(*a.node);
 }
 
 PropValue socketValue(const GraphSocketAddress &a, const SocketType &type)
@@ -595,13 +595,15 @@ Status detail::addNodeStructs(Runtime &rt, const NodeType &type)
   ApiRegistry &reg = rt.ext<ApiRegistry>();
   ApiStruct st(std::string(kGraphNodeStruct) + ":" + type.name.c_str());
   st.uiName(type.uiName.c_str()).parent(StructId::of(kGraphNodeStruct));
-  if (type.role == NodeRole::Kernel) {
+  if (type.params.size() > 0 || type.role == NodeRole::Kernel) {
     CDCC_TRY(reg.add(paramsStruct(type)).status());
-    CDCC_TRY(reg.add(inputsStruct(type)).status());
     addPart(st, "params", structOf(kGraphParamsStruct, type.name.c_str()));
+  }
+  if (type.role == NodeRole::Kernel) {
+    CDCC_TRY(reg.add(inputsStruct(type)).status());
     addPart(st, "inputs", structOf(kGraphInputsStruct, type.name.c_str()));
   }
-  if (type.role == NodeRole::Group) {
+  if (hasGroup(type.role)) {
     PointerAccessor a;
     a.get = [](const PointerRef &self, Context &) {
       return blockRef(nodeOf(self).def(), nodeOf(self).group());
@@ -616,7 +618,7 @@ Status detail::addNodeStructs(Runtime &rt, const NodeType &type)
     a.target = StructId::of(kGraphDefType);
     st.addPointer(PropertyDef::pointerProp("group", a.target), std::move(a));
   }
-  if (type.role == NodeRole::Group || type.role == NodeRole::Output) {
+  if (hasGroup(type.role) || type.role == NodeRole::Output) {
     st.addCollection(PropertyDef::collectionProp("sockets", StructId::of(kSocketStruct)),
                      socketsAccessor());
   }

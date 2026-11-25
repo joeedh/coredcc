@@ -56,7 +56,7 @@ std::shared_ptr<const GraphTopology> GraphTopology::build(const GraphDef &def)
     for (const SocketInfo &s : outs) {
       t->outputs.append(Output{s.key, types.find(s.typeName.c_str())});
     }
-    if (out.role == NodeRole::Group) {
+    if (hasGroup(out.role)) {
       out.group = int(t->groups.size());
       const GraphDef *target = def.groupTarget(n);
       t->groups.append(Group{&n, index, target ? target->interfaceVersion() : 0});

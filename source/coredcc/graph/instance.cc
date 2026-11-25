@@ -90,6 +90,8 @@ bool GraphError::operator==(const GraphError &b) const
 {
   return status.code() == b.status.code() &&
          strcmp(status.message(), b.status.message()) == 0 && origin == b.origin &&
+         elements.size() == b.elements.size() &&
+         std::equal(elements.begin(), elements.end(), b.elements.begin()) &&
          strcmp(socket.c_str(), b.socket.c_str()) == 0;
 }
 
@@ -176,7 +178,12 @@ void GraphInstance::setMaxFrames(int n)
 
 int GraphInstance::frameCount() const
 {
-  return e_->frameCount;
+  return e_->frameCount();
+}
+
+int GraphInstance::elementCount() const
+{
+  return e_->elementCount();
 }
 
 uint64_t GraphInstance::totalRuns() const
@@ -283,6 +290,7 @@ Status Evaluator::retry()
         k->ran = false;
       }
     }
+    f->forEachElement([&](Element &e) { stack.append(e.frame); });
     for (const Frame::Group &g : f->groups) {
       if (g.child) {
         stack.append(g.child);
@@ -299,7 +307,6 @@ Status Evaluator::clear()
   /* The last pin of a block that owns this instance may go: only after the scope. */
   NoCollectScope noCollect(lib_.get());
   root_ = nullptr;
-  frameCount = 0;
   results_.clear();
   passKey_ = Key();
   return Status();

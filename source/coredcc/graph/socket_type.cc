@@ -253,6 +253,19 @@ const SocketType *SocketTypeRegistry::builtin(Type type) const
   return nullptr;
 }
 
+const SocketType *SocketTypeRegistry::typeOf(const GraphValue &v) const
+{
+  if (v.type() != Type::Payload) {
+    return builtin(v.type());
+  }
+  for (const Entry *e : types_) {
+    if (v.asPayload() && e->type.payload == v.asPayload().type()) {
+      return &e->type;
+    }
+  }
+  return nullptr;
+}
+
 bool SocketTypeRegistry::canConvert(const SocketType &from, const SocketType &to) const
 {
   return &from == &to || conversions_.lookup_ptr(PairKey{from.id.value, to.id.value});

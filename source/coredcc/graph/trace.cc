@@ -15,6 +15,26 @@ int TypeChains::extend(int chain, const SocketType *type)
   return id;
 }
 
+void DepSet::clear()
+{
+  blocks_.clear();
+  queries_.clear();
+}
+
+void DepSet::add(const Trace &from, Trace &to)
+{
+  for (const BlockDep &d : from.blocks) {
+    if (blocks_.add(d.id, true)) {
+      to.blocks.append(d);
+    }
+  }
+  for (const QueryDep &d : from.queries) {
+    if (queries_.add(QueryKey{d.handle, d.iface.value}, true)) {
+      to.queries.append(d);
+    }
+  }
+}
+
 BlockReader::BlockReader(Runtime &rt, LibraryRef lib)
     : rt_(rt), system_(rt.ext<GraphSystem>()), lib_(std::move(lib))
 {

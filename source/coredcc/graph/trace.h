@@ -37,6 +37,8 @@ struct Origin {
     NodeDefault,
     /** A socket type's default: `a` the type's id. */
     TypeDefault,
+    /** A column of a foreach's table. */
+    Column,
   };
   Kind kind = Kind::None;
   uint64_t a = 0;
@@ -104,6 +106,27 @@ struct Trace {
   litestl::util::Vector<TraceInput, 2> inputs;
   litestl::util::Vector<BlockDep, 1> blocks;
   litestl::util::Vector<QueryDep, 1> queries;
+};
+
+/** Collects the blocks and queries of many traces in one, each as it was first seen: if it
+ * moves before the last of them, that is out of date, as it must be. */
+class DepSet {
+ public:
+  void clear();
+  void add(const Trace &from, Trace &to);
+
+ private:
+  struct QueryKey {
+    BlockHandle handle;
+    uint64_t iface = 0;
+    uint64_t computeHash() const
+    {
+      return handle.computeHash() * 0x9E3779B97F4A7C15ull ^ iface;
+    }
+    bool operator==(const QueryKey &) const = default;
+  };
+  litestl::util::Map<BlockId, bool> blocks_;
+  litestl::util::Map<QueryKey, bool> queries_;
 };
 
 /** Finds blocks, as they are now. */

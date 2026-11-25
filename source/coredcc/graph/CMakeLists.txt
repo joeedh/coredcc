@@ -8,6 +8,7 @@ coredcc_library(coredcc_graph
     def_edit.cc
     evaluator.cc
     exec_context.cc
+    foreach.cc
     frame.cc
     instance.cc
     node_type.cc

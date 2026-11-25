@@ -217,7 +217,7 @@ class CycleWalk {
     if (role == NodeRole::Input || role == NodeRole::Output) {
       return false;
     }
-    if (role == NodeRole::Kernel) {
+    if (isOneStep(role)) {
       return follow(s.node, [](const string &) { return true; });
     }
     const GraphDef *target = def_.groupTarget(*s.node);
@@ -240,9 +240,9 @@ class CycleWalk {
  private:
   void add(Socket s)
   {
-    /* All sockets of a kernel node lead to the same places. */
+    /* All sockets of such a node lead to the same places. */
     const NodeType *type = s.node->type();
-    const bool kernel = !type || type->role == NodeRole::Kernel;
+    const bool kernel = !type || isOneStep(type->role);
     const uint64_t at = uint64_t(uintptr_t(s.node));
     if (seen_.add(Seen{at, kernel ? string() : s.key}, true)) {
       queue_.append(std::move(s));

@@ -4,6 +4,7 @@
 
 #include "coredcc/api/change_bus.h"
 #include "coredcc/base/text.h"
+#include "coredcc/graph/foreach.h"
 #include "coredcc/graph/provider.h"
 #include "coredcc/graph/topology.h"
 #include "coredcc/lib/library.h"
@@ -191,7 +192,6 @@ const NodeType *GraphDef::typeOf(const GraphNode &node) const
 
 static void fromInterface(const Vector<InterfaceSocket> &iface, SocketInfos &out)
 {
-  out.clear();
   for (const InterfaceSocket &s : iface) {
     out.append(SocketInfo{s.key(), s.name, s.typeName});
   }
@@ -203,17 +203,27 @@ void GraphDef::refreshSockets(const GraphNode &node) const
   if (!type || type->role == NodeRole::Kernel) {
     return;
   }
-  const GraphDef *source = type->role == NodeRole::Group ? groupTarget(node) : this;
+  const bool foreach = type->role == NodeRole::Foreach;
+  const GraphDef *source = hasGroup(type->role) ? groupTarget(node) : this;
   /* Interface versions are unique, so one also says which def it is of. */
-  if (!source || node.socketsVersion_ == source->interfaceVersion_) {
+  if (source ? node.socketsVersion_ == source->interfaceVersion_ :
+               !foreach || (node.inputs_.size() > 0 && node.outputs_.size() > 0))
+  {
     return;
   }
-  node.socketsVersion_ = source->interfaceVersion_;
-  if (type->role != NodeRole::Output) {
+  node.inputs_.clear();
+  node.outputs_.clear();
+  node.socketsVersion_ = source ? source->interfaceVersion_ : 0;
+  if (foreach) {
+    const SocketInfo elements{kElementsSocket, kElementsSocket, PayloadTraits<Elements>::name};
+    node.inputs_.append(elements);
+    node.outputs_.append(elements);
+  }
+  if (source && type->role != NodeRole::Output) {
     fromInterface(source->ifaceIn_,
                   type->role == NodeRole::Input ? node.outputs_ : node.inputs_);
   }
-  if (type->role != NodeRole::Input) {
+  if (source && type->role != NodeRole::Input && !foreach) {
     fromInterface(source->ifaceOut_,
                   type->role == NodeRole::Output ? node.inputs_ : node.outputs_);
   }
@@ -259,7 +269,7 @@ GraphValue GraphDef::literalValue(const GraphNode &node,
     const int i = t->inputIndex(key);
     return i >= 0 ? t->inputs[i].defaultValue : type.defaultValue;
   }
-  if (t && t->role == NodeRole::Group) {
+  if (t && hasGroup(t->role)) {
     const GraphDef *group = groupTarget(node);
     for (int i = 0; group && i < int(group->ifaceIn_.size()); i++) {
       if (key == group->ifaceIn_[i].key().c_str()) {
@@ -448,7 +458,7 @@ void GraphDef::foreachRef(RefVisitor &visitor)
     if (!n) {
       continue;
     }
-    if (isType(*n, kGraphGroupType)) {
+    if (isType(*n, kGraphGroupType) || isType(*n, kGraphForeachType)) {
       visitor.visit(n->group_);
     }
     for (NodeBlockRef &r : n->refs_) {

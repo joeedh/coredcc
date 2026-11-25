@@ -4,6 +4,7 @@
 #include "coredcc/base/assert.h"
 #include "coredcc/base/text.h"
 #include "coredcc/graph/api.h"
+#include "coredcc/graph/foreach.h"
 
 #include "litestl/util/alloc.h"
 
@@ -132,7 +133,8 @@ NodeTypeDef &NodeTypeDef::kernel(Owned<GraphKernel> kernel)
 
 NodeTypeRegistry::NodeTypeRegistry(Runtime *rt) : rt_(*rt)
 {
-  rt_.ext<SocketTypeRegistry>();
+  const bool ok = rt_.ext<SocketTypeRegistry>().addPayloadType<Elements>().ok();
+  CDCC_CHECK(ok, "registering the elements payload");
   detail::addGraphStructs(rt_);
   struct Special {
     const char *name, *uiName;
@@ -142,14 +144,18 @@ NodeTypeRegistry::NodeTypeRegistry(Runtime *rt) : rt_(*rt)
       {kGraphInputType, "Group Input", NodeRole::Input},
       {kGraphOutputType, "Group Output", NodeRole::Output},
       {kGraphGroupType, "Group", NodeRole::Group},
+      {kGraphForeachType, "For Each", NodeRole::Foreach},
   };
   for (const Special &s : special) {
     NodeType *t = litestl::alloc::New<NodeType>("coredcc::NodeType");
     t->name = s.name;
     t->uiName = s.uiName;
     t->role = s.role;
-    const bool ok = store(t).ok();
-    CDCC_CHECK(ok, "registering a built-in node type");
+    if (s.role == NodeRole::Foreach) {
+      t->params.append(NodeParamDef{foreachMaxCachedParam()});
+    }
+    const bool stored = store(t).ok();
+    CDCC_CHECK(stored, "registering a built-in node type");
   }
   detail::addBuiltinNodes(rt_, *this);
 }

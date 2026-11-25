@@ -12,12 +12,8 @@ namespace coredcc::graph {
 
 using litestl::util::Vector;
 
-namespace {
-
-/** Groups nested deeper than this fail. The root is at depth 0. */
-constexpr int kMaxDepth = 64;
-
-} // namespace
+KernelState::KernelState() = default;
+KernelState::~KernelState() = default;
 
 Frame::~Frame()
 {
@@ -63,7 +59,7 @@ ErrorPtr Evaluator::makeError(const Frame &f,
 
 void Evaluator::dropFrame(Frame *f)
 {
-  frameCount -= f->count();
+  f->top->frames -= f->count();
   litestl::alloc::Delete(f);
 }
 
@@ -82,6 +78,7 @@ void Evaluator::dropNewFrames()
         stack.append(g.child);
       }
     }
+    f->forEachElement([&](Element &e) { stack.append(e.frame); });
   }
 }
 
@@ -105,7 +102,7 @@ Status Evaluator::prepareRoot()
   CDCC_TRY(status);
   if (!root_ || root_->def != def || root_->defSerial != def->serial()) {
     root_ = std::make_unique<Frame>();
-    frameCount = 0;
+    root_->top = root_.get();
     root_->def = def;
     root_->defSerial = def->serial();
     root_->serial = rt_.nextVersion();
@@ -139,7 +136,7 @@ void Evaluator::sync(Frame &f)
   for (int i = 0; i < int(kernels.size()); i++) {
     if (KernelState *k = kernels[i]) {
       const int at = f.topo->find(old->nodes[i].id);
-      if (at >= 0 && f.topo->nodes[at].role == NodeRole::Kernel &&
+      if (at >= 0 && isOneStep(f.topo->nodes[at].role) &&
           f.topo->nodes[at].type == k->type)
       {
         f.kernels[at] = k;
@@ -179,11 +176,49 @@ KernelState &Evaluator::kernel(Frame &f, int node)
   if (!k) {
     k = litestl::alloc::New<KernelState>("coredcc::KernelState");
     k->type = f.topo->nodes[node].type;
-    if (k->type) {
+    if (k->type && k->type->role == NodeRole::Foreach) {
+      k->outputs.resize(1);
+      k->foreach = std::make_unique<Foreach>();
+    }
+    else if (k->type) {
       k->outputs.resize(size_t(k->type->outputs.size()));
     }
   }
   return *k;
+}
+
+Status Evaluator::checkGroup(const Frame &f, const GraphNode &node, const GraphDef *def) const
+{
+  if (!def) {
+    return Status::error(StatusCode::NotFound,
+                         node.group().isNull() ? "the group has no graph" :
+                                                 "the group's graph isn't there");
+  }
+  for (const Frame *a = &f; a; a = a->parent) {
+    if (a->def == def) {
+      return Status::error(StatusCode::FailedPrecondition, "the graph contains itself");
+    }
+  }
+  if (f.depth + 1 > kMaxDepth) {
+    return Status::error(
+        StatusCode::OutOfRange,
+        ("graphs are nested deeper than " + std::to_string(kMaxDepth)).c_str());
+  }
+  return Status();
+}
+
+Frame *Evaluator::newFrame(Frame &parent, const GraphNode &node, GraphDef *def)
+{
+  Frame *f = litestl::alloc::New<Frame>("coredcc::GraphFrame");
+  f->def = def;
+  f->defSerial = def->serial();
+  f->parent = &parent;
+  f->top = parent.top;
+  f->groupNode = node.id();
+  f->depth = parent.depth + 1;
+  f->serial = rt_.nextVersion();
+  f->call = call_;
+  return f;
 }
 
 Frame *Evaluator::child(Frame &f, int group, ErrorPtr &error)
@@ -199,22 +234,7 @@ Frame *Evaluator::child(Frame &f, int group, ErrorPtr &error)
   g.error = nullptr;
   const GraphNode &node = *f.topo->groups[group].node;
   GraphDef *def = f.def->groupTarget(node);
-  Status status;
-  if (!def) {
-    status = Status::error(StatusCode::NotFound,
-                           node.group().isNull() ? "the group has no graph" :
-                                                   "the group's graph isn't there");
-  }
-  for (const Frame *a = &f; def && status.ok() && a; a = a->parent) {
-    if (a->def == def) {
-      status = Status::error(StatusCode::FailedPrecondition, "the graph contains itself");
-    }
-  }
-  if (status.ok() && f.depth + 1 > kMaxDepth) {
-    status = Status::error(
-        StatusCode::OutOfRange,
-        ("graphs are nested deeper than " + std::to_string(kMaxDepth)).c_str());
-  }
+  Status status = checkGroup(f, node, def);
   if (!status.ok()) {
     g.pass = pass_;
     g.error = error = makeError(f, node.id(), std::move(status));
@@ -225,20 +245,12 @@ Frame *Evaluator::child(Frame &f, int group, ErrorPtr &error)
     g.child = nullptr;
   }
   if (!g.child) {
-    if (frameCount >= maxFrames) {
+    if (f.top->frames >= maxFrames) {
       overBudget_ = true;
       return nullptr;
     }
-    Frame *c = litestl::alloc::New<Frame>("coredcc::GraphFrame");
-    c->def = def;
-    c->defSerial = def->serial();
-    c->parent = &f;
-    c->groupNode = node.id();
-    c->depth = f.depth + 1;
-    c->serial = rt_.nextVersion();
-    c->call = call_;
-    g.child = c;
-    frameCount++;
+    g.child = newFrame(f, node, def);
+    f.top->frames++;
   }
   g.child->groupIndex = f.topo->groups[group].index;
   pinDef(*g.child);

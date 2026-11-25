@@ -15,12 +15,12 @@ namespace coredcc::graph {
 using litestl::util::string;
 using litestl::util::Vector;
 
-namespace {
-
 Status unknownType()
 {
   return Status::error(StatusCode::NotFound, "a socket's type isn't registered");
 }
+
+namespace {
 
 bool sameError(const ErrorPtr &a, const ErrorPtr &b)
 {
@@ -60,7 +60,7 @@ Status Evaluator::evaluate(std::span<const SocketPath> sockets, Vector<Status> &
   const Key key = currentKey();
   if (!(key == passKey_)) {
     passKey_ = key;
-    pass_++;
+    pass_ = ++passes_;
     numbers_ = 0;
   }
   call_++;
@@ -170,7 +170,7 @@ Evaluator::Request Evaluator::find(const SocketPath &path)
     return r;
   }
   const SocketType *type = f->topo->outputs[n.outBegin + s].type;
-  if (n.role == NodeRole::Kernel) {
+  if (isOneStep(n.role)) {
     r.vertex = Vertex{f, i, true};
     r.output = s;
     return r;
@@ -269,8 +269,9 @@ bool Evaluator::walk(Vertex root)
   if (walkState(root).pass == pass_) {
     return true;
   }
+  const int base = int(stack_.size()); /* not 0 in a run of an element */
   enter(root);
-  while (stack_.size() > 0) {
+  while (int(stack_.size()) > base) {
     Item &item = stack_.last();
     const Vertex v = item.vertex;
     std::optional<Vertex> next;
@@ -317,6 +318,9 @@ bool Evaluator::walk(Vertex root)
     if (first == int(component_.size()) - 1) {
       if (v.kernel) {
         computeKernel(*v.frame, v.index);
+        if (overBudget_) {
+          return false;
+        }
       }
       else {
         computeInput(*v.frame, v.index);
@@ -394,11 +398,12 @@ std::optional<Vertex> Evaluator::follow(Frame &f, int input)
   s.sourceType = t.outputs[from.outBegin + in.fromOutput].type;
   switch (from.role) {
     case NodeRole::Kernel:
+    case NodeRole::Foreach:
       s.source = Vertex{&f, in.fromNode, true};
       s.sourceOutput = in.fromOutput;
       break;
     case NodeRole::Input:
-      if (f.parent) {
+      if (f.parent && !f.element) {
         const GraphTopology::Node &g = f.parent->topo->nodes[f.groupIndex];
         s.source = Vertex{f.parent, g.inBegin + in.fromOutput, false};
       }
@@ -484,9 +489,10 @@ Evaluator::Constant Evaluator::unlinked(const Frame &f, int input) const
     c.value = n.type->inputs[index].defaultValue;
     return c;
   }
-  if (n.role == NodeRole::Group) {
+  if (hasGroup(n.role)) {
     const GraphDef *def = f.def->groupTarget(*n.node);
-    if (def && interfaceDefault(*def, index, *in.type, c.origin, c.value)) {
+    const int at = n.role == NodeRole::Foreach ? index - 1 : index;
+    if (def && at >= 0 && interfaceDefault(*def, at, *in.type, c.origin, c.value)) {
       return c;
     }
   }
@@ -546,16 +552,16 @@ void Evaluator::computeInput(Frame &f, int input)
     if (!type) {
       return fail(unknownType());
     }
-    if (in.fromNode < 0) {
-      constant = unlinked(f, input);
-    }
-    else if (f.topo->nodes[in.fromNode].role == NodeRole::Input) {
-      constant = external(in.fromOutput, *type);
+    const bool inner = in.fromNode >= 0 && f.topo->nodes[in.fromNode].role == NodeRole::Input;
+    if (inner && f.element) {
+      value = elementInput(f, in.fromOutput, *type, s.origin);
     }
     else {
-      constant = typeDefault(*type);
+      constant = in.fromNode < 0 ? unlinked(f, input) :
+                 inner           ? external(in.fromOutput, *type) :
+                                   typeDefault(*type);
+      s.origin = TraceInput{constant.origin, chains_.extend(TypeChains::kEmpty, type)};
     }
-    s.origin = TraceInput{constant.origin, chains_.extend(TypeChains::kEmpty, type)};
   }
   if (!type || !in.type) {
     return fail(unknownType());
@@ -603,6 +609,9 @@ void Evaluator::settle(KernelState &k, ErrorPtr error, bool inputFailed)
 void Evaluator::computeKernel(Frame &f, int node)
 {
   const GraphTopology::Node &n = f.topo->nodes[node];
+  if (n.role == NodeRole::Foreach) {
+    return computeForeach(f, node);
+  }
   KernelState &k = kernel(f, node);
   if (!n.type) {
     Status status = rt_.ext<NodeTypeRegistry>().unknown(n.node->typeName().c_str());
@@ -628,6 +637,9 @@ void Evaluator::computeKernel(Frame &f, int node)
   }
   if (!same || !blocks_.current(k.trace)) {
     run(f, node, k, std::move(trace));
+  }
+  if (sink_.set) {
+    sink_.set->add(k.trace, *sink_.trace);
   }
   settle(k, k.runError, false);
 }

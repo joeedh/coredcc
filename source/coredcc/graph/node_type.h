@@ -75,7 +75,21 @@ enum class NodeRole : uint8_t {
   Output,
   /** `graph.group`: evaluates another def, whose interface gives its sockets. */
   Group,
+  /** `graph.foreach`: evaluates another def for each element of a table
+   * (graph/foreach.h). */
+  Foreach,
 };
+
+/** Whether nodes of a role have a def that they evaluate. */
+inline bool hasGroup(NodeRole r)
+{
+  return r == NodeRole::Group || r == NodeRole::Foreach;
+}
+/** Whether a node of a role needs all its inputs to give any output. */
+inline bool isOneStep(NodeRole r)
+{
+  return r == NodeRole::Kernel || r == NodeRole::Foreach;
+}
 
 /** A socket as a node has it. */
 struct SocketInfo {
@@ -198,11 +212,12 @@ class NodeTypeDef {
 inline constexpr const char *kGraphInputType = "graph.input";
 inline constexpr const char *kGraphOutputType = "graph.output";
 inline constexpr const char *kGraphGroupType = "graph.group";
+inline constexpr const char *kGraphForeachType = "graph.foreach";
 
 /**
  * Node types by name. A Runtime extension, created with the built-in ones: `graph.input`,
- * `graph.output` and `graph.group`, `value.<socket type>` (a constant, in its `value`
- * param), `math.float`, `vec.combine`, `vec.separate` and `mat4.multiply`.
+ * `graph.output`, `graph.group` and `graph.foreach`, `value.<socket type>` (a constant, in
+ * its `value` param), `math.float`, `vec.combine`, `vec.separate` and `mat4.multiply`.
  *
  * Types can't be replaced or removed. Registering is Busy while a graph evaluates, and
  * counts as an edit, so nodes waiting for the type evaluate again.

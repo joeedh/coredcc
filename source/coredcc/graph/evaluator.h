@@ -35,6 +35,11 @@ struct NoCollectScope {
   Library *lib;
 };
 
+struct ElementsMap;
+
+/** The error of a socket whose type isn't known. */
+Status unknownType();
+
 /**
  * Pulls sockets. A call walks the vertices the requested sockets depend on, depth first on
  * an explicit stack, and computes each when everything below it is done. Vertices on a
@@ -43,6 +48,9 @@ struct NoCollectScope {
  */
 class Evaluator {
  public:
+  /** Groups and elements nested deeper than this fail. The root is at depth 0. */
+  static constexpr int kMaxDepth = 64;
+
   Evaluator(Runtime *rt, Library *lib, GraphSource source);
   ~Evaluator();
 
@@ -73,7 +81,14 @@ class Evaluator {
 
   void *userData = nullptr;
   int maxFrames = 262144;
-  int frameCount = 0;
+  int frameCount() const
+  {
+    return root_ ? root_->frames : 0;
+  }
+  int elementCount() const
+  {
+    return elements_;
+  }
   uint64_t totalRuns = 0;
 
  private:
@@ -100,6 +115,9 @@ class Evaluator {
   /** Keeps the frame's def in memory until this call ends, whatever a kernel destroys. */
   void pinDef(Frame &f);
   Frame *child(Frame &f, int group, ErrorPtr &error);
+  /** Whether a node of `f` can evaluate `def`, its target. */
+  Status checkGroup(const Frame &f, const GraphNode &node, const GraphDef *def) const;
+  Frame *newFrame(Frame &parent, const GraphNode &node, GraphDef *def);
   KernelState &kernel(Frame &f, int node);
   ErrorPtr makeError(const Frame &f, NodeId node, Status status, std::string_view socket = {}) const;
 
@@ -115,12 +133,26 @@ class Evaluator {
     Origin origin;
     GraphValue value;
   };
+  /** The value of an element's interface input. */
+  const GraphValue *elementInput(const Frame &f,
+                                 int interfaceIndex,
+                                 const SocketType &type,
+                                 TraceInput &origin);
   void computeInput(Frame &f, int input);
   Constant unlinked(const Frame &f, int input) const;
   Constant external(int interfaceIndex, const SocketType &type) const;
   Constant typeDefault(const SocketType &type) const;
   void computeKernel(Frame &f, int node);
   void run(Frame &f, int node, KernelState &k, Trace trace);
+  /* foreach.cc */
+  void computeForeach(Frame &f, int node);
+  /** Whether anything but the table moved since the last run; notes the new state. */
+  bool worldMoved(Frame &f, int node, KernelState &k, const GraphDef &def);
+  ErrorPtr runElements(Frame &f, int node, KernelState &k, GraphDef &def, bool newTable);
+  /** Sets an element's inputs to a row of the table. `same` becomes false if any moved. */
+  Status setRow(Element &e, const ElementsMap &map, int row, bool &same);
+  /** Evaluates an element's outputs. */
+  ErrorPtr runElement(Frame &f, int node, KernelState &k, Element &e);
   void settle(KernelState &k, ErrorPtr error, bool inputFailed);
   void failCycle(const litestl::util::Vector<Vertex> &members);
 
@@ -129,6 +161,8 @@ class Evaluator {
   Runtime &rt_;
   LibraryRef lib_;
   GraphSource source_;
+  /** Counted by the elements themselves. */
+  int elements_ = 0;
   std::unique_ptr<Frame> root_;
   BlockReader blocks_;
   TypeChains chains_;
@@ -142,7 +176,16 @@ class Evaluator {
   uint64_t own_ = 1;
   litestl::util::Map<SocketPath, Pulled> results_;
 
+  /** The current pass, and the last one's number. Each run of an element is a pass of its
+   * own, over its frames only. */
   uint64_t pass_ = 0;
+  uint64_t passes_ = 0;
+  /** Where the innermost foreach that runs collects its blocks. */
+  struct Sink {
+    DepSet *set = nullptr;
+    Trace *trace = nullptr;
+  };
+  Sink sink_;
   Key passKey_;
   uint64_t call_ = 0;
   litestl::util::Vector<LibraryPin, 4> pins_;
