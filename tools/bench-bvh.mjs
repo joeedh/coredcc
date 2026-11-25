@@ -10,7 +10,8 @@
 //                                       stdout
 //   --out FILE                          write the report here instead
 //
-// The report says what the default (BvhOptions::leafSize) should be; it doesn't change it.
+// The report says what the default (BvhOptions::leafSize) should be; it doesn't change it. A section
+// "Notes" at the end of the file is kept when the file is written again.
 
 import {spawnSync} from 'node:child_process'
 import fs from 'node:fs'
@@ -18,6 +19,8 @@ import os from 'node:os'
 import path from 'node:path'
 import {parseArgs} from 'node:util'
 import {fileURLToPath} from 'node:url'
+
+import {build, describe} from './bench.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const {values: opts} = parseArgs({
@@ -29,27 +32,11 @@ const {values: opts} = parseArgs({
 })
 
 const LEAVES = [4, 8, 16, 32, 64, 128, 256, 512, 1024]
-const DEFAULT_LEAF = 128
+/* What it is now, in the source. */
+const DEFAULT_LEAF = Number(
+  /int leafSize = (\d+);/.exec(fs.readFileSync(path.join(root, 'source', 'coredcc', 'bvh', 'bvh.h'), 'utf8'))[1],
+)
 const preset = opts.wasm ? 'wasm-st' : 'native-clang'
-
-function sh(args) {
-  const devshell = path.join(root, 'tools', 'devshell.cmd')
-  const [cmd, list] = process.platform === 'win32' ? ['cmd.exe', ['/c', devshell, ...args]] : [args[0], args.slice(1)]
-  const r = spawnSync(cmd, list, {cwd: root, encoding: 'utf8', maxBuffer: 1 << 26})
-  if (r.status !== 0) {
-    console.error(r.stdout, r.stderr)
-    throw new Error(`failed: ${args.join(' ')}`)
-  }
-}
-
-function buildBench() {
-  if (!fs.existsSync(path.join(root, 'build', preset, 'CMakeCache.txt'))) {
-    sh(['cmake', '--preset', preset])
-  }
-  sh(['cmake', '--build', '--preset', `${preset}-release`, '--target', 'bench_bvh'])
-  const dir = path.join(root, 'build', preset, 'tests', 'bench', 'RelWithDebInfo')
-  return opts.wasm ? path.join(dir, 'bench_bvh.js') : path.join(dir, process.platform === 'win32' ? 'bench_bvh.exe' : 'bench_bvh')
-}
 
 function runBench(exe, source, count, leaves, extra = []) {
   const args = ['--source', source, '--count', String(count), '--leaf', leaves.join(','), ...extra]
@@ -123,6 +110,7 @@ function report(main, confirm, d) {
     'Best of several runs; queries are single-threaded.',
     '',
     `- Machine: ${os.cpus()[0].model.trim()}, ${os.cpus().length} threads, ${os.type()} ${os.release()}`,
+    `- Program: ${describe(exe)}`,
     `- Build: ${preset}, RelWithDebInfo${opts.wasm ? `, node ${process.version}` : ''}`,
     `- Date: ${new Date().toISOString().slice(0, 10)}`,
     '',
@@ -160,7 +148,7 @@ function report(main, confirm, d) {
   return `${lines.join('\n')}\n`
 }
 
-const exe = buildBench()
+const exe = build('bench_bvh', preset)
 console.error('running')
 const extra = opts.quick ? ['--queries', '1024', '--reps', '2'] : []
 const SETS = opts.quick
@@ -176,7 +164,9 @@ if (!opts.quick && !opts.wasm) {
 const text = report(main, confirm, d)
 const out = opts.out ?? (opts.quick || opts.wasm ? null : path.join(root, 'docs', 'bvh-leafsize.md'))
 if (out) {
-  fs.writeFileSync(out, text)
+  /* What was written by hand is below this line, and stays. */
+  const notes = /^## Notes$[^]*/m.exec(fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '')
+  fs.writeFileSync(out, notes ? `${text}\n${notes[0]}` : text)
   console.error(`wrote ${out}`)
 } else {
   process.stdout.write(text)

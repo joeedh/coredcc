@@ -1,7 +1,7 @@
-/* The scene's commands on many native objects. Not a test: build the bench_scene_commands target
- * (release) and run it on an idle machine.
+/* The scene's commands on many native objects. Not a test: run it on an idle machine, with
+ * the tool, which builds it first.
  *
- *   bench_scene_commands [--count N] [--only PART]
+ *   node tools/bench.mjs scene_commands [-- [--count N] [--only PART]]
  *
  * One line per case, in ms. Parts: members, history, delete, transforms, chain, types. */
 #include "coredcc/api/ref_text.h"

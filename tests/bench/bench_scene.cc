@@ -1,7 +1,7 @@
-/* evaluateScene on many native objects, each with a data block that has bounds. Not a test: build
- * the bench_scene target (release) and run it on an idle machine.
+/* evaluateScene on many native objects, each with a data block that has bounds. Not a test: run it
+ * on an idle machine, with the tool, which builds it first.
  *
- *   bench_scene [--count N] [--reps N] [--leaf N]
+ *   node tools/bench.mjs scene [-- [--count N] [--reps N] [--leaf N]]
  *
  * One line per case: the best, the median and the worst of the repetitions, in ms. The targets
  * (P3's exit criteria) are for 100,000 objects, and include what evaluateScene does to the

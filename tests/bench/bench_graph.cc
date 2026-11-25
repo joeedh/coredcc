@@ -1,7 +1,9 @@
 /* The graph benchmarks: one JSON object per line on stdout, with the time of a repetition
  * (minimum and median, milliseconds) and how many kernels it ran.
  *
- *   bench_graph [--reps N] [--scale D]     sizes are divided by D, for a quick look */
+ *   node tools/bench.mjs graph [-- [--reps N] [--scale D]]
+ *
+ * The tool builds it first. Sizes are divided by D, for a quick look. */
 #include "coredcc/api/change_bus.h"
 #include "coredcc/base/iface/owned.h"
 #include "coredcc/base/iface/registry.h"
