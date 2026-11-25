@@ -57,7 +57,7 @@ class NodeExecContext {
     std::span<const Input> inputs;
     std::span<const PropValue> params;
     std::span<const BlockId> paramBlocks;
-    const Library *library = nullptr;
+    Library *library = nullptr;
     ExecBlocks *blocks = nullptr;
     void *userData = nullptr;
   };
@@ -114,6 +114,18 @@ class NodeExecContext {
     return out;
   }
   IfaceRef queryBlockRaw(BlockHandle h, InterfaceId iface);
+  /** makeAlias for views into the data of blocks this kernel got from useBlock. */
+  template <class T> Result<PayloadRef> alias(T view, std::span<const BlockHandle> blocks)
+  {
+    if (!s_.library) {
+      return Status::error(StatusCode::NotFound, "alias: there is no Library");
+    }
+    return makeAlias<T>(std::move(view), *s_.library, blocks);
+  }
+  template <class T> Result<PayloadRef> alias(T view, BlockHandle block)
+  {
+    return alias<T>(std::move(view), std::span<const BlockHandle>(&block, 1));
+  }
 
   /** Sets an output. A value of another type is TypeMismatch, and fails the node even if
    * the kernel then returns ok. */

@@ -59,6 +59,7 @@ struct BlockRead {
   BlockId id;
   BlockHandle handle;
   BlockState state = BlockState::Live;
+  uint64_t stateChanges = 0;
   double value = 0;
   int notified = 0;
   bool seesSame(const BlockRead &b) const
@@ -68,7 +69,7 @@ struct BlockRead {
   }
   bool operator==(const BlockRead &b) const
   {
-    return asked == b.asked && id == b.id && handle == b.handle && state == b.state && value == b.value &&
+    return asked == b.asked && id == b.id && handle == b.handle && state == b.state && stateChanges == b.stateChanges && value == b.value &&
            notified == b.notified;
   }
 };
@@ -802,6 +803,7 @@ class Evaluation {
     r.handle = env_.lib->find(id);
     if (const Datablock *b = env_.lib->get(r.handle)) {
       r.state = b->state();
+      r.stateChanges = b->stateChanges();
       r.value = r.state == BlockState::Live ? static_cast<Thing *>(b->clientData())->value : 0;
     }
     auto it = env_.notified.find(id);

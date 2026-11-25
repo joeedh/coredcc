@@ -258,19 +258,11 @@ struct GraphPassKey {
   static GraphPassKey of(Runtime &rt, const Library *lib);
 };
 
-/** How graphs hold their Library. A raw pointer for now: the client destroys graphs and
- * instances before it. P5's step 5 makes it a LibraryRef. */
-class GraphLibrary {
- public:
-  explicit GraphLibrary(Library *lib = nullptr) : lib_(lib) {}
-  Library *get() const
-  {
-    return lib_;
-  }
-
- private:
-  Library *lib_;
-};
+/** A weak reference to `lib`, which may be null. */
+inline LibraryRef libraryRef(Library *lib)
+{
+  return lib ? lib->ref() : LibraryRef();
+}
 
 /**
  * A graph: nodes, links, and an interface of typed sockets.
@@ -300,6 +292,7 @@ class GraphDef {
   {
     return rt_;
   }
+  /** Null also once the Library is being destroyed. */
   Library *library() const
   {
     return lib_.get();
@@ -470,7 +463,7 @@ class GraphDef {
   Status checkRecursion(BlockId def) const;
 
   Runtime &rt_;
-  GraphLibrary lib_;
+  LibraryRef lib_;
   BlockId self_;
   uint64_t serial_;
   uint64_t structureVersion_;

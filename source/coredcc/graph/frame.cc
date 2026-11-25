@@ -163,6 +163,16 @@ void Evaluator::sync(Frame &f)
   }
 }
 
+void Evaluator::pinDef(Frame &f)
+{
+  Library *lib = f.def->library();
+  if (f.pinned == call_ || !lib || f.def->self().isNull()) {
+    return;
+  }
+  f.pinned = call_;
+  pins_.append(LibraryPin(*lib, lib->find(f.def->self())));
+}
+
 KernelState &Evaluator::kernel(Frame &f, int node)
 {
   KernelState *&k = f.kernels[node];
@@ -181,6 +191,9 @@ Frame *Evaluator::child(Frame &f, int group, ErrorPtr &error)
   Frame::Group &g = f.groups[group];
   if (g.pass == pass_) {
     error = g.error;
+    if (!g.error) {
+      pinDef(*g.child);
+    }
     return g.error ? nullptr : g.child;
   }
   g.error = nullptr;
@@ -228,6 +241,7 @@ Frame *Evaluator::child(Frame &f, int group, ErrorPtr &error)
     frameCount++;
   }
   g.child->groupIndex = f.topo->groups[group].index;
+  pinDef(*g.child);
   sync(*g.child);
   g.pass = pass_;
   return g.child;

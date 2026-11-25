@@ -7,7 +7,7 @@
 #include "coredcc/base/iface/iface.h"
 #include "coredcc/base/runtime.h"
 #include "coredcc/graph/exec_context.h"
-#include "coredcc/lib/library.h"
+#include "coredcc/lib/pin.h"
 
 #include "litestl/util/map.h"
 #include "litestl/util/vector.h"
@@ -80,6 +80,8 @@ struct BlockDep {
   BlockId id;
   BlockHandle handle;
   BlockState state = BlockState::Live;
+  /** So a destroy and a restore between two looks are seen. */
+  uint64_t stateChanges = 0;
   uint64_t version = 0;
   bool operator==(const BlockDep &) const = default;
 };
@@ -107,20 +109,20 @@ struct Trace {
 /** Finds blocks, as they are now. */
 class BlockReader {
  public:
-  BlockReader(Runtime &rt, Library *lib);
+  BlockReader(Runtime &rt, LibraryRef lib);
   BlockDep read(BlockId id) const;
   QueryDep read(BlockHandle h, InterfaceId iface) const;
   /** Whether every block and query in `t` would still read the same. */
   bool current(const Trace &t) const;
   Library *library() const
   {
-    return lib_;
+    return lib_.get();
   }
 
  private:
   Runtime &rt_;
   GraphSystem &system_;
-  Library *lib_;
+  LibraryRef lib_;
 };
 
 /** Gives a kernel its blocks, and records them in a trace. */

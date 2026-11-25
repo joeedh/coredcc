@@ -16,6 +16,25 @@
 
 namespace coredcc::graph {
 
+/** Keeps a Library from collecting, and from destroying Doomed blocks until it ends. */
+struct NoCollectScope {
+  explicit NoCollectScope(Library *l) : lib(l)
+  {
+    if (lib) {
+      lib->beginNoCollect();
+    }
+  }
+  ~NoCollectScope()
+  {
+    if (lib) {
+      lib->endNoCollect();
+    }
+  }
+  NoCollectScope(const NoCollectScope &) = delete;
+  NoCollectScope &operator=(const NoCollectScope &) = delete;
+  Library *lib;
+};
+
 /**
  * Pulls sockets. A call walks the vertices the requested sockets depend on, depth first on
  * an explicit stack, and computes each when everything below it is done. Vertices on a
@@ -78,6 +97,8 @@ class Evaluator {
 
   /* frames */
   void sync(Frame &f);
+  /** Keeps the frame's def in memory until this call ends, whatever a kernel destroys. */
+  void pinDef(Frame &f);
   Frame *child(Frame &f, int group, ErrorPtr &error);
   KernelState &kernel(Frame &f, int node);
   ErrorPtr makeError(const Frame &f, NodeId node, Status status, std::string_view socket = {}) const;
@@ -106,7 +127,7 @@ class Evaluator {
   void store(const SocketPath &socket, const Request &r, Status &status);
 
   Runtime &rt_;
-  GraphLibrary lib_;
+  LibraryRef lib_;
   GraphSource source_;
   std::unique_ptr<Frame> root_;
   BlockReader blocks_;
@@ -124,6 +145,7 @@ class Evaluator {
   uint64_t pass_ = 0;
   Key passKey_;
   uint64_t call_ = 0;
+  litestl::util::Vector<LibraryPin, 4> pins_;
   bool running_ = false;
   bool overBudget_ = false;
 

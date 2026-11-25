@@ -191,6 +191,7 @@ namespace graph {
 Status Evaluator::setInput(std::string_view name, GraphValue v)
 {
   CDCC_TRY(rt_.busyIfEvaluating("GraphInstance::setInput"));
+  NoCollectScope noCollect(lib_.get()); /* as in clear */
   Status status;
   const GraphDef *def = findDef(status);
   CDCC_TRY(status);
@@ -295,6 +296,8 @@ Status Evaluator::retry()
 Status Evaluator::clear()
 {
   CDCC_TRY(rt_.busyIfEvaluating("GraphInstance::clear"));
+  /* The last pin of a block that owns this instance may go: only after the scope. */
+  NoCollectScope noCollect(lib_.get());
   root_ = nullptr;
   frameCount = 0;
   results_.clear();

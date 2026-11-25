@@ -27,28 +27,10 @@ bool sameError(const ErrorPtr &a, const ErrorPtr &b)
   return a == b || (a && b && *a == *b);
 }
 
-struct NoCollectScope {
-  explicit NoCollectScope(Library *l) : lib(l)
-  {
-    if (lib) {
-      lib->beginNoCollect();
-    }
-  }
-  ~NoCollectScope()
-  {
-    if (lib) {
-      lib->endNoCollect();
-    }
-  }
-  NoCollectScope(const NoCollectScope &) = delete;
-  NoCollectScope &operator=(const NoCollectScope &) = delete;
-  Library *lib;
-};
-
 } // namespace
 
 Evaluator::Evaluator(Runtime *rt, Library *lib, GraphSource source)
-    : rt_(*rt), lib_(lib), source_(source), blocks_(*rt, lib)
+    : rt_(*rt), lib_(libraryRef(lib)), source_(source), blocks_(*rt, lib_)
 {
 }
 
@@ -71,8 +53,8 @@ Status Evaluator::evaluate(std::span<const SocketPath> sockets, Vector<Status> &
                          "GraphInstance::evaluate: a sticky error is pending; take it first");
   }
   Library *lib = lib_.get();
-  if (lib && lib->sweeping()) {
-    return Status::error(StatusCode::Busy, "GraphInstance::evaluate: the library is sweeping");
+  if (lib && lib->busy()) {
+    return Status::error(StatusCode::Busy, "GraphInstance::evaluate: the library is collecting");
   }
   CDCC_TRY(prepareRoot());
   const Key key = currentKey();
@@ -84,9 +66,10 @@ Status Evaluator::evaluate(std::span<const SocketPath> sockets, Vector<Status> &
   call_++;
   overBudget_ = false;
 
-  NoCollectScope noCollect(lib);
+  NoCollectScope noCollect(lib); /* ends last: what it lets go may free defs */
   EvaluationScope scope(rt_);
   running_ = true;
+  pinDef(*root_);
   for (const SocketPath &path : sockets) {
     Request r = find(path);
     if (!r.done && !overBudget_) {
@@ -100,6 +83,7 @@ Status Evaluator::evaluate(std::span<const SocketPath> sockets, Vector<Status> &
     results.append(std::move(status));
   }
   running_ = false;
+  pins_.clear();
   if (overBudget_) {
     results.clear();
     dropNewFrames();

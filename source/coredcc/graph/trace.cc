@@ -15,8 +15,8 @@ int TypeChains::extend(int chain, const SocketType *type)
   return id;
 }
 
-BlockReader::BlockReader(Runtime &rt, Library *lib)
-    : rt_(rt), system_(rt.ext<GraphSystem>()), lib_(lib)
+BlockReader::BlockReader(Runtime &rt, LibraryRef lib)
+    : rt_(rt), system_(rt.ext<GraphSystem>()), lib_(std::move(lib))
 {
 }
 
@@ -25,16 +25,19 @@ BlockDep BlockReader::read(BlockId id) const
   BlockDep d;
   d.id = id;
   d.version = system_.versionOf(id);
-  d.handle = lib_->find(id);
-  if (const Datablock *b = lib_->get(d.handle)) {
+  const Library *lib = lib_.get();
+  d.handle = lib ? lib->find(id) : BlockHandle();
+  if (const Datablock *b = lib ? lib->get(d.handle) : nullptr) {
     d.state = b->state();
+    d.stateChanges = b->stateChanges();
   }
   return d;
 }
 
 QueryDep BlockReader::read(BlockHandle h, InterfaceId iface) const
 {
-  const IfaceRef r = lib_->queryRaw(h, iface);
+  const Library *lib = lib_.get();
+  const IfaceRef r = lib ? lib->queryRaw(h, iface) : IfaceRef();
   return QueryDep{h, iface, r.table(), r.self()};
 }
 

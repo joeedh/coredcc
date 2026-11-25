@@ -87,7 +87,7 @@ static bool isType(const GraphNode &n, const char *type)
 /* ---- GraphDef ---- */
 
 GraphDef::GraphDef(Runtime *rt, Library *lib, BlockId self)
-    : rt_(*rt), lib_(lib), self_(self), serial_(rt->nextVersion())
+    : rt_(*rt), lib_(libraryRef(lib)), self_(self), serial_(rt->nextVersion())
 {
   CDCC_CHECK(self.isNull() || lib, "a block's GraphDef needs its Library");
   rt_.ext<NodeTypeRegistry>();

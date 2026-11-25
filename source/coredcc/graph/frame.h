@@ -95,8 +95,9 @@ struct Frame {
   uint64_t serial = 0;
   /** The pass its topology was checked in. */
   uint64_t pass = 0;
-  /** The evaluate call it was made in. */
+  /** The evaluate call it was made in, and the last one that pinned its def. */
   uint64_t call = 0;
+  uint64_t pinned = 0;
 
   std::shared_ptr<const GraphTopology> topo;
   litestl::util::Vector<InputState, 1> inputs;

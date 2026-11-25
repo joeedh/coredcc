@@ -5,12 +5,13 @@
  * set). See docs/plans/2026-11-24-p5-graph.md.
  */
 
-#include "coredcc/base/id.h"
+#include "coredcc/lib/pin.h"
 
 #include "litestl/util/alloc.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -43,6 +44,8 @@ namespace detail {
 class PayloadBox {
  public:
   explicit PayloadBox(TypeId type);
+  /** An aliasing payload, of views into the data of the pinned blocks. */
+  PayloadBox(TypeId type, litestl::util::Vector<LibraryPin, 1> pins);
   PayloadBox(const PayloadBox &) = delete;
   PayloadBox &operator=(const PayloadBox &) = delete;
 
@@ -53,6 +56,15 @@ class PayloadBox {
   int refs() const
   {
     return refs_;
+  }
+  bool isAlias() const
+  {
+    return pins_.size() > 0;
+  }
+  /** Whether what it points into is still there. */
+  bool alive() const
+  {
+    return !isAlias() || pinsAlive();
   }
   void ref();
   /** Drops one reference, destroying the payload with the last. */
@@ -66,22 +78,31 @@ class PayloadBox {
 
  private:
   void checkThread() const;
+  bool pinsAlive() const;
 
   TypeId type_;
   int refs_ = 1;
   /** The creating thread, in debug builds. In every build, so the layout is the same. */
   size_t thread_;
+  litestl::util::Vector<LibraryPin, 1> pins_;
 };
 
 template <class T> class PayloadBoxOf final : public PayloadBox {
  public:
   explicit PayloadBoxOf(T v) : PayloadBox(payloadTypeId<T>()), value(std::move(v)) {}
+  PayloadBoxOf(T v, litestl::util::Vector<LibraryPin, 1> pins)
+      : PayloadBox(payloadTypeId<T>(), std::move(pins)), value(std::move(v))
+  {
+  }
   ~PayloadBoxOf() override = default;
 
   bool equal(const PayloadBox &b) const override
   {
     if (this == &b) {
       return true;
+    }
+    if (isAlias() || b.isAlias()) {
+      return false; /* both may read the same memory, edited in between */
     }
     if constexpr (requires(const T &x) { PayloadTraits<T>::equal(x, x); }) {
       return b.type() == type() &&
@@ -94,11 +115,11 @@ template <class T> class PayloadBoxOf final : public PayloadBox {
   size_t bytes() const override
   {
     if constexpr (requires(const T &x) { PayloadTraits<T>::bytes(x); }) {
-      return PayloadTraits<T>::bytes(value);
+      if (alive()) {
+        return PayloadTraits<T>::bytes(value);
+      }
     }
-    else {
-      return sizeof(T);
-    }
+    return sizeof(T);
   }
 
   T value;
@@ -148,19 +169,21 @@ class PayloadRef {
   {
     return box_ ? box_->type() : TypeId();
   }
-  /** The value, or null if this is null or holds another type. */
+  /** The value, or null if this is null, holds another type, or is an aliasing payload
+   * whose blocks' data is gone (see makeAlias). Keep the PayloadRef, not the pointer. */
   template <class T> const T *get() const
   {
-    return box_ && box_->type() == payloadTypeId<T>() ?
+    return box_ && box_->type() == payloadTypeId<T>() && box_->alive() ?
                &static_cast<detail::PayloadBoxOf<T> *>(box_)->value :
                nullptr;
   }
   /** The value for writing: in place if this is the only reference, else a copy, which
-   * this then refers to. Null as for `get`. */
+   * this then refers to. Null as for `get`, and for an aliasing payload, whose views are of
+   * the user's original data. */
   template <class T> T *mutate()
   {
     const T *now = get<T>();
-    if (!now) {
+    if (!now || box_->isAlias()) {
       return nullptr;
     }
     if (box_->refs() > 1) {
@@ -173,6 +196,10 @@ class PayloadRef {
   size_t bytes() const
   {
     return box_ ? box_->bytes() : 0;
+  }
+  bool isAlias() const
+  {
+    return box_ && box_->isAlias();
   }
   /** Whether both refer to the same object. */
   bool same(const PayloadRef &b) const
@@ -187,6 +214,8 @@ class PayloadRef {
 
  private:
   template <class T> friend PayloadRef makePayload(T value);
+  template <class T>
+  friend Result<PayloadRef> makeAlias(T view, Library &lib, std::span<const BlockHandle> blocks);
   explicit PayloadRef(detail::PayloadBox *box) : box_(box) {}
   detail::PayloadBox *box_ = nullptr;
 };
@@ -197,6 +226,40 @@ template <class T> PayloadRef makePayload(T value)
   static_assert(std::is_same_v<T, std::remove_cvref_t<T>>);
   return PayloadRef(
       litestl::alloc::New<detail::PayloadBoxOf<T>>("coredcc::Payload", std::move(value)));
+}
+
+namespace detail {
+/** The Host pins of an aliasing payload; see makeAlias for the errors. */
+Result<litestl::util::Vector<LibraryPin, 1>> pinAliased(Library &lib,
+                                                        std::span<const BlockHandle> blocks);
+} // namespace detail
+
+/**
+ * An aliasing payload: `view` points into the data of `blocks`, which get a Host pin each
+ * until the payload's last reference goes, so deleting one, or dropping it from the history,
+ * doesn't free the data. Where it is freed anyway (the Library is destroyed, the host frees
+ * a Detached block's data), `get` is null from then on. A pin doesn't keep the owner from
+ * editing the data: what reads it through the payload also needs the block as a dependency.
+ * For the same reason two aliasing payloads are equal only if they are the same object.
+ *
+ * NotFound for a null handle and FailedPrecondition for a block that isn't Live;
+ * Unsupported for a Transient block type. A block that keeps a payload aliasing itself (in
+ * an instance it owns, say) is never collected.
+ */
+template <class T>
+Result<PayloadRef> makeAlias(T view, Library &lib, std::span<const BlockHandle> blocks)
+{
+  static_assert(std::is_same_v<T, std::remove_cvref_t<T>>);
+  auto pins = detail::pinAliased(lib, blocks);
+  if (!pins.ok()) {
+    return pins.status();
+  }
+  return PayloadRef(litestl::alloc::New<detail::PayloadBoxOf<T>>(
+      "coredcc::Payload", std::move(view), std::move(pins).value()));
+}
+template <class T> Result<PayloadRef> makeAlias(T view, Library &lib, BlockHandle block)
+{
+  return makeAlias<T>(std::move(view), lib, std::span<const BlockHandle>(&block, 1));
 }
 
 } // namespace coredcc
