@@ -9,6 +9,7 @@
 #include "coredcc/base/name_table.h"
 #include "coredcc/base/runtime.h"
 #include "coredcc/lib/block.h"
+#include "coredcc/lib/id_key.h"
 #include "coredcc/lib/registry.h"
 
 #include "litestl/util/function.h"
@@ -67,12 +68,13 @@ class Library {
                                    void *clientData);
   /**
    * Recreates a block under an id it had before (redo of a create). An unknown id
-   * creates a record. A Live id is AlreadyExists; an InHistory, Detached or Placeholder
-   * record is FailedPrecondition: restore those instead.
+   * creates a record, and a MissingBlock placeholder is filled (createWithId). A Live id is
+   * AlreadyExists; any other record is FailedPrecondition: restore it instead.
    */
   Result<BlockHandle> reviveAs(TypeId type, BlockId id, std::string_view name, void *clientData);
-  /** A record for a block whose client or type is missing; it keeps the type name and
-   * payload so the file round-trips. */
+  /** A record for a block whose type or data is missing (see PlaceholderReason). */
+  Result<BlockHandle> addPlaceholder(BlockId id, PlaceholderInfo info);
+  /** A MissingType placeholder without references. */
   Result<BlockHandle> addPlaceholder(BlockId id,
                                      std::string_view typeName,
                                      std::string_view name,
@@ -101,24 +103,28 @@ class Library {
 
   /* ---- states ---- */
 
-  /** Live -> InHistory: deleted, restorable by undo. */
+  /** Live, Placeholder or Detached -> InHistory: deleted, restorable by undo. */
   Status markDeleted(BlockHandle h);
-  /** InHistory -> Live. */
+  /** InHistory -> the state it was deleted in. */
   Status restoreFromHistory(BlockHandle h);
+  /** Changes the name. Names aren't unique. */
+  Status rename(BlockHandle h, std::string_view name);
   /**
    * Destroys an InHistory block, when the history drops the step that holds it. Refused
-   * (FailedPrecondition) while a Live or Detached block holds a Strong ref to it.
+   * (FailedPrecondition) while a Live, Detached or Placeholder block holds a Strong ref
+   * to it.
    *
    * With Host pins it returns ok and the block becomes Doomed instead: its id is free at
    * once, and it is destroyed when the last Host pin goes (or when the sweep or
-   * no-collect scope that happens in ends). If a Live or Detached block holds a Strong
-   * ref to its id by then, and no other record has the id, it goes back to InHistory.
+   * no-collect scope that happens in ends). If such a block holds a Strong ref to
+   * its id by then, and no other record has the id, it goes back to InHistory.
    * History pins don't matter here: the step holding one can't undo past this one.
    */
   Status destroyFromHistory(BlockHandle h);
-  /** The host destroyed the data: Live -> Detached. */
+  /** The host destroyed the data: Live -> Detached. On an InHistory block it changes the
+   * state restoring goes back to. */
   Status onHostDestroyed(BlockId id);
-  /** The host brought it back: Detached -> Live. */
+  /** The host brought it back: Detached -> Live, also of an InHistory block. */
   Status onHostRestored(BlockId id);
 
   /* ---- flags and pins (void: deferred during a sweep) ---- */
@@ -161,8 +167,29 @@ class Library {
   Status setSlot(BlockHandle owner, TypeId ns, int64_t key, BlockId target, RefKind kind);
   /** The slot, or null. Valid until the next setSlot or forceUnlink on `owner`. */
   const RefCell *slot(BlockHandle owner, TypeId ns, int64_t key) const;
-  /** Removes a slot. Also how a placeholder's refs are cut (forceUnlink). */
+  /** Removes a slot. */
   Status forceUnlink(BlockHandle owner, TypeId ns, int64_t key);
+  /** Calls fn(TypeId ns, int64_t key, const RefCell &) for each slot. `fn` must not change
+   * them. */
+  template <class Fn> void forEachSlot(BlockHandle owner, Fn &&fn) const
+  {
+    if (const Datablock *b = rec(owner)) {
+      for (const Datablock::Slot &s : b->slots_) {
+        fn(s.ns, s.key, s.cell);
+      }
+    }
+  }
+
+  /* ---- a placeholder's references ---- */
+
+  /** Nulls row `index` of a placeholder's ref table (its indices stay valid), so a block it
+   * references can be deleted. */
+  Status forceUnlinkRef(BlockHandle placeholder, int index)
+  {
+    return relinkRef(placeholder, index, BlockId());
+  }
+  /** Sets a row again: the undo of forceUnlinkRef. */
+  Status relinkRef(BlockHandle placeholder, int index, BlockId target);
 
   /** Every reference out of `h`: the provider's, the slots', then the attachments'. */
   Status foreachRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const;
@@ -189,6 +216,15 @@ class Library {
    * while set. */
   Status setOverride(BlockHandle h, InterfaceId iface, IfaceRef ref);
   void clearOverride(BlockHandle h, InterfaceId iface);
+  /** Calls fn(InterfaceId, const IfaceRef &) for each override. `fn` must not change them. */
+  template <class Fn> void forEachOverride(BlockHandle h, Fn &&fn) const
+  {
+    if (const Datablock *b = rec(h)) {
+      for (const Datablock::Override &o : b->overrides_) {
+        fn(o.iface, o.ref);
+      }
+    }
+  }
 
   /* ---- attachments ---- */
 
@@ -199,12 +235,22 @@ class Library {
   /** Removes an attachment without destroying it, returning its data. */
   Result<void *> detach(BlockHandle h, TypeId type);
   void *attachment(BlockHandle h, TypeId type) const;
+  /** Calls fn(TypeId, void *data) for each attachment. `fn` must not change them. */
+  template <class Fn> void forEachAttachment(BlockHandle h, Fn &&fn) const
+  {
+    if (const Datablock *b = rec(h)) {
+      for (const Datablock::Attachment &a : b->attachments_) {
+        fn(a.type, a.data);
+      }
+    }
+  }
 
   /* ---- garbage collection ---- */
 
   /**
    * Mark and sweep (architecture §8a). Roots: Root and FakeUser blocks, pinned blocks,
-   * and every block that isn't Live (the history, the host or a file still holds it).
+   * and every block that isn't Live (the history, the host or a file still holds it),
+   * except a MissingBlock that was never a record.
    * Marks along strong references, from providers and slots. Returns how many blocks
    * were destroyed.
    *
@@ -265,11 +311,23 @@ class Library {
   {
     return pool_.get(h);
   }
+  /** Fills a MissingBlock placeholder in place. */
+  Result<BlockHandle> adopt(BlockHandle h,
+                            const BlockTypeRegistry::Entry &type,
+                            std::string_view name,
+                            void *clientData);
+  /** A key for maps over block ids; only for this Library's maps. */
+  BlockIdKey keyOf(const BlockId &id) const
+  {
+    return hasher_.key(id);
+  }
   Result<BlockHandle> addRecord(TypeId type, BlockId id, std::string_view name, void *clientData);
   Status busyIfSweeping(const char *what) const;
   /** Runs `fn` now, or after the sweep if one is running. */
   void runOrDefer(litestl::util::function<void()> fn);
-  void buildRelations(litestl::util::Map<BlockId, litestl::util::Vector<BlockHandle>> &out,
+  using Relations = litestl::util::Map<BlockIdKey, litestl::util::Vector<BlockHandle>>;
+  static bool sameRelations(const Relations &a, const Relations &b);
+  void buildRelations(Relations &out,
                       Status &status) const;
   /** Two-phase destruction of `garbage` (see collect). */
   void destroyBlocks(const litestl::util::Vector<BlockHandle> &garbage);
@@ -281,9 +339,11 @@ class Library {
     b.stateChanges_++;
     epoch_++;
   }
-  /** A Live or Detached block with a Strong ref to `id`, or null. */
+  /** A Live, Detached or Placeholder block with a Strong ref to `id`, or null. */
   const Datablock *strongUserOf(BlockId id) const;
   Status doom(BlockHandle h);
+  /** onHostDestroyed and onHostRestored: the data's state goes from `from` to `to`. */
+  Status hostChanged(Datablock &b, const char *op, BlockState from, BlockState to);
   /** Destroys the Doomed blocks that lost their last Host pin, unless the library is busy
    * or in a no-collect scope. */
   void releaseDoomed();
@@ -304,7 +364,8 @@ class Library {
   AttachmentTypeRegistry &attachmentTypes_;
   NameTable fileNames_;
   HandlePool<Datablock> pool_;
-  litestl::util::Map<BlockId, BlockHandle> byId_;
+  BlockIdHasher hasher_;
+  litestl::util::Map<BlockIdKey, BlockHandle> byId_;
   uint64_t epoch_ = 1;
   int noCollect_ = 0;
   bool sweeping_ = false;
@@ -326,7 +387,7 @@ class Library {
   int deferredErrorCount_ = 0;
 
   mutable uint64_t relationsEpoch_ = 0;
-  mutable litestl::util::Map<BlockId, litestl::util::Vector<BlockHandle>> relations_;
+  mutable Relations relations_;
 };
 
 template <class T, RefKind K> T *TypedRef<T, K>::get(const Library &lib) const

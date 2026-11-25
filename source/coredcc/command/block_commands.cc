@@ -1,5 +1,6 @@
 #include "coredcc/command/block_commands.h"
 
+#include "coredcc/command/block_edits.h"
 #include "coredcc/command/executor.h"
 
 #include "litestl/binding/binding.h"
@@ -22,9 +23,12 @@ Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target)
   for (int i = 0; i < int(out.size()); i++) {
     const BlockId gone = lib.get(out[i])->id();
     for (BlockHandle user : lib.usersOf(out[i])) {
-      /* Only Live users can be deleted with it; InHistory ones are already gone, and
-       * Detached ones belong to the host (destroyFromHistory guards their refs). */
-      if (out.contains(user) || lib.get(user)->state() != BlockState::Live) {
+      /* InHistory users are already gone, and Detached ones belong to the host
+       * (destroyFromHistory guards their refs). */
+      const BlockState state = lib.get(user)->state();
+      if (out.contains(user) ||
+          (state != BlockState::Live && state != BlockState::Placeholder))
+      {
         continue;
       }
       bool breaks = false;
@@ -283,7 +287,7 @@ Status registerBlockCommands(Runtime &rt)
       return d.status();
     }
   }
-  return Status();
+  return detail::registerBlockEdits(rt);
 }
 
 } // namespace coredcc

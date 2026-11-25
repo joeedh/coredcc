@@ -52,7 +52,7 @@ Status noBlock(const char *op)
 
 Library::Library(Runtime *rt)
     : rt_(*rt), types_(rt->ext<BlockTypeRegistry>()), clients_(rt->ext<ClientRegistry>()),
-      attachmentTypes_(rt->ext<AttachmentTypeRegistry>()),
+      attachmentTypes_(rt->ext<AttachmentTypeRegistry>()), hasher_(rt->newLocalId()),
       token_(std::make_shared<detail::LibraryToken>())
 {
   token_->lib = this;
@@ -105,7 +105,7 @@ Result<BlockHandle> Library::addRecord(TypeId type,
   b->type_ = type;
   b->name_ = toLs(name);
   b->clientData_ = clientData;
-  byId_.add(id, h);
+  byId_.add(keyOf(id), h);
   epoch_++;
   return h;
 }
@@ -147,10 +147,16 @@ Result<BlockHandle> Library::createWithId(TypeId type,
     return Status::error(StatusCode::InvalidArgument,
                          "createWithId: the id's client is not the block type's client");
   }
-  if (find(id)) {
+  if (const BlockHandle existing = find(id)) {
+    const Datablock &b = *rec(existing);
+    if (b.state_ == BlockState::Placeholder &&
+        b.placeholderReason_ == PlaceholderReason::MissingBlock)
+    {
+      return adopt(existing, *entry, name, clientData);
+    }
     return Status::error(StatusCode::AlreadyExists,
                          ("createWithId: a block with this id exists ('" +
-                          std::string(rec(find(id))->name_.c_str()) + "')")
+                          std::string(b.name_.c_str()) + "')")
                              .c_str());
   }
   return addRecord(type, id, name, clientData);
@@ -170,31 +176,17 @@ Result<BlockHandle> Library::reviveAs(TypeId type,
                             "' is already Live")
                                .c_str());
     }
+    if (b.state_ == BlockState::Placeholder &&
+        b.placeholderReason_ == PlaceholderReason::MissingBlock)
+    {
+      return createWithId(type, id, name, clientData);
+    }
     return Status::error(StatusCode::FailedPrecondition,
                          ("reviveAs: block '" + std::string(b.name_.c_str()) + "' is " +
                           blockStateName(b.state_) + "; restore it instead")
                              .c_str());
   }
   return createWithId(type, id, name, clientData);
-}
-
-Result<BlockHandle> Library::addPlaceholder(BlockId id,
-                                            std::string_view typeName,
-                                            std::string_view name,
-                                            Vector<uint8_t> payload)
-{
-  CDCC_TRY(busyIfSweeping("addPlaceholder"));
-  id = clients_.canonical(id);
-  if (id.local.isNull() || find(id)) {
-    return Status::error(StatusCode::AlreadyExists,
-                         "addPlaceholder: the id is null or already has a record");
-  }
-  Result<BlockHandle> h = addRecord(TypeId::of(typeName), id, name, nullptr);
-  Datablock *b = rec(*h);
-  b->state_ = BlockState::Placeholder;
-  b->placeholderType_ = toLs(typeName);
-  b->placeholderPayload_ = std::move(payload);
-  return h;
 }
 
 /* ---- finding ---- */
@@ -215,7 +207,7 @@ void Library::renormalizeIds() const
   for (BlockHandle h : stale) {
     Datablock *b = self->rec(h);
     const BlockId c = clients_.canonical(b->id_);
-    if (byId_.lookup_ptr(c)) {
+    if (byId_.lookup_ptr(keyOf(c))) {
       /* Two records for one block: keep both findable by their old ids and say so. */
       rt_.setStickyError(Status::error(
           StatusCode::AlreadyExists,
@@ -225,9 +217,9 @@ void Library::renormalizeIds() const
               .c_str()));
       continue;
     }
-    self->byId_.remove(b->id_);
+    self->byId_.remove(keyOf(b->id_));
     b->id_ = c;
-    self->byId_.add(c, h);
+    self->byId_.add(keyOf(c), h);
   }
   if (stale.size() > 0) {
     self->epoch_++;
@@ -237,7 +229,7 @@ void Library::renormalizeIds() const
 BlockHandle Library::find(BlockId id) const
 {
   renormalizeIds();
-  const BlockHandle *h = byId_.lookup_ptr(clients_.canonical(id));
+  const BlockHandle *h = byId_.lookup_ptr(keyOf(clients_.canonical(id)));
   return h ? *h : BlockHandle();
 }
 
@@ -255,9 +247,10 @@ Status Library::markDeleted(BlockHandle h)
   if (!b) {
     return noBlock("markDeleted");
   }
-  if (b->state_ != BlockState::Live) {
+  if (b->state_ == BlockState::InHistory || b->state_ == BlockState::Doomed) {
     return wrongState(*b, "markDeleted", BlockState::Live);
   }
+  b->deletedFrom_ = b->state_;
   setState(*b, BlockState::InHistory);
   return Status();
 }
@@ -272,7 +265,22 @@ Status Library::restoreFromHistory(BlockHandle h)
   if (b->state_ != BlockState::InHistory) {
     return wrongState(*b, "restoreFromHistory", BlockState::InHistory);
   }
-  setState(*b, BlockState::Live);
+  setState(*b, b->deletedFrom_);
+  return Status();
+}
+
+Status Library::hostChanged(Datablock &b, const char *op, BlockState from, BlockState to)
+{
+  if (b.dataState() != from) {
+    return wrongState(b, op, from);
+  }
+  if (b.state_ == BlockState::InHistory) {
+    b.deletedFrom_ = to;
+    setState(b, BlockState::InHistory); /* a transition of its data */
+  }
+  else {
+    setState(b, to);
+  }
   return Status();
 }
 
@@ -283,11 +291,7 @@ Status Library::onHostDestroyed(BlockId id)
   if (!b) {
     return noBlock("onHostDestroyed");
   }
-  if (b->state_ != BlockState::Live) {
-    return wrongState(*b, "onHostDestroyed", BlockState::Live);
-  }
-  setState(*b, BlockState::Detached);
-  return Status();
+  return hostChanged(*b, "onHostDestroyed", BlockState::Live, BlockState::Detached);
 }
 
 Status Library::onHostRestored(BlockId id)
@@ -297,11 +301,7 @@ Status Library::onHostRestored(BlockId id)
   if (!b) {
     return noBlock("onHostRestored");
   }
-  if (b->state_ != BlockState::Detached) {
-    return wrongState(*b, "onHostRestored", BlockState::Detached);
-  }
-  setState(*b, BlockState::Live);
-  return Status();
+  return hostChanged(*b, "onHostRestored", BlockState::Detached, BlockState::Live);
 }
 
 /* ---- flags and pins ---- */
@@ -448,7 +448,13 @@ Status Library::foreachDataRef(BlockHandle h, litestl::util::function<void(RefCe
    * history, Detached (whose targets must survive until the host restores it), or Doomed
    * (whose pinned data may reach them). */
   BlockProvider p = types_.provider(b->type_);
-  if (b->state_ == BlockState::Placeholder || !p) {
+  if (b->dataState() == BlockState::Placeholder) {
+    for (RefCell &cell : const_cast<Datablock *>(b)->placeholderData_.refs) {
+      fn(cell);
+    }
+    return Status();
+  }
+  if (!p) {
     return Status();
   }
   return visitRefs(*b, fn, [&](RefVisitor &v) { p.foreachRef(*b, v); });
@@ -645,7 +651,7 @@ Status Library::validate() const
   renormalizeIds();
   Status status;
   forEach([&](BlockHandle h, const Datablock &b) {
-    const BlockHandle *indexed = byId_.lookup_ptr(b.id_);
+    const BlockHandle *indexed = byId_.lookup_ptr(keyOf(b.id_));
     if (status.ok() && (!indexed || *indexed != h)) {
       status = Status::error(StatusCode::Internal,
                              ("Library: block '" + std::string(b.name_.c_str()) +

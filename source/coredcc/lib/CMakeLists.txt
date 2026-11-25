@@ -4,8 +4,10 @@ coredcc_library(coredcc_lib
     bindings.cc
     block_io.cc
     gc.cc
+    id_key.cc
     library.cc
     lifetime.cc
+    placeholder.cc
     registry.cc
   DEPS
     coredcc_props

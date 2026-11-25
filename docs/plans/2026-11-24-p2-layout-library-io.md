@@ -772,3 +772,25 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
 - `const void *` parameters bind as `void *` does, so the attachment slots keep `const`.
 - `BlockTypeRegistry::add` also refuses `Payload` without the slots.
 - Attachment types and block types share TypeId names. Nothing stops one name being both.
+
+### A2: library bookkeeping (2026-11-24)
+- **The attachment and block type name overlap** (listed after A1) is refused: each registry's `add`
+  rejects a name the other has (AlreadyExists). No API change. Slots belong to either kind by
+  TypeId, so a shared name would have mixed them.
+- `Datablock::dataState()` is the state a deleted block remembers (else its state).
+  `LibraryPin::dataAlive` and `writePayload` use it: a block deleted while Detached or a
+  placeholder has no data.
+- `addPlaceholder(id, PlaceholderInfo)` carries the reason, type, names and a `BlockPayload` (which
+  moved to `lib/block.h`). The four-argument form stays, for a MissingType without refs.
+- `Library::relinkRef(h, index, target)` is the undo of `forceUnlinkRef`, which is `relinkRef` to
+  null.
+- **The id index uses SipHash-1-3** seeded from `newLocalId()`, so constructing a Library takes one
+  id from the GUID source. The relations map, the weak-notice map and the payload audit use keyed
+  hashes too.
+- `HistoryBlock` (`command/history_block.h`) is A3's "handle and id", moved forward for the two new
+  commands. It finds by id alone: the index never holds a Doomed record, so a handle that still
+  names a record of the id is what the index gives.
+- **`PointerAccessor::cell`:** undo and redo go through `setValue` when the target was and is Live,
+  and write the cell directly (with the same notification and update hook) otherwise, which also
+  covers a placeholder that was filled in between.
+- `api/struct.h` includes `lib/block.h` for `RefCell`.

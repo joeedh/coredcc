@@ -1,5 +1,6 @@
 #include "coredcc/command/set_property.h"
 
+#include "coredcc/api/change_bus.h"
 #include "coredcc/api/resolve.h"
 #include "coredcc/command/executor.h"
 #include "coredcc/lib/library.h"
@@ -24,18 +25,26 @@ struct SetProperty {
   StableRef ref;
   PropValue oldValue;
   PropValue newValue;
+  /* With a PointerAccessor::cell: the linked ids, also of blocks that aren't Live (those
+   * read as null). */
+  bool hasCell = false;
+  BlockId oldTarget;
+  BlockId newTarget;
   Library *lib = nullptr;
   litestl::util::Vector<BlockHandle> pins;
 
   void pinTarget(Context &ctx, const PropValue &v)
   {
     const StableRef *r = v.tryPointer();
-    Library *l = ctx.library();
-    if (!r || !l || r->owner.kind != OwnerKey::Kind::Block) {
-      return;
+    if (r && r->owner.kind == OwnerKey::Kind::Block) {
+      pinBlock(ctx, r->owner.block);
     }
-    const BlockHandle h = l->find(r->owner.block);
-    if (l->get(h)) {
+  }
+  void pinBlock(Context &ctx, BlockId id)
+  {
+    Library *l = ctx.library();
+    const BlockHandle h = l ? l->find(id) : BlockHandle();
+    if (h && !pins.contains(h)) {
       l->pin(h, PinKind::History);
       lib = l;
       pins.append(h);
@@ -58,6 +67,10 @@ struct SetProperty {
       return old.status();
     }
     oldValue = *old;
+    if (const RefCell *cell = cellOf(ctx, *rp)) {
+      hasCell = true;
+      oldTarget = cell->target;
+    }
     CDCC_TRY(setValue(ctx, *rp, input));
     Result<PropValue> now = readWhole(ctx);
     if (!now.ok()) {
@@ -66,15 +79,20 @@ struct SetProperty {
     newValue = *now;
     pinTarget(ctx, oldValue);
     pinTarget(ctx, newValue);
+    if (hasCell) {
+      const RefCell *cell = cellOf(ctx, *rp);
+      newTarget = cell ? cell->target : BlockId();
+      pinBlock(ctx, oldTarget);
+    }
     return Status();
   }
   void undo(Context &ctx)
   {
-    write(ctx, oldValue);
+    write(ctx, oldValue, oldTarget);
   }
   Status redo(Context &ctx)
   {
-    return writeStatus(ctx, newValue);
+    return writeStatus(ctx, newValue, newTarget);
   }
   uint64_t memSize() const
   {
@@ -108,6 +126,7 @@ struct SetProperty {
       return false;
     }
     newValue = n->newValue;
+    newTarget = n->newTarget;
     for (BlockHandle h : n->pins) {
       pins.append(h); /* n's discard then unpins nothing */
     }
@@ -126,17 +145,40 @@ struct SetProperty {
     }
     return getValue(ctx, *rp);
   }
-  Status writeStatus(Context &ctx, const PropValue &v) const
+  static RefCell *cellOf(Context &ctx, const ResolvedPath &rp)
+  {
+    const bool has = rp.kind == ResolvedPath::Kind::Member &&
+                     rp.member->kind() == MemberKind::Pointer && rp.member->pointer().cell &&
+                     ctx.library();
+    return has ? rp.member->pointer().cell(rp.ptr, ctx) : nullptr;
+  }
+  Status writeStatus(Context &ctx, const PropValue &v, const BlockId &target) const
   {
     Result<ResolvedPath> rp = resolve(ctx, ref);
     if (!rp.ok()) {
       return rp.status();
     }
-    return setValue(ctx, *rp, v);
+    RefCell *cell = hasCell && !target.isNull() ? cellOf(ctx, *rp) : nullptr;
+    if (!cell || isLiveTarget(*ctx.library(), v, target)) {
+      return setValue(ctx, *rp, v);
+    }
+    /* A link to a block that isn't Live, or wasn't when it was read: the cell itself. */
+    CDCC_TRY(ctx.library()->writeRef(*cell, target));
+    ctx.runtime().ext<ChangeBus>().notify(rp->canonical.owner, rp->member->name());
+    if (rp->member->updateFn()) {
+      rp->member->updateFn()(rp->ptr, ctx);
+    }
+    return Status();
   }
-  void write(Context &ctx, const PropValue &v) const
+  static bool isLiveTarget(const Library &l, const PropValue &v, const BlockId &target)
   {
-    Status s = writeStatus(ctx, v);
+    const StableRef *r = v.tryPointer();
+    const Datablock *b = l.get(l.find(target));
+    return r && r->owner.kind == OwnerKey::Kind::Block && b && b->state() == BlockState::Live;
+  }
+  void write(Context &ctx, const PropValue &v, const BlockId &target) const
+  {
+    Status s = writeStatus(ctx, v, target);
     if (!s.ok()) {
       ctx.runtime().setStickyError(std::move(s)); /* undo can't return a Status */
     }

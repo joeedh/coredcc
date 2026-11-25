@@ -1,5 +1,7 @@
 #include "coredcc/lib/registry.h"
 
+#include "coredcc/lib/attachment.h"
+
 #include <string>
 
 namespace coredcc {
@@ -113,6 +115,11 @@ Result<TypeId> BlockTypeRegistry::add(BlockTypeInfo info, Owned<BlockProvider> p
   if (byId_.lookup_ptr(id->value)) {
     return Status::error(StatusCode::AlreadyExists,
                          ("block type '" + name + "' is already registered").c_str());
+  }
+  const AttachmentTypeRegistry *attachments = rt_.findExt<AttachmentTypeRegistry>();
+  if (attachments && attachments->find(*id)) {
+    return Status::error(StatusCode::AlreadyExists,
+                         ("block type '" + name + "': an attachment type has this name").c_str());
   }
   Entry *e = litestl::alloc::New<Entry>("coredcc::BlockTypeRegistry::Entry");
   e->info = std::move(info);

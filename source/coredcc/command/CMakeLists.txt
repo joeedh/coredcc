@@ -1,9 +1,11 @@
 coredcc_library(coredcc_command
   SOURCES
     block_commands.cc
+    block_edits.cc
     bindings.cc
     command.cc
     executor.cc
+    history_block.cc
     last_used.cc
     literal.cc
     set_property.cc

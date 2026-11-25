@@ -7,6 +7,7 @@
  */
 
 #include "coredcc/api/context.h"
+#include "coredcc/lib/block.h"
 #include "coredcc/props/def.h"
 
 #include "litestl/util/function.h"
@@ -49,6 +50,12 @@ struct PointerAccessor {
    */
   litestl::util::function<StableRef(const PointerRef &self, Context &ctx, const PointerRef &target)>
       address;
+  /**
+   * Optional, for a settable pointer to a block: the RefCell it is stored in (null for
+   * none). Undo then restores a link to a block that isn't Live (a placeholder, a deleted
+   * block): such a link reads as null, so setting the read value back would lose it.
+   */
+  litestl::util::function<RefCell *(const PointerRef &self, Context &ctx)> cell;
 };
 
 /** A Collection member. `keyOf` is mandatory: undo stores items by key. */

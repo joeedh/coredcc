@@ -175,6 +175,21 @@ static void test_registry_rules()
       rt, "t.5#provider", litestl::alloc::New<PartProvider<Part::None>>("p"));
   test_assert(p.ok() && reg.add(info, std::move(p).value()).status().code() ==
                             StatusCode::AlreadyExists);
+  /* A block type's name, and the other way round. */
+  ThingHost things;
+  registerThing(rt, things);
+  info.name = "test.Thing";
+  Result<Owned<AttachmentProvider>> ap = own<AttachmentProvider>(
+      rt, "t.5#provider", litestl::alloc::New<PartProvider<Part::None>>("p"));
+  test_assert(ap.ok() && hasMsg(reg.add(info, std::move(ap).value()).status(),
+                                "a block type has this name"));
+  BlockTypeInfo block;
+  block.name = "t.5";
+  block.client = ClientId::of(kCoredccClient);
+  Result<Owned<BlockProvider>> bp = own<BlockProvider>(
+      rt, "test.Thing#provider", litestl::alloc::New<ThingProvider>("provider"));
+  test_assert(bp.ok() && hasMsg(rt.ext<BlockTypeRegistry>().add(block, std::move(bp).value()).status(),
+                                "an attachment type has this name"));
   test_assert(!reg.find(TypeId::of("t.1")) && reg.find(TypeId::of("t.5")) != nullptr);
   const AttachmentProvider part = reg.find(TypeId::of("t.5"))->provider.get();
   test_assert(!part.hasCreate() && !part.hasCopy() && !part.hasSerialize() &&
@@ -192,6 +207,9 @@ static void test_attach()
   test_assert(s.code() == StatusCode::NotFound && hasMsg(s, "not a registered"));
   test_assert(w.lib.attach(BlockHandle(), kNote, n).code() == StatusCode::NotFound);
   test_assert(w.lib.attach(a, kNote, n).ok() && w.lib.attachment(a, kNote) == n);
+  int listed = 0;
+  w.lib.forEachAttachment(a, [&](TypeId t, void *d) { listed += t == kNote && d == n ? 1 : 10; });
+  test_assert(listed == 1);
   test_assert(w.lib.attach(a, kNote, n).code() == StatusCode::AlreadyExists);
 
   /* Its references count: relations, marking, remapping through foreachRef. */

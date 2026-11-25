@@ -10,7 +10,7 @@ namespace coredcc {
 using litestl::util::Map;
 using litestl::util::Vector;
 
-void Library::buildRelations(Map<BlockId, Vector<BlockHandle>> &out, Status &status) const
+void Library::buildRelations(Relations &out, Status &status) const
 {
   out.clear();
   forEach([&](BlockHandle user, const Datablock &) {
@@ -21,7 +21,7 @@ void Library::buildRelations(Map<BlockId, Vector<BlockHandle>> &out, Status &sta
       if (cell.target.isNull()) {
         return;
       }
-      const BlockId target = clients_.canonical(cell.target);
+      const BlockIdKey target = keyOf(clients_.canonical(cell.target));
       Vector<BlockHandle> *users = out.lookup_ptr(target);
       if (!users) {
         out.add(target, Vector<BlockHandle>());
@@ -46,14 +46,11 @@ Vector<BlockHandle> Library::usersOf(BlockHandle target) const
     /* A failed enumeration isn't cached; the sticky error says why. */
     relationsEpoch_ = status.ok() ? epoch_ : 0;
   }
-  const Vector<BlockHandle> *users = relations_.lookup_ptr(t->id_);
+  const Vector<BlockHandle> *users = relations_.lookup_ptr(keyOf(t->id_));
   return users ? *users : Vector<BlockHandle>();
 }
 
-namespace {
-
-bool sameRelations(const Map<BlockId, Vector<BlockHandle>> &a,
-                   const Map<BlockId, Vector<BlockHandle>> &b)
+bool Library::sameRelations(const Relations &a, const Relations &b)
 {
   if (a.size() != b.size()) {
     return false;
@@ -71,8 +68,6 @@ bool sameRelations(const Map<BlockId, Vector<BlockHandle>> &a,
   }
   return true;
 }
-
-} // namespace
 
 void Library::endNoCollect()
 {
@@ -110,7 +105,7 @@ Result<int> Library::collect()
   };
 
   if (audit_ && relationsEpoch_ == epoch_) {
-    Map<BlockId, Vector<BlockHandle>> fresh;
+    Relations fresh;
     Status status;
     buildRelations(fresh, status);
     if (!status.ok()) {
@@ -124,11 +119,15 @@ Result<int> Library::collect()
   }
 
   /* Mark. Every record that isn't Live is held by something (the history, the host, a
-   * file, a Doomed block's Host pins), so it is a root too. */
+   * file, a Doomed block's Host pins), so it is a root too, unless it only stands for a
+   * missing block. */
   Map<BlockHandle, bool> marked;
   Vector<BlockHandle> stack;
   pool_.forEach([&](BlockHandle h, Datablock &b) {
-    if (b.state_ != BlockState::Live || b.hasFlag(BlockFlags::Root) ||
+    const bool held = b.state_ != BlockState::Live &&
+                      (b.state_ != BlockState::Placeholder || b.type_ ||
+                       b.placeholderReason_ != PlaceholderReason::MissingBlock);
+    if (held || b.hasFlag(BlockFlags::Root) ||
         b.hasFlag(BlockFlags::FakeUser) || b.pins() > 0)
     {
       marked.add(h, true);
@@ -173,17 +172,17 @@ Result<int> Library::collect()
 
 void Library::noticeWeakLost(const Vector<BlockHandle> &lost)
 {
-  Map<BlockId, bool> dying;
+  Map<BlockIdKey, bool> dying;
   for (BlockHandle h : lost) {
     if (rec(h)->state_ != BlockState::Doomed) {
-      dying.add(rec(h)->id_, true);
+      dying.add(keyOf(rec(h)->id_), true);
     }
   }
   if (dying.size() == 0) {
     return;
   }
   forEach([&](BlockHandle user, const Datablock &u) {
-    if (dying.lookup_ptr(u.id_)) {
+    if (dying.lookup_ptr(keyOf(u.id_))) {
       return;
     }
     BlockProvider p = types_.provider(u.type_);
@@ -193,7 +192,7 @@ void Library::noticeWeakLost(const Vector<BlockHandle> &lost)
     Vector<BlockHandle> hit;
     foreachRef(user, [&](RefCell &cell) {
       if (cell.kind == RefKind::Weak && !cell.target.isNull() &&
-          dying.lookup_ptr(clients_.canonical(cell.target)))
+          dying.lookup_ptr(keyOf(clients_.canonical(cell.target))))
       {
         hit.append(find(cell.target));
       }
@@ -224,7 +223,7 @@ void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
   for (BlockHandle h : garbage) {
     Datablock *b = rec(h);
     if (BlockProvider p = types_.provider(b->type_);
-        p && b->state_ != BlockState::Placeholder)
+        p && b->dataState() != BlockState::Placeholder)
     {
       p.destroy(*b);
     }
@@ -236,7 +235,7 @@ void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
       doomedCount_--; /* its id may be another record's */
     }
     else {
-      byId_.remove(b->id_);
+      byId_.remove(keyOf(b->id_));
     }
     pool_.destroy(h);
   }

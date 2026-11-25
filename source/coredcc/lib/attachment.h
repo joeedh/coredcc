@@ -114,7 +114,7 @@ class AttachmentTypeRegistry {
   AttachmentTypeRegistry &operator=(const AttachmentTypeRegistry &) = delete;
 
   /** Registers a type. Takes the provider. Refuses one of serialize and deserialize without
-   * the other, and DuplicatePolicy::Copy without `copy`. */
+   * the other, DuplicatePolicy::Copy without `copy`, and a block type's name. */
   Result<TypeId> add(AttachmentTypeInfo info, Owned<AttachmentProvider> provider);
   const Entry *find(TypeId type) const;
 

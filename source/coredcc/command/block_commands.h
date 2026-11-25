@@ -12,7 +12,7 @@
 namespace coredcc {
 
 /**
- * The blocks deleting `target` takes with it: Live users whose non-null `Ref`
+ * The blocks deleting `target` takes with it: Live and Placeholder users whose non-null `Ref`
  * (RefKind::Strong) to a deleted block would break, transitively, comparing canonical
  * ids. `target` comes first. Nullable refs aren't followed: they resolve to null while
  * their target is deleted.
@@ -46,6 +46,7 @@ class CreatedBlocks {
  * - `core.block.delete(block=<Pointer to a block> cascade=true)` deletes the block and
  *   its preview. With `cascade=false` a non-empty cascade is FailedPrecondition naming
  *   the users. Undo restores them all with their ids. Outputs `count`.
+ * - `core.block.rename` and `core.block.unlinkRef` (block_edits.h).
  * - `core.block.purge()` collects garbage (NoUndo). Outputs `count`, the blocks freed.
  */
 Status registerBlockCommands(Runtime &rt);

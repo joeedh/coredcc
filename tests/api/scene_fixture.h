@@ -120,6 +120,8 @@ inline PointerRef blockRef(Library &lib, BlockHandle h, StructId type)
 
 /* Counts calls to Mesh.radius's update hook. */
 inline int g_radiusUpdates = 0;
+/* Calls to Object.data's and plainData's. */
+inline int g_dataUpdates = 0;
 
 inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
 {
@@ -160,7 +162,15 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
   data.set = [](const PointerRef &self, Context &ctx, const PointerRef &target) {
     return ctx.library()->writeRef(static_cast<Object *>(self.data)->mesh, target.owner.block);
   };
-  object.addPointer(PropertyDef::pointerProp("data", kMesh), std::move(data));
+  PointerAccessor plain = data;
+  data.cell = [](const PointerRef &self, Context &) {
+    return &static_cast<Object *>(self.data)->mesh;
+  };
+  const auto onUpdate = [](const PointerRef &, Context &) { g_dataUpdates++; };
+  object.addPointer(PropertyDef::pointerProp("data", kMesh), std::move(data)).update(onUpdate);
+  /* The same without a cell. */
+  object.addPointer(PropertyDef::pointerProp("plainData", kMesh), std::move(plain))
+      .update(onUpdate);
   /* The same target, declared as the base struct and left untyped. */
   PointerAccessor anyData;
   anyData.get = [](const PointerRef &self, Context &ctx) {

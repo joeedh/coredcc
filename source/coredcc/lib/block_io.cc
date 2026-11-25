@@ -287,7 +287,7 @@ Result<BlockPayload> writePayload(const Library &lib, BlockHandle h)
   if (!b) {
     return notFound("writePayload");
   }
-  if (b->state() != BlockState::Live && b->state() != BlockState::InHistory) {
+  if (b->dataState() != BlockState::Live || b->state() == BlockState::Doomed) {
     return badState("writePayload", *b, "Live or InHistory");
   }
   Result<const BlockTypeRegistry::Entry *> type = payloadType(lib, *b, "writePayload");
@@ -313,19 +313,20 @@ Status checkPayloadRefs(const Library &lib, BlockHandle h, const BlockPayload &p
 {
   /* Bit 0: strong, bit 1: weak. */
   const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
-  const auto note = [&clients](Map<BlockId, int> &to, const RefCell &cell) {
+  const BlockIdHasher hasher(lib.runtime().newLocalId());
+  const auto note = [&](Map<BlockIdKey, int> &to, const RefCell &cell) {
     if (!cell.target.isNull()) {
-      const BlockId id = clients.canonical(cell.target);
+      const BlockIdKey id = hasher.key(clients.canonical(cell.target));
       const int *have = to.lookup_ptr(id);
       to.add_overwrite(id, (have ? *have : 0) | (isStrong(cell.kind) ? 1 : 2));
     }
   };
-  Map<BlockId, int> rows, refs;
+  Map<BlockIdKey, int> rows, refs;
   for (const RefCell &cell : payload.refs) {
     note(rows, cell);
   }
   CDCC_TRY(lib.foreachDataRef(h, [&](RefCell &cell) { note(refs, cell); }));
-  const auto differs = [](const Map<BlockId, int> &a, const Map<BlockId, int> &b) {
+  const auto differs = [](const Map<BlockIdKey, int> &a, const Map<BlockIdKey, int> &b) {
     for (const auto &pair : a) {
       const int *other = b.lookup_ptr(pair.key);
       if (!other || (pair.value & ~*other)) {

@@ -74,8 +74,8 @@ class LibraryPin {
   }
   /**
    * Whether memory inside the block's data is still there: the Library is alive and the
-   * block is Live, InHistory or Doomed. False for a Detached block (the host freed its
-   * data, whatever the pins) and for a placeholder.
+   * block is Live, or was when it was deleted (InHistory, Doomed). False for a Detached
+   * block (the host freed its data, whatever the pins) and for a placeholder.
    */
   bool dataAlive() const;
 

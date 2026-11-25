@@ -83,8 +83,7 @@ bool LibraryPin::dataAlive() const
 {
   const Library *lib = ref_.get();
   const Datablock *b = lib ? lib->get(handle_) : nullptr;
-  return b && (b->state() == BlockState::Live || b->state() == BlockState::InHistory ||
-               b->state() == BlockState::Doomed);
+  return b && b->dataState() == BlockState::Live;
 }
 
 /* ---- leaving the history ---- */
@@ -93,7 +92,7 @@ const Datablock *Library::strongUserOf(BlockId id) const
 {
   const Datablock *found = nullptr;
   forEach([&](BlockHandle h, const Datablock &u) {
-    if (found || (u.state_ != BlockState::Live && u.state_ != BlockState::Detached)) {
+    if (found || u.state_ == BlockState::InHistory) {
       return;
     }
     foreachRef(h, [&](RefCell &cell) {
@@ -148,7 +147,7 @@ Status Library::doom(BlockHandle h)
   noticeWeakLost(one);
   sweeping_ = false;
   Datablock *b = rec(h);
-  byId_.remove(b->id_);
+  byId_.remove(keyOf(b->id_));
   setState(*b, BlockState::Doomed);
   doomedCount_++;
   /* destroyBlocks of nothing would return early: run what the notices deferred here. */
@@ -179,7 +178,7 @@ void Library::releaseOneDoomed(BlockHandle h)
   const BlockId id = clients_.canonical(b->id_);
   if (!find(id) && strongUserOf(id)) {
     b->id_ = id;
-    byId_.add(id, h);
+    byId_.add(keyOf(id), h);
     doomedCount_--;
     setState(*b, BlockState::InHistory);
   }

@@ -24,15 +24,6 @@ namespace coredcc {
 
 class Library;
 
-/** The library's form of one block's data. */
-struct BlockPayload {
-  /** The block type's payloadVersion when it was written. */
-  uint32_t version = 1;
-  litestl::util::Vector<uint8_t> bytes;
-  /** The ref table: rows in the order they were written, null ones and repeats included. */
-  litestl::util::Vector<RefCell> refs;
-};
-
 /** A named value in a payload. */
 struct BlockEntry {
   litestl::util::string name;

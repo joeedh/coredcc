@@ -1,5 +1,7 @@
 #include "coredcc/lib/attachment.h"
 
+#include "coredcc/lib/registry.h"
+
 #include <string>
 #include <utility>
 
@@ -34,6 +36,10 @@ Result<TypeId> AttachmentTypeRegistry::add(AttachmentTypeInfo info,
   }
   if (byId_.lookup_ptr(id->value)) {
     return Status::error(StatusCode::AlreadyExists, (what + " is already registered").c_str());
+  }
+  const BlockTypeRegistry *blocks = rt_.findExt<BlockTypeRegistry>();
+  if (blocks && blocks->find(*id)) {
+    return Status::error(StatusCode::AlreadyExists, (what + ": a block type has this name").c_str());
   }
   Entry *e = litestl::alloc::New<Entry>("coredcc::AttachmentTypeRegistry::Entry");
   e->info = std::move(info);

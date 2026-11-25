@@ -106,7 +106,8 @@ class BlockTypeRegistry {
   BlockTypeRegistry &operator=(const BlockTypeRegistry &) = delete;
 
   /** Registers a block type. Its client must be registered. Takes the provider. Refuses one
-   * of serialize and deserialize without the other, and a `storage` that contradicts them. */
+   * of serialize and deserialize without the other, and a `storage` that contradicts them,
+   * and an attachment type's name (slots belong to either kind by TypeId). */
   Result<TypeId> add(BlockTypeInfo info, Owned<BlockProvider> provider);
   const Entry *find(TypeId type) const;
   /** The provider of `type`, or a null interface. */

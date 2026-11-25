@@ -102,6 +102,39 @@ struct RefCell {
   static const litestl::binding::types::Struct<RefCell> *defineBindings();
 };
 
+/** The library's form of one block's data (written and read through lib/block_io.h). */
+struct BlockPayload {
+  /** The block type's payloadVersion when it was written. */
+  uint32_t version = 1;
+  litestl::util::Vector<uint8_t> bytes;
+  /** The ref table: rows in the order they were written, null ones and repeats included. */
+  litestl::util::Vector<RefCell> refs;
+};
+
+/** Why a record is a placeholder. */
+enum class PlaceholderReason : uint8_t {
+  /** A record from a file whose type or payload this build can't read. It keeps the payload
+   * and is a GC root, so a save writes it back. */
+  MissingType,
+  /** A block that isn't here: the target of a strong reference that has no record, or a
+   * record saved without its data (host-owned). Library::createWithId fills it in place. A
+   * GC root only with a type name (it was a record). */
+  MissingBlock,
+};
+
+/** What a placeholder is made from (Library::addPlaceholder). */
+struct PlaceholderInfo {
+  PlaceholderReason reason = PlaceholderReason::MissingType;
+  /** Empty only for a MissingBlock that was never a record. */
+  litestl::util::string typeName;
+  litestl::util::string name;
+  /** Where it came from (a file's name), for messages. */
+  litestl::util::string sourceName;
+  /** MissingType: the stored payload. MissingBlock: only the ref table, the references the
+   * block had. */
+  BlockPayload payload;
+};
+
 /** A typed reference. The library resolves it to the target's data, so `T` is the
  * target block type's data type; it isn't checked. */
 template <class T, RefKind K> class TypedRef {
@@ -183,6 +216,13 @@ class Datablock {
   {
     return state_;
   }
+  /** What became of the data: state(), or for an InHistory or Doomed block the state it was
+   * deleted in (Live, Detached or Placeholder), which restoring goes back to. */
+  BlockState dataState() const
+  {
+    return state_ == BlockState::InHistory || state_ == BlockState::Doomed ? deletedFrom_ :
+                                                                            state_;
+  }
   BlockFlags flags() const
   {
     return flags_;
@@ -219,7 +259,22 @@ class Datablock {
   }
   const litestl::util::Vector<uint8_t> &placeholderPayload() const
   {
-    return placeholderPayload_;
+    return placeholderData_.bytes;
+  }
+  /** Placeholder only: the stored version, bytes and ref table. */
+  const BlockPayload &placeholderData() const
+  {
+    return placeholderData_;
+  }
+  /** Placeholder only. */
+  PlaceholderReason placeholderReason() const
+  {
+    return placeholderReason_;
+  }
+  /** Where a placeholder came from, for messages. Kept when it is filled. */
+  const litestl::util::string &sourceName() const
+  {
+    return sourceName_;
   }
 
   static const litestl::binding::types::Struct<Datablock> *defineBindings();
@@ -246,6 +301,8 @@ class Datablock {
   TypeId type_;
   litestl::util::string name_;
   BlockState state_ = BlockState::Live;
+  /** InHistory and Doomed: see dataState(). */
+  BlockState deletedFrom_ = BlockState::Live;
   BlockFlags flags_ = BlockFlags::None;
   uint64_t stateChanges_ = 0;
   int pins_[2] = {0, 0};
@@ -254,7 +311,9 @@ class Datablock {
   litestl::util::Vector<Attachment> attachments_;
   litestl::util::Vector<Override> overrides_;
   litestl::util::string placeholderType_;
-  litestl::util::Vector<uint8_t> placeholderPayload_;
+  litestl::util::string sourceName_;
+  PlaceholderReason placeholderReason_ = PlaceholderReason::MissingType;
+  BlockPayload placeholderData_;
 };
 
 } // namespace coredcc
