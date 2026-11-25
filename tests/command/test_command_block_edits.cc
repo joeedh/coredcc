@@ -168,7 +168,8 @@ static void test_unlink_opaque()
   blocks.u32(1);
   blocks.u64(mesh.local.hi);
   blocks.u64(mesh.local.lo);
-  blocks.u32(0);
+  blocks.u32(0); /* no blob */
+  blocks.u32(0); /* no extension */
   blocks.endSection(record);
   data.u32(0);
   BytesWriter file;

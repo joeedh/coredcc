@@ -46,6 +46,8 @@ class LibraryFiller {
   void addSlot(BlockHandle h, TypeId ns, int64_t key, const RefCell &cell);
   void addOpaque(BlockHandle h, OpaqueAttachment attachment);
   void addAttachment(BlockHandle h, TypeId type, void *data);
+  /** Copies the extension of the block's file record. */
+  void setExtension(BlockHandle h, std::span<const uint8_t> bytes);
   void setSource(BlockHandle h, const litestl::util::string &source);
 
   /* ---- inside it ---- */
@@ -68,7 +70,10 @@ class LibraryFiller {
   void destroy(const litestl::util::Vector<BlockHandle> &blocks);
   /** What the type's `rekey` makes of a block that isn't a record yet: null without a type, or a
    * rekey. */
-  static BlockId rekey(Library &lib, BlockId id, const PlaceholderInfo &info);
+  static BlockId rekey(Library &lib,
+                       BlockId id,
+                       const PlaceholderInfo &info,
+                       const RekeyContext &context);
   /** readPayload without its checks: `h` is Live and has no data. */
   static Status read(Library &lib,
                      BlockHandle h,

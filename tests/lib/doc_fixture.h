@@ -3,9 +3,13 @@
 /* A block type with payloads, for the IO tests: an integer, refs, a list of entries and a
  * bag with the entries it couldn't read. DocHost makes it misbehave. */
 
+#include "coredcc/lib/payload_access.h"
+
 #include "thing_fixture.h"
 
 namespace coredcc_test {
+
+using coredcc::detail::PayloadAccess;
 
 using litestl::util::Vector;
 
@@ -15,8 +19,7 @@ struct Doc {
   RefCell mesh{RefKind::Strong};
   Vector<BlockEntry> entries;
   PropertyBag bag;
-  /** The bag's `target` property; the bag's value holds a copy of the id. */
-  RefCell bagTarget{RefKind::OptStrong};
+  BagRefs bagRefs{RefKind::OptStrong};
   Vector<BlockEntry> unread;
 };
 
@@ -40,7 +43,7 @@ struct DocHost {
   litestl::util::function<void(BlockReader &)> onDeserialize;
   litestl::util::function<void(const Datablock &)> onDestroy;
   /** What rekey answers; by default, another id of the same client. */
-  litestl::util::function<BlockId(const Datablock &)> onRekey;
+  litestl::util::function<BlockId(const Datablock &, const RekeyContext &)> onRekey;
   int duplicated = 0;
   litestl::util::function<void()> onDuplicate;
 };
@@ -100,7 +103,7 @@ template <bool Extras> struct DocProviderT {
         v.visit(c);
       }
     }
-    v.visit(d->bagTarget);
+    d->bagRefs.visit(v);
     for (BlockEntry &e : d->unread) {
       for (RefCell &c : e.refs) {
         v.visit(c);
@@ -143,7 +146,7 @@ template <bool Extras> struct DocProviderT {
       out.ref(extra);
     }
     out.entries(std::span<const BlockEntry>(d->entries.data(), size_t(d->entries.size())));
-    out.bag(d->bag, RefKind::OptStrong,
+    out.bag(d->bag, d->bagRefs,
             std::span<const BlockEntry>(d->unread.data(), size_t(d->unread.size())));
     return Status();
   }
@@ -176,10 +179,7 @@ template <bool Extras> struct DocProviderT {
     in.ref(d->mesh);
     in.entries(d->entries);
     d->bag = makeDocBag(*host);
-    in.bag(d->bag, d->unread);
-    if (const StableRef *r = d->bag.get("target")->tryPointer()) {
-      d->bagTarget.target = r->owner.block;
-    }
+    in.bag(d->bag, d->bagRefs, d->unread);
     return Status();
   }
   Status duplicate(const Datablock &src, BlockCopy &out)
@@ -207,10 +207,10 @@ template <bool Extras> struct DocProviderT {
     out.setData(copy);
     return Status();
   }
-  BlockId rekey(const Datablock &imported) const
+  BlockId rekey(const Datablock &imported, const RekeyContext &context) const
   {
     if (host->onRekey) {
-      return host->onRekey(imported);
+      return host->onRekey(imported, context);
     }
     BlockId id = imported.id();
     id.local.hi ^= 1;
@@ -227,7 +227,7 @@ template <bool Extras> struct DocProviderT {
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
     if constexpr (Extras) {
       BIND_STRUCT_METHOD(st, duplicate, MARGS("src", "out"));
-      BIND_STRUCT_METHOD(st, rekey, MARGS("imported"));
+      BIND_STRUCT_METHOD(st, rekey, MARGS("imported", "context"));
     }
     return st;
   }

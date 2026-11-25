@@ -185,20 +185,32 @@ void Library::noticeWeakLost(const Vector<BlockHandle> &lost)
     if (dying.lookup_ptr(keyOf(u.id_))) {
       return;
     }
-    BlockProvider p = types_.provider(u.type_);
-    if (!p || !p.hasOnWeakTargetLost()) {
-      return;
-    }
     Vector<BlockHandle> hit;
-    foreachRef(user, [&](RefCell &cell) {
+    litestl::util::function<void(RefCell &)> note = [&](RefCell &cell) {
       if (cell.kind == RefKind::Weak && !cell.target.isNull() &&
           dying.lookup_ptr(keyOf(clients_.canonical(cell.target))))
       {
         hit.append(find(cell.target));
       }
-    }).ignore();
-    for (BlockHandle l : hit) {
-      p.onWeakTargetLost(u, *rec(l));
+    };
+    /* Only a block that has its data: not a placeholder, and not a Detached one. */
+    BlockProvider p = types_.provider(u.type_);
+    if (p && p.hasOnWeakTargetLost() && u.dataState() == BlockState::Live) {
+      foreachDataRef(user, note).ignore();
+      for (BlockHandle l : hit) {
+        p.onWeakTargetLost(u, *rec(l));
+      }
+    }
+    for (const Datablock::Attachment &a : u.attachments_) {
+      AttachmentProvider ap = attachmentTypes_.find(a.type)->provider.get();
+      if (!ap.hasOnWeakTargetLost() || !ap.hasForeachRef()) {
+        continue;
+      }
+      hit.clear();
+      visitRefs(u, note, [&](RefVisitor &v) { ap.foreachRef(u, a.data, v); }).ignore();
+      for (BlockHandle l : hit) {
+        ap.onWeakTargetLost(u, a.data, *rec(l));
+      }
     }
   });
 }

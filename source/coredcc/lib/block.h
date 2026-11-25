@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 
 namespace coredcc {
 
@@ -211,6 +212,11 @@ struct QueryAnswer {
  */
 class Datablock {
  public:
+  /** The Library it is in. In a provider's slots the Library's busy rules apply. */
+  Library &library() const
+  {
+    return *lib_;
+  }
   const BlockId &id() const
   {
     return id_;
@@ -289,6 +295,14 @@ class Datablock {
     return sourceName_;
   }
 
+  /** Fields of its file record that a newer build wrote, as stored: a save writes them back. */
+  std::span<const uint8_t> fileExtension() const
+  {
+    return fileExtension_ ? std::span<const uint8_t>(fileExtension_->data(),
+                                                     size_t(fileExtension_->size())) :
+                            std::span<const uint8_t>();
+  }
+
   static const litestl::binding::types::Struct<Datablock> *defineBindings();
 
  private:
@@ -310,6 +324,7 @@ class Datablock {
     IfaceRef ref;
   };
 
+  Library *lib_ = nullptr;
   BlockId id_;
   TypeId type_;
   litestl::util::string name_;
@@ -329,6 +344,8 @@ class Datablock {
   litestl::util::string sourceName_;
   PlaceholderReason placeholderReason_ = PlaceholderReason::MissingType;
   BlockPayload placeholderData_;
+  /** Null for none. */
+  std::unique_ptr<litestl::util::Vector<uint8_t>> fileExtension_;
 };
 
 } // namespace coredcc

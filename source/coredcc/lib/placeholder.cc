@@ -1,4 +1,5 @@
 /* Placeholders: adding, filling and cutting them, and renaming any record. */
+#include "coredcc/lib/io/format.h"
 #include "coredcc/lib/library.h"
 
 #include <string>
@@ -65,6 +66,10 @@ Result<BlockHandle> Library::adopt(BlockHandle h,
                           std::string(b->placeholderType_.c_str()) + "', not a '" +
                           type.info.name.c_str() + "'")
                              .c_str());
+  }
+  if (detail::libio::hasCriticalField(b->fileExtension())) {
+    return Status::error(StatusCode::Unsupported,
+                         "createWithId: the block's record in the file needs a newer build");
   }
   b->type_ = type.id;
   b->name_ = std::string(name).c_str();

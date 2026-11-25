@@ -12,12 +12,18 @@
  *           client, u64 hi, u64 lo, type, str name, u32 flags, u8 storage,
  *           u32 payloadVersion, source, rows,
  *           u32 count of slots (namespace, i64 key, row),
- *           u32 count of attachments (type, u32 version, blob, rows), blob
+ *           u32 count of attachments (type, u32 version, blob, rows), blob,
+ *           extension
  *   DATA  u32 count, then blobs: u8 lz4, u64 raw, u64 stored, bytes
  *
  *   rows: u32 count, then rows; a row: u8 kind, client, u64 hi, u64 lo
  *   client, type, source, namespace: u32, 0 for none, else an index into NAME plus 1
  *   blob: u32, 0 for no bytes, else an index into DATA plus 1; each is used at most once
+ *   extension: u32 length, and fields: u32 tag, u32 length, bytes; the tags ascend
+ *
+ * The extension is for what later versions add to a record. A build keeps the fields it doesn't
+ * know and writes them back, so they hold no indices into the file. A field whose tag has the
+ * top bit is critical: a build that doesn't know it doesn't read the block's data.
  *
  * Integer and tag values here are the file format: they never change meaning.
  */
@@ -62,6 +68,8 @@ enum class StoredAs : uint8_t {
   NoPayload = 1,
 };
 
+inline constexpr uint32_t kFieldCritical = 1u << 31;
+
 inline constexpr uint8_t kRowStrong = 0;
 inline constexpr uint8_t kRowOptStrong = 1;
 inline constexpr uint8_t kRowWeak = 2;
@@ -73,7 +81,7 @@ inline constexpr size_t kRowBytes = 21;
 inline constexpr size_t kSlotBytes = 12 + kRowBytes;
 inline constexpr size_t kAttachmentBytes = 16;
 /** The least a record takes, its length included. */
-inline constexpr size_t kRecordBytes = 61;
+inline constexpr size_t kRecordBytes = 65;
 inline constexpr size_t kNameBytes = 5;
 inline constexpr size_t kBlobBytes = 17;
 
@@ -118,6 +126,12 @@ struct Budget {
     return true;
   }
 };
+
+/** Whether a record's extension, which was checked, has a critical field this build doesn't
+ * know. Version 1 knows none. */
+bool hasCriticalField(std::span<const uint8_t> extension);
+/** Reads the fields. Fails `in` for damaged ones. */
+void readExtension(BytesReader &in, bool &critical);
 
 /** Bytes as stored: compressed or not. */
 struct Stored {

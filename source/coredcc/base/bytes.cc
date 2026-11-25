@@ -2,6 +2,7 @@
 
 #include "coredcc/base/assert.h"
 
+#include <algorithm>
 #include <bit>
 #include <cstring>
 #include <string>
@@ -10,6 +11,20 @@
 namespace coredcc {
 
 using litestl::util::Vector;
+
+void detail::copyNumbers(void *to, const void *from, size_t n, size_t size, bool swap)
+{
+  if (n == 0) {
+    return;
+  }
+  memcpy(to, from, n * size);
+  if (swap) {
+    for (size_t i = 0; i < n; i++) {
+      uint8_t *p = static_cast<uint8_t *>(to) + i * size;
+      std::reverse(p, p + size);
+    }
+  }
+}
 
 /* ---- BytesWriter ---- */
 
@@ -53,6 +68,14 @@ void BytesWriter::u64(uint64_t v)
 {
   number(v);
 }
+void BytesWriter::i32(int32_t v)
+{
+  number(uint32_t(v));
+}
+void BytesWriter::f32(float v)
+{
+  number(std::bit_cast<uint32_t>(v));
+}
 void BytesWriter::i64(int64_t v)
 {
   number(uint64_t(v));
@@ -93,6 +116,22 @@ void BytesWriter::raw(std::span<const uint8_t> bytes)
 {
   if (uint8_t *p = grow(bytes.size()); p && !bytes.empty()) {
     memcpy(p, bytes.data(), bytes.size());
+  }
+}
+
+void BytesWriter::arrayCount(size_t n)
+{
+  if (n > UINT32_MAX) {
+    fail(Status::error(StatusCode::OutOfRange, "more than 2^32 numbers in one array"));
+    return;
+  }
+  u32(uint32_t(n));
+}
+
+void BytesWriter::numbers(const void *from, size_t n, size_t size)
+{
+  if (uint8_t *p = grow(n * size)) {
+    detail::copyNumbers(p, from, n, size, detail::kSwapBytes);
   }
 }
 
@@ -173,6 +212,14 @@ uint64_t BytesReader::u64()
 {
   return number<uint64_t>();
 }
+int32_t BytesReader::i32()
+{
+  return int32_t(number<uint32_t>());
+}
+float BytesReader::f32()
+{
+  return std::bit_cast<float>(number<uint32_t>());
+}
 int64_t BytesReader::i64()
 {
   return int64_t(number<uint64_t>());
@@ -213,6 +260,16 @@ std::span<const uint8_t> BytesReader::raw(size_t n)
 {
   const uint8_t *p = take(n);
   return p ? std::span(p, n) : std::span<const uint8_t>();
+}
+
+void BytesReader::numbers(void *to, size_t n, size_t size)
+{
+  if (const uint8_t *p = take(n * size)) {
+    detail::copyNumbers(to, p, n, size, detail::kSwapBytes);
+  }
+  else if (n > 0) {
+    memset(to, 0, n * size);
+  }
 }
 
 uint32_t BytesReader::count(size_t minItemBytes)

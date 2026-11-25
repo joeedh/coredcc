@@ -10,6 +10,7 @@
  */
 
 #include "coredcc/base/bytes.h"
+#include "coredcc/lib/bag_refs.h"
 #include "coredcc/lib/block.h"
 #include "coredcc/props/bag.h"
 #include "coredcc/props/value_io.h"
@@ -44,8 +45,12 @@ class EntryCodec : public ValueCodec {
   using ValueCodec::ValueCodec;
   void writeBlockId(BytesWriter &out, const BlockId &id) override;
   void readBlockId(BytesReader &in, BlockId &id) override;
+  void chargeKey(BytesReader &in, uint32_t n) override;
   const BlockEntry *entry = nullptr;
+  /** Null: no bound. */
+  uint64_t *budget = nullptr;
 };
+struct PayloadAccess;
 } // namespace detail
 
 /** What BlockProvider::serialize and AttachmentProvider::serialize write to. */
@@ -71,19 +76,18 @@ class BlockWriter {
     entries(std::span<const BlockEntry>(&e, 1));
   }
   /**
-   * The bag's set entries, with `unread` (what BlockReader::bag gave) before them. Pointers
-   * into blocks become refs of `pointerKind`; the provider reports those from foreachRef
-   * like any other, so it keeps a RefCell for each.
+   * The bag's set entries, with `unread` (what BlockReader::bag gave) before them. Which block a
+   * pointer is into comes from `refs`, which foreachRef reports. A pointer into a block that has
+   * no cell there is Internal.
    */
-  void bag(const PropertyBag &bag, RefKind pointerKind, std::span<const BlockEntry> unread = {});
-
-  /** Takes what was written. The writer's failure, if it has one. */
-  Result<BlockPayload> take(uint32_t version);
+  void bag(const PropertyBag &bag, const BagRefs &refs, std::span<const BlockEntry> unread = {});
 
   /** Opaque. */
   static const litestl::binding::types::Struct<BlockWriter> *defineBindings();
 
  private:
+  friend struct detail::PayloadAccess;
+  Result<BlockPayload> take(uint32_t version);
   void writeEntry(const BlockEntry &e);
 
   BytesWriter bytes_;
@@ -110,24 +114,14 @@ class BlockReader {
   void ref(RefCell &cell);
   /** Appends the entries one BlockWriter::entries() call wrote. */
   void entries(litestl::util::Vector<BlockEntry> &out);
-  /** Sets the entries into the bag. Those no def takes, or that don't coerce, land in
-   * `unread`: keep them, report their refs from foreachRef, and write them again, so a
-   * file survives a build that doesn't know them. */
-  void bag(PropertyBag &bag, litestl::util::Vector<BlockEntry> &unread);
+  /** Sets the entries into the bag, and the cells of its pointers into blocks. Those no def
+   * takes, or that don't coerce, land in `unread`: keep them, report their refs from
+   * foreachRef, and write them again, so a file survives a build that doesn't know them. */
+  void bag(PropertyBag &bag, BagRefs &refs, litestl::util::Vector<BlockEntry> &unread);
   /** The new data, on success: what the record's clientData becomes. Not null. */
   void setData(void *data)
   {
     data_ = data;
-  }
-  void *data() const
-  {
-    return data_;
-  }
-  /** Bounds what entries() and bag() allocate: they take from `*left` (null: no bound), and
-   * fail with OutOfRange when it runs out. A load sets it. */
-  void setBudget(uint64_t *left)
-  {
-    budget_ = left;
   }
   /** For ids and names. Other blocks may not have their data yet. */
   Library &library() const
@@ -139,6 +133,7 @@ class BlockReader {
   static const litestl::binding::types::Struct<BlockReader> *defineBindings();
 
  private:
+  friend struct detail::PayloadAccess;
   /** A row of the table by a stored index; null (and a failure) for a bad index. */
   const RefCell *row();
   bool readEntry(BlockEntry &e);
@@ -150,7 +145,6 @@ class BlockReader {
   BytesReader bytes_;
   detail::EntryCodec codec_;
   void *data_ = nullptr;
-  uint64_t *budget_ = nullptr;
 };
 
 /** What BlockProvider::duplicate gives its copy to. */
@@ -161,15 +155,12 @@ class BlockCopy {
   {
     data_ = data;
   }
-  void *data() const
-  {
-    return data_;
-  }
 
   /** Opaque. */
   static const litestl::binding::types::Struct<BlockCopy> *defineBindings();
 
  private:
+  friend struct detail::PayloadAccess;
   void *data_ = nullptr;
 };
 

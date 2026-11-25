@@ -82,9 +82,8 @@ BlockHandle makeFull(World &w, BlockHandle a, BlockHandle b)
   d->entries.append(entryOf("null", PropValue::nullPointer()));
   d->entries.append(entryOf("weak", pointerTo(w.id(a)), RefKind::Weak));
   test_assert(d->bag.set("size", PropValue::ofFloat(2)).ok());
-  test_assert(d->bag.set("target", pointerTo(w.id(a))).ok());
+  test_assert(d->bagRefs.set(d->bag, "target", pointerTo(w.id(a))).ok());
   test_assert(d->bag.set("extra", PropValue::ofString("\xff")).ok());
-  d->bagTarget.target = w.id(a);
   w.lib.noteRefsChanged();
   return h;
 }
@@ -187,7 +186,7 @@ static void test_unknown_kept()
   bag.append(entryOf("size", PropValue::ofString("huge")));
   bag.append(entryOf("extra", PropValue::ofString("kept")));
   out.entries(std::span<const BlockEntry>(bag.data(), size_t(bag.size())));
-  Result<BlockPayload> p = out.take(3);
+  Result<BlockPayload> p = PayloadAccess::take(out, 3);
   test_assert(p.ok());
 
   const BlockHandle h = emptyDoc(w.lib, "h");
@@ -249,14 +248,14 @@ static void test_writer_refuses()
     e.name = "p";
     e.value = pointerTo(w.id(a)); /* no ref */
     out.entry(e);
-    test_assert(hasMsg(out.take(1).status(), "no ref"));
+    test_assert(hasMsg(PayloadAccess::take(out, 1).status(), "no ref"));
   }
   {
     BlockWriter out(w.lib);
     BlockEntry e;
     e.unknownTag = uint8_t(ValueTag::Int);
     out.entry(e);
-    test_assert(hasMsg(out.take(1).status(), "known type"));
+    test_assert(hasMsg(PayloadAccess::take(out, 1).status(), "known type"));
   }
 }
 
@@ -275,7 +274,7 @@ static void test_bad_entries()
       out.bytes().u8(uint8_t(b));
     }
     out.bytes().endSection(at);
-    Result<BlockPayload> p = out.take(1);
+    Result<BlockPayload> p = PayloadAccess::take(out, 1);
     test_assert(p.ok());
     BlockReader in(w.lib, *p);
     Vector<BlockEntry> entries;
@@ -290,14 +289,15 @@ static void test_bad_entries()
   test_assert(hasMsg(readEntry(uint8_t(ValueTag::Pointer), {1, 0, 0, 0, 0}), "ref it doesn't"));
   BlockWriter out(w.lib);
   out.bytes().u32(0xffffffffu);
-  Result<BlockPayload> p = out.take(1);
+  Result<BlockPayload> p = PayloadAccess::take(out, 1);
   test_assert(p.ok());
   for (int bag = 0; bag < 2; bag++) {
     BlockReader in(w.lib, *p);
     Vector<BlockEntry> entries;
     PropertyBag values;
     if (bag) {
-      in.bag(values, entries);
+      BagRefs refs;
+      in.bag(values, refs, entries);
     }
     else {
       in.entries(entries);
@@ -323,8 +323,7 @@ static void test_audit()
       /* The other rows name the same blocks: cut them, so one row decides. */
       Doc *d = doc(w.lib, h);
       d->entries.clear();
-      d->bagTarget.target = BlockId();
-      test_assert(d->bag.reset("target").ok());
+      test_assert(d->bagRefs.reset(d->bag, "target").ok());
       w.lib.noteRefsChanged();
     }
     w.docs.fault = c.fault;
@@ -467,11 +466,11 @@ static void test_other_slots()
   test_assert(p.hasSerialize() && p.hasDeserialize() && p.hasDuplicate() && p.hasRekey());
   BlockCopy copy;
   test_assert(p.duplicate(*w.lib.get(h), copy).ok());
-  Doc *d = static_cast<Doc *>(copy.data());
+  Doc *d = static_cast<Doc *>(PayloadAccess::data(copy));
   test_assert(d && d != doc(w.lib, h) && sameEntries(d->entries, doc(w.lib, h)->entries));
   test_assert(d && d->mesh.target == w.id(b));
   litestl::alloc::Delete(d);
-  const BlockId re = p.rekey(*w.lib.get(h));
+  const BlockId re = p.rekey(*w.lib.get(h), RekeyContext(w.lib, nullptr, nullptr));
   test_assert(re.local.hi == (w.id(h).local.hi ^ 1) && re.local.lo == w.id(h).local.lo);
   BlockProvider t = w.rt.ext<BlockTypeRegistry>().provider(kThing);
   test_assert(!t.hasSerialize() && !t.hasDeserialize() && !t.hasDuplicate() && !t.hasRekey());
@@ -598,6 +597,9 @@ struct FakeHost : ForeignDispatcher {
     else if (strcmp(name, "rekey") == 0) {
       BlockId id = b.id();
       id.local.lo = 77;
+      if (!static_cast<const RekeyContext *>(args[1])->isFree(id)) {
+        id.local.lo++;
+      }
       new (ret) BlockId(id);
     }
     return Status();
@@ -630,9 +632,12 @@ static void test_foreign()
   test_assert(doc(lib, *back)->number == 12 && doc(lib, *back)->mesh.target == lib.get(*h)->id());
   BlockCopy copy;
   test_assert(p.duplicate(*lib.get(*h), copy).ok());
-  test_assert(copy.data() && static_cast<Doc *>(copy.data())->number == 12);
-  litestl::alloc::Delete(static_cast<Doc *>(copy.data()));
-  test_assert(p.rekey(*lib.get(*h)).local.lo == 77);
+  test_assert(PayloadAccess::data(copy) && static_cast<Doc *>(PayloadAccess::data(copy))->number == 12);
+  litestl::alloc::Delete(static_cast<Doc *>(PayloadAccess::data(copy)));
+  const auto odd = [](const void *, const BlockId &id) { return (id.local.lo & 1) != 0; };
+  const auto even = [](const void *, const BlockId &id) { return (id.local.lo & 1) == 0; };
+  test_assert(p.rekey(*lib.get(*h), RekeyContext(lib, nullptr, odd)).local.lo == 77);
+  test_assert(p.rekey(*lib.get(*h), RekeyContext(lib, nullptr, even)).local.lo == 78);
 
   Result<BlockHandle> none = lib.create(TypeId::of("test.Js"), "none", nullptr);
   host.fail = true;
@@ -725,7 +730,7 @@ static void test_fuzz()
       out.bytes().blob({});
     }
     out.entries({});
-    Result<BlockPayload> dense = out.take(3);
+    Result<BlockPayload> dense = PayloadAccess::take(out, 3);
     const BlockHandle e = emptyDoc(w.lib, "dense");
     const size_t before = litestl::alloc::getMemorySize();
     test_assert(dense.ok() && readPayload(w.lib, e, *dense).ok());

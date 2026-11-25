@@ -75,8 +75,8 @@ bool roundTrips(IoWorld &w, const Bytes &bytes)
 void buildGolden(IoWorld &w, bool reversed = false)
 {
   BlockHandle a, b, c;
-  const auto makeA = [&]() { a = w.doc(1, "alpha"); };
-  const auto makeB = [&]() { b = w.doc(2, "b\xC3\xA9ta", kAcmeDoc); };
+  const auto makeA = [&]() { a = w.doc(1, "\xC3\xA9"); };
+  const auto makeB = [&]() { b = w.doc(2, "b", kAcmeDoc); };
   const auto makeC = [&]() { c = placeholder(w, cid(3, ClientId::of("old.acme")), "gone.Type", "c",
                                              PlaceholderReason::MissingType,
                                              payload(9, bytesOf({1, 2, 3}),
@@ -172,7 +172,7 @@ static void test_golden()
     test_assert(*d->bag.get("size") == PropValue::ofFloat(0.5));
     test_assert(w.lib.get(a)->flags() == BlockFlags::Root);
     test_assert(w.lib.get(b)->flags() == BlockFlags::FakeUser);
-    test_assert(strcmp(w.lib.get(b)->name().c_str(), "b\xC3\xA9ta") == 0);
+    test_assert(strcmp(w.lib.get(a)->name().c_str(), "\xC3\xA9") == 0);
     const RefCell *s = w.lib.slot(a, kDoc, 5);
     test_assert(s && s->kind == RefKind::OptStrong && s->target == w.id(b));
     s = w.lib.slot(a, TypeId{0xABCDEF}, -1);

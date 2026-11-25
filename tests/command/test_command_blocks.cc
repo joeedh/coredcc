@@ -92,15 +92,14 @@ static void test_block_commands()
 /* A snapshot provider over one int. */
 struct IntSnapshot {
   int *value = nullptr;
-  litestl::util::Vector<uint8_t> capture() const
+  Status capture(Context &, litestl::util::Vector<uint8_t> &out) const
   {
-    litestl::util::Vector<uint8_t> out;
     for (int i = 0; i < 4; i++) {
       out.append(uint8_t((uint32_t(*value) >> (i * 8)) & 0xff));
     }
-    return out;
+    return Status();
   }
-  Status restore(const litestl::util::Vector<uint8_t> &blob)
+  Status restore(Context &, const litestl::util::Vector<uint8_t> &blob)
   {
     if (blob.size() != 4) {
       return Status::error(StatusCode::InvalidArgument, "bad snapshot");
@@ -115,8 +114,8 @@ struct IntSnapshot {
   static lbt::Struct<IntSnapshot> *defineBindings()
   {
     auto *st = new lbt::Struct<IntSnapshot>("test::IntSnapshot", sizeof(IntSnapshot));
-    BIND_STRUCT_METHOD(st, capture, MARGS());
-    BIND_STRUCT_METHOD(st, restore, MARGS("blob"));
+    BIND_STRUCT_METHOD(st, capture, MARGS("ctx", "blob"));
+    BIND_STRUCT_METHOD(st, restore, MARGS("ctx", "blob"));
     return st;
   }
 };
@@ -142,10 +141,12 @@ static void test_undo_strategies()
   impl.value = &value;
   SnapshotProvider snap = query<SnapshotProvider>(rt, TypeId::of("test.IntSnapshot"), &impl);
   test_assert(bool(snap));
-  litestl::util::Vector<uint8_t> blob = snap.capture();
+  Context ctx(&rt, nullptr, PointerRef());
+  litestl::util::Vector<uint8_t> blob;
+  test_assert(snap.capture(ctx, blob).ok());
   value = 0;
-  test_assert(snap.restore(blob).ok() && value == 1234567);
-  test_assert(!snap.restore(litestl::util::Vector<uint8_t>()).ok());
+  test_assert(snap.restore(ctx, blob).ok() && value == 1234567);
+  test_assert(!snap.restore(ctx, litestl::util::Vector<uint8_t>()).ok());
 }
 
 int main()

@@ -21,6 +21,9 @@ struct State {
   BlockId ref;
   int foreachs = 0, captures = 0, restores = 0, alive = 0;
   bool failRestore = false, throwRestore = false, throwCapture = false, throwForeach = false;
+  bool failCapture = false;
+  /** The Library and the root that each slot was called with. */
+  std::vector<std::pair<const Library *, const void *>> where;
 };
 
 template <bool Refs> struct StateProvider {
@@ -29,12 +32,16 @@ template <bool Refs> struct StateProvider {
   {
     s->alive--;
   }
-  Vector<uint8_t> capture() const
+  Status capture(Context &ctx, Vector<uint8_t> &blob) const
   {
     s->captures++;
+    s->where.push_back({ctx.library(), ctx.root().data});
+    if (s->failCapture) {
+      return Status::error(StatusCode::Unsupported, "can't capture");
+    }
     if (s->throwCapture) {
       s->rt->setStickyError(Status::error(StatusCode::Internal, "capture threw"));
-      return {};
+      return Status();
     }
     BytesWriter out;
     out.u32(uint32_t(s->value));
@@ -46,11 +53,13 @@ template <bool Refs> struct StateProvider {
       seed = seed * 6364136223846793005ull + 1442695040888963407ull;
       out.u8(s->random ? uint8_t(seed >> 56) : 7);
     }
-    return out.take();
+    blob = out.take();
+    return Status();
   }
-  Status restore(const Vector<uint8_t> &blob)
+  Status restore(Context &ctx, const Vector<uint8_t> &blob)
   {
     s->restores++;
+    s->where.push_back({ctx.library(), ctx.root().data});
     if (s->failRestore) {
       return Status::error(StatusCode::Unsupported, "can't restore");
     }
@@ -66,7 +75,7 @@ template <bool Refs> struct StateProvider {
     test_assert(int(in.remaining()) == s->padding);
     return in.status();
   }
-  void foreachRef(const Vector<uint8_t> &blob, RefVisitor &v) const
+  void foreachRef(Context &, const Vector<uint8_t> &blob, RefVisitor &v) const
   {
     s->foreachs++;
     if (s->throwForeach) {
@@ -86,10 +95,10 @@ template <bool Refs> struct StateProvider {
   {
     auto *st = new lbt::Struct<StateProvider>(Refs ? "test::StateProvider" : "test::PlainState",
                                               sizeof(StateProvider));
-    BIND_STRUCT_METHOD(st, capture, MARGS());
-    BIND_STRUCT_METHOD(st, restore, MARGS("blob"));
+    BIND_STRUCT_METHOD(st, capture, MARGS("ctx", "blob"));
+    BIND_STRUCT_METHOD(st, restore, MARGS("ctx", "blob"));
     if constexpr (Refs) {
-      BIND_STRUCT_METHOD(st, foreachRef, MARGS("blob", "visitor"));
+      BIND_STRUCT_METHOD(st, foreachRef, MARGS("ctx", "blob", "visitor"));
     }
     return st;
   }
@@ -384,9 +393,79 @@ static void test_undo()
   test_assert(!w.s.history.canRedo());
 }
 
+/* Every slot is told the document, also at the discard of a failed command. */
+static void test_where()
+{
+  SnapWorld w;
+  g_fail = Fail::AfterSub;
+  test_assert(w.run("test.opaque").code() == StatusCode::Cancelled);
+  g_fail = Fail::None;
+  test_assert(w.state.where.size() == 3); /* a capture, the rollback, and the discard */
+  test_assert(w.run("test.opaque").ok() && w.s.ex.undo(w.s.ctx).ok() && w.s.ex.redo(w.s.ctx).ok());
+  test_assert(w.state.where.size() == 7);
+  for (const auto &[lib, root] : w.state.where) {
+    test_assert(lib == &w.s.w.lib && root == w.s.ctx.root().data && root);
+  }
+}
+
+namespace {
+
+/* A foreign provider over one number. */
+struct FakeHost : ForeignDispatcher {
+  int value = 4;
+  bool fail = false;
+  Status call(const IfaceTable &table, void *, int slot, void **args, void *ret) override
+  {
+    const std::string name = table.ifaceDesc->methods[slot]->name.c_str();
+    test_assert(static_cast<Context *>(args[0])->library());
+    if (fail) {
+      return Status::error(StatusCode::Internal, ("TypeError: " + name).c_str());
+    }
+    auto &blob = *static_cast<Vector<uint8_t> *>(args[1]);
+    if (name == "capture") {
+      blob.append(uint8_t(value));
+    }
+    else {
+      value = blob[0];
+    }
+    new (ret) Status();
+    return Status();
+  }
+};
+
+} // namespace
+
+static void test_foreign()
+{
+  Setup s;
+  Runtime &rt = s.w.rt;
+  FakeHost host;
+  const char *slots[] = {"capture", "restore"};
+  test_assert(registerForeign<SnapshotProvider>(rt, "test.JsSnap", &host, nullptr, slots).ok());
+  int jsObject = 1;
+  SnapshotProvider p = query<SnapshotProvider>(rt, TypeId::of("test.JsSnap"), &jsObject);
+  test_assert(p && !p.hasForeachRef());
+  test_assert(rt.ext<SnapshotRegistry>().add("js", Owned<SnapshotProvider>(p, nullptr)).ok());
+  SnapshotUndo u("js");
+  test_assert(u.begin(s.ctx).ok());
+  host.value = 9;
+  test_assert(u.end(s.ctx).ok());
+  u.undo(s.ctx);
+  test_assert(host.value == 4 && u.redo(s.ctx).ok() && host.value == 9);
+  host.fail = true;
+  SnapshotUndo v("js");
+  test_assert(hasMsg(v.begin(s.ctx), "TypeError: capture") && !rt.hasStickyError());
+  test_assert(hasMsg(u.redo(s.ctx), "TypeError: restore") && !rt.hasStickyError());
+  test_assert(rt.ext<SnapshotRegistry>().remove("js").ok());
+}
+
 static void test_failures()
 {
   SnapWorld w;
+  w.state.failCapture = true;
+  test_assert(hasMsg(w.run("test.opaque"), "can't capture") && w.state.value == 4);
+  test_assert(w.state.foreachs == 0 && w.s.history.size() == 0);
+  w.state.failCapture = false;
   w.state.throwCapture = true;
   test_assert(hasMsg(w.run("test.opaque"), "capture threw") && w.state.value == 4);
   test_assert(w.state.foreachs == 0); /* no blob to look at */
@@ -601,6 +680,8 @@ int main()
 {
   test_registry();
   test_undo();
+  test_where();
+  test_foreign();
   test_failures();
   test_folding();
   test_interactive();

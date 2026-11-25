@@ -15,16 +15,20 @@
 namespace coredcc {
 
 /**
- * What a client implements per attachment type. Only `destroy` is required.
+ * What a client implements per attachment type. Only `destroy` is required. `block` is the block
+ * the data is (or will be) attached to.
  *
  * - `destroy` frees the data. It runs when the block is destroyed, under the same rules as
- *   BlockProvider::destroy.
+ *   BlockProvider::destroy. It gets no block: the history can hold detached data for longer than
+ *   the block, and the Library, exist.
  * - `create` makes empty data, for code that attaches by type name alone.
- * - `copy` makes a copy for a duplicated block (DuplicatePolicy::Copy needs it). References
+ * - `copy` makes a copy for a duplicate of `from` (DuplicatePolicy::Copy needs it). References
  *   are copied as they are; the library remaps them.
  * - `serialize` and `deserialize` come together, and work as BlockProvider's do. A type
  *   without them isn't saved.
  * - `foreachRef` reports the data's references, as BlockProvider::foreachRef does.
+ * - `onWeakTargetLost` is told when a block that the data weakly references (`foreachRef` says)
+ *   is about to be destroyed. The block may be in any state.
  */
 struct AttachmentProvider : IfaceRef {
   void destroy(void *data)
@@ -35,51 +39,60 @@ struct AttachmentProvider : IfaceRef {
   {
     return CDCC_HAS(create);
   }
-  void *create()
+  void *create(const Datablock &block)
   {
-    return CDCC_CALL(create);
+    return CDCC_CALL(create, block);
   }
   bool hasCopy() const
   {
     return CDCC_HAS(copy);
   }
-  void *copy(const void *data)
+  void *copy(const Datablock &from, const void *data, const Datablock &to)
   {
-    return CDCC_CALL(copy, data);
+    return CDCC_CALL(copy, from, data, to);
   }
   bool hasSerialize() const
   {
     return CDCC_HAS(serialize);
   }
-  Status serialize(const void *data, BlockWriter &out) const
+  Status serialize(const Datablock &block, const void *data, BlockWriter &out) const
   {
-    return CDCC_CALL(serialize, data, out);
+    return CDCC_CALL(serialize, block, data, out);
   }
   bool hasDeserialize() const
   {
     return CDCC_HAS(deserialize);
   }
-  Status deserialize(BlockReader &in)
+  Status deserialize(const Datablock &block, BlockReader &in)
   {
-    return CDCC_CALL(deserialize, in);
+    return CDCC_CALL(deserialize, block, in);
   }
   bool hasForeachRef() const
   {
     return CDCC_HAS(foreachRef);
   }
-  void foreachRef(const void *data, RefVisitor &visitor) const
+  void foreachRef(const Datablock &block, const void *data, RefVisitor &visitor) const
   {
-    CDCC_CALL(foreachRef, data, visitor);
+    CDCC_CALL(foreachRef, block, data, visitor);
+  }
+  bool hasOnWeakTargetLost() const
+  {
+    return CDCC_HAS(onWeakTargetLost);
+  }
+  void onWeakTargetLost(const Datablock &block, void *data, const Datablock &lost)
+  {
+    CDCC_CALL(onWeakTargetLost, block, data, lost);
   }
 
   CDCC_INTERFACE(AttachmentProvider, "coredcc::AttachmentProvider")
   {
     BIND_STRUCT_METHOD(st, destroy, MARGS("data"));
-    BIND_OPTIONAL_METHOD(st, create, MARGS());
-    BIND_OPTIONAL_METHOD(st, copy, MARGS("data"));
-    BIND_OPTIONAL_METHOD(st, serialize, MARGS("data", "out"));
-    BIND_OPTIONAL_METHOD(st, deserialize, MARGS("in"));
-    BIND_OPTIONAL_METHOD(st, foreachRef, MARGS("data", "visitor"));
+    BIND_OPTIONAL_METHOD(st, create, MARGS("block"));
+    BIND_OPTIONAL_METHOD(st, copy, MARGS("from", "data", "to"));
+    BIND_OPTIONAL_METHOD(st, serialize, MARGS("block", "data", "out"));
+    BIND_OPTIONAL_METHOD(st, deserialize, MARGS("block", "in"));
+    BIND_OPTIONAL_METHOD(st, foreachRef, MARGS("block", "data", "visitor"));
+    BIND_OPTIONAL_METHOD(st, onWeakTargetLost, MARGS("block", "data", "lost"));
   }
 };
 
@@ -93,7 +106,7 @@ struct AttachmentTypeInfo {
   /** The bound struct of the data, for the datapath layer. */
   StructId dataStruct;
   /** The payload version `serialize` writes. */
-  uint32_t version = 1;
+  uint32_t payloadVersion = 1;
   DuplicatePolicy onDuplicate = DuplicatePolicy::Drop;
 };
 

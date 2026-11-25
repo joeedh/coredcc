@@ -96,12 +96,13 @@ class SnapshotUndo {
   };
 
   Status capture(Context &ctx, Blob &to);
-  Status restore(Runtime &rt, Library *lib, const Blob &from);
+  Status restore(Context &ctx, const Blob &from);
 
   std::string name_;
   Blob before_, after_;
   Runtime *rt_ = nullptr;
   LibraryRef lib_;
+  PointerRef root_;
   bool restoreAtDiscard_ = false;
 };
 

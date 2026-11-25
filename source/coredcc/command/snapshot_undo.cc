@@ -86,9 +86,14 @@ Status SnapshotUndo::capture(Context &ctx, Blob &to)
     return noProvider(name_);
   }
   const SnapshotProvider p = *found;
-  const Vector<uint8_t> raw = p.capture();
+  Vector<uint8_t> raw;
+  Status taken = p.capture(ctx, raw);
+  if (rt.hasStickyError()) {
+    return rt.takeStickyError(); /* a foreign provider threw */
+  }
+  CDCC_TRY(taken);
   Blob blob;
-  if (Library *lib = ctx.library(); lib && p.hasForeachRef() && !rt.hasStickyError()) {
+  if (Library *lib = ctx.library(); lib && p.hasForeachRef()) {
     struct Pinner {
       Library &lib;
       litestl::util::Map<BlockHandle, bool> seen;
@@ -104,10 +109,10 @@ Status SnapshotUndo::capture(Context &ctx, Blob &to)
           }
         },
         &pinner);
-    p.foreachRef(raw, v);
+    p.foreachRef(ctx, raw, v);
   }
   if (rt.hasStickyError()) {
-    return rt.takeStickyError(); /* a foreign provider threw */
+    return rt.takeStickyError();
   }
   if (uint64_t(raw.size()) > detail::libio::kMaxRaw) {
     return Status::error(StatusCode::OutOfRange, "the snapshot is too large");
@@ -122,8 +127,9 @@ Status SnapshotUndo::capture(Context &ctx, Blob &to)
   return Status();
 }
 
-Status SnapshotUndo::restore(Runtime &rt, Library *lib, const Blob &from)
+Status SnapshotUndo::restore(Context &ctx, const Blob &from)
 {
+  Runtime &rt = ctx.runtime();
   SnapshotProvider *found = rt.ext<SnapshotRegistry>().find(name_);
   if (!found) {
     return noProvider(name_);
@@ -134,12 +140,12 @@ Status SnapshotUndo::restore(Runtime &rt, Library *lib, const Blob &from)
       std::span<const uint8_t>(from.bytes.data(), size_t(from.bytes.size())), from.lz4, from.raw,
       unbounded, raw));
   SnapshotProvider p = *found;
-  Status s = p.restore(raw);
+  Status s = p.restore(ctx, raw);
   if (rt.hasStickyError()) {
     Status sticky = rt.takeStickyError();
     s = s.ok() ? sticky : s;
   }
-  if (lib) {
+  if (Library *lib = ctx.library()) {
     lib->noteRefsChanged();
   }
   rt.ext<ChangeBus>().notifyAll();
@@ -153,6 +159,7 @@ Status SnapshotUndo::begin(Context &ctx)
   restoreAtDiscard_ = false;
   rt_ = &ctx.runtime();
   lib_ = ctx.library() ? ctx.library()->ref() : LibraryRef();
+  root_ = ctx.root();
   return capture(ctx, before_);
 }
 
@@ -163,7 +170,7 @@ Status SnapshotUndo::end(Context &ctx)
 
 void SnapshotUndo::undo(Context &ctx)
 {
-  Status s = before_.taken ? restore(ctx.runtime(), ctx.library(), before_) : notTaken("undo");
+  Status s = before_.taken ? restore(ctx, before_) : notTaken("undo");
   if (!s.ok()) {
     ctx.runtime().setStickyError(std::move(s));
   }
@@ -171,7 +178,7 @@ void SnapshotUndo::undo(Context &ctx)
 
 Status SnapshotUndo::redo(Context &ctx)
 {
-  return after_.taken ? restore(ctx.runtime(), ctx.library(), after_) : notTaken("redo");
+  return after_.taken ? restore(ctx, after_) : notTaken("redo");
 }
 
 Status SnapshotUndo::rollback(Context &ctx)
@@ -180,7 +187,7 @@ Status SnapshotUndo::rollback(Context &ctx)
     return notTaken("rollback");
   }
   restoreAtDiscard_ = true;
-  return restore(ctx.runtime(), ctx.library(), before_);
+  return restore(ctx, before_);
 }
 
 bool SnapshotUndo::foldFrom(SnapshotUndo &next)
@@ -202,7 +209,8 @@ uint64_t SnapshotUndo::memSize() const
 void SnapshotUndo::discard()
 {
   if (std::exchange(restoreAtDiscard_, false)) {
-    if (Status s = restore(*rt_, lib_.get(), before_); !s.ok()) {
+    Context ctx(rt_, lib_.get(), root_);
+    if (Status s = restore(ctx, before_); !s.ok()) {
       rt_->setStickyError(std::move(s));
     }
   }

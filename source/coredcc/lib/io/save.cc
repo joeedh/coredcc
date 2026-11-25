@@ -3,6 +3,7 @@
 
 #include "coredcc/lib/attachment.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/lib/payload_access.h"
 
 #include "litestl/util/map.h"
 
@@ -358,8 +359,9 @@ class Saver {
       BlockPayload own;
       if (a.type) {
         BlockWriter w(lib_);
-        Status s = takeSticky(a.type->provider.get().serialize(a.data, w));
-        Result<BlockPayload> p = s.ok() ? w.take(a.type->info.version) : Result<BlockPayload>(s);
+        Status s = takeSticky(a.type->provider.get().serialize(*item.b, a.data, w));
+        Result<BlockPayload> p = s.ok() ? PayloadAccess::take(w, a.type->info.payloadVersion) :
+                                        Result<BlockPayload>(s);
         if (!p.ok()) {
           return Status::error(p.status().code(),
                                ("attachment '" + a.name + "': " + p.status().message()).c_str());
@@ -429,6 +431,7 @@ class Saver {
       return data.status();
     }
     out.u32(*data);
+    out.blob(b.fileExtension());
     return Status();
   }
 

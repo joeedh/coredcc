@@ -4,6 +4,7 @@
 #include "fuzz.h"
 #include "test_util.h"
 
+#include <algorithm>
 #include <bit>
 #include <chrono>
 #include <cmath>
@@ -559,13 +560,13 @@ static void test_fuzz()
   NameTable names;
   ValueCodec codec(rt, &names);
   const size_t kItems = 200000;
-  {
+  for (uint32_t n : {kMaxKeySegments, kMaxKeySegments + 1, 200000u}) {
     BytesWriter w;
     w.u8(uint8_t(ValueTag::Pointer));
     w.u8(2);
     w.u8(0);
-    w.u32(uint32_t(kItems));
-    for (size_t i = 0; i < kItems; i++) {
+    w.u32(n);
+    for (uint32_t i = 0; i < n; i++) {
       w.u8(0);
       w.u32(0);
     }
@@ -573,7 +574,21 @@ static void test_fuzz()
     const size_t before = litestl::alloc::getMemorySize();
     BytesReader r(view(w));
     const PropValue v = readValue(r, codec);
-    test_assert(r.ok() && litestl::alloc::getMemorySize() - before < 60 * size_t(w.data().size()));
+    test_assert(r.ok() == (n <= kMaxKeySegments));
+    test_assert(r.ok() || (r.status().code() == StatusCode::OutOfRange &&
+                           strstr(r.status().message(), "too long")));
+    test_assert(litestl::alloc::getMemorySize() - before <
+                60 * size_t(std::min(n, kMaxKeySegments)) * 5);
+    StableRef ref;
+    ref.owner = OwnerKey::ofRuntime(1);
+    for (uint32_t i = 0; i < n; i++) {
+      ref.key.append(KeySegment::member(""));
+    }
+    BytesWriter out;
+    writeValue(out, PropValue::ofPointer(ref), codec);
+    test_assert(out.status().ok() ? n <= kMaxKeySegments :
+                                    out.status().code() == StatusCode::OutOfRange);
+    test_assert(out.status().ok() == (n <= kMaxKeySegments));
   }
   {
     BytesWriter w;

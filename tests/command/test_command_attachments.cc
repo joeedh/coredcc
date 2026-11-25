@@ -27,7 +27,7 @@ template <bool Create> struct NotesProvider {
     host->alive--;
     litestl::alloc::Delete(static_cast<Notes *>(data));
   }
-  void *create()
+  void *create(const Datablock &)
   {
     if (host->throws) {
       host->rt->setStickyError(Status::error(StatusCode::Internal, "create threw"));
@@ -38,7 +38,7 @@ template <bool Create> struct NotesProvider {
     host->alive++;
     return litestl::alloc::New<Notes>("Notes");
   }
-  void foreachRef(const void *data, RefVisitor &v) const
+  void foreachRef(const Datablock &, const void *data, RefVisitor &v) const
   {
     if (host->throws) {
       host->rt->setStickyError(Status::error(StatusCode::Internal, "foreachRef threw"));
@@ -52,8 +52,8 @@ template <bool Create> struct NotesProvider {
                                               sizeof(NotesProvider));
     BIND_STRUCT_METHOD(st, destroy, MARGS("data"));
     if constexpr (Create) {
-      BIND_STRUCT_METHOD(st, create, MARGS());
-      BIND_STRUCT_METHOD(st, foreachRef, MARGS("data", "visitor"));
+      BIND_STRUCT_METHOD(st, create, MARGS("block"));
+      BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "data", "visitor"));
     }
     return st;
   }

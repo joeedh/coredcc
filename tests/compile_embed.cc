@@ -48,6 +48,7 @@
 #include "coredcc/base/utf8.h"
 #include "coredcc/lib/attachment.h"
 #include "coredcc/lib/block.h"
+#include "coredcc/lib/bag_refs.h"
 #include "coredcc/lib/block_io.h"
 #include "coredcc/lib/duplicate.h"
 #include "coredcc/lib/id_key.h"

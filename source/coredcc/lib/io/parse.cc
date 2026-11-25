@@ -39,6 +39,32 @@ struct Chunk {
   std::span<const uint8_t> stored;
 };
 
+} // namespace
+
+void readExtension(BytesReader &in, bool &critical)
+{
+  uint32_t last = 0;
+  for (bool any = false; in.ok() && !in.atEnd(); any = true) {
+    const uint32_t tag = in.u32();
+    in.blob();
+    if (any && tag <= last) {
+      in.fail(StatusCode::InvalidArgument, "extension fields out of order");
+    }
+    critical |= (tag & kFieldCritical) != 0;
+    last = tag;
+  }
+}
+
+bool hasCriticalField(std::span<const uint8_t> extension)
+{
+  BytesReader in(extension);
+  bool critical = false;
+  readExtension(in, critical);
+  return critical;
+}
+
+namespace {
+
 class Parser {
  public:
   Parser(std::span<const uint8_t> bytes, const LoadLimits &limits, IoIssues &issues)
@@ -197,6 +223,17 @@ class Parser {
     return Status();
   }
 
+  /* A code with a value that this build doesn't know. */
+  Status unknown(const char *what) const
+  {
+    return version_ <= kVersion ?
+               damaged(what) :
+               Status::error(StatusCode::Unsupported,
+                             (std::string("the library section: ") + what +
+                              ", of a newer format than this build's")
+                                 .c_str());
+  }
+
   Status charge(uint64_t n)
   {
     return file_->budget.take(n) ? Status() : tooLarge("it needs more memory than allowed");
@@ -248,7 +285,7 @@ class Parser {
         }
       }
       else {
-        in.fail(StatusCode::InvalidArgument, "an unknown kind of name");
+        in.fail(unknown("an unknown kind of name"));
       }
       CDCC_TRY(in.status());
       file_->names.append(name);
@@ -307,7 +344,7 @@ class Parser {
         cell.kind = RefKind::Weak;
         break;
       default:
-        in.fail(StatusCode::InvalidArgument, "an unknown kind of reference");
+        in.fail(unknown("an unknown kind of reference"));
     }
     cell.target.client = clientName(in);
     cell.target.local.hi = in.u64();
@@ -405,7 +442,7 @@ class Parser {
       return damaged("a block without an id");
     }
     if (as > uint8_t(StoredAs::NoPayload)) {
-      return damaged("a block stored in an unknown way");
+      return unknown("a block stored in an unknown way");
     }
     r.storedAs = StoredAs(as);
     if (r.type.empty() && r.storedAs != StoredAs::NoPayload) {
@@ -419,7 +456,15 @@ class Parser {
     CDCC_TRY(slots(in, r.slots));
     CDCC_TRY(attachments(in, r.attachments));
     r.blob = in.u32();
+    r.extension = in.blob();
     CDCC_TRY(in.status());
+    CDCC_TRY(charge(r.extension.size()));
+    BytesReader fields(r.extension);
+    bool critical = false;
+    readExtension(fields, critical);
+    if (!fields.ok()) {
+      return damaged(std::string("a block's extension: ") + fields.status().message());
+    }
     if (r.blob != 0 && r.storedAs == StoredAs::NoPayload) {
       return damaged("a block without a payload has bytes");
     }
@@ -478,7 +523,11 @@ class Parser {
       CDCC_TRY(use(a.blob));
     }
     for (uint32_t i = 0; i < n; i++) {
-      const bool lz4 = in.boolean();
+      const uint8_t codec = in.u8();
+      if (codec > 1) {
+        in.fail(unknown("data compressed in an unknown way"));
+      }
+      const bool lz4 = codec == 1;
       const uint64_t raw = in.u64();
       const uint64_t stored = in.u64();
       if (stored > in.remaining()) {

@@ -1,6 +1,7 @@
 #include "coredcc/lib/duplicate.h"
 
 #include "coredcc/lib/io/fill.h"
+#include "coredcc/lib/payload_access.h"
 
 #include <string>
 #include <utility>
@@ -101,10 +102,11 @@ class Duplicator {
         s = sticky(rt_, p.duplicate(b, out));
       }
       CDCC_TRY(s);
-      if (!out.data()) {
+      if (!detail::PayloadAccess::data(out)) {
         return Status::error(StatusCode::Internal, "duplicate succeeded without calling setData");
       }
-      made = lib_.createWithId(b.type(), *id, b.name().c_str(), out.data());
+      made = lib_.createWithId(b.type(), *id, b.name().c_str(),
+                               detail::PayloadAccess::data(out));
     }
     else {
       PlaceholderInfo info;
@@ -140,6 +142,7 @@ class Duplicator {
     copies_.append(copy);
     ids_.add(b.id(), *id);
     lib_.setFlag(copy.to, BlockFlags::FakeUser, b.hasFlag(BlockFlags::FakeUser));
+    filler_.setExtension(copy.to, b.fileExtension());
     lib_.forEachSlot(h, [&](TypeId ns, int64_t key, const RefCell &cell) {
       RefCell own(cell.kind);
       own.target = cell.target;
@@ -163,7 +166,7 @@ class Duplicator {
         return;
       }
       AttachmentProvider p = e->provider.get();
-      void *copy = p.copy(data);
+      void *copy = p.copy(*lib_.get(c.from), data, *lib_.get(c.to));
       if (copy) {
         filler_.addAttachment(c.to, type, copy);
       }

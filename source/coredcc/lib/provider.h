@@ -5,9 +5,38 @@
 
 namespace coredcc {
 
+/** What BlockProvider::rekey may ask about the append. */
+class RekeyContext {
+ public:
+  using IsFree = bool (*)(const void *self, const BlockId &id);
+  RekeyContext(Library &lib, const void *self, IsFree isFree)
+      : lib_(lib), self_(self), isFree_(isFree)
+  {
+  }
+
+  Library &library() const
+  {
+    return lib_;
+  }
+  /** Whether a block of the append may get `id`: it isn't null, and no block here or of the
+   * append has it. */
+  bool isFree(const BlockId &id) const
+  {
+    return isFree_(self_, id);
+  }
+
+  static const litestl::binding::types::Struct<RekeyContext> *defineBindings();
+
+ private:
+  Library &lib_;
+  const void *self_;
+  IsFree isFree_;
+};
+
 /**
  * What a client implements per block type (architecture §8a). Native or foreign (TS),
- * like any interface (§2a).
+ * like any interface (§2a). A provider serves every Library of its Runtime: the block says
+ * which one it is in.
  *
  * - `data` resolves the block's data on every use; it may return null (a Detached
  *   block, a host object that went away).
@@ -19,8 +48,9 @@ namespace coredcc {
  *   a sweep: library reads are allowed, void mutations are deferred, creates fail.
  * - `queryInterface` (optional) answers interfaces the block type doesn't implement
  *   itself, the last step of Library::query.
- * - `onWeakTargetLost` (optional) is told when a block it weakly references is about
- *   to be destroyed, so a child can keep its world transform.
+ * - `onWeakTargetLost` (optional) is told when a block that `user`'s data weakly references is
+ *   about to be destroyed, so a child can keep its world transform. `user` has its data: it is
+ *   Live, or InHistory from Live.
  *
  * - `serialize` and `deserialize` (optional, together) write the block's data to a payload
  *   and make it again: what saving needs. `deserialize` makes new data and gives it to
@@ -29,7 +59,8 @@ namespace coredcc {
  * - `duplicate` (optional) copies the data, references as they are; the library then remaps
  *   them through foreachRef.
  * - `rekey` (optional) gives an imported block an id the client can resolve (a UUID in host
- *   data). A null id refuses the import.
+ *   data), one that `context.isFree`. A null id refuses the import. `imported` isn't a record
+ *   yet; it has the id the file has, the type and the name.
  */
 struct BlockProvider : IfaceRef {
   void *data(const Datablock &block) const
@@ -88,9 +119,9 @@ struct BlockProvider : IfaceRef {
   {
     return CDCC_HAS(rekey);
   }
-  BlockId rekey(const Datablock &imported) const
+  BlockId rekey(const Datablock &imported, const RekeyContext &context) const
   {
-    return CDCC_CALL(rekey, imported);
+    return CDCC_CALL(rekey, imported, context);
   }
 
   CDCC_INTERFACE(BlockProvider, "coredcc::BlockProvider")
@@ -103,7 +134,7 @@ struct BlockProvider : IfaceRef {
     BIND_OPTIONAL_METHOD(st, serialize, MARGS("block", "out"));
     BIND_OPTIONAL_METHOD(st, deserialize, MARGS("block", "in"));
     BIND_OPTIONAL_METHOD(st, duplicate, MARGS("src", "out"));
-    BIND_OPTIONAL_METHOD(st, rekey, MARGS("imported"));
+    BIND_OPTIONAL_METHOD(st, rekey, MARGS("imported", "context"));
   }
 };
 

@@ -893,3 +893,28 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
 - **Mutations:** 85 in `json_writer`, `utf8`, `ref_text`, `literal`, `resolve`, `meta` and `facades`.
   All are caught but one, which is equivalent: `unsignedInteger` one past 2^53 reaches `integer`,
   which quotes it as well.
+
+### Review of library IO, round 1 (2026-11-24)
+Numbers are the report's (`docs/reports/feature-report-library-io-2026-11-24.md`, with round 2).
+- **1:** `BagRefs` (`lib/bag_refs.h`) is a bag's cells by name. The cell says which block, the bag's
+  value says the rest. `BlockWriter::bag` and `BlockReader::bag` take it, and an entry with more ref
+  rows than its value needs is kept as unread.
+- **2 and 9:** `Datablock::library()`, so every slot that gets a block knows the document. Attachment
+  slots get their block, except `destroy`: the history holds detached data for longer than the
+  block and the Library exist. `rekey` gets a `RekeyContext` (`library`, `isFree`).
+  `onWeakTargetLost` runs for data that is there (Live, or InHistory from Live), for the data's own
+  weak references only, and attachments have it as well.
+- **9:** `SnapshotProvider` slots take the Context, and `capture` is a Status with the blob as an
+  out-parameter: a `Result` can't be a bound return type. Filling a MissingBlock through an append's
+  `rekey` waits for round 2's un-adopt.
+- **5:** a pointer's key has at most 1,024 segments, written and read, and entries are charged for
+  them. The cap alone doesn't bound it: many short keys take as much.
+- **23:** codes this build doesn't know are Unsupported in a newer file, and damage in one of ours.
+- **24:** each record ends with an extension: fields of a tag and bytes, kept and written back by
+  builds that don't know them. A tag with the top bit is critical: the block stays a placeholder.
+- **25:** `values` (no count) and `array` (with one) for fixed-width numbers, `i32` and `f32`.
+- **31:** `take`, `setBudget` and the data getters are the library's (`lib/payload_access.h`).
+  `AttachmentTypeInfo::version` is `payloadVersion`, as a block type's.
+- **The golden file changed** (4 more bytes per record), and its names are shorter so that BLCK stays
+  below the compression threshold.
+- **Mutations:** 60 in these changes, all caught (8 of them only after the tests were extended).

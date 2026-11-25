@@ -332,7 +332,7 @@ static void test_records()
   };
   test_assert(refused(data(0, 5, 4, 4), kBad, "says the wrong size"));
   test_assert(refused(data(0, 4, 5, 4), kBad, "past the end"));
-  test_assert(refused(data(2, 4, 4, 4), kBad, "boolean"));
+  test_assert(refused(data(2, 4, 4, 4), kBad, "unknown way"));
   test_assert(refused(data(1, 4, 4, 4), kBad, "compressed data is damaged"));
   test_assert(refused(data(1, 0, 4, 4), kBad, "says the wrong size"));
   test_assert(refused(data(1, 4, 0, 0), kBad, "says the wrong size"));

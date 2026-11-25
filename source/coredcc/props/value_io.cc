@@ -65,6 +65,9 @@ void writeRef(BytesWriter &out, const StableRef &ref, ValueCodec &codec)
     out.u8(uint8_t(OwnerForm::Runtime));
     codec.writeName(out, IdDomain::Type, ref.owner.nameHash);
   }
+  if (uint64_t(ref.key.size()) > kMaxKeySegments) {
+    out.fail(Status::error(StatusCode::OutOfRange, "a pointer whose key is too long"));
+  }
   out.u32(uint32_t(ref.key.size()));
   for (int i = 0; i < int(ref.key.size()); i++) {
     const KeySegment &s = ref.key[i];
@@ -108,6 +111,10 @@ StableRef readRef(BytesReader &in, ValueCodec &codec)
       return StableRef();
   }
   const uint32_t n = in.count(kMinKeyBytes);
+  if (n > kMaxKeySegments) {
+    in.fail(StatusCode::OutOfRange, "a pointer whose key is too long");
+  }
+  codec.chargeKey(in, n);
   for (uint32_t i = 0; i < n && in.ok(); i++) {
     KeySegment s;
     switch (KeyForm(in.u8())) {
@@ -193,6 +200,8 @@ void ValueCodec::readBlockId(BytesReader &in, BlockId &id)
   id.local.hi = in.u64();
   id.local.lo = in.u64();
 }
+
+void ValueCodec::chargeKey(BytesReader &, uint32_t) {}
 
 void ValueCodec::writeName(BytesWriter &out, IdDomain domain, uint64_t id) const
 {

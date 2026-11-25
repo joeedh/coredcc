@@ -101,6 +101,7 @@ Result<BlockHandle> Library::addRecord(TypeId type,
 {
   const BlockHandle h = pool_.create();
   Datablock *b = rec(h);
+  b->lib_ = this;
   b->id_ = id;
   b->type_ = type;
   b->name_ = toLs(name);
@@ -470,7 +471,7 @@ Status Library::foreachRef(BlockHandle h, litestl::util::function<void(RefCell &
   for (const Datablock::Attachment &a : b->attachments_) {
     const AttachmentProvider p = attachmentTypes_.find(a.type)->provider.get();
     if (p.hasForeachRef()) {
-      CDCC_TRY(visitRefs(*b, fn, [&](RefVisitor &v) { p.foreachRef(a.data, v); }));
+      CDCC_TRY(visitRefs(*b, fn, [&](RefVisitor &v) { p.foreachRef(*b, a.data, v); }));
     }
   }
   if (b->opaque_) {

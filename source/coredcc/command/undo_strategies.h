@@ -6,6 +6,7 @@
  * block creation.
  */
 
+#include "coredcc/api/context.h"
 #include "coredcc/base/iface/iface.h"
 #include "coredcc/base/status.h"
 #include "coredcc/lib/block.h"
@@ -94,32 +95,35 @@ class DelegatedUndo {
  * Snapshot undo: a host-registered provider that captures and restores state as bytes.
  * Synchronous. SnapshotUndo (snapshot_undo.h) is the command's side.
  *
+ * - `ctx` says which document. When a failed command is rolled back it has only the Runtime, the
+ *   Library and the root.
+ * - `capture` appends the state's bytes to `blob`, which is empty.
  * - `foreachRef` (optional): visits a cell for each block that `blob` references, so undo
  *   keeps those blocks. The cells are the provider's own; writes to them are ignored.
  */
 struct SnapshotProvider : IfaceRef {
-  litestl::util::Vector<uint8_t> capture() const
+  Status capture(Context &ctx, litestl::util::Vector<uint8_t> &blob) const
   {
-    return CDCC_CALL(capture);
+    return CDCC_CALL(capture, ctx, blob);
   }
-  Status restore(const litestl::util::Vector<uint8_t> &blob)
+  Status restore(Context &ctx, const litestl::util::Vector<uint8_t> &blob)
   {
-    return CDCC_CALL(restore, blob);
+    return CDCC_CALL(restore, ctx, blob);
   }
   bool hasForeachRef() const
   {
     return CDCC_HAS(foreachRef);
   }
-  void foreachRef(const litestl::util::Vector<uint8_t> &blob, RefVisitor &v) const
+  void foreachRef(Context &ctx, const litestl::util::Vector<uint8_t> &blob, RefVisitor &v) const
   {
-    CDCC_CALL(foreachRef, blob, v);
+    CDCC_CALL(foreachRef, ctx, blob, v);
   }
 
   CDCC_INTERFACE(SnapshotProvider, "coredcc::SnapshotProvider")
   {
-    BIND_STRUCT_METHOD(st, capture, MARGS());
-    BIND_STRUCT_METHOD(st, restore, MARGS("blob"));
-    BIND_OPTIONAL_METHOD(st, foreachRef, MARGS("blob", "v"));
+    BIND_STRUCT_METHOD(st, capture, MARGS("ctx", "blob"));
+    BIND_STRUCT_METHOD(st, restore, MARGS("ctx", "blob"));
+    BIND_OPTIONAL_METHOD(st, foreachRef, MARGS("ctx", "blob", "v"));
   }
 };
 

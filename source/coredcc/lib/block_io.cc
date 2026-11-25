@@ -2,6 +2,7 @@
 
 #include "coredcc/lib/io/fill.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/lib/payload_access.h"
 
 #include <string>
 #include <utility>
@@ -57,6 +58,24 @@ void detail::EntryCodec::readBlockId(BytesReader &in, BlockId &id)
   id = entry->refs[int(i)].target;
 }
 
+/* What an entry allocates is a multiple of its bytes: hundreds for a small one. */
+static bool chargeBudget(uint64_t *budget, uint64_t bytes, BytesReader &in)
+{
+  if (budget && bytes > *budget) {
+    in.fail(StatusCode::OutOfRange, "the entries need more memory than allowed");
+    return false;
+  }
+  if (budget) {
+    *budget -= bytes;
+  }
+  return in.ok();
+}
+
+void detail::EntryCodec::chargeKey(BytesReader &in, uint32_t n)
+{
+  chargeBudget(budget, uint64_t(n) * sizeof(KeySegment) * 3, in);
+}
+
 /* ---- BlockWriter ---- */
 
 BlockWriter::BlockWriter(const Library &lib) : codec_(lib.runtime(), tableOf(lib)) {}
@@ -102,12 +121,12 @@ void BlockWriter::entries(std::span<const BlockEntry> all)
 }
 
 void BlockWriter::bag(const PropertyBag &bag,
-                      RefKind pointerKind,
+                      const BagRefs &refs,
                       std::span<const BlockEntry> unread)
 {
   uint32_t n = uint32_t(unread.size());
   for (int i = 0; i < bag.size(); i++) {
-    n += bag.wasSet(i) ? 1 : 0;
+    n += refs.isSet(bag, i) ? 1 : 0;
   }
   bytes_.u32(n);
   /* Unread ones first: if the bag has since set the same name, that one wins on read. */
@@ -115,18 +134,17 @@ void BlockWriter::bag(const PropertyBag &bag,
     writeEntry(e);
   }
   for (int i = 0; i < bag.size(); i++) {
-    if (!bag.wasSet(i)) {
+    if (!refs.isSet(bag, i)) {
       continue;
     }
     BlockEntry e;
     e.name = bag.def(i).apiName();
-    e.value = storedBagValue(bag, i);
-    if (isBlockPointer(e.value)) {
-      RefCell cell(pointerKind);
-      cell.target = e.value.asPointer().owner.block;
-      e.refs.append(cell);
+    e.value = bag.def(i).kind() == PropKind::Pointer ? refs.value(bag, i) : storedBagValue(bag, i);
+    const RefCell *cell = refs.find(e.name.c_str());
+    if (cell && isBlockPointer(e.value)) {
+      e.refs.append(*cell);
     }
-    writeEntry(e);
+    writeEntry(e); /* without its cell, it fails */
   }
 }
 
@@ -177,17 +195,9 @@ uint32_t BlockReader::entryCount()
   return charge(uint64_t(n) * sizeof(BlockEntry) * 4) ? n : 0;
 }
 
-/* What an entry allocates is a multiple of its bytes: hundreds for a small one. */
 bool BlockReader::charge(uint64_t bytes)
 {
-  if (budget_ && bytes > *budget_) {
-    bytes_.fail(StatusCode::OutOfRange, "the entries need more memory than allowed");
-    return false;
-  }
-  if (budget_) {
-    *budget_ -= bytes;
-  }
-  return bytes_.ok();
+  return chargeBudget(codec_.budget, bytes, bytes_);
 }
 
 bool BlockReader::readEntry(BlockEntry &e)
@@ -241,7 +251,7 @@ void BlockReader::entries(Vector<BlockEntry> &out)
   }
 }
 
-void BlockReader::bag(PropertyBag &bag, Vector<BlockEntry> &unread)
+void BlockReader::bag(PropertyBag &bag, BagRefs &refs, Vector<BlockEntry> &unread)
 {
   const uint32_t n = entryCount();
   for (uint32_t i = 0; i < n; i++) {
@@ -249,8 +259,10 @@ void BlockReader::bag(PropertyBag &bag, Vector<BlockEntry> &unread)
     if (!readEntry(e)) {
       return;
     }
-    const int at = e.unknownTag ? -1 : bag.indexOf(e.name.c_str());
-    if (at < 0 || !bag.setAt(at, e.value).ok()) {
+    /* One ref for a pointer into a block, else none: anything more is a newer build's. */
+    const bool plain = !e.unknownTag && e.refs.size() <= (isBlockPointer(e.value) ? 1u : 0u);
+    const int at = plain ? bag.indexOf(e.name.c_str()) : -1;
+    if (at < 0 || !refs.setAt(bag, at, e.value).ok()) {
       unread.append(std::move(e));
     }
   }
@@ -325,7 +337,7 @@ Result<BlockPayload> writePayload(const Library &lib, BlockHandle h)
   if (!s.ok()) {
     return s;
   }
-  Result<BlockPayload> p = out.take((*type)->info.payloadVersion);
+  Result<BlockPayload> p = detail::PayloadAccess::take(out, (*type)->info.payloadVersion);
   if (p.ok() && lib.auditsRelations()) {
     CDCC_TRY(checkPayloadRefs(lib, h, *p));
   }

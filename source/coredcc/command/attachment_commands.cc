@@ -89,7 +89,7 @@ struct AttachmentEdit {
             }
           },
           &pinner);
-      p.foreachRef(held->data, v);
+      p.foreachRef(*lib.get(block.get()), held->data, v);
     }
     if (!stickyBefore && held->rt->hasStickyError()) {
       /* It threw: what the data references isn't known, so put it back. */
@@ -147,7 +147,7 @@ template <bool Attach> struct EditCommand {
     edit.begin(ctx, *h, type);
     if constexpr (Attach) {
       AttachmentProvider p = findType(ctx.runtime(), type)->provider.get();
-      edit.held->data = p.create();
+      edit.held->data = p.create(*ctx.library()->get(*h));
       if (ctx.runtime().hasStickyError()) {
         return ctx.runtime().takeStickyError(); /* the discard destroys the data */
       }

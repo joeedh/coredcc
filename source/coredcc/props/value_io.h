@@ -55,6 +55,9 @@ class ValueCodec {
 
   virtual void writeBlockId(BytesWriter &out, const BlockId &id);
   virtual void readBlockId(BytesReader &in, BlockId &id);
+  /** Called before a pointer's `n` key segments are read: fails `in` when they need more
+   * memory than there is. */
+  virtual void chargeKey(BytesReader &in, uint32_t n);
 
   void writeName(BytesWriter &out, IdDomain domain, uint64_t id) const;
   /** 0 for a null id. A name that hashes to an id the Runtime or the table has under
@@ -66,8 +69,12 @@ class ValueCodec {
   NameTable *names_;
 };
 
-/** A tag byte, then the body. Fails the writer (InvalidArgument) for a Pointer with a
- * negative handle in its key, which no path can address. */
+/** The most segments a pointer's key has in a file. Part of the format, version 1. */
+inline constexpr uint32_t kMaxKeySegments = 1024;
+
+/** A tag byte, then the body. Fails the writer for a Pointer that can't be read back:
+ * with a negative handle in its key (InvalidArgument), which no path can address, or more than
+ * kMaxKeySegments (OutOfRange). */
 void writeValue(BytesWriter &out, const PropValue &v, ValueCodec &codec);
 /** None after a failure, an unknown tag among them. */
 PropValue readValue(BytesReader &in, ValueCodec &codec);

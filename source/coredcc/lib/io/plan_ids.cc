@@ -120,6 +120,12 @@ class IdSource {
   {
     return !id.isNull() && !lib_.find(id) && taken_.insert(id).second;
   }
+  /* What a rekey may answer. */
+  static bool isFree(const void *self, const BlockId &id)
+  {
+    const IdSource &s = *static_cast<const IdSource *>(self);
+    return !id.isNull() && !s.lib_.find(id) && !s.taken_.contains(id);
+  }
   Result<BlockId> fresh(ClientId client)
   {
     for (int attempt = 0; attempt < 4; attempt++) {
@@ -185,7 +191,7 @@ Status planAppendIds(ParsedFile &file, Library &lib, RekeyFn &rekey, IdMap &move
       to = *id;
     }
     else {
-      to = rekey(r, p.id);
+      to = rekey(r, p.id, RekeyContext(lib, &ids, &IdSource::isFree));
       if (lib.runtime().hasStickyError()) {
         return lib.runtime().takeStickyError();
       }

@@ -8,6 +8,7 @@
 #include "coredcc/lib/id_map.h"
 #include "coredcc/lib/io/format.h"
 #include "coredcc/lib/io/library_io.h"
+#include "coredcc/lib/provider.h"
 
 #include "litestl/util/function.h"
 
@@ -59,6 +60,7 @@ struct ParsedRecord {
   StoredAs storedAs = StoredAs::Payload;
   uint32_t version = 0;
   uint32_t blob = 0;
+  std::span<const uint8_t> extension;
   Range rows;
   Range slots;
   Range attachments;
@@ -88,7 +90,8 @@ Result<std::unique_ptr<ParsedFile>> parseLibrary(std::span<const uint8_t> bytes,
                                                  IoIssues &issues);
 
 /** Gives an imported block an id, or a null one. */
-using RekeyFn = litestl::util::function<BlockId(const ParsedRecord &, BlockId id)>;
+using RekeyFn =
+    litestl::util::function<BlockId(const ParsedRecord &, BlockId id, const RekeyContext &)>;
 
 /**
  * Like planIds, for an append to a library that has records: every record of the coredcc client

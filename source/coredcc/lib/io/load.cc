@@ -63,6 +63,7 @@ Status addRecord(LibraryFiller &filler, ParsedFile &file, const ParsedRecord &r,
   if (!h.ok()) {
     return h.status();
   }
+  filler.setExtension(*h, r.extension);
   for (uint32_t i = 0; i < r.slots.count; i++) {
     const ParsedSlot &s = file.slots[int(r.slots.begin + i)];
     filler.addSlot(*h, s.ns, s.key, s.cell);
@@ -160,13 +161,13 @@ Result<AppendResult> appendLibrary(Library &lib,
   if (!file.ok()) {
     return file.status();
   }
-  const auto rekey = [&lib](const ParsedRecord &r, BlockId id) {
+  const auto rekey = [&lib](const ParsedRecord &r, BlockId id, const RekeyContext &context) {
     PlaceholderInfo info;
     info.reason = reasonOf(r);
     info.typeName = own(r.type);
     info.name = own(r.name);
     info.sourceName = own(r.source);
-    return LibraryFiller::rekey(lib, id, info);
+    return LibraryFiller::rekey(lib, id, info, context);
   };
   CDCC_TRY(planAppend(**file, lib, options.limits, rekey, result.ids, result.report.issues));
   for (ParsedRecord &r : (*file)->records) {

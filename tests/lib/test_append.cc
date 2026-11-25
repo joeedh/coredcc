@@ -29,8 +29,7 @@ Bytes sample()
   w.link(a, b);
   w.link(b, a, c);
   w.addOptEntry(a, w.id(c));
-  test_assert(w.data(a)->bag.set("target", pointerTo(w.id(c))).ok());
-  w.data(a)->bagTarget.target = w.id(c);
+  test_assert(w.data(a)->bagRefs.set(w.data(a)->bag, "target", pointerTo(w.id(c))).ok());
   test_assert(w.lib.setSlot(a, kDoc, 4, w.id(b), RefKind::OptStrong).ok());
   w.note(a, 5, w.id(c));
   w.lib.noteRefsChanged();
@@ -66,7 +65,7 @@ static void test_twice()
   const Bytes bytes = sample();
   IoWorld w;
   int rekeys = 0;
-  w.docs.onRekey = [&](const Datablock &b) {
+  w.docs.onRekey = [&](const Datablock &b, const RekeyContext &) {
     test_assert(w.lib.busy() && b.id() == cid(2, kAcme) && b.type() == kAcmeDoc);
     test_assert(strcmp(b.name().c_str(), "b") == 0 && b.state() == BlockState::Placeholder);
     test_assert(!b.clientData());
@@ -90,7 +89,7 @@ static void test_twice()
                 w.data(hb)->parent.target == c);
     test_assert(da.entries[0].refs[0].target == c);
     test_assert(da.entries[0].value.tryPointer()->owner.block == c);
-    test_assert(da.bag.get("target")->tryPointer()->owner.block == c && da.bagTarget.target == c);
+    test_assert(da.bagRefs.value(da.bag, 1).asPointer().owner.block == c);
     test_assert(w.lib.slot(ha, kDoc, 4)->target == b);
     test_assert(static_cast<Note *>(w.lib.attachment(ha, kNote))->about.target == c);
     /* Kept, but not roots here. */
@@ -192,20 +191,20 @@ static void test_refused()
   IoWorld w;
   w.doc(9, "x", kAcmeDoc);
   const auto answering = [&](BlockId id) {
-    w.docs.onRekey = [id](const Datablock &) { return id; };
+    w.docs.onRekey = [id](const Datablock &, const RekeyContext &) { return id; };
     return refused(w, bytes, StatusCode::FailedPrecondition, "acme.Doc");
   };
   test_assert(answering(BlockId()));
   test_assert(answering(cid(9, kAcme)));  /* in use */
   test_assert(answering(cid(10)));        /* another client's */
   test_assert(answering(BlockId{kAcme, LocalId()}));
-  w.docs.onRekey = [&](const Datablock &) {
+  w.docs.onRekey = [&](const Datablock &, const RekeyContext &) {
     w.rt.setStickyError(Status::error(StatusCode::Internal, "rekey threw"));
     return BlockId();
   };
   test_assert(refused(w, bytes, StatusCode::Internal, "rekey threw"));
   /* The library is busy to a rekey. */
-  w.docs.onRekey = [&](const Datablock &b) {
+  w.docs.onRekey = [&](const Datablock &b, const RekeyContext &) {
     test_assert(w.append(bytes).status().code() == StatusCode::Busy);
     test_assert(w.lib.create(kDoc, "x", nullptr).status().code() == StatusCode::Busy);
     return b.id();
@@ -239,7 +238,7 @@ static void test_refused()
     from.root(from.doc(1, "one", kAcmeDoc));
     from.root(from.doc(2, "two", kAcmeDoc));
     IoWorld into;
-    into.docs.onRekey = [](const Datablock &) { return cid(1, kAcme); };
+    into.docs.onRekey = [](const Datablock &, const RekeyContext &) { return cid(1, kAcme); };
     test_assert(refused(into, from.save(), StatusCode::FailedPrecondition, "acme.Doc"));
     into.docs.onRekey = nullptr;
   }
@@ -338,7 +337,7 @@ static void test_fuzz()
       b[i] = k == 0 ? uint8_t(b[i] ^ (1 << (i % 8))) : k == 1 ? 0xff : uint8_t(rng.next());
       fixUp(b);
       IoWorld w;
-      w.docs.onRekey = [&](const Datablock &block) {
+      w.docs.onRekey = [&](const Datablock &block, const RekeyContext &) {
         return cid(1000 + uint64_t(w.lib.size()) + rng.next() % 100000, block.id().client);
       };
       const BlockHandle own = w.doc(1, "mine"), kept = w.doc(2, "kept");

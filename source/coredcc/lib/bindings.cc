@@ -2,6 +2,7 @@
  * yet: their accessors are bound with the rest of bind/ (P1f). */
 #include "coredcc/lib/block.h"
 #include "coredcc/lib/block_io.h"
+#include "coredcc/lib/provider.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
@@ -72,6 +73,17 @@ const lbt::Struct<BlockReader> *BlockReader::defineBindings()
   if (!st) {
     PermanentGuard guard;
     st = new lbt::Struct<BlockReader>("coredcc::BlockReader", sizeof(BlockReader));
+  }
+  return st;
+}
+
+const lbt::Struct<RekeyContext> *RekeyContext::defineBindings()
+{
+  static lbt::Struct<RekeyContext> *st = nullptr;
+  if (!st) {
+    PermanentGuard guard;
+    st = new lbt::Struct<RekeyContext>("coredcc::RekeyContext", sizeof(RekeyContext));
+    BIND_STRUCT_METHOD(st, isFree, MARGS("id"));
   }
   return st;
 }

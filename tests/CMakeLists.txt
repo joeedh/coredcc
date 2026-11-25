@@ -29,6 +29,7 @@ coredcc_test(test_lib_library_save SOURCES lib/test_library_save.cc DEPS coredcc
 coredcc_test(test_lib_library_load SOURCES lib/test_library_load.cc DEPS coredcc_lib)
 coredcc_test(test_lib_append SOURCES lib/test_append.cc DEPS coredcc_lib)
 coredcc_test(test_lib_duplicate SOURCES lib/test_duplicate.cc DEPS coredcc_lib)
+coredcc_test(test_lib_io_review SOURCES lib/test_io_review.cc DEPS coredcc_lib)
 coredcc_test(test_lib_library_hostile SOURCES lib/test_library_hostile.cc DEPS coredcc_lib)
 coredcc_test(test_api_ref_text SOURCES api/test_ref_text.cc DEPS coredcc_api)
 coredcc_test(test_api_library_io SOURCES api/test_library_io.cc DEPS coredcc_api)

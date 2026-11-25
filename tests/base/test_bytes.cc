@@ -74,6 +74,79 @@ static void test_floats_keep_bits()
   }
 }
 
+static void test_arrays()
+{
+  const float f[] = {1.0f, std::bit_cast<float>(0x7fc12345u), -0.0f};
+  const uint32_t u[] = {0x01020304u, 7};
+  const int16_t i[] = {-2, 0x0102};
+  const uint64_t big[] = {0x0102030405060708ull};
+  BytesWriter w;
+  w.i32(-2);
+  w.f32(f[1]);
+  w.values(std::span<const float>(f));
+  w.array(std::span<const uint32_t>(u));
+  w.array(std::span<const int16_t>(i));
+  w.values(std::span<const uint64_t>(big));
+  w.array(std::span<const double>());
+  const uint8_t golden[] = {
+      0xfe, 0xff, 0xff, 0xff, 0x45, 0x23, 0xc1, 0x7f,                         /* scalars */
+      0,    0,    0x80, 0x3f, 0x45, 0x23, 0xc1, 0x7f, 0, 0, 0, 0x80,          /* f, no count */
+      2,    0,    0,    0,    4,    3,    2,    1,    7, 0, 0, 0,             /* u */
+      2,    0,    0,    0,    0xfe, 0xff, 2,    1,                            /* i */
+      8,    7,    6,    5,    4,    3,    2,    1,    0, 0, 0, 0};            /* big, none */
+  test_assert(w.status().ok() && size_t(w.data().size()) == sizeof(golden));
+  test_assert(memcmp(w.data().data(), golden, sizeof(golden)) == 0);
+
+  BytesReader r(view(w));
+  float back[3];
+  litestl::util::Vector<uint32_t> bu;
+  litestl::util::Vector<int16_t> bi;
+  litestl::util::Vector<double> none;
+  uint64_t bb[1];
+  test_assert(r.i32() == -2 && std::bit_cast<uint32_t>(r.f32()) == 0x7fc12345u);
+  r.values(std::span<float>(back));
+  r.array(bu);
+  r.array(bi);
+  r.values(std::span<uint64_t>(bb));
+  none.append(1.0);
+  r.array(none);
+  test_assert(r.ok() && r.atEnd() && memcmp(back, f, sizeof(f)) == 0 && bb[0] == big[0]);
+  test_assert(bu.size() == 2 && bu[0] == u[0] && bu[1] == 7 && none.size() == 0);
+  test_assert(bi.size() == 2 && bi[0] == -2 && bi[1] == 0x0102);
+
+  /* Too short: zeros, and an empty array. */
+  {
+    BytesReader cut(view(w).first(15));
+    cut.u64();
+    back[0] = back[1] = 5;
+    cut.values(std::span<float>(back).first(2));
+    test_assert(!cut.ok() && back[0] == 0 && back[1] == 0 && back[2] != 5);
+    cut.array(bu);
+    test_assert(bu.size() == 0);
+  }
+  {
+    const uint8_t lying[] = {3, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0};
+    BytesReader cut{std::span<const uint8_t>(lying)};
+    cut.array(bu);
+    test_assert(!cut.ok() && bu.size() == 0);
+  }
+  {
+    BytesWriter small(7);
+    small.array(std::span<const uint32_t>(u));
+    test_assert(small.status().code() == StatusCode::OutOfRange);
+  }
+  /* What a big-endian machine does. */
+  uint8_t swapped[8];
+  detail::copyNumbers(swapped, u, 2, 4, true);
+  const uint8_t want[] = {1, 2, 3, 4, 0, 0, 0, 7};
+  if constexpr (std::endian::native == std::endian::little) {
+    test_assert(memcmp(swapped, want, 8) == 0);
+  }
+  detail::copyNumbers(swapped, u, 2, 4, false);
+  test_assert(memcmp(swapped, u, 8) == 0);
+  detail::copyNumbers(swapped, nullptr, 0, 4, true);
+}
+
 static void test_sections()
 {
   BytesWriter w;
@@ -266,6 +339,7 @@ int main()
 {
   test_golden();
   test_floats_keep_bits();
+  test_arrays();
   test_sections();
   test_writer_failures();
   test_reader_failures();

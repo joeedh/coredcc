@@ -1,6 +1,7 @@
 coredcc_library(coredcc_lib
   SOURCES
     attachment.cc
+    bag_refs.cc
     bindings.cc
     block_io.cc
     duplicate.cc

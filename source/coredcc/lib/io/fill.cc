@@ -1,5 +1,9 @@
 #include "coredcc/lib/io/fill.h"
 
+#include "coredcc/lib/io/format.h"
+#include "coredcc/lib/payload_access.h"
+
+#include <cstring>
 #include <string>
 #include <utility>
 
@@ -112,7 +116,10 @@ void LibraryFiller::destroy(const Vector<BlockHandle> &blocks)
   lib_.destroyBlocks(blocks);
 }
 
-BlockId LibraryFiller::rekey(Library &lib, BlockId id, const PlaceholderInfo &info)
+BlockId LibraryFiller::rekey(Library &lib,
+                             BlockId id,
+                             const PlaceholderInfo &info,
+                             const RekeyContext &context)
 {
   const TypeId type = info.typeName.size() > 0 ? TypeId::of(info.typeName.c_str()) : TypeId();
   const BlockProvider p = lib.types_.provider(type);
@@ -120,6 +127,7 @@ BlockId LibraryFiller::rekey(Library &lib, BlockId id, const PlaceholderInfo &in
     return BlockId();
   }
   Datablock b;
+  b.lib_ = &lib;
   b.id_ = id;
   b.type_ = type;
   b.name_ = info.name;
@@ -128,7 +136,18 @@ BlockId LibraryFiller::rekey(Library &lib, BlockId id, const PlaceholderInfo &in
   b.placeholderType_ = info.typeName;
   b.sourceName_ = info.sourceName;
   Scope scope(lib);
-  return p.rekey(b);
+  return p.rekey(b, context);
+}
+
+void LibraryFiller::setExtension(BlockHandle h, std::span<const uint8_t> bytes)
+{
+  if (bytes.empty()) {
+    return;
+  }
+  auto kept = std::make_unique<Vector<uint8_t>>();
+  kept->resize<false>(bytes.size());
+  memcpy(kept->data(), bytes.data(), bytes.size());
+  lib_.rec(h)->fileExtension_ = std::move(kept);
 }
 
 void LibraryFiller::setSource(BlockHandle h, const string &source)
@@ -148,7 +167,7 @@ Status LibraryFiller::read(Library &lib,
                            uint64_t *budget)
 {
   BlockReader in(lib, payload);
-  in.setBudget(budget);
+  PayloadAccess::setBudget(in, budget);
   lib.beginNoCollect(); /* nothing keeps a half-made block */
   BlockProvider provider = type.provider.get();
   Status s = readOutcome(lib.runtime(), provider.deserialize(*lib.get(h), in));
@@ -156,9 +175,10 @@ Status LibraryFiller::read(Library &lib,
   if (!s.ok()) {
     return s; /* the provider freed what it made */
   }
-  s = readComplete(in.bytes(), in.data());
-  if (in.data()) {
-    lib.adoptData(h, in.data(), s.ok());
+  void *data = PayloadAccess::data(in);
+  s = readComplete(in.bytes(), data);
+  if (data) {
+    lib.adoptData(h, data, s.ok());
   }
   return s;
 }
@@ -178,6 +198,9 @@ Status LibraryFiller::why(const Datablock &b) const
   if (e->info.storage != BlockStorage::Payload) {
     return Status::error(StatusCode::Unsupported,
                          ("its type " + type + " isn't read from files").c_str());
+  }
+  if (libio::hasCriticalField(b.fileExtension())) {
+    return Status::error(StatusCode::Unsupported, "it needs a newer build");
   }
   return b.placeholderData().version > e->info.payloadVersion ? newer("it") : Status();
 }
@@ -218,25 +241,26 @@ Status LibraryFiller::readAttachment(Datablock &b, const OpaqueAttachment &from)
   if (!p.hasDeserialize()) {
     return Status::error(StatusCode::Unsupported, (what + ": the type isn't read from files").c_str());
   }
-  if (from.payload.version > e->info.version) {
+  if (from.payload.version > e->info.payloadVersion) {
     return newer(what.c_str());
   }
   BlockReader in(lib_, from.payload);
-  in.setBudget(&budget_);
-  Status s = readOutcome(lib_.runtime(), p.deserialize(in));
+  PayloadAccess::setBudget(in, &budget_);
+  Status s = readOutcome(lib_.runtime(), p.deserialize(b, in));
   if (s.ok()) {
-    s = readComplete(in.bytes(), in.data());
+    void *data = PayloadAccess::data(in);
+    s = readComplete(in.bytes(), data);
     if (s.ok()) {
-      b.attachments_.append(Datablock::Attachment{type, in.data()});
+      b.attachments_.append(Datablock::Attachment{type, data});
       lib_.epoch_++;
       return s;
     }
-    if (in.data()) {
+    if (data) {
       if (p.hasForeachRef()) {
         RefVisitor v([](void *, RefCell &cell) { sever(cell); }, nullptr);
-        p.foreachRef(in.data(), v);
+        p.foreachRef(b, data, v);
       }
-      p.destroy(in.data());
+      p.destroy(data);
       lib_.runtime().takeStickyError().ignore(); /* `s` says what went wrong first */
     }
   }

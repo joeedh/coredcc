@@ -60,7 +60,7 @@ struct NoteProvider {
     host->severed += n->about.isNull() ? 1 : 0;
     litestl::alloc::Delete(n);
   }
-  void *copy(const void *data)
+  void *copy(const Datablock &, const void *data, const Datablock &)
   {
     if (host->onCopy) {
       host->onCopy();
@@ -75,7 +75,7 @@ struct NoteProvider {
     host->alive++;
     return litestl::alloc::New<Note>("Note", *static_cast<const Note *>(data));
   }
-  Status serialize(const void *data, BlockWriter &out) const
+  Status serialize(const Datablock &, const void *data, BlockWriter &out) const
   {
     if (host->onSerialize) {
       host->onSerialize();
@@ -88,7 +88,7 @@ struct NoteProvider {
     out.ref(n->about);
     return Status();
   }
-  Status deserialize(BlockReader &in)
+  Status deserialize(const Datablock &, BlockReader &in)
   {
     if (host->fault == DocFault::Error) {
       return Status::error(StatusCode::Unsupported, "no notes today");
@@ -107,7 +107,7 @@ struct NoteProvider {
     }
     return Status();
   }
-  void foreachRef(const void *data, RefVisitor &v) const
+  void foreachRef(const Datablock &, const void *data, RefVisitor &v) const
   {
     if (host->failForeach) {
       host->rt->setStickyError(Status::error(StatusCode::Internal, "note foreachRef threw"));
@@ -119,10 +119,10 @@ struct NoteProvider {
   {
     auto *st = new lbt::Struct<NoteProvider>("test::NoteProvider", sizeof(NoteProvider));
     BIND_STRUCT_METHOD(st, destroy, MARGS("data"));
-    BIND_STRUCT_METHOD(st, copy, MARGS("data"));
-    BIND_STRUCT_METHOD(st, serialize, MARGS("data", "out"));
-    BIND_STRUCT_METHOD(st, deserialize, MARGS("in"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("data", "visitor"));
+    BIND_STRUCT_METHOD(st, copy, MARGS("from", "data", "to"));
+    BIND_STRUCT_METHOD(st, serialize, MARGS("block", "data", "out"));
+    BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
+    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "data", "visitor"));
     return st;
   }
 };
@@ -157,7 +157,7 @@ inline void registerNote(Runtime &rt,
   p->host = &host;
   AttachmentTypeInfo info;
   info.name = "test.Note";
-  info.version = version;
+  info.payloadVersion = version;
   info.onDuplicate = onDuplicate;
   Result<Owned<AttachmentProvider>> owned = own<AttachmentProvider>(rt, "test.Note#provider", p);
   test_assert(owned.ok() &&
@@ -365,11 +365,11 @@ inline bool sameEntries(const Vector<BlockEntry> &a, const Vector<BlockEntry> &b
 inline bool sameDocs(const Doc &a, const Doc &b)
 {
   bool same = a.number == b.number && sameCell(a.parent, b.parent) && sameCell(a.mesh, b.mesh) &&
-              sameEntries(a.entries, b.entries) && sameEntries(a.unread, b.unread) &&
-              sameCell(a.bagTarget, b.bagTarget);
+              sameEntries(a.entries, b.entries) && sameEntries(a.unread, b.unread);
   for (const char *name : {"size", "target", "extra", "other"}) {
-    const PropValue *x = a.bag.get(name), *y = b.bag.get(name);
-    same = same && (!x || !y ? x == y : *x == *y);
+    const int x = a.bag.indexOf(name), y = b.bag.indexOf(name);
+    same = same && (x < 0 || y < 0 ? x == y :
+                                     a.bagRefs.value(a.bag, x) == b.bagRefs.value(b.bag, y));
   }
   return same;
 }
@@ -527,6 +527,7 @@ struct RawRecord {
   uint32_t source = 0;
   std::vector<std::pair<uint8_t, LocalId>> rows; /* of client 1, or null */
   uint32_t blob = 0;
+  std::string extension;
   litestl::util::function<void(BytesWriter &)> slots, attachments, after;
 
   static void row(BytesWriter &out, uint8_t kind, LocalId local, uint32_t client = 1)
@@ -565,6 +566,7 @@ struct RawRecord {
       out.u32(0);
     }
     out.u32(blob);
+    out.blob(std::span(reinterpret_cast<const uint8_t *>(extension.data()), extension.size()));
     if (after) {
       after(out);
     }
