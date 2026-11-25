@@ -2,6 +2,7 @@
 #include "edit_fixture.h"
 
 #include "coredcc/graph/instance.h"
+#include "coredcc/lib/io/library_io.h"
 
 #include <map>
 
@@ -500,6 +501,18 @@ void testGone()
   test_assert(d.undo().ok() && fresh->nodeCount() == 0);
 }
 
+/* Until graphs are serialized, a save of one fails instead of losing it. */
+void testSave()
+{
+  Doc d;
+  const Graph g = newGraph(d.lib, "g");
+  test_assert(saveLibrary(d.lib).ok()); /* nothing keeps it */
+  d.lib.setFlag(g.h, BlockFlags::Root, true);
+  Result<litestl::util::Vector<uint8_t>> saved = saveLibrary(d.lib);
+  test_assert(hasCode(saved, StatusCode::FailedPrecondition));
+  test_assert(strstr(saved.status().message(), kGraphDefType));
+}
+
 /* A group that a direct write made recursive can be removed, and come back. */
 void testRecursive()
 {
@@ -622,6 +635,7 @@ int main()
   testInterface();
   testRunGraphEdit();
   testGone();
+  testSave();
   testRecursive();
   testStamps();
   testCollect();
