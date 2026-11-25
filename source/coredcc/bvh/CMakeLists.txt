@@ -1,5 +1,7 @@
 coredcc_library(coredcc_bvh
   SOURCES
+    any_source.cc
+    bindings.cc
     build.cc
     kernels.cc
   DEPS

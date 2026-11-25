@@ -14,6 +14,7 @@
 #include "coredcc/api/resolve.h"
 #include "coredcc/api/struct.h"
 #include "coredcc/base/assert.h"
+#include "coredcc/bvh/any_source.h"
 #include "coredcc/bvh/geometry_bvh.h"
 #include "coredcc/command/block_commands.h"
 #include "coredcc/command/block_edits.h"
@@ -129,6 +130,7 @@ int main()
     ray.origin = {0.25, 0.25, -1};
     ray.dir = {0, 0, 1};
     test_assert(bvh.rayClosest(ray) && bvh.rayAny(ray) && bvh.nearest(ray.origin, 2));
+    test_assert(!coredcc::AnyBvh().build(rt, coredcc::AnyBvhSource()).ok());
     test_assert(rt.validateAll().ok());
   }
   return test_end();
