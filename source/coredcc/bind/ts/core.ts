@@ -378,3 +378,13 @@ export function sync<T>(slot: string, r: T): T {
   }
   return r
 }
+
+/** Runs a slot's body. */
+export function inSlot<T>(fn: () => T): T {
+  scriptSlots.depth++
+  try {
+    return fn()
+  } finally {
+    scriptSlots.depth--
+  }
+}

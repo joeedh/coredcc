@@ -30,9 +30,9 @@ import {
   check,
   checkCtx,
   errorStatus,
+  inSlot,
   isFatal,
   ScriptError,
-  scriptSlots,
   statusOf,
   sync,
   take,
@@ -216,19 +216,6 @@ export interface CommandSpec {
   inputs?: Record<string, Writable>
   outputs?: Record<string, Writable>
 }
-
-/** Runs a slot's body. */
-function inSlot<T>(fn: () => T): T {
-  scriptSlots.depth++
-  try {
-    return fn()
-  } finally {
-    scriptSlots.depth--
-  }
-}
-
-/** For scene.ts; not for scripts. */
-export const internal = {take, check, checkCtx, withValue, statusOf, sync, inSlot}
 
 /** What C++ calls: the user's command with defaults for the slots it left out. */
 class Adapter {

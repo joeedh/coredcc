@@ -17,7 +17,7 @@ import type {TransformState as BoundState} from 'coredcc-gen/coredcc/TransformSt
 import type {PickOptions as BoundPickOptions} from 'coredcc-gen/coredcc/PickOptions'
 import type {View as BoundView} from 'coredcc-gen/coredcc/View'
 import type {ViewMath} from 'coredcc-gen/coredcc/ViewMath'
-import {internal, Ref, toJs, type Writable} from './index'
+import {check, checkCtx, inSlot, statusOf, sync, take, withValue, Ref, toJs, type Writable} from './core.ts'
 
 /* ---- numbers ---- */
 
@@ -130,8 +130,8 @@ class ModelAdapter {
   constructor(private spec: TransformTypeSpec) {}
 
   evaluate(ctx: EvalCtx, parent: BoundState): BoundState {
-    return internal.inSlot(() => {
-      const s = internal.sync('evaluate', this.spec.evaluate(channelsOf(ctx), stateOf(parent)))
+    return inSlot(() => {
+      const s = sync('evaluate', this.spec.evaluate(channelsOf(ctx), stateOf(parent)))
       if (typeof s !== 'object' || s === null) throw new TypeError('evaluate returned no state')
       const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
       fill('world', this.result.world, s.world ?? identity, 16)
@@ -154,14 +154,14 @@ class ModelAdapter {
     )
   }
   private solve(slot: string, out: ChannelBlock, fn: () => ArrayLike<number>): Status | undefined {
-    return internal.inSlot(() => {
+    return inSlot(() => {
       try {
-        const values = internal.sync(slot, fn())
+        const values = sync(slot, fn())
         if (typeof values !== 'object' || values === null) throw new TypeError(`${slot} returned no channels`)
         putChannels(slot, out, values)
         return undefined
       } catch (e) {
-        return internal.statusOf(StatusCode.Internal, e)
+        return statusOf(StatusCode.Internal, e)
       }
     })
   }
@@ -169,7 +169,7 @@ class ModelAdapter {
 
 /** Registers a transform type, for as long as the document is open. */
 export function defineTransformType(ctx: Context, spec: TransformTypeSpec) {
-  internal.checkCtx(ctx)
+  checkCtx(ctx)
   for (const slot of ['evaluate', 'setWorld', 'applyDelta'] as const) {
     if (typeof spec[slot] !== 'function' && !(slot === 'applyDelta' && spec[slot] === undefined)) {
       throw new TypeError(`defineTransformType: ${spec.id}: ${slot} must be a function`)
@@ -180,14 +180,14 @@ export function defineTransformType(ctx: Context, spec: TransformTypeSpec) {
   const type = cd.newTransformType(spec.id)
   if (!type) throw new Error(`defineTransformType: no type for ${spec.id}`)
   try {
-    if (spec.uiName !== undefined) internal.check(cd.transformTypeUiName(type, spec.uiName))
+    if (spec.uiName !== undefined) check(cd.transformTypeUiName(type, spec.uiName))
     for (const [name, v] of Object.entries(spec.channels)) {
       const distance = spec.distances?.includes(name) ?? false
-      internal.withValue(undefined, v, (pv) => internal.check(cd.transformChannel(type, name, pv, distance)))
+      withValue(undefined, v, (pv) => check(cd.transformChannel(type, name, pv, distance)))
     }
     const slots = spec.applyDelta ? 'evaluate setWorld applyDelta' : 'evaluate setWorld'
     const handle = getBindingBackend().foreignHandle(new ModelAdapter(spec))
-    internal.check(cd.registerForeignTransformType(ctx, type, handle, slots))
+    check(cd.registerForeignTransformType(ctx, type, handle, slots))
   } finally {
     type[Symbol.dispose]()
   }
@@ -197,23 +197,23 @@ export function defineTransformType(ctx: Context, spec: TransformTypeSpec) {
 
 /** Makes a scene, undoably. It doesn't become the document's. */
 export function newScene(ctx: Context, name: string): Ref {
-  return internal.take(cd.newScene(ctx, name), (v) => toJs(ctx, v) as Ref)
+  return take(cd.newScene(ctx, name), (v) => toJs(ctx, v) as Ref)
 }
 /** The scene that commands and the functions below work on; null for none. Not undoable. */
 export function setScene(ctx: Context, scene: Ref | null) {
-  internal.check(cd.setScene(ctx, scene === null ? '' : scene.text))
+  check(cd.setScene(ctx, scene === null ? '' : scene.text))
 }
 /** For the `objects` input of commands. */
 export function blockIds(ctx: Context, blocks: readonly Ref[]): string {
-  return blocks.map((b) => internal.take(cd.blockIdText(ctx, b.text), (s) => s)).join(';')
+  return blocks.map((b) => take(cd.blockIdText(ctx, b.text), (s) => s)).join(';')
 }
 /** Computes the states of the scene's objects: `evaluated` has them. */
 export function evaluateScene(ctx: Context) {
-  internal.check(cd.evaluateScene(ctx))
+  check(cd.evaluateScene(ctx))
 }
 /** Where an object is now. */
 export function worldMatrix(ctx: Context, object: Ref): number[] {
-  return internal.take(cd.worldMatrix(ctx, object.text), (m) => read(m, 16))
+  return take(cd.worldMatrix(ctx, object.text), (m) => read(m, 16))
 }
 
 /* ---- picking ---- */
@@ -310,7 +310,7 @@ function withPickOptions<R>(spec: PickOptions, fn: (o: BoundPickOptions) => R): 
  * Evaluates the scene. Hidden and unselectable objects can't be picked. */
 export function pick(ctx: Context, view: ViewSpec, x: number, y: number, options: PickOptions = {}): PickedObject[] {
   const picked = withView(view, (v) => withPickOptions(options, (o) => cd.pick(ctx, v, x, y, o)))
-  return internal.take(picked, (list) => {
+  return take(picked, (list) => {
     const out: PickedObject[] = []
     for (let i = 0; i < list.size(); i++) {
       const p = list.at(i)
@@ -352,7 +352,7 @@ function withViewMath<R>(spec: ViewSpec, fn: (m: ViewMath) => R): R {
   return withView(spec, (v) => {
     const m = getBindingBackend().construct('coredcc::ViewMath') as ViewMath
     try {
-      internal.check(m.set(v))
+      check(m.set(v))
       return fn(m)
     } finally {
       m[Symbol.dispose]()
@@ -406,12 +406,12 @@ export class Bvh {
   private bvh = getBindingBackend().construct('coredcc::AnyBvh') as AnyBvh
 
   build(bounds: ArrayLike<number>) {
-    internal.check(this.bvh.buildFrom(Array.from(bounds)))
+    check(this.bvh.buildFrom(Array.from(bounds)))
   }
   /** New bounds: of all primitives, or of `primitives`, in that order. */
   refit(bounds: ArrayLike<number>, primitives?: ArrayLike<number>) {
     const b = Array.from(bounds)
-    internal.check(
+    check(
       primitives === undefined ? this.bvh.refitFrom(b) : this.bvh.refitSome(Array.from(primitives), b)
     )
   }
