@@ -5,6 +5,9 @@
 #include "coredcc/base/iface/registry.h"
 #include "coredcc/lib/pin.h"
 
+#include <algorithm>
+#include <utility>
+
 #if defined(_MSC_VER) && !defined(__clang__)
 #include <intrin.h>
 #endif
@@ -19,6 +22,7 @@ namespace {
 
 const InterfaceId kTransformableId = InterfaceId::of(Transformable::ifaceName);
 const InterfaceId kSpatialId = InterfaceId::of(Spatial::ifaceName);
+const InterfaceId kInvalidationId = InterfaceId::of(Invalidation::ifaceName);
 
 /* The record, or null unless it is Live. */
 const Datablock *live(const Library &lib, BlockHandle h)
@@ -133,6 +137,7 @@ int SceneEvaluator::typeFor(const Library &lib, TypeId type)
   t.hasQuery = t.provider && t.provider.hasQueryInterface();
   t.transformable = lib.runtime().ifaces().find(type, kTransformableId);
   t.spatial = lib.runtime().ifaces().find(type, kSpatialId);
+  t.invalidation = lib.runtime().ifaces().find(type, kInvalidationId) != nullptr;
   types_.append(t);
   return int(types_.size()) - 1;
 }
@@ -160,6 +165,7 @@ SceneMember SceneEvaluator::memberFor(const Library &lib,
     if (!takeError(rt, ignored)) {
       m.parentId = info.parent;
       m.dataId = info.data;
+      m.transformType = info.transformType;
     }
   }
   m.data = liveBlock(lib, m.dataId, before ? before->data : BlockHandle());
@@ -213,10 +219,128 @@ void SceneEvaluator::lookUp(const Scene &scene, const Library &lib)
   sortByParent();
   hints_.clear();
   hints_.resize(members_.size());
+  keepBoxes(lib);
+  lookups_++;
+}
+
+/* A block has bounds that are kept if its type implements Invalidation and nothing stands in for its
+ * Spatial. */
+void SceneEvaluator::keepBoxes(const Library &lib)
+{
+  boxOf_.clear();
+  boxes_.clear();
+  for (SceneMember &m : members_) {
+    const bool own = m.dataSpatial == CapMode::None;
+    const BlockHandle h = own ? m.handle : m.data;
+    const int type = own ? m.type : m.dataType;
+    if ((own ? m.spatial : m.dataSpatial) != CapMode::Table || !types_[type].invalidation) {
+      continue;
+    }
+    const BlockId id = lib.get(h)->id();
+    if (const int *known = boxOf_.lookup_ptr(id)) {
+      m.box = *known;
+      continue;
+    }
+    m.box = int(boxes_.size());
+    boxOf_.add(id, m.box);
+    boxes_.append(KeptBox());
+  }
+}
+
+void SceneEvaluator::forgetBoxes()
+{
+  for (KeptBox &b : boxes_) {
+    b.valid = false;
+  }
+}
+
+/* A change while it is asked counts: it is asked again next time. */
+Box3d SceneEvaluator::boundsOf(Runtime &rt, const SceneMember &m, Spatial &sp, Status &foreign)
+{
+  if (m.box >= 0 && boxes_[m.box].valid) {
+    return boxes_[m.box].box;
+  }
+  if (m.box >= 0) {
+    boxes_[m.box].valid = true;
+  }
+  Box3d box = sp.localBounds();
+  const bool failed = takeError(rt, foreign);
+  if (failed || !box.allFinite()) {
+    box = Box3d();
+  }
+  if (m.box >= 0) {
+    boxes_[m.box].box = box;
+    boxes_[m.box].valid = boxes_[m.box].valid && !failed;
+  }
+  return box;
+}
+
+void SceneEvaluator::sortByDepth()
+{
+  for (int i : order_) {
+    SceneMember &m = members_[i];
+    m.depth = m.parent < 0 || cyclic_[i] ? 0 : members_[m.parent].depth + 1;
+  }
+  std::stable_sort(order_.data(), order_.data() + order_.size(), [this](int a, int b) {
+    return members_[a].depth < members_[b].depth;
+  });
+  byDepth_ = true;
+}
+
+const Vector<BlockHandle> &SceneEvaluator::recorded(const Library &lib) const
+{
+  if (recordedEpoch_ != lib.epoch() || recordedVersion_ != changes.version) {
+    recorded_.clear();
+    const EvaluatedStore &s = front();
+    for (int i = 0; s.index && i < int(s.index->handles().size()); i++) {
+      if (lib.get(s.index->handles()[i])) {
+        recorded_.append(s.index->handles()[i]);
+      }
+    }
+    recordedEpoch_ = lib.epoch();
+    recordedVersion_ = changes.version;
+  }
+  return recorded_;
+}
+
+std::span<const BlockHandle> SceneEvaluator::children(BlockHandle h) const
+{
+  const EvaluatedStore &s = front();
+  const int n = int(s.objects.size());
+  if (!s.index) {
+    return {};
+  }
+  if (childrenOf_ != frontLookups_) {
+    firstChild_.clear();
+    firstChild_.resize(n + 2);
+    for (int &at : firstChild_) {
+      at = 0;
+    }
+    const auto place = [n](const ObjectEval &e) { return e.parent < 0 ? n : e.parent; };
+    for (const ObjectEval &e : s.objects) {
+      firstChild_[place(e) + 1]++;
+    }
+    for (int i = 0; i <= n; i++) {
+      firstChild_[i + 1] += firstChild_[i];
+    }
+    children_.resize(n);
+    Vector<int> next = firstChild_;
+    for (int i = 0; i < n; i++) {
+      children_[next[place(s.objects[i])]++] = s.index->handles()[i];
+    }
+    childrenOf_ = frontLookups_;
+  }
+  const int at = h ? s.index->find(h) : n;
+  if (at < 0) {
+    return {};
+  }
+  return std::span<const BlockHandle>(children_.data() + firstChild_[at],
+                                      size_t(firstChild_[at + 1] - firstChild_[at]));
 }
 
 void SceneEvaluator::sortByParent()
 {
+  byDepth_ = false;
   const int n = int(members_.size());
   enum : uint8_t { Unseen, OnPath, Sorted };
   Vector<uint8_t> seen;
@@ -341,9 +465,23 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
   const TransformType *lastType = nullptr;
   ObjectInfo info;
   ObjectEval e;
+  const bool batching = types.hasEvaluateMany();
+  if (batching && !byDepth_) {
+    sortByDepth();
+  }
+  if (batching) {
+    batch_.resize(n);
+  }
+  int levelEnd = 0;
   for (int k = 0; k < n; k++) {
     const int i = order_[k];
     const SceneMember &m = members_[i];
+    if (batching && k == levelEnd) {
+      while (levelEnd < n && members_[order_[levelEnd]].depth == m.depth) {
+        levelEnd++;
+      }
+      evaluateLevel(lib, k, levelEnd, provider, time, differs ? out.objects : old.objects, foreign);
+    }
     if (k + kPrefetchAhead < n) {
       for (uintptr_t at : hints_[order_[k + kPrefetchAhead]].at) {
         for (int line = 0; line < 3; line++) {
@@ -363,19 +501,34 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
                                    differs ? out.objects[m.parent].state :
                                              old.objects[m.parent].state;
     e.member = m.member;
-    info.parent = info.data = BlockId();
-    const auto tr = get<Transformable>(lib, m.transformable, t.transformable, m.handle, data);
+    e.parent = cyclic_[i] ? -1 : m.parent;
+    e.data = m.data;
+    info = ObjectInfo();
+    const bool batched = batching && batch_[i].done;
+    const auto tr = batched ? Transformable() :
+                              get<Transformable>(
+                                  lib, m.transformable, t.transformable, m.handle, data);
     bool failed = takeError(rt, foreign);
-    if (tr && !failed) {
+    if (batched) {
+      info = batch_[i].info;
+    }
+    else if (tr && !failed) {
       tr.read(info, scratch_);
       failed = takeError(rt, foreign);
+      members_[i].transformType = info.transformType;
     }
+    e.flags = info.flags;
     if (failed) {
       e.status = EvalStatus::ModelFailed;
       e.state = parent;
     }
     else if (info.parent != m.parentId || info.data != m.dataId) {
       return Pass::Stale;
+    }
+    else if (batched) {
+      e.state = batch_[i].state;
+      e.status = batch_[i].status == EvalStatus::Ok && cyclic_[i] ? EvalStatus::Cycle :
+                                                                    batch_[i].status;
     }
     else if (!tr) {
       e.status = EvalStatus::NoTransform;
@@ -408,8 +561,7 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
       sp = get<Spatial>(lib, m.spatial, t.spatial, m.handle, data);
     }
     if (!takeError(rt, foreign) && sp) {
-      const Box3d box = sp.localBounds();
-      e.localBounds = !takeError(rt, foreign) && box.allFinite() ? box : Box3d();
+      e.localBounds = boundsOf(rt, m, sp, foreign);
     }
     e.bounds = transformBox(e.localBounds, static_cast<const double *>(e.dataWorld()));
     if (!e.bounds.allFinite()) {
@@ -441,7 +593,23 @@ Status SceneEvaluator::run(const Scene &scene, const Library &lib, bool &changed
 {
   EvaluationScope scope(lib.runtime());
   const LookupKey key = keyOf(lib);
+  if (!changeListener_.connected()) {
+    changeListener_ = lib.runtime().ext<ChangeBus>().addChangeListener([this](const BusChange &c) {
+      constexpr ChangeAspects kBounds =
+          ChangeAspects(InvalidateKinds::Topology) | ChangeAspects(InvalidateKinds::Positions);
+      if (!c.owner) {
+        forgetBoxes();
+      }
+      else if (c.owner->kind == OwnerKey::Kind::Block && (c.aspects & kBounds) != 0) {
+        if (const int *box = boxOf_.lookup_ptr(c.owner->block)) {
+          boxes_[*box].valid = false;
+        }
+      }
+    });
+    forgetBoxes();
+  }
   if (!valid_ || key != key_) {
+    forgetBoxes();
     counters.revalidations++;
     if (key.tables != key_.tables) {
       types_.clear();
@@ -464,6 +632,7 @@ Status SceneEvaluator::run(const Scene &scene, const Library &lib, bool &changed
         changes.all = stores_[front_].index != index_;
         std::swap(changes.places, differing_);
         front_ = 1 - front_;
+        frontLookups_ = lookups_;
       }
       return changed || !bvh.valid() ?
                  bvh.update(stores_[front_], lib.runtime().ext<SceneSettings>().bvh) :
@@ -480,8 +649,11 @@ Status SceneEvaluator::run(const Scene &scene, const Library &lib, bool &changed
 
 } // namespace detail
 
-Status evaluateScene(Context &ctx, BlockHandle h)
+Status evaluateScene(Context &ctx, BlockHandle h, EvaluateResult *result)
 {
+  if (result) {
+    *result = EvaluateResult();
+  }
   Library *lib = ctx.library();
   if (!lib) {
     return Status::error(StatusCode::FailedPrecondition, "the Context has no Library");
@@ -507,18 +679,21 @@ Status evaluateScene(Context &ctx, BlockHandle h)
     lib->beginNoCollect();
     scene->evaluator_->counters.evaluations++;
     status = scene->evaluator_->run(*scene, *lib, changed, foreign);
-    scene->evaluator_->counters.completed += status.ok() ? 1 : 0;
     lib->endNoCollect();
   }
   if (changed) {
     rt.ext<ChangeBus>().notify(detail::evaluatedOwner(rt));
   }
+  if (result) {
+    result->done = status.ok();
+    result->changed = changed;
+  }
   return status.ok() ? foreign : status;
 }
 
-Status evaluateScene(Context &ctx)
+Status evaluateScene(Context &ctx, EvaluateResult *result)
 {
-  return evaluateScene(ctx, ctx.scene());
+  return evaluateScene(ctx, ctx.scene(), result);
 }
 
 } // namespace coredcc

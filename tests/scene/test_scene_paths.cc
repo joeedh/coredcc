@@ -213,6 +213,9 @@ void testEvaluated()
   bus.flush();
   int heard = 0;
   ScopedConnection l = bus.addListener([&](const OwnerKey *k) {
+    if (*k == OwnerKey::ofBlock(d.idOf(shape))) {
+      return;
+    }
     heard++;
     test_assert(*k == d.rt.ext<ApiRegistry>().runtimeOwner(kEvaluatedOwner).owner);
     test_assert(!d.rt.evaluating());
@@ -239,14 +242,14 @@ void testEvaluated()
   heard = 0;
   d.evaluate();
   test_assert(heard == 1 && d.isAt(b, 0));
-  /* Another parent that changes nothing. */
+  /* Another parent that moves nothing: which one it is is a result too. */
   heard = 0;
   d.setParent(b, d.object("still"));
   d.evaluate();
   test_assert(heard == 1); /* one more object */
   d.setParent(b, a);
   d.evaluate();
-  test_assert(heard == 1 && d.sc().counters().rebuilds > 2);
+  test_assert(heard == 2 && d.sc().counters().rebuilds > 2);
   bus.flush();
 
   /* Another scene, and none. */

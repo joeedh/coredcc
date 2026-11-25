@@ -295,7 +295,14 @@ struct Doc {
   {
     return *static_cast<Host *>(slot(h).data);
   }
+  /** For changing it: what it answers may be different, so its bounds are asked for again. */
   Shape &shape(BlockHandle h)
+  {
+    rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(idOf(h)));
+    return shapeRaw(h);
+  }
+  /** Nobody hears of it. */
+  Shape &shapeRaw(BlockHandle h)
   {
     return *static_cast<Shape *>(slot(h).data);
   }

@@ -162,6 +162,7 @@ Result<const TransformType *> TransformRegistry::add(TransformTypeInfo info,
   type->defs_ = std::move(info.channels);
   type->model_ = std::move(model);
   type->rt_ = &rt_;
+  evaluateMany_ = evaluateMany_ || type->model_.get().hasEvaluateMany();
   types_.append(type);
   byId_.add(id->value, type);
   rt_.ext<ChangeBus>().notifyAll(); /* objects that waited for it answer otherwise now */

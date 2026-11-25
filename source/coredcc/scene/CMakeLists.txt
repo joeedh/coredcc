@@ -4,8 +4,10 @@ coredcc_library(coredcc_scene
     bindings.cc
     builtins.cc
     channel_io.cc
+    duplicate_commands.cc
     evaluated.cc
     evaluator.cc
+    evaluator_batch.cc
     fbx.cc
     host_channels.cc
     kept_worlds.cc

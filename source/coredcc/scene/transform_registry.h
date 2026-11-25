@@ -123,6 +123,11 @@ class TransformRegistry {
   {
     return find(TypeId::of(name));
   }
+  /** Whether a type's model has evaluateMany. */
+  bool hasEvaluateMany() const
+  {
+    return evaluateMany_;
+  }
   /** In registration order. */
   int32_t count() const
   {
@@ -137,6 +142,7 @@ class TransformRegistry {
   Runtime &rt_;
   litestl::util::Vector<TransformType *> types_;
   litestl::util::Map<uint64_t, TransformType *> byId_;
+  bool evaluateMany_ = false;
 };
 
 /** The point that an object turns about, in world space (TransformModel's `pivot`). */

@@ -337,16 +337,21 @@ void Scene::pruneRemoved(Library &lib)
   }
 }
 
-Vector<BlockHandle> Scene::selected(const Library &lib) const
+const Vector<BlockHandle> &Scene::selected(const Library &lib) const
 {
-  Vector<BlockHandle> out;
-  for (const RefCell &c : selection_) {
-    const BlockHandle h = lib.resolveRef(c);
-    if (h && contains(lib, h)) {
-      out.append(h);
+  const uint64_t clients = lib.runtime().ext<ClientRegistry>().generation();
+  if (selectedEpoch_ != lib.epoch() || selectedGeneration_ != clients) {
+    selected_.clear();
+    for (const RefCell &c : selection_) {
+      const BlockHandle h = lib.resolveRef(c);
+      if (h && contains(lib, h)) {
+        selected_.append(h);
+      }
     }
+    selectedEpoch_ = lib.epoch();
+    selectedGeneration_ = clients;
   }
-  return out;
+  return selected_;
 }
 
 void Scene::setSelection(Library &lib, const Vector<BlockId> &ids)
@@ -375,10 +380,26 @@ bool Scene::evaluated(BlockHandle h, ObjectEval &out) const
   return e != nullptr;
 }
 
-Vector<BlockHandle> Scene::evaluatedObjects() const
+const Vector<BlockHandle> &Scene::evaluatedObjects() const
 {
   const detail::EvaluatedStore &s = evaluator_->front();
-  return s.index ? s.index->handles() : Vector<BlockHandle>();
+  return s.index ? s.index->handles() : evaluator_->none;
+}
+
+const Vector<BlockHandle> &Scene::recordedObjects(const Library &lib) const
+{
+  return evaluator_->recorded(lib);
+}
+
+std::span<const ObjectEval> Scene::results() const
+{
+  const detail::EvaluatedStore &s = evaluator_->front();
+  return std::span<const ObjectEval>(s.objects.data(), size_t(s.objects.size()));
+}
+
+std::span<const BlockHandle> Scene::children(BlockHandle h) const
+{
+  return evaluator_->children(h);
 }
 
 const Scene::Counters &Scene::counters() const
@@ -499,25 +520,19 @@ int64_t packed(BlockHandle h)
 CollectionAccessor collectionOf(bool selectedOnly)
 {
   using Handles = Vector<BlockHandle>;
-  const auto list = [selectedOnly](const PointerRef &p, Context &ctx) {
-    return selectedOnly ? self(p).selected(*ctx.library()) : Handles();
+  const auto list = [selectedOnly](const PointerRef &p, Context &ctx) -> const Handles & {
+    return selectedOnly ? self(p).selected(*ctx.library()) : self(p).objects(*ctx.library());
   };
   CollectionAccessor c;
   c.itemStruct = StructId::of(kSceneObjectStruct);
-  c.length = [selectedOnly, list](const PointerRef &p, Context &ctx) {
-    return !ctx.library() ? int64_t(0) :
-           selectedOnly   ? int64_t(list(p, ctx).size()) :
-                            int64_t(self(p).objects(*ctx.library()).size());
+  c.length = [list](const PointerRef &p, Context &ctx) {
+    return ctx.library() ? int64_t(list(p, ctx).size()) : int64_t(0);
   };
-  c.at = [selectedOnly, list](const PointerRef &p, Context &ctx, int64_t i) {
+  c.at = [list](const PointerRef &p, Context &ctx, int64_t i) {
     if (!ctx.library()) {
       return PointerRef();
     }
-    if (selectedOnly) {
-      const Handles l = list(p, ctx);
-      return i >= 0 && i < int64_t(l.size()) ? blockRoot(ctx, l[int(i)]) : PointerRef();
-    }
-    const Handles &l = self(p).objects(*ctx.library());
+    const Handles &l = list(p, ctx);
     return i >= 0 && i < int64_t(l.size()) ? blockRoot(ctx, l[int(i)]) : PointerRef();
   };
   c.lookup = [selectedOnly, list](const PointerRef &p, Context &ctx, const KeySegment &key) {
@@ -532,8 +547,7 @@ CollectionAccessor collectionOf(bool selectedOnly)
       const bool in = selectedOnly ? list(p, ctx).contains(h) : self(p).contains(*lib, h);
       return in ? blockRoot(ctx, h) : PointerRef();
     }
-    const Handles some = list(p, ctx);
-    for (BlockHandle h : selectedOnly ? some : self(p).objects(*lib)) {
+    for (BlockHandle h : list(p, ctx)) {
       if (lib->get(h)->name() == key.text) {
         return blockRoot(ctx, h);
       }

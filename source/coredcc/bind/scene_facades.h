@@ -34,6 +34,107 @@ StringResult blockIdText(Context &ctx, const string &block);
 /** coredcc::evaluateScene for the Context's scene. */
 Status evaluateScene(Context &ctx);
 
+/** Results of the last evaluation as flat arrays, for drawing. One row for each place in
+ * Scene::evaluatedObjects that was asked for. */
+struct SceneTable {
+  using Doubles = litestl::util::Vector<double>;
+  using Ints = litestl::util::Vector<int32_t>;
+
+  /* 16 for each, column by column: ObjectEval::dataWorld. */
+  Doubles matrixList;
+  /* Minimum and maximum, 6 for each, in the world. An empty box has a minimum above its maximum. */
+  Doubles boundsList;
+  /* EvalStatus, ObjectFlags, the parent's place or -1, and whether it is a member. */
+  Ints statusList, flagsList, parentList, memberList;
+  /* Scene::lastChanges. */
+  Ints changedList;
+  double changeVersion = 0.0;
+  bool changedAll = false;
+  /* How many places there are. */
+  int32_t placeCount = 0;
+
+  Doubles matrices() const
+  {
+    return matrixList;
+  }
+  Doubles bounds() const
+  {
+    return boundsList;
+  }
+  Ints status() const
+  {
+    return statusList;
+  }
+  Ints flags() const
+  {
+    return flagsList;
+  }
+  Ints parents() const
+  {
+    return parentList;
+  }
+  Ints members() const
+  {
+    return memberList;
+  }
+  Ints changed() const
+  {
+    return changedList;
+  }
+  double version() const
+  {
+    return changeVersion;
+  }
+  bool allChanged() const
+  {
+    return changedAll;
+  }
+  int32_t places() const
+  {
+    return placeCount;
+  }
+  static const litestl::binding::types::Struct<SceneTable> *defineBindings();
+};
+
+struct SceneTableResult {
+  Status status;
+  SceneTable value;
+  static const litestl::binding::types::Struct<SceneTableResult> *defineBindings();
+};
+
+/** The results at these places (OutOfRange if one isn't there), or `all` of them. Before the first
+ * evaluation there are none. */
+SceneTableResult sceneResults(Context &ctx,
+                              const litestl::util::Vector<int32_t> &places,
+                              bool all);
+
+/** Pointers to blocks, as text. */
+struct RefList {
+  litestl::util::Vector<string> refs;
+
+  int32_t size() const
+  {
+    return int32_t(refs.size());
+  }
+  /** "" out of range. */
+  string at(int32_t i) const
+  {
+    return i >= 0 && i < size() ? refs[i] : string();
+  }
+  static const litestl::binding::types::Struct<RefList> *defineBindings();
+};
+
+struct RefListResult {
+  Status status;
+  RefList value;
+  static const litestl::binding::types::Struct<RefListResult> *defineBindings();
+};
+
+/** The objects at these places, or at `all`. "" for one whose record is gone. */
+RefListResult sceneRefs(Context &ctx, const litestl::util::Vector<int32_t> &places, bool all);
+/** Scene::children; `object` "" for the roots. */
+RefListResult sceneChildren(Context &ctx, const string &object);
+
 struct MatrixResult {
   Status status;
   mat4d value;

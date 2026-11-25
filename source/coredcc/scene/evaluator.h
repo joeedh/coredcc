@@ -2,6 +2,7 @@
 
 /* Scene evaluation. Internal: P5's graph client replaces what run() does. */
 
+#include "coredcc/base/signal.h"
 #include "coredcc/lib/provider.h"
 #include "coredcc/scene/scene.h"
 
@@ -26,6 +27,8 @@ struct SceneBlockType {
   bool hasQuery = false;
   const IfaceTable *transformable = nullptr;
   const IfaceTable *spatial = nullptr;
+  /** It implements Invalidation: bounds are kept. */
+  bool invalidation = false;
 };
 
 /** What is looked up once for an object, and its place in the hierarchy. */
@@ -48,6 +51,26 @@ struct SceneMember {
   CapMode transformable = CapMode::None;
   CapMode spatial = CapMode::None;
   CapMode dataSpatial = CapMode::None;
+  /** Into boxes_, if the bounds of the block that has them are kept, or -1. */
+  int box = -1;
+  /** How many are above it; 0 on a cycle. */
+  int depth = 0;
+  /** The transform type it had last. */
+  TypeId transformType;
+};
+
+/** The bounds of a block, until it changes. */
+struct KeptBox {
+  Box3d box;
+  bool valid = false;
+};
+
+/** An object that is evaluated together with others of its type and level. */
+struct BatchItem {
+  bool done = false;
+  ObjectInfo info;
+  TransformState state;
+  EvalStatus status = EvalStatus::Ok;
 };
 
 /** Where an object's memory was in the last evaluation: its record, its data, its data block's
@@ -70,10 +93,14 @@ class SceneEvaluator {
   Scene::Counters counters;
   Scene::Changes changes;
   SceneBvh bvh;
+  const litestl::util::Vector<BlockHandle> none;
 
   /** Evaluates, and makes the results the last ones if they differ, with their BVH. Opens the EvaluationScope;
    * the no-collect is the caller's. The first foreign exception goes to `foreign`. */
   Status run(const Scene &scene, const Library &lib, bool &changed, Status &foreign);
+  /** Of the last results. */
+  std::span<const BlockHandle> children(BlockHandle h) const;
+  const litestl::util::Vector<BlockHandle> &recorded(const Library &lib) const;
 
   /** The last results. */
   const EvaluatedStore &front() const
@@ -93,6 +120,17 @@ class SceneEvaluator {
                          const TransformState &parent,
                          TransformState &out,
                          Status &foreign);
+  Box3d boundsOf(Runtime &rt, const SceneMember &m, Spatial &sp, Status &foreign);
+  void keepBoxes(const Library &lib);
+  void forgetBoxes();
+  /** Evaluates those of a level whose types have evaluateMany, in order_[from, to), into batch_. */
+  void evaluateLevel(const Library &lib,
+                     int from,
+                     int to,
+                     OverrideProvider *provider,
+                     double time,
+                     const litestl::util::Vector<ObjectEval> &results,
+                     Status &foreign);
   bool stillValid(const Scene &scene, const Library &lib) const;
   void lookUp(const Scene &scene, const Library &lib);
   /** `before` is what was found for it last time, if anything. */
@@ -102,14 +140,32 @@ class SceneEvaluator {
                         const SceneMember *before);
   int typeFor(const Library &lib, TypeId type);
   void sortByParent();
+  void sortByDepth();
 
   litestl::util::Vector<SceneBlockType, 4> types_;
   litestl::util::Vector<SceneMember> members_;
   litestl::util::Vector<PrefetchHint> hints_;
   /** The first ones are the scene's members. */
   int inScene_ = 0;
-  /** Parents before children. */
+  /** Parents before children. With batches, in the order of their depths. */
   litestl::util::Vector<int> order_;
+  bool byDepth_ = false;
+  litestl::util::Vector<BatchItem> batch_;
+  /** Blocks whose bounds are kept, by id: a change of one makes its box invalid. */
+  litestl::util::Map<BlockId, int> boxOf_;
+  litestl::util::Vector<KeptBox> boxes_;
+  ScopedConnection changeListener_;
+  /** Moves when members or parents may be others; and what it was for the last results. */
+  uint64_t lookups_ = 0;
+  uint64_t frontLookups_ = 0;
+  /** children(): the handles, and where those of each place begin; the roots are the last. */
+  mutable litestl::util::Vector<BlockHandle> children_;
+  mutable litestl::util::Vector<int> firstChild_;
+  mutable uint64_t childrenOf_ = ~uint64_t(0);
+  /** recorded(), at an epoch and a version. A loop over the paths asks for it at each step. */
+  mutable litestl::util::Vector<BlockHandle> recorded_;
+  mutable uint64_t recordedEpoch_ = 0;
+  mutable uint64_t recordedVersion_ = 0;
   /** 1 for the members of a cycle. */
   litestl::util::Vector<uint8_t> cyclic_;
   std::shared_ptr<const HandleIndex> index_;

@@ -5,6 +5,7 @@
 #include "coredcc/command/block_commands.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/scene/builtins.h"
+#include "coredcc/scene/solve.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/map.h"
@@ -36,12 +37,9 @@ PropertyDef objectsInput()
       .access(PropAccess::Optional | PropAccess::NotRemembered);
 }
 
-Result<Vector<BlockHandle>> objectsOf(Context &ctx)
+Result<Vector<BlockHandle>> blocksNamed(Context &ctx)
 {
-  Result<SceneOf> s = sceneOf(ctx);
-  if (!s.ok()) {
-    return s.status();
-  }
+  const Library &lib = *ctx.library();
   const litestl::util::string text = ctx.inputs()->get("objects")->asString();
   Result<Vector<BlockId>> ids = parseBlockIds(ctx.runtime(), text.c_str());
   if (!ids.ok()) {
@@ -51,15 +49,12 @@ Result<Vector<BlockHandle>> objectsOf(Context &ctx)
   Vector<BlockHandle> out;
   litestl::util::Map<BlockHandle, char> seen;
   for (const BlockId &id : *ids) {
-    const BlockHandle h = s->lib->find(id);
-    const Datablock *b = s->lib->get(h);
+    const BlockHandle h = lib.find(id);
+    const Datablock *b = lib.get(h);
     if (!b || b->state() != BlockState::Live) {
       return Status::error(
           StatusCode::NotFound,
           ("objects: there is no block " + formatBlockId(ctx.runtime(), id)).c_str());
-    }
-    if (!s->scene->contains(*s->lib, h)) {
-      return about(*s->lib, h, Status::error(StatusCode::FailedPrecondition, "isn't in the scene"));
     }
     if (!seen.lookup_ptr(h)) {
       seen.add(h, 0);
@@ -67,6 +62,24 @@ Result<Vector<BlockHandle>> objectsOf(Context &ctx)
     }
   }
   return out;
+}
+
+Result<Vector<BlockHandle>> objectsOf(Context &ctx)
+{
+  Result<SceneOf> s = sceneOf(ctx);
+  if (!s.ok()) {
+    return s.status();
+  }
+  Result<Vector<BlockHandle>> named = blocksNamed(ctx);
+  if (!named.ok()) {
+    return named;
+  }
+  for (BlockHandle h : *named) {
+    if (!s->scene->contains(*s->lib, h)) {
+      return about(*s->lib, h, Status::error(StatusCode::FailedPrecondition, "isn't in the scene"));
+    }
+  }
+  return named;
 }
 
 Result<Vector<BlockHandle>> targetObjects(Context &ctx)
@@ -282,7 +295,7 @@ struct NewScene {
 
 struct Link {
   HeldScene scene;
-  HistoryBlock object;
+  Vector<HistoryBlock> objects;
 
   Status canRun(Context &ctx) const
   {
@@ -290,27 +303,59 @@ struct Link {
     if (!s.ok()) {
       return s.status();
     }
+    Result<Vector<BlockHandle>> named = namedBlocks(ctx);
+    if (!named.ok()) {
+      return named.status();
+    }
+    for (BlockHandle h : *named) {
+      CDCC_TRY(readObject(*s->lib, h).status());
+    }
+    return Status();
+  }
+  /* What `object` or `objects` names: Live blocks. */
+  static Result<Vector<BlockHandle>> namedBlocks(Context &ctx)
+  {
     Result<BlockHandle> h = detail::blockOf(ctx, "object");
     if (!h.ok()) {
       return h.status();
     }
-    return *h ? readObject(*s->lib, *h).status() : failed("object: no such block");
+    Vector<BlockHandle> out;
+    if (ctx.inputs()->get("objects")->isNone()) {
+      if (!*h) {
+        return failed("object: no such block");
+      }
+      out.append(*h);
+      return out;
+    }
+    if (*h) {
+      return Status::error(StatusCode::InvalidArgument, "both object and objects are given");
+    }
+    Result<Vector<BlockHandle>> named = detail::blocksNamed(ctx);
+    return named.ok() && named->size() == 0 ? failed("objects: no object is named") : named;
   }
   Status exec(Context &ctx)
   {
     Result<SceneOf> s = detail::sceneOf(ctx);
-    const BlockHandle h = *detail::blockOf(ctx, "object");
+    const Vector<BlockHandle> named = *namedBlocks(ctx);
     s->scene->pruneRemoved(*s->lib);
-    CDCC_TRY(s->scene->add(*s->lib, h));
+    CDCC_TRY(s->scene->addMany(*s->lib, {named.data(), size_t(named.size())}));
     scene.block = HistoryBlock(*s->lib, s->handle);
-    object = HistoryBlock(*s->lib, h);
+    for (BlockHandle h : named) {
+      objects.append(HistoryBlock(*s->lib, h));
+    }
     scene.changed(ctx, kObjects);
     return Status();
   }
   void undo(Context &ctx)
   {
     Result<SceneOf> s = scene.get(ctx);
-    report(ctx, s.ok() ? s->scene->remove(*s->lib, object.id()).status() : s.status());
+    Vector<BlockId> ids;
+    for (const HistoryBlock &o : objects) {
+      ids.append(o.id());
+    }
+    report(ctx,
+           s.ok() ? s->scene->removeMany(*s->lib, {ids.data(), size_t(ids.size())}).status() :
+                    s.status());
     if (s.ok()) {
       scene.changed(ctx, kObjects);
     }
@@ -322,18 +367,22 @@ struct Link {
       return s.status();
     }
     s->scene->pruneRemoved(*s->lib);
-    CDCC_TRY(s->scene->add(*s->lib, object.get()));
+    Vector<BlockHandle> handles;
+    for (const HistoryBlock &o : objects) {
+      handles.append(o.get());
+    }
+    CDCC_TRY(s->scene->addMany(*s->lib, {handles.data(), size_t(handles.size())}));
     scene.changed(ctx, kObjects);
     return Status();
   }
   uint64_t memSize() const
   {
-    return sizeof(*this);
+    return sizeof(*this) + uint64_t(objects.size()) * sizeof(HistoryBlock);
   }
   void discard()
   {
     scene.block.release();
-    object.release();
+    objects.clear();
   }
   static lbt::Struct<Link> *defineBindings()
   {
@@ -606,10 +655,42 @@ struct AddObject {
   LibraryRef lib;
   CreatedBlocks created;
   BlockId object;
+  /* With `select`: the selection and the active object as they were. */
+  bool select = false;
+  Vector<BlockId> selected;
+  BlockId active;
 
   Status canRun(Context &ctx) const
   {
-    return memberOf(ctx, "parent").status();
+    CDCC_TRY(memberOf(ctx, "parent").status());
+    Result<BlockHandle> data = detail::blockOf(ctx, "data");
+    if (!data.ok() || !*data) {
+      return data.status();
+    }
+    const Datablock *b = ctx.library()->get(*data);
+    const BlockTypeRegistry::Entry *e =
+        ctx.runtime().ext<BlockTypeRegistry>().find(b->type());
+    return e && ctx.runtime().ext<ApiRegistry>().isA(e->info.dataStruct,
+                                                     StructId::of(kObjectDataStruct)) ?
+               Status() :
+               detail::about(*ctx.library(), *data, failed("can't be an object's data"));
+  }
+  /* Where it is to be, in the world. */
+  static mat4d targetOf(Context &ctx)
+  {
+    const PropValue location = *ctx.inputs()->get("location");
+    const PropValue rotation = *ctx.inputs()->get("rotation");
+    const PropValue scale = *ctx.inputs()->get("scale");
+    quatd q;
+    for (int i = 0; i < 4; i++) {
+      q[i] = rotation.component(i);
+    }
+    double3 t, f;
+    for (int i = 0; i < 3; i++) {
+      t[i] = location.component(i);
+      f[i] = scale.component(i);
+    }
+    return solve::affine(solve::Linear::of(q.normalized()).scaled(f), t);
   }
   /* The object's channels. */
   static Status place(Context &ctx, BlockHandle h, BlockHandle parent, double time)
@@ -628,15 +709,8 @@ struct AddObject {
     if (!r.ok()) {
       return r.status();
     }
-    const PropValue location = *ctx.inputs()->get("location");
-    mat4d target;
-    target.identity();
-    double *m = target;
-    for (int i = 0; i < 3; i++) {
-      m[12 + i] = location.component(i);
-    }
     Result<ChannelBlock> c = solveWorld(
-        *r->type, r->ctx(), target, parentState, SetWorldMode::Closest);
+        *r->type, r->ctx(), targetOf(ctx), parentState, SetWorldMode::Closest);
     return c.ok() ? writeTransform(ctx, h, *c) : c.status();
   }
   Status exec(Context &ctx)
@@ -652,6 +726,10 @@ struct AddObject {
     }
     scene.block = HistoryBlock(*l, s->handle);
     object = l->get(*h)->id();
+    if (const BlockHandle data = *detail::blockOf(ctx, "data")) {
+      RefCell &cell = static_cast<Object *>(l->get(*h)->clientData())->data.cell();
+      l->writeRef(cell, l->get(data)->id()).ignore();
+    }
     Status e = place(ctx, *h, *memberOf(ctx, "parent"), s->scene->time());
     if (e.ok()) {
       s->scene->pruneRemoved(*l);
@@ -664,7 +742,24 @@ struct AddObject {
     }
     created.add(*l, *h);
     scene.changed(ctx, kObjects);
+    select = ctx.inputs()->get("select")->asBool();
+    if (select) {
+      for (const RefCell &c : s->scene->selection()) {
+        selected.append(c.target);
+      }
+      active = s->scene->activeCell().target;
+      Vector<BlockId> one;
+      one.append(object);
+      chosen(ctx, *s, one, object);
+    }
     return ctx.outputs()->set("object", detail::pointerTo(*l, *h));
+  }
+  void chosen(Context &ctx, const SceneOf &s, const Vector<BlockId> &ids, const BlockId &id) const
+  {
+    s.scene->setSelection(*s.lib, ids);
+    report(ctx, s.lib->writeRef(s.scene->activeCell(), id));
+    scene.changed(ctx, "selectedObjects");
+    scene.changed(ctx, "activeObject");
   }
   void undo(Context &ctx)
   {
@@ -676,6 +771,9 @@ struct AddObject {
         created.undo(*l); /* only the scene is gone */
       }
       return;
+    }
+    if (select) {
+      chosen(ctx, *s, selected, active);
     }
     report(ctx, s->scene->remove(*s->lib, object).status());
     created.undo(*s->lib);
@@ -694,11 +792,16 @@ struct AddObject {
       return e;
     }
     scene.changed(ctx, kObjects);
+    if (select) {
+      Vector<BlockId> one;
+      one.append(object);
+      chosen(ctx, *s, one, object);
+    }
     return Status();
   }
   uint64_t memSize() const
   {
-    return sizeof(*this) + created.memSize();
+    return sizeof(*this) + created.memSize() + uint64_t(selected.size()) * sizeof(BlockId);
   }
   void discard()
   {
@@ -734,7 +837,7 @@ Status detail::registerMembershipCommands(Runtime &rt)
   CDCC_TRY(addCommandOnce<NewScene>(rt, std::move(scene)));
 
   CommandDef link(kLinkCommand);
-  link.uiName("Link to Scene").input(blockInputDef("object"));
+  link.uiName("Link to Scene").input(blockInputDef("object")).input(detail::objectsInput());
   CDCC_TRY(addCommandOnce<Link>(rt, std::move(link)));
 
   CommandDef unlink(kUnlinkCommand);
@@ -768,9 +871,14 @@ Status detail::registerMembershipCommands(Runtime &rt)
       .input(PropertyDef::vecProp("location", 3)
                  .subtype(PropSubtype::Distance)
                  .unit(UnitFamily::Length))
+      .input(PropertyDef::quatProp("rotation").defaultValue(PropValue::ofQuat(0, 0, 0, 1)))
+      .input(PropertyDef::vecProp("scale", 3).defaultValue(PropValue::ofVec3(1, 1, 1)))
       .input(blockInputDef("parent"))
+      .input(blockInputDef("data"))
+      .input(PropertyDef::boolProp("select"))
       .output(blockInputDef("object"));
-  return addCommandOnce<AddObject>(rt, std::move(add));
+  CDCC_TRY(addCommandOnce<AddObject>(rt, std::move(add)));
+  return registerDuplicateCommands(rt);
 }
 
 Status registerSceneCommands(Runtime &rt)

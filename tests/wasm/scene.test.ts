@@ -350,6 +350,114 @@ const suite = () => {
     assert.equal(cdcc.get(ctx, 'scene.units.fps'), 24)
   })
 
+  test('results, and what changed', () => {
+    const a = add('name="a" location=(1, 0, 0)')
+    const b = add(`name="b" parent="${a.text}" location=(3, 0, 0)`)
+    assert.equal(cdcc.sceneResults(ctx).places, 0)
+    cdcc.evaluateScene(ctx)
+    const all = cdcc.sceneResults(ctx)
+    assert.equal(all.places, 2)
+    assert.deepEqual(all.status, [0, 0])
+    assert.deepEqual(all.members, [1, 1])
+    const objects = cdcc.sceneObjects(ctx).map((o) => o!.text)
+    assert.deepEqual([...objects].sort(), [a.text, b.text].sort())
+    const i = objects.indexOf(b.text)
+    near(all.matrices.slice(i * 16, i * 16 + 16), at(3, 0, 0))
+    assert.deepEqual([all.parents[i], all.parents[1 - i]], [1 - i, -1])
+    assert.equal(all.bounds.length, 12)
+    assert.ok(all.bounds[0] > all.bounds[3]) /* nothing to bound */
+    assert.deepEqual(cdcc.children(ctx, a).map((o) => o.text), [b.text])
+    assert.deepEqual(cdcc.children(ctx, null).map((o) => o.text), [a.text])
+    assert.deepEqual(cdcc.children(ctx, b), [])
+
+    /* Placed, undoably. */
+    assert.deepEqual(cdcc.setWorld(ctx, [b], at(5, 6, 7)), {approximate: 0, skipped: 0})
+    assert.throws(() => cdcc.setWorld(ctx, [a, b], at(0, 0, 0)), /32 numbers, not 16/)
+    cdcc.evaluateScene(ctx)
+    const next = cdcc.sceneResults(ctx, [i])
+    assert.equal(next.version, all.version + 1)
+    assert.deepEqual([next.changed, next.allChanged, next.places], [[i], false, 2])
+    near(next.matrices, at(5, 6, 7))
+    assert.deepEqual(cdcc.sceneObjects(ctx, [i]).map((o) => o!.text), [b.text])
+    assert.throws(() => cdcc.sceneResults(ctx, [2]), fails(StatusCode.OutOfRange, /no such place/))
+    cdcc.setWorld(ctx, [b, a], [...at(1, 2, 3), ...at(0, 0, 1)], true)
+    near(where(a), [0, 0, 1])
+    near(where(b), [1, 2, 3])
+    cdcc.undo(ctx)
+    near(where(b), [5, 6, 7])
+  })
+
+  test('a transform type with more', () => {
+    let many = 0
+    let kept: cdcc.ChannelEntries | undefined
+    cdcc.defineTransformType(ctx, {
+      id: 'ts.more',
+      version: 2,
+      channels: {
+        axis: {default: 'Y', items: [{key: 'X', value: 0}, {key: 'Y', value: 1, uiName: 'Up'}]},
+        offset: {
+          default: cdcc.float(2),
+          uiName: 'Offset',
+          description: 'How far',
+          subtype: 'Distance',
+          unit: 'Length',
+          displayUnit: 'cm',
+          hardMin: 0,
+          softMax: 10,
+          precision: 2,
+        },
+        turn: cdcc.quat(0, 0, 0, 1),
+      },
+      distances: ['offset'],
+      evaluate({channels: [axis, d]}, parent) {
+        return {world: mul(parent.world, at(axis === 0 ? d : 0, axis === 1 ? d : 0, 0))}
+      },
+      setWorld: ({channels}) => channels,
+      evaluateMany({count, channels, parents}) {
+        many++
+        const out: number[] = []
+        for (let i = 0; i < count; i++) {
+          const [axis, d] = channels.slice(i * 6)
+          const parent = parents.slice(i * 23, i * 23 + 16)
+          out.push(...mul(parent, at(axis === 0 ? d : 0, axis === 1 ? d : 0, 0)), 0, 0, 0, 1, 1, 1, 1)
+        }
+        return out
+      },
+      pivot: (_, parent) => [parent.world[12], 7, 0],
+      upgrade(_, channels) {
+        kept = channels
+      },
+    })
+    const o = add('name="o" location=(0, 2, 0)')
+    const only = cdcc.blockIds(ctx, [o])
+    cdcc.invoke(ctx, `core.object.setTransformType(type="ts.more" objects="${only}")`)
+    const path = 'scene.objects["o"].transform'
+    cdcc.set(ctx, `${path}.offset`, 4)
+    cdcc.set(ctx, `${path}.axis`, 'X')
+    cdcc.evaluateScene(ctx)
+    assert.equal(many, 1)
+    near(cdcc.sceneResults(ctx).matrices, at(4, 0, 0))
+    near(where(o), [4, 0, 0])
+    assert.deepEqual(cdcc.get(ctx, `${path}.turn`), [0, 0, 0, 1])
+    const meta = cdcc.meta(ctx, `${path}.offset`)
+    assert.equal(meta.uiName, 'Offset')
+    assert.equal(meta.subtype, 'Distance')
+    assert.equal(meta.unit, 'Length')
+    assert.equal(cdcc.meta(ctx, `${path}.axis`).items![1].uiName, 'Up')
+    assert.equal(kept, undefined) /* nothing is old */
+
+    const bad = (channels: TransformTypeSpec['channels'], re: RegExp | ((e: unknown) => boolean)) =>
+      assert.throws(() => cdcc.defineTransformType(ctx, {...polar, id: 'ts.bad', distances: [], channels}), re)
+    bad({x: {default: 1, items: [{key: 'A', value: 1}]}}, /default is a key/)
+    bad({x: {default: 'B', items: [{key: 'A', value: 1}]}}, fails(StatusCode.InvalidArgument, /no item 'B'/))
+    bad({x: {default: 1.5, subtype: 'Bogus'}}, fails(StatusCode.InvalidArgument, /subtype 'Bogus'/))
+    bad({x: {default: 1.5, hardMin: 2, hardMax: 1}}, fails(StatusCode.InvalidArgument, /./))
+    assert.throws(
+      () => cdcc.defineTransformType(ctx, {...polar, id: 'ts.bad', pivot: 1 as never}),
+      /pivot must be a function/
+    )
+  })
+
   test('a Bvh', () => {
     /* Unit boxes at whole numbers along x, and one that has no bounds. */
     const count = 1000

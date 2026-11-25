@@ -34,7 +34,7 @@ class StateCache;
 
 /** `name`. A new scene; it doesn't become the Context's. Outputs `scene`. */
 inline constexpr const char *kNewSceneCommand = "core.scene.new";
-/** `object`: adds it at the end. */
+/** `object`, or `objects`: adds them at the end. */
 inline constexpr const char *kLinkCommand = "core.scene.link";
 /** Removes `objects`. Undo puts each behind the one it was behind. Outputs `count`. */
 inline constexpr const char *kUnlinkCommand = "core.scene.unlink";
@@ -44,9 +44,20 @@ inline constexpr const char *kSetActiveCommand = "core.scene.setActive";
  * with neither selects nothing. Unselectable objects are left out, and for ALL hidden ones too.
  * Outputs `skipped`: how many of those that were named were left out. */
 inline constexpr const char *kSelectCommand = "core.scene.select";
-/** `type` (a transform type's name), `name`, `location` (in the world) and `parent`, which must
- * be in the scene. Outputs `object`. */
+/** `type` (a transform type's name), `name`, `location`, `rotation` (a quaternion) and `scale` (in the
+ * world, as well as the type can), `parent`, which must be in the scene, and `data`. With `select`, it is
+ * what is selected, and active. Outputs `object`. */
 inline constexpr const char *kAddObjectCommand = "core.object.add";
+/** Copies of `objects` where they are, in the scene, at the end. The copies' parents are copies if those
+ * are copied too. `children`: with the members below them. `linkData`: they have the same data blocks;
+ * otherwise copies of them. `select`: the copies are selected instead, and the active object's copy is
+ * active. Outputs `objects` (the copies, as text, in order) and `count`. To drag them, it is followed by
+ * core.object.dragDelta. */
+inline constexpr const char *kDuplicateObjectsCommand = "core.object.duplicate";
+/** A copy of `scene` (null for the Context's), a GC root, under `name`, or its own if that is empty.
+ * `objects`: with copies of its members; otherwise the copy has the same ones. `linkData`: as above. It
+ * doesn't become the Context's. Outputs `scene`. */
+inline constexpr const char *kDuplicateSceneCommand = "core.scene.duplicate";
 
 /* Transforms of `objects` (transform_commands.cc). With `keepWorld`, they stay where they are:
  * exactly, or as well as their type can, which the output `approximate` counts. So do the objects
@@ -275,7 +286,9 @@ struct SceneOf {
 Result<SceneOf> sceneOf(Context &ctx);
 /** The input `objects`. */
 PropertyDef objectsInput();
-/** The objects it names. */
+/** The Live blocks it names, each once. */
+Result<litestl::util::Vector<BlockHandle>> blocksNamed(Context &ctx);
+/** The same; they must be in the scene. */
 Result<litestl::util::Vector<BlockHandle>> objectsOf(Context &ctx);
 /** Those, or the selected ones if it isn't given, without hidden and unselectable ones: at least
  * one. */
@@ -311,6 +324,7 @@ class Skips {
 };
 
 Status registerMembershipCommands(Runtime &rt);
+Status registerDuplicateCommands(Runtime &rt);
 Status registerTransformCommands(Runtime &rt);
 
 /** Channels of `type` at `world`: exactly, or as well as they can (which adds to

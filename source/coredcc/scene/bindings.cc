@@ -162,6 +162,8 @@ lbt::Struct<ObjectEval> *ObjectEval::defineBindings()
     BIND_STRUCT_MEMBER(st, localBounds);
     BIND_STRUCT_MEMBER(st, bounds);
     BIND_STRUCT_MEMBER(st, status);
+    BIND_STRUCT_MEMBER(st, flags);
+    BIND_STRUCT_MEMBER(st, parent);
     BIND_STRUCT_MEMBER(st, member);
   }
   return st;

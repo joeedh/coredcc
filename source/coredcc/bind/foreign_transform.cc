@@ -4,6 +4,8 @@
 #include "coredcc/bind/detail.h"
 #include "coredcc/bind/foreign_command.h"
 
+#include <cmath>
+#include <optional>
 #include <span>
 #include <string>
 
@@ -31,13 +33,18 @@ Status transformChannel(TransformTypeInfo &type,
                         const PropValue &defaultValue,
                         bool distance)
 {
-  Result<PropertyDef> p = detail::scriptProp("transformChannel", name, defaultValue, false);
+  const bool quat = defaultValue.type() == PropValue::Type::Quat;
+  Result<PropertyDef> p = detail::scriptProp(
+      "transformChannel", name, quat ? PropValue::ofBool(false) : defaultValue, false);
   if (!p.ok()) {
     return p.status();
   }
   PropertyDef def = std::move(p).value();
+  if (quat) {
+    def = PropertyDef::quatProp(view(name)).defaultValue(defaultValue);
+  }
   if (distance) {
-    if (def.kind() == PropKind::Bool || def.kind() == PropKind::Int) {
+    if (quat || def.kind() == PropKind::Bool || def.kind() == PropKind::Int) {
       return error(StatusCode::InvalidArgument,
                    std::string("transformChannel: '") + name.c_str() +
                        "' isn't a Float or a vector, so it can't be a distance");
@@ -45,6 +52,148 @@ Status transformChannel(TransformTypeInfo &type,
     def.subtype(PropSubtype::Distance).unit(UnitFamily::Length);
   }
   type.channels.append(std::move(def));
+  return Status();
+}
+
+Status transformTypeVersion(TransformTypeInfo &type, int32_t version)
+{
+  if (version < 0) {
+    return error(StatusCode::InvalidArgument, "transformTypeVersion: it is negative");
+  }
+  type.version = uint32_t(version);
+  return Status();
+}
+
+Status transformEnumChannel(TransformTypeInfo &type, const string &name)
+{
+  Result<PropertyDef> p =
+      detail::scriptProp("transformChannel", name, PropValue::ofBool(false), false);
+  if (!p.ok()) {
+    return p.status();
+  }
+  type.channels.append(PropertyDef::enumProp(view(name)));
+  return Status();
+}
+
+/* The channel that a call is about: the last one of that name. */
+static PropertyDef *channelOf(TransformTypeInfo &type, const string &name)
+{
+  for (int i = int(type.channels.size()) - 1; i >= 0; i--) {
+    if (type.channels[i].apiName() == name) {
+      return &type.channels[i];
+    }
+  }
+  return nullptr;
+}
+
+static Status invalid(const string &channel, const std::string &why)
+{
+  return error(StatusCode::InvalidArgument,
+               std::string("transform channel '") + channel.c_str() + "': " + why);
+}
+
+Status transformChannelItem(TransformTypeInfo &type,
+                            const string &name,
+                            const string &key,
+                            double value,
+                            const string &uiName,
+                            const string &description)
+{
+  PropertyDef *def = channelOf(type, name);
+  if (!def || def->kind() != PropKind::Enum) {
+    return invalid(name, "it isn't an Enum channel");
+  }
+  if (!(value >= -channels::kMaxInt && value <= channels::kMaxInt) || std::floor(value) != value) {
+    return invalid(name, "an item's value must be a whole number within +-2^53");
+  }
+  def->item(view(key), int64_t(value), view(uiName), view(description));
+  return Status();
+}
+
+Status transformChannelText(TransformTypeInfo &type,
+                            const string &name,
+                            const string &what,
+                            const string &text)
+{
+  PropertyDef *def = channelOf(type, name);
+  if (!def) {
+    return invalid(name, "there is no such channel");
+  }
+  const std::string_view w = view(what);
+  if (w == "uiName") {
+    def->uiName(view(text));
+  }
+  else if (w == "description") {
+    def->description(view(text));
+  }
+  else if (w == "icon") {
+    def->icon(view(text));
+  }
+  else if (w == "subtype") {
+    for (int i = 0; i <= int(PropSubtype::Password); i++) {
+      if (view(text) == propSubtypeName(PropSubtype(i))) {
+        def->subtype(PropSubtype(i));
+        return Status();
+      }
+    }
+    return invalid(name, std::string("no subtype '") + text.c_str() + "'");
+  }
+  else if (w == "unit") {
+    const std::optional<UnitFamily> family = unitFamilyOfName(view(text));
+    if (!family) {
+      return invalid(name, std::string("no unit family '") + text.c_str() + "'");
+    }
+    def->unit(*family);
+  }
+  else if (w == "displayUnit") {
+    const NumericMeta *n = def->numeric();
+    if (!n || n->unit == UnitFamily::None) {
+      return invalid(name, "a display unit needs a unit family");
+    }
+    def->unit(n->unit, view(text));
+  }
+  else if (w == "default") {
+    const EnumItem *item = def->enumMeta() ? def->enumMeta()->findKey(view(text)) : nullptr;
+    if (!item) {
+      return invalid(name, std::string("no item '") + text.c_str() + "'");
+    }
+    def->defaultValue(PropValue::ofEnum(item->value));
+  }
+  else {
+    return invalid(name, std::string("nothing is named '") + what.c_str() + "'");
+  }
+  return Status();
+}
+
+Status transformChannelNumbers(TransformTypeInfo &type,
+                               const string &name,
+                               const string &what,
+                               double a,
+                               double b)
+{
+  PropertyDef *def = channelOf(type, name);
+  if (!def) {
+    return invalid(name, "there is no such channel");
+  }
+  const std::string_view w = view(what);
+  if (w == "range") {
+    def->range(a, b);
+  }
+  else if (w == "softRange") {
+    def->softRange(a, b);
+  }
+  else if (w == "step") {
+    def->step(a);
+  }
+  else if (w == "precision") {
+    if (!(a >= 0.0 && a <= 100.0)) {
+      return invalid(name, "a precision is a number of digits");
+    }
+    def->precision(int(a));
+  }
+  else {
+    return invalid(name, std::string("nothing is named '") + what.c_str() + "'");
+  }
   return Status();
 }
 

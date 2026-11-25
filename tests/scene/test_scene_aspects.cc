@@ -49,7 +49,7 @@ void testKernels(bool incremental)
   g_aspects = ChangeAspects(kGeometry);
   test_assert(runs() == 1 && value() == 1.0);
   test_assert(runs() == 0);
-  d.shape(shape).box.max[0] = 2.0;
+  d.shapeRaw(shape).box.max[0] = 2.0;
   /* Selecting elements, and other blocks, aren't the kernel's business. */
   must(invalidateData(*d.ctx, shape, InvalidateKinds::Selection));
   must(invalidateData(*d.ctx, shape, InvalidateKinds::Attributes | InvalidateKinds::Materials));
@@ -58,7 +58,7 @@ void testKernels(bool incremental)
   test_assert(runs() == 0 && value() == 1.0);
   must(invalidateData(*d.ctx, shape, InvalidateKinds::Positions));
   test_assert(runs() == 1 && value() == 2.0);
-  d.shape(shape).box.max[0] = 3.0;
+  d.shapeRaw(shape).box.max[0] = 3.0;
   must(invalidateData(*d.ctx, shape, InvalidateKinds::Selection | InvalidateKinds::Topology));
   test_assert(runs() == 1 && value() == 3.0);
   /* A write by path is all of it. */

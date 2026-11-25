@@ -6,6 +6,10 @@
  */
 import {getBindingBackend} from '@litestl/typescript-runtime'
 import type {AnyBvh} from 'coredcc-gen/coredcc/AnyBvh'
+import type {ChannelEntries as BoundEntries} from 'coredcc-gen/coredcc/ChannelEntries'
+import type {RefList} from 'coredcc-gen/coredcc/RefList'
+import type {TransformBatch as BoundBatch} from 'coredcc-gen/coredcc/TransformBatch'
+import type {TransformTypeInfo} from 'coredcc-gen/coredcc/TransformTypeInfo'
 import type {ChannelBlock} from 'coredcc-gen/coredcc/ChannelBlock'
 import type {Context} from 'coredcc-gen/coredcc/Context'
 import type {EvalCtx} from 'coredcc-gen/coredcc/EvalCtx'
@@ -17,7 +21,9 @@ import type {TransformState as BoundState} from 'coredcc-gen/coredcc/TransformSt
 import type {PickOptions as BoundPickOptions} from 'coredcc-gen/coredcc/PickOptions'
 import type {View as BoundView} from 'coredcc-gen/coredcc/View'
 import type {ViewMath} from 'coredcc-gen/coredcc/ViewMath'
-import {check, checkCtx, inSlot, statusOf, sync, take, withValue, Ref, toJs, type Writable} from './core.ts'
+import {
+  bagToJs, check, checkCtx, inSlot, statusOf, sync, take, withValue, Ref, toJs, type Value, type Writable,
+} from './core.ts'
 
 /* ---- numbers ---- */
 
@@ -42,6 +48,47 @@ function fill(what: string, e: Elements, values: ArrayLike<number>, count: numbe
 }
 
 /* ---- transform types ---- */
+
+/** A channel with more than its default. The names are those of `meta`. */
+export interface ChannelSpec {
+  /** Boolean, number, vector, `quat(...)`, or with `items` a key. */
+  default: Writable
+  uiName?: string
+  description?: string
+  icon?: string
+  subtype?: string
+  unit?: string
+  displayUnit?: string
+  hardMin?: number
+  hardMax?: number
+  softMin?: number
+  softMax?: number
+  step?: number
+  precision?: number
+  /** Makes it an Enum. */
+  items?: readonly {key: string; value: number; uiName?: string; description?: string}[]
+}
+
+/** What a file has of an object's channels, by the names of the version that wrote it. An enum is its
+ * item's key. */
+export interface ChannelEntries {
+  get(name: string): Value
+  set(name: string, value: Writable): void
+  /** Whether there was one. */
+  remove(name: string): boolean
+  rename(from: string, to: string): boolean
+}
+
+/** Objects of one type, one after the other. */
+export interface TransformBatch {
+  readonly count: number
+  /** In seconds. */
+  readonly time: number
+  /** As many numbers for each object as it has channels. */
+  readonly channels: readonly number[]
+  /** The states of their parents: 23 numbers each, the matrix, the rotation and the local scale. */
+  readonly parents: readonly number[]
+}
 
 export interface TransformState {
   /** Object to world. */
@@ -76,9 +123,11 @@ export interface TransformTypeSpec {
   /** Dotted, e.g. "my.polar". The `core.` namespace is reserved. */
   id: string
   uiName?: string
-  /** Channels by name, with their defaults: booleans, numbers and vectors. A whole number declares
-   * an Int: use `float(1)` for a Float. */
-  channels: Record<string, Writable>
+  /** Moves when the channels are others. A type that raises it has `upgrade`. */
+  version?: number
+  /** Channels by name, with their defaults, or more: booleans, numbers, vectors and `quat(...)`. A whole
+   * number declares an Int: use `float(1)` for a Float. */
+  channels: Record<string, Writable | ChannelSpec>
   /** The names of those that are lengths that move the object. */
   distances?: readonly string[]
   /** The object's state. What is left out of it is the identity. One function for all objects of
@@ -97,6 +146,14 @@ export interface TransformTypeSpec {
     delta: TransformDelta,
     parent: TransformState
   ): ArrayLike<number>
+  /** The same as `evaluate` for many: their states, 23 numbers each, as `parents` has them. evaluateScene
+   * uses it, for the objects of a level of the hierarchy. */
+  evaluateMany?(batch: TransformBatch): ArrayLike<number>
+  /** The point in the world that the object turns about, where a gizmo is put. Without it, the translation
+   * of `evaluate`'s matrix. */
+  pivot?(object: TransformChannels, parent: TransformState): ArrayLike<number>
+  /** Changes what a file of an older version has to what `channels` says now. */
+  upgrade?(version: number, channels: ChannelEntries): void
 }
 
 const channelsOf = (ctx: EvalCtx): TransformChannels => ({
@@ -153,6 +210,42 @@ class ModelAdapter {
       this.spec.applyDelta!(channelsOf(base), near, deltaOf(delta), stateOf(parent))
     )
   }
+  evaluateMany(batch: BoundBatch): Status | undefined {
+    return inSlot(() => {
+      try {
+        const count = batch.count()
+        const states = sync(
+          'evaluateMany',
+          this.spec.evaluateMany!({count, time: batch.time(), channels: batch.channels(), parents: batch.parents()})
+        )
+        if (typeof states !== 'object' || states === null) throw new TypeError('evaluateMany returned no states')
+        checkNumbers('evaluateMany', states, count * 23)
+        check(batch.setStates(Array.from(states)))
+        return undefined
+      } catch (e) {
+        return statusOf(StatusCode.Internal, e)
+      }
+    })
+  }
+  pivot(ctx: EvalCtx, parent: BoundState): Vec3 {
+    return inSlot(() => {
+      const p = sync('pivot', this.spec.pivot!(channelsOf(ctx), stateOf(parent)))
+      checkNumbers('pivot', p, 3)
+      const out = this.result.localScale
+      for (let i = 0; i < 3; i++) cd.vec3Put(out, i, p[i])
+      return out
+    })
+  }
+  upgrade(version: number, entries: BoundEntries): Status | undefined {
+    return inSlot(() => {
+      try {
+        withEntries(entries, (e) => sync('upgrade', this.spec.upgrade!(version, e) as void))
+        return undefined
+      } catch (e) {
+        return statusOf(StatusCode.Internal, e)
+      }
+    })
+  }
   private solve(slot: string, out: ChannelBlock, fn: () => ArrayLike<number>): Status | undefined {
     return inSlot(() => {
       try {
@@ -167,11 +260,71 @@ class ModelAdapter {
   }
 }
 
+/** The entries are gone when `upgrade` returns. */
+function withEntries(bound: BoundEntries, fn: (entries: ChannelEntries) => void) {
+  let open = true
+  const e = () => {
+    if (!open) throw new Error('upgrade has returned')
+    return bound
+  }
+  try {
+    fn({
+      get(name) {
+        const v = e().get(name)
+        try {
+          return toJs(undefined, v)
+        } finally {
+          v[Symbol.dispose]()
+        }
+      },
+      set: (name, value) => withValue(undefined, value, (v) => e().set(name, v)),
+      remove: (name) => e().remove(name),
+      rename: (from, to) => e().rename(from, to),
+    })
+  } finally {
+    open = false
+  }
+}
+
+const isChannelSpec = (v: Writable | ChannelSpec): v is ChannelSpec =>
+  typeof v === 'object' && v !== null && Object.getPrototypeOf(v) === Object.prototype && Object.hasOwn(v, 'default')
+
+const channelTexts = ['uiName', 'description', 'icon', 'subtype', 'unit', 'displayUnit'] as const
+
+function addChannel(type: TransformTypeInfo, name: string, spec: ChannelSpec, distance: boolean) {
+  if (spec.items) {
+    if (typeof spec.default !== 'string') throw new TypeError(`channel ${name}: an enum's default is a key`)
+    check(cd.transformEnumChannel(type, name))
+    for (const i of spec.items) {
+      check(cd.transformChannelItem(type, name, i.key, i.value, i.uiName ?? '', i.description ?? ''))
+    }
+    check(cd.transformChannelText(type, name, 'default', spec.default))
+  } else {
+    withValue(undefined, spec.default, (pv) => check(cd.transformChannel(type, name, pv, distance)))
+  }
+  for (const what of channelTexts) {
+    const text = spec[what]
+    if (text !== undefined) check(cd.transformChannelText(type, name, what, text))
+  }
+  const numbers = (what: string, a?: number, b = 0) => {
+    if (a !== undefined) check(cd.transformChannelNumbers(type, name, what, a, b))
+  }
+  const range = (what: string, min?: number, max?: number) => {
+    if (min !== undefined || max !== undefined) numbers(what, min ?? -Infinity, max ?? Infinity)
+  }
+  range('range', spec.hardMin, spec.hardMax)
+  range('softRange', spec.softMin, spec.softMax)
+  numbers('step', spec.step)
+  numbers('precision', spec.precision)
+}
+
 /** Registers a transform type, for as long as the document is open. */
 export function defineTransformType(ctx: Context, spec: TransformTypeSpec) {
   checkCtx(ctx)
-  for (const slot of ['evaluate', 'setWorld', 'applyDelta'] as const) {
-    if (typeof spec[slot] !== 'function' && !(slot === 'applyDelta' && spec[slot] === undefined)) {
+  const optional = ['applyDelta', 'evaluateMany', 'pivot', 'upgrade'] as const
+  for (const slot of ['evaluate', 'setWorld', ...optional] as const) {
+    const left = optional.some((s) => s === slot) && spec[slot] === undefined
+    if (typeof spec[slot] !== 'function' && !left) {
       throw new TypeError(`defineTransformType: ${spec.id}: ${slot} must be a function`)
     }
   }
@@ -181,11 +334,12 @@ export function defineTransformType(ctx: Context, spec: TransformTypeSpec) {
   if (!type) throw new Error(`defineTransformType: no type for ${spec.id}`)
   try {
     if (spec.uiName !== undefined) check(cd.transformTypeUiName(type, spec.uiName))
+    if (spec.version !== undefined) check(cd.transformTypeVersion(type, spec.version))
     for (const [name, v] of Object.entries(spec.channels)) {
       const distance = spec.distances?.includes(name) ?? false
-      withValue(undefined, v, (pv) => check(cd.transformChannel(type, name, pv, distance)))
+      addChannel(type, name, isChannelSpec(v) ? v : {default: v}, distance)
     }
-    const slots = spec.applyDelta ? 'evaluate setWorld applyDelta' : 'evaluate setWorld'
+    const slots = ['evaluate', 'setWorld', ...optional.filter((s) => spec[s] !== undefined)].join(' ')
     const handle = getBindingBackend().foreignHandle(new ModelAdapter(spec))
     check(cd.registerForeignTransformType(ctx, type, handle, slots))
   } finally {
@@ -210,6 +364,68 @@ export function blockIds(ctx: Context, blocks: readonly Ref[]): string {
 /** Computes the states of the scene's objects: `evaluated` has them. */
 export function evaluateScene(ctx: Context) {
   check(cd.evaluateScene(ctx))
+}
+/** The last evaluation's results, one row for each place: an object that was evaluated. */
+export interface SceneResults {
+  /** How many places there are, also when only some were asked for. */
+  places: number
+  /** 16 numbers for each. */
+  matrices: number[]
+  /** 6 numbers for each: the minimum, then the maximum. An empty box has a minimum above its maximum. */
+  bounds: number[]
+  /** EvalStatus as a number: 0 is Ok. */
+  status: number[]
+  /** 1 for hidden, 2 for unselectable. */
+  flags: number[]
+  /** The parent's place, or -1. */
+  parents: number[]
+  /** 1 for a member of the scene, and 0 for a parent of one that isn't. */
+  members: number[]
+  /** Moves by one with each evaluation that changed something. Who has seen the one before this needs only
+   * the places in `changed`, unless `allChanged`. */
+  version: number
+  changed: number[]
+  allChanged: boolean
+}
+/** Of these places, or of all. Doesn't evaluate. */
+export function sceneResults(ctx: Context, places?: ArrayLike<number>): SceneResults {
+  const at = places === undefined ? [] : Array.from(places)
+  return take(cd.sceneResults(ctx, at, places === undefined), (t) => ({
+    places: t.places(),
+    matrices: t.matrices(),
+    bounds: t.bounds(),
+    status: t.status(),
+    flags: t.flags(),
+    parents: t.parents(),
+    members: t.members(),
+    version: t.version(),
+    changed: t.changed(),
+    allChanged: t.allChanged(),
+  }))
+}
+const refsOf = (list: RefList) =>
+  Array.from({length: list.size()}, (_, i) => list.at(i)).map((text) => (text === '' ? null : new Ref(text)))
+/** The objects at these places, or at all. null for one that is gone. */
+export function sceneObjects(ctx: Context, places?: ArrayLike<number>): (Ref | null)[] {
+  const at = places === undefined ? [] : Array.from(places)
+  return take(cd.sceneRefs(ctx, at, places === undefined), refsOf)
+}
+/** The children of an object in the last evaluation, in the scene's order; for null the objects without a
+ * parent. */
+export function children(ctx: Context, object: Ref | null): Ref[] {
+  return take(cd.sceneChildren(ctx, object?.text ?? ''), refsOf).filter((r) => r !== null)
+}
+/** Puts objects at matrices, 16 numbers for each, undoably. `exact` leaves out those whose transform can't
+ * have it. Returns the outputs of core.object.setWorld. */
+export function setWorld(ctx: Context, objects: readonly Ref[], matrices: ArrayLike<number>, exact = false) {
+  checkNumbers('setWorld', matrices, objects.length * 16)
+  const mode = exact ? 'EXACT' : 'CLOSEST'
+  const numbers = Array.from(matrices, String).join(' ')
+  const out = take(
+    cd.invoke(ctx, `core.object.setWorld(objects="${blockIds(ctx, objects)}" matrices="${numbers}" mode="${mode}")`),
+    (bag) => bagToJs(ctx, bag)
+  )
+  return out as {approximate: number; skipped: number}
 }
 /** Where an object is now. */
 export function worldMatrix(ctx: Context, object: Ref): number[] {

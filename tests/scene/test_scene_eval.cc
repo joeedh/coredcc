@@ -458,7 +458,7 @@ void testCapabilities()
   Vector<OwnerKey> heard;
   ScopedConnection c = bus.addListener([&](const OwnerKey *k) { heard.append(*k); });
   must(invalidateData(*d.ctx, data, InvalidateKinds::Positions | InvalidateKinds::Selection));
-  test_assert(d.shape(data).invalidated ==
+  test_assert(d.shapeRaw(data).invalidated ==
               uint32_t(InvalidateKinds::Positions | InvalidateKinds::Selection));
   test_assert(heard.size() == 1 && heard[0] == OwnerKey::ofBlock(d.idOf(data)));
   must(invalidateData(*d.ctx, a, InvalidateKinds::Topology)); /* has no Invalidation */

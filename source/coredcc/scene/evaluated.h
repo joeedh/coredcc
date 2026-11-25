@@ -18,6 +18,12 @@ struct ObjectEval {
   /** A box around localBounds in the world; empty when that isn't finite. */
   Box3d bounds;
   EvalStatus status = EvalStatus::Ok;
+  /** ObjectFlags. */
+  uint32_t flags = 0;
+  /** Its Live parent's place in evaluatedObjects, or -1; -1 on a cycle. */
+  int32_t parent = -1;
+  /** Its Live data block, or null. */
+  BlockHandle data;
   /** Whether it is a member of the scene, not only a parent of one. */
   bool member = false;
 

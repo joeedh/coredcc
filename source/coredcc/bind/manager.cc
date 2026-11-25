@@ -436,6 +436,26 @@ void addSceneFacades(litestl::binding::BindingManager *mgr)
               "coredcc::transformChannel",
               script::transformChannel,
               MARGS("type", "name", "defaultValue", "distance"));
+  BIND_FACADE(mgr,
+              "coredcc::transformTypeVersion",
+              script::transformTypeVersion,
+              MARGS("type", "version"));
+  BIND_FACADE(mgr,
+              "coredcc::transformEnumChannel",
+              script::transformEnumChannel,
+              MARGS("type", "name"));
+  BIND_FACADE(mgr,
+              "coredcc::transformChannelItem",
+              script::transformChannelItem,
+              MARGS("type", "name", "key", "value", "uiName", "description"));
+  BIND_FACADE(mgr,
+              "coredcc::transformChannelText",
+              script::transformChannelText,
+              MARGS("type", "name", "what", "text"));
+  BIND_FACADE(mgr,
+              "coredcc::transformChannelNumbers",
+              script::transformChannelNumbers,
+              MARGS("type", "name", "what", "a", "b"));
   BIND_OWNING_FACADE(mgr,
                      "coredcc::registerForeignTransformType",
                      script::registerForeignTransformType,
@@ -446,6 +466,9 @@ void addSceneFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::setScene", script::setScene, MARGS("ctx", "scene"));
   BIND_FACADE(mgr, "coredcc::blockIdText", script::blockIdText, MARGS("ctx", "block"));
   BIND_FACADE(mgr, "coredcc::evaluateScene", script::evaluateScene, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::sceneResults", script::sceneResults, MARGS("ctx", "places", "all"));
+  BIND_FACADE(mgr, "coredcc::sceneRefs", script::sceneRefs, MARGS("ctx", "places", "all"));
+  BIND_FACADE(mgr, "coredcc::sceneChildren", script::sceneChildren, MARGS("ctx", "object"));
   BIND_FACADE(mgr, "coredcc::worldMatrix", script::worldMatrix, MARGS("ctx", "object"));
   BIND_FACADE(mgr, "coredcc::pick", script::pick, MARGS("ctx", "view", "x", "y", "options"));
 }

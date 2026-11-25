@@ -17,7 +17,8 @@ bool ObjectEval::same(const ObjectEval &b) const
     static_assert(sizeof(x) % sizeof(double) == 0);
     return memcmp(&x, &y, sizeof(x)) == 0;
   };
-  return status == b.status && member == b.member && equal(state.world, b.state.world) &&
+  return status == b.status && member == b.member && flags == b.flags && parent == b.parent &&
+         data == b.data && equal(state.world, b.state.world) &&
          equal(state.rotation, b.state.rotation) && equal(state.localScale, b.state.localScale) &&
          equal(localBounds, b.localBounds) && equal(bounds, b.bounds);
 }
@@ -46,6 +47,7 @@ class EvaluatedKeys {
  public:
   static constexpr const char *kExtName = "coredcc.EvaluatedKeys";
   OwnerKey owner;
+  const Vector<BlockHandle> none;
 
   explicit EvaluatedKeys(Runtime *) {}
   ~EvaluatedKeys()
@@ -86,17 +88,10 @@ PointerRef itemFor(Context &ctx, const BlockId &id)
 }
 
 /* The results that still have a record. */
-Vector<BlockHandle> handles(Context &ctx)
+const Vector<BlockHandle> &handles(Context &ctx)
 {
-  Vector<BlockHandle> out;
-  if (const Scene *scene = activeScene(ctx)) {
-    for (BlockHandle h : scene->evaluatedObjects()) {
-      if (ctx.library()->get(h)) {
-        out.append(h);
-      }
-    }
-  }
-  return out;
+  const Scene *scene = activeScene(ctx);
+  return scene ? scene->recordedObjects(*ctx.library()) : ctx.runtime().ext<EvaluatedKeys>().none;
 }
 
 ApiStruct sceneStruct()
@@ -107,7 +102,7 @@ ApiStruct sceneStruct()
   c.itemStruct = StructId::of(kEvaluatedObjectStruct);
   c.length = [](const PointerRef &, Context &ctx) { return int64_t(handles(ctx).size()); };
   c.at = [](const PointerRef &, Context &ctx, int64_t i) {
-    const Vector<BlockHandle> l = handles(ctx);
+    const Vector<BlockHandle> &l = handles(ctx);
     return i >= 0 && i < int64_t(l.size()) ?
                itemFor(ctx, ctx.library()->get(l[int(i)])->id()) :
                PointerRef();

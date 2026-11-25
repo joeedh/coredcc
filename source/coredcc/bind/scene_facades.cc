@@ -15,6 +15,7 @@ using detail::failed;
 using detail::ok;
 using detail::slotGate;
 using detail::view;
+using litestl::util::Vector;
 namespace lbt = litestl::binding::types;
 
 double3 vec3(double x, double y, double z)
@@ -115,6 +116,119 @@ Status evaluateScene(Context &ctx)
   return coredcc::evaluateScene(ctx);
 }
 
+/* The Context's scene, and the places: all of them, or those that were given. */
+static Result<const Scene *> placesOf(Context &ctx,
+                                      const char *what,
+                                      const Vector<int32_t> &given,
+                                      bool all,
+                                      Vector<int32_t> &out)
+{
+  const Scene *scene = activeScene(ctx);
+  if (!scene) {
+    return error(StatusCode::FailedPrecondition, std::string(what) + ": there is no scene");
+  }
+  const int32_t n = int32_t(scene->results().size());
+  for (int32_t i = 0; all && i < n; i++) {
+    out.append(i);
+  }
+  for (int32_t i : given) {
+    if (all || i < 0 || i >= n) {
+      return error(all ? StatusCode::InvalidArgument : StatusCode::OutOfRange,
+                   std::string(what) + (all ? ": both places and all" : ": no such place"));
+    }
+    out.append(i);
+  }
+  return scene;
+}
+
+SceneTableResult sceneResults(Context &ctx, const Vector<int32_t> &places, bool all)
+{
+  if (Status s = slotGate(ctx, "sceneResults", {"exec"}); !s.ok()) {
+    return failed<SceneTableResult>(std::move(s));
+  }
+  Vector<int32_t> at;
+  Result<const Scene *> scene = placesOf(ctx, "sceneResults", places, all, at);
+  if (!scene.ok()) {
+    return failed<SceneTableResult>(scene.status());
+  }
+  SceneTableResult r;
+  SceneTable &t = r.value;
+  t.matrixList.ensure_capacity(at.size() * 16);
+  t.boundsList.ensure_capacity(at.size() * 6);
+  for (int32_t i : at) {
+    const ObjectEval &e = (*scene)->results()[size_t(i)];
+    const double *m = e.dataWorld();
+    for (int k = 0; k < 16; k++) {
+      t.matrixList.append(m[k]);
+    }
+    for (int k = 0; k < 6; k++) {
+      t.boundsList.append(k < 3 ? e.bounds.min[k] : e.bounds.max[k - 3]);
+    }
+    t.statusList.append(int32_t(e.status));
+    t.flagsList.append(int32_t(e.flags));
+    t.parentList.append(e.parent);
+    t.memberList.append(e.member ? 1 : 0);
+  }
+  const Scene::Changes &changes = (*scene)->lastChanges();
+  t.changedList = changes.places;
+  t.changeVersion = double(changes.version);
+  t.changedAll = changes.all;
+  t.placeCount = int32_t((*scene)->results().size());
+  return r;
+}
+
+static string refText(const Context &ctx, BlockHandle h)
+{
+  const Library &lib = *ctx.library();
+  if (!lib.get(h)) {
+    return string();
+  }
+  const PropValue pointer = coredcc::detail::pointerTo(lib, h);
+  return string(formatRef(ctx.runtime(), *pointer.tryPointer()).c_str());
+}
+
+RefListResult sceneRefs(Context &ctx, const Vector<int32_t> &places, bool all)
+{
+  if (Status s = slotGate(ctx, "sceneRefs", {"exec"}); !s.ok()) {
+    return failed<RefListResult>(std::move(s));
+  }
+  Vector<int32_t> at;
+  Result<const Scene *> scene = placesOf(ctx, "sceneRefs", places, all, at);
+  if (!scene.ok()) {
+    return failed<RefListResult>(scene.status());
+  }
+  RefListResult r;
+  for (int32_t i : at) {
+    r.value.refs.append(refText(ctx, (*scene)->evaluatedObjects()[i]));
+  }
+  return r;
+}
+
+RefListResult sceneChildren(Context &ctx, const string &object)
+{
+  if (Status s = slotGate(ctx, "sceneChildren", {"exec"}); !s.ok()) {
+    return failed<RefListResult>(std::move(s));
+  }
+  const Scene *scene = activeScene(ctx);
+  if (!scene) {
+    return failed<RefListResult>(
+        error(StatusCode::FailedPrecondition, "sceneChildren: there is no scene"));
+  }
+  BlockHandle h;
+  if (object.size() > 0) {
+    Result<BlockHandle> at = blockAt(ctx, "sceneChildren", object);
+    if (!at.ok()) {
+      return failed<RefListResult>(at.status());
+    }
+    h = *at;
+  }
+  RefListResult r;
+  for (BlockHandle child : scene->children(h)) {
+    r.value.refs.append(refText(ctx, child));
+  }
+  return r;
+}
+
 MatrixResult worldMatrix(Context &ctx, const string &object)
 {
   if (Status s = slotGate(ctx, "worldMatrix", {"exec"}); !s.ok()) {
@@ -143,9 +257,9 @@ PickResult pick(Context &ctx, const View &view, double x, double y, const PickOp
     return failed<PickResult>(std::move(s));
   }
   PickResult r;
-  const int before = scene->counters().completed;
-  r.status = coredcc::evaluateScene(ctx);
-  if (!r.status.ok() && scene->counters().completed == before) {
+  EvaluateResult evaluated;
+  r.status = coredcc::evaluateScene(ctx, &evaluated);
+  if (!evaluated.done) {
     return r;
   }
   litestl::util::Vector<PickHit> hits;
@@ -209,6 +323,42 @@ const lbt::Struct<PickList> *PickList::defineBindings()
   return st;
 }
 
+const lbt::Struct<SceneTable> *SceneTable::defineBindings()
+{
+  static lbt::Struct<SceneTable> *st = nullptr;
+  if (!st) {
+    litestl::alloc::PermanentGuard guard;
+    st = new lbt::Struct<SceneTable>("coredcc::SceneTable", sizeof(SceneTable));
+    BIND_STRUCT_COPY_CONSTRUCTOR(st);
+    BIND_STRUCT_METHOD(st, matrices, MARGS());
+    BIND_STRUCT_METHOD(st, bounds, MARGS());
+    BIND_STRUCT_METHOD(st, status, MARGS());
+    BIND_STRUCT_METHOD(st, flags, MARGS());
+    BIND_STRUCT_METHOD(st, parents, MARGS());
+    BIND_STRUCT_METHOD(st, members, MARGS());
+    BIND_STRUCT_METHOD(st, changed, MARGS());
+    BIND_STRUCT_METHOD(st, version, MARGS());
+    BIND_STRUCT_METHOD(st, allChanged, MARGS());
+    BIND_STRUCT_METHOD(st, places, MARGS());
+  }
+  return st;
+}
+
+const lbt::Struct<RefList> *RefList::defineBindings()
+{
+  static lbt::Struct<RefList> *st = nullptr;
+  if (!st) {
+    litestl::alloc::PermanentGuard guard;
+    st = new lbt::Struct<RefList>("coredcc::RefList", sizeof(RefList));
+    BIND_STRUCT_COPY_CONSTRUCTOR(st);
+    BIND_STRUCT_METHOD(st, size, MARGS());
+    BIND_STRUCT_METHOD(st, at, MARGS("i"));
+  }
+  return st;
+}
+
+CDCC_RESULT_BINDINGS(SceneTableResult)
+CDCC_RESULT_BINDINGS(RefListResult)
 CDCC_RESULT_BINDINGS(MatrixResult)
 CDCC_RESULT_BINDINGS(PickResult)
 

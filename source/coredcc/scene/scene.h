@@ -16,6 +16,8 @@ namespace coredcc {
 /** coredcc's own scene: a block of type kSceneType. */
 inline constexpr const char *kSceneType = "coredcc.Scene";
 
+struct EvaluateResult;
+
 namespace detail {
 class SceneEvaluator;
 }
@@ -101,8 +103,9 @@ class Scene {
   {
     return active_.cell();
   }
-  /** The selected Live objects that are members, in the order they were selected. */
-  litestl::util::Vector<BlockHandle> selected(const Library &lib) const;
+  /** The selected Live objects that are members, in the order they were selected. Valid until something
+   * changes. */
+  const litestl::util::Vector<BlockHandle> &selected(const Library &lib) const;
   /** The cells, with those that aren't Live. */
   const litestl::util::Vector<RefCell> &selection() const
   {
@@ -128,14 +131,20 @@ class Scene {
    * with `out` unchanged, if it wasn't there. */
   bool evaluated(BlockHandle h, ObjectEval &out) const;
   /** Objects evaluated last time, in order: the members that were Live, then parents that
-   * aren't members. */
-  litestl::util::Vector<BlockHandle> evaluatedObjects() const;
+   * aren't members. Valid until the next evaluation. */
+  const litestl::util::Vector<BlockHandle> &evaluatedObjects() const;
+  /** Those that still have a record. Valid until something changes. */
+  const litestl::util::Vector<BlockHandle> &recordedObjects(const Library &lib) const;
+  /** The results themselves, in that order. Valid until the next evaluation. */
+  std::span<const ObjectEval> results() const;
+  /** The children of an object in the last evaluation, in that order; for a null handle those that have no
+   * parent there, or are on a cycle. Valid until the next evaluation. */
+  std::span<const BlockHandle> children(BlockHandle h) const;
 
-  /** How often evaluateScene ran, and to the end (a foreign exception doesn't stop it); how often
-   * it made its lookups again, and how often they had changed. */
+  /** How often evaluateScene ran, how often it made its lookups again, and how often they had
+   * changed. */
   struct Counters {
     int evaluations = 0;
-    int completed = 0;
     int revalidations = 0;
     int rebuilds = 0;
   };
@@ -187,7 +196,7 @@ class Scene {
 
  private:
   friend class detail::SceneEvaluator;
-  friend Status evaluateScene(Context &ctx, BlockHandle scene);
+  friend Status evaluateScene(Context &ctx, BlockHandle scene, EvaluateResult *result);
   void ensureIndex(const Library &lib) const;
   /** The same, as of the Library's epoch. */
   void ensureFreshIndex(const Library &lib) const;
@@ -215,11 +224,25 @@ class Scene {
   mutable uint64_t liveEpoch_ = 0;
   mutable uint64_t liveGeneration_ = 0;
 
+  mutable litestl::util::Vector<BlockHandle> selected_;
+  mutable uint64_t selectedEpoch_ = 0;
+  mutable uint64_t selectedGeneration_ = 0;
+
   std::unique_ptr<detail::SceneEvaluator> evaluator_;
 };
 
 /** A new, empty Scene. A GC root. */
 Result<BlockHandle> newScene(Library &lib, std::string_view name);
+
+/** What evaluateScene did, besides its Status. */
+struct EvaluateResult {
+  /** It ran to the end: the results are new, or the same. With `done`, its error is an exception of a
+   * foreign capability, model or driver, and everything else was computed. Without, the results are the
+   * last ones. */
+  bool done = false;
+  /** A result differs: Scene::lastChanges says which. */
+  bool changed = false;
+};
 
 /** The Context's scene, or null unless it is a Live coredcc.Scene. */
 Scene *activeScene(const Context &ctx);
@@ -236,9 +259,11 @@ Scene *activeScene(const Context &ctx);
  * - FailedPrecondition, with the last results kept, when a sticky error is pending, or when an
  *   object's `read` answers otherwise each time it is asked.
  * - After it, watchers of `evaluated` hear of it if any result differs.
+ * - The bounds of a block whose type implements Invalidation are asked for again after a change of its
+ *   positions or its topology (invalidateData), or when the Library's epoch moved, and not otherwise.
  */
-Status evaluateScene(Context &ctx, BlockHandle scene);
+Status evaluateScene(Context &ctx, BlockHandle scene, EvaluateResult *result = nullptr);
 /** The Context's scene. */
-Status evaluateScene(Context &ctx);
+Status evaluateScene(Context &ctx, EvaluateResult *result = nullptr);
 
 } // namespace coredcc

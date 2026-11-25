@@ -81,6 +81,60 @@ struct TransformDelta {
   static litestl::binding::types::Struct<TransformDelta> *defineBindings();
 };
 
+/** What TransformModel::evaluateMany is given: several objects of one type, and where the answer goes.
+ * A state is 23 numbers: the world matrix, column by column, the rotation (x, y, z, w), and the local
+ * scale. */
+class TransformBatch {
+ public:
+  static constexpr int kStateSize = 23;
+
+  TransformBatch(int32_t channelCount, double time) : channelCount_(channelCount), time_(time) {}
+  void add(const EvalCtx &object, const TransformState &parent)
+  {
+    for (int32_t i = 0; i < channelCount_; i++) {
+      channels_.append(object.channel(i));
+    }
+    parents_.append(parent);
+  }
+
+  int32_t count() const
+  {
+    return int32_t(parents_.size());
+  }
+  int32_t channelCount() const
+  {
+    return channelCount_;
+  }
+  double time() const
+  {
+    return time_;
+  }
+  /** Of all objects, one after the other: channelCount numbers each. */
+  litestl::util::Vector<double> channels() const;
+  /** The states of their parents. */
+  litestl::util::Vector<double> parents() const;
+  /** The objects' states. InvalidArgument for another number of them. */
+  Status setStates(const litestl::util::Vector<double> &states);
+
+  /* For native callers and models. */
+  const TransformState &parent(int i) const
+  {
+    return parents_[i];
+  }
+  const litestl::util::Vector<TransformState> &states() const
+  {
+    return states_;
+  }
+  static litestl::binding::types::Struct<TransformBatch> *defineBindings();
+
+ private:
+  int32_t channelCount_;
+  double time_;
+  litestl::util::Vector<double> channels_;
+  litestl::util::Vector<TransformState> parents_;
+  litestl::util::Vector<TransformState> states_;
+};
+
 /**
  * A kind of transform: how channels and the parent's state give an object's. Stateless: one
  * instance serves every object of its type. Native or foreign, and never called from a worker
@@ -97,6 +151,9 @@ struct TransformDelta {
  *   same interaction (or `base`): where several channel values mean the same, such as Euler
  *   angles, the ones nearest to it are wanted. `out` starts as a copy of `nearTo`. Without the
  *   slot, setWorld in Closest mode is used.
+ * - `evaluateMany` (optional) is `evaluate` for several objects at once (TransformBatch), and must give
+ *   the same. evaluateScene uses it, for the objects of each level of the hierarchy; all others use
+ *   `evaluate`. For scripts, where a call costs more than the work in it.
  * - `pivot` (optional) is the point, in world space, that the model turns about: a gizmo's place. It
  *   is the translation of the object's matrix without the slot.
  * - `upgrade` (optional) changes what a file has of version `version` to what this build's
@@ -129,6 +186,14 @@ struct TransformModel : IfaceRef {
     return CDCC_CALL(applyDelta, base, nearTo, delta, parent, out);
   }
 
+  bool hasEvaluateMany() const
+  {
+    return CDCC_HAS(evaluateMany);
+  }
+  Status evaluateMany(TransformBatch &batch) const
+  {
+    return CDCC_CALL(evaluateMany, batch);
+  }
   bool hasPivot() const
   {
     return CDCC_HAS(pivot);
@@ -153,6 +218,7 @@ struct TransformModel : IfaceRef {
     BIND_STRUCT_METHOD(st, setWorld, MARGS("current", "target", "parent", "mode", "out"));
     BIND_OPTIONAL_METHOD(
         st, applyDelta, MARGS("base", "nearTo", "delta", "parent", "out"));
+    BIND_OPTIONAL_METHOD(st, evaluateMany, MARGS("batch"));
     BIND_OPTIONAL_METHOD(st, pivot, MARGS("ctx", "parent"));
     BIND_OPTIONAL_METHOD(st, upgrade, MARGS("version", "channels"));
   }
