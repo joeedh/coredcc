@@ -54,8 +54,13 @@ bool Evaluator::concerns(const GraphEditNote &e) const
   switch (e.kind) {
     case GraphEditNote::Kind::All:
       return true;
-    case GraphEditNote::Kind::Block:
-      return deps_.kernelsOf(e.block) != nullptr;
+    case GraphEditNote::Kind::Block: {
+      const BlockLink *l = deps_.kernelsOf(e.block);
+      while (l && !(l->aspects & e.aspects)) {
+        l = l->next;
+      }
+      return l != nullptr;
+    }
     default:
       return reaches(e.def);
   }
@@ -133,7 +138,9 @@ bool Evaluator::absorb(const GraphEditNote &e)
   switch (e.kind) {
     case GraphEditNote::Kind::Block:
       for (const BlockLink *l = deps_.kernelsOf(e.block); l; l = l->next) {
-        markStale(Vertex{l->kernel->frame, l->kernel->index, true});
+        if (l->aspects & e.aspects) {
+          markStale(Vertex{l->kernel->frame, l->kernel->index, true});
+        }
       }
       return true;
     case GraphEditNote::Kind::Node:

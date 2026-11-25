@@ -120,7 +120,7 @@ void store(Watcher &w, Reading r)
 struct ChangeBus::State final : detail::SignalStateBase {
   Vector<Watcher> watchers;
   Vector<Change> pending;
-  Signal<const OwnerKey *> listeners;
+  Signal<const BusChange &> listeners;
   uint64_t nextId = 1;
   uint64_t epoch = 0;
   uint64_t flushedEpoch = 0;
@@ -170,20 +170,20 @@ ChangeBus::ChangeBus(Runtime *) : state_(std::make_shared<State>()) {}
 
 ChangeBus::~ChangeBus() = default;
 
-void ChangeBus::notify(const OwnerKey &owner, std::string_view member)
+void ChangeBus::notify(const OwnerKey &owner, std::string_view member, ChangeAspects aspects)
 {
   if (owner.isNull()) {
     return;
   }
   /* Queued first, so a listener that flushes sees it. */
   state_->pending.append(Change{owner, lsString(member)});
-  state_->listeners.emit(&owner);
+  state_->listeners.emit(BusChange{&owner, member, aspects});
 }
 
 void ChangeBus::notifyAll()
 {
   state_->epoch++;
-  state_->listeners.emit(nullptr);
+  state_->listeners.emit(BusChange());
 }
 
 void ChangeBus::bumpEpoch()
@@ -237,6 +237,12 @@ Result<ScopedConnection> ChangeBus::watch(Context &ctx,
 ScopedConnection ChangeBus::addListener(ListenFn fn)
 {
   CDCC_CHECK(bool(fn), "ChangeBus::addListener: an empty callback");
+  return addChangeListener([fn = std::move(fn)](const BusChange &c) mutable { fn(c.owner); });
+}
+
+ScopedConnection ChangeBus::addChangeListener(ChangeFn fn)
+{
+  CDCC_CHECK(bool(fn), "ChangeBus::addChangeListener: an empty callback");
   return ScopedConnection(state_->listeners.connect(std::move(fn)));
 }
 

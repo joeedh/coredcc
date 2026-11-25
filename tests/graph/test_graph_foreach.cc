@@ -267,6 +267,40 @@ void testBlocks()
   test_assert(l.evaluate().ok() && l.ran() == 0);
 }
 
+/* Elements whose kernels use different aspects of one block. */
+void testAspects()
+{
+  World w;
+  Loop l(w);
+  const BlockHandle h = newThing(w.lib, "t", 5);
+  const BlockId id = idOf(w.lib, h);
+  const NodeId one = add(*l.inner.def, "t.part"), two = add(*l.inner.def, "t.part");
+  for (NodeId n : {one, two}) {
+    test_assert(l.inner.def->setParam(n, "thing", toThing(id)).ok());
+    test_assert(l.inner.def->setParam(n, "aspects", PropValue::ofInt(n == one ? 1 : 2)).ok());
+  }
+  connect(*l.inner.def, one, "value", l.add, "a");
+  connect(*l.inner.def, two, "value", l.add, "b");
+  l.set(table({1}, {}));
+  test_assert(l.is({1}, {{"sum", {10}}, {"c2", {0}}}, 4));
+  w.thing(h).value = 6;
+  l.ran();
+  w.notify(id, 4);
+  test_assert(l.evaluate().ok() && l.ran() == 0);
+  w.notify(id, 2);
+  test_assert(l.is({1}, {{"sum", {11}}, {"c2", {0}}}, 2));
+  w.notify(id, 1);
+  test_assert(l.is({1}, {{"sum", {12}}, {"c2", {0}}}, 2));
+  /* A kernel that uses others than before. */
+  test_assert(l.inner.def->setParam(one, "aspects", PropValue::ofInt(4)).ok());
+  test_assert(l.is({1}, {{"sum", {12}}, {"c2", {0}}}, 1));
+  w.thing(h).value = 7;
+  w.notify(id, 1);
+  test_assert(l.is({1}, {{"sum", {12}}, {"c2", {0}}}, 0));
+  w.notify(id, 4);
+  test_assert(l.is({1}, {{"sum", {13}}, {"c2", {0}}}, 2));
+}
+
 /* References to groups that a Library writes, and pins. */
 Library *g_lib = nullptr;
 BlockId g_block;
@@ -381,6 +415,7 @@ int main()
   testInputs();
   testRuns();
   testBlocks();
+  testAspects();
   testGroupRefs();
   testMaxCached();
   return test_end();

@@ -159,9 +159,11 @@ void testRegistration()
 struct Blocks final : ExecBlocks {
   int uses = 0;
   int queries = 0;
-  BlockUse useBlock(BlockId) override
+  ChangeAspects aspects = 0;
+  BlockUse useBlock(BlockId, ChangeAspects a) override
   {
     uses++;
+    aspects = a;
     return BlockUse{BlockHandle{1, 1}, this};
   }
   IfaceRef queryBlock(BlockHandle, InterfaceId) override
@@ -205,9 +207,12 @@ void testExecContext()
   test_assert(ctx.param("mode")->asEnum() == 1 && !ctx.param("no"));
   test_assert(ctx.param("block")->isNone());
   test_assert(ctx.paramBlock("block").data == &host && host.uses == 1);
+  test_assert(host.aspects == kAllAspects);
   test_assert(!ctx.paramBlock("mode").handle && !ctx.paramBlock("no").handle && host.uses == 1);
   test_assert(!ctx.useBlock(BlockId()).handle && host.uses == 1);
-  test_assert(ctx.useBlock(blocks[1]).handle && host.uses == 2);
+  test_assert(ctx.useBlock(blocks[1]).handle && host.uses == 2 && host.aspects == kAllAspects);
+  test_assert(ctx.useBlock(blocks[1], 4).handle && host.aspects == 4);
+  test_assert(ctx.paramBlock("block", 2).handle && host.aspects == 2);
   test_assert(!ctx.queryBlockRaw(BlockHandle{1, 1}, InterfaceId::of("x")) && host.queries == 1);
 
   /* Nothing set, then one of two, then both. */

@@ -55,6 +55,7 @@ struct BlockLink {
   KernelState *kernel = nullptr;
   /** Canonical. */
   BlockId block;
+  ChangeAspects aspects = kAllAspects;
   BlockLink *next = nullptr;
   BlockLink *prev = nullptr;
 };

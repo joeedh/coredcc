@@ -90,10 +90,16 @@ void Dependents::removeFrame(Frame &f)
 
 void Dependents::setBlocks(KernelState &k, ClientRegistry &clients)
 {
-  const int n = k.trace.more ? int(k.trace.more->blocks.size()) : 0;
+  const Trace::Blocks *t = k.trace.more.get();
+  const int used = t ? int(t->blocks.size()) : 0;
+  const int n = used + (t ? int(t->queries.size()) : 0);
+  const auto block = [&](int i) {
+    return clients.canonical(i < used ? t->blocks[i].id : t->queries[i - used].id);
+  };
+  const auto aspects = [&](int i) { return i < used ? t->blocks[i].aspects : kAllAspects; };
   bool same = n == k.blockLinks.size();
   for (int i = 0; same && i < n; i++) {
-    same = k.blockLinks[i].block == clients.canonical(k.trace.more->blocks[i].id);
+    same = k.blockLinks[i].block == block(i) && k.blockLinks[i].aspects == aspects(i);
   }
   if (same) {
     return;
@@ -105,7 +111,8 @@ void Dependents::setBlocks(KernelState &k, ClientRegistry &clients)
   for (int i = 0; i < n; i++) {
     BlockLink &l = k.blockLinks[i];
     l.kernel = &k;
-    l.block = clients.canonical(k.trace.more->blocks[i].id);
+    l.block = block(i);
+    l.aspects = aspects(i);
     l.next = kernelsOf(l.block);
     if (l.next) {
       l.next->prev = &l;

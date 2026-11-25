@@ -44,15 +44,15 @@ const PropValue *NodeExecContext::param(std::string_view name) const
   return i >= 0 ? &s_.params[size_t(i)] : nullptr;
 }
 
-BlockUse NodeExecContext::paramBlock(std::string_view name)
+BlockUse NodeExecContext::paramBlock(std::string_view name, ChangeAspects aspects)
 {
   const int i = s_.type->paramIndex(name);
-  return i >= 0 ? useBlock(s_.paramBlocks[size_t(i)]) : BlockUse();
+  return i >= 0 ? useBlock(s_.paramBlocks[size_t(i)], aspects) : BlockUse();
 }
 
-BlockUse NodeExecContext::useBlock(BlockId id)
+BlockUse NodeExecContext::useBlock(BlockId id, ChangeAspects aspects)
 {
-  return s_.blocks && !id.isNull() ? s_.blocks->useBlock(id) : BlockUse();
+  return s_.blocks && !id.isNull() ? s_.blocks->useBlock(id, aspects) : BlockUse();
 }
 
 IfaceRef NodeExecContext::queryBlockRaw(BlockHandle h, InterfaceId iface)

@@ -21,6 +21,8 @@ namespace lbt = litestl::binding::types;
 
 struct Thing {
   double value = 0;
+  /** What its queryInterface says, whatever the interface. */
+  QueryAnswer answer;
 };
 
 struct ThingProvider {
@@ -33,12 +35,18 @@ struct ThingProvider {
   {
     litestl::alloc::Delete(static_cast<Thing *>(b.clientData()));
   }
+  QueryAnswer queryInterface(const Datablock &b, InterfaceId) const
+  {
+    const Thing *t = static_cast<const Thing *>(b.clientData());
+    return t ? t->answer : QueryAnswer();
+  }
   static lbt::Struct<ThingProvider> *defineBindings()
   {
     auto *st = new lbt::Struct<ThingProvider>("test::ThingProvider", sizeof(ThingProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
+    BIND_STRUCT_METHOD(st, queryInterface, MARGS("block", "iface"));
     return st;
   }
 };

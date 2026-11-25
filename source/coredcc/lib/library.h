@@ -231,6 +231,10 @@ class Library {
    * Interface I of block `h`, or a null interface. Checks the block's override table
    * (if it has one), then the implementation registered for the block type with the
    * block's data as `self`, then the provider's queryInterface hook.
+   *
+   * What a block answers may change only with a ChangeBus notification of the block or a
+   * move of the Library's epoch (setOverride moves it). Evaluated graphs look at the answer
+   * again only then, and would keep a stale one otherwise.
    */
   template <class I> I query(BlockHandle h) const
   {

@@ -29,14 +29,15 @@ struct GraphEditNote {
   };
   Kind kind = Kind::All;
   BlockId block;
+  ChangeAspects aspects = kAllAspects;
   /** GraphDef::serial. */
   uint64_t def = 0;
   int64_t node = 0;
 };
 
 /**
- * A version per block that some kernel used, moved by every ChangeBus notification of the
- * block (and of all blocks, by notifyAll). Those count as edits (Runtime::touch), so the
+ * A version per block that some kernel used and the aspects of it that it used, moved by every
+ * ChangeBus notification of some of those (and of all blocks, by notifyAll). Those count as edits (Runtime::touch), so the
  * next evaluation looks at its dependencies again. A Runtime extension.
  *
  * The last edits are kept, so that an instance can look at only what they touch. An edit that
@@ -48,8 +49,8 @@ class GraphSystem {
 
   explicit GraphSystem(Runtime *rt);
 
-  /** The version of a block. From the first call on, it follows the block's changes. */
-  uint64_t versionOf(BlockId id);
+  /** The version of aspects of a block. From the first call on, it follows their changes. */
+  uint64_t versionOf(BlockId id, ChangeAspects aspects = kAllAspects);
   /** Moves when the nodes, links, groups or interface of any GraphDef do, or one is made. */
   uint64_t structureVersion() const
   {
@@ -85,14 +86,18 @@ class GraphSystem {
   }
 
  private:
-  void changed(const OwnerKey *owner);
+  void changed(const BusChange &change);
   void note(const GraphEditNote &edit);
 
   Runtime &rt_;
   ClientRegistry &clients_;
   /** By canonical id. An id that became an alias leaves its entry behind, never found again;
    * its block has another version from then on, so its users run. */
-  litestl::util::Map<BlockId, uint64_t> versions_;
+  struct Version {
+    ChangeAspects aspects = kAllAspects;
+    uint64_t version = 0;
+  };
+  litestl::util::Map<BlockId, litestl::util::Vector<Version, 1>> versions_;
   uint64_t structure_ = 0;
   static constexpr uint64_t kJournal = 4096;
   /** A ring, once it has kJournal. */

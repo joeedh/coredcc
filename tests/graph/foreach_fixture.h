@@ -107,6 +107,14 @@ inline Status queryKernel(NodeExecContext &ctx)
   return ctx.setOutput(0, GraphValue::ofFloat(s ? s.scale() : -1));
 }
 
+/* The value of its thing, of which it uses some aspects. */
+inline Status partKernel(NodeExecContext &ctx)
+{
+  const BlockUse use = ctx.paramBlock("thing", ChangeAspects(ctx.param("aspects")->asInt()));
+  const Thing *t = static_cast<const Thing *>(use.data);
+  return ctx.setOutput(0, GraphValue::ofFloat(t ? t->value : -2));
+}
+
 /* A table of `count` elements 0, 1, ...: the keys are the column `i`. */
 inline Status rangeKernel(NodeExecContext &ctx)
 {
@@ -150,6 +158,11 @@ inline void addForeachTypes(Runtime &rt)
   NodeTypeDef query("t.query");
   query.param(PropertyDef::pointerProp("thing", kThingStruct)).output("value", "float");
   addType<queryKernel>(rt, query, "t.query");
+  NodeTypeDef part("t.part");
+  part.param(PropertyDef::pointerProp("thing", kThingStruct))
+      .param(PropertyDef::intProp("aspects"))
+      .output("value", "float");
+  addType<partKernel>(rt, part, "t.part");
   NodeTypeDef range("t.range");
   range.input(PropertyDef::floatProp("count")).output("elements", "elements");
   addType<rangeKernel>(rt, range, "t.range");
@@ -191,9 +204,9 @@ struct World {
                            query<Scaled>(rt, TypeId::of("test.Scaled"), &scaled))
                .ok();
   }
-  void notify(BlockId id)
+  void notify(BlockId id, ChangeAspects aspects = kAllAspects)
   {
-    rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(id));
+    rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(id), {}, aspects);
   }
 };
 

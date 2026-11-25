@@ -82,6 +82,7 @@ struct TraceInput {
 struct BlockDep {
   /** As asked for. */
   BlockId id;
+  ChangeAspects aspects = kAllAspects;
   BlockHandle handle;
   BlockState state = BlockState::Live;
   /** So a destroy and a restore between two looks are seen. */
@@ -94,6 +95,8 @@ struct BlockDep {
 
 /** An interface a kernel asked for. */
 struct QueryDep {
+  /** Null when there is no such block. */
+  BlockId id;
   BlockHandle handle;
   InterfaceId iface;
   const IfaceTable *table = nullptr;
@@ -147,7 +150,16 @@ class DepSet {
     }
     bool operator==(const QueryKey &) const = default;
   };
-  litestl::util::Map<BlockId, bool> blocks_;
+  struct BlockKey {
+    BlockId id;
+    ChangeAspects aspects = kAllAspects;
+    uint64_t computeHash() const
+    {
+      return id.computeHash() * 0x9E3779B97F4A7C15ull ^ aspects;
+    }
+    bool operator==(const BlockKey &) const = default;
+  };
+  litestl::util::Map<BlockKey, bool> blocks_;
   litestl::util::Map<QueryKey, bool> queries_;
 };
 
@@ -155,7 +167,7 @@ class DepSet {
 class BlockReader {
  public:
   BlockReader(Runtime &rt, LibraryRef lib);
-  BlockDep read(BlockId id) const;
+  BlockDep read(BlockId id, ChangeAspects aspects) const;
   QueryDep read(BlockHandle h, InterfaceId iface) const;
   /** Whether every block and query in `t` would still read the same. */
   bool current(const Trace &t) const;
@@ -174,7 +186,7 @@ class BlockReader {
 class BlockRecorder final : public ExecBlocks {
  public:
   BlockRecorder(const BlockReader &reader, Trace &trace) : reader_(reader), trace_(trace) {}
-  BlockUse useBlock(BlockId id) override;
+  BlockUse useBlock(BlockId id, ChangeAspects aspects) override;
   IfaceRef queryBlock(BlockHandle h, InterfaceId iface) override;
 
  private:

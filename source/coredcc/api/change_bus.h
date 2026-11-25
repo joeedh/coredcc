@@ -12,10 +12,25 @@
 #include "litestl/util/function.h"
 #include "litestl/util/vector.h"
 
+#include <cstdint>
 #include <memory>
 #include <string_view>
 
 namespace coredcc {
+
+/** Which aspects of an owner changed, as bits. Bits 0 to 15 are coredcc's: geometry's are
+ * InvalidateKinds. The others are the client's, whose owners it is. */
+using ChangeAspects = uint32_t;
+inline constexpr ChangeAspects kAllAspects = ~ChangeAspects(0);
+
+/** What a change listener is told. */
+struct BusChange {
+  /** Null after notifyAll: anything may have changed. */
+  const OwnerKey *owner = nullptr;
+  /** Empty for anything in it. */
+  std::string_view member;
+  ChangeAspects aspects = kAllAspects;
+};
 
 /**
  * Collects changes and tells watchers about them at `flush()`.
@@ -50,6 +65,7 @@ class ChangeBus {
   using MetaFn = litestl::util::function<void()>;
   /** `owner` is what changed; null after notifyAll (anything may have). */
   using ListenFn = litestl::util::function<void(const OwnerKey *owner)>;
+  using ChangeFn = litestl::util::function<void(const BusChange &change)>;
 
   explicit ChangeBus(Runtime *rt);
   ~ChangeBus();
@@ -57,8 +73,11 @@ class ChangeBus {
   ChangeBus &operator=(const ChangeBus &) = delete;
 
   /** A change to `owner`'s member, or with no member to anything in it. Calls the
-   * listeners now. A null owner is ignored. */
-  void notify(const OwnerKey &owner, std::string_view member = {});
+   * listeners now. A null owner is ignored. `aspects` are for change listeners: watchers
+   * don't go by them. */
+  void notify(const OwnerKey &owner,
+              std::string_view member = {},
+              ChangeAspects aspects = kAllAspects);
   /** Anything may have changed (an opaque snapshot was restored): every watcher is read
    * again at the next flush, and the listeners are called now, with null. */
   void notifyAll();
@@ -88,6 +107,8 @@ class ChangeBus {
    * Runtime.
    */
   ScopedConnection addListener(ListenFn fn);
+  /** The same, with all that is known about the change. */
+  ScopedConnection addChangeListener(ChangeFn fn);
 
   /** Delivers pending changes; returns how many watchers fired. */
   int flush();

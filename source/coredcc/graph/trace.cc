@@ -27,7 +27,7 @@ void DepSet::add(const Trace &from, Trace &to)
     return;
   }
   for (const BlockDep &d : from.more->blocks) {
-    if (blocks_.add(d.id, true)) {
+    if (blocks_.add(BlockKey{d.id, d.aspects}, true)) {
       to.blocks().blocks.append(d);
     }
   }
@@ -43,11 +43,12 @@ BlockReader::BlockReader(Runtime &rt, LibraryRef lib)
 {
 }
 
-BlockDep BlockReader::read(BlockId id) const
+BlockDep BlockReader::read(BlockId id, ChangeAspects aspects) const
 {
   BlockDep d;
   d.id = id;
-  d.version = system_.versionOf(id);
+  d.aspects = aspects;
+  d.version = system_.versionOf(id, aspects);
   const Library *lib = lib_.get();
   d.handle = lib ? lib->find(id) : BlockHandle();
   if (const Datablock *b = lib ? lib->get(d.handle) : nullptr) {
@@ -62,7 +63,13 @@ QueryDep BlockReader::read(BlockHandle h, InterfaceId iface) const
 {
   const Library *lib = lib_.get();
   const IfaceRef r = lib ? lib->queryRaw(h, iface) : IfaceRef();
-  return QueryDep{h, iface, r.table(), r.self()};
+  const Datablock *b = lib ? lib->get(h) : nullptr;
+  const BlockId id = b ? b->id() : BlockId();
+  if (b) {
+    /* Any notification of it may go with another answer, so all are followed. */
+    system_.versionOf(id);
+  }
+  return QueryDep{id, h, iface, r.table(), r.self()};
 }
 
 bool BlockReader::current(const Trace &t) const
@@ -71,7 +78,7 @@ bool BlockReader::current(const Trace &t) const
     return true;
   }
   for (const BlockDep &d : t.more->blocks) {
-    if (!(read(d.id) == d)) {
+    if (!(read(d.id, d.aspects) == d)) {
       return false;
     }
   }
@@ -87,12 +94,12 @@ bool BlockReader::current(const Trace &t) const
   return true;
 }
 
-BlockUse BlockRecorder::useBlock(BlockId id)
+BlockUse BlockRecorder::useBlock(BlockId id, ChangeAspects aspects)
 {
   if (!reader_.library()) {
     return BlockUse();
   }
-  BlockDep d = reader_.read(id);
+  BlockDep d = reader_.read(id, aspects);
   const BlockUse use{d.handle, reader_.library()->data(d.handle)};
   trace_.blocks().blocks.append(d);
   return use;

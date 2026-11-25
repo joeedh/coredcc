@@ -66,6 +66,25 @@ Status readIds(NodeExecContext &ctx)
   return ctx.setOutput(0, GraphValue::ofFloat(v));
 }
 
+constexpr ChangeAspects kPositions = 1, kSelection = 2, kHost = 1u << 31;
+
+ChangeAspects g_aspects = kPositions | kHost;
+
+/* A block's value, as some aspects of it; -100 without it. */
+Status readAspect(NodeExecContext &ctx)
+{
+  const BlockUse use = ctx.paramBlock("thing", g_aspects);
+  const Thing *t = static_cast<const Thing *>(use.data);
+  return ctx.setOutput(0, GraphValue::ofFloat(t ? t->value : -100));
+}
+
+/* What the interface of a block says, of which it uses one aspect. */
+Status readScaleOnly(NodeExecContext &ctx)
+{
+  const Scaled s = ctx.queryBlock<Scaled>(ctx.useBlock(g_use[0], kPositions).handle);
+  return ctx.setOutput(0, GraphValue::ofFloat(s ? s.scale() : -1));
+}
+
 /* What the interface of a block says, or -1. */
 Status readScale(NodeExecContext &ctx)
 {
@@ -89,14 +108,20 @@ struct World {
     NodeTypeDef s("t.scale");
     s.output("value", "float");
     addType<readScale>(rt, s, "t.scale");
+    NodeTypeDef a("t.aspect");
+    a.param(PropertyDef::pointerProp("thing", kThingStruct)).output("value", "float");
+    addType<readAspect>(rt, a, "t.aspect");
+    NodeTypeDef o("t.scaleOnly");
+    o.output("value", "float");
+    addType<readScaleOnly>(rt, o, "t.scaleOnly");
   }
   Thing &thing(BlockHandle h)
   {
     return *static_cast<Thing *>(lib.get(h)->clientData());
   }
-  void notify(BlockId id)
+  void notify(BlockId id, ChangeAspects aspects = kAllAspects)
   {
-    rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(id));
+    rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(id), {}, aspects);
   }
 };
 
@@ -293,6 +318,116 @@ void testQueries()
   test_assert(p.is(2.5, 1));
 }
 
+/* Kernels that use some aspects of a block. */
+void testAspects(bool incremental)
+{
+  World w;
+  GraphDef def(&w.rt, &w.lib);
+  const BlockHandle h = newThing(w.lib, "t", 1);
+  const BlockId id = idOf(w.lib, h);
+  const NodeId some = add(def, "t.aspect"), all = add(def, "t.param");
+  test_assert(def.setParam(some, "thing", pointerTo(id)).ok());
+  Puller p(w.rt, &w.lib, &def, some);
+  p.inst.setIncremental(incremental);
+  test_assert(p.is(1, 1));
+  Thing &t = w.thing(h);
+
+  /* Nobody uses the selection: not even an edit. */
+  const uint64_t edit = w.rt.lastEdit();
+  t.value = 2;
+  w.notify(id, kSelection);
+  test_assert(w.rt.lastEdit() == edit && p.is(1, 0));
+  w.notify(id, kSelection | kPositions);
+  test_assert(p.is(2, 1));
+  t.value = 3;
+  w.notify(id, kHost);
+  test_assert(p.is(3, 1));
+  t.value = 4;
+  w.rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(id), "value"); /* a write of a member */
+  test_assert(p.is(4, 1));
+  t.value = 5;
+  w.notify(id, 0); /* none, so it tells no one */
+  test_assert(p.is(4, 0));
+  w.rt.ext<ChangeBus>().notifyAll();
+  test_assert(p.is(5, 1));
+
+  /* Beside a kernel that uses all of it: each by its own. */
+  test_assert(def.setParam(all, "thing", pointerTo(id)).ok());
+  Puller q(w.rt, &w.lib, &def, all);
+  q.inst.setIncremental(incremental);
+  test_assert(p.is(5, 0) && q.is(5, 1));
+  t.value = 6;
+  const uint64_t visits = p.inst.totalVisits();
+  w.notify(id, kSelection);
+  test_assert(p.inst.isCurrent(p.path) == incremental && !q.inst.isCurrent(q.path));
+  test_assert(p.is(5, 0) && q.is(6, 1));
+  test_assert(!incremental || p.inst.totalVisits() == visits); /* not even looked at */
+  w.notify(id, kPositions);
+  test_assert(p.is(6, 1) && q.is(6, 1));
+  /* Also in one instance, by reading both. */
+  const SocketPath both[] = {SocketPath::of(some, "value"), SocketPath::of(all, "value")};
+  litestl::util::Vector<Status> results;
+  test_assert(p.inst.evaluate(both, results).ok());
+  t.value = 7;
+  const uint64_t runs = p.inst.totalRuns(), looked = p.inst.totalVisits();
+  w.notify(id, kSelection);
+  test_assert(p.inst.evaluate(both, results).ok() && p.inst.totalRuns() == runs + 1);
+  test_assert(p.inst.totalVisits() == looked + (incremental ? 1 : 2));
+  test_assert(*p.inst.value(both[0]) == GraphValue::ofFloat(6));
+  test_assert(*p.inst.value(both[1]) == GraphValue::ofFloat(7));
+
+  /* A kernel that uses others than in its last run. */
+  g_aspects = kSelection;
+  w.notify(id, kPositions);
+  test_assert(p.is(7, 1));
+  g_aspects = kPositions | kHost;
+  t.value = 8;
+  w.notify(id, kPositions);
+  test_assert(p.is(7, 0));
+  w.notify(id, kSelection);
+  test_assert(p.is(8, 1));
+  t.value = 7;
+  w.notify(id, kHost);
+  test_assert(p.is(7, 1));
+
+  /* It goes away and comes back: whatever the aspects. */
+  test_assert(w.lib.markDeleted(h).ok() && p.is(-100, 1));
+  test_assert(w.lib.restoreFromHistory(h).ok() && p.is(7, 1));
+}
+
+/* An answer may change with a notification of any aspect. */
+void testQueryAspects(bool incremental)
+{
+  World w;
+  test_assert((registerImpl<Scaled, ThingScaled>(w.rt, "test.Other").ok()));
+  GraphDef def(&w.rt, &w.lib);
+  const NodeId n = add(def, "t.scaleOnly");
+  const BlockHandle h = newThing(w.lib, "t", 0);
+  g_use[0] = idOf(w.lib, h);
+  ThingScaled mine{7}, yours{8};
+  Puller p(w.rt, &w.lib, &def, n);
+  p.inst.setIncremental(incremental);
+  Thing &t = w.thing(h);
+  t.answer = QueryAnswer{TypeId::of("test.Other"), &mine};
+  test_assert(p.is(7, 1));
+  t.answer.self = &yours;
+  w.notify(g_use[0], kSelection);
+  test_assert(p.is(8, 1));
+  t.answer.self = &mine;
+  w.notify(g_use[0], kSelection);
+  test_assert(p.is(7, 1));
+  /* It answers the same: looked at, and not run. */
+  w.notify(g_use[0], kSelection);
+  test_assert(!p.inst.isCurrent(p.path) && p.is(7, 0));
+  w.notify(g_use[0], kPositions);
+  test_assert(p.is(7, 1));
+  w.rt.ext<ChangeBus>().notifyAll();
+  test_assert(p.is(7, 1));
+  t.answer.self = &yours;
+  w.notify(g_use[0], kSelection); /* still followed */
+  test_assert(!p.inst.isCurrent(p.path) && p.is(8, 1));
+}
+
 /* Instances and defs that come and go. */
 void testLifetimes()
 {
@@ -339,6 +474,10 @@ int main()
   testParams();
   testIds();
   testQueries();
+  for (bool incremental : {false, true}) {
+    testAspects(incremental);
+    testQueryAspects(incremental);
+  }
   testLifetimes();
   return test_end();
 }

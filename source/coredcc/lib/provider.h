@@ -47,7 +47,8 @@ class RekeyContext {
  * - `destroy` frees the data (for a host-owned block, only the wrapper). It runs during
  *   a sweep: library reads are allowed, void mutations are deferred, creates fail.
  * - `queryInterface` (optional) answers interfaces the block type doesn't implement
- *   itself, the last step of Library::query.
+ *   itself, the last step of Library::query. Its answer may change only with a ChangeBus
+ *   notification of the block or a move of the Library's epoch (see Library::query).
  * - `onWeakTargetLost` (optional) is told when a block that `user`'s data weakly references is
  *   about to be destroyed, so a child can keep its world transform. `user` has its data: it is
  *   Live, or InHistory from Live.

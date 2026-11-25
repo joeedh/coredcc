@@ -91,15 +91,33 @@ GraphValue::Type graphTypeFor(PropKind kind)
 
 /* ---- copying ---- */
 
-/* The count is atomic: workers may copy values. Plain new: there are many. */
+/* The count is atomic: workers may copy values. There are many, so a release build allocates
+ * them plainly, and a debug build so that leaks show. */
 struct GraphValue::Matrix {
   std::atomic<int> refs{1};
   double m[16];
+
+  static Matrix *make()
+  {
+#ifdef NDEBUG
+    return new Matrix;
+#else
+    return litestl::alloc::New<Matrix>("coredcc::GraphValue matrix");
+#endif
+  }
+  static void free(Matrix *m)
+  {
+#ifdef NDEBUG
+    delete m;
+#else
+    litestl::alloc::Delete(m);
+#endif
+  }
 };
 
 double *GraphValue::newMatrix()
 {
-  m_ = new Matrix;
+  m_ = Matrix::make();
   type_ = Type::Mat4;
   return m_->m;
 }
@@ -111,7 +129,7 @@ void GraphValue::reset()
   }
   else if (type_ == Type::Mat4) {
     if (m_->refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-      delete m_;
+      Matrix::free(m_);
     }
   }
   else if (type_ == Type::Payload) {

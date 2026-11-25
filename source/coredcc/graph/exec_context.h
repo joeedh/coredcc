@@ -4,6 +4,7 @@
  * NodeExecContext: what a kernel sees while it runs.
  */
 
+#include "coredcc/api/change_bus.h"
 #include "coredcc/base/runtime.h"
 #include "coredcc/graph/value.h"
 #include "coredcc/lib/block.h"
@@ -29,7 +30,7 @@ struct BlockUse {
  * test's. */
 class ExecBlocks {
  public:
-  virtual BlockUse useBlock(BlockId id) = 0;
+  virtual BlockUse useBlock(BlockId id, ChangeAspects aspects) = 0;
   virtual IfaceRef queryBlock(BlockHandle h, InterfaceId iface) = 0;
 
  protected:
@@ -100,11 +101,15 @@ class NodeExecContext {
    * paramBlock. */
   const PropValue *param(std::string_view name) const;
   /** useBlock of a Pointer param's target. Nothing is recorded for a null pointer. */
-  BlockUse paramBlock(std::string_view name);
+  BlockUse paramBlock(std::string_view name, ChangeAspects aspects = kAllAspects);
 
   /** A block, recorded as a dependency: the node runs again when it changes, appears or
-   * goes away. The handle is null if there is none. */
-  BlockUse useBlock(BlockId id);
+   * goes away. The handle is null if there is none.
+   *
+   * With `aspects`, only changes of those count (ChangeBus::notify), as if the kernel read
+   * nothing else of it: one that reads a mesh's positions doesn't run when its selection
+   * changes. Appearing, going away and being renamed always count. */
+  BlockUse useBlock(BlockId id, ChangeAspects aspects = kAllAspects);
   /** An interface of a block; the answer is recorded as a dependency. Null if it has none.
    * What a block answers may change only with a notification of the block or a move of the
    * Library's epoch (an override does move it): without either, the node isn't looked at

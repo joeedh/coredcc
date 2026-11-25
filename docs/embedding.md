@@ -69,7 +69,12 @@ Unreal, coredcc is exactly one module, so they exist once.
 - Payloads that a kernel made may outlive the Library. One that aliases a block's data is null then, so
   `get()` can be null even for a value that was there.
 - A host that changes block data itself must call `ChangeBus::notify` with its owner, or graphs that read
-  it aren't evaluated again.
+  it aren't evaluated again. It may say which aspects of the data changed (`ChangeAspects`), so that
+  kernels that don't use those don't run.
+- **What a block answers to a query** (`Library::query`, and `NodeExecContext::queryBlock` in a kernel) may
+  change only with a notification of the block, or a move of the Library's epoch: an override does move
+  it. That holds for providers' `queryInterface` too. Otherwise a graph keeps the old answer, and calls a
+  table or `self` that may be gone.
 - A program that evaluates graphs for the user's objects builds a standalone GraphDef around theirs, and
   connects with interior sockets (`graph/interior.h`). `tests/graph/test_graph_scene.cc` is an example.
 

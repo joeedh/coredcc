@@ -289,6 +289,37 @@ static void test_listeners()
   test_assert(!outlives.connected());
 }
 
+/* Change listeners get all of it. */
+static void test_change_listeners()
+{
+  World w;
+  Context ctx = w.context();
+  ChangeBus &bus = w.rt.ext<ChangeBus>();
+  int calls = 0;
+  OwnerKey owner;
+  std::string member;
+  ChangeAspects aspects = 0;
+  ScopedConnection l = bus.addChangeListener([&](const BusChange &c) {
+    calls++;
+    owner = c.owner ? *c.owner : OwnerKey();
+    member = std::string(c.member);
+    aspects = c.aspects;
+  });
+  const OwnerKey mesh = OwnerKey::ofBlock(w.meshId(0));
+  bus.notify(mesh, "radius", 6);
+  test_assert(calls == 1 && owner == mesh && member == "radius" && aspects == 6);
+  bus.notify(mesh);
+  test_assert(calls == 2 && member.empty() && aspects == kAllAspects);
+  test_assert(setValue(ctx, "tool.strength", PropValue::ofFloat(0.5)).ok());
+  test_assert(calls == 3 && member == "strength" && aspects == kAllAspects);
+  bus.notifyAll();
+  test_assert(calls == 4 && owner == OwnerKey() && member.empty() && aspects == kAllAspects);
+  bus.bumpEpoch();
+  l.disconnect();
+  bus.notifyAll();
+  test_assert(calls == 4);
+}
+
 static void test_notify_all()
 {
   World w;
@@ -388,6 +419,7 @@ static void test_unwatching()
 int main()
 {
   test_listeners();
+  test_change_listeners();
   test_notify_all();
   test_notified_before_update();
   test_busy_while_evaluating();
