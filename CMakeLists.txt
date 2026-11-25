@@ -49,7 +49,7 @@ if(NOT TARGET util)
   endif()
 endif()
 # When a host supplied litestl non-SYSTEM, its header warnings would hit coredcc's /WX.
-foreach(_lt util platform math binding)
+foreach(_lt util platform math binding io lz4)
   if(TARGET ${_lt})
     set_property(TARGET ${_lt} PROPERTY SYSTEM ON)
   endif()

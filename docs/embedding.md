@@ -29,6 +29,19 @@ Unreal, coredcc is exactly one module, so they exist once.
   that copy (`if(NOT TARGET util)`). The two pins must be compatible, and the host's pin
   wins.
 
+- coredcc links litestl's `io` target, and through it the lz4 that litestl vendors. A host
+  that has its own lz4 gets two copies of its symbols when both are linked statically.
+
+## Files
+- `loadLibrary` is safe on any input. It is bounded by `LoadLimits`: 2 GiB and 1,048,576 blocks
+  by default, 128 MiB in a 32-bit process. Memory that providers allocate in `deserialize` is
+  theirs to bound.
+- A load isn't undoable and needs a library without records: clear the history first.
+- **Transient blocks** (the host's data, such as actors) aren't in the file. References to them
+  load as MissingBlock records. Create them again with `createWithId` under the same ids, so ids
+  must be stable across sessions. `SaveReport` lists them, and the blocks only they lead to.
+- A type that was registered after a load reads its blocks with `resolvePlaceholders`.
+
 ## Threading
 - The public API is single-threaded, on the host's main thread.
 - Foreign (JS) interface implementations are thread-affine. Parallel algorithms check

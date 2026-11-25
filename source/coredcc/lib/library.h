@@ -33,7 +33,8 @@ struct LibraryToken;
  *
  * **Busy rules.** While a sweep runs (collect(), destroyFromHistory(), the destructor),
  * providers' `destroy` may call back in: reads work, void mutations are deferred
- * until the sweep ends, and calls that return a Status fail with Busy.
+ * until the sweep ends, and calls that return a Status fail with Busy. The same holds in
+ * providers' `deserialize` while a load runs.
  */
 class Library {
  public:
@@ -51,6 +52,11 @@ class Library {
   /** Names that files brought in and the Runtime doesn't know (a missing add-on's structs
    * and runtime owners), so a save can write them again. */
   NameTable &fileNames()
+  {
+    return fileNames_;
+  }
+
+  const NameTable &fileNames() const
   {
     return fileNames_;
   }
@@ -191,7 +197,8 @@ class Library {
   /** Sets a row again: the undo of forceUnlinkRef. */
   Status relinkRef(BlockHandle placeholder, int index, BlockId target);
 
-  /** Every reference out of `h`: the provider's, the slots', then the attachments'. */
+  /** Every reference out of `h`: the provider's, the slots', then the attachments'
+   * (opaque ones included). */
   Status foreachRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const;
   /** The references in the block's data alone, as its provider reports them. */
   Status foreachDataRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const;
@@ -229,7 +236,8 @@ class Library {
   /* ---- attachments ---- */
 
   /** Attaches client data to a block under `type`, which must be in the
-   * AttachmentTypeRegistry; its provider destroys the data with the block. The undoable
+   * AttachmentTypeRegistry; its provider destroys the data with the block. AlreadyExists if
+   * the block has one, read or opaque. The undoable
    * attach and detach commands are in command/. */
   Status attach(BlockHandle h, TypeId type, void *data);
   /** Removes an attachment without destroying it, returning its data. */
@@ -241,6 +249,17 @@ class Library {
     if (const Datablock *b = rec(h)) {
       for (const Datablock::Attachment &a : b->attachments_) {
         fn(a.type, a.data);
+      }
+    }
+  }
+
+  /** Calls fn(const OpaqueAttachment &) for each attachment that this build couldn't read. */
+  template <class Fn> void forEachOpaqueAttachment(BlockHandle h, Fn &&fn) const
+  {
+    const Datablock *b = rec(h);
+    if (b && b->opaque_) {
+      for (const OpaqueAttachment &o : *b->opaque_) {
+        fn(o);
       }
     }
   }
@@ -284,10 +303,10 @@ class Library {
   {
     return sweeping_;
   }
-  /** Sweeping or collecting: calls that return a Status fail with Busy. */
+  /** Sweeping, collecting or loading: calls that return a Status fail with Busy. */
   bool busy() const
   {
-    return sweeping_ || collecting_;
+    return sweeping_ || collecting_ || loading_;
   }
 
   /** Never reuse a freed record's slot, so a stale handle always resolves to null. For
@@ -301,7 +320,7 @@ class Library {
   Status validate() const;
 
  private:
-  friend Status readPayload(Library &lib, BlockHandle h, const BlockPayload &payload);
+  friend class detail::LibraryFiller;
 
   Datablock *rec(BlockHandle h)
   {
@@ -380,6 +399,8 @@ class Library {
 
   int doomedCount_ = 0;
   bool releasing_ = false;
+  /** A load is calling providers. */
+  bool loading_ = false;
   /** Doomed blocks without Host pins, waiting for releaseDoomed. */
   litestl::util::Vector<BlockHandle> released_;
   /** Errors of deferred destructions: the first few, and how many there were. */

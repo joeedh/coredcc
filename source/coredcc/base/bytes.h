@@ -41,6 +41,8 @@ class BytesWriter {
   void str(std::string_view s);
   /** A u32 length and the bytes. */
   void blob(std::span<const uint8_t> bytes);
+  /** The bytes alone. */
+  void raw(std::span<const uint8_t> bytes);
 
   /** Starts a section the reader gets as one blob(); returns the token endSection() takes.
    * Sections nest. */
@@ -90,6 +92,8 @@ class BytesReader {
   /** A view into the bytes. A NUL inside is a failure. */
   std::string_view str();
   std::span<const uint8_t> blob();
+  /** The next `n` bytes. */
+  std::span<const uint8_t> raw(size_t n);
   /** A u32 item count for items of at least `minItemBytes` (more than 0) bytes each. Fails
    * when that many can't follow, so a loop over the count is bounded by the input. */
   uint32_t count(size_t minItemBytes);

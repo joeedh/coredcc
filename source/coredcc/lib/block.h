@@ -15,11 +15,15 @@
 #include "litestl/util/vector.h"
 
 #include <cstdint>
+#include <memory>
 
 namespace coredcc {
 
 class Datablock;
 class Library;
+namespace detail {
+class LibraryFiller;
+}
 
 /** A session-local, generational handle to a block record in one Library. Persistent
  * and undo data store BlockIds instead. */
@@ -109,6 +113,14 @@ struct BlockPayload {
   litestl::util::Vector<uint8_t> bytes;
   /** The ref table: rows in the order they were written, null ones and repeats included. */
   litestl::util::Vector<RefCell> refs;
+};
+
+/** An attachment from a file that this build can't read. It is kept, its references count,
+ * and a save writes it back. */
+struct OpaqueAttachment {
+  litestl::util::string typeName;
+  /** `version` is the attachment type's. */
+  BlockPayload payload;
 };
 
 /** Why a record is a placeholder. */
@@ -281,6 +293,7 @@ class Datablock {
 
  private:
   friend class Library;
+  friend class detail::LibraryFiller;
 
   struct Slot {
     /** The provider or attachment type that owns the slot. */
@@ -309,6 +322,8 @@ class Datablock {
   void *clientData_ = nullptr;
   litestl::util::Vector<Slot> slots_;
   litestl::util::Vector<Attachment> attachments_;
+  /** Null for none. */
+  std::unique_ptr<litestl::util::Vector<OpaqueAttachment, 1>> opaque_;
   litestl::util::Vector<Override> overrides_;
   litestl::util::string placeholderType_;
   litestl::util::string sourceName_;

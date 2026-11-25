@@ -123,6 +123,12 @@ class BlockReader {
   {
     return data_;
   }
+  /** Bounds what entries() and bag() allocate: they take from `*left` (null: no bound), and
+   * fail with OutOfRange when it runs out. A load sets it. */
+  void setBudget(uint64_t *left)
+  {
+    budget_ = left;
+  }
   /** For ids and names. Other blocks may not have their data yet. */
   Library &library() const
   {
@@ -136,12 +142,15 @@ class BlockReader {
   /** A row of the table by a stored index; null (and a failure) for a bad index. */
   const RefCell *row();
   bool readEntry(BlockEntry &e);
+  uint32_t entryCount();
+  bool charge(uint64_t bytes);
 
   Library &lib_;
   const BlockPayload &payload_;
   BytesReader bytes_;
   detail::EntryCodec codec_;
   void *data_ = nullptr;
+  uint64_t *budget_ = nullptr;
 };
 
 /** What BlockProvider::duplicate gives its copy to. */

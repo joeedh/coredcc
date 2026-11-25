@@ -89,6 +89,13 @@ void BytesWriter::blob(std::span<const uint8_t> bytes)
   }
 }
 
+void BytesWriter::raw(std::span<const uint8_t> bytes)
+{
+  if (uint8_t *p = grow(bytes.size()); p && !bytes.empty()) {
+    memcpy(p, bytes.data(), bytes.size());
+  }
+}
+
 size_t BytesWriter::beginSection()
 {
   const size_t token = size_t(data_.size());
@@ -199,9 +206,13 @@ std::string_view BytesReader::str()
 
 std::span<const uint8_t> BytesReader::blob()
 {
-  const uint32_t n = u32();
+  return raw(u32());
+}
+
+std::span<const uint8_t> BytesReader::raw(size_t n)
+{
   const uint8_t *p = take(n);
-  return p ? std::span(p, size_t(n)) : std::span<const uint8_t>();
+  return p ? std::span(p, n) : std::span<const uint8_t>();
 }
 
 uint32_t BytesReader::count(size_t minItemBytes)

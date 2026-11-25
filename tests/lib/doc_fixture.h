@@ -210,17 +210,23 @@ struct DocProvider {
 
 inline const TypeId kDoc = TypeId::of("test.Doc");
 
-inline void registerDoc(Runtime &rt, DocHost &host, uint32_t version = 3)
+/** Any number of types can share a host. */
+inline void registerDoc(Runtime &rt,
+                        DocHost &host,
+                        uint32_t version = 3,
+                        const char *name = "test.Doc",
+                        ClientId client = ClientId::of(kCoredccClient))
 {
   host.rt = &rt;
-  test_assert((registerImpl<BlockProvider, DocProvider>(rt, "test.Doc#provider").ok()));
+  const std::string impl = std::string(name) + "#provider";
+  test_assert((registerImpl<BlockProvider, DocProvider>(rt, impl).ok()));
   DocProvider *p = litestl::alloc::New<DocProvider>("provider");
   p->host = &host;
-  Result<Owned<BlockProvider>> owned = own<BlockProvider>(rt, "test.Doc#provider", p);
+  Result<Owned<BlockProvider>> owned = own<BlockProvider>(rt, impl, p);
   test_assert(owned.ok());
   BlockTypeInfo info;
-  info.name = "test.Doc";
-  info.client = ClientId::of(kCoredccClient);
+  info.name = name;
+  info.client = client;
   info.payloadVersion = version;
   test_assert(rt.ext<BlockTypeRegistry>().add(info, std::move(owned).value()).ok());
 }

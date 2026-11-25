@@ -807,3 +807,36 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
 - The `attachments` collection lists attachments whose type has a `dataStruct`; its item struct id
   is `coredcc.Attachment`, which has no struct, so items are only reached through their own type's.
 - Attach and detach post a change of the owner's `attachments` member.
+
+### A4: save and load (2026-11-24)
+- **Files:** `lib/io/library_io.h` (saving, limits, reports), `lib/io/{save,parse,plan_ids,load,fill,
+  pack}.cc`; `api/library_io.h` has `loadLibrary` and `resolvePlaceholders`, which notify.
+- **A load adds every record as a placeholder, then fills it in place**, which is exactly what
+  `resolvePlaceholders` does later. So a half-loaded library has no Live block without data:
+  `resolveRef` gives null for a block that isn't read yet, and `usersOf` uses the tables.
+- **Format changes from the plan:**
+  - Two kinds of storage, `Payload` and `NoPayload`. A `MissingType` kind would have made a build
+    without a type rewrite the file; now it writes the same bytes.
+  - A `NAME` entry is text or an id (the A1 rule for names nobody knows). A block's own name is
+    inline; `NAME` holds client, type, namespace and source names.
+  - Indices are stored plus 1, with 0 for none. Each blob is used at most once, and in this version
+    each must be used, so a blob can't be copied many times.
+- **Costs:** `kRecordCost` is `sizeof(Datablock)` (about 930) plus 640; rows, slots, attachments and
+  names have their own costs in `format.h`, which include Vector growth. A 1,048,576-block file fits
+  in 2 GiB, barely. `BlockReader::setBudget` bounds what entries allocate (208 bytes for 13 stored):
+  past it the block stays a placeholder.
+- **Name collisions are refused (InvalidArgument)**, and they are a real attack: FNV-1a 64 collisions
+  between readable names take seconds to make (the test has a pair, found with lattice reduction).
+  Without the check a file could pass its blocks off as another type's.
+- **A missing-block placeholder that was never a record** is written if it is reachable and has a
+  name, flags, slots or attachments.
+- **An attachment type without `serialize`** is counted in `SaveReport::skippedAttachments`.
+- A name table that is full doesn't fail the load: those names are written as ids later, with an
+  issue.
+- `Library::attach` is AlreadyExists over an opaque attachment of the type. Nothing removes one, and
+  `forceUnlinkRef` doesn't reach its table, so deleting a block that an opaque attachment
+  references Strongly takes the attachment's owner with it.
+- `Library::busy()` is also true in a load; the Busy message says "a sweep or a load".
+- A deleted (InHistory) placeholder isn't resolved; after its restore, the next
+  `resolvePlaceholders` does.
+- `BytesWriter::raw`, `BytesReader::raw` and `Library::fileNames() const` are new.

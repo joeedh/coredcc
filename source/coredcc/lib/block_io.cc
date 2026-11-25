@@ -1,5 +1,6 @@
 #include "coredcc/lib/block_io.h"
 
+#include "coredcc/lib/io/fill.h"
 #include "coredcc/lib/library.h"
 
 #include <string>
@@ -170,11 +171,33 @@ void BlockReader::ref(RefCell &cell)
   cell.cache = BlockHandle();
 }
 
+uint32_t BlockReader::entryCount()
+{
+  const uint32_t n = bytes_.count(kMinEntryBytes);
+  return charge(uint64_t(n) * sizeof(BlockEntry) * 4) ? n : 0;
+}
+
+/* What an entry allocates is a multiple of its bytes: hundreds for a small one. */
+bool BlockReader::charge(uint64_t bytes)
+{
+  if (budget_ && bytes > *budget_) {
+    bytes_.fail(StatusCode::OutOfRange, "the entries need more memory than allowed");
+    return false;
+  }
+  if (budget_) {
+    *budget_ -= bytes;
+  }
+  return bytes_.ok();
+}
+
 bool BlockReader::readEntry(BlockEntry &e)
 {
   e.name = std::string(bytes_.str()).c_str();
   const uint8_t tag = bytes_.u8();
   const uint32_t refs = bytes_.count(kRefIndexBytes);
+  if (!charge(uint64_t(refs) * sizeof(RefCell) * 4)) {
+    return false;
+  }
   for (uint32_t i = 0; i < refs; i++) {
     const RefCell *from = row();
     if (!from) {
@@ -208,7 +231,7 @@ bool BlockReader::readEntry(BlockEntry &e)
 
 void BlockReader::entries(Vector<BlockEntry> &out)
 {
-  const uint32_t n = bytes_.count(kMinEntryBytes);
+  const uint32_t n = entryCount();
   for (uint32_t i = 0; i < n; i++) {
     BlockEntry e;
     if (!readEntry(e)) {
@@ -220,7 +243,7 @@ void BlockReader::entries(Vector<BlockEntry> &out)
 
 void BlockReader::bag(PropertyBag &bag, Vector<BlockEntry> &unread)
 {
-  const uint32_t n = bytes_.count(kMinEntryBytes);
+  const uint32_t n = entryCount();
   for (uint32_t i = 0; i < n; i++) {
     BlockEntry e;
     if (!readEntry(e)) {
@@ -377,33 +400,7 @@ Status readPayload(Library &lib, BlockHandle h, const BlockPayload &payload)
                           "' was written by a newer version of its type")
                              .c_str());
   }
-  BlockReader in(lib, payload);
-  lib.beginNoCollect(); /* nothing keeps a half-made block */
-  BlockProvider provider = (*type)->provider.get();
-  Status s = provider.deserialize(*b, in);
-  lib.endNoCollect();
-  if (lib.runtime().hasStickyError()) {
-    s = lib.runtime().takeStickyError(); /* a foreign deserialize threw */
-  }
-  if (!s.ok()) {
-    return s; /* the provider freed what it made */
-  }
-  if (!in.bytes().ok()) {
-    s = in.bytes().status();
-  }
-  else if (!in.bytes().atEnd()) {
-    s = Status::error(StatusCode::InvalidArgument,
-                      (std::to_string(in.bytes().remaining()) +
-                       " bytes of the payload were left over")
-                          .c_str());
-  }
-  else if (!in.data()) {
-    s = Status::error(StatusCode::Internal, "deserialize succeeded without calling setData");
-  }
-  if (in.data()) {
-    lib.adoptData(h, in.data(), s.ok());
-  }
-  return s;
+  return detail::LibraryFiller::read(lib, h, **type, payload);
 }
 
 } // namespace coredcc

@@ -77,14 +77,14 @@ Status Library::busyIfSweeping(const char *what) const
     return Status();
   }
   return Status::error(StatusCode::Busy,
-                       (std::string(what) + ": the library is sweeping (called from a "
-                                            "provider's destroy)")
+                       (std::string(what) + ": the library is busy (called from a provider "
+                                            "during a sweep or a load)")
                            .c_str());
 }
 
 void Library::runOrDefer(litestl::util::function<void()> fn)
 {
-  if (sweeping_) {
+  if (sweeping_ || loading_) {
     deferred_.append(std::move(fn));
   }
   else {
@@ -473,6 +473,13 @@ Status Library::foreachRef(BlockHandle h, litestl::util::function<void(RefCell &
       CDCC_TRY(visitRefs(*b, fn, [&](RefVisitor &v) { p.foreachRef(a.data, v); }));
     }
   }
+  if (b->opaque_) {
+    for (OpaqueAttachment &o : *b->opaque_) {
+      for (RefCell &cell : o.payload.refs) {
+        fn(cell);
+      }
+    }
+  }
   return Status();
 }
 
@@ -568,7 +575,10 @@ Status Library::attach(BlockHandle h, TypeId type, void *data)
                           "' is not a registered attachment type")
                              .c_str());
   }
-  if (attachment(h, type)) {
+  bool has = attachment(h, type) != nullptr;
+  forEachOpaqueAttachment(
+      h, [&](const OpaqueAttachment &o) { has |= TypeId::of(o.typeName.c_str()) == type; });
+  if (has) {
     return Status::error(StatusCode::AlreadyExists, "attach: the block has this attachment");
   }
   b->attachments_.append(Datablock::Attachment{type, data});
@@ -630,7 +640,9 @@ void Library::adoptData(BlockHandle h, void *data, bool keep)
   types_.provider(b->type_).destroy(*b);
   sweeping_ = false;
   b->clientData_ = nullptr;
-  runDeferred();
+  if (!loading_) {
+    runDeferred();
+  }
 }
 
 /* ---- validation ---- */

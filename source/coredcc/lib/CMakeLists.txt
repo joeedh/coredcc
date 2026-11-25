@@ -5,10 +5,17 @@ coredcc_library(coredcc_lib
     block_io.cc
     gc.cc
     id_key.cc
+    io/fill.cc
+    io/load.cc
+    io/pack.cc
+    io/parse.cc
+    io/plan_ids.cc
+    io/save.cc
     library.cc
     lifetime.cc
     placeholder.cc
     registry.cc
   DEPS
     coredcc_props
+    io
 )

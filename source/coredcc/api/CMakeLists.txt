@@ -4,6 +4,7 @@ coredcc_library(coredcc_api
     bindings.cc
     change_bus.cc
     context.cc
+    library_io.cc
     resolve.cc
     struct.cc
   DEPS
