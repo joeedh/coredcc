@@ -1,5 +1,6 @@
 #include "coredcc/scene/commands.h"
 
+#include "coredcc/api/ref_text.h"
 #include "coredcc/command/block_commands.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/command/executor.h"
@@ -384,10 +385,8 @@ struct DeleteObjects : ChangesCommand {
     int approximate = 0;
     if (ctx.inputs()->get("keepChildrenWorld")->asBool()) {
       HandleSet gone;
-      for (BlockHandle h : objects) {
-        for (BlockHandle x : deletePreview(*s.lib, h)) {
-          gone.add(x, 0);
-        }
+      for (BlockHandle x : deletePreview(*s.lib, {objects.data(), objects.size()})) {
+        gone.add(x, 0);
       }
       Vector<Child> found;
       CDCC_TRY(children(*s.lib, gone, time, found));
@@ -396,22 +395,21 @@ struct DeleteObjects : ChangesCommand {
       }
     }
     const CommandDef *del = ctx.runtime().ext<CommandRegistry>().find(kDeleteBlockCommand);
-    int64_t count = 0;
+    Vector<BlockId> ids;
     for (BlockHandle h : objects) {
-      const Datablock *b = s.lib->get(h);
-      if (!b || b->state() != BlockState::Live) {
-        continue; /* another one's deletion took it along */
-      }
-      PropertyBag in = del->newInputs();
-      Status set = in.set("block", detail::pointerTo(*s.lib, h));
-      Result<PropertyBag> out =
-          set.ok() ? ctx.executor()->runSub(ctx, *del, std::move(in)) : Result<PropertyBag>(set);
-      if (!out.ok()) {
-        changes.undo(ctx); /* the executor undoes the deletions, not this */
-        return out.status();
-      }
-      count += out->get("count")->asInt();
+      ids.append(s.lib->get(h)->id());
     }
+    PropertyBag in = del->newInputs();
+    Status set = in.set(
+        "blocks",
+        PropValue::ofString(formatBlockIds(ctx.runtime(), {ids.data(), ids.size()}).c_str()));
+    Result<PropertyBag> out =
+        set.ok() ? ctx.executor()->runSub(ctx, *del, std::move(in)) : Result<PropertyBag>(set);
+    if (!out.ok()) {
+      changes.undo(ctx); /* the executor undoes the deletion, not this */
+      return out.status();
+    }
+    const int64_t count = out->get("count")->asInt();
     ctx.outputs()->set("count", PropValue::ofInt(count)).ignore();
     setApproximate(ctx, approximate);
     return Status();

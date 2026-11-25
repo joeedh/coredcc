@@ -901,6 +901,14 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   `setWorld` and `applyDelta` return the channels. The bound objects stay inside scene.ts.
 - **Mutations:** 52, each alone; all are found.
 
+### On P2's library IO round 2 (ff50545)
+- `core.object.delete` runs one `core.block.delete` with `blocks`, and one deletePreview for all.
+- Every scene command refuses a Context of another Library than its own, and one whose Library is
+  gone (P2's finding 16): `HeldScene::get(ctx)`, ObjectChanges, LibraryRef instead of `Library *`.
+- NewScene and AddObject count what the history holds for them (`CreatedBlocks::memSize`).
+- Test: `test_scene_documents`. Mutations: 17; 16 are found, and the other one's code was redundant and
+  is gone (ApplyDelta kept a Library of its own).
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms

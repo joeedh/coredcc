@@ -21,6 +21,7 @@ coredcc_test(test_scene_paths SOURCES scene/test_scene_paths.cc DEPS coredcc_sce
 coredcc_test(test_scene_membership SOURCES scene/test_scene_membership.cc DEPS coredcc_scene)
 coredcc_test(test_scene_transforms SOURCES scene/test_scene_transforms.cc DEPS coredcc_scene)
 coredcc_test(test_scene_outline SOURCES scene/test_scene_outline.cc DEPS coredcc_scene)
+coredcc_test(test_scene_documents SOURCES scene/test_scene_documents.cc DEPS coredcc_scene)
 coredcc_test(test_scene_objects SOURCES scene/test_scene_objects.cc DEPS coredcc_scene)
 coredcc_test(test_scene_pick SOURCES scene/test_scene_pick.cc DEPS coredcc_bind coredcc_scene)
 coredcc_test(test_scene_bvh SOURCES scene/test_scene_bvh.cc DEPS coredcc_scene)

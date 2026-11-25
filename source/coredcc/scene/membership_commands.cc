@@ -141,12 +141,16 @@ Status failed(const std::string &what)
 struct HeldScene {
   HistoryBlock block;
 
-  Result<SceneOf> get() const
+  Result<SceneOf> get(const Context &ctx) const
   {
+    Result<Library *> lib = detail::libraryOf(ctx, block.library());
+    if (!lib.ok()) {
+      return lib.status();
+    }
     SceneOf s;
-    s.lib = block.library();
+    s.lib = *lib;
     s.handle = block.get();
-    s.scene = s.lib ? Scene::of(*s.lib, s.handle) : nullptr;
+    s.scene = Scene::of(*s.lib, s.handle);
     if (!s.scene) {
       return failed("the scene is gone");
     }
@@ -190,7 +194,7 @@ Result<BlockHandle> memberOf(Context &ctx, const char *input)
 /* ---- new ---- */
 
 struct NewScene {
-  Library *lib = nullptr;
+  LibraryRef lib;
   CreatedBlocks created;
 
   Status canRun(Context &ctx) const
@@ -199,30 +203,37 @@ struct NewScene {
   }
   Status exec(Context &ctx)
   {
-    lib = ctx.library();
-    Result<BlockHandle> h = newScene(*lib, ctx.inputs()->get("name")->asString().c_str());
+    Library &l = *ctx.library();
+    lib = l.ref();
+    Result<BlockHandle> h = newScene(l, ctx.inputs()->get("name")->asString().c_str());
     if (!h.ok()) {
       return h.status();
     }
-    created.add(*lib, *h);
-    return ctx.outputs()->set("scene", detail::pointerTo(*lib, *h));
+    created.add(l, *h);
+    return ctx.outputs()->set("scene", detail::pointerTo(l, *h));
   }
-  void undo(Context &)
+  void undo(Context &ctx)
   {
-    created.undo(*lib);
+    Result<Library *> l = detail::libraryOf(ctx, lib);
+    if (!l.ok()) {
+      report(ctx, l.status());
+      return;
+    }
+    created.undo(**l);
   }
-  Status redo(Context &)
+  Status redo(Context &ctx)
   {
-    return created.redo(*lib);
+    Result<Library *> l = detail::libraryOf(ctx, lib);
+    return l.ok() ? created.redo(**l) : l.status();
   }
   uint64_t memSize() const
   {
-    return sizeof(*this);
+    return sizeof(*this) + created.memSize();
   }
   void discard()
   {
-    if (lib) {
-      created.discard(*lib);
+    if (Library *l = lib.get()) {
+      created.discard(*l);
     }
   }
   static lbt::Struct<NewScene> *defineBindings()
@@ -264,13 +275,15 @@ struct Link {
   }
   void undo(Context &ctx)
   {
-    Result<SceneOf> s = scene.get();
+    Result<SceneOf> s = scene.get(ctx);
     report(ctx, s.ok() ? s->scene->remove(*s->lib, object.id()).status() : s.status());
-    scene.changed(ctx, kObjects);
+    if (s.ok()) {
+      scene.changed(ctx, kObjects);
+    }
   }
   Status redo(Context &ctx)
   {
-    Result<SceneOf> s = scene.get();
+    Result<SceneOf> s = scene.get(ctx);
     if (!s.ok()) {
       return s.status();
     }
@@ -329,7 +342,7 @@ struct Unlink {
   }
   Status apply(Context &ctx)
   {
-    Result<SceneOf> s = scene.get();
+    Result<SceneOf> s = scene.get(ctx);
     if (!s.ok()) {
       return s.status();
     }
@@ -362,9 +375,11 @@ struct Unlink {
   }
   void undo(Context &ctx)
   {
-    Result<SceneOf> s = scene.get();
+    Result<SceneOf> s = scene.get(ctx);
     report(ctx, s.ok() ? putBack(*s, int(removed.size())) : s.status());
-    scene.changed(ctx, kObjects);
+    if (s.ok()) {
+      scene.changed(ctx, kObjects);
+    }
   }
   Status redo(Context &ctx)
   {
@@ -408,7 +423,7 @@ struct SetActive {
   }
   Status write(Context &ctx, const BlockId &id) const
   {
-    Result<SceneOf> s = scene.get();
+    Result<SceneOf> s = scene.get(ctx);
     if (!s.ok()) {
       return s.status();
     }
@@ -546,7 +561,7 @@ struct Select {
   }
   Status write(Context &ctx, const Vector<BlockId> &ids) const
   {
-    Result<SceneOf> s = scene.get();
+    Result<SceneOf> s = scene.get(ctx);
     if (!s.ok()) {
       return s.status();
     }
@@ -582,7 +597,7 @@ struct Select {
 
 struct AddObject {
   HeldScene scene;
-  Library *lib = nullptr;
+  LibraryRef lib;
   CreatedBlocks created;
   BlockId object;
 
@@ -591,8 +606,9 @@ struct AddObject {
     return memberOf(ctx, "parent").status();
   }
   /* The object's channels. */
-  Status place(Context &ctx, BlockHandle h, BlockHandle parent, double time) const
+  static Status place(Context &ctx, BlockHandle h, BlockHandle parent, double time)
   {
+    Library *lib = ctx.library();
     TransformState parentState;
     if (parent) {
       Result<TransformState> s = computeState(*lib, parent, time);
@@ -620,46 +636,55 @@ struct AddObject {
   Status exec(Context &ctx)
   {
     Result<SceneOf> s = detail::sceneOf(ctx);
-    lib = s->lib;
+    Library *l = s->lib;
+    lib = l->ref();
     const litestl::util::string type = ctx.inputs()->get("type")->asString();
     const litestl::util::string name = ctx.inputs()->get("name")->asString();
-    Result<BlockHandle> h = newObject(*lib, name.c_str(), type.c_str());
+    Result<BlockHandle> h = newObject(*l, name.c_str(), type.c_str());
     if (!h.ok()) {
       return h.status();
     }
-    scene.block = HistoryBlock(*lib, s->handle);
-    object = lib->get(*h)->id();
+    scene.block = HistoryBlock(*l, s->handle);
+    object = l->get(*h)->id();
     Status e = place(ctx, *h, *memberOf(ctx, "parent"), s->scene->time());
     if (e.ok()) {
-      s->scene->prune(*lib);
-      e = s->scene->add(*lib, *h);
+      s->scene->prune(*l);
+      e = s->scene->add(*l, *h);
     }
     if (!e.ok()) {
-      lib->markDeleted(*h).ignore();
-      lib->destroyFromHistory(*h).ignore();
+      l->markDeleted(*h).ignore();
+      l->destroyFromHistory(*h).ignore();
       return e;
     }
-    created.add(*lib, *h);
+    created.add(*l, *h);
     scene.changed(ctx, kObjects);
-    return ctx.outputs()->set("object", detail::pointerTo(*lib, *h));
+    return ctx.outputs()->set("object", detail::pointerTo(*l, *h));
   }
   void undo(Context &ctx)
   {
-    Result<SceneOf> s = scene.get();
-    report(ctx, s.ok() ? s->scene->remove(*lib, object).status() : s.status());
-    created.undo(*lib);
+    Result<SceneOf> s = scene.get(ctx);
+    if (!s.ok()) {
+      Library *l = lib.get();
+      report(ctx, s.status());
+      if (l && l == ctx.library()) {
+        created.undo(*l); /* only the scene is gone */
+      }
+      return;
+    }
+    report(ctx, s->scene->remove(*s->lib, object).status());
+    created.undo(*s->lib);
     scene.changed(ctx, kObjects);
   }
   Status redo(Context &ctx)
   {
-    Result<SceneOf> s = scene.get();
+    Result<SceneOf> s = scene.get(ctx);
     if (!s.ok()) {
       return s.status();
     }
-    CDCC_TRY(created.redo(*lib));
-    s->scene->prune(*lib);
-    if (Status e = s->scene->add(*lib, lib->find(object)); !e.ok()) {
-      created.undo(*lib);
+    CDCC_TRY(created.redo(*s->lib));
+    s->scene->prune(*s->lib);
+    if (Status e = s->scene->add(*s->lib, s->lib->find(object)); !e.ok()) {
+      created.undo(*s->lib);
       return e;
     }
     scene.changed(ctx, kObjects);
@@ -667,13 +692,13 @@ struct AddObject {
   }
   uint64_t memSize() const
   {
-    return sizeof(*this);
+    return sizeof(*this) + created.memSize();
   }
   void discard()
   {
     scene.block.release();
-    if (lib) {
-      created.discard(*lib);
+    if (Library *l = lib.get()) {
+      created.discard(*l);
     }
   }
   static lbt::Struct<AddObject> *defineBindings()

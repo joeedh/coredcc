@@ -10,6 +10,7 @@
  */
 
 #include "coredcc/command/command.h"
+#include "coredcc/lib/pin.h"
 #include "coredcc/scene/scene.h"
 
 namespace coredcc {
@@ -48,7 +49,7 @@ inline constexpr const char *kApplyDeltaCommand = "core.object.applyDelta";
 /** The same as an Interactive command: see ApplyDelta. */
 inline constexpr const char *kDragDeltaCommand = "core.object.dragDelta";
 /** `keepChildrenWorld`: first, Live children that stay are given to their nearest ancestor that
- * stays. Then core.block.delete for each. Outputs `count` and `approximate`. */
+ * stays. Then one core.block.delete for all. Outputs `count` and `approximate`. */
 inline constexpr const char *kDeleteObjectsCommand = "core.object.delete";
 
 /** Registers the scene's types and commands, and the block commands (idempotent). */
@@ -56,7 +57,8 @@ Status registerSceneCommands(Runtime &rt);
 
 /**
  * What a command changes about objects, for its undo. Objects are found by id. Undo and redo write
- * stored values: nothing is computed again.
+ * stored values: nothing is computed again. All of it is FailedPrecondition in a Context of another
+ * Library than the first write's.
  */
 class ObjectChanges {
  public:
@@ -108,6 +110,7 @@ class ObjectChanges {
   Status takeBack(Context &ctx);
 
   litestl::util::Vector<Change> changes_;
+  LibraryRef lib_;
 };
 
 /**

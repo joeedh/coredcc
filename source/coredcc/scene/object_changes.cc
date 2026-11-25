@@ -1,11 +1,13 @@
 #include "coredcc/scene/commands.h"
 
+#include "coredcc/command/history_block.h"
+
 namespace coredcc {
 
 /* A parent before the rest, and a type with its channels. */
 Status ObjectChanges::apply(Context &ctx, const Change &c, const Stored &values)
 {
-  const BlockHandle h = ctx.library() ? ctx.library()->find(c.object) : BlockHandle();
+  const BlockHandle h = ctx.library()->find(c.object);
   if (c.hasParent) {
     CDCC_TRY(writeParent(ctx, h, values.parent));
   }
@@ -17,6 +19,10 @@ Status ObjectChanges::apply(Context &ctx, const Change &c, const Stored &values)
 
 Status ObjectChanges::write(Context &ctx, BlockHandle object, const Values &values)
 {
+  if (changes_.size() == 0) {
+    lib_ = ctx.library()->ref();
+  }
+  CDCC_TRY(detail::libraryOf(ctx, lib_).status());
   Result<ObjectRead> r = readObject(*ctx.library(), object);
   Status s = r.status();
   if (r.ok()) {
@@ -52,6 +58,7 @@ Status ObjectChanges::write(Context &ctx, BlockHandle object, const Values &valu
 
 Status ObjectChanges::rewrite(Context &ctx, int i, const ChannelBlock &channels)
 {
+  CDCC_TRY(detail::libraryOf(ctx, lib_).status());
   Stored after = changes_[i].after;
   after.channels = channels;
   CDCC_TRY(apply(ctx, changes_[i], after));
@@ -76,7 +83,10 @@ void ObjectChanges::undo(Context &ctx)
   Runtime &rt = ctx.runtime();
   /* A sub-command's undo may have left one; writing needs it out of the way. */
   Status pending = rt.hasStickyError() ? rt.takeStickyError() : Status();
-  Status s = takeBack(ctx);
+  Status s = changes_.size() == 0 ? Status() : detail::libraryOf(ctx, lib_).status();
+  if (s.ok()) {
+    s = takeBack(ctx);
+  }
   if (!pending.ok()) {
     rt.setStickyError(std::move(pending));
   }
@@ -87,6 +97,9 @@ void ObjectChanges::undo(Context &ctx)
 
 Status ObjectChanges::redo(Context &ctx)
 {
+  if (changes_.size() > 0) {
+    CDCC_TRY(detail::libraryOf(ctx, lib_).status());
+  }
   for (int i = 0; i < int(changes_.size()); i++) {
     if (Status s = apply(ctx, changes_[i], changes_[i].after); !s.ok()) {
       for (int j = i; j >= 0; j--) {
