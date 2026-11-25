@@ -1,6 +1,7 @@
 #include "coredcc/command/command.h"
 
 #include "coredcc/base/text.h"
+#include "coredcc/parse/invocation.h"
 
 #include <string>
 
@@ -214,6 +215,20 @@ Status CommandRegistry::unknown(std::string_view id) const
   Suggester sg(id);
   for (const CommandDef *d : defs_) {
     sg.consider(d->name().c_str());
+  }
+  sg.addTo(err);
+  return err;
+}
+
+Status detail::unknownInput(const CommandDef &def, const InvocationArg &arg)
+{
+  Status err = Status::error(StatusCode::NotFound,
+                             (std::string(def.name().c_str()) + " has no input '" +
+                              arg.name.c_str() + "' (at offset " + std::to_string(arg.offset) + ")")
+                                 .c_str());
+  Suggester sg(arg.name.c_str());
+  for (int i = 0; i < def.inputCount(); i++) {
+    sg.consider(def.inputDef(i).apiName().c_str());
   }
   sg.addTo(err);
   return err;

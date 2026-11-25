@@ -5,6 +5,7 @@
 #include "coredcc/parse/path.h"
 
 #include <cstring>
+#include <unordered_set>
 
 namespace coredcc {
 
@@ -205,6 +206,7 @@ bool parseArgs(Lexer &lx, Invocation &out, Failure &fail)
   if (lx.eat(')')) {
     return true;
   }
+  std::unordered_set<std::string_view> names;
   while (true) {
     InvocationArg arg;
     arg.offset = uint32_t(lx.pos());
@@ -213,7 +215,7 @@ bool parseArgs(Lexer &lx, Invocation &out, Failure &fail)
       fail = lx.failHere("expected an argument name, got " + lx.describeHere());
       return false;
     }
-    if (out.find(name)) {
+    if (!names.insert(name).second) {
       fail = Failure{arg.offset, "argument '" + std::string(name) + "' given twice"};
       return false;
     }

@@ -93,6 +93,11 @@ Result<PropertyDef> getMeta(Context &ctx, std::string_view path);
 Status setValue(Context &ctx, const ResolvedPath &rp, const PropValue &value);
 Status setValue(Context &ctx, std::string_view path, const PropValue &value);
 
+namespace detail {
+/** `s` with the segment's offset appended, keeping its suggestions. */
+Status atSegment(const PathSegment &seg, const Status &s);
+} // namespace detail
+
 /** Many reads in one call, for UIs and bindings. `values[i]` is None where
  * `errors[i]` holds the failure. Paths go through the Runtime's PathCache. */
 void getValues(Context &ctx,

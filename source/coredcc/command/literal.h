@@ -28,6 +28,9 @@ Result<std::string> formatLiteral(const Runtime &rt, const PropertyDef &def, con
 /** A parsed literal as a value of `def`, coerced (so clamped). */
 Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw);
 
+/** `ref` as a value of a Pointer def. A target whose struct inherits from the def's is accepted. */
+Result<PropValue> coercePointer(Runtime &rt, const PropertyDef &def, StableRef ref);
+
 /**
  * As above for a Pointer, in a Context: the string is a reference's text, or a datapath,
  * which is resolved now (with the Context's prefix). A datapath names a struct, or a Pointer

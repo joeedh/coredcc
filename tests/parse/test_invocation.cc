@@ -2,6 +2,7 @@
 
 #include "test_util.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -119,10 +120,25 @@ static void test_errors()
   test_assert(failsAt("c[a=1]") == 1);
 }
 
+/* In time, however many arguments there are. */
+static void test_many()
+{
+  std::string text = "c(";
+  for (int i = 0; i < 100000; i++) {
+    text += "a" + std::to_string(i) + "=1 ";
+  }
+  const auto start = std::chrono::steady_clock::now();
+  Result<Invocation> r = parseInvocation(text + ")");
+  test_assert(r.ok() && r->args.size() == 100000);
+  test_assert(!parseInvocation(text + "a500=1)").ok());
+  test_assert(std::chrono::steady_clock::now() - start < std::chrono::seconds(10));
+}
+
 int main()
 {
   test_forms();
   test_canonical();
   test_errors();
+  test_many();
   return test_end();
 }

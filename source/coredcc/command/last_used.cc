@@ -255,6 +255,12 @@ void LastUsedStore::addCollectionTo(ApiStruct &root, std::string_view memberName
                                 nullptr;
     return def ? PointerRef{&entry(*def), itemStruct(*def), OwnerKey()} : PointerRef();
   };
+  c.staticItem = [this](const KeySegment &key) -> Result<StructId> {
+    const CommandRegistry &commands = rt_.ext<CommandRegistry>();
+    const CommandDef *def =
+        key.kind == KeySegment::Kind::StringKey ? commands.find(key.text.c_str()) : nullptr;
+    return def ? Result<StructId>(itemStruct(*def)) : commands.unknown(key.text.c_str());
+  };
   c.keyOf = [](const PointerRef &, Context &, const PointerRef &item) {
     return KeySegment::stringKey(static_cast<const Entry *>(item.data)->def->name().c_str());
   };

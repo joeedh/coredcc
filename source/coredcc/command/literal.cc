@@ -238,7 +238,11 @@ Result<PropValue> parsePointer(Context &ctx, const PropertyDef &def, const RawVa
   if (!value.ok()) {
     return value.status();
   }
-  StableRef ref = value->asPointer();
+  return coercePointer(rt, def, value->asPointer());
+}
+
+Result<PropValue> coercePointer(Runtime &rt, const PropertyDef &def, StableRef ref)
+{
   const StructId want = def.target()->target;
   if (want && ref.type && rt.ext<ApiRegistry>().isA(ref.type, want)) {
     ref.type = want; /* coerce can't see the parents */

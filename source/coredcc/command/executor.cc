@@ -888,17 +888,7 @@ Result<PropertyBag> inputsFromInvocation(Context &ctx, const CommandDef &def, co
   for (const InvocationArg &arg : inv.args) {
     const PropertyDef *in = def.findInput(arg.name.c_str());
     if (!in) {
-      Status err = Status::error(StatusCode::NotFound,
-                                 (std::string(def.name().c_str()) + " has no input '" +
-                                  arg.name.c_str() + "' (at offset " +
-                                  std::to_string(arg.offset) + ")")
-                                     .c_str());
-      Suggester sg(arg.name.c_str());
-      for (int i = 0; i < def.inputCount(); i++) {
-        sg.consider(def.inputDef(i).apiName().c_str());
-      }
-      sg.addTo(err);
-      return err;
+      return detail::unknownInput(def, arg);
     }
     Result<PropValue> v = in->kind() == PropKind::Pointer ? parsePointer(ctx, *in, arg.value) :
                                                             parseLiteral(rt, *in, arg.value);

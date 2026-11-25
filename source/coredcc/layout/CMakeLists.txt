@@ -4,7 +4,8 @@ coredcc_library(coredcc_layout
     draft.cc
     json.cc
     layout.cc
+    validate.cc
     xml.cc
   DEPS
-    coredcc_parse
+    coredcc_command
 )

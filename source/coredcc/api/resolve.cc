@@ -12,10 +12,7 @@ namespace coredcc {
 
 using litestl::util::Vector;
 
-namespace {
-
-/* `s` with the failing segment's offset appended, keeping its suggestions. */
-Status at(const PathSegment &seg, const Status &s)
+Status detail::atSegment(const PathSegment &seg, const Status &s)
 {
   const std::string msg =
       std::string(s.message()) + " (at offset " + std::to_string(seg.offset) + ")";
@@ -24,6 +21,13 @@ Status at(const PathSegment &seg, const Status &s)
     out.suggest(sg.c_str());
   }
   return out;
+}
+
+namespace {
+
+Status at(const PathSegment &seg, const Status &s)
+{
+  return detail::atSegment(seg, s);
 }
 
 Status err(StatusCode code, const std::string &msg)

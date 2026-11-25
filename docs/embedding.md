@@ -73,6 +73,17 @@ Unreal, coredcc is exactly one module, so they exist once.
 - A program that evaluates graphs for the user's objects builds a standalone GraphDef around theirs, and
   connects with interior sockets (`graph/interior.h`). `tests/graph/test_graph_scene.cc` is an example.
 
+## Layouts
+- **Text is untrusted.** `parseLayout` is linear in it and refuses what is over `LayoutLimits`. A Layout
+  is well formed, but may name what doesn't exist.
+- **Call `validateLayout` once everything is registered,** with the struct of the Context's root. A
+  struct that is registered later only gives warnings.
+- **It knows static defs only.** An enum key that only a dynamic hook adds is an error to it, and a path
+  that it accepts can still fail in a given document.
+- **`CollectionAccessor::staticItem`** lets it see the struct of one item by its key, for collections
+  whose items have structs of their own.
+- **A node's own paths are relative to its parent's prefix;** a leading `/` is the Context's root.
+
 ## Threading
 - The public API is single-threaded, on the host's main thread.
 - Foreign (JS) interface implementations are thread-affine. Parallel algorithms check

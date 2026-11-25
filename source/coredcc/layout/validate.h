@@ -1,0 +1,53 @@
+#pragma once
+
+/** \file
+ * Checking a Layout against what is registered.
+ */
+
+#include "coredcc/api/static_resolve.h"
+#include "coredcc/layout/layout.h"
+
+#include "litestl/util/vector.h"
+
+namespace coredcc {
+
+enum class LayoutSeverity : uint8_t {
+  /** It can't be checked: it goes through a struct that isn't registered (yet). */
+  Warning,
+  /** It can't work. */
+  Error,
+};
+
+struct LayoutIssue {
+  int node = 0;
+  /** In the layout's text: of the attribute, or of the element. */
+  uint32_t offset = 0;
+  LayoutSeverity severity = LayoutSeverity::Error;
+  /** "<prop> path: no member 'x' in Object (at offset 0)", with suggestions. */
+  Status status;
+};
+
+/** At most this many issues are reported. If there are more, the last one says so. */
+inline constexpr int kMaxLayoutIssues = 1000;
+
+/**
+ * Checks what `layout` names, in a Context whose root is a `root` struct, without one:
+ * - a Prop's path is a value, a pointer, a component, an enum key or a length;
+ * - a container's path is a struct, or a pointer (its target is meant). A Custom's path may be
+ *   anything;
+ * - conditions are Bools or enum keys;
+ * - a Tool's command is registered, and has the inputs it gives, which take the literals. A
+ *   pointer's path is checked from the prefix, and for the input's struct;
+ * - a ToolOptions' command is registered.
+ *
+ * Paths are checked by StaticResolver, so a path that fits one of the structs a pointer can have
+ * is fine. Call it when all structs and commands are registered.
+ */
+litestl::util::Vector<LayoutIssue> validateLayout(Runtime &rt,
+                                                  StructId root,
+                                                  const Layout &layout);
+
+/** Whether none of `issues` is an Error. */
+bool layoutIsValid(const litestl::util::Vector<LayoutIssue> &issues);
+
+} // namespace coredcc

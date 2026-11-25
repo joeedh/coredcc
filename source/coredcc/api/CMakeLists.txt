@@ -7,6 +7,7 @@ coredcc_library(coredcc_api
     library_io.cc
     ref_text.cc
     resolve.cc
+    static_resolve.cc
     struct.cc
   DEPS
     coredcc_lib

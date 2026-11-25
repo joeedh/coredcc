@@ -239,6 +239,13 @@ class CommandRegistry {
   litestl::util::Map<uint64_t, CommandDef *> byId_;
 };
 
+struct InvocationArg;
+
+namespace detail {
+/** NotFound for an argument that `def` has no input for, with suggestions. */
+Status unknownInput(const CommandDef &def, const InvocationArg &arg);
+} // namespace detail
+
 /**
  * Registers Impl as a Command implementation and a def whose factory makes a
  * default-constructed Impl. For native commands; foreign ones pass their own factory.

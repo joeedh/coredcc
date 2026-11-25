@@ -86,6 +86,9 @@ struct CollectionAccessor {
   litestl::util::string activeMember;
   /** The items' struct (an item's own `type`, when set, wins). */
   StructId itemStruct;
+  /** Optional, for static checks of paths: the struct of the item with this key, or why there
+   * is none. Without it, an item is an `itemStruct` or inherits from it. */
+  litestl::util::function<Result<StructId>(const KeySegment &key)> staticItem;
 };
 
 using MemberUpdateFn = litestl::util::function<void(const PointerRef &self, Context &ctx)>;

@@ -922,6 +922,28 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
   that the next line makes redundant, one node more in the builder), or were a duplicated check that is
   removed.
 
+### B3: static resolution and the validator (2026-11-25)
+- **Files:** `api/static_resolve.{h,cc}`, `layout/validate.{h,cc}`. `coredcc_layout` now depends on
+  `coredcc_command`.
+- **Members take one segment or two** (a collection's item is the second), so the walk keeps the
+  possible structs per place in the path, not one set.
+- **"No static type" doesn't exist:** `ApiRegistry::add` requires a target, candidates or an item struct.
+  What is unknown, and a warning, is a struct that isn't registered. A root that isn't is an error.
+- **A member found through several structs of one parent counts once.** If none has it, the error names
+  the structs and suggests from all of them.
+- **A prefix that is wrong is reported once,** and relative paths in it aren't. So are unknown prefixes.
+- **A Custom's path may name anything;** if it isn't a struct, relative paths in it aren't checked.
+- **At most 1,000 issues.**
+- **Shared with the resolver and the executor:** `detail::atSegment`, `detail::unknownInput` and
+  `coercePointer`, so the messages are the same. A test resolves what a document has both ways.
+- **Found by the hostile tests and fixed:** `parseInvocation` compared each argument's name with all
+  before it (87 s for 100,000 arguments, in Debug); the walk added the structs of one target once per
+  member that points to it; suggestions were made for errors that were dropped; and the validator went
+  on after its last issue. The largest layouts now take at most 4 s in Debug.
+- **Mutations:** 91, of which 86 fail a test. Four change only speed (the memo of subtypes, the late
+  suggestions, and stopping after the last issue, in two places), and one doesn't compile.
+- **Docs:** `docs/embedding.md`, "Layouts".
+
 ### Review of library IO, round 1 (2026-11-24)
 Numbers are the report's (`docs/reports/feature-report-library-io-2026-11-24.md`, with round 2).
 - **1:** `BagRefs` (`lib/bag_refs.h`) is a bag's cells by name. The cell says which block, the bag's
