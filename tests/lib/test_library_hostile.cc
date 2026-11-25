@@ -7,6 +7,7 @@
 #include "litestl/util/alloc.h"
 
 #include <chrono>
+#include <optional>
 
 test_init;
 
@@ -422,19 +423,22 @@ static void test_limits()
   options.limits.maxBytes = uint64_t(6) << 20;
   test_assert(refused(f.build(), kRange, "NAME: the data needs more", options));
 
-  /* A huge size, within what lz4 could: refused by the limit, the memory probe or lz4. */
+  /* A huge size, within what lz4 could (255 times the stored one): refused by the limit,
+   * the memory probe or lz4. It is lz4 in a 64-bit process, at any size, and less is
+   * faster. The probe of a 32-bit process needs the 1 GiB. */
+  const uint64_t claimed = uint64_t(1) << (sizeof(void *) == 4 ? 30 : 28);
+  Bytes stored;
+  stored.resize(size_t(claimed / 250));
+  memset(stored.data(), 0, stored.size());
   f = oneRecord([](RawRecord &r) { r.blob = 1; });
   f.blobs.push_back(Bytes());
   f.file();
   BytesWriter big;
   big.u32(1);
   big.u8(1);
-  big.u64(uint64_t(1) << 30);
-  big.u64(zeros.size() + 400000);
-  big.raw(view(zeros));
-  for (int i = 0; i < 400000; i++) {
-    big.u8(0);
-  }
+  big.u64(claimed);
+  big.u64(stored.size());
+  big.raw(view(stored));
   f.chunks[2].bytes = big.take();
   f.chunks[2].raw = f.chunks[2].bytes.size();
   options.limits.maxBytes = UINT64_MAX;
@@ -613,36 +617,46 @@ static void test_fuzz()
   LoadOptions options;
   options.limits.maxBytes = uint64_t(4) << 20;
   const size_t before = litestl::alloc::getMemorySize();
+  /* Registering the types takes longer than most attempts: these are for all of them, and
+   * each has a Library of its own. */
+  Knows unknown;
+  unknown.note = false;
+  std::optional<IoWorld> withNote(std::in_place), without(std::in_place, unknown);
   const auto attempt = [&](const Bytes &file) {
     const auto t = std::chrono::steady_clock::now();
     Bytes again;
     {
-      Knows k;
-      k.note = (loaded & 1) != 0;
-      IoWorld w(k);
+      IoWorld &w = (loaded & 1) != 0 ? *withNote : *without;
+      Library lib(&w.rt);
+      lib.setAuditRelations(true);
       const size_t start = litestl::alloc::getMemorySize();
-      Result<LoadReport> r = detail::loadLibrary(w.lib, view(file), options);
+      Result<LoadReport> r = detail::loadLibrary(lib, view(file), options);
       /* getMemorySize is 0 growth in release builds. The payload copy of a Doc is the
        * rest. */
       test_assert(litestl::alloc::getMemorySize() - start < size_t(8) << 20);
       if (r.ok()) {
         loaded++;
-        test_assert(w.lib.validate().ok());
-        Result<Bytes> saved = saveLibrary(w.lib);
+        test_assert(lib.validate().ok());
+        Result<Bytes> saved = saveLibrary(lib);
         if (!saved.ok()) {
           fprintf(stderr, "saving what was loaded: %s\n", saved.status().message());
         }
         test_assert(saved.ok());
         again = std::move(saved).value();
       } else {
-        test_assert(w.lib.size() == 0);
+        test_assert(lib.size() == 0);
       }
-      w.lib.setAuditRelations(false);
+      test_assert(lib.validate().ok() && !w.rt.hasStickyError());
+      lib.setAuditRelations(false);
     }
     if (again.size() > 0) {
-      IoWorld w;
-      test_assert(detail::loadLibrary(w.lib, view(again), {}).ok());
+      Library lib(&withNote->rt);
+      lib.setAuditRelations(true);
+      test_assert(detail::loadLibrary(lib, view(again), {}).ok());
+      test_assert(lib.validate().ok() && !withNote->rt.hasStickyError());
     }
+    /* Nothing of the attempt is left. */
+    test_assert(withNote->notes.alive == 0 && without->notes.alive == 0);
     slowest = std::max(slowest, seconds(t));
   };
   for (int i = 0; i < int(good.size()); i++) {
@@ -688,6 +702,8 @@ static void test_fuzz()
     fixUp(b);
     attempt(b);
   }
+  withNote.reset();
+  without.reset();
   test_assert(loaded > 1000); /* the fuzz reaches past the parser */
   test_assert(slowest < 5);
   test_assert(litestl::alloc::getMemorySize() <= before + 4096);

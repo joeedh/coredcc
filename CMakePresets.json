@@ -77,7 +77,8 @@
         "outputOnFailure": true
       },
       "execution": {
-        "noTestsAction": "error"
+        "noTestsAction": "error",
+        "jobs": 4
       }
     },
     {"name": "native-clang-debug", "inherits": "test-base", "configurePreset": "native-clang", "configuration": "Debug"},

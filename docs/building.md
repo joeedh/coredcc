@@ -28,6 +28,8 @@ Only Windows is built and tested so far.
 - **Build:** `tools\devshell.cmd cmake --build --preset native-clang-debug -j 5`. Without `-j`, a machine with
   many cores may run out of memory.
 - **Test:** `tools\devshell.cmd ctest --preset native-clang-debug`. One test: add `-R test_base_signal`.
+  - Four tests run at a time (`jobs` in `CMakePresets.json`; `-j 1` for one). Those that are `SERIAL` in
+    `tests/CMakeLists.txt`, and `testapp`, run alone: their time limits are relative or tight.
 - WASM tests run in node.
 - `wasm-mt` needs COOP and COEP headers in a browser. `wasm-st` doesn't.
 
@@ -50,8 +52,8 @@ Run them by hand: they are not git hooks, and nothing else runs them.
 - The gate's own tests: `node --test tools/gate.test.mjs`.
 
 ## Formatting
-`.clang-format` is litestl's. `tools\devshell.cmd clang-format -i <file>` formats a file. Most files haven't been
-formatted with it yet (2026-11-25), so doing it to a whole file that you only edit makes a large diff.
+`.clang-format` is litestl's, and all of `source/` and `tests/` is formatted with it (2026-11-25). Nothing checks
+it. `tools\devshell.cmd clang-format -i <file>` formats a file.
 
 ## Test app
 `apps/testapp` is an NW.js app that hosts the wasm-st module. Build `wasm-st-debug` first.

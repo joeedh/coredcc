@@ -50,11 +50,13 @@ function(_coredcc_test_support target)
   endif()
 endfunction()
 
-# coredcc_test(name SOURCES... [DEPS targets...])
+# coredcc_test(name [SERIAL] SOURCES... [DEPS targets...])
 # One executable per test, registered with CTest. LITESTL_TEST_NO_BREAK stops a failing
 # test_assert from calling __debugbreak (6.5 s per failure under ctest otherwise).
+# Tests run at the same time (CMakePresets.json). SERIAL is for those whose time limits are
+# relative, or near what they take: they run alone.
 function(coredcc_test name)
-  cmake_parse_arguments(ARG "" "" "SOURCES;DEPS" ${ARGN})
+  cmake_parse_arguments(ARG "SERIAL" "" "SOURCES;DEPS" ${ARGN})
   add_executable(${name} ${ARG_SOURCES})
   target_link_libraries(${name} PRIVATE ${ARG_DEPS})
   coredcc_target_flags(${name})
@@ -62,6 +64,9 @@ function(coredcc_test name)
   _coredcc_wasm_test_options(${name})
   add_test(NAME ${name} COMMAND ${name})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "LITESTL_TEST_NO_BREAK=1")
+  if(ARG_SERIAL)
+    set_tests_properties(${name} PROPERTIES RUN_SERIAL TRUE)
+  endif()
 endfunction()
 
 # Under Emscripten a test runs in node (the toolchain's CROSSCOMPILING_EMULATOR):

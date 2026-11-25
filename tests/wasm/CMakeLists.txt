@@ -25,4 +25,4 @@ add_test(NAME testapp
   COMMAND "${COREDCC_NODE}" "${PROJECT_SOURCE_DIR}/apps/testapp/ctest.mjs"
     --node-module $<TARGET_FILE:coredcc_testapp_node>
     --module $<TARGET_FILE:coredcc_testapp>)
-set_tests_properties(testapp PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+set_tests_properties(testapp PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600 RUN_SERIAL TRUE)
