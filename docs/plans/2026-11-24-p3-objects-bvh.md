@@ -267,13 +267,18 @@ struct AnyBvhSource : IfaceRef {
 ### Leaf-size benchmark
 - `node tools/bench-bvh.mjs [--quick] [--wasm]` builds the release target (outside `all` and
   ctest), runs it and writes `docs/bvh-leafsize.md`. The coordinator runs it on an idle machine.
-- **What decides the leaf size:** triangles at 10k and 1M, all seven leaf sizes (16 to 1024),
-  coherent and random closest-ray, and region queries; build and refit time, node memory. Fixed
-  seeds, best of 5.
-- **Confirmation only:** capsules and spheres at 1M, and triangles at 10M, with the winner and
-  its two neighbours.
-- The default is the best geometric mean of query time among sizes whose build is within 10% of
-  the fastest; 128 stays if it is within 5%. `--quick` is 10k only; `--wasm` goes to 1M in node.
+- **What decides the leaf size:** triangles at 10k and 1M, capsules and spheres at 1M, all nine leaf
+  sizes (4 to 1024), coherent and random closest-ray, and region queries. Build and refit time
+  and node memory are reported. Fixed seeds, best of 5.
+- **The rule:** the largest leaf size whose worst slowdown is at most 10%.
+  - A slowdown is a size's query time over the best size's, for one query kind on one data set. The
+    worst is taken over all of them. Nothing is averaged, so no data set or kind can hide
+    another.
+  - If no size is within 10% everywhere, it is the one with the smallest worst slowdown, and the
+    larger on a tie.
+- **Confirmation only:** triangles at 10M with the winner and its two neighbours. A worst slowdown
+  over 10% there is reported as "not confirmed".
+- `--quick` is 10k triangles and spheres, as a smoke test; `--wasm` runs in node without 10M.
 
 ## View (`draw/view.h`)
 ```cpp
@@ -686,11 +691,19 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 - **`region` is conservative at leaves too:** a primitive is dropped only if it is certainly
   outside one plane.
 - **wasm-mt:** the four BVH tests pass in node.
-- **The leaf-size rule needs another look before the recorded run.** The build gets faster with
-  every larger leaf size, so "within 10% of the fastest build" keeps only the largest sizes. In
-  the smoke runs (10k triangles, not a measurement) it chose 1024 or 512, whose queries were 6 to 10
-  times slower than 16's. The tool follows the plan's rule and also prints the largest size within 10%
-  of the best query time, which is the rule recommended instead.
+- **The leaf-size rule was replaced** (coordinator, 2026-11-24). The first one took the best query
+  time among the sizes within 10% of the fastest build, but the build gets faster with every
+  larger size, so it kept only the largest ones, with queries 6 to 10 times slower than 16's.
+
+### Step 4
+- `resolveForWrite` is one flag in the path walk. **Resolving `.active` also touches the
+  activeMember:** inside one runtime owner neither the structural epoch nor the Library moves
+  when it is written, so watchers of `brushes.active.size` would not have fired.
+- `ApiRegistry::validate()` checks the activeMember (a settable pointer of the same struct, to the
+  items' struct), not `add()`, because the member may be a parent struct's.
+- `Context::setScene` takes any block handle and doesn't check it; `activeScene(ctx)` (step 7) does.
+- `foreignImplementable` has a reason per slot. It also refuses reference returns and owned
+  pointers, which litestl's dispatch refuses on the call.
 
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.

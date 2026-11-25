@@ -57,6 +57,10 @@ struct ResolvedPath {
  * segment's offset and suggest members. */
 Result<ResolvedPath> resolve(Context &ctx, const Path &path);
 Result<ResolvedPath> resolve(Context &ctx, std::string_view path);
+/** As resolve, for writing: a path that ends in `.active` of a collection with an
+ * `activeMember` resolves to that member, also when there is no active item. */
+Result<ResolvedPath> resolveForWrite(Context &ctx, const Path &path);
+Result<ResolvedPath> resolveForWrite(Context &ctx, std::string_view path);
 /** Resolves a StableRef from its owner. A target that is gone (a deleted block, a
  * missing key) fails with NotFound, never a crash. */
 Result<ResolvedPath> resolve(Context &ctx, const StableRef &ref);
@@ -84,7 +88,7 @@ Result<PropertyDef> getMeta(Context &ctx, std::string_view path);
  *    new value).
  * Busy, with nothing written, while a graph evaluates (Runtime::evaluating).
  * A Pointer member takes a Pointer value (resolved to its target) and bumps the
- * library's reference epoch.
+ * library's reference epoch. Path strings are resolved with resolveForWrite.
  */
 Status setValue(Context &ctx, const ResolvedPath &rp, const PropValue &value);
 Status setValue(Context &ctx, std::string_view path, const PropValue &value);

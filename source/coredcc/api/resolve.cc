@@ -48,6 +48,8 @@ struct Walk {
   OwnerKey owner;
   Vector<KeySegment, 2> key;
   ResolvedPath out;
+  /** A trailing `.active` names the collection's activeMember. */
+  bool forWrite = false;
 
   /* Moves into `next`, reached through member `m` (and an item key). Canonical paths
    * keep no hops that can be reassigned:
@@ -229,6 +231,18 @@ Result<ResolvedPath> walkPath(Walk &w, const Path &path)
             return at(sub, err(StatusCode::Unsupported,
                                std::string("'") + m->name() + "' has no active item"));
           }
+          if (c.activeMember.size() > 0) {
+            w.touch(c.activeMember.c_str()); /* a write to it changes what this path means */
+            if (w.forWrite && i + 2 == n) {
+              const ApiMember *am = w.reg.findMember(w.cur.type, c.activeMember.c_str());
+              if (!am || am->kind() != MemberKind::Pointer) {
+                return at(sub, err(StatusCode::Internal,
+                                   std::string("'") + m->name() + "': its activeMember '" +
+                                       c.activeMember.c_str() + "' isn't a pointer member"));
+              }
+              return w.finish(ResolvedPath::Kind::Member, am);
+            }
+          }
           item = c.active(w.cur, w.ctx);
         }
         else if (sub.kind == SegmentKind::Index) {
@@ -327,23 +341,48 @@ PointerRef blockPointer(Context &ctx, const OwnerKey &owner)
 
 } // namespace
 
-Result<ResolvedPath> resolve(Context &ctx, const Path &path)
+namespace {
+
+Result<ResolvedPath> resolvePath(Context &ctx, const Path &path, bool forWrite)
 {
   Walk w{ctx, ctx.runtime().ext<ApiRegistry>(), {}, {}, {}, {}};
   Result<Walk *> started = startAtRoot(ctx, w);
   if (!started.ok()) {
     return started.status();
   }
+  w.forWrite = forWrite;
   return walkPath(w, path);
 }
 
-Result<ResolvedPath> resolve(Context &ctx, std::string_view path)
+Result<ResolvedPath> resolvePath(Context &ctx, std::string_view path, bool forWrite)
 {
   Result<PathPtr> p = ctx.runtime().ext<PathCache>().get(path);
   if (!p.ok()) {
     return p.status();
   }
-  return resolve(ctx, **p);
+  return resolvePath(ctx, **p, forWrite);
+}
+
+} // namespace
+
+Result<ResolvedPath> resolve(Context &ctx, const Path &path)
+{
+  return resolvePath(ctx, path, false);
+}
+
+Result<ResolvedPath> resolve(Context &ctx, std::string_view path)
+{
+  return resolvePath(ctx, path, false);
+}
+
+Result<ResolvedPath> resolveForWrite(Context &ctx, const Path &path)
+{
+  return resolvePath(ctx, path, true);
+}
+
+Result<ResolvedPath> resolveForWrite(Context &ctx, std::string_view path)
+{
+  return resolvePath(ctx, path, true);
 }
 
 Result<ResolvedPath> resolve(Context &ctx, const StableRef &ref)
@@ -717,7 +756,7 @@ Status setValue(Context &ctx, const ResolvedPath &rp, const PropValue &value)
 
 Status setValue(Context &ctx, std::string_view path, const PropValue &value)
 {
-  Result<ResolvedPath> rp = resolve(ctx, path);
+  Result<ResolvedPath> rp = resolveForWrite(ctx, path);
   if (!rp.ok()) {
     return rp.status();
   }

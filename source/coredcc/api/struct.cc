@@ -244,6 +244,41 @@ PointerRef ApiRegistry::runtimeOwner(std::string_view name) const
   return runtimeOwner(OwnerKey::ofRuntime(TypeId::of("owner:" + std::string(name)).value));
 }
 
+namespace {
+
+/* A collection's activeMember must be a settable pointer to its items, in the same struct. */
+Status validateActive(const ApiRegistry &reg, const ApiStruct &st, const ApiMember &list)
+{
+  const CollectionAccessor &c = list.collection();
+  if (c.activeMember.size() == 0) {
+    return Status();
+  }
+  const ApiMember *m = reg.findMember(st.id(), c.activeMember.c_str());
+  const char *why = nullptr;
+  if (!c.active) {
+    why = "without `active`";
+  }
+  else if (!m || !m->pointer().set) {
+    why = "which isn't a settable pointer of the struct";
+  }
+  else {
+    const StructId target = m->pointer().target;
+    bool fits = target && (reg.isA(c.itemStruct, target) || reg.isA(target, c.itemStruct));
+    for (StructId t : m->pointer().candidates) {
+      fits = fits || reg.isA(t, c.itemStruct);
+    }
+    why = fits ? nullptr : "which points to another struct";
+  }
+  return why ? Status::error(StatusCode::InvalidArgument,
+                             ("struct '" + std::string(st.name().c_str()) + "': collection '" +
+                              list.name() + "' has the activeMember '" +
+                              c.activeMember.c_str() + "', " + why)
+                                 .c_str()) :
+               Status();
+}
+
+} // namespace
+
 Status ApiRegistry::validate() const
 {
   if (int(byId_.size()) != int(structs_.size())) {
@@ -252,6 +287,11 @@ Status ApiRegistry::validate() const
   for (const ApiStruct *s : structs_) {
     if (find(s->id()) != s) {
       return Status::error(StatusCode::Internal, "ApiRegistry: a struct isn't indexed");
+    }
+    for (int i = 0; i < s->memberCount(); i++) {
+      if (s->member(i).kind() == MemberKind::Collection) {
+        CDCC_TRY(validateActive(*this, *s, s->member(i)));
+      }
     }
   }
   return Status();

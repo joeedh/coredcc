@@ -109,8 +109,13 @@ bool inForeignCall(const Runtime &rt);
 bool inForeignSlot(const Runtime &rt, std::initializer_list<const char *> slots);
 
 /**
- * Ok if every slot of `iface` can be implemented by a script: none takes or returns a
- * `void *` or a QueryAnswer. Else Unsupported, naming the slots.
+ * Ok if every slot of `iface` can be implemented by a script. Else Unsupported, naming the
+ * slots and why:
+ * - a `void *` or a QueryAnswer, taken or returned;
+ * - a reference returned, or ownership of a returned pointer;
+ * - a struct returned by value without bound default and copy constructors (the script makes
+ *   one, litestl copies it);
+ * - a Vector returned whose elements aren't numbers, booleans or enums.
  */
 Status foreignImplementable(const lbt::_StructBase *iface);
 

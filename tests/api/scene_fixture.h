@@ -223,7 +223,6 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
     Tool *tl = static_cast<Tool *>(self.data);
     return KeySegment::stringKey(item.data == &tl->brushes[0] ? "A" : "B");
   };
-  t.addCollection(PropertyDef::collectionProp("brushes", kBrush), std::move(brushes));
   auto activeGet = [](const PointerRef &self, Context &) {
     Tool *tl = static_cast<Tool *>(self.data);
     return PointerRef{&tl->brushes[tl->activeBrush], kBrush, OwnerKey()};
@@ -233,6 +232,9 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
     tl->activeBrush = target.data == &tl->brushes[1] ? 1 : 0;
     return Status();
   };
+  brushes.active = activeGet;
+  brushes.activeMember = "activeBrush";
+  t.addCollection(PropertyDef::collectionProp("brushes", kBrush), std::move(brushes));
   PointerAccessor active;
   active.get = activeGet;
   active.set = activeSet;

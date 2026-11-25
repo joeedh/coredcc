@@ -2,11 +2,12 @@
 // The BVH leaf-size benchmark. Builds the release bench_bvh target, runs it and writes
 // docs/bvh-leafsize.md. Run it on an idle machine.
 //
-//   node tools/bench-bvh.mjs            triangles at 10k and 1M decide; capsules and spheres
-//                                       at 1M and triangles at 10M confirm
-//   node tools/bench-bvh.mjs --quick    10k triangles only, few queries, report on stdout: a
-//                                       smoke test, not a measurement
-//   node tools/bench-bvh.mjs --wasm     the same on wasm-st in node, up to 1M, report on stdout
+//   node tools/bench-bvh.mjs            triangles at 10k and 1M, capsules and spheres at 1M
+//                                       decide; triangles at 10M confirm
+//   node tools/bench-bvh.mjs --quick    10k triangles and spheres, few queries, report on
+//                                       stdout: a smoke test, not a measurement
+//   node tools/bench-bvh.mjs --wasm     the same on wasm-st in node, without 10M, report on
+//                                       stdout
 //   --out FILE                          write the report here instead
 //
 // The report says what the default (BvhOptions::leafSize) should be; it doesn't change it.
@@ -27,7 +28,7 @@ const {values: opts} = parseArgs({
   },
 })
 
-const LEAVES = [16, 32, 64, 128, 256, 512, 1024]
+const LEAVES = [4, 8, 16, 32, 64, 128, 256, 512, 1024]
 const DEFAULT_LEAF = 128
 const preset = opts.wasm ? 'wasm-st' : 'native-clang'
 
@@ -60,28 +61,37 @@ function runBench(exe, source, count, leaves, extra = []) {
   return r.stdout.trim().split('\n').map((line) => JSON.parse(line))
 }
 
-const geomean = (v) => Math.exp(v.reduce((s, x) => s + Math.log(x), 0) / v.length)
+const KINDS = ['coherentNs', 'randomNs', 'regionNs']
+const TOLERANCE = 1.1
 
-/** The rule of the plan. Returns the scores too, so the report can show its working. */
-function decide(rows) {
-  const leaves = [...new Set(rows.map((r) => r.leaf))]
-  const large = Math.max(...rows.map((r) => r.count))
-  const scores = leaves.map((leaf) => {
-    const mine = rows.filter((r) => r.leaf === leaf)
-    return {
-      leaf,
-      query: geomean(mine.flatMap((r) => [r.coherentNs, r.randomNs, r.regionNs])),
-      build: mine.find((r) => r.count === large).buildMs,
+/**
+ * The rule (docs/plans/2026-11-24-p3-objects-bvh.md): for each data set and query kind, a leaf
+ * size's slowdown is its time over the best size's. Its score is its worst slowdown. The winner is
+ * the largest size with a score of at most 1.1, or, if there is none, the best score (the larger
+ * size on a tie). No averaging, so a data set counts as much as any other.
+ */
+function decide(rows, leaves) {
+  const sets = [...new Set(rows.map((r) => `${r.source} ${r.count}`))]
+  const scores = leaves.map((leaf) => ({leaf, score: 0, where: ''}))
+  for (const set of sets) {
+    const mine = rows.filter((r) => `${r.source} ${r.count}` === set)
+    for (const kind of KINDS) {
+      const best = Math.min(...mine.map((r) => r[kind]))
+      for (const s of scores) {
+        const slowdown = mine.find((r) => r.leaf === s.leaf)[kind] / best
+        if (slowdown > s.score) {
+          s.score = slowdown
+          s.where = `${kind.replace('Ns', '')}, ${set}`
+        }
+      }
     }
-  })
-  const fastest = Math.min(...scores.map((s) => s.build))
-  const eligible = scores.filter((s) => s.build <= fastest * 1.1)
-  const best = eligible.reduce((a, b) => (b.query < a.query ? b : a))
-  const bestAnyBuild = scores.reduce((a, b) => (b.query < a.query ? b : a))
-  const old = eligible.find((s) => s.leaf === DEFAULT_LEAF)
-  const winner = old && old.query <= best.query * 1.05 ? old : best
-  const largest = Math.max(...scores.filter((s) => s.query <= bestAnyBuild.query * 1.1).map((s) => s.leaf))
-  return {largest, scores, eligible: eligible.map((s) => s.leaf), best, bestAnyBuild, winner}
+  }
+  const good = scores.filter((s) => s.score <= TOLERANCE)
+  const winner =
+    good.length > 0
+      ? good.reduce((a, b) => (b.leaf > a.leaf ? b : a))
+      : scores.reduce((a, b) => (b.score < a.score || (b.score === a.score && b.leaf > a.leaf) ? b : a))
+  return {scores, winner, within: good.length > 0}
 }
 
 const COLUMNS = [
@@ -117,23 +127,33 @@ function report(main, confirm, d) {
     '## Result',
     '',
     `- **Leaf size ${d.winner.leaf}.** The default is ${DEFAULT_LEAF}.`,
-    '- The rule: the best geometric mean of query times (coherent and random closest ray, region;',
-    '  triangles at every count) among the sizes whose build, at the largest count, is within 10%',
-    `  of the fastest; ${DEFAULT_LEAF} stays if it is within 5% of that.`,
-    `- Sizes within 10% of the fastest build: ${d.eligible.join(', ')}. Best among them: ${d.best.leaf}.`,
-    `- Best whatever the build time: ${d.bestAnyBuild.leaf}; the largest within 10% of its query time: ${d.largest}.`,
+    '- The rule: the largest size whose worst slowdown is at most 10%. A slowdown is against the best',
+    '  size, for one query kind (coherent and random closest ray, region) on one data set; nothing is',
+    '  averaged.',
+    ...(d.within ? [] : ['- **No size is within 10% everywhere.** This is the one with the smallest worst slowdown.']),
+    ...(d.winner.leaf === LEAVES[0] ? ['- **It is the smallest size measured,** so a smaller one could be better.'] : []),
     ...(opts.quick ? ['- **A smoke test: too few queries to mean anything.**'] : []),
     '',
-    '| leaf | query geomean ns | build ms |',
+    '| leaf | worst slowdown | where |',
     '|---|---|---|',
-    ...d.scores.map((s) => `| ${s.leaf} | ${s.query.toFixed(0)} | ${s.build.toFixed(1)} |`),
+    ...d.scores.map((s) => `| ${s.leaf} | ${s.score.toFixed(2)} | ${s.where} |`),
     '',
-    '## Triangles',
+    '## Data sets that decide',
     '',
     table(main),
   ]
   if (confirm.length > 0) {
-    lines.push('', '## Confirmation', '', table(confirm))
+    const c = decide(confirm, [...new Set(confirm.map((r) => r.leaf))])
+    const mine = c.scores.find((s) => s.leaf === d.winner.leaf)
+    lines.push(
+      '',
+      '## Confirmation',
+      '',
+      `- At 10M triangles, against its neighbours, size ${mine.leaf}'s worst slowdown is ${mine.score.toFixed(2)}` +
+        ` (${mine.where})${mine.score > TOLERANCE ? ': **the choice is not confirmed**' : ''}.`,
+      '',
+      table(confirm),
+    )
   }
   return `${lines.join('\n')}\n`
 }
@@ -141,15 +161,15 @@ function report(main, confirm, d) {
 const exe = buildBench()
 console.error('running')
 const extra = opts.quick ? ['--queries', '1024', '--reps', '2'] : []
-const main = (opts.quick ? [10_000] : [10_000, 1_000_000]).flatMap((n) => runBench(exe, 'triangles', n, LEAVES, extra))
-const d = decide(main)
+const SETS = opts.quick
+  ? [['triangles', 10_000], ['spheres', 10_000]]
+  : [['triangles', 10_000], ['triangles', 1_000_000], ['capsules', 1_000_000], ['spheres', 1_000_000]]
+const main = SETS.flatMap(([source, n]) => runBench(exe, source, n, LEAVES, extra))
+const d = decide(main, LEAVES)
 const confirm = []
-if (!opts.quick) {
+if (!opts.quick && !opts.wasm) {
   const at = LEAVES.indexOf(d.winner.leaf)
-  const around = LEAVES.slice(Math.max(0, at - 1), at + 2)
-  confirm.push(...runBench(exe, 'capsules', 1_000_000, around))
-  confirm.push(...runBench(exe, 'spheres', 1_000_000, around))
-  if (!opts.wasm) confirm.push(...runBench(exe, 'triangles', 10_000_000, around))
+  confirm.push(...runBench(exe, 'triangles', 10_000_000, LEAVES.slice(Math.max(0, at - 1), at + 2)))
 }
 const text = report(main, confirm, d)
 const out = opts.out ?? (opts.quick || opts.wasm ? null : path.join(root, 'docs', 'bvh-leafsize.md'))

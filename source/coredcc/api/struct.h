@@ -70,6 +70,12 @@ struct CollectionAccessor {
       keyOf;
   /** Optional: `list.active`. */
   litestl::util::function<PointerRef(const PointerRef &self, Context &ctx)> active;
+  /**
+   * Optional: the settable Pointer member, of the struct the collection is in, that holds the
+   * active item. Writing `list.active` then writes that member. Watch or read the member itself
+   * where there may be no active item: `list.active` is NotFound then.
+   */
+  litestl::util::string activeMember;
   /** The items' struct (an item's own `type`, when set, wins). */
   StructId itemStruct;
 };

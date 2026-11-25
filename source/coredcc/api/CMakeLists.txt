@@ -2,6 +2,7 @@ coredcc_library(coredcc_api
   SOURCES
     bindings.cc
     change_bus.cc
+    context.cc
     resolve.cc
     struct.cc
   DEPS

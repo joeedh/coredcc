@@ -6,6 +6,7 @@
  */
 
 #include "coredcc/base/runtime.h"
+#include "coredcc/lib/block.h"
 #include "coredcc/parse/path.h"
 #include "coredcc/props/ref.h"
 
@@ -75,6 +76,17 @@ class Context {
     executor_ = executor;
   }
 
+  /**
+   * The active scene: a block of whatever type the host's scenes are (coredcc's own is
+   * `coredcc.Scene`); null for none. Setting another bumps the ChangeBus's structural epoch.
+   * The handle isn't checked: the block may be deleted or detached later.
+   */
+  BlockHandle scene() const
+  {
+    return scene_;
+  }
+  void setScene(BlockHandle scene);
+
   /** Paths resolve from `prefix` (itself resolved from the root) until cleared. */
   void setPrefix(Path prefix)
   {
@@ -114,6 +126,7 @@ class Context {
   Library *lib_;
   PointerRef root_;
   CommandExecutor *executor_ = nullptr;
+  BlockHandle scene_;
   Path prefix_;
   bool hasPrefix_ = false;
   const PropertyBag *inputs_ = nullptr;

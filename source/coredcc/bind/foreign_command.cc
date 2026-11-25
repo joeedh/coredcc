@@ -162,6 +162,54 @@ bool scriptCantCarry(const lb::BindingBase *t)
   return false;
 }
 
+const lb::BindingBase *unwrap(const lb::BindingBase *t)
+{
+  while (t && t->type == lb::BindingType::ParentTemplParam) {
+    t = static_cast<const lbt::ParentTemplateParam *>(t)->concreteType;
+  }
+  return t;
+}
+
+/* Why a script can't return `m`'s type; null if it can. These are the rules of litestl's
+ * foreign dispatch (writeReturn), which would otherwise fail on the first call. */
+const char *cantReturn(const lbt::Method &m)
+{
+  const lb::BindingBase *t = unwrap(m.returnType);
+  if (!t) {
+    return nullptr;
+  }
+  if (t->type == lb::BindingType::Reference) {
+    return "returns a reference";
+  }
+  if (t->type == lb::BindingType::Pointer) {
+    return m.returnPolicy == lbt::ReturnPolicy::Owned ? "returns ownership of a pointer" : nullptr;
+  }
+  if (t->type != lb::BindingType::Struct) {
+    return nullptr;
+  }
+  const auto *st = static_cast<const lbt::_StructBase *>(t);
+  const std::string_view name = st->name.c_str();
+  if (name == "litestl::util::String") {
+    return nullptr;
+  }
+  if (name == "litestl::util::Vector") {
+    const lb::BindingBase *e = unwrap(st->templateParams[0].type);
+    const bool scalar = e->type == lb::BindingType::Number ||
+                        e->type == lb::BindingType::Boolean || e->type == lb::BindingType::Enum;
+    return scalar ? nullptr : "returns a Vector whose elements aren't scalars";
+  }
+  bool hasDefault = false, hasCopy = false;
+  for (const lbt::Constructor *c : st->constructors) {
+    hasDefault = hasDefault || c->params.size() == 0;
+    if (c->params.size() == 1 && c->params[0].type->type == lb::BindingType::Reference) {
+      const auto *ref = static_cast<const lbt::Reference *>(c->params[0].type);
+      hasCopy = hasCopy || ref->refType->buildFullName() == st->buildFullName();
+    }
+  }
+  return hasDefault && hasCopy ? nullptr :
+                                 "returns a struct without bound default and copy constructors";
+}
+
 } // namespace
 
 Status foreignImplementable(const lbt::_StructBase *iface)
@@ -172,18 +220,16 @@ Status foreignImplementable(const lbt::_StructBase *iface)
     for (const lbt::MethodParam &p : m->params) {
       cant = cant || scriptCantCarry(p.type);
     }
-    if (cant) {
-      bad += std::string(bad.empty() ? "" : ", ") + m->name.c_str();
+    const char *why = cant ? "takes or returns a void * or a QueryAnswer" : cantReturn(*m);
+    if (why) {
+      bad += std::string(bad.empty() ? "" : "; ") + m->name.c_str() + " " + why;
     }
   }
   if (bad.empty()) {
     return Status();
   }
   return error(StatusCode::Unsupported,
-               std::string(iface->name.c_str()) +
-                   ": scripts can't implement slots taking or returning a void * or a "
-                   "QueryAnswer: " +
-                   bad);
+               std::string(iface->name.c_str()) + ": scripts can't implement it: " + bad);
 }
 
 /* ---- CommandDef builder facades ---- */

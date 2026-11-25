@@ -57,7 +57,7 @@ struct SetProperty {
   }
   Status exec(Context &ctx)
   {
-    Result<ResolvedPath> rp = resolve(ctx, path);
+    Result<ResolvedPath> rp = resolveForWrite(ctx, path);
     if (!rp.ok()) {
       return rp.status();
     }
@@ -219,7 +219,7 @@ Result<const CommandDef *> setPropertyDef(Runtime &rt)
 
 Status setValueUndo(Context &ctx, const Path &path, const PropValue &value, uint64_t gestureId)
 {
-  Result<ResolvedPath> rp = resolve(ctx, path);
+  Result<ResolvedPath> rp = resolveForWrite(ctx, path);
   if (!rp.ok()) {
     return rp.status();
   }

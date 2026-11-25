@@ -228,8 +228,151 @@ static void test_foreign_implementable()
   test_assert(bp.code() == StatusCode::Unsupported && strstr(bp.message(), "data") != nullptr);
 }
 
+/* Copyable, but a script can't make one. */
+struct NoDefault {
+  int x = 0;
+  static lbt::Struct<NoDefault> *defineBindings()
+  {
+    litestl::alloc::PermanentGuard guard;
+    auto *st = new lbt::Struct<NoDefault>("test::NoDefault", sizeof(NoDefault));
+    BIND_STRUCT_COPY_CONSTRUCTOR(st);
+    return st;
+  }
+};
+/* A constructor of one reference that isn't the copy constructor. */
+struct NoCopy {
+  NoCopy() = default;
+  NoCopy(const NoDefault &) {}
+  int x = 0;
+  static lbt::Struct<NoCopy> *defineBindings()
+  {
+    litestl::alloc::PermanentGuard guard;
+    auto *st = new lbt::Struct<NoCopy>("test::NoCopy", sizeof(NoCopy));
+    BIND_STRUCT_DEFAULT_CONSTRUCTOR(st);
+    BIND_STRUCT_CONSTRUCTOR(st, "ofNoDefault", const NoDefault &);
+    return st;
+  }
+};
+
+/* Each can be returned by a script. */
+struct Returnable : IfaceRef {
+  void nothing() const
+  {
+    CDCC_CALL(nothing);
+  }
+  string text() const
+  {
+    return CDCC_CALL(text);
+  }
+  litestl::util::Vector<double> numbers() const
+  {
+    return CDCC_CALL(numbers);
+  }
+  litestl::util::Vector<bool> bools() const
+  {
+    return CDCC_CALL(bools);
+  }
+  Status status() const
+  {
+    return CDCC_CALL(status);
+  }
+  PropValue value(const NoDefault &a, const NoCopy &b, const TypeId &c) const
+  {
+    return CDCC_CALL(value, a, b, c);
+  }
+  Context *context() const
+  {
+    return CDCC_CALL(context);
+  }
+  CDCC_INTERFACE(Returnable, "test.Returnable")
+  {
+    BIND_STRUCT_METHOD(st, nothing, MARGS());
+    BIND_STRUCT_METHOD(st, text, MARGS());
+    BIND_STRUCT_METHOD(st, numbers, MARGS());
+    BIND_STRUCT_METHOD(st, bools, MARGS());
+    BIND_STRUCT_METHOD(st, status, MARGS());
+    BIND_STRUCT_METHOD(st, value, MARGS("a", "b", "c"));
+    BIND_STRUCT_METHOD(st, context, MARGS());
+  }
+};
+
+struct NotReturnable : IfaceRef {
+  NoDefault noDefault() const
+  {
+    return CDCC_CALL(noDefault);
+  }
+  NoCopy noCopy() const
+  {
+    return CDCC_CALL(noCopy);
+  }
+  TypeId typeId() const
+  {
+    return CDCC_CALL(typeId);
+  }
+  litestl::util::Vector<Status> statuses() const
+  {
+    return CDCC_CALL(statuses);
+  }
+  litestl::util::Vector<litestl::util::Vector<int>> nested() const
+  {
+    return CDCC_CALL(nested);
+  }
+  int fine() const
+  {
+    return CDCC_CALL(fine);
+  }
+  CDCC_INTERFACE(NotReturnable, "test.NotReturnable")
+  {
+    BIND_STRUCT_METHOD(st, noDefault, MARGS());
+    BIND_STRUCT_METHOD(st, noCopy, MARGS());
+    BIND_STRUCT_METHOD(st, typeId, MARGS());
+    BIND_STRUCT_METHOD(st, statuses, MARGS());
+    BIND_STRUCT_METHOD(st, nested, MARGS());
+    BIND_STRUCT_METHOD(st, fine, MARGS());
+  }
+};
+
+/* Bound as classes, not as interfaces: CDCC_CALL refuses some of these types. */
+struct RefReturn {
+  Status s;
+  Status &byRef()
+  {
+    return s;
+  }
+  Status *owned()
+  {
+    return nullptr;
+  }
+  static lbt::Struct<RefReturn> *defineBindings()
+  {
+    litestl::alloc::PermanentGuard guard;
+    auto *st = new lbt::Struct<RefReturn>("test::RefReturn", sizeof(RefReturn));
+    BIND_STRUCT_METHOD(st, byRef, MARGS());
+    BIND_STRUCT_METHOD(st, owned, MARGS());
+    st->methods[1]->returnsOwned();
+    return st;
+  }
+};
+
+static void test_foreign_returns()
+{
+  test_assert(sc::foreignImplementable(detail::ifaceDesc<Returnable>()).ok());
+  const Status s = sc::foreignImplementable(detail::ifaceDesc<NotReturnable>());
+  test_assert(s.code() == StatusCode::Unsupported);
+  for (const char *needle : {"noDefault returns a struct", "noCopy returns a struct",
+                             "typeId returns a struct", "statuses returns a Vector",
+                             "nested returns a Vector"})
+  {
+    test_assert(hasMsg(s, needle));
+  }
+  test_assert(!strstr(s.message(), "fine"));
+  const Status r = sc::foreignImplementable(RefReturn::defineBindings());
+  test_assert(hasMsg(r, "byRef returns a reference") && hasMsg(r, "owned returns ownership"));
+}
+
 int main()
 {
+  test_foreign_returns();
   test_registration_refusals();
   test_def_facades();
   test_run_undo_redo();
