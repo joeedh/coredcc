@@ -200,16 +200,24 @@ Status LastUsedStore::load(std::string_view text)
 
 /* ---- datapath ---- */
 
+StructId LastUsedStore::baseStruct()
+{
+  return StructId::of(kItemBase);
+}
+
 StructId LastUsedStore::itemStruct(const CommandDef &def)
 {
   ApiRegistry &reg = rt_.ext<ApiRegistry>();
+  if (!reg.find(baseStruct())) {
+    return StructId();
+  }
   const std::string name = std::string(kItemBase) + ":" + def.name().c_str();
   const StructId id = StructId::of(name);
   if (reg.find(id)) {
     return id;
   }
   ApiStruct st(name);
-  st.parent(StructId::of(kItemBase));
+  st.parent(baseStruct());
   for (int i = 0; i < def.inputCount(); i++) {
     const PropertyDef &in = def.inputDef(i);
     if (!storable(in)) {
@@ -237,7 +245,7 @@ StructId LastUsedStore::itemStruct(const CommandDef &def)
 void LastUsedStore::addCollectionTo(ApiStruct &root, std::string_view memberName)
 {
   ApiRegistry &reg = rt_.ext<ApiRegistry>();
-  if (!reg.find(StructId::of(kItemBase))) {
+  if (!reg.find(baseStruct())) {
     CDCC_CHECK(reg.add(ApiStruct(kItemBase)).ok(), "LastUsedStore: base struct");
   }
   CollectionAccessor c;
@@ -265,7 +273,7 @@ void LastUsedStore::addCollectionTo(ApiStruct &root, std::string_view memberName
     const auto *e = static_cast<const Entry *>(static_cast<const PropertyBag *>(item.data));
     return KeySegment::stringKey(e->command->name().c_str());
   };
-  root.addCollection(PropertyDef::collectionProp(memberName, StructId::of(kItemBase))
+  root.addCollection(PropertyDef::collectionProp(memberName, baseStruct())
                          .access(PropAccess::NoUndo),
                      std::move(c));
 }

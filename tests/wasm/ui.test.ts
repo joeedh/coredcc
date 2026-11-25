@@ -7,6 +7,7 @@ import {afterEach, beforeEach, describe, test} from 'node:test'
 import * as cdcc from 'coredcc-script'
 import {CommandFlags, ScriptError, StatusCode, type Context, type ScriptCommand, type Session} from 'coredcc-script'
 import * as spike from 'coredcc-gen/testapp/functions'
+import type {Commands, Root} from 'coredcc-paths'
 
 import {backend, fails, hostOf, open, validate} from './fixture.ts'
 
@@ -312,6 +313,24 @@ describe('coredcc wasm-st UI', () => {
     assert.equal(spike.historySize(hostOf(ctx)), before) /* over the step undone */
     cdcc.undo(ctx)
     assert.deepEqual([cdcc.get(ctx, cube), cdcc.get(ctx, ball)], [1, 7])
+  })
+
+  test('the typed calls are the plain ones', () => {
+    const doc = cdcc.typed<Root, Commands>(ctx)
+    assert.equal(doc.ctx, ctx)
+    doc.set('items["Cube"].weight', 4)
+    doc.set('mode', 'EDIT')
+    assert.equal(doc.get('items["Cube"].weight'), 4)
+    assert.equal(doc.get('mode', {names: true}), 'EDIT')
+    assert.equal(doc.get('mode'), 1)
+    const drag = cdcc.beginGesture(ctx)
+    for (const x of [0.6, 0.7]) doc.set('strength', x, drag)
+    assert.equal(spike.historySize(hostOf(ctx)), 3)
+    weigh()
+    const at = {prefix: '/items["Cube"]'}
+    const plain = cdcc.typed<Root, {'ts.weigh': Commands['ts.add']}>(ctx)
+    assert.match(plain.canRun('ts.weigh', {amount: 1}, at)!, /amount/)
+    assert.deepEqual(plain.run('ts.weigh', {}, at), {weight: 5})
   })
 
   test('canInvoke, and of many tools at once', () => {

@@ -54,6 +54,12 @@ class LastUsedStore {
   /** Adds the `commandDefaults` collection (keyed by command id) to `root`. */
   void addCollectionTo(ApiStruct &root, std::string_view memberName = kMember);
 
+  /** The struct of `commandDefaults` items of `def`'s, which is registered on first use. Null
+   * unless addCollectionTo was called. */
+  StructId itemStruct(const CommandDef &def);
+  /** The parent of those structs. */
+  static StructId baseStruct();
+
   Status validate() const;
 
  private:
@@ -66,8 +72,6 @@ class LastUsedStore {
   void destroyEntries();
   Entry &entry(const CommandDef &def);
   const Entry *findEntry(const CommandDef &def) const;
-  /** The per-command struct of commandDefaults items, registered on first use. */
-  StructId itemStruct(const CommandDef &def);
 
   Runtime &rt_;
   litestl::util::Vector<Entry *> entries_;

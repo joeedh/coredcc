@@ -5,6 +5,7 @@
 #include "coredcc/bind/detail.h"
 #include "coredcc/bind/meta.h"
 #include "coredcc/command/command.h"
+#include "coredcc/command/last_used.h"
 
 namespace coredcc {
 
@@ -118,8 +119,19 @@ std::string apiCatalog(Context &ctx)
     out.key("root").string(root->name().c_str());
   }
   out.key("structs").beginArray();
+  const StructId defaults = LastUsedStore::baseStruct();
   for (int i = 0; i < reg.structCount(); i++) {
-    writeStruct(out, rt, reg.structAt(i));
+    if (reg.structAt(i).parentId() != defaults) {
+      writeStruct(out, rt, reg.structAt(i));
+    }
+  }
+  /* These are registered when they are first used, so in any order. */
+  for (int i = 0; i < commands.size(); i++) {
+    if (!commands.at(i).has(CommandFlags::Private)) {
+      if (const StructId id = rt.ext<LastUsedStore>().itemStruct(commands.at(i))) {
+        writeStruct(out, rt, *reg.find(id));
+      }
+    }
   }
   out.endArray().key("commands").beginArray();
   for (int i = 0; i < commands.size(); i++) {

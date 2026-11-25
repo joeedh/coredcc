@@ -2,6 +2,7 @@
 #include "../command/command_fixture.h"
 
 #include "coredcc/bind/catalog.h"
+#include "coredcc/command/last_used.h"
 
 #include <cstring>
 #include <string>
@@ -129,10 +130,54 @@ void test_scene()
   test_assert(shows(json, "\"name\":\"location\""));
 }
 
+/* The structs of commandDefaults are all there, whatever was used first. */
+void test_defaults()
+{
+  const auto make = [](bool use) {
+    Runtime rt;
+    ApiRegistry &reg = rt.ext<ApiRegistry>();
+    LastUsedStore &store = rt.ext<LastUsedStore>();
+    for (const char *id : {"test.b", "test.a", "test.hidden"}) {
+      CommandDef def(id);
+      def.input(PropertyDef::intProp("n"));
+      if (strcmp(id, "test.hidden") == 0) {
+        def.flags(CommandFlags::Private);
+      }
+      test_assert(addNativeCommand<Nothing>(rt, std::move(def)).ok());
+    }
+    const CommandRegistry &commands = rt.ext<CommandRegistry>();
+    test_assert(!store.itemStruct(*commands.find("test.a")));
+    ApiStruct root("Root");
+    store.addCollectionTo(root);
+    test_assert(reg.add(std::move(root)).ok());
+    if (use) {
+      test_assert(bool(store.itemStruct(*commands.find("test.hidden"))));
+      test_assert(bool(store.itemStruct(*commands.find("test.a"))));
+      test_assert(reg.add(ApiStruct("Later")).ok());
+    }
+    else {
+      test_assert(reg.add(ApiStruct("Later")).ok());
+    }
+    int data = 0;
+    test_assert(reg.addRuntimeOwner("root", StructId::of("Root"), [&] { return (void *)&data; }).ok());
+    Context ctx(&rt, nullptr, reg.runtimeOwner("root"));
+    const std::string out = apiCatalog(ctx);
+    test_assert(out == apiCatalog(ctx));
+    return out;
+  };
+  const std::string json = make(false);
+  test_assert(json == make(true));
+  const size_t b = json.find("{\"name\":\"CommandDefaults:test.b\"");
+  const size_t a = json.find("{\"name\":\"CommandDefaults:test.a\"");
+  test_assert(b != json.npos && a != json.npos && b < a && json.find("\"Later\"") < b);
+  test_assert(json.find("hidden") == json.npos && shows(json, "\"name\":\"CommandDefaults\""));
+}
+
 } // namespace
 
 int main()
 {
+  test_defaults();
   test_small();
   test_scene();
   return test_end();
