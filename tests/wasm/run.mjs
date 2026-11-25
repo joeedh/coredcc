@@ -76,6 +76,7 @@ writeFileSync(
         noEmit: true,
         skipLibCheck: true,
         isolatedModules: true,
+        allowImportingTsExtensions: true,
         lib: ['ES2022', 'DOM', 'ESNext.Disposable'],
         types: ['node'],
         typeRoots: [join(here, 'node_modules', '@types')],

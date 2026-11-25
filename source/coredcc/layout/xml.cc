@@ -462,11 +462,12 @@ class Parser {
 
 } // namespace
 
-LayoutPosition layoutPosition(std::string_view xml, size_t offset)
+LayoutPosition layoutPosition(std::string_view xml, size_t offset, const LayoutPosition &from)
 {
-  LayoutPosition out;
+  LayoutPosition out = from;
   out.offset = offset < xml.size() ? offset : xml.size();
-  for (size_t i = xml.substr(0, kBom.size()) == kBom ? kBom.size() : 0; i < out.offset; i++) {
+  const size_t start = xml.substr(0, kBom.size()) == kBom ? kBom.size() : 0;
+  for (size_t i = from.offset > start ? from.offset : start; i < out.offset; i++) {
     const char c = xml[i];
     if (c == '\n' || (c == '\r' && !(i + 1 < xml.size() && xml[i + 1] == '\n'))) {
       out.line++;

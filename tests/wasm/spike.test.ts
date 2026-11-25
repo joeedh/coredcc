@@ -216,6 +216,45 @@ describe('coredcc wasm-st spike', () => {
     for (const g of [0, -1, 1.5, NaN, 2 ** 60]) assert.throws(() => cdcc.set(ctx, 'strength', 1, g), TypeError)
   })
 
+  test('layouts: nodes, issues, and a tool under a prefix', () => {
+    const xml = `<layout path="items['Cube']">
+  <prop path="weight" enabledIf="!/enabled"/>
+  <tool invocation="ts.weigh(by=2)">Weigh</tool>
+</layout>`
+    const root = cdcc.parseLayout(xml)
+    assert.equal(root.kind, 'layout')
+    const [prop, tool] = root.children!
+    assert.equal(prop.effectivePath, 'items["Cube"].weight')
+    assert.deepEqual(prop.enabledIf, {path: 'enabled', not: true})
+    assert.equal(tool.label, 'Weigh')
+    assert.equal(tool.prefix, 'items["Cube"]')
+    assert.throws(() => cdcc.parseLayout(`<layout>
+<x/></layout>`), fails(StatusCode.InvalidArgument, /layout 2:1/))
+
+    const issues = cdcc.validateLayout(ctx, xml)
+    assert.deepEqual(issues.map((i) => [i.severity, i.line, i.node, i.code]), [['Error', 3, 2, 'NotFound']])
+
+    /* The command's own paths are under the prefix too, in its undo as well. */
+    class Weigh implements ScriptCommand {
+      before = 0
+      exec(c: Context) {
+        this.before = cdcc.get(c, 'weight') as number
+        cdcc.write(c, 'weight', this.before + (cdcc.input(c, 'by') as number))
+      }
+      undo(c: Context) {
+        cdcc.write(c, 'weight', this.before)
+      }
+    }
+    cdcc.registerCommand(ctx, {id: 'ts.weigh', inputs: {by: 1}}, Weigh)
+    assert.deepEqual(cdcc.validateLayout(ctx, xml), [])
+    cdcc.invokeAt(ctx, tool.prefix!, tool.invocation!)
+    assert.equal(cdcc.get(ctx, 'items["Cube"].weight'), 3)
+    cdcc.undo(ctx)
+    assert.equal(cdcc.get(ctx, 'items["Cube"].weight'), 1)
+    assert.throws(() => cdcc.invokeAt(ctx, 'items["Cone"]', tool.invocation!), ScriptError)
+    assert.throws(() => cdcc.invokeAt(ctx, '', tool.invocation!), fails(StatusCode.NotFound, /weight/))
+  })
+
   test('3. undoes the set', () => {
     cdcc.set(ctx, 'strength', 0.75)
     assert.ok(cdcc.canUndo(ctx) && !cdcc.canRedo(ctx))

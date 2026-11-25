@@ -3,6 +3,7 @@
 #include "coredcc/bind/facades.h"
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/bind/graph_facades.h"
+#include "coredcc/bind/layout_facades.h"
 #include "coredcc/command/command.h"
 
 #include "litestl/binding/binding.h"
@@ -101,6 +102,19 @@ void addFacades(litestl::binding::BindingManager *mgr)
                 MARGS("ctx", "def", "factory", "slots"));
 }
 
+void addLayoutFacades(litestl::binding::BindingManager *mgr)
+{
+  BIND_FUNCTION(mgr, "coredcc::layoutJson", script::layoutJson, MARGS("xml"));
+  BIND_FUNCTION(mgr,
+                "coredcc::validateLayoutXml",
+                script::validateLayoutXml,
+                MARGS("ctx", "xml"));
+  BIND_FUNCTION(mgr,
+                "coredcc::invokeAt",
+                script::invokeAt,
+                MARGS("ctx", "prefix", "invocation"));
+}
+
 void addGraphFacades(litestl::binding::BindingManager *mgr)
 {
   BIND_FUNCTION(mgr, "coredcc::newNodeType", script::newNodeType, MARGS("id")).returnsOwned();
@@ -173,6 +187,7 @@ void addBindings(litestl::binding::BindingManager *mgr)
   addTypes(mgr);
   addFacades(mgr);
   addGraphFacades(mgr);
+  addLayoutFacades(mgr);
 }
 
 litestl::binding::BindingManager *bindings()

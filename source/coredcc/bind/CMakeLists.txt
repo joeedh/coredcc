@@ -3,10 +3,12 @@ coredcc_library(coredcc_bind
     facades.cc
     foreign_command.cc
     graph_facades.cc
+    layout_facades.cc
     manager.cc
     meta.cc
   DEPS
     coredcc_graph
+    coredcc_layout
 )
 
 # Hosts link the manager's export into their module (P1f step 5).

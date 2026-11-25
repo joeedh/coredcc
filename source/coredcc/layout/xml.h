@@ -37,8 +37,8 @@ struct LayoutPosition {
   int column = 1;
 };
 
-/** The position of `offset` in the text. */
-LayoutPosition layoutPosition(std::string_view xml, size_t offset);
+/** The position of `offset` in the text, found from `from`, one at or before it. */
+LayoutPosition layoutPosition(std::string_view xml, size_t offset, const LayoutPosition &from = {});
 
 /**
  * The layout in `xml`, within LayoutLimits. Errors are "layout 3:14: what is wrong", with
