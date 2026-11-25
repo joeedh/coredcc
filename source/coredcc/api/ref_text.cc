@@ -67,6 +67,23 @@ class RefParser {
  public:
   explicit RefParser(std::string_view text) : lx_(text) {}
 
+  /** Ids separated by ';', which may also end the list. */
+  bool blockIds(litestl::util::Vector<BlockId> &out)
+  {
+    for (lx_.skipSpace(); !lx_.atEnd(); lx_.skipSpace()) {
+      BlockId id;
+      if (!blockId(id)) {
+        return false;
+      }
+      out.append(id);
+      lx_.skipSpace();
+      if (!lx_.eat(';')) {
+        return lx_.atEnd() || expected("';' or the end");
+      }
+    }
+    return true;
+  }
+
   bool parse(StableRef &out)
   {
     lx_.skipSpace();
@@ -173,19 +190,24 @@ class RefParser {
       return name(IdDomain::Type, kOwnerNamePrefix, out.nameHash) && token(')');
     }
     out.kind = OwnerKey::Kind::Block;
-    if (!name(IdDomain::Client, "", out.block.client.value) || !token(',')) {
+    return blockId(out.block) && token(')');
+  }
+
+  bool blockId(BlockId &out)
+  {
+    if (!name(IdDomain::Client, "", out.client.value) || !token(',')) {
       return false;
     }
     lx_.skipSpace();
     const size_t at = lx_.pos();
-    if (!hex(out.block.local.hi) || !hex(out.block.local.lo)) {
+    if (!hex(out.local.hi) || !hex(out.local.lo)) {
       return false;
     }
     if (out.isNull()) {
-      fail = Failure{at, "a null id (the empty text is the null pointer)"};
+      fail = Failure{at, "a null id"};
       return false;
     }
-    return token(')');
+    return true;
   }
 
   bool member(StableRef &out)
@@ -235,7 +257,77 @@ class RefParser {
   Lexer lx_;
 };
 
+void appendBlockId(std::string &out, const Runtime &rt, const BlockId &id, const char *comma)
+{
+  appendName(out, rt.nameOf(id.client), id.client.value);
+  out += comma;
+  appendHex(out, id.local.hi);
+  appendHex(out, id.local.lo);
+}
+
+BlockId canonical(const Runtime &rt, const BlockId &id)
+{
+  const ClientRegistry *clients = rt.findExt<ClientRegistry>();
+  return clients ? clients->canonical(id) : id;
+}
+
+Failure tooLong(size_t limit)
+{
+  return Failure{0, "longer than " + std::to_string(limit) + " bytes"};
+}
+
 } // namespace
+
+std::string formatBlockIds(const Runtime &rt, std::span<const BlockId> ids)
+{
+  std::string out;
+  for (const BlockId &id : ids) {
+    out += out.empty() ? "" : ";";
+    appendBlockId(out, rt, id, ",");
+  }
+  return out;
+}
+
+Result<litestl::util::Vector<BlockId>> parseBlockIds(const Runtime &rt,
+                                                     std::string_view text,
+                                                     size_t *errorOffset)
+{
+  RefParser p(text);
+  litestl::util::Vector<BlockId> ids;
+  if (text.size() > kMaxBlockIdsLength) {
+    p.fail = tooLong(kMaxBlockIdsLength);
+  }
+  if (!p.fail.what.empty() || !p.blockIds(ids)) {
+    if (errorOffset) {
+      *errorOffset = p.fail.offset;
+    }
+    return parse_detail::toStatus("block ids", p.fail);
+  }
+  for (BlockId &id : ids) {
+    id = canonical(rt, id);
+  }
+  return ids;
+}
+
+std::string formatBlockId(const Runtime &rt, const BlockId &id)
+{
+  return id.isNull() ? std::string() : formatBlockIds(rt, std::span<const BlockId>(&id, 1));
+}
+
+Result<BlockId> parseBlockId(const Runtime &rt, std::string_view text, size_t *errorOffset)
+{
+  Result<litestl::util::Vector<BlockId>> ids = parseBlockIds(rt, text, errorOffset);
+  if (!ids.ok()) {
+    return ids.status();
+  }
+  if (ids->size() > 1) {
+    if (errorOffset) {
+      *errorOffset = text.find(';');
+    }
+    return Status::error(StatusCode::InvalidArgument, "block id: more than one id");
+  }
+  return ids->size() == 1 ? (*ids)[0] : BlockId();
+}
 
 std::string formatRef(const Runtime &rt, const StableRef &ref)
 {
@@ -246,10 +338,7 @@ std::string formatRef(const Runtime &rt, const StableRef &ref)
   if (ref.owner.kind == OwnerKey::Kind::Block) {
     const BlockId &id = ref.owner.block;
     out += "@block(";
-    appendName(out, rt.nameOf(id.client), id.client.value);
-    out += ", ";
-    appendHex(out, id.local.hi);
-    appendHex(out, id.local.lo);
+    appendBlockId(out, rt, id, ", ");
   }
   else {
     const char *name = rt.nameOf(IdDomain::Type, ref.owner.nameHash);
@@ -293,7 +382,7 @@ Result<StableRef> parseRef(const Runtime &rt, std::string_view text, size_t *err
   StableRef ref;
   bool ok = false;
   if (text.size() > kMaxPathLength) {
-    p.fail = Failure{0, "longer than " + std::to_string(kMaxPathLength) + " bytes"};
+    p.fail = tooLong(kMaxPathLength);
   }
   else {
     ok = p.parse(ref);
@@ -304,9 +393,7 @@ Result<StableRef> parseRef(const Runtime &rt, std::string_view text, size_t *err
     }
     return parse_detail::toStatus("reference", p.fail);
   }
-  if (const ClientRegistry *clients = rt.findExt<ClientRegistry>()) {
-    ref.owner.block = clients->canonical(ref.owner.block);
-  }
+  ref.owner.block = canonical(rt, ref.owner.block);
   return ref;
 }
 

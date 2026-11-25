@@ -887,6 +887,8 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
   `members` without Private ones, its own first.
 - **`toJs` and `fromJs` take an optional context**: a graph's nodes have none, and their values are
   never pointers (TypeError).
+- **Block ids alone have text too** (`formatBlockId(s)`, `parseBlockId(s)`): `client,hex32`, lists
+  separated by `;`. P3's `blockIdText` becomes this, and commands on many blocks take it as a String.
 - **The wasm test host's pointer member is `activeItem`**: `active` is reserved for collections.
 - **Mutations:** 85 in `json_writer`, `utf8`, `ref_text`, `literal`, `resolve`, `meta` and `facades`.
   All are caught but one, which is equivalent: `unsignedInteger` one past 2^53 reaches `integer`,

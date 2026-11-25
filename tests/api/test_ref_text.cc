@@ -221,8 +221,67 @@ static void test_fuzz()
   test_assert(ok > 1000);
 }
 
+static void test_block_ids()
+{
+  World w;
+  Runtime &rt = w.rt;
+  test_assert(rt.ext<ClientRegistry>().registerClient("a b,c").ok());
+  const char *old[] = {"before.acme"};
+  test_assert(rt.ext<ClientRegistry>().registerClient("acme", old).ok());
+  const BlockId own{ClientId::of(kCoredccClient), {0x0123456789abcdef, 1}};
+  const BlockId odd{ClientId::of("a b,c"), {0, 2}};
+  const BlockId unknown{ClientId{0xabc}, {3, 0}};
+  test_assert(formatBlockId(rt, own) == "coredcc,0123456789abcdef0000000000000001");
+  test_assert(formatBlockId(rt, odd) == "\"a b,c\",00000000000000000000000000000002");
+  test_assert(formatBlockId(rt, unknown) == "#0000000000000abc,00000000000000030000000000000000");
+  test_assert(formatBlockId(rt, BlockId()).empty() && parseBlockId(rt, " ")->isNull());
+  for (const BlockId &id : {own, odd, unknown}) {
+    test_assert(*parseBlockId(rt, formatBlockId(rt, id)) == id);
+    StableRef ref;
+    ref.owner = OwnerKey::ofBlock(id);
+    /* The same id text as in a reference, but for a space. */
+    test_assert(*parseRef(rt, "@block(" + formatBlockId(rt, id) + ")") == ref);
+  }
+  test_assert(*parseBlockId(rt, " coredcc , 0123456789ABCDEF0000000000000001 ; ") == own);
+  test_assert(parseBlockId(rt, "before.acme," + std::string(31, '0') + "1")->client ==
+              ClientId::of("acme"));
+
+  const BlockId all[] = {own, odd, unknown, own};
+  const std::string text = formatBlockIds(rt, all);
+  Result<litestl::util::Vector<BlockId>> back = parseBlockIds(rt, text);
+  test_assert(back.ok() && back->size() == 4 && (*back)[0] == own && (*back)[1] == odd &&
+              (*back)[2] == unknown && (*back)[3] == own);
+  test_assert(formatBlockIds(rt, std::span<const BlockId>()).empty());
+  for (const char *none : {"", " ", "\t"}) {
+    test_assert(parseBlockIds(rt, none).ok() && parseBlockIds(rt, none)->size() == 0);
+  }
+  test_assert(parseBlockIds(rt, text + ";")->size() == 4);
+
+  const std::string hex(31, '0');
+  const auto bad = [&](const std::string &s, size_t at, const char *what) {
+    size_t offset = 999, one = 999;
+    Status st = parseBlockIds(rt, s, &offset).status();
+    Status single = parseBlockId(rt, s, &one).status();
+    return st.code() == StatusCode::InvalidArgument && strstr(st.message(), what) &&
+           offset == at && one == at && single.code() == st.code();
+  };
+  test_assert(bad("coredcc", 7, "','"));
+  test_assert(bad(";", 0, "a name"));
+  test_assert(bad("coredcc," + hex, 39, "hexadecimal"));
+  test_assert(bad("coredcc," + hex + "11", 40, "';'"));
+  test_assert(bad("coredcc," + hex + "0", 8, "a null id"));
+  test_assert(bad("coredcc," + hex + "1;;", 41, "a name"));
+  test_assert(bad("@block(coredcc," + hex + "1)", 0, "a name"));
+  size_t offset = 0;
+  test_assert(hasMsg(parseBlockId(rt, text, &offset).status(), "more than one") && offset == 40);
+  const std::string large(kMaxBlockIdsLength + 1, ' ');
+  test_assert(hasMsg(parseBlockIds(rt, large).status(), "longer than"));
+  test_assert(parseBlockIds(rt, std::string_view(large).substr(1)).ok());
+}
+
 int main()
 {
+  test_block_ids();
   test_format();
   test_parse();
   test_resolves();
