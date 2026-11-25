@@ -783,8 +783,7 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   Live and Transformable. A parent that isn't Transformable is the identity there too.
 - **An object's type name is registered with the Runtime** when it is set, so undo can come
   back to a missing type by id.
-- **`blockIdText` and `parseBlockIdText`** (`evaluated.h`) are the text of a block id. P2's B1 should
-  use or replace them.
+- **A result's key is `formatBlockId`'s text** (P2's B1, `api/ref_text.h`).
 - **Asked-for ids are kept** in a Runtime extension for the life of the Runtime (24 bytes each):
   a PointerRef into the results mustn't point into the store.
 - **Measured on a busy machine** (two other worktrees building; CPU load between 5 and 100 %;

@@ -1,6 +1,8 @@
 /* Object, Scene and the results of evaluateScene by datapath. */
 #include "scene_doc.h"
 
+#include "coredcc/api/ref_text.h"
+
 test_init;
 
 using namespace scene_test;
@@ -162,36 +164,6 @@ void testScene()
   test_assert(getValue(none, "evaluated.objects.length").ok());
 }
 
-void testIdText()
-{
-  Doc d;
-  BlockId id;
-  id.client = ClientId::of(kCoredccClient);
-  id.local.hi = 0x0123456789abcdefull;
-  id.local.lo = 5;
-  const std::string text = blockIdText(d.rt, id);
-  test_assert(text == std::string(kCoredccClient) + ",0123456789abcdef0000000000000005");
-  test_assert(parseBlockIdText(text) == id);
-  id.client = ClientId::of("nobody.knows.it");
-  const std::string unknown = blockIdText(d.rt, id);
-  test_assert(unknown[0] == '#' && parseBlockIdText(unknown) == id);
-  const std::string hex(32, 'a');
-  for (const std::string &bad : {std::string(),
-                                 std::string(","),
-                                 "coredcc" + hex,
-                                 "," + hex,
-                                 "coredcc," + hex + "0",
-                                 "coredcc," + hex.substr(1),
-                                 "coredcc," + std::string(31, 'a') + "G",
-                                 "coredcc," + std::string(32, 'A'),
-                                 "#12," + hex,
-                                 "#" + std::string(16, 'x') + "," + hex})
-  {
-    test_assert(parseBlockIdText(bad).isNull());
-  }
-  test_assert(parseBlockIdText("a,b," + hex).client == ClientId::of("a,b"));
-}
-
 void testEvaluated()
 {
   Doc d;
@@ -200,7 +172,7 @@ void testEvaluated()
   const BlockHandle shape = d.shapeBlock("shape", 1.0);
   d.setData(b, shape);
   const auto path = [&d](BlockHandle h, const char *member) {
-    return "evaluated.objects[\"" + blockIdText(d.rt, d.idOf(h)) + "\"]." + member;
+    return "evaluated.objects[\"" + formatBlockId(d.rt, d.idOf(h)) + "\"]." + member;
   };
   test_assert(readError(d, path(a, "world")) == StatusCode::NotFound);
   test_assert(read(d, "evaluated.objects.length") == PropValue::ofInt(0));
@@ -219,6 +191,10 @@ void testEvaluated()
   test_assert(read(d, "evaluated.objects.length") == PropValue::ofInt(2));
   test_assert(readError(d, "evaluated.objects[2]") == StatusCode::OutOfRange);
   test_assert(readError(d, "evaluated.objects[\"a\"]") == StatusCode::NotFound);
+  const std::string two = formatBlockId(d.rt, d.idOf(a)) + ";" + formatBlockId(d.rt, d.idOf(b));
+  for (const std::string &key : {std::string(), two, two + "0"}) {
+    test_assert(readError(d, "evaluated.objects[\"" + key + "\"].world") == StatusCode::NotFound);
+  }
   test_assert(readError(d, path(shape, "world")) == StatusCode::NotFound);
 
   /* Read-only, and addressed by id. */
@@ -301,7 +277,6 @@ int main()
 {
   testObject();
   testScene();
-  testIdText();
   testEvaluated();
   return test_end();
 }

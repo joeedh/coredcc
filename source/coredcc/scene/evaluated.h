@@ -7,8 +7,6 @@
 #include "litestl/util/vector.h"
 
 #include <memory>
-#include <string>
-#include <string_view>
 
 namespace coredcc {
 
@@ -79,7 +77,7 @@ struct EvaluatedStore {
 
 /* Results by path: the runtime owner `coredcc.evaluated`, for the Context's scene.
  *
- *     evaluated.objects["coredcc,0123456789abcdef0123456789abcdef"].world
+ *     evaluated.objects["coredcc,0123456789abcdef0123456789abcdef"].world     (formatBlockId)
  *
  * NotFound without a scene, before its first evaluation, and for objects that weren't in it. */
 
@@ -87,10 +85,5 @@ inline constexpr const char *kEvaluatedOwner = "coredcc.evaluated";
 
 /** Adds a member `evaluated` to a host's root struct. */
 void addEvaluated(ApiStruct &root);
-
-/** A block id as text: its client's name (or `#` and its hash in hex), a comma, 32 hex digits. */
-std::string blockIdText(const Runtime &rt, const BlockId &id);
-/** The inverse; a null id for anything else. */
-BlockId parseBlockIdText(std::string_view text);
 
 } // namespace coredcc

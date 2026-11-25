@@ -1,10 +1,10 @@
 #include "coredcc/scene/evaluated.h"
 
+#include "coredcc/api/ref_text.h"
 #include "coredcc/scene/scene.h"
 
 #include "litestl/util/alloc.h"
 
-#include <cstdio>
 #include <cstring>
 
 namespace coredcc {
@@ -20,68 +20,6 @@ bool ObjectEval::same(const ObjectEval &b) const
   return status == b.status && member == b.member && equal(state.world, b.state.world) &&
          equal(state.rotation, b.state.rotation) && equal(state.localScale, b.state.localScale) &&
          equal(localBounds, b.localBounds) && equal(bounds, b.bounds);
-}
-
-/* ---- block ids as text ---- */
-
-std::string blockIdText(const Runtime &rt, const BlockId &id)
-{
-  char hex[40];
-  snprintf(hex,
-           sizeof(hex),
-           "%016llx%016llx",
-           static_cast<unsigned long long>(id.local.hi),
-           static_cast<unsigned long long>(id.local.lo));
-  std::string client;
-  if (const char *name = rt.nameOf(id.client)) {
-    client = name;
-  }
-  else {
-    char hash[20];
-    snprintf(hash, sizeof(hash), "#%016llx", static_cast<unsigned long long>(id.client.value));
-    client = hash;
-  }
-  return client + "," + hex;
-}
-
-namespace {
-
-bool parseHex(std::string_view s, uint64_t &out)
-{
-  if (s.size() != 16) {
-    return false;
-  }
-  out = 0;
-  for (char c : s) {
-    const int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
-    if (d < 0) {
-      return false;
-    }
-    out = out << 4 | uint64_t(d);
-  }
-  return true;
-}
-
-} // namespace
-
-BlockId parseBlockIdText(std::string_view text)
-{
-  const size_t comma = text.rfind(',');
-  BlockId id;
-  if (comma == std::string_view::npos || comma == 0 || text.size() - comma - 1 != 32 ||
-      !parseHex(text.substr(comma + 1, 16), id.local.hi) ||
-      !parseHex(text.substr(comma + 17, 16), id.local.lo))
-  {
-    return BlockId();
-  }
-  const std::string_view client = text.substr(0, comma);
-  if (client[0] != '#') {
-    id.client = ClientId::of(client);
-  }
-  else if (!parseHex(client.substr(1), id.client.value)) {
-    return BlockId();
-  }
-  return id;
 }
 
 /* ---- the owner ---- */
@@ -175,14 +113,15 @@ ApiStruct sceneStruct()
                PointerRef();
   };
   c.lookup = [](const PointerRef &, Context &ctx, const KeySegment &key) {
-    const BlockId id = key.kind == KeySegment::Kind::StringKey ?
-                           parseBlockIdText(key.text.c_str()) :
-                           BlockId();
-    return id.isNull() ? PointerRef() : itemFor(ctx, id);
+    if (key.kind != KeySegment::Kind::StringKey) {
+      return PointerRef();
+    }
+    const Result<BlockId> id = parseBlockId(ctx.runtime(), key.text.c_str());
+    return id.ok() && !id->isNull() ? itemFor(ctx, *id) : PointerRef();
   };
   c.keyOf = [](const PointerRef &, Context &ctx, const PointerRef &item) {
     return KeySegment::stringKey(
-        blockIdText(ctx.runtime(), *static_cast<const BlockId *>(item.data)));
+        formatBlockId(ctx.runtime(), *static_cast<const BlockId *>(item.data)));
   };
   st.addCollection(PropertyDef::collectionProp("objects", c.itemStruct), std::move(c));
   return st;
