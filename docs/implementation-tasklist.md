@@ -12,11 +12,11 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | # | Plan | Phase | Depends on | State | Feature report |
 |---|---|---|---|---|---|
 | 1 | [Architecture](plans/2026-11-19-architecture.md) | all | — | pressure-tested | — |
-| 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | in progress (TA0, TA1 done) | — |
+| 2 | [Integration test app](plans/2026-11-19-test-app.md) | TA0–TA4 | staged with P0–P6 | in progress (TA0-TA2 done) | — |
 | 3 | [P0 scaffold and interface system](plans/2026-11-19-p0-scaffold-interfaces.md) | P0 | 1, 4 | reviewed | [interfaces](reports/feature-report-interfaces-2026-11-20.md) |
 | 4 | [P0b litestl PRs](plans/2026-11-19-p0-scaffold-interfaces.md#litestl-prs-p0b) | P0b | 1 | done (litestl #4 B, #5 A, #6 C1 merged; C2 moves to P1f) | — |
 | 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | reviewed | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md); [script bindings](reports/feature-report-bind-2026-11-22.md); [TS spike](reports/feature-report-ts-spike-2026-11-22.md); [TA1](reports/feature-report-ta1-2026-11-23.md) |
-| 6 | [P2 library IO and layout](plans/2026-11-24-p2-layout-library-io.md) | P2 | 5 | in progress (P2a reviewed, B1-B3 done) | [library IO](reports/feature-report-library-io-2026-11-24.md); layout |
+| 6 | [P2 library IO and layout](plans/2026-11-24-p2-layout-library-io.md) | P2 | 5 | in progress (P2a reviewed, B1-B5 done) | [library IO](reports/feature-report-library-io-2026-11-24.md); layout |
 | 7 | P3 objects, transforms and BVH | P3 | 5 | in progress | objects and transforms; BVH |
 | 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | todo | tools and overlay |
 | 9 | [P5 graph and instancing](plans/2026-11-24-p5-graph.md) | P5 | 5 | in progress (reviewed; round 1 of 3 done) | [graph](reports/feature-report-graph-2026-11-25.md) |
@@ -83,5 +83,5 @@ then.
     `docs/reports/feature-report-ta1-2026-11-23.md`.
   - The end of P1 (build cache, worktrees) is done (2026-11-24). P2, P3 and
     P5 are being planned, in worktrees.
-- Test app TA0 and TA1 are done (19 tests pass): build the wasm-st preset, then
+- Test app TA0, TA1 and TA2 are done: build the wasm-st preset, then
   `cd apps/testapp && pnpm install && pnpm test`.

@@ -1,5 +1,6 @@
 #include "coredcc/bind/manager.h"
 
+#include "coredcc/bind/catalog.h"
 #include "coredcc/bind/facades.h"
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/bind/graph_facades.h"
@@ -79,6 +80,7 @@ void addFacades(litestl::binding::BindingManager *mgr)
 
   BIND_FUNCTION(mgr, "coredcc::resolvePath", script::resolvePath, MARGS("ctx", "path"));
   BIND_FUNCTION(mgr, "coredcc::pathMeta", script::pathMeta, MARGS("ctx", "path"));
+  BIND_FUNCTION(mgr, "coredcc::apiCatalog", script::apiCatalog, MARGS("ctx"));
   BIND_FUNCTION(mgr, "coredcc::valueKeys", script::valueKeys, MARGS("ctx", "path", "v"));
   BIND_FUNCTION(mgr, "coredcc::getValue", script::getValue, MARGS("ctx", "path"));
   BIND_FUNCTION(mgr, "coredcc::setValue", script::setValue, MARGS("ctx", "path", "value"));

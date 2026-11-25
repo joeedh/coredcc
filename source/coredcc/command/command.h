@@ -138,6 +138,14 @@ class CommandDef {
   {
     return uiName_;
   }
+  const litestl::util::string &descriptionText() const
+  {
+    return description_;
+  }
+  const litestl::util::string &iconText() const
+  {
+    return icon_;
+  }
   CommandFlags flagSet() const
   {
     return flags_;

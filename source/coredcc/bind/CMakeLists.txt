@@ -1,5 +1,6 @@
 coredcc_library(coredcc_bind
   SOURCES
+    catalog.cc
     facades.cc
     foreign_command.cc
     graph_facades.cc

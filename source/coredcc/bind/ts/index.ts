@@ -49,6 +49,7 @@ import {
 export {CommandFlags, StatusCode}
 export type {Context}
 export {float, FloatValue, fromJs, load, Ref, ScriptError, Session, toJs, type NamedValue, type Value, type Writable} from './core.ts'
+export * from './catalog.ts'
 export * from './layout.ts'
 export * from './library.ts'
 export * from './reader.ts'

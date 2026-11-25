@@ -6,8 +6,9 @@
 // Exits 77 (a ctest skip) when the dev dependencies aren't installed (`npm ci` here).
 //
 // 1. generates the bindings' TS with the generator inside the module;
-// 2. type-checks it with coredcc's TS layer (source/coredcc/bind/ts) and the suite;
-// 3. bundles the suite with esbuild, and runs it under node:test.
+// 2. generates the test app's typed paths (gen-paths);
+// 3. type-checks all of it with coredcc's TS layer (source/coredcc/bind/ts) and the suite;
+// 4. bundles the suite with esbuild, and runs it under node:test.
 import {spawnSync} from 'node:child_process'
 import {existsSync, mkdirSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
@@ -19,6 +20,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '../..')
 const runtime = join(root, 'extern/litestl/binding/typescriptRuntime/index.ts')
 const script = join(root, 'source/coredcc/bind/ts/index.ts')
+const genPaths = join(root, 'source/coredcc/bind/ts/gen_paths.ts')
 const genScript = join(root, 'source/coredcc/bind/ts/gen.ts')
 
 const {values: opts} = parseArgs({options: {module: {type: 'string'}, out: {type: 'string'}}})
@@ -46,6 +48,7 @@ if (!existsSync(tools.tsc) || !existsSync(tools.esbuild)) {
 }
 const aliases = [
   `--alias:@litestl/typescript-runtime=${runtime}`,
+  `--alias:coredcc-script/gen_paths.ts=${genPaths}`,
   `--alias:coredcc-script=${script}`,
   `--alias:coredcc-gen=${gen}`,
 ]
@@ -59,6 +62,14 @@ const bundle = (entry, outfile) =>
 console.log('== generating the bindings TS')
 const genBundle = join(out, 'gen.mjs')
 if (bundle(genScript, genBundle) !== 0 || run([genBundle, modulePath, gen, 'TESTAPP_GetManager']) !== 0) {
+  process.exit(1)
+}
+
+console.log('== gen-paths')
+const paths = join(gen, 'paths.ts')
+const oddPaths = join(gen, 'odd_paths.ts')
+const pathsBundle = join(out, 'gen_paths.mjs')
+if (bundle(join(here, 'gen_paths.ts'), pathsBundle) !== 0 || run([pathsBundle, modulePath, paths, oddPaths]) !== 0) {
   process.exit(1)
 }
 
@@ -83,10 +94,13 @@ writeFileSync(
         paths: {
           '@litestl/typescript-runtime': [runtime],
           'coredcc-script': [script],
+          'coredcc-script/gen_paths.ts': [genPaths],
+          'coredcc-paths': [paths],
+          'coredcc-odd-paths': [oddPaths],
           'coredcc-gen/*': [join(gen, '*')],
         },
       },
-      files: [join(here, 'spike.test.ts'), genScript],
+      files: [join(here, 'spike.test.ts'), join(here, 'gen_paths.ts'), join(here, 'paths.types.ts'), genScript],
       include: [join(gen, '**', '*.ts')],
     },
     null,

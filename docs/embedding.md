@@ -83,6 +83,14 @@ Unreal, coredcc is exactly one module, so they exist once.
 - **`CollectionAccessor::staticItem`** lets it see the struct of one item by its key, for collections
   whose items have structs of their own.
 - **A node's own paths are relative to its parent's prefix;** a leading `/` is the Context's root.
+- **`invokeAt` runs a tool under its prefix,** and its undo and redo run under it too.
+
+## Watching paths from scripts
+- **A `PathReader` that watches holds the Context.** Dispose of it, or `unwatch`, before the Context
+  goes; a `Session` does that for its readers.
+- **Nothing is called back.** `flushChanges` runs the ChangeBus, and `takeChanged` says which paths of
+  a reader changed since it was last asked. Call them as often as the UI should follow.
+- **`libraryResolve` needs an empty history;** `clearHistory` first.
 
 ## Threading
 - The public API is single-threaded, on the host's main thread.

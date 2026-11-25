@@ -944,6 +944,39 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
   suggestions, and stopping after the last issue, in two places), and one doesn't compile.
 - **Docs:** `docs/embedding.md`, "Layouts".
 
+### B4: bindings and TA2 (2026-11-25)
+- **A run keeps its prefix.** A tool's prefix applies to the command's own paths as well as to its
+  arguments, so `CommandRecord` holds it, and undo, redo and reruns set it again in every slot.
+  Two runs under different prefixes don't fold. `invokeAt` refuses a prefix that names no struct.
+- **PathReader's calls** are free functions: `readerAdd/Count/Read/Value/Watch/Unwatch/TakeChanged`.
+  `readerTakeChanged` replaces `changed(i)`: it gives the indices that fired since it was last asked.
+- **ChangeBus:** watchers that are gone are dropped from the list once they are half of it, so
+  that many of them go in linear time; a callback is destroyed as its connection ends.
+- **LastUsedStore** bumps the bus's epoch when a value changes. Until then a watcher of
+  `commandDefaults[...]` missed what a run remembered.
+- **Library IO for scripts:** `librarySave`, `libraryLoad`, `libraryAppend`, `libraryResolve` and
+  `clearHistory`. Bytes cross in chunks (`ScriptBytes`), reports as JSON with lists of
+  `{total, first}` that hold at most 10,000 entries. `libraryResolve` refuses while the history
+  has anything to undo or redo, hence `clearHistory`.
+- **TS files:** `core.ts` (shared), `layout.ts`, `reader.ts` and `library.ts`, next to `index.ts`.
+- **Panel:** `panelDrag(id, values)` was added for gestures, and `panelSet` takes a component or a
+  flag's key. The panel's timer flushes every 50 ms. A prop's widget is made from `meta` when its
+  path first has a value; a pointer that then leads to a struct whose member has another kind or
+  range keeps the widget until the path has had no value.
+- The test app's root has `commandDefaults`.
+
+### B5: gen-paths (2026-11-25)
+- `apiCatalog(ctx)` (`bind/catalog.h`); `bind/ts/catalog.ts` has its types, and
+  `bind/ts/gen_paths.ts` the generator, `generatePaths(catalog)`, which returns the text and
+  imports nothing from the module, so a build script can run it on a saved catalog.
+- An interface has the inherited members too, since an own one may hide an inherited one of
+  another type, which `extends` would refuse. A struct that others inherit from also has a union
+  `Any<Name>` of them, which is what references to it give.
+- Private members, inputs, outputs and commands are left out of the catalog. Structs are private by
+  no flag, so `CommandDefaults` and its items are in it when they are registered.
+- The spike's `tsc` checks the test app's paths and those of a hostile catalog
+  (`tests/wasm/paths.types.ts`).
+
 ### Review of library IO, round 1 (2026-11-24)
 Numbers are the report's (`docs/reports/feature-report-library-io-2026-11-24.md`, with round 2).
 - **1:** `BagRefs` (`lib/bag_refs.h`) is a bag's cells by name. The cell says which block, the bag's
