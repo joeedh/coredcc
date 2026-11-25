@@ -79,7 +79,7 @@ class ApiMember {
  public:
   ApiMember(PropertyDef def) : def_(std::move(def)) {}
 
-  /** Called after every successful set through setValue (step 4). */
+  /** Called after every successful set through setValue (step 5). */
   ApiMember &update(MemberUpdateFn fn)
   {
     update_ = std::move(fn);

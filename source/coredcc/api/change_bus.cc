@@ -95,6 +95,7 @@ void store(Watcher &w, Reading r)
 struct ChangeBus::State final : detail::SignalStateBase {
   Vector<Watcher> watchers;
   Vector<Change> pending;
+  Signal<const OwnerKey *> listeners;
   uint64_t nextId = 1;
   uint64_t epoch = 0;
   uint64_t flushedEpoch = 0;
@@ -147,7 +148,15 @@ void ChangeBus::notify(const OwnerKey &owner, std::string_view member)
   if (owner.isNull()) {
     return;
   }
+  /* Queued first, so a listener that flushes sees it. */
   state_->pending.append(Change{owner, lsString(member)});
+  state_->listeners.emit(&owner);
+}
+
+void ChangeBus::notifyAll()
+{
+  state_->epoch++;
+  state_->listeners.emit(nullptr);
 }
 
 void ChangeBus::bumpEpoch()
@@ -186,6 +195,12 @@ Result<ScopedConnection> ChangeBus::watch(Context &ctx, std::string_view path, W
     return p.status();
   }
   return watch(ctx, **p, std::move(fn));
+}
+
+ScopedConnection ChangeBus::addListener(ListenFn fn)
+{
+  CDCC_CHECK(bool(fn), "ChangeBus::addListener: an empty callback");
+  return ScopedConnection(state_->listeners.connect(std::move(fn)));
 }
 
 int ChangeBus::watcherCount() const

@@ -76,6 +76,36 @@ static void test_new_domains()
   test_assert(rt.nameOf(IdDomain::Type, CommandId::of("mesh.extrude").value) == nullptr);
 }
 
+static void test_versions()
+{
+  Runtime rt, other;
+  test_assert(rt.lastEdit() == 0);
+  const uint64_t a = rt.nextVersion();
+  test_assert(a > 0 && rt.lastEdit() == 0); /* a stamp alone is no edit */
+  const uint64_t b = rt.touch();
+  test_assert(b > a && rt.lastEdit() == b);
+  const uint64_t c = rt.nextVersion();
+  test_assert(c > b && rt.lastEdit() == b);
+  test_assert(other.lastEdit() == 0 && other.nextVersion() == a); /* per Runtime */
+}
+
+static void test_evaluation_scope()
+{
+  Runtime rt, other;
+  test_assert(!rt.evaluating() && rt.busyIfEvaluating("x").ok());
+  {
+    EvaluationScope outer(rt);
+    {
+      EvaluationScope inner(rt);
+      test_assert(rt.evaluating() && !other.evaluating() && other.busyIfEvaluating("x").ok());
+    }
+    const Status s = rt.busyIfEvaluating("doing this");
+    test_assert(rt.evaluating() && s.code() == StatusCode::Busy);
+    test_assert(strstr(s.message(), "doing this") != nullptr);
+  }
+  test_assert(!rt.evaluating());
+}
+
 int main()
 {
   {
@@ -117,5 +147,7 @@ int main()
 
   test_extensions();
   test_new_domains();
+  test_versions();
+  test_evaluation_scope();
   return test_end();
 }

@@ -34,6 +34,9 @@ namespace coredcc {
  * - A path that fails to resolve reads as None with the error; it fires once on the
  *   transition, and again when it resolves.
  *
+ * - A **listener** is called at once, from inside `notify` and `notifyAll`. It is for
+ *   dependency tracking (graph evaluation); UIs use watchers.
+ *
  * Callbacks may watch, unwatch and notify. Changes posted during a flush are delivered
  * by the next one.
  */
@@ -41,13 +44,22 @@ class ChangeBus {
  public:
   static constexpr const char *kExtName = "coredcc.ChangeBus";
   using WatchFn = litestl::util::function<void(const PropValue &value, const Status &status)>;
+  /** `owner` is what changed; null after notifyAll (anything may have). */
+  using ListenFn = litestl::util::function<void(const OwnerKey *owner)>;
 
   explicit ChangeBus(Runtime *rt);
   ~ChangeBus();
   ChangeBus(const ChangeBus &) = delete;
   ChangeBus &operator=(const ChangeBus &) = delete;
 
+  /** A change to `owner`'s member, or with no member to anything in it. Calls the
+   * listeners now. A null owner is ignored. */
   void notify(const OwnerKey &owner, std::string_view member = {});
+  /** Anything may have changed (an opaque snapshot was restored): every watcher is read
+   * again at the next flush, and the listeners are called now, with null. */
+  void notifyAll();
+  /** Re-reads every watcher at the next flush. It says nothing about stored data, so
+   * listeners aren't called. */
   void bumpEpoch();
   uint64_t epoch() const;
   /** Changes waiting for the next flush. */
@@ -58,6 +70,14 @@ class ChangeBus {
   Result<ScopedConnection> watch(Context &ctx, const Path &path, WatchFn fn);
   Result<ScopedConnection> watch(Context &ctx, std::string_view path, WatchFn fn);
   int watcherCount() const;
+
+  /**
+   * Calls `fn` on every notify and notifyAll, until the connection goes. The change is
+   * already in the data. A listener may connect, disconnect and notify (which calls the
+   * listeners again, itself included). It must not write the document, or destroy the
+   * Runtime.
+   */
+  ScopedConnection addListener(ListenFn fn);
 
   /** Delivers pending changes; returns how many callbacks ran. */
   int flush();

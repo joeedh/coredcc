@@ -216,8 +216,138 @@ static void test_reentrant_getter()
   test_assert(bus.watcherCount() == 1 && bus.validate().ok());
 }
 
+static void test_listeners()
+{
+  World w;
+  Context ctx = w.context();
+  ChangeBus &bus = w.rt.ext<ChangeBus>();
+  const OwnerKey tool = w.rt.ext<ApiRegistry>().runtimeOwner("tool").owner;
+  int calls = 0, alls = 0;
+  OwnerKey last;
+  double seen = -1;
+  int pendingSeen = -1;
+  ScopedConnection a = bus.addListener([&](const OwnerKey *owner) {
+    calls++;
+    alls += owner ? 0 : 1;
+    last = owner ? *owner : OwnerKey();
+    seen = w.tool.strength;
+    pendingSeen = bus.pendingCount();
+  });
+
+  /* Called at once, after the write and the queueing. */
+  test_assert(setValue(ctx, "tool.strength", PropValue::ofFloat(0.25)).ok());
+  test_assert(calls == 1 && last == tool && seen == 0.25 && pendingSeen == 1);
+  bus.notify(OwnerKey::ofBlock(w.meshId(0)), "radius");
+  test_assert(calls == 2 && last == OwnerKey::ofBlock(w.meshId(0)));
+  /* Not by a null owner, a failed set, an epoch bump or a flush. */
+  bus.notify(OwnerKey());
+  test_assert(!setValue(ctx, "tool.version", PropValue::ofInt(1)).ok());
+  bus.bumpEpoch();
+  bus.flush();
+  test_assert(calls == 2);
+
+  /* A listener may connect, disconnect and notify. One connected during a notify is not
+   * called by it. */
+  ScopedConnection self, added;
+  int selfCalls = 0, addedCalls = 0;
+  self = bus.addListener([&](const OwnerKey *) {
+    selfCalls++;
+    self.disconnect();
+    added = bus.addListener([&](const OwnerKey *) { addedCalls++; });
+  });
+  bus.notify(tool);
+  test_assert(calls == 3 && selfCalls == 1 && addedCalls == 0);
+  bus.notify(tool);
+  test_assert(calls == 4 && selfCalls == 1 && addedCalls == 1);
+  added.disconnect();
+  bool again = true;
+  ScopedConnection nested = bus.addListener([&](const OwnerKey *) {
+    if (again) {
+      again = false;
+      bus.notify(OwnerKey::ofBlock(w.meshId(1)));
+    }
+  });
+  bus.notify(tool);
+  test_assert(calls == 6 && last == OwnerKey::ofBlock(w.meshId(1)) && addedCalls == 1);
+
+  a.disconnect();
+  bus.notify(tool);
+  test_assert(calls == 6 && alls == 0);
+
+  /* A connection may outlive the bus. */
+  ScopedConnection outlives;
+  {
+    Runtime rt2;
+    outlives = rt2.ext<ChangeBus>().addListener([](const OwnerKey *) {});
+    test_assert(outlives.connected());
+  }
+  test_assert(!outlives.connected());
+}
+
+static void test_notify_all()
+{
+  World w;
+  Context ctx = w.context();
+  ChangeBus &bus = w.rt.ext<ChangeBus>();
+  int alls = 0, owners = 0;
+  ScopedConnection l = bus.addListener([&](const OwnerKey *owner) { (owner ? owners : alls)++; });
+  Recorder strength, radius;
+  ScopedConnection a = watchOk(bus, ctx, "tool.strength", strength);
+  ScopedConnection b = watchOk(bus, ctx, "objects[0].data.radius", radius);
+  w.tool.strength = 0.75;
+  w.mesh(0).radius = 4;
+  test_assert(bus.flush() == 0); /* nobody said */
+  bus.notifyAll();
+  test_assert(alls == 1 && owners == 0);
+  test_assert(bus.flush() == 2 && strength.last == PropValue::ofFloat(0.75) &&
+              radius.last == PropValue::ofFloat(4));
+  test_assert(bus.flush() == 0);
+}
+
+/* The update hook runs after the listeners, so a graph it evaluates is not stale. */
+static void test_notified_before_update()
+{
+  World w;
+  Context ctx = w.context();
+  ChangeBus &bus = w.rt.ext<ChangeBus>();
+  int hooksWhenCalled = -1;
+  g_radiusUpdates = 0;
+  ScopedConnection l =
+      bus.addListener([&](const OwnerKey *) { hooksWhenCalled = g_radiusUpdates; });
+  test_assert(setValue(ctx, "objects[0].data.radius", PropValue::ofFloat(2)).ok());
+  test_assert(hooksWhenCalled == 0 && g_radiusUpdates == 1);
+}
+
+static void test_busy_while_evaluating()
+{
+  World w;
+  Context ctx = w.context();
+  ChangeBus &bus = w.rt.ext<ChangeBus>();
+  int calls = 0;
+  ScopedConnection l = bus.addListener([&](const OwnerKey *) { calls++; });
+  g_radiusUpdates = 0;
+  Result<PropValue> otherMesh = getValue(ctx, "objects[1].data");
+  {
+    EvaluationScope scope(w.rt);
+    test_assert(setValue(ctx, "objects[0].data.radius", PropValue::ofFloat(5)).code() ==
+                StatusCode::Busy);
+    test_assert(setValue(ctx, "objects[0].location[1]", PropValue::ofFloat(5)).code() ==
+                StatusCode::Busy);
+    test_assert(setValue(ctx, "objects[0].data", *otherMesh).code() == StatusCode::Busy);
+    /* Reads still work. */
+    test_assert(getValue(ctx, "objects[0].data.radius").ok());
+  }
+  test_assert(w.mesh(0).radius == 1 && w.object(0).location[1] == 0 && g_radiusUpdates == 0);
+  test_assert(w.object(0).mesh.target == w.meshId(0) && calls == 0 && bus.pendingCount() == 0);
+  test_assert(setValue(ctx, "objects[0].data.radius", PropValue::ofFloat(5)).ok());
+}
+
 int main()
 {
+  test_listeners();
+  test_notify_all();
+  test_notified_before_update();
+  test_busy_while_evaluating();
   test_library_changes();
   test_reentrant_getter();
   test_aliases();

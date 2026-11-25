@@ -104,6 +104,37 @@ class Runtime {
   LocalId newLocalId();
 
   /**
+   * The next version stamp: monotonic, never 0, and never stored in a file or a
+   * snapshot. Undo, redo and restore stamp fresh versions instead of putting old ones
+   * back, so equal versions mean the same state.
+   */
+  uint64_t nextVersion()
+  {
+    return ++version_;
+  }
+  /** nextVersion(), recorded as an edit: something a graph evaluation may depend on
+   * changed. */
+  uint64_t touch()
+  {
+    lastEdit_ = nextVersion();
+    return lastEdit_;
+  }
+  /** The version of the last touch(); 0 before the first. */
+  uint64_t lastEdit() const
+  {
+    return lastEdit_;
+  }
+
+  /** Whether a graph is evaluating (an EvaluationScope is open). Until it ends, nothing
+   * may change the document: setValue and every CommandExecutor call are Busy. */
+  bool evaluating() const
+  {
+    return evaluating_ > 0;
+  }
+  /** Busy, naming `what`, while evaluating(); else ok. */
+  Status busyIfEvaluating(const char *what) const;
+
+  /**
    * The sticky error: set by calls that can't return a Status (a failed foreign
    * interface call), checked by the caller afterwards (the command executor checks it
    * after each command). The first error wins until it is taken.
@@ -143,6 +174,7 @@ class Runtime {
   }
 
  private:
+  friend class EvaluationScope;
   template <class T> static void destroyExt(void *p)
   {
     litestl::alloc::Delete(static_cast<T *>(p));
@@ -168,6 +200,28 @@ class Runtime {
   IfaceRegistry *ifaces_;
   Status stickyError_;
   GuidSource guidSource_;
+  uint64_t version_ = 0;
+  uint64_t lastEdit_ = 0;
+  int evaluating_ = 0;
+};
+
+/** Makes `rt` evaluating() while it lives. Opened by the graph evaluator, around a whole
+ * evaluation; scopes nest. The Runtime must outlive it. */
+class EvaluationScope {
+ public:
+  explicit EvaluationScope(Runtime &rt) : rt_(rt)
+  {
+    rt_.evaluating_++;
+  }
+  ~EvaluationScope()
+  {
+    rt_.evaluating_--;
+  }
+  EvaluationScope(const EvaluationScope &) = delete;
+  EvaluationScope &operator=(const EvaluationScope &) = delete;
+
+ private:
+  Runtime &rt_;
 };
 
 } // namespace coredcc

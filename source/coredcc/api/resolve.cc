@@ -679,6 +679,7 @@ Result<PropValue> widen(Context &ctx, const ResolvedPath &rp, const PropValue &v
 
 Status setValue(Context &ctx, const ResolvedPath &rp, const PropValue &value)
 {
+  CDCC_TRY(ctx.runtime().busyIfEvaluating("setValue"));
   if (rp.kind == ResolvedPath::Kind::Struct || rp.kind == ResolvedPath::Kind::Length) {
     return err(StatusCode::FailedPrecondition, "setValue: the path is read-only");
   }
@@ -707,10 +708,10 @@ Status setValue(Context &ctx, const ResolvedPath &rp, const PropValue &value)
     }
     CDCC_TRY(m.value().set(rp.ptr, ctx, *v));
   }
+  ctx.runtime().ext<ChangeBus>().notify(rp.canonical.owner, m.name());
   if (m.updateFn()) {
     m.updateFn()(rp.ptr, ctx);
   }
-  ctx.runtime().ext<ChangeBus>().notify(rp.canonical.owner, m.name());
   return Status();
 }
 

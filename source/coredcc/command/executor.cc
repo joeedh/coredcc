@@ -333,6 +333,7 @@ bool LinearHistory::canRedo() const
 
 Status LinearHistory::undo(Context &ctx)
 {
+  CDCC_TRY(ctx.runtime().busyIfEvaluating("LinearHistory::undo"));
   if (inCall_) {
     return Status::error(StatusCode::Busy, "LinearHistory::undo from inside a slot");
   }
@@ -358,6 +359,7 @@ Status LinearHistory::undo(Context &ctx)
 
 Status LinearHistory::redo(Context &ctx)
 {
+  CDCC_TRY(ctx.runtime().busyIfEvaluating("LinearHistory::redo"));
   if (inCall_) {
     return Status::error(StatusCode::Busy, "LinearHistory::redo from inside a slot");
   }
@@ -599,10 +601,9 @@ Result<PropertyBag> CommandExecutor::runInstance(Context &ctx,
                                                  Owned<Command> cmd,
                                                  PropertyBag inputs)
 {
-  if (Status s = refuseNested(("run(" + std::string(def.name().c_str()) + ")").c_str());
-      !s.ok()) {
-    return s;
-  }
+  const std::string what = "run(" + std::string(def.name().c_str()) + ")";
+  CDCC_TRY(rt_.busyIfEvaluating(what.c_str()));
+  CDCC_TRY(refuseNested(what.c_str()));
   if (open_) {
     return busy(def.name().c_str());
   }
@@ -651,6 +652,7 @@ Result<PropertyBag> CommandExecutor::subRun(Context &ctx,
                                             Owned<Command> cmd,
                                             PropertyBag inputs)
 {
+  CDCC_TRY(rt_.busyIfEvaluating("runSub"));
   if (!running() || slotDepth_ > 0) {
     return Status::error(StatusCode::FailedPrecondition,
                          ("runSub(" + std::string(def.name().c_str()) +
@@ -676,6 +678,7 @@ Result<PropertyBag> CommandExecutor::subRun(Context &ctx,
 
 Status CommandExecutor::undo(Context &ctx)
 {
+  CDCC_TRY(rt_.busyIfEvaluating("undo"));
   if (open_ && !running() && slotDepth_ == 0) {
     return cancel(ctx); /* before the stray-error check: cancel collects the live phase's */
   }
@@ -695,6 +698,7 @@ Status CommandExecutor::undo(Context &ctx)
 
 Status CommandExecutor::redo(Context &ctx)
 {
+  CDCC_TRY(rt_.busyIfEvaluating("redo"));
   if (open_ && !running() && slotDepth_ == 0) {
     return cancel(ctx); /* before the stray-error check: cancel collects the live phase's */
   }
@@ -714,6 +718,7 @@ Status CommandExecutor::redo(Context &ctx)
 
 Status CommandExecutor::rerunHead(Context &ctx, PropertyBag newInputs)
 {
+  CDCC_TRY(rt_.busyIfEvaluating("rerunHead"));
   CDCC_TRY(refuseNested("rerunHead"));
   if (open_) {
     return busy("rerunHead");
@@ -779,6 +784,7 @@ Status CommandExecutor::rerunHead(Context &ctx, PropertyBag newInputs)
 
 Status CommandExecutor::beginInteractive(Context &ctx, const CommandDef &def, PropertyBag inputs)
 {
+  CDCC_TRY(rt_.busyIfEvaluating("beginInteractive"));
   CDCC_TRY(refuseNested("beginInteractive"));
   if (open_) {
     return busy(def.name().c_str());
@@ -810,6 +816,7 @@ Command *CommandExecutor::interactiveCommand()
 
 Status CommandExecutor::commit(Context &ctx)
 {
+  CDCC_TRY(rt_.busyIfEvaluating("commit"));
   if (running() || slotDepth_ > 0) {
     return Status::error(StatusCode::FailedPrecondition, "commit inside a command");
   }
@@ -839,6 +846,7 @@ Status CommandExecutor::commit(Context &ctx)
 
 Status CommandExecutor::cancel(Context &ctx)
 {
+  CDCC_TRY(rt_.busyIfEvaluating("cancel"));
   if (running() || slotDepth_ > 0) {
     return Status::error(StatusCode::FailedPrecondition, "cancel inside a command");
   }
@@ -846,6 +854,7 @@ Status CommandExecutor::cancel(Context &ctx)
     return Status::error(StatusCode::FailedPrecondition, "cancel: no interactive command");
   }
   Binding bind(ctx, this);
+  CDCC_TRY(bind.status());
   RecordPtr rec = std::move(open_);
   {
     SlotScope slot(slotDepth_);

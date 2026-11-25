@@ -200,6 +200,9 @@ class LinearHistory final : public UndoHistory {
  *   and library collection is Busy.
  * - From inside a command's slots, only `runSub` is allowed, and only from `exec`. Every
  *   other call (run, undo, redo, rerunHead, the interactive calls) is refused.
+ * - While a graph evaluates (Runtime::evaluating) every call is Busy, before any other
+ *   check and with nothing changed: an open interactive command stays open, and a pending
+ *   sticky error stays pending. LinearHistory's undo and redo are too.
  * - A Context with no executor is bound to this one for the length of each call, then
  *   unbound. One bound to another executor is FailedPrecondition. `invoke` and
  *   `setValueUndo` need `ctx.setExecutor` first.

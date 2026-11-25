@@ -44,6 +44,14 @@ Status Runtime::validateAll() const
   return Status();
 }
 
+Status Runtime::busyIfEvaluating(const char *what) const
+{
+  if (!evaluating()) {
+    return Status();
+  }
+  return Status::error(StatusCode::Busy, (std::string(what) + ": a graph is evaluating").c_str());
+}
+
 void Runtime::setStickyError(Status status)
 {
   if (stickyError_.ok()) {

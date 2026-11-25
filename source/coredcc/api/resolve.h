@@ -79,8 +79,10 @@ Result<PropertyDef> getMeta(Context &ctx, std::string_view path);
  * 1. reject read-only members;
  * 2. coerce (and clamp) to the member's def;
  * 3. call the accessor;
- * 4. call the member's update hook;
- * 5. post the change to the ChangeBus.
+ * 4. notify the ChangeBus, whose listeners run now;
+ * 5. call the member's update hook (after 4, so a hook that evaluates a graph sees the
+ *    new value).
+ * Busy, with nothing written, while a graph evaluates (Runtime::evaluating).
  * A Pointer member takes a Pointer value (resolved to its target) and bumps the
  * library's reference epoch.
  */
