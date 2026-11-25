@@ -103,7 +103,7 @@ static void test_golden()
 {
   test_assert(equals(
       json(kExample),
-      R"x({"kind":"layout","path":"objects.active","effectivePath":"/objects.active","id":"root",)x"
+      R"x({"kind":"layout","version":1,"path":"objects.active","effectivePath":"/objects.active","id":"root",)x"
       R"x("class":"wide dark","children":[)x"
       R"x({"kind":"panel","path":"transform","effectivePath":"/objects.active.transform",)x"
       R"x("label":"Transform","icon":"move","description":"Where it is","closed":true,"children":[)x"
@@ -129,11 +129,11 @@ static void test_golden()
       R"x({"kind":"custom","tag":"brush-tip","attrs":{"a.b-c":"1"},"children":[)x"
       R"x({"kind":"label","label":"in it","icon":"i"}]},)x"
       R"x({"kind":"custom","tag":"inner","text":"keep\u000a   this"}]}]})x"));
-  test_assert(equals(json("<layout/>"), R"({"kind":"layout"})"));
+  test_assert(equals(json("<layout/>"), R"({"kind":"layout","version":1})"));
   test_assert(equals(json("<layout><row path='a'/><tool invocation='x'/></layout>"),
-                     R"({"kind":"layout","children":[{"kind":"row","path":"a",)"
+                     R"({"kind":"layout","version":1,"children":[{"kind":"row","path":"a",)"
                      R"("effectivePath":"/a"},{"kind":"tool","invocation":"x"}]})"));
-  test_assert(layoutToJson(Layout()) == R"({"kind":"layout"})" &&
+  test_assert(layoutToJson(Layout()) == R"({"kind":"layout","version":1})" &&
               Layout() == parsed("<layout></layout>"));
 }
 
@@ -465,8 +465,137 @@ static void test_positions()
   test_assert(layoutPosition(text, 99).offset == text.size());
 }
 
+/* What a later version may have. */
+static void test_versions()
+{
+  test_assert(Layout().version() == 1 && parsed("<layout/>").version() == 1);
+  test_assert(parsed("<layout version='1'/>").version() == 1);
+  test_assert(parsed("<layout version='999999999'/>").version() == 999999999);
+  test_assert(json("<layout version='7' id='a'/>") == json("<layout id='a'/>"));
+  for (const char *bad : {"", "0", "01", "-1", "1.0", "x", " 1", "1234567890"}) {
+    test_assert(fails("<layout version='" + std::string(bad) + "'/>",
+                      "version: it isn't a number from 1", 1, 18));
+  }
+  test_assert(failsIn("<row version='1'/>", "a <row> has no 'version'", 6));
+  /* Unknown things, in this version and in a newer one. */
+  const std::string body = " foo='1'><row bar='2' id='r'><gone a='&lt;' x='1'>some text<row><prop/></row>"
+                           "<!-- c --></gone><prop path='a'/></row><tabs><nope/><tab id='t'/></tabs></layout>";
+  test_assert(fails("<layout" + body, "there is no attribute 'foo'", 1, 9));
+  test_assert(fails("<layout version='1'" + body, "there is no attribute 'foo'", 1, 21));
+  for (const std::string &head : {"<layout version='2'", "<layout foo='1' version='2'"}) {
+    const std::string rest = head.size() > 19 ? body.substr(8) : body;
+    Result<Layout> r = parseLayout(head + rest);
+    test_assert(r.ok());
+    if (!r.ok()) {
+      continue;
+    }
+    test_assert(*r == parsed("<layout version='2'><row id='r'><prop path='a'/></row><tabs>"
+                             "<tab id='t'/></tabs></layout>"));
+    const auto &skipped = r->skipped();
+    test_assert(skipped.size() == 4);
+    const char *const what[] = {"there is no attribute 'foo'", "there is no attribute 'bar'",
+                                "there is no element <gone>", "there is no element <nope>"};
+    const char *const at[] = {"foo=", "bar=", "<gone", "<nope"};
+    const int nodes[] = {0, 1, 1, 3};
+    for (int i = 0; i < int(skipped.size()) && i < 4; i++) {
+      test_assert(strcmp(skipped[i].what.c_str(), what[i]) == 0 && skipped[i].node == nodes[i]);
+      test_assert((head + rest).compare(skipped[i].offset, strlen(at[i]), at[i]) == 0);
+    }
+  }
+  /* What is skipped is still XML, and what is known is checked. */
+  const auto newer = [](const std::string &inner) { return "<layout version='2'>" + inner + "</layout>"; };
+  test_assert(fails(newer("<x><y></x>"), "</x> can't close <y>", 1, 27));
+  test_assert(fails(newer("<x a=1/>"), "expected a quote, not '1'", 1, 26));
+  test_assert(fails(newer("<x a='1'b='2'/>"), "expected '>' or an attribute, not 'b'", 1, 29));
+  test_assert(fails(newer("<x>&y;</x>"), "'&' must start one of &lt; &gt; &amp; &quot; &apos;", 1, 24));
+  test_assert(fails("<layout version='2'><x>", "the <x> in line 1 isn't closed", 1, 24));
+  test_assert(fails(newer("text<x/>"), "a <layout> can't hold text: write it in a <label>", 1, 21));
+  test_assert(!parseLayout(newer("<row><tab/></row>")).ok());
+  test_assert(!parseLayout(newer("<row closed='maybe' expand='maybe'/>")).ok());
+  test_assert(!parseLayout("<other version='2'/>").ok());
+  /* An attribute of another kind's is one it doesn't know here. */
+  test_assert(parseLayout(newer("<row closed='maybe'/>"))->skipped().size() == 1);
+  /* Reserved names, which a Custom can't hold either. */
+  for (const std::string name : {"list", "menu", "include", "slot"}) {
+    const std::string e = "<" + name + " a='1'/>", what = "<" + name + "> is reserved for a later version";
+    test_assert(fails("<layout>" + e + "</layout>", what, 1, 9));
+    test_assert(fails("<layout><custom tag='a'>" + e + "</custom></layout>", what, 1, 25));
+    const Result<Layout> r = parseLayout(newer("<custom tag='a'><b>" + e + "</b></custom>"));
+    test_assert(r.ok() && r->nodeCount() == 3 && r->skipped().size() == 1 && r->skipped()[0].node == 2);
+    test_assert(what == r->skipped()[0].what.c_str());
+    test_assert(parsed("<layout><custom tag='" + name + "'/></layout>").nodeCount() == 2);
+  }
+  /* Not more than that many. */
+  std::string many;
+  for (int i = 0; i < LayoutLimits::kMaxSkipped + 5; i++) {
+    many += "<x/>";
+  }
+  test_assert(parseLayout(newer(many))->skipped().size() == LayoutLimits::kMaxSkipped);
+  test_assert(fails(newer("<row" + [] {
+    std::string attrs;
+    for (int i = 0; i < 65; i++) {
+      attrs += " x='1'";
+    }
+    return attrs;
+  }() + "/>"), "an element has more than 64 attributes", 1, 26 + 64 * 6, StatusCode::OutOfRange));
+}
+
+/* `data-` attributes, on any node. */
+static void test_data()
+{
+  const Layout l = parsed("<layout data-a='1'><row data-b='2' data-a='x'/><custom tag='t' c='3' data-d=''/></layout>");
+  test_assert(strcmp(l.freeAttr(0, "data-a")->value.c_str(), "1") == 0);
+  test_assert(strcmp(l.freeAttr(1, "data-b")->value.c_str(), "2") == 0 && !l.freeAttr(1, "data-d"));
+  test_assert(equals(layoutToJson(l),
+                     R"({"kind":"layout","version":1,"attrs":{"data-a":"1"},"children":[)"
+                     R"({"kind":"row","attrs":{"data-a":"x","data-b":"2"}},)"
+                     R"({"kind":"custom","tag":"t","attrs":{"c":"3","data-d":""}}]})"));
+  test_assert(failsIn("<row data-='1'/>", "there is no attribute 'data-'", 6));
+  test_assert(failsIn("<row data='1'/>", "there is no attribute 'data'", 6));
+  test_assert(failsIn("<row data-a='1' data-a='1'/>", "'data-a' is there twice", 17));
+}
+
+/* A tool's own prefix, and the size of the JSON. */
+static void test_tool_prefix()
+{
+  test_assert(equals(json("<layout path='a'><tool invocation='x' path='b' visibleIf='c'/>"
+                          "<tool invocation='x' path='/'/><toolOptions target='x' path='/d'/></layout>"),
+                     R"({"kind":"layout","version":1,"path":"a","effectivePath":"/a","children":[)"
+                     R"({"kind":"tool","path":"b","effectivePath":"/a.b","visibleIf":{"path":"/a.c"},)"
+                     R"("invocation":"x","prefix":"/a.b"},)"
+                     R"({"kind":"tool","path":"/","effectivePath":"/","invocation":"x"},)"
+                     R"({"kind":"toolOptions","path":"/d","effectivePath":"/d","target":"x",)"
+                     R"("optionsPath":"/commandDefaults[\"x\"]","prefix":"/d"}]})"));
+  const Layout l = parsed("<layout path='a'><row id='b'/><tool id='a' invocation='x' path='b'/><row id='c'/></layout>");
+  test_assert(l.effectivePath(2).toString() == "/a.b" && l.prefixOf(2).toString() == "/a");
+  test_assert(l.findId("a") == 2 && l.findId("b") == 1 && l.findId("c") == 3);
+  test_assert(l.findId("") == -1 && l.findId("bb") == -1 && l.findId("d") == -1 && Layout().findId("a") == -1);
+  /* 2 MiB of joined paths: of props, of conditions, of tools. */
+  const std::string outer(1000, 'a');
+  const auto size = [&](int n, const char *element) {
+    std::string out = "<layout path='" + outer + "'>";
+    for (int i = 0; i < n; i++) {
+      out += element;
+    }
+    return parseLayout(out + "</layout>").status();
+  };
+  /* "/aaa.bbbbbb" is 1008 bytes; the root's own is 1001. */
+  const int fits = int((LayoutLimits::kMaxJoinedBytes - 1001) / 1008);
+  test_assert(size(fits, "<prop path='bbbbbb'/>").ok());
+  const Status s = size(fits + 1, "<prop path='bbbbbb'/>");
+  test_assert(s.code() == StatusCode::OutOfRange &&
+              strstr(s.message(), "the paths, with the prefixes around them, are more than 2 MiB"));
+  test_assert(size(fits, "<row visibleIf='bbbbbb'/>").ok() && !size(fits + 1, "<row visibleIf='bbbbbb'/>").ok());
+  const int tools = int((LayoutLimits::kMaxJoinedBytes - 1001) / 1001);
+  test_assert(size(tools, "<tool invocation='x'/>").ok() && !size(tools + 1, "<tool invocation='x'/>").ok());
+  test_assert(size(tools, "<toolOptions target='x'/>").ok() && !size(tools + 1, "<toolOptions target='x'/>").ok());
+}
+
 int main()
 {
+  test_versions();
+  test_data();
+  test_tool_prefix();
   test_golden();
   test_nodes();
   test_prefixes();

@@ -25,10 +25,16 @@ std::string writeNode(JsonWriter &out, const Layout &layout, int i, const std::s
   const LayoutNode &n = layout.node(i);
   std::string within = around;
   out.key("kind").string(layoutKindName(n.kind));
+  if (i == 0) {
+    out.key("version").integer(kLayoutVersion);
+  }
   bool free = false;
   for (uint32_t j = 0; j < n.attrCount; j++) {
     const LayoutAttr &a = layout.attrs()[n.attrBegin + j];
     const char *value = a.value.c_str();
+    if (a.id == LayoutAttrId::Version) {
+      continue; /* the text's */
+    }
     if (a.id == LayoutAttrId::Free) { /* they are the last ones */
       if (!free) {
         out.key("attrs").beginObject();
@@ -63,8 +69,8 @@ std::string writeNode(JsonWriter &out, const Layout &layout, int i, const std::s
   if (n.kind == LayoutKind::ToolOptions) {
     out.key("optionsPath").string(layout.optionsPath(i).toString());
   }
-  if ((n.kind == LayoutKind::Tool || n.kind == LayoutKind::ToolOptions) && around != "/") {
-    out.key("prefix").string(around);
+  if ((n.kind == LayoutKind::Tool || n.kind == LayoutKind::ToolOptions) && within != "/") {
+    out.key("prefix").string(within);
   }
   return within;
 }

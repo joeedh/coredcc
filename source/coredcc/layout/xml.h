@@ -13,8 +13,9 @@
  *     </layout>
  *
  * - Elements are named as layoutKindName says, and `sep` is a separator. Attributes are named
- *   as layoutAttrName says. Others are errors, except on a `custom` and in one: an element of
- *   another name there is a Custom with that tag.
+ *   as layoutAttrName says, or start with `data-`. Others are errors, except on a `custom` and in
+ *   one, where an element of another name is a Custom with that tag, and in the text of a newer
+ *   version, where they are skipped (see Layout).
  * - Text is allowed in `label` and `tool`, where it is the label, and in `custom`. Space around
  *   it is dropped; in `label` and `tool`, space inside it becomes one blank.
  * - Comments, the five entities, a byte order mark and an `<?xml?>` declaration are allowed.

@@ -1,5 +1,6 @@
 #include "coredcc/layout/draft.h"
 
+#include "coredcc/base/assert.h"
 #include "coredcc/base/text.h"
 #include "coredcc/base/utf8.h"
 #include "coredcc/parse/invocation.h"
@@ -15,7 +16,7 @@ namespace {
 using Id = LayoutAttrId;
 using Kind = LayoutKind;
 
-enum class Form : uint8_t { Text, NonEmpty, Path, Condition, Bool, Invocation };
+enum class Form : uint8_t { Text, NonEmpty, Path, Condition, Bool, Invocation, Version };
 
 struct KindInfo {
   const char *name;
@@ -61,9 +62,10 @@ struct AttrInfo {
 
 /* By LayoutAttrId. */
 constexpr AttrInfo kAttrs[] = {
+    {"version", Form::Version, bit(Kind::Layout)},
     {"path", Form::Path,
      bits(Kind::Layout, Kind::Column, Kind::Row, Kind::Panel, Kind::Tabs, Kind::Tab, Kind::Prop,
-          Kind::Custom)},
+          Kind::Tool, Kind::ToolOptions, Kind::Custom)},
     {"label", Form::Text, kTexts},
     {"icon", Form::Text, kTexts},
     {"description", Form::Text, kTexts},
@@ -80,8 +82,16 @@ constexpr AttrInfo kAttrs[] = {
     {"showLabel", Form::Bool, bit(Kind::Prop)},
     {"tag", Form::NonEmpty, bit(Kind::Custom)},
     {"text", Form::Text, bit(Kind::Custom)},
-    {"", Form::Text, bit(Kind::Custom)},
+    {"", Form::Text, kAll},
 };
+
+constexpr std::string_view kReserved[] = {"include", "list", "menu", "slot"};
+
+/* Of the host's own attributes, on any kind. */
+bool isData(std::string_view name)
+{
+  return name.size() > 5 && name.substr(0, 5) == "data-";
+}
 static_assert(sizeof(kKinds) / sizeof(kKinds[0]) == size_t(Kind::Custom) + 1);
 static_assert(sizeof(kAttrs) / sizeof(kAttrs[0]) == size_t(Id::Free) + 1);
 
@@ -192,6 +202,9 @@ class Checker {
         return fail(i, a.offset,
                     invalid("a " + element(n.kind) + " has no '" + layoutAttrName(a.id) + "'"));
       }
+      if (a.id == Id::Free && n.kind != Kind::Custom && !isData(a.name)) {
+        return fail(i, a.offset, invalid("a " + element(n.kind) + " has no '" + a.name + "'"));
+      }
       if (a.id == Id::Free && !layout_detail::isXmlName(a.name)) {
         return fail(i, a.offset, invalid("'" + a.name + "' isn't an attribute's name"));
       }
@@ -229,6 +242,12 @@ class Checker {
     if (form == Form::Bool && a.value != "true" && a.value != "false") {
       return failIn(i, a, 0, invalid("it is neither 'true' nor 'false'"));
     }
+    if (form == Form::Version &&
+        (a.value.size() < 1 || a.value.size() > 9 || a.value[0] == '0' ||
+         a.value.find_first_not_of("0123456789") != std::string::npos))
+    {
+      return failIn(i, a, 0, invalid("it isn't a number from 1"));
+    }
     if (form == Form::Invocation) {
       size_t at = 0;
       if (Result<Invocation> r = parseInvocation(a.value, &at); !r.ok()) {
@@ -260,7 +279,15 @@ class Checker {
                                      std::to_string(LayoutLimits::kMaxPathBytes) +
                                      " bytes, with the prefixes around it"));
     }
-    return true;
+    return total(i, a.offset, out.size());
+  }
+
+  /* Counts a path of the JSON. */
+  bool total(int i, size_t offset, size_t size)
+  {
+    joined_ += size;
+    return joined_ <= LayoutLimits::kMaxJoinedBytes ||
+           fail(i, offset, tooMany("the paths, with the prefixes around them, are more than 2 MiB"));
   }
 
   bool paths(int i)
@@ -278,7 +305,9 @@ class Checker {
         return false;
       }
     }
-    return true;
+    const DraftNode &n = nodes_[i];
+    return (n.kind != Kind::Tool && n.kind != Kind::ToolOptions) ||
+           total(i, n.offset, prefix_[i].size());
   }
 
   std::vector<DraftNode> &nodes_;
@@ -287,6 +316,7 @@ class Checker {
   /** Joined, for the paths of a node's children. */
   std::vector<std::string> prefix_;
   std::set<std::string> ids_;
+  size_t joined_ = 0;
 };
 
 } // namespace
@@ -328,6 +358,11 @@ bool isKindName(std::string_view name, LayoutKind &out)
   return false;
 }
 
+bool isReservedName(std::string_view name)
+{
+  return std::find(std::begin(kReserved), std::end(kReserved), name) != std::end(kReserved);
+}
+
 std::vector<std::string_view> kindNames()
 {
   std::vector<std::string_view> out;
@@ -363,7 +398,7 @@ Result<LayoutAttrId> attrOf(LayoutKind kind, std::string_view name)
       suggest.consider(kAttrs[i].name);
     }
   }
-  if (kind == Kind::Custom) {
+  if (kind == Kind::Custom || isData(name)) {
     return Id::Free;
   }
   Status s = invalid(known ? "a " + element(kind) + " has no '" + std::string(name) + "'" :
@@ -448,14 +483,32 @@ Result<Layout> LayoutAssembler::assemble(std::vector<DraftNode> nodes, DraftFaul
     n.attrBegin = uint32_t(out.attrs_.size());
     n.attrCount = uint32_t(from.attrs.size());
     n.offset = uint32_t(from.offset);
-    out.nodes_.append(n);
+    const uint32_t around = n.parent < 0 ? 0 : out.nodes_[n.parent].effectivePath;
+    n.effectivePath = around;
     for (const DraftAttr &a : from.attrs) {
       LayoutAttr to;
       to.id = a.id;
       to.name = lsString(a.name);
       to.value = lsString(a.value);
       to.offset = uint32_t(a.offset);
+      const Form form = kAttrs[int(a.id)].form;
+      if (form == Form::Path || form == Form::Condition) {
+        const std::string_view text = a.value;
+        Result<Path> path = joinLayoutPath(
+            out.paths_[around], text.substr(form == Form::Condition && text[0] == '!' ? 1 : 0));
+        CDCC_CHECK(path.ok(), "the Checker took a path that isn't one");
+        to.joined = uint32_t(out.paths_.size());
+        out.paths_.append(std::move(path).value());
+        n.effectivePath = form == Form::Path ? to.joined : n.effectivePath;
+      }
+      if (a.id == Id::Id) {
+        out.byId_.append(place[i]);
+      }
       out.attrs_.append(std::move(to));
+    }
+    out.nodes_.append(n);
+    for (const auto &[at, what] : from.skipped) {
+      out.skipped_.append(LayoutSkipped{place[i], uint32_t(at), lsString(what)});
     }
     if (first[i] >= 0) {
       i = first[i];
@@ -466,6 +519,11 @@ Result<Layout> LayoutAssembler::assemble(std::vector<DraftNode> nodes, DraftFaul
     }
     i = i < 0 ? -1 : next[i];
   }
+  std::sort(out.skipped_.begin(), out.skipped_.begin() + out.skipped_.size(),
+            [](const LayoutSkipped &a, const LayoutSkipped &b) { return a.offset < b.offset; });
+  std::sort(out.byId_.begin(), out.byId_.begin() + out.byId_.size(), [&out](int32_t a, int32_t b) {
+    return std::string_view(out.text(a, Id::Id)) < out.text(b, Id::Id);
+  });
   for (int j = 0; j < count; j++) {
     LayoutNode &n = out.nodes_[place[j]];
     n.firstChild = first[j] < 0 ? -1 : place[first[j]];

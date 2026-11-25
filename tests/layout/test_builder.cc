@@ -106,8 +106,43 @@ static void test_differs()
   }
 }
 
+/* From a layout. */
+static void test_edit()
+{
+  const char *const xml = R"(<layout version="3" path="a"><panel id="p" label="P" data-x="1"><prop path="b"/></panel>
+    <custom tag="t" c="d">text</custom><label id="l">L</label></layout>)";
+  const Layout from = parsed(xml);
+  LayoutBuilder same(from);
+  test_assert(*same.finish() == from);
+  test_assert(*same.finish() == Layout()); /* it starts again, empty */
+  LayoutBuilder b(from);
+  test_assert(b.findId("p") == 1 && b.findId("l") == 4 && b.findId("x") == -1 && b.findId("") == -1);
+  b.at(1).prop("c").id("x");
+  test_assert(b.findId("x") == 5);
+  b.at(4).set(Id::Label, "M");
+  b.at(1).set("data-y", "2");
+  b.root().row();
+  Result<Layout> out = b.finish();
+  test_assert(out.ok() && *out == parsed(R"(<layout version="3" path="a">
+    <panel id="p" label="P" data-x="1" data-y="2"><prop path="b"/><prop path="c" id="x"/></panel>
+    <custom tag="t" c="d">text</custom><label id="l">M</label><row/></layout>)"));
+  test_assert(from.node(4).kind == LayoutKind::Label && from == parsed(xml));
+  /* Its bytes count. */
+  LayoutBuilder big;
+  big.root().label(std::string(LayoutLimits::kMaxBytes - 100, 'x'));
+  LayoutBuilder more(*big.finish());
+  more.root().label(std::string(50, 'x'));
+  LayoutBuilder tooMuch(*more.finish());
+  tooMuch.root().label(std::string(100, 'x'));
+  test_assert(tooMuch.finish().status().code() == StatusCode::OutOfRange);
+}
+
 static void test_refuses()
 {
+  test_assert(fails([](LayoutBuilder &b) { b.root().row().set("x", "1"); },
+                    "layout: node 1 (row): there is no attribute 'x'"));
+  test_assert(fails([](LayoutBuilder &b) { b.root().set(Id::Version, "v"); },
+                    "layout: node 0 (layout): version: it isn't a number from 1"));
   LayoutBuilder bad;
   bad.root().row().prop("a..b");
   Result<Layout> r = bad.finish();
@@ -208,6 +243,7 @@ int main()
 {
   test_same();
   test_differs();
+  test_edit();
   test_refuses();
   test_limits();
   return test_end();

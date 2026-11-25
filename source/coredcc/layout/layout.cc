@@ -1,28 +1,18 @@
 #include "coredcc/layout/layout.h"
 
-#include "coredcc/base/assert.h"
 #include "coredcc/command/last_used.h"
 
+#include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <utility>
 
 namespace coredcc {
 
-namespace {
-
-/* Joins text that LayoutAssembler checked. */
-void join(Path &to, std::string_view path)
-{
-  Result<Path> joined = joinLayoutPath(to, path);
-  CDCC_CHECK(joined.ok(), "a Layout holds a path that isn't one");
-  to = std::move(joined).value();
-}
-
-} // namespace
-
 Layout::Layout()
 {
   nodes_.append(LayoutNode());
+  paths_.append(Path::root());
 }
 
 const LayoutAttr *Layout::attr(int node, LayoutAttrId id) const
@@ -63,39 +53,28 @@ const LayoutAttr *Layout::freeAttr(int node, std::string_view name) const
 
 int Layout::findId(std::string_view id) const
 {
-  for (int i = 0; i < nodeCount(); i++) {
-    const LayoutAttr *a = attr(i, LayoutAttrId::Id);
-    if (a && a->value.c_str() == id) {
-      return i;
-    }
-  }
-  return -1;
+  const auto end = byId_.begin() + byId_.size();
+  const auto at = std::lower_bound(byId_.begin(), end, id, [this](int32_t i, std::string_view id) {
+    return text(i, LayoutAttrId::Id) < id;
+  });
+  return at != end && text(*at, LayoutAttrId::Id) == id ? *at : -1;
 }
 
-Path Layout::prefixOf(int node) const
+int Layout::version() const
+{
+  const LayoutAttr *a = attr(0, LayoutAttrId::Version);
+  return a ? atoi(a->value.c_str()) : 1;
+}
+
+const Path &Layout::prefixOf(int node) const
 {
   const int parent = nodes_[node].parent;
-  return parent < 0 ? Path::root() : effectivePath(parent);
+  return parent < 0 ? paths_[0] : effectivePath(parent);
 }
 
-Path Layout::effectivePath(int node) const
+const Path &Layout::effectivePath(int node) const
 {
-  /* From the innermost: a path from the root hides those around it. */
-  const LayoutAttr *chain[LayoutLimits::kMaxDepth];
-  int count = 0;
-  for (int i = node; i >= 0; i = nodes_[i].parent) {
-    if (const LayoutAttr *a = attr(i, LayoutAttrId::Path)) {
-      chain[count++] = a;
-      if (a->value.c_str()[0] == '/') {
-        break;
-      }
-    }
-  }
-  Path out = Path::root();
-  while (count > 0) {
-    join(out, chain[--count]->value.c_str());
-  }
-  return out;
+  return paths_[nodes_[node].effectivePath];
 }
 
 Path Layout::optionsPath(int node) const
@@ -116,10 +95,8 @@ bool Layout::condition(int node, LayoutAttrId id, LayoutCondition &out) const
   if (!a) {
     return false;
   }
-  const char *text = a->value.c_str();
-  out.negated = text[0] == '!';
-  out.path = prefixOf(node);
-  join(out.path, text + (out.negated ? 1 : 0));
+  out.negated = a->value.c_str()[0] == '!';
+  out.path = paths_[a->joined];
   return true;
 }
 

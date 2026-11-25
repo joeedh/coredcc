@@ -3,6 +3,7 @@
 #include "coredcc/base/text.h"
 #include "coredcc/layout/draft.h"
 
+#include <cstdlib>
 #include <string>
 #include <utility>
 #include <vector>
@@ -80,7 +81,7 @@ class Parser {
       }
     }
     if (!open_.empty()) {
-      const LayoutPosition from = layoutPosition(s_, nodes_[open_.back().node].offset);
+      const LayoutPosition from = layoutPosition(s_, open_.back().offset);
       return fail(at_, "the <" + std::string(open_.back().name) + "> in line " +
                            std::to_string(from.line) + " isn't closed");
     }
@@ -93,8 +94,10 @@ class Parser {
 
  private:
   struct Open {
+    /** -1 for one that is skipped, as is what is in it. */
     int node;
     std::string_view name;
+    size_t offset;
     std::string text;
     /** Of the first character of the text that isn't space. */
     size_t textOffset = 0;
@@ -297,12 +300,23 @@ class Parser {
     DraftNode n;
     n.offset = from;
     n.parent = open_.empty() ? -1 : open_.back().node;
+    if (n.parent < 0 && !open_.empty()) {
+      return skip(from, tag);
+    }
     const bool inCustom = n.parent >= 0 && nodes_[n.parent].kind == LayoutKind::Custom;
     const bool known = layout_detail::isKindName(tag, n.kind);
     if (!known) {
-      if (!inCustom) {
+      const bool reserved = layout_detail::isReservedName(tag);
+      if (!inCustom || reserved) {
+        const std::string what = "<" + std::string(tag) + ">";
         Status s = Status::error(StatusCode::InvalidArgument,
-                                 ("there is no element <" + std::string(tag) + ">").c_str());
+                                 (reserved ? what + " is reserved for a later version" :
+                                             "there is no element " + what)
+                                     .c_str());
+        if (newer_) {
+          skipped(nodes_[n.parent], from, s.message());
+          return skip(from, tag);
+        }
         Suggester suggest(tag);
         for (std::string_view k : layout_detail::kindNames()) {
           suggest.consider(k);
@@ -320,41 +334,94 @@ class Parser {
     if (!attributes(n, known)) {
       return false;
     }
+    nodes_.push_back(std::move(n));
+    return open(int(nodes_.size()) - 1, from, tag);
+  }
+
+  /* At '>' or '/>'. */
+  bool open(int node, size_t from, std::string_view tag)
+  {
     const bool closed = s_[at_] == '/';
     at_ += closed ? 2 : 1;
-    nodes_.push_back(std::move(n));
     Open o;
-    o.node = int(nodes_.size()) - 1;
+    o.node = node;
     o.name = tag;
+    o.offset = from;
     open_.push_back(std::move(o));
     return !closed || close();
+  }
+
+  /* An element that isn't known, after its name. */
+  bool skip(size_t from, std::string_view tag)
+  {
+    Attr a;
+    while (true) {
+      bool end = false;
+      if (!nextAttribute(end, a)) {
+        return false;
+      }
+      if (end) {
+        return open(-1, from, tag);
+      }
+    }
+  }
+
+  void skipped(DraftNode &n, size_t at, const std::string &what)
+  {
+    if (skippedCount_ < LayoutLimits::kMaxSkipped) {
+      skippedCount_++;
+      n.skipped.emplace_back(at, what);
+    }
+  }
+
+  /* Skips space, and reads an attribute, unless '>' or '/>' is the end of them. */
+  bool nextAttribute(bool &end, Attr &a)
+  {
+    const bool space = skipSpace();
+    end = at_ < s_.size() && (s_[at_] == '>' || starts("/>"));
+    if (end) {
+      return true;
+    }
+    if (!space) {
+      return fail(at_, "expected '>' or an attribute, not " + here());
+    }
+    return attribute(a);
   }
 
   /* Up to '>' or '/>'. */
   bool attributes(DraftNode &n, bool known)
   {
+    /* Of the root, whose version may come later. */
+    size_t unknownAt = 0;
+    Status unknown;
     while (true) {
-      const bool space = skipSpace();
-      if (at_ < s_.size() && (s_[at_] == '>' || starts("/>"))) {
-        return true;
-      }
-      if (!space) {
-        return fail(at_, "expected '>' or an attribute, not " + here());
-      }
-      if (n.attrs.size() == size_t(LayoutLimits::kMaxAttrs)) {
-        return fail(at_, "an element has more than " + std::to_string(LayoutLimits::kMaxAttrs) +
-                             " attributes", StatusCode::OutOfRange);
-      }
       Attr a;
-      if (!attribute(a)) {
+      bool end = false;
+      if (!nextAttribute(end, a)) {
         return false;
+      }
+      if (end) {
+        return root(n, unknownAt, unknown);
+      }
+      if (n.attrs.size() + n.skipped.size() == size_t(LayoutLimits::kMaxAttrs)) {
+        return fail(a.offset, "an element has more than " +
+                                  std::to_string(LayoutLimits::kMaxAttrs) + " attributes",
+                    StatusCode::OutOfRange);
       }
       if (a.name == "xmlns") {
         return fail(a.offset, "namespaces aren't supported");
       }
       Result<LayoutAttrId> id = layout_detail::attrOf(n.kind, a.name);
       if (!id.ok()) {
-        return fail(a.offset, id.status());
+        if (!newer_ && n.parent >= 0) {
+          return fail(a.offset, id.status());
+        }
+        if (unknown.ok()) {
+          unknownAt = a.offset;
+          unknown = id.status();
+        }
+        skipped(n, a.offset, id.status().message());
+        continue;
       }
       if (!known && *id == LayoutAttrId::Tag) {
         return fail(a.offset, "the element's name is its tag");
@@ -371,6 +438,19 @@ class Parser {
       d.verbatim = a.verbatim;
       n.attrs.push_back(std::move(d));
     }
+  }
+
+  /* After the attributes: is the text of a newer version? */
+  bool root(const DraftNode &n, size_t unknownAt, const Status &unknown)
+  {
+    if (n.parent >= 0) {
+      return true;
+    }
+    for (const DraftAttr &a : n.attrs) {
+      newer_ |= a.id == LayoutAttrId::Version && a.value.size() < 10 &&
+                atoi(a.value.c_str()) > kLayoutVersion;
+    }
+    return newer_ || unknown.ok() || fail(unknownAt, unknown);
   }
 
   bool endTag()
@@ -400,7 +480,7 @@ class Parser {
   {
     Open o = std::move(open_.back());
     open_.pop_back();
-    if (!o.hasText) {
+    if (!o.hasText || o.node < 0) {
       return true;
     }
     DraftNode &n = nodes_[o.node];
@@ -425,7 +505,7 @@ class Parser {
         if (!o) {
           return fail(at_, "there is text outside of the <layout>");
         }
-        if (!hasText(nodes_[o->node].kind)) {
+        if (o->node >= 0 && !hasText(nodes_[o->node].kind)) {
           return fail(at_, "a <" + std::string(o->name) +
                                "> can't hold text: write it in a <label>");
         }
@@ -447,7 +527,7 @@ class Parser {
         at_ += c == '\r' && at_ + 1 < s_.size() && s_[at_ + 1] == '\n' ? 2 : 1;
         decoded = c == '\r' ? '\n' : c;
       }
-      if (o) {
+      if (o && o->node >= 0) {
         o->text += decoded;
       }
     }
@@ -458,6 +538,9 @@ class Parser {
   size_t at_ = 0;
   std::vector<DraftNode> nodes_;
   std::vector<Open> open_;
+  /** The text is of a newer version. */
+  bool newer_ = false;
+  int skippedCount_ = 0;
 };
 
 } // namespace

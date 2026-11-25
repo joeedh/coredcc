@@ -8,6 +8,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace coredcc {
@@ -28,6 +29,8 @@ struct DraftNode {
   int parent = -1;
   std::vector<DraftAttr> attrs;
   size_t offset = 0;
+  /** In it or on it: where, and what. */
+  std::vector<std::pair<size_t, std::string>> skipped;
 
   DraftAttr *find(LayoutAttrId id, std::string_view name = {});
 };
@@ -55,7 +58,9 @@ std::vector<std::string_view> kindNames();
 bool mayHave(LayoutKind kind, LayoutAttrId id);
 /** May hold elements. */
 bool isContainer(LayoutKind kind);
-/** `name` as an attribute of `kind`: Free for a Custom's own, else an error. */
+/** Of an element of a later version. */
+bool isReservedName(std::string_view name);
+/** `name` as an attribute of `kind`: Free for the host's own, else an error. */
 Result<LayoutAttrId> attrOf(LayoutKind kind, std::string_view name);
 /** [A-Za-z_], and [0-9.-] if it isn't the first. */
 bool isXmlNameChar(char c, bool first);

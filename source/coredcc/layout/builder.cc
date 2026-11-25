@@ -1,5 +1,6 @@
 #include "coredcc/layout/builder.h"
 
+#include "coredcc/base/assert.h"
 #include "coredcc/layout/draft.h"
 
 #include <string>
@@ -28,7 +29,45 @@ struct LayoutBuilder::State {
 };
 
 LayoutBuilder::LayoutBuilder() : s_(std::make_unique<State>()) {}
+LayoutBuilder::LayoutBuilder(const Layout &layout) : LayoutBuilder()
+{
+  s_->nodes.clear();
+  for (int i = 0; i < layout.nodeCount(); i++) {
+    const LayoutNode &n = layout.node(i);
+    DraftNode to;
+    to.kind = n.kind;
+    to.parent = n.parent;
+    for (uint32_t j = 0; j < n.attrCount; j++) {
+      const LayoutAttr &from = layout.attrs()[n.attrBegin + j];
+      DraftAttr a;
+      a.id = from.id;
+      a.name = from.name.c_str();
+      a.value = from.value.c_str();
+      s_->bytes += a.name.size() + a.value.size();
+      to.attrs.push_back(std::move(a));
+    }
+    s_->nodes.push_back(std::move(to));
+  }
+}
+
 LayoutBuilder::~LayoutBuilder() = default;
+
+LayoutScope LayoutBuilder::at(int node)
+{
+  CDCC_CHECK(node >= 0 && node < int(s_->nodes.size()), "LayoutBuilder::at: no such node");
+  return LayoutScope(*this, node);
+}
+
+int LayoutBuilder::findId(std::string_view id) const
+{
+  for (size_t i = 0; i < s_->nodes.size(); i++) {
+    const DraftAttr *a = s_->nodes[i].find(LayoutAttrId::Id);
+    if (a && a->value == id) {
+      return int(i);
+    }
+  }
+  return -1;
+}
 
 int LayoutBuilder::add(int parent, LayoutKind kind)
 {

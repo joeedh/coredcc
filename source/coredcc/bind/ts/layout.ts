@@ -33,6 +33,8 @@ export interface LayoutNode {
   visibleIf?: LayoutCondition
   enabledIf?: LayoutCondition
   widget?: string
+  /** The root's: the JSON's, 1. */
+  version?: number
   /** Of a tool: for `invokeAt(ctx, node.prefix ?? '', node.invocation)`. */
   invocation?: string
   target?: string
@@ -44,6 +46,7 @@ export interface LayoutNode {
   /** Of a custom node. */
   tag?: string
   text?: string
+  /** The host's own: `data-` ones, and any of a custom node. */
   attrs?: Record<string, string>
   children?: LayoutNode[]
 }

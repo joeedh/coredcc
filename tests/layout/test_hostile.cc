@@ -119,6 +119,9 @@ bool isJson(const std::string &s)
       }
       value = false;
     }
+    else if (c >= '0' && c <= '9') {
+      value = true;
+    }
     else if (s.compare(i, 4, "true") == 0) {
       i += 3;
       value = true;
@@ -332,11 +335,11 @@ static void test_bounds()
       json = layoutToJson(*r).size();
     }
     const double took = watch.seconds();
-    if (r.ok() != ok || took > seconds || json > (64u << 20)) {
+    if (r.ok() != ok || took > seconds || json > (8u << 20)) {
       fprintf(stderr, "%s: %s, %f s, %zu bytes of JSON\n", what,
               r.ok() ? "ok" : r.status().message(), took, json);
     }
-    test_assert(r.ok() == ok && took <= seconds && json <= (64u << 20));
+    test_assert(r.ok() == ok && took <= seconds && json <= (8u << 20));
   };
   const auto repeated = [](const std::string &s, size_t bytes) {
     std::string out;
@@ -362,8 +365,12 @@ static void test_bounds()
   for (int i = 0; i < 16000; i++) {
     deep += "<prop path='b' visibleIf='c' enabledIf='d'/>";
   }
-  bounded("long prefixes", in(deep, segments), true, 10);
-  bounded("long prefixes, deep", in(rows + deep + ends, segments), true, 10);
+  bounded("long prefixes", in(deep, segments), false, 10);
+  bounded("long prefixes that fit", in(deep.substr(0, deep.size() / 16000 * 680), segments), true, 10);
+  bounded("long prefixes of tools", in(repeated("<tool invocation='a'/>", 1 << 18), segments), false, 10);
+  bounded("skipped", "<layout version='2'>" + repeated("<x a='1'>", room / 2), false, 5);
+  bounded("skipped attributes", "<layout version='2'><x" + repeated(" a='1'", room / 2) + "/></layout>", true, 5);
+  bounded("long prefixes, deep", in(rows + deep + ends, segments), false, 10);
   std::string ids;
   for (int i = 0; i < 16000; i++) {
     ids += "<sep id='" + std::to_string(i) + "'/>";

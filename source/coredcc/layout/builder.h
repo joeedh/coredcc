@@ -80,6 +80,9 @@ class LayoutScope {
 class LayoutBuilder {
  public:
   LayoutBuilder();
+  /** Starts with the nodes of `layout`, whose scopes are at() its indices: to add to it, or to set
+   * attributes. */
+  explicit LayoutBuilder(const Layout &layout);
   ~LayoutBuilder();
   LayoutBuilder(const LayoutBuilder &) = delete;
   LayoutBuilder &operator=(const LayoutBuilder &) = delete;
@@ -88,6 +91,10 @@ class LayoutBuilder {
   {
     return LayoutScope(*this, 0);
   }
+  /** A node by its index. */
+  LayoutScope at(int node);
+  /** The node with this `id` now, or -1. */
+  int findId(std::string_view id) const;
   /** The layout, or what is wrong with it, as the parser would say. The first mistake counts.
    * The builder starts again, and its scopes are invalid. */
   Result<Layout> finish();

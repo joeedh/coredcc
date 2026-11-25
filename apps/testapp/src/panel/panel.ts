@@ -132,6 +132,7 @@ export class Panel {
     el.className = ['node', node.kind, node.expand ? 'expand' : '', node.class ?? ''].filter((c) => c).join(' ')
     el.dataset.id = id
     if (node.description) el.title = node.description
+    for (const [k, v] of Object.entries(node.attrs ?? {})) el.setAttribute(`data-attr-${k}`, v)
     this.entries.set(id, e)
     parent?.children.push(e)
     let within: HTMLElement = el
@@ -159,7 +160,6 @@ export class Panel {
         break
       case 'custom':
         el.dataset.tag = node.tag
-        for (const [k, v] of Object.entries(node.attrs ?? {})) el.setAttribute(`data-attr-${k}`, v)
         if (node.text !== undefined) el.textContent = node.text
         break
     }

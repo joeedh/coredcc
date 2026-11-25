@@ -5,6 +5,7 @@
 #include "coredcc/command/command.h"
 #include "coredcc/command/literal.h"
 
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
@@ -31,8 +32,11 @@ bool isProperty(const StaticTarget &t)
 
 bool isCondition(const StaticTarget &t)
 {
-  return t.kind == Kind::EnumKey ||
-         (t.kind == Kind::Member && t.member->def().kind() == PropKind::Bool);
+  if (t.kind != Kind::Member) {
+    return t.kind == Kind::EnumKey || t.kind == Kind::Length;
+  }
+  const PropKind kind = t.member->def().kind();
+  return kind == PropKind::Bool || kind == PropKind::String || kind == PropKind::Pointer;
 }
 
 class Validator {
@@ -49,6 +53,11 @@ class Validator {
 
   Vector<LayoutIssue> run()
   {
+    for (const LayoutSkipped &s : layout_.skipped()) {
+      issue(s.node, nullptr, LayoutSeverity::Warning,
+            invalid(std::string("skipped, since it is of a newer version: ") + s.what.c_str()));
+      issues_.last().offset = s.offset;
+    }
     for (int i = 0; i < layout_.nodeCount() && !more_; i++) {
       node(i);
     }
@@ -147,7 +156,11 @@ class Validator {
       }
       return;
     }
-    error(i, &a, invalid("'" + s.path.toString() + "' isn't " + what));
+    const int n = s.path.size();
+    const bool active = n > 1 && s.path[n - 1].kind == SegmentKind::Member &&
+                        strcmp(s.path[n - 1].text.c_str(), "active") == 0;
+    const std::string hint = active ? ": use the pointer that holds the active item" : "";
+    error(i, &a, invalid("'" + s.path.toString() + "' isn't " + what + hint));
   }
 
   void node(int i)
@@ -169,7 +182,7 @@ class Validator {
         case Id::VisibleIf:
         case Id::EnabledIf:
           target(i, a, value.substr(value[0] == '!' ? 1 : 0), isCondition,
-                 "a Bool or an enum's key");
+                 "a Bool, an enum's key, a pointer, a length or a String");
           break;
         case Id::Invocation:
           tool(i, a);
@@ -280,10 +293,10 @@ class Validator {
     if (!path.ok()) {
       return path.status();
     }
-    if (!canStart(path->fromRoot ? root_ : around(i))) {
+    const StaticStructs &from = path->fromRoot ? root_ : prefixes_[size_t(i)];
+    if (!canStart(from)) {
       return Status();
     }
-    const StaticStructs &from = path->fromRoot ? root_ : around(i);
     Result<StaticStructs> to = resolver_.resolveStructs(from, *path);
     if (!to.ok()) {
       return to.status();
@@ -309,7 +322,7 @@ class Validator {
   const Layout &layout_;
   StaticResolver resolver_;
   StaticStructs root_;
-  /** Of a container, for the paths in it. Nothing, and not unknown, if it was wrong. */
+  /** Of a container, for the paths in it, and of a Tool, for its command's. Nothing, and not unknown, if it was wrong. */
   std::vector<StaticStructs> prefixes_;
   Vector<LayoutIssue> issues_;
   /** There are more than that: it stops. */

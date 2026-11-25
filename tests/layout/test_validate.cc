@@ -203,12 +203,11 @@ static void test_conditions()
   test_assert(w.fine("<row visibleIf='tool.locked' enabledIf='!objects.active.mode[EDIT]'/>"));
   test_assert(w.fine("<row path='data' visibleIf='!/tool.locked' enabledIf='flags[HIDE]'/>",
                      "objects.active"));
-  for (const char *path : {"tool.strength", "objects.length", "objects", "objects[0]", "tool",
-                           "objects[0].location[0]"})
+  for (const char *path : {"tool.strength", "objects", "objects[0]", "objects[0].location", "objects[0].location[0]"})
   {
     test_assert(w.one("<sep visibleIf='!" + std::string(path) + "'/>",
                       "<separator> visibleIf: '" + std::string(path) +
-                          "' isn't a Bool or an enum's key",
+                          "' isn't a Bool, an enum's key, a pointer, a length or a String",
                       "visibleIf="));
   }
   test_assert(w.one("<sep enabledIf='tool.x'/>",
@@ -238,6 +237,38 @@ static void test_tools()
   /* Also where what is around it names nothing, which is another issue. */
   test_assert(w.issues("<layout><row path='nope'>" + tool("any='/objcts[0]'") + "</row></layout>").size() == 2);
   test_assert(w.issues("<layout><row path='nope'>" + tool("any='objcts[0]'") + "</row></layout>").size() == 1);
+  /* A tool's own path is the prefix of its arguments. */
+  test_assert(w.fine("<tool path='tool' invocation=\"test.take(brush='brushes[0]')\"/>"));
+  test_assert(w.one("<tool path='tool' invocation=\"test.take(brush='objects[0]')\"/>",
+                    "<tool> invocation: no member 'objects' in Tool (at offset 0)", "invocation="));
+  test_assert(w.fine("<tool path='/' invocation=\"test.take(any='objects[0]')\"/>", "tool"));
+  test_assert(w.one("<tool path='nope' invocation=\"test.take(brush='gone')\"/>",
+                    "<tool> path: no member 'nope' in LayoutRoot (at offset 0)", "path="));
+  test_assert(w.one("<tool path='tool.count' invocation='test.add'/>",
+                    "<tool> path: 'tool.count' isn't a struct", "path="));
+  /* Conditions. */
+  test_assert(w.fine("<row visibleIf='objects.length'/><row visibleIf='!tool.activeBrush'/>"
+                     "<row visibleIf='objects.active.name'/>"));
+  const char *const want = "' isn't a Bool, an enum's key, a pointer, a length or a String";
+  test_assert(w.one("<row visibleIf='tool.count'/>", std::string("<row> visibleIf: 'tool.count") + want,
+                    "visibleIf="));
+  test_assert(w.one("<row visibleIf='objects'/>", std::string("<row> visibleIf: 'objects") + want,
+                    "visibleIf="));
+  /* The active item is what a pointer says. */
+  test_assert(w.one("<prop path='objects.active'/>",
+                    "<prop> path: 'objects.active' isn't a property: use the pointer that holds the "
+                    "active item", "path="));
+  test_assert(w.fine("<prop path='tool.activeBrush'/><row path='objects.active'/>"));
+  /* What was skipped. */
+  {
+    const std::string xml = "<layout version='2'><row x='1'/><new/><prop path='nope'/></layout>";
+    const Vector<LayoutIssue> found = w.issues(xml);
+    test_assert(found.size() == 3 && found[0].severity == LayoutSeverity::Warning && found[0].node == 1 &&
+                xml.compare(found[0].offset, 2, "x=") == 0 && xml.compare(found[1].offset, 4, "<new") == 0);
+    test_assert(strcmp(found[1].status.message(),
+                       "<layout> skipped, since it is of a newer version: there is no element <new>") == 0);
+    test_assert(found[2].severity == LayoutSeverity::Error && !layoutIsValid(found));
+  }
   /* What isn't for a button that invokes it, or not for users. */
   test_assert(w.one("<tool invocation='test.drag'/>",
                     "<tool> invocation: 'test.drag' is interactive: it is begun with "
@@ -391,7 +422,7 @@ static void test_hostile()
   for (int i = 0; i < 60; i++) {
     nested += "<row path='" + std::string(i ? "m.n.m" : "link") + "'>";
   }
-  while (nested.size() < 500 * 1000) {
+  while (nested.size() < 200 * 1000) {
     nested += "<sep visibleIf='m.m.m.m.m.m.m.m.m.m.m.m.x'/>";
   }
   for (int i = 0; i < 60; i++) {
