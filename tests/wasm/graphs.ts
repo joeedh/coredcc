@@ -137,6 +137,7 @@ export function graphTests(env: Env) {
       params: {
         mode: cdcc.enumParam({ADD: 0, SUB: 4}, 'SUB'),
         bits: cdcc.flagsParam({X: 1, Y: 2}, ['Y']),
+        wide: cdcc.flagsParam({A: 2 ** 31, B: 2 ** 40, C: 1n << 63n}, ['A', 'B', 'C']),
         turn: cdcc.quat(0, 0, 1, 0),
         item: cdcc.pointerParam('TestItem', {weak: true}),
         n: 1,
@@ -152,6 +153,7 @@ export function graphTests(env: Env) {
         assert.equal(node.useBlock('item'), '')
         assert.deepEqual(node.param('turn'), [0, 0, 1, 0])
         assert.equal(node.param('bits'), 2)
+        assert.equal(node.param('wide'), 2n ** 63n + 2n ** 40n + 2n ** 31n)
         const m = node.input('m') as number[]
         const linked = node.isLinked('a') ? 100 : 0
         node.output('value', (node.param('mode') as number) * factor + m[13] + linked)
@@ -253,6 +255,56 @@ export function graphTests(env: Env) {
     assert.throws(() => graph.evaluate('out'), fails(StatusCode.Unsupported, /payload/))
     assert.throws(() => graph.setInput('in', new cdcc.Table([1, 1])), fails(StatusCode.InvalidArgument, /./))
     assert.throws(() => graph.setInput('in', new cdcc.Table([1], {c: []})), TypeError)
+  })
+
+  test('keys of 64 bits, through a foreach', () => {
+    const path = 'graphs["g"]'
+    const inner = 'graphs["inner"]'
+    const each = cdcc.graphCreate(ctx, 'inner')
+    const c = cdcc.graphAddInterface(ctx, inner, 'input', 'c', 'float')
+    const d = cdcc.graphAddInterface(ctx, inner, 'output', 'd', 'float')
+    const innerIn = cdcc.graphAddNode(ctx, inner, 'graph.input')
+    const innerOut = cdcc.graphAddNode(ctx, inner, 'graph.output')
+    cdcc.graphLink(ctx, inner, innerIn, `#${c}`, innerOut, `#${d}`)
+    cdcc.defineNodeType(ctx, {
+      id: 'ts.keys',
+      inputs: {t: cdcc.payload('elements')},
+      outputs: {t: 'elements'},
+      evaluate(node) {
+        const t = node.table('t')
+        node.output('t', new cdcc.Table(t.keys, t.columns))
+      },
+    })
+    cdcc.graphCreate(ctx, 'g')[Symbol.dispose]()
+    const in_ = cdcc.graphAddInterface(ctx, path, 'input', 'in', 'elements')
+    const out = cdcc.graphAddInterface(ctx, path, 'output', 'out', 'elements')
+    const input = cdcc.graphAddNode(ctx, path, 'graph.input')
+    const output = cdcc.graphAddNode(ctx, path, 'graph.output')
+    const node = cdcc.graphAddNode(ctx, path, 'ts.keys')
+    const foreach = cdcc.graphAddNode(ctx, path, 'graph.foreach')
+    cdcc.set(ctx, `${path}.nodes[#${foreach}].group`, each)
+    each[Symbol.dispose]()
+    cdcc.graphLink(ctx, path, input, `#${in_}`, node, 't')
+    cdcc.graphLink(ctx, path, node, 't', foreach, 'elements')
+    cdcc.graphLink(ctx, path, foreach, 'elements', output, `#${out}`)
+    using graph = new cdcc.GraphInstance(ctx, path)
+    const keys = [2n ** 53n + 1n, 2 ** 53, 2n ** 63n - 1n, -(2n ** 63n), -(2n ** 53n) - 1n, 5]
+    graph.setInput('in', new cdcc.Table(keys, {c: [1, 2, 3, 4, 5, 6]}))
+    const got = graph.evaluateTable('out')
+    assert.deepEqual(got.keys, keys)
+    assert.deepEqual(got.columns, {d: [1, 2, 3, 4, 5, 6]})
+    /* They name elements, too. */
+    assert.equal(graph.peek(`${foreach}/${innerIn}[${2n ** 53n + 1n}]`, `#${c}`), 1)
+    assert.equal(graph.peek(`${foreach}/${innerIn}[${2n ** 53n}]`, `#${c}`), 2)
+    /* A bigint that is small is a number when it is read. */
+    graph.setInput('in', new cdcc.Table([7n], {c: [1]}))
+    assert.deepEqual(graph.evaluateTable('out').keys, [7])
+    for (const bad of [0.5, NaN, Infinity, 2 ** 53 + 2, -(2 ** 60)]) {
+      assert.throws(() => graph.setInput('in', new cdcc.Table([bad])), TypeError)
+    }
+    for (const bad of [2n ** 63n, -(2n ** 63n) - 1n]) {
+      assert.throws(() => graph.setInput('in', new cdcc.Table([bad])), RangeError)
+    }
   })
 
   test('a TS kernel that disposes of its own graph instance', () => {

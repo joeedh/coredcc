@@ -22,6 +22,7 @@ import {
   sync,
   take,
   toJs,
+  toNumber,
   withValue,
   type Disposable,
   type ResultOf,
@@ -31,12 +32,15 @@ import {
 
 /* ---- tables ---- */
 
+/** The key of a row: an int64. Read, it is a bigint only past 2^53. */
+export type TableKey = number | bigint
+
 /** A table, as `graph.foreach` takes and gives them: rows with unique keys, by which elements
  * are found again when the table changes. A copy: changing it changes no graph. Columns have a
  * value per key. */
 export class Table {
   constructor(
-    readonly keys: number[] = [],
+    readonly keys: TableKey[] = [],
     readonly columns: Record<string, Value[]> = {}
   ) {}
 }
@@ -44,7 +48,7 @@ export class Table {
 function tableToJs(t: ScriptTable): Table {
   const rows = cd.tableRows(t)
   const out = new Table()
-  for (let i = 0; i < rows; i++) out.keys.push(take(cd.tableKey(t, i), Number))
+  for (let i = 0; i < rows; i++) out.keys.push(take(cd.tableKey(t, i), (k) => toNumber(BigInt(k))))
   const columns = cd.tableColumns(t)
   for (let c = 0; c < columns; c++) {
     const name = take(cd.tableColumnName(t, c), (s) => s)
@@ -52,6 +56,15 @@ function tableToJs(t: ScriptTable): Table {
     Object.defineProperty(out.columns, name, {value, enumerable: true, writable: true, configurable: true})
   }
   return out
+}
+
+function keyOf(key: TableKey): bigint {
+  if (typeof key === 'number' && !(Number.isInteger(key) && Math.abs(key) <= 2 ** 53)) {
+    throw new TypeError(`a table's key is an integer, and a bigint past 2^53, not ${key}`)
+  }
+  const k = BigInt(key)
+  if (BigInt.asIntN(64, k) !== k) throw new RangeError(`a table's key ${k} is outside int64`)
+  return k
 }
 
 /** `fn` with the bound form of a table. Its cells are written as `set` writes: floats with
@@ -62,7 +75,7 @@ function withTable<R>(table: Table, fn: (t: ScriptTable) => R): R {
     (v) => getBindingBackend().constructWith('coredcc::ScriptTable', 'copy', v) as ScriptTable
   )
   try {
-    for (const key of table.keys) check(cd.tableAddRow(t, BigInt(key)))
+    for (const key of table.keys) check(cd.tableAddRow(t, keyOf(key)))
     for (const [name, values] of Object.entries(table.columns)) {
       if (values.length !== table.keys.length) {
         throw new TypeError(`a table's column '${name}' has ${values.length} values for ${table.keys.length} keys`)
@@ -148,22 +161,22 @@ export class PayloadInput {
 export const payload = (socketType: string) => new PayloadInput(socketType)
 
 /** A param with items: one of them for `enumParam({A: 0, B: 1}, 'A')`, any of them (single bits)
- * for `flagsParam({X: 1, Y: 2}, ['X'])`. */
+ * for `flagsParam({X: 1, Y: 2}, ['X'])`. Values past 2^53 are bigints. */
 export class ItemParam {
   constructor(
-    readonly items: Record<string, number>,
-    readonly value: number,
+    readonly items: Record<string, number | bigint>,
+    readonly value: bigint,
     readonly flags: boolean
   ) {}
 }
-const itemOf = (items: Record<string, number>, key: string) => {
+const itemOf = (items: Record<string, number | bigint>, key: string) => {
   if (!Object.hasOwn(items, key)) throw new TypeError(`there is no item '${key}'`)
-  return items[key]
+  return BigInt(items[key])
 }
-export const enumParam = (items: Record<string, number>, value: string) =>
+export const enumParam = (items: Record<string, number | bigint>, value: string) =>
   new ItemParam(items, itemOf(items, value), false)
-export const flagsParam = (items: Record<string, number>, value: string[] = []) =>
-  new ItemParam(items, value.reduce((bits, key) => bits | itemOf(items, key), 0), true)
+export const flagsParam = (items: Record<string, number | bigint>, value: string[] = []) =>
+  new ItemParam(items, value.reduce((bits, key) => bits | itemOf(items, key), 0n), true)
 
 /** A pointer to blocks of an api struct. A weak one doesn't keep them. */
 export class PointerParam {
@@ -207,7 +220,7 @@ function fill(def: NodeTypeDef, spec: NodeTypeSpec) {
   for (const [name, v] of Object.entries(spec.params ?? {})) {
     if (v instanceof PointerParam) check(cd.nodeTypePointerParam(def, name, v.target, v.weak))
     else if (v instanceof ItemParam) {
-      check(cd.nodeTypeItemParam(def, name, v.flags, BigInt(v.value)))
+      check(cd.nodeTypeItemParam(def, name, v.flags, v.value))
       for (const [key, value] of Object.entries(v.items)) {
         check(cd.nodeTypeItem(def, name, key, BigInt(value), ''))
       }

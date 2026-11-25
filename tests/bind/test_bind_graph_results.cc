@@ -23,7 +23,19 @@ test_init;
 namespace {
 
 struct Mesh {
-  int n = 0;
+  static inline int live = 0;
+  Mesh()
+  {
+    live++;
+  }
+  Mesh(const Mesh &)
+  {
+    live++;
+  }
+  ~Mesh()
+  {
+    live--;
+  }
 };
 
 } // namespace
@@ -389,12 +401,15 @@ void testTables()
     NodeTypeDef mesh("t.mesh");
     mesh.output("mesh", "t.Mesh");
     addType<[](NodeExecContext &x) {
-      return x.setOutput(0, GraphValue::ofPayload(makePayload(Mesh{3})));
+      return x.setOutput(0, GraphValue::ofPayload(makePayload(Mesh())));
     }>(d.rt, mesh, "t.mesh");
     const int64_t m = addNode(d, "t.mesh");
     const int64_t wm = sc::graphWatch(g.value, id(m).c_str(), "mesh").value;
     test_assert(sc::graphUpdate(g.value).status.ok());
     test_assert(hasCode(sc::graphWatchTable(g.value, wm).status, StatusCode::TypeMismatch));
+    /* Unwatched, nothing but the node has its value. */
+    test_assert(sc::graphUnwatch(g.value, wm).ok() && Mesh::live == 1);
+    test_assert(sc::graphDrop(g.value, id(m).c_str()).ok() && Mesh::live == 0);
     /* A column of payloads can't be read. */
     Elements nested;
     nested.keys.append(1);

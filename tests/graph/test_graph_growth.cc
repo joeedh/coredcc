@@ -96,6 +96,15 @@ void testLinks()
     }
     return secondsOf([&]() { test_assert(f.g.def->linkAll(chain, f.ids).ok()); });
   }));
+  test_assert(grows("each link's diagnostic", 250, [](int n) {
+    Fan f(n);
+    test_assert(f.g.def->linkAll(f.specs, f.ids).ok());
+    return secondsOf([&]() {
+      for (LinkId id : f.ids) {
+        test_assert(!f.g.def->diagnostic(id));
+      }
+    });
+  }));
   test_assert(grows("a link in a chain that is as long as it gets", 500, [](int n) {
     Fan f(n);
     std::vector<LinkSpec> chain;

@@ -214,6 +214,7 @@ void testElements()
   test_assert(l.inst.report(inside(7, l.add)).state == State::NotEvaluated);
   const NodeReport whole = l.inst.report(at({}, l.node));
   test_assert(whole.elements == 2 && whole.current && whole.memory.elements == 2);
+  test_assert(whole.seconds > 0 && whole.totalSeconds == whole.seconds);
   test_assert(whole.memory.kernels == 1 + 2 * 2 && whole.memory.frames == 2);
   test_assert(whole.memory.payloadBytes > 0 && whole.memory.bytes > 2 * r.memory.bytes);
 
@@ -289,6 +290,55 @@ void testNestedElements()
   test_assert(l.inst.report(p).state == State::Ok && l.inst.report(p).current);
   test_assert(l.root.def->setParam(l.node, kMaxCachedParam, PropValue::ofInt(1)).ok());
   test_assert(!l.inst.report(p).current);
+}
+
+/* Nothing of a group that can't be evaluated, though its frame may still be there. */
+void testPeekLost()
+{
+  Nest n;
+  GraphInstance &i = n.inst;
+  const std::string interior = "@" + std::to_string(n.y.value) + ".value";
+  connect(*n.root.def, n.group, interior, n.c, "a");
+  const SocketPath c = SocketPath::of(n.c, "value");
+  const SocketPath inside = socket(at({}, n.group), interior);
+  const SocketPath whole = socket(at({}, n.group), key(n.z));
+  test_assert(i.evaluate(c).ok() && n.evaluate().ok());
+  test_assert(isFloat(i.peek(inside), 1) && isFloat(i.peek(whole), 3));
+  test_assert(n.w.lib.markDeleted(n.inner.h).ok());
+  test_assert(!n.evaluate().ok() && i.evaluate(c).ok()); /* a link from nowhere has the default */
+  test_assert(i.peek(inside).isNone() && i.peek(whole).isNone());
+  test_assert(n.w.lib.restoreFromHistory(n.inner.h).ok());
+  test_assert(i.evaluate(c).ok() && isFloat(i.peek(inside), 1));
+}
+
+/* A group that contains itself, as only an undo record could have it: its frame is still that of
+ * the graph it had, where nodes of the other may be found by id. */
+void testPeekSelf(bool nested)
+{
+  Nest n;
+  GraphInstance &i = n.inst;
+  GraphDef &r = *n.root.def;
+  const NodeState y = n.inner.def->stateOf(*n.inner.def->node(n.y));
+  test_assert(r.insertNode(y).ok());
+  Graph mid = newGraph(n.w.lib, "mid");
+  const NodeId leaf = add(*mid.def, kGraphGroupType);
+  test_assert(mid.def->setGroup(leaf, n.inner.id).ok());
+  NodeId group = n.group;
+  std::string interior = "@" + std::to_string(n.y.value) + ".value";
+  if (nested) {
+    group = add(r, kGraphGroupType);
+    test_assert(r.setGroup(group, mid.id).ok());
+    interior = "@" + std::to_string(leaf.value) + "/" + interior.substr(1);
+  }
+  connect(r, group, interior, n.c, "a");
+  const SocketPath c = SocketPath::of(n.c, "value"), inside = socket(at({}, group), interior);
+  test_assert(i.evaluate(c).ok() && isFloat(i.peek(inside), 1));
+  GraphDef &changed = nested ? *mid.def : r;
+  const NodeId place = nested ? leaf : group;
+  test_assert(changed.restoreRef(place, "", n.root.id).ok());
+  test_assert(!i.evaluate(c).ok() && i.peek(inside).isNone());
+  test_assert(changed.restoreRef(place, "", n.inner.id).ok());
+  test_assert(i.evaluate(c).ok() && isFloat(i.peek(inside), 1));
 }
 
 void testReports()
@@ -542,6 +592,9 @@ int main()
   testPeekOverBudget();
   testElements();
   testNestedElements();
+  testPeekLost();
+  testPeekSelf(false);
+  testPeekSelf(true);
   testReports();
   testDrop();
   testFollowing();

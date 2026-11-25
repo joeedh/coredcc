@@ -218,7 +218,8 @@ export function copyValue(v: PropValue): PropValue {
   return getBindingBackend().constructWith('coredcc::PropValue', 'copy', v) as PropValue
 }
 
-const toNumber = (n: bigint): number | bigint => (n >= -(2n ** 53n) && n <= 2n ** 53n ? Number(n) : n)
+/** A bigint only past 2^53, where a number would lose digits. */
+export const toNumber = (n: bigint): number | bigint => (n >= -(2n ** 53n) && n <= 2n ** 53n ? Number(n) : n)
 
 /** Graph sockets and params hold no pointers, so a node has no context to read them with. */
 const pointerCtx = (ctx: Context | undefined): Context => {
