@@ -10,8 +10,9 @@
 #include "coredcc/parse/path.h"
 #include "coredcc/props/ref.h"
 
-#include <optional>
+#include <cstddef>
 #include <utility>
+#include <variant>
 
 namespace litestl::binding::types {
 template <typename T> struct Struct;
@@ -46,8 +47,9 @@ struct PointerRef {
  * and in P1e the command executor.
  *
  * A **path prefix** makes paths resolve from another struct than the root, as a panel
- * does to run against its own data (Blender's context override). The sticky error is
- * the Runtime's; a Context has none of its own.
+ * does to run against its own data (Blender's context override). It is a path, which is
+ * resolved at each use, or a struct's address, which stays where it is. The sticky error is the
+ * Runtime's; a Context has none of its own.
  */
 class Context {
  public:
@@ -95,15 +97,29 @@ class Context {
   void setPrefix(Path prefix)
   {
     prefix_ = std::move(prefix);
-    hasPrefix_ = true;
+  }
+  /** As above, from the struct at an address. `canonicalize(ctx, Path())` is the prefix's. */
+  void setPrefix(StableRef address)
+  {
+    prefix_ = std::move(address);
   }
   void clearPrefix()
   {
-    hasPrefix_ = false;
+    prefix_ = std::monostate();
   }
+  bool hasPrefix() const
+  {
+    return !std::holds_alternative<std::monostate>(prefix_);
+  }
+  /** Null if there is none, or it is an address. */
   const Path *prefix() const
   {
-    return hasPrefix_ ? &prefix_ : nullptr;
+    return std::get_if<Path>(&prefix_);
+  }
+  /** Null if there is none, or it is a path. */
+  const StableRef *prefixAddress() const
+  {
+    return std::get_if<StableRef>(&prefix_);
   }
 
   /** The running command's input and output bags, set by the executor around each
@@ -126,13 +142,15 @@ class Context {
   static const litestl::binding::types::Struct<Context> *defineBindings();
 
  private:
+  friend class PrefixScope;
+  using Prefix = std::variant<std::monostate, Path, StableRef>;
+
   Runtime &rt_;
   Library *lib_;
   PointerRef root_;
   CommandExecutor *executor_ = nullptr;
   BlockHandle scene_;
-  Path prefix_;
-  bool hasPrefix_ = false;
+  Prefix prefix_;
   const PropertyBag *inputs_ = nullptr;
   PropertyBag *outputs_ = nullptr;
 };
@@ -140,37 +158,32 @@ class Context {
 /**
  * Sets a Context's path prefix, or clears it (null), for the length of a scope. With
  * `invoke`, it runs a layout's tool: its pointer arguments and the command see the prefix, and
- * so do the command's undo and redo later.
+ * so do the command's undo and redo later, at the address it had.
  */
 class PrefixScope {
  public:
-  PrefixScope(Context &ctx, const Path *prefix) : ctx_(ctx)
+  PrefixScope(Context &ctx, std::nullptr_t) : ctx_(ctx), before_(ctx.prefix_)
   {
-    if (const Path *before = ctx.prefix()) {
-      before_ = *before;
-    }
-    if (prefix) {
-      ctx.setPrefix(*prefix);
-    }
-    else {
-      ctx.clearPrefix();
-    }
+    ctx.clearPrefix();
+  }
+  PrefixScope(Context &ctx, const Path *prefix) : ctx_(ctx), before_(ctx.prefix_)
+  {
+    prefix ? ctx.setPrefix(*prefix) : ctx.clearPrefix();
+  }
+  PrefixScope(Context &ctx, const StableRef *address) : ctx_(ctx), before_(ctx.prefix_)
+  {
+    address ? ctx.setPrefix(*address) : ctx.clearPrefix();
   }
   ~PrefixScope()
   {
-    if (before_) {
-      ctx_.setPrefix(std::move(*before_));
-    }
-    else {
-      ctx_.clearPrefix();
-    }
+    ctx_.prefix_ = std::move(before_);
   }
   PrefixScope(const PrefixScope &) = delete;
   PrefixScope &operator=(const PrefixScope &) = delete;
 
  private:
   Context &ctx_;
-  std::optional<Path> before_;
+  Context::Prefix before_;
 };
 
 } // namespace coredcc

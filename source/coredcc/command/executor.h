@@ -8,6 +8,8 @@
 
 #include "coredcc/command/command.h"
 
+#include "litestl/util/function.h"
+
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -76,8 +78,9 @@ class CommandRecord {
   {
     return fromFactory_;
   }
-  /** The path prefix it ran with, which undo and redo set too; null for none. */
-  const Path *prefix() const
+  /** The address of the struct that its path prefix named when it started, which is the prefix
+   * of every slot, undo and redo too; null if it had none. */
+  const StableRef *prefix() const
   {
     return prefix_ ? &*prefix_ : nullptr;
   }
@@ -93,8 +96,7 @@ class CommandRecord {
   PropertyBag outputs_;
   litestl::util::Vector<CommandRecord *> subs_;
   bool fromFactory_ = false;
-  /** The Context's path prefix of the run, which every slot sees. */
-  std::optional<Path> prefix_;
+  std::optional<StableRef> prefix_;
   /** memSize() when the history took it, for the budget's running total. */
   uint64_t cachedSize_ = 0;
 };
@@ -262,6 +264,11 @@ class CommandExecutor {
   }
   /** The open command, for the tool driving it; null when none is open. */
   Command *interactiveCommand();
+  /** Runs `fn` on the open command with its bags and its path prefix in `ctx`, as in its slots,
+   * and returns what it returns. For live edits; commands can't be run from it. A sticky error
+   * that it leaves stays for commit. */
+  Status updateInteractive(Context &ctx,
+                           litestl::util::function_ref<Status(Context &ctx, Command &cmd)> fn);
   /** Records the open command. A sticky error left by the live phase cancels it
    * instead, and is returned. */
   Status commit(Context &ctx);

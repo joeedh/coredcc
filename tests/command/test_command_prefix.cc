@@ -39,6 +39,22 @@ struct Grow {
   }
 };
 
+/* Grow with a redo slot, for interactive runs. */
+struct GrowLive : Grow {
+  double after = 0;
+  Status redo(Context &ctx)
+  {
+    return setValue(ctx, "radius", PropValue::ofFloat(after));
+  }
+  static lbt::Struct<GrowLive> *defineBindings()
+  {
+    auto *st = new lbt::Struct<GrowLive>("test::GrowLive", sizeof(GrowLive));
+    BIND_COMMAND_CORE(st);
+    BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));
+    return st;
+  }
+};
+
 /* Grow as a sub-command, and a property set, both under the prefix. */
 struct GrowTwice {
   Status canRun(Context &) const
@@ -62,6 +78,33 @@ struct GrowTwice {
   static lbt::Struct<GrowTwice> *defineBindings()
   {
     auto *st = new lbt::Struct<GrowTwice>("test::GrowTwice", sizeof(GrowTwice));
+    BIND_COMMAND_CORE(st);
+    return st;
+  }
+};
+
+/* Needs its prefix to name a struct in every slot. */
+struct Named {
+  Status canRun(Context &ctx) const
+  {
+    return resolve(ctx, Path()).status();
+  }
+  Status exec(Context &ctx)
+  {
+    return resolve(ctx, Path()).status();
+  }
+  void undo(Context &ctx)
+  {
+    test_assert(resolve(ctx, Path()).ok());
+  }
+  uint64_t memSize() const
+  {
+    return 0;
+  }
+  void discard() {}
+  static lbt::Struct<Named> *defineBindings()
+  {
+    auto *st = new lbt::Struct<Named>("test::Named", sizeof(Named));
     BIND_COMMAND_CORE(st);
     return st;
   }
@@ -114,12 +157,23 @@ struct PrefixWorld {
     test_assert(addNativeCommand<Grow>(s.w.rt, CommandDef("test.grow")
                                                    .input(PropertyDef::intProp("times")))
                     .ok());
+    test_assert(addNativeCommand<GrowLive>(
+                    s.w.rt, CommandDef("test.growLive").flags(CommandFlags::Interactive))
+                    .ok());
     test_assert(addNativeCommand<GrowTwice>(s.w.rt, CommandDef("test.growTwice")).ok());
+    test_assert(addNativeCommand<Named>(s.w.rt, CommandDef("test.name")).ok());
     test_assert(addNativeCommand<Folder>(s.w.rt, CommandDef("test.folder")).ok());
   }
   double radius(int i)
   {
     return getValue(s.ctx, i ? "objects[1].data.radius" : "objects[0].data.radius")->asFloat();
+  }
+  double radiusOf(const StableRef &mesh)
+  {
+    StableRef r = mesh;
+    r.key.append(KeySegment::member("radius"));
+    r.type = StructId();
+    return getValue(s.ctx, *resolve(s.ctx, r))->asFloat();
   }
   Status at(const Path &prefix, const char *invocation)
   {
@@ -146,6 +200,14 @@ static void test_scope()
     test_assert(*ctx.prefix() == w.mesh0);
     PrefixScope same(ctx, ctx.prefix()); /* its own */
     test_assert(*ctx.prefix() == w.mesh0);
+    const StableRef mesh = *canonicalize(ctx, Path());
+    const StableRef none;
+    PrefixScope address(ctx, &mesh);
+    test_assert(ctx.hasPrefix() && !ctx.prefix() && *ctx.prefixAddress() == mesh);
+    test_assert(getValue(ctx, "radius")->asFloat() == w.radiusOf(mesh));
+    test_assert(*canonicalize(ctx, Path()) == mesh);
+    PrefixScope nothing(ctx, &none);
+    test_assert(!getValue(ctx, "radius").ok());
   }
   test_assert(!ctx.prefix());
 }
@@ -214,6 +276,101 @@ static void test_fold()
   test_assert(w.at(w.mesh1, "test.folder()").ok() && w.s.history.size() == 4);
 }
 
+/* What a prefix names may change outside the history: undo, redo and rerun are where the run
+ * was. */
+static void test_repointed()
+{
+  PrefixWorld w;
+  Context &ctx = w.s.ctx;
+  const Path active = *parsePath("objects.active.data");
+  w.s.w.scene.active = 0;
+  const double r0 = w.radius(0), r1 = w.radius(1);
+  test_assert(w.at(active, "test.grow()").ok() && w.radius(0) == r0 + 1);
+  w.s.w.scene.active = 1;
+  test_assert(w.s.ex.undo(ctx).ok() && w.radius(0) == r0 && w.radius(1) == r1);
+  test_assert(w.s.ex.redo(ctx).ok() && w.radius(0) == r0 + 1 && w.radius(1) == r1);
+  PropertyBag in = w.s.history.head() ? w.s.history.head()->inputs() : PropertyBag();
+  test_assert(w.at(active, "test.growTwice()").ok() && w.radius(1) == r1 + 1);
+  w.s.w.scene.active = 0;
+  in = w.s.history.head()->inputs();
+  test_assert(w.s.ex.rerunHead(ctx, in).ok() && w.radius(1) == r1 + 1 && w.radius(0) == r0 + 1);
+  test_assert(w.s.ex.undo(ctx).ok() && w.radius(1) == r1 && w.radius(0) == r0 + 1);
+  w.s.w.scene.active = -1; /* nor need it name anything */
+  test_assert(w.s.ex.redo(ctx).ok() && w.radius(1) == r1 + 1);
+  test_assert(w.s.ex.undo(ctx).ok() && w.s.ex.undo(ctx).ok() && w.radius(0) == r0);
+
+  /* Nor be named as it was. */
+  w.s.w.scene.active = 0;
+  Library &lib = w.s.w.lib;
+  const std::string name = lib.get(w.s.w.scene.objects[0])->name().c_str();
+  test_assert(w.at(*parsePath("objects[\"" + name + "\"]"), "test.name()").ok());
+  test_assert(lib.rename(w.s.w.scene.objects[0], "another").ok());
+  test_assert(w.s.ex.undo(ctx).ok() && w.s.ex.redo(ctx).ok());
+
+  /* A prefix inside its owner, by its key. */
+  test_assert(w.at(*parsePath("tool.activeBrush"), "test.name()").ok());
+  const StableRef *at = w.s.history.head()->prefix();
+  test_assert(at && at->key.size() > 0 && *at == *canonicalize(ctx, *parsePath("tool.brushes[0]")));
+
+  /* One that names nothing. */
+  w.s.w.scene.active = -1;
+  const int size = w.s.history.size();
+  const Status none = w.at(active, "test.name()");
+  test_assert(none.code() == StatusCode::NotFound && strstr(none.message(), "the path prefix: "));
+  test_assert(w.s.history.size() == size && !ctx.hasPrefix());
+  /* setValueUndo's own command too, once. */
+  Result<Owned<Command>> cmd = w.s.w.rt.ext<CommandRegistry>().find("test.grow")->instantiate(w.s.w.rt);
+  PrefixScope scope(ctx, &active);
+  const CommandDef *grow = w.s.w.rt.ext<CommandRegistry>().find("test.grow");
+  test_assert(!w.s.ex.runInstance(ctx, *grow, std::move(cmd).value(), grow->newInputs()).ok());
+}
+
+static void test_fold_repointed()
+{
+  PrefixWorld w;
+  const Path active = *parsePath("objects.active.data");
+  w.s.w.scene.active = 0;
+  test_assert(w.at(active, "test.folder()").ok());
+  w.s.w.scene.active = 1; /* the same path, another object */
+  test_assert(w.at(active, "test.folder()").ok() && w.s.history.size() == 2);
+  test_assert(w.at(w.mesh1, "test.folder()").ok() && w.s.history.size() == 2); /* another, the same */
+}
+
+/* The live phase of an interactive command is under its prefix. */
+static void test_interactive()
+{
+  PrefixWorld w;
+  Context &ctx = w.s.ctx;
+  const CommandDef *def = w.s.w.rt.ext<CommandRegistry>().find("test.growLive");
+  auto update = [](Context &c, Command &cmd) {
+    test_assert(c.inputs() && c.outputs());
+    cmd.as<GrowLive>()->after = 9;
+    return setValue(c, "radius", PropValue::ofFloat(9));
+  };
+  test_assert(w.s.ex.updateInteractive(ctx, update).code() == StatusCode::FailedPrecondition);
+  const double r1 = w.radius(1);
+  for (bool commit : {false, true}) {
+    {
+      PrefixScope scope(ctx, &w.mesh1);
+      test_assert(w.s.ex.beginInteractive(ctx, *def, def->newInputs()).ok());
+    }
+    test_assert(!getValue(ctx, "radius").ok());
+    test_assert(w.s.ex.updateInteractive(ctx, update).ok() && w.radius(1) == 9);
+    test_assert(!ctx.hasPrefix() && !ctx.inputs());
+    /* Commands, and the open one's end, aren't for it. */
+    const Status nested = w.s.ex.updateInteractive(ctx, [&](Context &c, Command &) {
+      test_assert(w.s.ex.updateInteractive(c, update).code() == StatusCode::FailedPrecondition);
+      test_assert(!w.s.ex.commit(c).ok() && !w.s.ex.undo(c).ok());
+      return w.s.ex.cancel(c);
+    });
+    test_assert(nested.code() == StatusCode::FailedPrecondition && w.s.ex.interactiveOpen());
+    test_assert((commit ? w.s.ex.commit(ctx) : w.s.ex.cancel(ctx)).ok());
+    test_assert(w.radius(1) == (commit ? 9 : r1));
+  }
+  test_assert(w.s.ex.undo(ctx).ok() && w.radius(1) == r1);
+  test_assert(w.s.ex.redo(ctx).ok() && w.radius(1) == 9);
+}
+
 int main()
 {
   test_scope();
@@ -221,5 +378,8 @@ int main()
   test_subs();
   test_rerun();
   test_fold();
+  test_repointed();
+  test_fold_repointed();
+  test_interactive();
   return test_end();
 }

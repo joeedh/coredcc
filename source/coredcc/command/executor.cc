@@ -1,5 +1,6 @@
 #include "coredcc/command/executor.h"
 
+#include "coredcc/api/resolve.h"
 #include "coredcc/command/last_used.h"
 #include "coredcc/base/text.h"
 #include "coredcc/command/literal.h"
@@ -527,6 +528,19 @@ Result<RecordPtr> CommandExecutor::start(Context &ctx,
     }
     return bag.status();
   }
+  std::optional<StableRef> prefix;
+  if (ctx.hasPrefix()) {
+    Result<StableRef> address = canonicalize(ctx, Path());
+    if (!address.ok()) {
+      if (cmd) {
+        SlotScope slot(slotDepth_);
+        cmd.get().discard();
+      }
+      return Status::error(address.status().code(),
+                           (std::string("the path prefix: ") + address.status().message()).c_str());
+    }
+    prefix = std::move(address).value();
+  }
   const bool fromFactory = !cmd;
   if (!cmd) {
     SlotScope slot(slotDepth_);
@@ -539,9 +553,7 @@ Result<RecordPtr> CommandExecutor::start(Context &ctx,
   RecordPtr rec(litestl::alloc::New<CommandRecord>("coredcc::CommandRecord", &def,
                                                    std::move(cmd), std::move(bag).value()));
   rec->fromFactory_ = fromFactory;
-  if (ctx.prefix()) {
-    rec->prefix_ = *ctx.prefix();
-  }
+  rec->prefix_ = std::move(prefix);
   Status ok;
   {
     SlotScope slot(slotDepth_);
@@ -829,6 +841,24 @@ Status CommandExecutor::beginInteractive(Context &ctx, const CommandDef &def, Pr
 Command *CommandExecutor::interactiveCommand()
 {
   return open_ ? &open_->command() : nullptr;
+}
+
+Status CommandExecutor::updateInteractive(
+    Context &ctx, litestl::util::function_ref<Status(Context &ctx, Command &cmd)> fn)
+{
+  CDCC_TRY(rt_.busyIfEvaluating("updateInteractive"));
+  if (running() || slotDepth_ > 0) {
+    return Status::error(StatusCode::FailedPrecondition, "updateInteractive inside a command");
+  }
+  if (!open_) {
+    return Status::error(StatusCode::FailedPrecondition,
+                         "updateInteractive: no interactive command");
+  }
+  Binding bind(ctx, this);
+  CDCC_TRY(bind.status());
+  SlotScope slot(slotDepth_);
+  BagScope scope(ctx, *open_);
+  return fn(ctx, open_->command());
 }
 
 Status CommandExecutor::commit(Context &ctx)

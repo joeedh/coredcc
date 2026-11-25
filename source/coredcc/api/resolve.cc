@@ -309,9 +309,10 @@ Result<Walk *> startAtRoot(Context &ctx, Walk &w)
 {
   w.cur = ctx.root();
   w.owner = ctx.root().owner;
-  if (const Path *prefix = ctx.prefix()) {
+  if (ctx.hasPrefix()) {
     Walk pw{ctx, w.reg, ctx.root(), ctx.root().owner, {}, {}};
-    Result<ResolvedPath> base = walkPath(pw, *prefix, true);
+    Result<ResolvedPath> base = ctx.prefix() ? walkPath(pw, *ctx.prefix(), true) :
+                                               resolve(ctx, *ctx.prefixAddress());
     if (!base.ok()) {
       return base.status();
     }
