@@ -108,6 +108,7 @@ static void test_save()
 
 static void test_cancel_gesture()
 {
+  test_assert(strcmp(CommandDef("test.doIt").uiNameText().c_str(), "Do It") == 0);
   Setup s;
   Context &ctx = s.ctx;
   Runtime &rt = s.w.rt;

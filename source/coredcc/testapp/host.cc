@@ -147,12 +147,17 @@ class Host {
     ApiRegistry &reg = rt_.ext<ApiRegistry>();
     ApiStruct s("TestApp");
     s.addField(PropertyDef::intProp("count"), &Data::count);
-    s.addField(PropertyDef::floatProp("strength").range(0, 1), &Data::strength);
+    s.addField(PropertyDef::floatProp("strength").range(0, 1).icon("bolt").description("How strong"),
+               &Data::strength);
     s.addField(PropertyDef::boolProp("enabled"), &Data::enabled);
     s.addField(PropertyDef::stringProp("label"), &Data::label);
     s.addField(PropertyDef::vecProp("offset", 3), &Data::offset);
     s.addField(PropertyDef::enumProp("mode").item("OBJECT", 0).item("EDIT", 1), &Data::mode);
-    s.addField(PropertyDef::flagsProp("flags").item("SELECT", 1).item("HIDE", 2), &Data::flags);
+    s.addField(PropertyDef::flagsProp("flags")
+                   .item("SELECT", 1, "Select", "Can be selected", "cursor")
+                   .item("HIDE", 2)
+                   .ui(PropUi{true, false, SliderStyle::Default, false}),
+               &Data::flags);
     CDCC_CHECK(registerGraphCommands(rt_).ok(), "testapp: registering graphs");
     s.addCollection(PropertyDef::collectionProp("graphs", StructId::of(kGraphDefType)),
                     graphsAccessor());
@@ -163,7 +168,9 @@ class Host {
                      d.range(0, std::max(1, static_cast<const Data *>(owner)->count));
                    }),
                &Data::level);
-    s.addField(PropertyDef::enumProp("focus").item("NONE", 0), &Data::focus)
+    s.addField(PropertyDef::enumProp("focus").item("NONE", 0).ui(
+                   PropUi{false, true, SliderStyle::Default, false}),
+               &Data::focus)
         .dynamic([](PropertyDef &d, const PointerRef &, Context &ctx) { addItemKeys(d, ctx); });
     rt_.ext<LastUsedStore>().addCollectionTo(s);
     CDCC_CHECK(reg.add(std::move(s)).ok(), "testapp: registering the root struct");

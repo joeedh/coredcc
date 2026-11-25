@@ -3,8 +3,9 @@
  * PathReader, and shows again what `flushChanges` finds changed.
  */
 import * as cdcc from 'coredcc-script'
-import type {Context, LayoutCondition, LayoutIssue, LayoutNode, NamedValue, PathMeta, Writable} from 'coredcc-script'
-import {makeWidget, type Widget} from './widgets.ts'
+import type {Context, LayoutCondition, LayoutIssue, LayoutNode, NamedValue, PathMeta} from 'coredcc-script'
+import {scrub} from './scrub.ts'
+import {caption, InputError, makeWidget, type Widget, type WidgetHost} from './widgets.ts'
 
 /** What a node shows, read from the DOM. */
 export interface NodeState {
@@ -35,7 +36,11 @@ interface Entry {
   path?: string
   meta?: PathMeta
   widget?: Widget
+  /** Its meta changed while its widget was in use. */
+  stale?: boolean
   button?: HTMLButtonElement
+  /** Of a tab: called when it was shown or hidden. */
+  shown?: () => void
   holder?: HTMLElement
   error?: string
 }
@@ -50,10 +55,12 @@ export class Panel {
   private readonly root: Entry
   private readonly reader: cdcc.PathReader
   /** By the reader's index. */
-  private readonly shows: ((v: Shown) => void)[][] = []
+  private readonly shows: ((v: Shown, newMeta: boolean) => void)[][] = []
   private readonly indices = new Map<string, number>()
   private readonly timer: ReturnType<typeof setInterval>
-  private count = 0
+  /** The ids of the layout, and those made for the nodes without one. */
+  private readonly ids = new Set<string>()
+  private uiNames: Map<string, string> | undefined
   /** An error that isn't the document's: a bug, or a dead module. */
   private thrown: unknown
 
@@ -67,9 +74,10 @@ export class Panel {
     this.issues = cdcc.validateLayout(ctx, xml)
     this.reader = new cdcc.PathReader(ctx)
     try {
+      this.takeIds(layout)
       this.root = this.build(layout, undefined)
       this.reader.watch()
-      this.shows.forEach((_, i) => this.show(i))
+      this.shows.forEach((_, i) => this.show(i, true))
     } catch (e) {
       this.reader[Symbol.dispose]()
       throw e
@@ -94,7 +102,8 @@ export class Panel {
   /** Shows what has changed. */
   refresh() {
     cdcc.flushChanges(this.ctx)
-    for (const i of this.reader.takeChanged()) this.show(i)
+    const metas = new Set(this.reader.takeChangedMeta())
+    for (const i of new Set([...this.reader.takeChanged(), ...metas])) this.show(i, metas.has(i))
   }
 
   state(): NodeState {
@@ -118,10 +127,9 @@ export class Panel {
 
   private build(node: LayoutNode, parent: Entry | undefined): Entry {
     const el = document.createElement('div')
-    const id = node.id ?? `n${this.count}`
-    this.count++
+    const id = node.id ?? this.newId(node.kind)
     const e: Entry = {id, node, el, parent, children: [], enabled: true, enabledHere: true}
-    el.className = ['node', node.kind, node.class ?? ''].join(' ').trim()
+    el.className = ['node', node.kind, node.expand ? 'expand' : '', node.class ?? ''].filter((c) => c).join(' ')
     el.dataset.id = id
     if (node.description) el.title = node.description
     this.entries.set(id, e)
@@ -144,7 +152,7 @@ export class Panel {
         this.toolOptions(e)
         break
       case 'label':
-        el.textContent = node.label ?? ''
+        caption(el, node.icon, node.label ?? '')
         break
       case 'separator':
         el.append(document.createElement('hr'))
@@ -157,7 +165,10 @@ export class Panel {
     }
     if (node.kind !== 'tabs') for (const child of node.children ?? []) within.append(this.build(child, e).el)
     if (node.visibleIf) {
-      this.condition(node.visibleIf, (on) => void (el.hidden = !on))
+      this.condition(node.visibleIf, (on) => {
+        el.hidden = !on
+        e.shown?.()
+      })
     }
     if (node.enabledIf) {
       this.condition(node.enabledIf, (on) => {
@@ -172,7 +183,7 @@ export class Panel {
     const details = document.createElement('details')
     details.open = !e.node.closed
     const summary = document.createElement('summary')
-    summary.textContent = e.node.label ?? ''
+    caption(summary, e.node.icon, e.node.label ?? '')
     details.append(summary)
     e.el.append(details)
     return details
@@ -182,25 +193,34 @@ export class Panel {
     const bar = document.createElement('div')
     bar.className = 'bar'
     e.el.append(bar)
-    const select = (chosen: Entry) => {
-      e.children.forEach((tab, i) => {
+    /* The one that the user chose, or the first, if that is hidden. */
+    let wanted: Entry | undefined
+    const select = () => {
+      const visible = e.children.filter((tab) => !tab.el.hidden)
+      const chosen = wanted && visible.includes(wanted) ? wanted : visible[0]
+      for (const tab of e.children) {
         tab.el.classList.toggle('chosen', tab === chosen)
-        bar.children[i].classList.toggle('chosen', tab === chosen)
-      })
+        tab.button?.classList.toggle('chosen', tab === chosen)
+        if (tab.button) tab.button.hidden = tab.el.hidden
+      }
     }
     for (const child of e.node.children ?? []) {
       const tab = this.build(child, e)
       const button = document.createElement('button')
-      button.textContent = child.label ?? ''
-      button.addEventListener('click', () => select(tab))
+      caption(button, child.icon, child.label ?? '')
+      button.addEventListener('click', () => {
+        wanted = tab
+        select()
+      })
       tab.button = button
+      tab.shown = select
       bar.append(button)
       e.el.append(tab.el)
     }
-    if (e.children.length > 0) select(e.children[0])
+    select()
   }
 
-  /* A prop's widget comes when its path has a value, and again when that comes back. */
+  /* A prop's widget is made when its path has a value, and again when its meta changes. */
   private prop(e: Entry, path: string) {
     e.path = path
     const label = document.createElement('label')
@@ -209,36 +229,68 @@ export class Panel {
     holder.className = 'holder'
     e.holder = holder
     e.el.append(label, holder)
-    this.watch(path, (v) => {
+    const host: WidgetHost = {
+      write: (make, gesture) => this.act(e, () => cdcc.set(this.ctx, path, make(), gesture)),
+      beginGesture: () => cdcc.beginGesture(this.ctx),
+      cancelGesture: (gesture) => this.act(e, () => cdcc.cancelGesture(this.ctx, gesture)),
+      done: () => this.act(e, () => {}),
+    }
+    let current: NamedValue
+    this.watch(path, (v, newMeta) => {
       if ('error' in v) {
         e.widget = e.meta = undefined
         e.error = v.error
         holder.replaceChildren(v.error)
       } else {
-        if (!e.widget) {
-          e.error = undefined
+        current = v.value
+        e.stale ||= newMeta
+        if (!e.widget || (e.stale && !e.widget.active?.())) {
+          if (!e.widget) e.error = undefined
+          e.stale = false
           e.meta = cdcc.meta(this.ctx, path)
-          const write = (value: Writable, gesture?: number) => {
-            this.act(e, () => cdcc.set(this.ctx, path, value, gesture))
-          }
-          e.widget = makeWidget(e.meta, write, {widget: e.node.widget})
+          e.widget = makeWidget(e.meta, host, {widget: e.node.widget})
           holder.replaceChildren(e.widget.root)
+          e.el.title = e.node.description ?? e.meta.description ?? ''
           this.applyEnabled(e)
         }
         e.widget.show(v.value)
       }
-      label.textContent = e.node.showLabel === false ? '' : (e.node.label ?? e.meta?.uiName ?? path)
+      const name = e.node.label ?? e.meta?.uiName ?? path
+      caption(label, e.node.icon ?? e.meta?.icon, e.node.showLabel === false ? '' : name, e.node.iconsOnly)
+    })
+    scrub(label, host, () => {
+      const usable = e.widget && ![...e.widget.inputs.values()].some((input) => input.disabled)
+      return usable && e.meta && typeof current === 'number' ? {meta: e.meta, value: current} : undefined
     })
   }
 
   private tool(e: Entry) {
     const button = document.createElement('button')
-    button.textContent = e.node.label ?? e.node.invocation!.split('(')[0]
+    const id = e.node.invocation!.split('(')[0].trim()
+    caption(button, e.node.icon, e.node.label ?? this.commandName(id), e.node.iconsOnly)
     button.addEventListener('click', () =>
       this.act(e, () => void cdcc.invokeAt(this.ctx, e.node.prefix ?? '', e.node.invocation!))
     )
     e.button = button
     e.el.append(button)
+  }
+
+  private commandName(id: string): string {
+    this.uiNames ??= new Map(cdcc.apiCatalog(this.ctx).commands.map((c) => [c.id, c.uiName]))
+    return this.uiNames.get(id) ?? id
+  }
+
+  private takeIds(node: LayoutNode) {
+    if (node.id !== undefined) this.ids.add(node.id)
+    node.children?.forEach((child) => this.takeIds(child))
+  }
+
+  /* One that no node has. */
+  private newId(base: string): string {
+    let id = base
+    for (let i = 1; this.ids.has(id); i++) id = `${base}-${i}`
+    this.ids.add(id)
+    return id
   }
 
   /* The command's last-used inputs. */
@@ -253,14 +305,14 @@ export class Panel {
       return
     }
     for (const name of members) {
-      const node: LayoutNode = {kind: 'prop', id: `${e.id}.${name}`, effectivePath: `${path}.${name}`}
+      const node: LayoutNode = {kind: 'prop', id: this.newId(`${e.id}.${name}`), effectivePath: `${path}.${name}`}
       e.el.append(this.build(node, e).el)
     }
   }
 
   /* ---- showing ---- */
 
-  private watch(path: string, show: (v: Shown) => void) {
+  private watch(path: string, show: (v: Shown, newMeta: boolean) => void) {
     let i = this.indices.get(path)
     if (i === undefined) {
       i = this.reader.add(path)
@@ -270,7 +322,7 @@ export class Panel {
     this.shows[i].push(show)
   }
 
-  private show(i: number) {
+  private show(i: number, newMeta = false) {
     let v: Shown
     try {
       v = {value: this.reader.value(i, {names: true})}
@@ -278,7 +330,7 @@ export class Panel {
       if (!(e instanceof cdcc.ScriptError)) throw e
       v = {error: e.message}
     }
-    for (const show of this.shows[i]) show(v)
+    for (const show of this.shows[i]) show(v, newMeta)
   }
 
   /* A condition without a value is false, also when it is negated. */
@@ -304,7 +356,7 @@ export class Panel {
       try {
         run()
       } catch (err) {
-        if (!(err instanceof cdcc.ScriptError)) throw err
+        if (!(err instanceof cdcc.ScriptError || err instanceof InputError)) throw err
         e.error = err.message
       }
       e.el.classList.toggle('error', e.error !== undefined)

@@ -37,7 +37,7 @@ export function installPanelMethods(method: DefineMethod, ctx: () => Context): (
     return input
   }
   const set = (input: HTMLInputElement | HTMLSelectElement, value: unknown, events: string[]) => {
-    if (input.type === 'checkbox') {
+    if (input.type === 'checkbox' || input.type === 'radio') {
       ;(input as HTMLInputElement).checked = Boolean(value)
     } else {
       input.value = String(value)
@@ -66,11 +66,45 @@ export function installPanelMethods(method: DefineMethod, ctx: () => Context): (
     set(inputOf(id, at), value, ['input', 'change'])
     return true
   })
-  /* A drag over `values`, as one gesture. */
-  method('panelDrag', (id: string, values: unknown[]) => {
+  /* Typing, without its end: `panelSet` and `panelBlur` end it. */
+  method('panelType', (id: string, text: string, at?: string | number) => {
+    set(inputOf(id, at), text, ['input'])
+    return true
+  })
+  method('panelBlur', (id: string, at?: string | number) => {
+    inputOf(id, at).dispatchEvent(new Event('blur'))
+    current().rethrow()
+    return true
+  })
+  const escape = (on: EventTarget) =>
+    on.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}))
+  /* A drag of a slider over `values`, as one gesture. With `cancel`, Escape is pressed, and the
+   * slider moves on. Without `end`, it goes on. */
+  method('panelDrag', (id: string, values: unknown[], opts: {cancel?: boolean; end?: boolean} = {}) => {
     const input = inputOf(id)
     for (const v of values) set(input, v, ['input'])
-    set(input, values.at(-1), ['change'])
+    if (opts.cancel) {
+      escape(input)
+      set(input, values[0], ['input'])
+    }
+    if (opts.end !== false) set(input, input.value, ['change'])
+    return true
+  })
+  /* A drag of a number's name, by `dxs` pixels from its start. */
+  method('panelScrub', (id: string, dxs: number[], opts: {cancel?: boolean} = {}) => {
+    const name = current().entry(id).el.querySelector(':scope > .name')
+    if (!name) throw new Error(`'${id}' has no name`)
+    const pointer = (on: EventTarget, type: string, x: number) =>
+      on.dispatchEvent(new PointerEvent(type, {clientX: 100 + x, button: 0, bubbles: true}))
+    pointer(name, 'pointerdown', 0)
+    for (const x of dxs) pointer(document, 'pointermove', x)
+    if (opts.cancel) {
+      escape(document)
+      pointer(document, 'pointermove', dxs[0])
+    }
+    pointer(document, 'pointerup', dxs.at(-1) ?? 0)
+    pointer(document, 'pointermove', 500)
+    current().rethrow()
     return true
   })
   /* A tool's button, or a tab's. */

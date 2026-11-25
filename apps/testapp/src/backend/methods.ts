@@ -148,6 +148,7 @@ export function installMethods(register: Register, loaded: LoadedBackend, report
     cdcc.set(ctx(), path, unwireValue(value), gesture)
     return true
   })
+  method('beginGesture', () => cdcc.beginGesture(ctx()))
   method('exec', (invocation: string) => {
     const out = cdcc.invoke(ctx(), invocation)
     const wired: Record<string, unknown> = {}

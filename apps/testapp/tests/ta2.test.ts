@@ -175,7 +175,17 @@ describe('TA2: the panel of a layout', () => {
     await value('panelSet', 'weight', 500)
     assert.equal(await value('get', 'items["Cube"].weight'), 100)
     await shows('weight', 100)
+    /* What isn't a number is an error at the widget, and an emptied field has no number to read. */
+    await value('panelSet', 'count', 4)
+    const {size} = await value('history')
     await value('panelSet', 'count', '')
+    assert.match((await node('count')).error!, /number|integer/)
+    await shows('count', 4)
+    assert.deepEqual([await value('get', 'count'), (await value('history')).size], [4, size])
+    await value('panelType', 'count', '')
+    await shows('count', '')
+    await value('panelBlur', 'count')
+    await shows('count', 4)
     assert.match((await refused('panelSet', 'count', 'x')).message, /can't hold/)
   })
 
@@ -265,7 +275,7 @@ describe('TA2: the panel of a layout', () => {
     assert.deepEqual(await value('exec', 'testapp.addCount'), {result: 13})
     await shows('count', 13)
     const button = await node('addThree')
-    assert.equal(button.label, 'testapp.addCount')
+    assert.equal(button.label, 'Add Count')
   })
 
   step('a drag is one undo step', async () => {
@@ -280,6 +290,77 @@ describe('TA2: the panel of a layout', () => {
     await shows('strength', 0.75)
     await value('undo')
     await shows('strength', 0.5)
+  })
+
+  step('Escape takes back a drag', async () => {
+    const was = await value('history')
+    await value('panelDrag', 'strength', [0.25, 0.375], {cancel: true})
+    assert.equal(await value('get', 'strength'), 0.5)
+    await shows('strength', 0.5)
+    assert.deepEqual(await value('history'), was)
+    /* The next drag is one again. */
+    await value('panelDrag', 'strength', [0.25, 0.75])
+    assert.equal((await value('history')).size, was.size + 1)
+    await shows('strength', 0.75)
+  })
+
+  step("dragging a number's name changes it", async () => {
+    const {size} = await value('history')
+    await value('panelScrub', 'count', [1, 3, 6])
+    assert.equal(await value('get', 'count'), 6)
+    await shows('count', 6)
+    assert.equal((await value('history')).size, size + 1)
+    await value('panelScrub', 'count', [2, 9], {cancel: true})
+    assert.equal(await value('get', 'count'), 6)
+    assert.equal((await value('history')).size, size + 1)
+    await value('panelScrub', 'offsetY', [-2])
+    assert.deepEqual(await value('get', 'offset'), [0, -0.125, 0])
+    /* A click isn't a drag, and what isn't a number, or is disabled, isn't dragged. */
+    await value('panelScrub', 'count', [])
+    await value('panelScrub', 'label', [5])
+    await value('panelScrub', 'itemCount', [5])
+    assert.equal((await value('history')).size, size + 2)
+  })
+
+  step('an edit that changes nothing shows what was written meanwhile', async () => {
+    await value('panelType', 'count', '12')
+    await value('set', 'count', 5)
+    await shows('count', 12)
+    await value('panelBlur', 'count')
+    await shows('count', 5)
+    assert.equal(await value('get', 'count'), 5)
+  })
+
+  step('a widget is made again when its def changes', async () => {
+    const html = async () => (await app!.client.evaluate(`document.getElementById('panel').innerHTML`)).value
+    const dom = async (expr: string) => (await app!.client.evaluate(expr)).value
+    const keysShown = () =>
+      dom(`[...document.querySelectorAll('#panel [data-id="focus"] .check')].map((c) => c.textContent).join()`)
+    const slideMax = () => dom(`document.querySelector('#panel [data-id="slide"] input').max`)
+    await value('panel', {
+      xml: `<layout><prop id="level" path="level"/><prop id="focus" path="focus"/>
+        <prop id="slide" path="level" widget="slider"/><prop id="name" path="items['Cube'].name"/></layout>`,
+    })
+    assert.match(await html(), /min="0" max="1"/)
+    await value('set', 'count', 8)
+    await nodes()
+    assert.match(await html(), /min="0" max="8"/)
+    await value('panelSet', 'level', 5)
+    await shows('slide', 5)
+    assert.equal(await keysShown(), 'NONE,Cube,Ball')
+    await value('panelSet', 'focus', true, 'Cube')
+    await shows('focus', 'Cube')
+    await value('panelSet', 'name', 'Brick')
+    assert.equal(await keysShown(), 'NONE,Brick,Ball')
+    await shows('focus', 'Brick')
+    /* Not while it is dragged, but after. */
+    await value('panelDrag', 'slide', [1, 2], {end: false})
+    await value('set', 'count', 3)
+    await nodes()
+    assert.equal(await slideMax(), '8')
+    await value('panelDrag', 'slide', [2])
+    await nodes()
+    assert.equal(await slideMax(), '3')
   })
 
   step('a change made in C++ reaches the panel', async () => {
@@ -303,6 +384,64 @@ describe('TA2: the panel of a layout', () => {
     assert.match(html, /<hr>/)
     assert.match(html, /<input class="slider" type="range" min="0" max="1"/)
     assert.match(html, /data-tag="swatch" data-attr-color="red">Swatch</)
+  })
+
+  step('a hidden tab has no button, and another one is chosen', async () => {
+    await value('panel', {
+      xml: `<layout><tabs><tab id="one" label="One" visibleIf="enabled"><label id="a">x</label></tab>
+        <tab id="two" label="Two"/><tab id="three" label="Three"/></tabs></layout>`,
+    })
+    const tabs = async () =>
+      (await app!.client.evaluate(`JSON.stringify([...document.querySelectorAll('#panel .bar button')].map(
+        (b) => (b.hidden ? '-' : b.textContent) + (b.classList.contains('chosen') ? '*' : ''))
+        .concat([...document.querySelectorAll('#panel .tab.chosen')].map((t) => t.dataset.id)))`)).value
+    assert.equal(await tabs(), '["One*","Two","Three","one"]')
+    await value('set', 'enabled', false)
+    await nodes()
+    assert.equal(await tabs(), '["-","Two*","Three","two"]')
+    await value('set', 'enabled', true)
+    await nodes()
+    assert.equal(await tabs(), '["One*","Two","Three","one"]')
+    await value('panelClick', 'three')
+    await value('set', 'enabled', false)
+    await nodes()
+    assert.equal(await tabs(), '["-","Two","Three*","three"]')
+  })
+
+  step('names, icons, tooltips, and how widgets are laid out', async () => {
+    const {issues} = await value('panel', {
+      xml: `<layout><panel id="shut" label="Shut" icon="box" closed="true" description="what"/>
+        <panel id="open" label="Open"><row id="wide" expand="true"/></panel>
+        <prop id="strength" path="strength"/>
+        <prop id="bare" path="strength" icon="x" iconsOnly="true" description="mine"/>
+        <prop id="flags" path="flags"/><prop id="focus" path="focus"/>
+        <tool id="t" invocation="testapp.addCount" icon="plus" iconsOnly="true"/>
+        <label id="l" icon="info">Hello</label>
+        <prop id="prop" path="count"/><prop path="count"/></layout>`,
+    })
+    assert.deepEqual(issues, [])
+    const dom = async (id: string, expr: string) =>
+      (await app!.client.evaluate(
+        `(() => { const el = document.querySelector('#panel [data-id="${id}"]'); return ${expr} })()`
+      )).value
+    const name = `[el.querySelector('.name').textContent, el.querySelector('.name .icon')?.dataset.icon, el.title].join()`
+    assert.equal(await dom('shut', `el.querySelector('details').open`), false)
+    assert.equal(await dom('open', `el.querySelector('details').open`), true)
+    assert.equal(await dom('shut', `el.querySelector('summary .icon').dataset.icon + el.title`), 'boxwhat')
+    assert.equal(await dom('wide', `el.classList.contains('expand')`), true)
+    assert.equal(await dom('open', `el.classList.contains('expand')`), false)
+    assert.equal(await dom('strength', name), 'Strength,bolt,How strong')
+    assert.equal(await dom('bare', name), ',x,mine')
+    assert.equal(await dom('bare', `el.querySelector('.name').title`), 'Strength')
+    assert.equal(await dom('flags', `[...el.querySelectorAll('.check')].map((c) => c.textContent + '/' + c.title +
+      '/' + c.querySelector('.icon')?.dataset.icon).join()`), '/Select/cursor,HIDE//undefined')
+    assert.equal(await dom('focus', `el.querySelectorAll('input[type=radio]').length > 1`), true)
+    const button = `[el.querySelector('button').textContent, el.querySelector('button').title].join()`
+    assert.equal(await dom('t', button), ',Add Count')
+    assert.equal(await dom('l', `el.textContent + el.querySelector('.icon').dataset.icon`), 'Helloinfo')
+    /* A node without an id doesn't take an author's. */
+    await value('panelSet', 'prop', 3)
+    assert.deepEqual([(await node('prop')).value, (await node('prop-1')).value], [3, 3])
   })
 
   step('a broken layout is refused, and the panel stays', async () => {

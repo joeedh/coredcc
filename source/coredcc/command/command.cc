@@ -8,7 +8,8 @@
 namespace coredcc {
 
 CommandDef::CommandDef(std::string_view id)
-    : id_(CommandId::of(id)), name_(lsString(id)), uiName_(lsString(uiNameFromApiName(id)))
+    : id_(CommandId::of(id)), name_(lsString(id)),
+      uiName_(lsString(uiNameFromApiName(id.substr(id.rfind('.') + 1))))
 {
 }
 
