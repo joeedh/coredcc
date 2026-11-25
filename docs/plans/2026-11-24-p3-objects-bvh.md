@@ -1,19 +1,22 @@
 # P3: objects, transforms and BVH
 
-- Status: draft, not pressure-tested yet.
+- Status: pressure-tested (2026-11-24) and changed; the record is at the end.
 - Branch: `p3-scene`, in the worktree `C:\dev\coredcc-p3-scene`.
 - Architecture: §8 (objects and transforms), §9 (BVH), §10 (View), §2a (interfaces), §14.
 - Feature reviews: **objects and transforms**, and **BVH**.
 
 ## Ownership between the parallel phases
-The same text is in the P2, P3 and P5 plans.
 
 | Phase | Owns |
 |---|---|
-| P2 | Value bytes (a bounded, versioned reader/writer for PropValue and PropertyBag); BlockProvider's optional `serialize`, `deserialize`, `duplicate` and `rekey`; the attachment type registry and the attach/detach commands; `Library::rename`; snapshot undo and lz4; CreatedBlocks with BlockIds; `layout/`; TA2. The shared pieces (value bytes, provider slots) are P2's **first step**, merged to master early so P3 and P5 can rebase onto them. |
-| P3 | `scene/`, `bvh/`, `draw/View` if it needs it for screen distance, EvalCtx, `CollectionAccessor::setActive`, the Context scene slot, display units and frames. Its providers' `serialize` is its **last step**. |
-| P5 | `graph/`, the Runtime's global version counter, payloads. GraphDef serialization is its **last step**. |
-| Shared files | `source/coredcc/CMakeLists.txt`, `tests/CMakeLists.txt`, the task list, `debugging.md`, `docs/embedding.md`: small appended changes only. Task list: only the phase's own row and focus lines. No phase edits CLAUDE.md. |
+| P2 | Value bytes; `BlockProvider`'s optional slots; **library lifetime** (pin kinds, deferred destruction of pinned blocks, `LibraryRef`, `LibraryPin`); attachments; `Library::rename`; snapshot undo and lz4; CreatedBlocks with BlockIds; `layout/`; TA2; `gen-paths`. Value bytes, slots, lifetime and the attachment registry are step A1, merged early. |
+| P3 | `scene/`, `bvh/`, `draw/View`, `EvalCtx`, `CollectionAccessor::setActive`, the Context scene slot, display units and frames. Its providers' `serialize` is its last large step. |
+| P5 | `graph/`, the Runtime's global version counter, payloads, and **immediate change notification**: ChangeBus listeners, notify before the `update` hook, `notifyAll()`, EvaluationScope and its Busy rule (its step 1, merged early). GraphDef serialization is its last step. |
+| Shared files | `source/coredcc/CMakeLists.txt`, `tests/CMakeLists.txt`, the task list, `docs/debugging.md`, `docs/embedding.md`: small appended changes only. Task list: each phase edits its own row and focus lines. No phase edits `CLAUDE.md`. |
+
+- **`api/struct.h`** gets one optional field from P3 (`setActive`) and two from P2.
+- **`api/resolve.cc`'s `resolve()` isn't changed by P3** (see "setActive").
+- **`props/units.*`** are P3's. `props/def.cc` gets one check in `validate()`.
 
 ## Scope
 
@@ -21,78 +24,72 @@ The same text is in the P2, P3 and P5 plans.
 - **From architecture §14:** TransformModel, TrsTransform, FbxTransform, Object, its
   capabilities, Scene; BVH, its built-in sources, SceneBvh with two-phase queries; the
   leaf-size benchmark.
-- **Moved here from P4:** `draw/View` only (camera math and conventions). Picking has to
-  report screen distances, so it needs one. The DrawList, events and tools stay in P4.
-- **Deferred to P3 by earlier phases:**
-  - `CollectionAccessor::setActive` (P1c/P1d review, D2);
-  - the Context's scene slot (P1d; its ToolManager slot goes to P4 with the ToolManager);
-  - display units and the subtype/unit agreement check (props review, D12);
-  - frames as a time unit (props review, D12).
-- **The litestl math PR ("PR D")**, planned for before P3 and never written. See step 0.
+- **Moved here from P4:** `draw/View` only. Picking reports screen distances, so it needs one.
+- **Deferred to P3 by earlier phases:** `CollectionAccessor::setActive` (lib and api review,
+  D2); the Context's scene slot (P1d; its ToolManager slot goes to P4); display units, the
+  subtype/unit agreement check and frames (props review, D12).
+- **The litestl math PR ("PR D"),** planned for before P3 and never written.
 
-### Deferred to P3 by the command review, moved to P4
-- Scripting interactive commands, and `runSub` of an Interactive def. The review deferred
-  them "with the tools", and the tools are P4.
+### Moved out
+- **Scripting interactive commands** and `runSub` of an Interactive def: the command review
+  deferred them "with the tools", and the tools are P4.
+- **Script capability overrides (`implementOn`)** go to P6's faberforge spike, which is what
+  needs them. They will use P2's `AttachmentProvider` (`lib/attachment.h`), not a destroy
+  function. P3's script surface is foreign transform types.
+- **`AnyBvhSource::rayTest`, and a world-space `nearest`:** deferred until a client needs them.
 
 ### Out
-- The scene evaluator as a graph client: generated nodes, override inputs, adapter nodes,
-  the apply phase (P5c).
-- DrawList, OverlayDrawable drawing anything, gizmos, TransformableElements, Symmetry (P4).
-- Attributes, Triangles and ActiveElement (deferred in §14).
-- Files beyond the providers' `serialize` (P2 owns library IO).
-- Incremental (dynamic) BVH insertion and removal. Rebuild and refit only.
-- FBX's `SphericXYZ` rotation order, and IK or constraint evaluation.
+- The scene evaluator as a graph client (P5c). DrawList, `OverlayDrawable`, gizmos,
+  TransformableElements, Symmetry (P4). Attributes, Triangles, ActiveElement (§14).
+- Incremental BVH insertion and removal. FBX's `SphericXYZ` order. IK and constraints.
+- Fixing litestl's `Matrix * Vec`.
 
-## What the code says (checked 2026-11-24)
-Scratch files are in the session scratchpad's `p3\` folder (`a.cc`, `q.cc`, `emb.cc`,
-`fbx.mjs`, `iface.cc`, `hc.cc`, `mt.cc`).
+## What the code says
+Scratch: the author's `p3\` and the test's `pt-p3\` folders in the session scratchpad.
 
-- **litestl's math group never landed.** P0b merged A, B and C1 (#4–#6), and P1 merged C2.
-  `math/quat.h` still doesn't compile (MSVC and clang-cl). There are no Euler conversions,
-  no decompose and no bound matrix type.
-- **`Matrix * Vec` is the transpose.** With a column-major translation of (5, 6, 7),
-  `mat4d * double3(1, 2, 3)` gives (1, 2, 3), and the `double4` version adds 39 to w.
-  `Matrix * Matrix` (through Eigen) is correct. `operator*=` returns a reference to a
-  local, and `operator[]` has no const overload.
-- **A singular `Matrix::inverse()` returns NaN**, with no error.
-- **litestl's AABB:** the default constructor makes a box that isn't empty (both corners at
-  the negative limit). An empty box's `size()` is −inf. `isEmpty` isn't const. Its binding
-  has no copy constructor, so a script can't return one from a slot.
-- **litestl's `rayTriIsect` has an absolute epsilon** (1e-6 on the determinant): a triangle
-  with 1e-4 edges is never hit. `aabbRayIsects` skips axes whose direction is below 1e-4.
-  P3 uses neither.
-- **Nobody outside litestl uses `Matrix`'s Eigen conversions** in sculptcore or UberTopo
-  (sculptcore includes Eigen's sparse headers itself).
-- **Interfaces carry these shapes.** A prototype interface took a 184-byte struct by const
-  reference and returned one by value, took an interface value by value (null included),
-  and returned `Vector<int32_t>`:
-  - native, and through the script dispatcher with the fake host, in both directions;
-  - `foreignImplementable` accepts it;
-  - a failed foreign call gave a default value plus the sticky error;
-  - about 18 ns per native call through the table (clang-cl, /O2).
-- **Foreign dispatch limits** (`typescriptRuntime/foreign.ts`): a `Vector&` argument reaches
-  JS as a *copy*, so it can't be an output. A returned `Vector` may hold scalars only. A
-  returned struct needs a bound copy constructor. A `void *` or `QueryAnswer` slot is
-  refused, so a script can't implement BlockProvider.
-- **Calling a forwarder on a null interface** asserts in Debug and crashes in Release, and
-  `bool(iface)` isn't bound. So a script can't test a null interface argument.
-- **`task::parallel_for` is unused in coredcc so far.** It blocks the caller, and nested
-  waits can starve the pool. `parallel_for_chunks` and `parallel_reduce` have chunk
-  boundaries independent of the worker count and run serially inside a worker.
-  - wasm-st: `hardware_concurrency()` is 1, so it is serial.
-  - wasm-mt under node: works with and without `PTHREAD_POOL_SIZE`. Blocking a browser's
-    main thread is not tested.
-- **A Strong ref from Scene to its objects would delete the Scene with any object**:
-  `deletePreview` follows `RefKind::Strong`.
-- **`onWeakTargetLost` runs at the sweep**, not at delete (`markDeleted`). It can't keep a
-  child's world transform when its parent is deleted.
-- **`refine` results and candidates accept subtypes** (P1d review), so new transform models
-  don't have to be listed when Object's struct is registered.
+- **litestl's math group never landed.** `math/quat.h` doesn't compile. There are no Euler
+  conversions, no decompose and no bound matrix.
+- **`Matrix * Vec` uses the transpose** of `Matrix * Matrix`'s convention. sculptcore depends
+  on that: `brush_command.h:456` computes `renderMatrix * float4`, and `texture_eval.h` copies
+  its indexing.
+- **A singular `Matrix::inverse()` is NaN.** The default AABB isn't empty. `rayTriIsect` has an
+  absolute epsilon and misses triangles with 1e-4 edges.
+- **`matrix.h` includes Eigen.** It compiles next to Unreal-style macros and `<windows.h>`
+  (tested).
+- **Interfaces carry P3's shapes** (a prototype, native and through the fake host): structs by
+  const reference and by value, interface values, `Vector<int32_t>` returns.
+- **Foreign dispatch:** a `Vector&` argument reaches JS as a copy. A returned struct needs a
+  bound copy constructor; `TypeId` and `BlockId` have none, and `foreignImplementable` doesn't
+  check. A failed call returns `R()`, which for a matrix is all zeros, and sets the sticky
+  error, which keeps only the first error.
+- **`task::parallel_for`** gives each worker one contiguous band, without rebalancing.
+  `parallel_for_chunks` and `parallel_reduce` have chunk boundaries independent of the worker
+  count. wasm-st is serial. wasm-mt works under node.
+- **`deletePreview` follows Strong refs**, so Strong membership would delete the Scene.
+  `onWeakTargetLost` runs at the sweep, too late to keep a child's world transform.
+- **`destroyBlocks` clears refs out of the garbage, not refs into it** (`lib/gc.cc:198`). A
+  cell in a survivor keeps an id that has no record.
+- **Nothing makes a Scene a GC root.**
+- **`objects.active` with no active item is NotFound**, and SetProperty stores the *item's*
+  canonical address.
+- **`PropValue` has no list type,** and a Pointer has no literal until P2's B1.
+- **A capability lookup costs.** A `Library::query` is a provider thunk plus a hash lookup.
+
+### Measured (clang-cl /O2, 100,000 objects with one data block each, the real Library)
+| | ms |
+|---|---|
+| The first draft's `evaluate` (per-object queries, 6 slots) | 39–43 |
+| Of which the model calls | 2 |
+| Cached members, one bulk slot, parent and data ids re-read and compared | 8.5–10 |
+| Calling `Library::data` again for an object and its data block | + 5 |
+| Rebuilding the cache after an epoch change | 25–28 |
+
+SceneBvh isn't in these numbers.
 
 ### FBX inherit types, checked numerically
-`fbx.mjs` evaluates the formulas of Autodesk's FBX SDK "Transformations" sample. Columns are
-basis vectors; `GR` is the parent's global rotation; `GSM = GR⁻¹ · linear(parentWorld)`; `LR`
-and `LS` are the node's rotation and scale; `pls` is the parent's *local* scale.
+`GR` is the parent's carried global rotation; `GSM = GR⁻¹ · linear(parentWorld)`; `LR`, `LS` are
+the node's rotation and scale; `pls` is the parent's local scale. The formulas are from
+Autodesk's "Transformations" sample; the FBX SDK isn't installed.
 
 | Type | Linear part of the world matrix |
 |---|---|
@@ -100,90 +97,78 @@ and `LS` are the node's rotation and scale; `pls` is the parent's *local* scale.
 | RSrs | `GR · GSM · LR · LS` (= `parentWorld · local`) |
 | Rrs | `GR · LR · GSM · S(pls)⁻¹ · LS` |
 
-The translation is `parentWorld · localTranslation` for all three. Results over 2000 random
-chains each:
+- The translation is `parentWorld · localTranslation` for all three.
+- Two independent implementations agree: RSrs is the TRS product, an all-RrSs chain is
+  `R(all)·S(product)`, an all-Rrs chain is Maya's `P·T·S(pls)⁻¹·R·S`, with signed scales.
+- **Those identities are weak tests.** `Rrs = GR·LR·LS` and `RrSs = GR·LR·LS·GSM` pass them too.
+- **Outside all-Rrs chains, Rrs differs from Maya's segment scale compensation** (by 6 for an
+  Rrs joint under a unit-scale RSrs joint under a non-uniform group). Documented, not changed.
+- **`GR` is carried, not decomposed.** They agree to 6e-14 without shear and reflection, and
+  differ by 16 with them. Carrying gives `R(all)·S(product)` for reflected chains.
 
-- **RSrs equals the plain TRS product,** 4 deep with non-uniform scale: max error 6e-14.
-- **With uniform scale, RrSs equals RSrs** (9e-14). With non-uniform scale they differ (32).
-- **An all-RrSs chain equals `R(all) · S(product)`** (2e-14), so it never shears.
-- **An all-Rrs chain equals Maya's segment scale compensation**, `P·T·S(pls)⁻¹·R·S`, 3 deep
-  (9e-15).
-- **Where `GR` comes from matters.** Decomposing it from the parent's matrix and carrying it
-  down the chain (`GR · LR`) agree to 6e-14 with positive scales and no shear. They
-  disagree by 16 when the parent is reflected in y or z, and by 17 when it is sheared.
-  - Carrying it gives `R(all) · S(product)` for reflected RrSs chains. Decomposing doesn't.
-- **Inverting RrSs and Rrs for setWorld.** Solve `X = LR · A · LS` for a known `A`:
-  `LS[i] = |X col i| / |A col i|` (one sign flipped if the determinants' signs differ), then
-  `LR = X · LS⁻¹ · A⁻¹`.
-  - It recovers rotation and scale to 2e-15, even under a sheared parent.
-  - The obvious QR method is wrong by 6 to 8 there.
-  - For an arbitrary target under a sheared parent, `LR` isn't orthonormal (residual at
-    least 6e-3), which is how "not representable" is detected.
-
-Not checked against the FBX SDK itself, which isn't installed.
+### Inverting them, checked numerically
+Solve `X = LR · A · LS` for `LR` and `LS` with `A` known. (`A` is the identity for RSrs and TRS,
+after `X = (GR·GSM)⁻¹ · target`.)
+- **Scale:** `|LS_i| = |X_i| / |A_i|` by columns. Try all 8 sign patterns.
+- **Rotation:** from orthonormal frames of the two most independent columns of `A`, and the
+  same columns of `X · LS⁻¹`. No inverse of `A` is needed.
+- **Residual:** the largest relative error of a column of `LR·A` against `X·LS⁻¹`.
+- **Choice:** patterns with a residual below 1e-9 first; then the fewest sign changes from the
+  current channels; then the rotation nearest to the current one.
+- **Results** (all in `p3\e1.mjs`):
+  - A node's own world, with random signs, depths 1 to 4 and mixed types: 0 of 40,000 refused,
+    and its own channels come back to 1e-14. The first draft's method refused 29% to 76%.
+  - Scales from 1/1000 to 1000 at every level: 0 of 8,000 refused, residual 1e-11. At 1e4,
+    1 refused.
+  - Arbitrary targets under a sheared parent: 0 of 8,000 accepted.
+- **Zero columns** (under 1e-12 of the largest): the scale is 0. The rotation is completed from
+  the other columns, and from the current rotation when fewer than two are left. 0 of 20,000
+  fail, and a node's own flattened world keeps its rotation to 6e-16.
+- **The residual equals the target's shear,** continuously. 1e-9 is a chosen threshold, not a gap
+  in the data.
+- **Translation:** with two steps of iterative refinement, the residual is below
+  1.0 · ε·(|P|·|t|) for parent conditions from 1e2 to 1e8. Without refinement it is 8,600 times
+  that unit at 1e6.
 
 ## Key decisions
-1. **A TransformModel is stateless.** Channel values live with the object as a flat array of
-   doubles, and reach the model through EvalCtx. This replaces §8's per-object model
-   objects.
-   - P5c's channel overrides become a second array that EvalCtx reads first. No model code
-     changes.
-   - Serialization, duplication, undo and animation are generic over channels.
-   - A foreign model is one JS object per type, not one per scene object.
-   - `evaluate` depends on its arguments only, which is what a graph node's `exec` requires.
-2. **Parents are passed as data, not as interfaces.** `evaluate` takes the parent's
-   `TransformState {world, rotation, localScale}` instead of §8's `TransformModel parent`.
-   - It holds everything FBX's rules need (`GR` is `rotation`, `pls` is `localScale`).
-   - In P5c the state is a socket value. A parent interface would make `exec` read another
-     object.
-   - Scripts can't test a null interface argument. A root gets the identity state.
-   - §8's `components()` is replaced by the state, so a TRS parent works under an FBX child.
-3. **`GR` is carried down the chain**, not decomposed, so reflections work. Where it differs
-   from the SDK sample (a sheared or reflected parent) is documented and pinned by a test.
-4. **Objects are found through a capability, not a class.** Scene members are blocks that
-   implement `Transformable`. `coredcc.Object` is the built-in one; an Unreal actor block
-   can be another.
-5. **Until P5c, `Scene::evaluate()` recomputes every object.** There is no dirty tracking,
-   so no stale cache and no need for P5's version counter. At about 20 ns per native model
-   call, 100k objects take a few ms. Readers only use `Scene::evaluated(handle)`, and P5c
-   replaces what is behind `evaluate()`.
-6. **Picking's broad phase uses planes.** A pixel-radius region is the frustum of a screen
-   square. World planes go to object space as `(Mᵀn, n·t + d)`, which is exact for any
-   affine matrix, singular ones included, and needs no inverse. This replaces §9's bound by
-   the largest singular value.
-7. **BVH traversal computes in double.** Nodes store the source's scalar, rounded outward.
-8. **Scene membership uses OptStrong refs**, not Strong.
-9. **litestl gets the math** (architecture §2: general fixes go into litestl), and BVH, which
-   doesn't need it, goes first so the PR doesn't block everything.
+1. **A TransformModel is stateless.** Channels are a flat array of doubles on the object, and
+   reach the model through EvalCtx. P5c's overrides are a second array that EvalCtx reads
+   first. Serialization, duplication, undo and animation are generic over channels.
+2. **Parents are passed as data** (`TransformState {world, rotation, localScale}`), not as
+   interfaces. It is a socket value in P5c, and scripts can't test a null interface.
+3. **`GR` is carried down the chain.**
+4. **Objects are found through a capability** (`Transformable`), not a class.
+5. **`Scene::evaluate()` recomputes every object's transform.** Only lookups are cached, and the
+   cached lookups are checked each time. P5c replaces what is behind `evaluate()`.
+6. **Picking's broad phase uses planes,** taken to object space by `Mᵀ`, without an inverse.
+7. **BVH traversal computes in double;** nodes store the source's scalar, rounded outward.
+8. **Scene membership uses OptStrong refs,** and a Scene is a Root block.
+9. **Mutations never read the last evaluation.** They compute the parent's state themselves.
+10. **litestl gets the math,** and P3's steps that don't need it come first.
 
 ## Step 0: litestl PR D (`coredcc/math`)
-Made in this worktree's `extern/litestl` on a branch, after checking the open PRs. Additive
-for existing users, except that `matrix.h` stops including Eigen.
+Written in this worktree's `extern/litestl`, following its CLAUDE.md (no standard containers)
+and the pr-workflow skill: fresh base, the open PRs checked first (none on 2026-11-24).
 
-- **`math/quat.h`** rewritten: `Quat<Float>`, stored xyzw (as `PropValue::Quat`), trivially
-  copyable. Identity, product, conjugate, inverse, normalize (a zero or non-finite
-  quaternion gives the identity), rotate a vector, to and from a rotation matrix, axis-angle,
-  slerp. `quatd` and `quatf`.
-- **`math/euler.h`** (new): the 6 Tait-Bryan orders, `eulerToQuat`, `quatToEuler`, and
-  `quatToEuler(q, order, near)`, which picks the solution closest to an earlier value.
-- **`math/transform.h`** (new): `transformPoint`, `transformVector`, `transformNormal`,
-  `transformPlane`; `translation`, `rotation`, `scaling`, `composeTrs`; `decomposeTrs(m) ->
-  {t, q, s, shear, ok}` by Gram-Schmidt, reflections on x; `tryInverse(m, out) -> bool`;
-  `largestSingularValue3`; `perspective` and `orthographic` (depth range and reversed-Z
-  parameters, infinite far), `lookAt`.
-- **`math/matrix.h`:** own multiply, determinant and inverse instead of Eigen; const
-  `operator[]`; `operator*=` returns `*this`; trivially copyable. `operator*(Vec)` keeps its
-  (transposed) behaviour, with a comment pointing to `transformPoint`; changing it could
-  break another repo silently.
-- **`math/aabb.h`:** const `isEmpty`.
-- **`math/math_bindings.h`:** `Binder` for `Matrix` and `Quat` (default and copy
-  constructors, `at(i)` and `put(i, v)`), and a copy constructor for `AABB`.
-- Tests: round trips of each conversion in all orders, including gimbal lock; decompose and
-  compose; inverse against the product; the old Matrix test.
+- **`math/quat.h`**, rewritten (it never compiled, so it has no users): xyzw, product,
+  conjugate, normalize (zero and non-finite give the identity), rotate, to and from a rotation
+  matrix, axis-angle, slerp.
+- **`math/euler.h`** (new): 6 orders, `eulerToQuat`, `quatToEuler(q, order, near)`.
+- **`math/transform.h`** (new): `transformPoint`, `transformVector`, `transformPlane`,
+  `composeTrs`, `decomposeTrs` (reports shear), `tryInverse(m, out) -> bool`, `perspective`,
+  `orthographic`, `lookAt`.
+- **`math/math_bindings.h`** (new): `Binder` for `Matrix` and `Quat` with default and copy
+  constructors, `at(i)` and `put(i, v)`. No other repo defines one for them.
+- Tests, and one CMake entry.
+- **`matrix.h`, `aabb.h` and `vector.h` are not touched,** so nothing changes for sculptcore
+  (`StrokeView::inverted`, `renderMatrix * float4`), faberforge or UberTopo. Taking Eigen out of
+  `matrix.h`, a const `operator[]` and the dangling `operator*=` are reported to the user as
+  possible later PRs.
+- **P3 never uses `Matrix * Vec`, `operator*=` or `inverse()`.** A grep test added in step 5
+  checks `scene/`, `draw/` and `bvh/`.
 
-Until it merges, the branch builds against the PR commit with the gitlink uncommitted, which
-the task list allows. Steps 1 to 4 don't need it. Steps 5 on do, and they are merged to
-master only after the gitlink bump.
+Steps that need it are built against the PR commit with the gitlink uncommitted, and merge to
+master after the bump.
 
 ## BVH (`bvh/`)
 
@@ -193,452 +178,547 @@ template <class Scalar> struct BvhNode {   // 32 bytes for float
   Scalar min[3]; uint32_t rightOrFirst;    // inner: right child (left is next); leaf: first
   Scalar max[3]; uint32_t count;           // 0 for an inner node
 };
-
 template <class S> concept BvhSource = requires(const S &s, int i) {
   typename S::Scalar;
   { s.size() } -> std::convertible_to<int>;
   { s.bounds(i) } -> std::same_as<Box3<typename S::Scalar>>;
 };
-
 struct BvhOptions { int leafSize = 128; int bins = 16; bool parallel = true; };
 
 template <BvhSource S> class Bvh {
- public:
   Status build(const S &src, BvhOptions opts = {});
   Status refit(const S &src);          // same size and the same skipped set as the build
-  double cost() const;                 // SAH cost, for the refit-or-rebuild choice
-  int size() const; int skipped() const;
+  double cost() const;  int size() const;  int skipped() const;
   Box3<Scalar> bounds() const;
   const Vector<int> &order() const;    // leaf position -> primitive
   template <class NodeTest, class Leaf> void traverse(NodeTest &&, Leaf &&) const;
-  ...
 };
 ```
-- **`Box3<Scalar>`** (`bvh/box.h`) is coredcc's: empty by default (min +max, max −max),
-  `valid()` is "finite and min ≤ max", and an empty box stays empty under any transform.
-  `Box3d` is bound with a copy constructor. Nothing uses litestl's AABB.
-- **Finite checks test exponent bits**, so they still work if a host compiles the templates
-  with fast-math (§2: coredcc doesn't depend on FP flags).
-- **Build.** Binned SAH, 16 bins per axis over centroids (the bounds' centers), areas in
-  double so huge float bounds don't overflow.
-  - A split that puts everything on one side (equal centroids), or a depth above 48, uses a
-    median split of the order array. So the depth is at most 48 + 31, and traversal uses a
-    fixed 96-entry stack.
-  - **Parallel:** the top of the tree is split serially, with bins computed by
-    `parallel_reduce` over fixed chunks, until there are at most 64 subtrees or every
-    subtree is below 4096 primitives. Subtrees are then built by one `parallel_for_chunks`
-    (chunk 1), each into its own node list, and appended in order.
-  - The result is bit-identical for any worker count, and serial inside a pool worker.
-    coredcc never calls `task::run`.
-- **Refit** is bottom-up over the node array in reverse, since children follow parents.
-- **Failure:** more than 2³¹−1 primitives is OutOfRange. An empty source builds an empty BVH
-  with no hits. Primitives whose bounds aren't finite are left out, counted by `skipped()`,
-  and never hit.
+- **`Box3<Scalar>`** is coredcc's: empty by default; an empty box stays empty under any
+  transform; transforming rounds outward (each sum padded by its own error bound). `Box3d` is
+  bound with default and copy constructors.
+- **Finite checks test exponent bits,** so a host's fast-math can't remove them.
+- **Build:** binned SAH over centroids computed as `0.5*min + 0.5*max` (no overflow). Areas are
+  in double, over extents scaled by the node's largest one, so they don't overflow.
+  - `leafSize >= 1` and `2 <= bins <= 64` are checked (InvalidArgument).
+  - **A median split is used for:** no finite best split, equal centroids, an extent whose
+    reciprocal isn't finite, or a depth over 48. Bin indices are clamped before the int cast.
+    The depth is at most 48 + 31, so a fixed 96-entry stack is enough.
+  - **Parallel:** the top is split serially (bins by `parallel_reduce`) until a subtree has 4096
+    primitives or fewer, or there are at least 64 subtrees. Subtrees are handed out largest
+    first, interleaved over the bands, by `parallel_for_chunks`; each builds its own node list,
+    and the lists are appended in tree order. Bit-identical for any worker count.
+  - Serial inside a pool worker, and on a browser's main thread
+    (`emscripten_is_main_browser_thread`), where blocking could deadlock. coredcc never calls
+    `task::run`.
+- **Refit** goes through the node array backwards.
+- **Failure:** over 2³¹−1 primitives is OutOfRange. Primitives with non-finite bounds are left
+  out, counted by `skipped()`, and never hit. Refit with another skipped set is
+  FailedPrecondition.
 
-### Built-in sources (leaf-ordered structure of arrays)
-- **`TriangleSource<Scalar>`**: positions and index triples. Degenerate triangles (zero
-  area) stay in the tree and can't be hit by a ray, but can be found by nearest queries,
-  where they are a segment or a point.
-- **`CapsuleSource<Scalar>`**: segments with a radius. A zero-length segment is a sphere.
-- **`SphereSource<Scalar>`**: centers and radii. Radius 0 is a point.
-- **`BoxSource`** (double): what SceneBvh and foreign sources use.
-- Radii are in object units. A negative or NaN radius skips the primitive.
-
-`GeometryBvh<Source>` (`bvh/geometry_bvh.h`) owns a leaf-ordered copy of the primitives, the
-BVH and the id map. `onInvalidate(kinds)` refits on Positions and rebuilds on Topology.
+### Sources (leaf-ordered structure of arrays)
+- `TriangleSource<Scalar>`, `CapsuleSource<Scalar>`, `SphereSource<Scalar>`, `BoxSource` (double,
+  rounded outward).
+- A zero-area triangle can't be hit by a ray, and is a segment or point to nearest queries. A
+  zero-length capsule is a sphere. A negative or NaN radius skips the primitive. Radii are in
+  object units.
+- `GeometryBvh<Source>` owns a leaf-ordered copy, the BVH and the id map. `onInvalidate(kinds)`
+  refits on Positions, and rebuilds on Topology or when the refit is refused.
 
 ### Queries (object space, double)
-- **Ray:** closest, any, all. `t` in `[tMin, tMax]`, in units of `dir`, which needn't be unit
-  length. Any non-finite component, or a zero direction, gives no hits.
-- **Nearest within a radius,** and **sphere overlap**.
-- **Region:** up to 6 planes (frustum or box). Returns candidates, not exact overlaps.
-- **Kernels** (`bvh/kernels.h`), each with a brute-force reference in the tests:
-  - ray-triangle: Möller-Trumbore with a *relative* determinant test (|det| against the
-    edge lengths and the direction), double sided;
-  - ray-capsule, ray-sphere (a ray starting inside hits at `t = tMin`, flagged `inside`);
-  - point-triangle, point-segment and point-box distance.
-- The ray-box slab test pads `tMax` by 4 ulp, so a ray through a shared edge can't miss
-  both boxes.
+- **Ray** (closest, any, all), **nearest within a radius,** **sphere overlap,** **region** (up to
+  8 planes; candidates, not exact overlaps).
+- A ray with a non-finite component or a zero direction hits nothing.
+- **Kernels** (`bvh/kernels.{h,cc}`):
+  - **Ray-triangle is watertight** (Woop, Benthin and Wald): shear to ray space, edge functions
+    with closed signs, so a ray through a shared edge hits at least one side. Measured in double:
+    0 leaks of 100,000 each for random rays and rays aimed at edges, at vertices, and at edges
+    along an axis. Möller-Trumbore leaks 8.8% of those aimed at edges. Interior hits are found at
+    scales from 1e-30 to 1e15.
+  - It needs `a*b - c*d` to change sign exactly when its operands swap. Contracted multiply-add
+    can break that, so `kernels.cc` is compiled with `-ffp-contract=off` or `/fp:precise` (a
+    source-file property, not a global flag) and the function isn't inline.
+  - A hit on a shared edge may be found twice; "closest" keeps the lower primitive id.
+  - Ray-capsule and ray-sphere (a ray starting inside hits at `tMin`, flagged); point-triangle,
+    point-segment and point-box distances.
+- **The slab test pads `tMax` by 4 ulp.** Without it, 3.3% of rays aimed at vertices are lost;
+  with it, none of 16 million grazing rays.
 
 ### Foreign sources
 ```cpp
 struct AnyBvhSource : IfaceRef {
   int size() const;
   Vector<double> bounds(int first, int count) const;      // 6 per primitive
-  Vector<double> rayTest(const Vector<int> &prims, const Ray3d &ray) const;  // optional
 };
 ```
-- Bulk on purpose: `geometry-contract.md` §4 forbids per-element round trips. `rayTest`
-  returns one `t` per primitive, NaN for a miss. Without it a box hit is the answer.
-- **`AnyBvh::build`** gathers all bounds first, on the calling thread, in chunks of 4096.
-  Only then does it build in parallel. That is what `threadAffine` needs, and native sources
-  flagged ThreadAffine are treated the same. No slot is called from a worker.
-- A wrong-length result, or a sticky error after a chunk, fails the build and keeps the
-  previous tree.
+- `AnyBvh::build` gathers all bounds first on the calling thread, in chunks of 4096, then builds.
+  ThreadAffine native sources are treated the same. No slot is called from a worker.
+- A wrong length, or a sticky error after a chunk, fails the build and keeps the previous tree.
 
 ### Leaf-size benchmark
-- `tests/bench/bench_bvh_leafsize.cc`, a target outside `all` and ctest.
-- One command, run by the coordinator on an idle machine:
-  `node tools/bench-bvh.mjs [--quick] [--wasm]`. It builds the release target, runs it, and
-  writes `docs/bvh-leafsize.md` (machine, compiler, commit, tables).
-- Leaf sizes 16, 32, 64, 128, 256, 512, 1024; 10k, 1M and 10M triangles, capsules and
-  spheres; closest-ray and region queries, coherent and random; build and refit time,
-  node memory. Fixed seeds, best of 5. `--quick` stops at 1M. `--wasm` runs up to 1M in node.
-- It warns when other processes use more than 10% of the CPU.
-- The default becomes the best geometric mean of query time, among sizes whose build time is
-  within 10% of the fastest. If the winner is within 5% of 128, 128 stays.
+- `node tools/bench-bvh.mjs [--quick] [--wasm]` builds the release target (outside `all` and
+  ctest), runs it and writes `docs/bvh-leafsize.md`. The coordinator runs it on an idle machine.
+- **What decides the leaf size:** triangles at 10k and 1M, all seven leaf sizes (16 to 1024),
+  coherent and random closest-ray, and region queries; build and refit time, node memory. Fixed
+  seeds, best of 5.
+- **Confirmation only:** capsules and spheres at 1M, and triangles at 10M, with the winner and
+  its two neighbours.
+- The default is the best geometric mean of query time among sizes whose build is within 10% of
+  the fastest; 128 stays if it is within 5%. `--quick` is 10k only; `--wasm` goes to 1M in node.
 
 ## View (`draw/view.h`)
 ```cpp
 struct View {
-  double viewport[4];            // x, y, width, height, pixels, y down
+  double viewport[4];            // x, y, width, height: device pixels, y down
   mat4d view, proj;
   DepthRange depth;              // ZeroToOne, MinusOneToOne
   bool reversedZ, infiniteFar, ortho;
   Handedness handedness; UpAxis up;
-  double dpiScale;
-  Status validate() const;       // finite, invertible, positive viewport
+  double dpiScale;               // device pixels per logical pixel
+  Status validate() const;
 };
 ```
-- **`ViewMath`**, built from a valid View, caches the inverses: `project(p) -> {pixel, depth,
-  behind}`, `unproject(pixel, ndcDepth)`, `rayFromPixel`, `regionFromPixel(px, radius) ->
-  planes`, `pixelSizeAt(p)`, `viewDistance(p)`.
-  - It inverts the view and the projection separately, and takes the ray's origin from the
-    view matrix, so an infinite far plane and reversed Z never divide by zero.
-  - A point at or behind the eye plane is `behind`, with an infinite screen distance.
-- The region has 4 side planes, plus the near plane. It has no far plane, so an infinite far
-  needs no special case.
-- Depth for ranking is the distance along the view direction, never the NDC depth.
-- P4 adds cone helpers, the DrawList and the event types on top.
+- **`validate()`** checks that everything is finite and invertible, and **checks the flags
+  against the matrices:** `ortho` against the projection's w row; `reversedZ` and `depth` against
+  where two probe points land; handedness against the sign of the view's determinant and the
+  projection's w row.
+- **`ViewMath`** (from a valid View; bound): `project`, `unproject`, `rayFromPixel`,
+  `regionFromPixel(px, radius)`, `pixelSizeAt(p)`, `viewDistance(p)`.
+  - Pixel radii are **logical**; they are multiplied by `dpiScale`.
+  - **The near plane comes from the projection:** `z >= 0`, `w + z >= 0`, or `w - z >= 0` when
+    reversed, by depth range.
+  - **Rays start on the near plane.** In orthographic views it may be behind the eye, and
+    depths measured from the eye are then negative.
+  - A point outside the near plane isn't visible. `behind` means `w <= 0` and exists only in
+    perspective.
+  - `unproject` at an infinite far plane's depth is FailedPrecondition.
+- **The region** is 4 side planes plus the near plane, of a square at least 0.5 px in radius.
+  Each plane is moved out by 1e-12 of the magnitude of its terms. It is conservative; scoring
+  decides. In double this holds to scene offsets of about 1e9; at 1e12 double itself is wrong by
+  up to 20 px.
+- **Depth for ranking** is the distance along the view direction from the near plane.
 
-## Transforms (`scene/transform.h`)
+## Transforms (`scene/`)
 
 ### Types
 ```cpp
-struct TransformState {      // bound, copyable, 184 bytes
-  mat4d world;  quatd rotation;  double3 localScale;
-};
-class EvalCtx {              // bound; only what a pure evaluation may read
- public:
+struct TransformState { mat4d world; quatd rotation; double3 localScale; };   // bound, copyable
+class EvalCtx {                      // bound; all that a pure evaluation may read
   double channel(int i) const;       // the override if one is set, else the object's value
   int channelCount() const;
-  double time() const;               // seconds
+  double time() const;               // seconds: the scene's current frame over its fps
 };
-class ChannelBlock { int size(); double get(int); void set(int, double); };   // bound
+class ChannelBlock { int size() const; double get(int) const; void set(int, double); };
 
 struct TransformModel : IfaceRef {
   TransformState evaluate(const EvalCtx &ctx, const TransformState &parent) const;
-  Status setWorld(const EvalCtx &, const mat4d &target, const TransformState &parent,
+  Status setWorld(const EvalCtx &current, const mat4d &target, const TransformState &parent,
                   SetWorldMode mode, ChannelBlock &out) const;
-  Status applyDelta(const EvalCtx &, const TransformDelta &, const TransformState &parent,
-                    ChannelBlock &out) const;                    // optional
+  Status applyDelta(const EvalCtx &base, const ChannelBlock &near, const TransformDelta &,
+                    const TransformState &parent, ChannelBlock &out) const;     // optional
 };
 ```
-- **EvalCtx has no Library, Runtime or Context.** A model can't read another block, so
-  decision 1's purity is checked by the type. P5c fills `overrides` from its sockets:
-  `EvalCtx(values, overrideMask, overrideValues, time)`. P3 builds it with an empty mask,
-  and tests set one.
-- **`TransformType`** (registered with `TransformRegistry`, a Runtime extension): name,
-  StructId, channel defs (`PropertyDef`s of kind Bool, Float, Int, Vec2-4, Enum or Quat,
-  flattened to doubles in order), default values, and one `Owned<TransformModel>`.
-  - Registration builds and registers the type's ApiStruct, with the parent struct
-    `TransformChannels`. Its members read and write the owning object's channel array
-    through `Transformable`, then call its update hook.
-  - Int and Enum channels outside ±2⁵³ are rejected by coerce ranges.
-- **`setWorld` and `applyDelta` are pure too:** they write `out`, not the object. A caller
-  applies `out` as one undoable command.
-  - `SetWorldMode::Strict` returns FailedPrecondition when the target isn't representable.
-    `Closest` drops what can't be represented (shear), keeping translation exact.
-  - **The caller verifies:** `setWorldOf(...)` re-evaluates the model with `out` and compares
-    it with the target, relative to the target's size. A Strict result off by more than
-    1e-9 is an Internal error, so a wrong foreign model can't corrupt an object silently.
-- **`applyDelta`** takes `TransformDelta {kind, space, pivot, vector, axis, angle}`. Without
-  the slot it goes through `setWorld`. Trs and Fbx rotate Euler channels directly and pick
-  the solution nearest to the current one, so an accumulated rotation doesn't wrap.
+- **EvalCtx has no Library, Runtime or Context.** P5c fills `overrides` from its sockets.
+- **Reading a channel as Bool, Int or Enum** rounds to nearest (Bool: >= 0.5), overrides
+  included. An enum value with no item is the first item.
+- **`TransformType`** (in `TransformRegistry`, a Runtime extension): name, StructId, channel defs
+  (Bool, Float, Int, Vec2 to Vec4, Enum, Quat, flattened in order), defaults, one
+  `Owned<TransformModel>`. A second registration of a name is AlreadyExists, so a second JS
+  object can't inherit the first one's slot table.
+  - Registering builds its ApiStruct, whose parent is `TransformChannels`. Members read and
+    write the owning object's channel array.
+  - Int and Enum channels outside ±2⁵³ are refused by their setter (OutOfRange). `coerce`
+    clamps, so it can't do this.
+- **`setWorldOf(lib, object, target, mode, out)`** is what callers use.
+  - It computes the parent's state (below), calls the model, and **checks the result** by
+    evaluating it: the linear part by the column residual (1e-9), the translation within
+    `16 ε · (|P|·|t| + |target t|)`. Beyond that it is FailedPrecondition, "not representable".
+  - `Closest` drops shear and keeps the translation. It checks only that the result is finite
+    and that the translation holds.
+  - A singular parent is FailedPrecondition in both modes. A zero-scale *target* is fine.
+- **`TransformDelta {kind, basis (quatd), pivot, vector, axis, angle}`.** `basis` replaces a space
+  enum: world, local, view and custom orientations are all bases.
+  - **The delta is the total from `base`;** `near` is the previous result. Trs and Fbx pick the
+    Euler solution nearest to `near`, so a 720° drag ends at 720°. A model without the slot goes
+    through `setWorld`.
+- **`computeState(lib, object, time)`** walks up from the object, uncached, with a cycle check.
+  Every command uses it, so a command can parent to an object created a moment before, and
+  parents changed earlier in the same command count. It is Busy in an EvaluationScope.
 
 ### Built-in models
 - **`core.transform.trs`:** location, rotationMode (6 orders, QUATERNION), rotationEuler,
-  rotationQuaternion, scale. `world = parent.world · T·R·S`; `rotation = parent.rotation · R`.
-  - Setting `rotationMode` doesn't convert the other channel. `core.object.setRotationMode`
-    does, as one undoable command.
-  - A zero or non-finite quaternion evaluates as the identity.
-- **`core.transform.fbx`:** lclTranslation, lclRotation, rotationOrder, pre- and
-  postRotation, rotation and scaling offsets and pivots, lclScaling, inheritType. The local
-  matrix is `T·Roff·Rp·Rpre·R·Rpost⁻¹·Rp⁻¹·Soff·Sp·S·Sp⁻¹`. The world matrix follows the
-  table above, with `LR = Rpre·R·Rpost⁻¹` and the translation column of the local matrix.
-- **`core.transform.matrix`:** 16 channels and nothing else. It accepts any affine target
-  (shear included), and keeps the interface honest.
+  rotationQuaternion, scale. A zero or non-finite quaternion is the identity. Setting
+  `rotationMode` converts nothing; `core.object.setRotationMode` does.
+- **`core.transform.fbx`:** lclTranslation, lclRotation, rotationOrder, pre- and postRotation,
+  rotation and scaling offsets and pivots, lclScaling, inheritType. Local is
+  `T·Roff·Rp·Rpre·R·Rpost⁻¹·Rp⁻¹·Soff·Sp·S·Sp⁻¹`; `LR = Rpre·R·Rpost⁻¹`.
+- **`core.transform.matrix`:** 16 channels; any affine target. `rotation` and `localScale` come
+  from `decomposeTrs` (reflections on x).
 
 ### Failure behaviour
-- **Singular matrices** (a scale channel of 0): `evaluate` is fine. Rrs divides by `pls`; a
-  zero component uses 1 instead, which is documented. `setWorld` under a singular parent
-  is FailedPrecondition in both modes.
-- **Non-finite results** (NaN channels, overflow): the evaluator stores the parent's state
-  instead, marks the object `EvalStatus::Invalid` and counts it. Children follow the
-  fallback. Its bounds are skipped by SceneBvh. Nothing aborts.
-- **Huge coordinates:** tested at 1e12 (double keeps about 1e-4) and at 1e200, which
-  overflows in products and must end as Invalid.
-- **A foreign model that throws:** its sticky error is returned by `evaluate()`, after every
-  object is processed.
+- **Scale channels of 0** evaluate. Rrs uses 1 for a zero component of `pls` (documented).
+- **A non-finite result:** the object gets its parent's state and `EvalStatus::Invalid`. Children
+  follow it. Its bounds aren't in SceneBvh. Nothing aborts.
+- **A foreign model that throws** is noticed right after its call: the sticky error is taken, the
+  object gets its parent's state and `EvalStatus::ModelFailed`, and `evaluate()` returns the
+  first such error after finishing. `evaluate()` refuses to start with an error pending, as
+  `collect()` does.
+- **P5c keeps this rule inside its kernel** (a fallback state plus a status output), so it
+  doesn't use `lastGood()` for it.
+- **Huge coordinates:** 1e12 works to about 1e-4; 1e200 overflows and ends as Invalid.
 
 ## Objects and Scene (`scene/`)
 
-### Capabilities (interfaces; names from `geometry-contract.md`)
-- **`Transformable`:** `transformType() -> TypeId`, `channelCount()`, `readChannels(ChannelBlock
-  &out)`, `writeChannels(const ChannelBlock &) -> Status`, `parentId() -> BlockId`, `dataId()
-  -> BlockId`, `flags() -> uint32`. Optional `setParentId(BlockId) -> Status`.
-- **`Spatial`:** `localBounds() -> Box3d`, `domains() -> uint32`, `closestElements(co, radius,
-  domain) -> Vector<int32_t>` (object space), optional `pick(const PickQuery &, PickSink &)`.
-  - `PickQuery`: planes, object-space ray and whether it exists, the object's world matrix,
-    the ViewMath, domain, mode. `PickSink` is a bound class; a script calls `add(...)`.
-  - Without `pick`, the object answers with its bounds, as faberforge's base class does.
-- **`Invalidation`:** `invalidate(uint32 kinds)`; Topology, Positions, Attributes, Selection,
-  Materials.
-- **`Elements`:** `topoStamp() -> uint64`, `elementCount(domain)`, `positions(handles, domain)
-  -> Vector<double>`.
-- **`OverlayDrawable`** is declared in P4 with the DrawList. Declaring a slot that takes a
-  type that doesn't exist would have to change anyway.
-- An object's geometry capabilities come from its **data block** first, then from the object.
-  `objectQuery<I>(lib, handle)` does that lookup.
+### Capabilities
+- **`Transformable`:** `read(ObjectInfo &info, ChannelBlock &channels) const`, one bulk slot. An
+  `ObjectInfo` holds the type name's id, parent id, data id and flags. Also
+  `writeChannels(const ChannelBlock &) -> Status` and optional `setParentId(const BlockId &) ->
+  Status`. No slot returns an id.
+- **`Spatial`:** `localBounds() -> Box3d`, `domains()`, `closestElements(co, radius, domain) ->
+  Vector<int32_t>` (object space), optional `pick(const PickQuery &, PickSink &)`. Without `pick`
+  the object answers with its bounds.
+- **`Invalidation`:** `invalidate(uint32 kinds)`.
+- **`Elements`:** `topoStamp`, `elementCount(domain)`, `positions(handles, domain) ->
+  Vector<double>`.
+- `objectQuery<I>(lib, handle)` asks the data block first, then the object.
+- **`foreignImplementable` is extended:** a struct return needs bound default and copy
+  constructors, and a Vector return needs scalar elements. Otherwise it is refused when
+  registered, not on the first call.
+
+### Change notification
+- **Through the datapath:** `setValue` notifies (P5's step 1 does so before the `update` hook).
+- **Commands** write channels with `writeTransform(ctx, object, channels)`, which calls
+  `writeChannels` and then `notify(owner, "transform")`, in exec, undo and redo.
+- **Data blocks:** `invalidateData(ctx, block, kinds)` is what anyone calls after changing a
+  block's own data. It calls the block's `Invalidation` if it has one, then
+  `notify(ofBlock(id))`. Built-in tools and hosts use it; nothing else calls `Invalidation`.
+- **P3's evaluator doesn't listen.** It recomputes.
 
 ### `coredcc.Object`
-- Data: flags (Hidden, Unselectable), `WeakRef` parent, `OptRef` data, the transform type
-  (stored by name) and its channel array. The name is the block's.
-- Its provider enumerates both refs. A missing transform type keeps its channels (as raw
-  doubles) and evaluates as the identity, flagged `MissingModel`.
-- ApiStruct members: `name` (read-only here; `Library::rename` is P2), `flags`, `parent`,
-  `data`, `transform` (a fixed nested pointer whose struct is the transform type's), and
-  read-only `worldMatrix` and `evalStatus`.
+- Data: flags (Hidden, Unselectable), Weak parent, OptStrong data, the transform type's name, its
+  channels.
+- A missing transform type keeps its channels (as P2's `BlockEntry`s once loaded) and evaluates
+  as its parent, flagged `MissingModel`.
+- ApiStruct: `name` (read-only; renaming is P2's command), `flags`, `parent`, `data`, `transform`
+  (a fixed nested pointer, whose struct is the transform type's).
+  - `parent` and `data`, and Scene's active object, fill P2's `PointerAccessor::cell`, so undo
+    keeps links to placeholders.
+- **Storage:** declared `BlockStorage::Transient` in the step that adds the type, and Payload in
+  the serialize step. A type with neither fails every save (P2's A4).
 
 ### `coredcc.Scene`
-- Data: `OptStrong` cells in order, the active object and the selection as Weak cells, unit
-  settings, the playback fps, and evaluated state (not saved, not undoable).
-- `add`, `remove`, `contains`, `setParent` (checks), `objects()` (skips cells that resolve to
-  null: deleted and Detached objects stay members, so undo and host restore bring them back).
-- **Cycle checks:** `setParent` walks up from the new parent. A cycle that appears anyway
-  (undo of two reparents, a host, a file) is found in `evaluate()`: every object on it gets
-  the identity parent and `EvalStatus::Cycle`. A parent outside the scene still counts and is
-  evaluated; it isn't drawn or picked.
-- **`evaluate()`**: `beginNoCollect` for its duration; topological walk from the roots (an
-  explicit stack, so a 100k-deep chain doesn't overflow); one `TransformState` and one world
-  box (8 transformed corners) per object, keyed by BlockHandle; then SceneBvh.
-  - Reads: `evaluated(handle) -> const ObjectEval *`, null before the first `evaluate()`.
-  - Reading `worldMatrix` by path does not evaluate.
-- **Seam for P5c:** `SceneEvaluator` is an internal virtual class with one method, `run(Scene
-  &, EvaluatedStore &)`. P3's `HierarchyEvaluator` is one; P5c's graph evaluator is another.
-- **The Context scene slot** is `Context::setScene(BlockHandle)` / `scene()`. `api/` can't name
-  Scene, so it holds a handle. `activeScene(ctx)` in `scene/` resolves it.
+- Data: OptStrong cells in order, Weak active object and selection, unit settings, fps, current
+  frame. A handle-to-index map beside the cells makes `contains` and `add` O(1). Same storage
+  rule as Object.
+- **Created with the Root flag,** by `core.scene.new`. (P2's append turns Root into FakeUser.)
+- **Cells:** `objects()` skips cells whose target isn't Live; InHistory and Detached members come
+  back by themselves. **Cells whose target has no record are pruned** by the membership commands
+  (never by `evaluate`, which doesn't change data). Undo of `core.object.add` and `link` removes
+  the cell itself. A save writes null for cells to deleted blocks (P2), and the load drops null
+  cells.
+- **Parents:** `setParent` refuses a parent that isn't in the scene, and cycles. A parent that is
+  outside anyway (a host, undo, a file) is evaluated but not picked. Cycles found by `evaluate`
+  (undo of two reparents, a file) get the identity parent and `EvalStatus::Cycle`.
+- **`evaluate(ctx)`:**
+  - opens P5's EvaluationScope, so setValue, executor entries, graph edits, `computeState` and
+    another `evaluate` are Busy, plus `beginNoCollect`;
+  - walks the hierarchy with an explicit stack, parents first; world boxes are the transform of
+    the local box, rounded outward; then SceneBvh;
+  - **writes to a second store and swaps it in at the end,** so a foreign slot that reads
+    results sees the previous evaluation, complete.
+- **Lookups are cached per member:** handle, interface tables, parent index, topological order.
+  They are rebuilt when `Library::epoch()` or the cell list changes.
+  - **Checked on every evaluate:** `Library::data()` is called again for every object and data
+    block (hosts may move them), and `read`'s parent and data ids are compared with the cached
+    ones. Any difference rebuilds the cache and starts over, once.
+  - An interface that came from an override or from a provider's `queryInterface` isn't cached.
+  - P2's A1 makes `setOverride`, `attach` and their opposites bump the epoch. Until it merges,
+    an object with the HasOverrides flag isn't cached.
+- **Results:** `evaluated(handle, ObjectEval &out) -> bool` copies. Nothing hands out pointers
+  into the store.
+- **By path:** a runtime owner `coredcc.evaluated` has a collection `objects` keyed like the
+  Scene's, with `world`, `bounds` and `status`, for the Context's scene.
+  `addEvaluated(ApiStruct &root)` puts it on a host's root. After the scope closes, `evaluate`
+  calls `notify` on that owner if any result changed. Watchers then fire, no block is stamped as
+  edited, and an object in several scenes has one answer. With no scene, or none evaluated, it
+  is NotFound.
+- **Seam for P5c:** `SceneEvaluator::run(Scene &, EvaluatedStore &)`, internal.
+- **The Context slot** is `setScene(BlockHandle)` and `scene()`; `activeScene(ctx)` resolves it.
 
-### `CollectionAccessor::setActive`
-- New optional callback `setActive(self, ctx, item) -> Status`; a null item clears it.
-- A path ending in `.active` can then be read as a Pointer value and set with one.
-  `ResolvedPath` gains `activeOf` (the collection's member and owner). Its struct behaviour
-  and canonical address are unchanged: `objects.active.x` still canonicalizes to the item.
-- `setValueUndo` on it records the collection's canonical key plus the pseudo-member
-  `active`, so undo restores the old active item wherever the list has moved.
-- Setting it bumps the ChangeBus's structural epoch.
-- Scene's `objects` collection: keys are the block id as text (`"<client>:<local>"`, hex),
-  which `lookup` tries first, then the first object of that name in scene order.
+### setActive
+- `CollectionAccessor` gains `setActive(self, ctx, item) -> Status` (a null item clears).
+- **`resolve()` is unchanged.** `objects.active` still resolves to the item, and is still
+  NotFound without one.
+- **`resolveActive(ctx, path)`** resolves everything before a trailing `.active` to `ActiveRef
+  {holder, member, collection StableRef}`, also when there is no item. `getActive` and
+  `setActive(ctx, ActiveRef, value)` check the type against the item struct, call the accessor,
+  notify, and bump the structural epoch.
+- The path forms of `getValue`, `setValue` and `setValueUndo` use it when a path ends in
+  `.active` of a collection with `setActive`. Undo is a private command
+  `core.collection.setActive`, which holds the collection's StableRef and the old and new items'
+  RefCells, not the item's address, and pins them with `PinKind::History`.
+- Files: `api/struct.h`, `api/active.{h,cc}`, `command/set_property.cc`, and the string overloads
+  in `api/resolve.cc`. P2's static resolver and `meta` see `.active` as today.
+- **Keys:** `objects` uses the block handle, packed into an int64, as its key
+  (`objects[#...]`), and `lookup` also takes a name (the first match). Items are roots of their
+  own owner, so canonical addresses never contain the key.
 
-### Commands (`scene/commands.cc`; sub-commands where one exists)
-- `core.object.add(type, name, location, parent)`, with CreatedBlocks.
-- `core.object.setParent(objects, parent, keepWorld)`: verified `setWorldOf`, Closest.
-- `core.object.setTransformType(object, type, keepWorld)`.
-- `core.object.setRotationMode`, `core.object.applyDelta(objects, delta)` (skips descendants
-  of selected objects).
-- `core.object.delete(objects, keepChildrenWorld)`: reparents Live children to the deleted
-  object's parent, then runs `core.block.delete`. Plain `core.block.delete` lets children
-  jump to the root. Undo restores both.
-- `core.scene.select(objects, mode)`, `core.scene.setActive`.
+### Commands (`scene/commands.cc`)
+- **Which objects:** commands that take several work on the Scene's **selection**. An optional
+  String input `objects` replaces it: space-separated `@block(<client>, <32 hex>)`, P2's text form
+  (its B1), in order, duplicates ignored; a missing one is NotFound.
+- Single objects are Pointer inputs. From invocations they need B1's literals.
+- `core.scene.new`, `core.scene.link`, `core.scene.unlink`, `core.scene.setActive`,
+  `core.scene.select(mode=SET|ADD|REMOVE|TOGGLE|ALL|NONE)`.
+- `core.object.add(type, name, location, parent)`.
+- `core.object.setParent(parent, keepWorld)`, `core.object.setTransformType(type, keepWorld)`,
+  `core.object.setRotationMode(mode)`.
+- `core.object.applyDelta(kind, basis, pivot, vector, axis, angle)`: TransformDelta's fields as
+  inputs. It skips descendants of selected objects. Interactive use keeps `base` from the start.
+- `core.object.delete(keepChildrenWorld)`: reparents Live children outside the set to their
+  nearest surviving ancestor, parents first, then runs `core.block.delete`. Plain
+  `core.block.delete` lets children jump; undo restores them.
+- Each captures old channels, and old parents, from the objects themselves.
 
 ### SceneBvh
-- A `Bvh<BoxSource>` over world boxes. `update()` refits when the object set is unchanged and
-  the cost is below 2× the last build's, else rebuilds. Objects with empty or Invalid bounds
-  are left out and can't be picked.
-- **`pick(view, px, radius, filter) -> Vector<PickHit>`:**
-  1. Broad phase in world space with the region's planes.
+- `Bvh<BoxSource>` over world boxes. Refit needs the same objects, the same skipped set, and a
+  cost below 2× the last build's; otherwise it rebuilds.
+- **`pick(view, px, radius, filter) -> Result<Vector<PickHit>>` answers for the last `evaluate`,**
+  which is what was drawn. Before one it is FailedPrecondition. Hosts evaluate once per frame.
+  1. The region's planes against world boxes.
   2. Per object: planes to object space; `Spatial::pick`, or its bounds.
-  3. Exact scoring in world and screen space: position, view distance, screen distance in
-     pixels. Triangles and segments are projected; a primitive crossing the eye plane is
-     clipped to it first.
-  4. Sorted by `(screenDist, depth)`; a ray hit has screenDist 0. Ties keep scene order.
-- **The object-space ray** exists only when the object's matrix inverts. For a singular
-  (flattened) object the region's candidates are transformed to world and scored there.
-- Radii under non-uniform scale: a ray hit is exact (`t` is affine invariant). For a miss, the
-  screen distance to a capsule or sphere is the axis's distance less the radius times the
-  largest singular value, which is an upper bound on the true radius. Documented.
-- `nearest(co, radius)` in world space: planes of the sphere's box, then exact distances.
+  3. **Clip to the near plane,** then score in screen space.
+  4. Sort: **ray hits before misses;** hits by depth; misses by screen distance, then depth; ties
+     in scene order.
+- The object-space ray exists only if the object's matrix inverts. Otherwise the region's
+  candidates are transformed to world and scored there.
+- **Spheres and capsules** are scored exactly, in pixels. The distance from the cursor to a
+  convex outline is the largest `n·p − h(n)` over directions `n`. A transformed sphere projects to
+  a conic, whose `h(n)` is a root of a quadratic in its dual conic. A capsule's outline is the
+  hull of its two ends, so `h` is the larger of the two. The search starts from 16 directions and
+  two seeds, then uses golden section.
+  - Checked against dense sampling under shear and perspective: within the sampling's coarseness
+    (0.65 px). `p3\e5.mjs`.
+  - A capsule that crosses the near plane falls back to its clipped axis, less `r·|Mᵀn|`.
 
-## Units and frames
-- **`UnitSettings`** (`props/unit_settings.h`): a display unit symbol per family (length,
-  angle, mass, time), fps as a rational, and the start frame. Scene holds one, exposed at
-  `units`. `Context::units()` returns the active scene's through a callback the scene module
-  installs, or the defaults.
-- **Frames:** `frame` is a Time unit whose scale is `1/fps`. `units::format` and `parse` get
-  overloads taking `const UnitSettings &`; the old ones are unchanged and don't know frames.
-  Frame numbers count from the start frame; `12f` means 12 frames of duration.
-- **`formatValue(ctx, def, value)` and `parseValue(ctx, def, text)`** in `api/`, for P2's
-  widgets.
-- **The agreement check** in `PropertyDef::validate()`: Angle and Euler need Angle or None;
-  Distance and Xyz need Length or None; Time needs Time or None; Factor and Percentage need
-  Factor or None.
+## Units and frames (own small step, last)
+- **`UnitSettings`** (`props/unit_settings.h`): a display unit per family, fps as a rational, start
+  frame. Scene has one at `units`; `Context::units()` gives the active scene's, or the defaults.
+- `frame` is a Time unit of `1/fps`, in new overloads of `units::format` and `parse` that take
+  UnitSettings. `formatValue` and `parseValue` in `api/format.h`.
+- `PropertyDef::validate()` checks that subtype and unit agree. No def outside a doc comment sets
+  either today, so nothing is refused; the check is for new defs.
 
 ## Bindings (`bind/`)
-- **Types in the manager:** `Mat4d`, `Quatd`, `double3`, `Box3d`, `Ray3d`, `TransformState`,
-  `EvalCtx`, `ChannelBlock`, `TransformDelta`, `PickQuery`, `PickSink`, `View`, and the
-  interfaces above. Value types have `at` and `put` methods, so a script needs no array
-  members.
-- **`registerForeignTransformType(ctx, type, handle, slots)`**, with builder facades
-  `newTransformType(name)` and `transformChannel(type, name, defaultValue)`. One JS object
-  serves every object of the type. ForeignBindings keeps its handle, as it keeps factories.
-- **`implementOn(ctx, blockId, ifaceName, implName, handle, slots)`**: a script capability on
-  one block, through `registerForeign` (once per implName) and `Library::setOverride`. Its
-  handle is released by an attachment's `destroy` when the block goes, or when it is cleared.
-  It refuses interfaces that `foreignImplementable` refuses.
-- **Facades:** `evaluateScene`, `worldMatrix(ctx, id)`, `pick(ctx, view, x, y, radius)` into a
-  result struct, `setScene`.
-- **threadAffine:** every P3 loop that calls interfaces (evaluate, gather, pick) runs on the
-  calling thread. Only native, already gathered arrays are processed in parallel. Tests
-  count foreign calls per thread id.
-- Bound methods compile slowly (40–80 ms each, §2a), so they stay in `*/bindings.cc`.
+- **Types:** `Mat4d`, `Quatd`, `double3`, `Box3d`, `TransformState`, `EvalCtx`, `ChannelBlock`,
+  `TransformDelta`, `View`, `ViewMath`, `ObjectEval`, and the TransformModel interface. Value
+  types have `at` and `put`, so a script needs no array members.
+- **`registerForeignTransformType(ctx, type, handle, slots)`**, with `newTransformType(name)` and
+  `transformChannel(type, name, defaultValue)`. One JS object per type; ForeignBindings keeps its
+  handle. Busy while evaluating. `core.` is reserved.
+- **Facades:** `newScene`, `setScene`, `evaluateScene`, `worldMatrix(ctx, objectText)`, and `pick`
+  (evaluates first), each Busy inside a foreign slot other than `exec`. P5's (interface, slot)
+  gate is used once it is merged.
+- **threadAffine:** every loop that calls interfaces runs on the calling thread.
 
 ## Files (each under 35 KB)
 ```
 bvh/    box.h  ray.h  kernels.{h,cc}  bvh.h  build.h  sources.h  geometry_bvh.h
         any_source.{h,cc}  bindings.cc
 draw/   view.{h,cc}  bindings.cc
-scene/  eval_ctx.h  transform.{h,cc}  transform_registry.{h,cc}  trs.cc  fbx.cc  matrix.cc
-        object.{h,cc}  capabilities.h  scene.{h,cc}  evaluator.{h,cc}  scene_bvh.{h,cc}
-        pick.{h,cc}  api.cc  commands.{h,cc}  bindings.cc  builtins.{h,cc}
-api/    setActive in struct.h, resolve.cc and context.h; format.{h,cc}
-props/  unit_settings.h, units.cc
-bind/   foreign_scene.{h,cc}
-tests/  bvh/ draw/ scene/ bench/
+scene/  eval_ctx.h  transform.{h,cc}  solve.{h,cc}  transform_registry.{h,cc}  trs.cc  fbx.cc
+        matrix.cc  capabilities.h  object.{h,cc}  scene.{h,cc}  evaluator.{h,cc}  evaluated.{h,cc}
+        scene_bvh.{h,cc}  pick.{h,cc}  conic.{h,cc}  api.cc  membership_commands.cc
+        transform_commands.cc  commands.h  bindings.cc  builtins.{h,cc}
+api/    active.{h,cc}  format.{h,cc}
+props/  unit_settings.h
+bind/   foreign_transform.{h,cc}
+tests/  bvh/  draw/  scene/  bench/
 ```
-Layering: `base` ← `bvh`; `base` ← `draw`; `command`, `bvh`, `draw` ← `scene` ← `bind`.
+Layering: `base` ← `bvh`, `draw`; `command`, `bvh`, `draw` ← `scene` ← `bind`.
 
 ## Tests
-- **Oracles.** Every BVH query is compared with a brute-force loop over the same kernels, on
-  random, clustered, coplanar, all-equal, long-thin and degenerate sets, at leaf sizes 1 to
-  1024, float and double. Kernels are compared with sampling or a long-double reference.
-- **Determinism:** node bytes identical for `ScopedBandCount` 1, 2, 5 and 12 (tests only), and
-  for serial and parallel builds.
-- **Refit** equals a rebuild's query answers after random motion. `refit` after the skipped
-  set changes is FailedPrecondition.
-- **Robustness:** NaN and infinite vertices, negative radii, zero-length segments, 0 and 1
-  primitives, rays along faces and through shared edges (a closed mesh is never leaked
-  through, 1e6 rays), coordinates of 1e-6 and 1e30 in float.
-- **Foreign source:** fake host, thread ids recorded, a throw mid-gather, a wrong length.
-- **View:** all 2×2×2×2×2 combinations of depth range, reversed Z, infinite far, handedness
-  and ortho: project against unproject, ray against project, region contains exactly the
-  points within the radius square; points behind the eye.
-- **Transforms:** the `fbx.mjs` identities, ported; each type under each other type; pivots
-  against an explicit matrix product; `setWorld` round trips for all models (positive,
-  negative and sheared parents) and Strict refusals; `applyDelta` over 720 degrees in 1
-  degree steps without a jump; Euler gimbal lock; overrides through EvalCtx change only the
-  overridden channel.
-- **Scene:** cycles; a deleted and restored parent; a Detached object; a scene surviving an
-  object's deletion; membership through undo, redo and discard; a collect during `evaluate`;
-  a 100k-deep chain; an Invalid object in the middle of a chain; a host-owned Transformable
-  type; a foreign model and a foreign override; quarantine mode on.
-- **setActive:** set, undo after reordering, clear, watchers fire, `.active` in the middle of
-  a path still resolves as before.
-- **Picking:** non-uniform, reflected, sheared and singular objects against a brute-force
-  screen-space loop over every triangle.
-- **Units:** frames at 24, 30000/1001 and 25 fps; every subtype/unit pair.
-- **compile_embed** includes every new public header.
-- **wasm-st:** the whole native suite under node, with `COREDCC_TEST_SCALE` for the sizes; the
-  TS spike gains a foreign TransformModel and a foreign Spatial override (`tests/wasm`).
-  **wasm-mt** is built and its BVH tests run in node.
+- **BVH oracles:** every query against a brute-force loop, on random, clustered, coplanar,
+  all-equal, long-thin and degenerate sets, leaf sizes 1 to 1024, float and double. Kernels
+  against long-double references. Watertightness is tested with rays **aimed** at edges and
+  vertices, from outside too.
+- **Extremes:** centroids at 3e38f and 1e308, 1e160 boxes, denormal extents, NaN and infinity, 0
+  and 1 primitives, `leafSize` 0.
+- **Determinism:** node bytes for `ScopedBandCount` 1, 2, 5 and 12 (tests only), parallel and not.
+- **Foreign source** through the fake host: thread ids, a throw mid-gather, a wrong length.
+- **View:** every combination of depth range, reversed Z, infinite far, handedness and ortho, with
+  near planes in front of and behind the eye; flags that contradict the matrices; the region is
+  conservative, and scoring is exact to 1e-3 px up to offsets of 1e6; `dpiScale` 2.
+- **FBX golden values:** `tests/scene/gen_fbx_golden.mjs` is a separate implementation of the
+  sample's formulas. Its table (mixed types, sheared, signed and reflected chains, pivots) is
+  committed. Mutation checks: dropping GSM, reordering it, and replacing `GR` with a decomposition
+  must each fail.
+- **Solving:** a node's own world for every model, with signs, shear, zero scales and scales from
+  1/1000 to 1000; unchanged channels; refusals; parent conditions to 1e8; translations at 1e10
+  with a wrong rotation must be refused.
+- **Deltas:** total-angle drags to 720° with `near`, custom bases, gimbal lock.
+- **Scene:** cycles; a deleted and restored parent; Detached; delete, then history clear, then a
+  membership command (the cell is gone); undo of add and its discard; purge keeps the Scene; a
+  100,000-deep chain; an Invalid and a throwing model mid-chain; a foreign slot that reads and one
+  that writes during `evaluate`; a host-owned Transformable whose data moves; a ref written
+  without `writeRef`; several scenes; quarantine mode on.
+- **Commands:** create a parent and parent to it in one step; `[A, B]` with A above B; delete of a
+  parent and its child; `objects` text with bad, missing and repeated ids; undo and redo of each.
+- **setActive:** from no item, undo after reorder, clear, wrong type; every existing `.active`
+  path as before.
+- **Picking:** against a screen-space loop over every triangle, clipped to the near plane, for
+  non-uniform, reflected, sheared and singular objects, in perspective and in ortho with the near
+  plane behind the eye. The pressure test's thin-curve case.
+- **compile_embed** includes every new header. **wasm-st** runs all of it under node
+  (`COREDCC_TEST_SCALE`). The TS spike gains a foreign TransformModel. **wasm-mt** BVH and scene
+  tests run in node.
 
 ## Order of work
-Each step ends with the full gate (4 native presets and wasm-st-debug) and a commit.
+Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 
-1. **`bvh/` core:** box, kernels, serial build, sources, queries, oracles.
-2. **Parallel build, refit, GeometryBvh, AnyBvhSource,** and their bindings.
-3. **The benchmark and its command.** Then the coordinator can merge steps 1–3 to master, and
-   run the benchmark on an idle machine.
-4. **`draw/View`.**
-5. *(needs PR D)* **EvalCtx, the registry, Trs, Fbx, Matrix, setWorld.**
-6. **Capabilities, Object, Scene, evaluate, the API structs, setActive, the Context slot.**
-7. **Commands.** *Feature review: objects and transforms.*
-8. **SceneBvh and picking.** *Feature review: BVH.*
-9. **Scripts:** foreign models and overrides, facades, the TS spike's additions.
-10. **Units and frames.**
-11. *(needs P2's first step)* **The Object and Scene providers' serialize, deserialize,
-    duplicate and rekey.** Channels are written by name with the type's name, so a missing
-    or changed model keeps what it doesn't know.
+| Step | What | Needs |
+|---|---|---|
+| 0 | litestl PR D, opened alongside step 1 | — |
+| 1 | `bvh/`: box, kernels, serial build, sources, queries, oracles | — |
+| 2 | Parallel build, refit, GeometryBvh, AnyBvhSource, bindings | 1 |
+| 3 | The benchmark and its command. **Mergeable here.** | 2 |
+| 4 | `setActive`, the Context scene slot, `foreignImplementable`'s return check. **Mergeable here.** | P2 A1 (`PinKind::History`) |
+| 5 | `draw/View` | PR D |
+| 6 | EvalCtx, the registry, Trs, Fbx, Matrix, the solver, golden values | PR D |
+| 7 | Capabilities, Object, Scene, evaluate, results by path, API structs | 4, 6; P5 step 1 (EvaluationScope, notify); P2 A1 (`BlockStorage`, epoch bumps) |
+| 8 | Commands. *Feature review: objects and transforms.* | 7; P2 A2 (`PointerAccessor::cell`) |
+| 9 | SceneBvh and picking. *Feature review: BVH.* | 3, 5, 7 |
+| 10 | Scripts: foreign transform types, facades, the TS test; the `objects` text input | 8, 9; P2 B1 (pointer text) |
+| 11 | `serialize`, `deserialize`, `duplicate`, `rekey` for Object and Scene; storage becomes Payload | 7; P2 A1 (A4 for the round-trip test) |
+| 12 | Units and frames | 7 |
 
-PR D (step 0) starts alongside step 1.
+- **P5's step 1 is on master** (`537b3d2`). P2's A1 isn't yet. Step 4 can use today's `pin` until
+  it merges; step 7 waits for it, because a type without a storage decision breaks saves.
+- If A2 is late, `cell` is filled in step 11. If B1 is late, step 10's text input moves after 12.
+- Channels are serialized as `BlockEntry`s by name, beside the type's name; unread ones are kept.
 
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
-- The leaf-size benchmark has run on an idle machine, `docs/bvh-leafsize.md` is committed,
-  and the default follows from it.
-- The three FBX inherit types pass their identities, and a round trip through `setWorld`.
-- A TransformModel and a Spatial written in TS work in the spike.
-- Both feature reviews are resolved.
-- `docs/embedding.md` says where coredcc uses the task pool.
+- **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms
+  when nothing structural changed (SceneBvh refit included), and 80 ms after a structural
+  change.** A bench target measures both.
+- The benchmark has run on an idle machine, `docs/bvh-leafsize.md` is committed, and the default
+  follows from it.
+- FBX golden values and mutation checks; `setWorld` keeps every model's own world.
+- A TransformModel written in TS works in the spike.
+- Both feature reviews are resolved. `docs/embedding.md` says where coredcc uses the task pool,
+  and `docs/debugging.md` says when to call `evaluate` and `invalidateData`.
 
-## Claims to falsify
-1. PR D doesn't break sculptcore, faberforge or ubertopo: nothing outside litestl uses
-   `Matrix`'s Eigen conversions or relies on `matrix.h` including Eigen.
-2. `parallel_for_chunks` and `parallel_reduce` suffice for the build, and it never nests.
-3. The build is bit-identical for any worker count.
-4. Depth is bounded by 79 for any input, so the 96-entry stack can't overflow.
-5. Traversing float nodes in double with outward rounding never misses a hit brute force
-   finds.
-6. The padded slab test never leaks through shared edges of a closed mesh.
-7. A relative determinant test handles edges from 1e-30 to 1e15 in double.
-8. Transforming planes by `Mᵀ` is conservative for every affine matrix, including singular
-   and reflected ones.
-9. The screen square's 4 planes plus near contain every point within the pixel radius, in
-   every convention and with an infinite far plane.
-10. `TransformState` is enough for all three FBX types; nothing needs the parent's interface.
-11. Carrying `GR` gives the same result as the SDK sample whenever the parent has no shear
-    and no reflection.
-12. The column-length inverse finds every representable target. (With reflections there are
-    several sign choices; it tries one.)
-13. EvalCtx is enough for P5c: no model needs more than channels, parent state and time.
-14. A flat array of doubles can hold every channel kind we want, exactly.
-15. A transform type registered after Object's struct works by path, by canonical StableRef
-    and in undo, through the `TransformChannels` parent.
-16. Recomputing everything in `evaluate()` takes under 10 ms for 100k native objects.
-17. OptStrong membership never cascades, and an object stays a member through delete, undo,
-    redo, discard, Detached and restore.
-18. `evaluate()` can't be re-entered or made stale by a foreign slot that calls facades.
-19. Adding `activeOf` changes no existing path behaviour.
-20. A foreign override's handle is released exactly once on clear, on block destruction and
-    at Runtime teardown.
-21. The agreement check rejects no def that exists today.
-22. Bound `at` and `put` value types are enough for a TS TransformModel, and a const argument
-    can't be written from JS.
-23. No slot is ever called off the calling thread.
-24. `foreignImplementable` accepts every P3 interface except those the plan doesn't offer to
-    scripts.
-25. Nothing here needs P5's version counter.
+## Claims this revision depends on
+1. PR D changes nothing for another repo: it doesn't touch the three headers, and nobody includes
+   `quat.h`.
+2. Interleaved largest-first subtrees balance contiguous bands well enough.
+3. The stack of 96 holds for any input with the checked options.
+4. Compiling one file without contraction keeps the triangle test watertight in every preset,
+   wasm included.
+5. Padded planes are conservative for every affine matrix up to offsets of 1e9.
+6. The near planes taken from the projection are right in every convention.
+7. `TransformState` is enough for every FBX type and for P5c.
+8. The sign search with the column residual keeps a node's own channels, zero scales included.
+9. The cache can't be stale in a way the per-evaluate checks miss.
+10. Writing to a second store makes every re-entrant read safe.
+11. `computeState` is enough for every command.
+12. The `coredcc.evaluated` owner can't loop with P5's versions.
+13. The conic distance is right when both ends are in front of the near plane.
+14. A flat array of doubles holds every channel kind exactly.
+15. `resolveActive` changes no existing path.
+16. The `objects` text covers what TS and P2's layouts need.
+17. 20 and 80 ms are met.
 
 ## Risks
-- **PR D waits for the user.** litestl #11 has been open since 2026-11-23. Steps 5 to 9 can
-  be written on the branch, but not merged.
-- **Size.** Eleven steps. If it slips, steps 9 and 10 can follow the merge, because P4 and
-  P5c need only 4 to 8.
-- **`api/resolve.cc` is changed by setActive,** which P2 may also touch. The change is small
-  and comes in one commit.
-- **The FBX rules are checked against a published sample's formulas, not the SDK.**
-- **Stateless models** can't keep caches. A model that needs one (a spline rig) has to be a
-  graph node writing channel overrides.
-- **Benchmark noise** from parallel builds. Only the coordinator runs it.
-- **Float geometry far from its own origin** loses precision in the source data itself. BVH
-  can't help; DrawList's double origin (P4) is the documented answer.
+- **PR D waits for the user.** Steps 5 to 12 can be written, not merged, without it.
+- **Step 7 needs P2's A1.** It is P2's first step and merges early.
+- **Size:** 12 steps. P4 and P5c need 5 to 9; the rest can follow.
+- **The FBX rules are checked against a published sample, not the SDK.**
+- **Stateless models** can't keep caches; a spline rig would be a graph node writing overrides.
+- **`evaluate` at 100,000 objects** is still 10 to 20 ms per frame in a drag. P5c is the answer.
+- **Float geometry far from its own origin** loses precision in the source data.
 
 ## Deviations from the architecture
-To be recorded there once the plan survives its pressure test:
-- decisions 1, 2, 5, 6 and 8;
-- View moves from P4 to P3;
-- `OverlayDrawable` is declared in P4;
-- `structId()` is the transform type's, not a model slot;
-- the "gizmos skip descendants" rule is applied in `core.object.applyDelta`.
+Recorded there when the phase is done:
+- decisions 1, 2, 5, 6, 8 and 9; `components()` replaced by TransformState;
+- View moves from P4; `OverlayDrawable` is declared in P4;
+- §9: cone queries are region queries (no `coneFromPixel`); the concept has no `centroid(i)` and
+  no per-query callbacks;
+- §8: `AABB<double3>` is `Box3d`; Transformable and PickSink are added; Invalidation is called
+  only by `invalidateData`, and doesn't drive the evaluator or SceneBvh;
+- "gizmos skip descendants" is in `core.object.applyDelta`.
 
-## Pressure test record
-Not run yet.
+## Pressure test record (2026-11-24)
+A fresh agent was given the first draft (`1f88d05`) and the code, without the author's reasoning.
+The author re-ran its experiments (all reproduced) and checked its claims about the code. The new
+parts of this revision have not had a second pressure test, except where a measurement is given.
+
+### Survived
+- The FBX formulas (re-derived), `TransformState` as the parent, planes by `Mᵀ`, outward-rounded
+  float nodes with double traversal, the 4-ulp slab pad, the parallel primitives, the depth bound
+  (with checked options), transform types registered after Object's struct, OptStrong not
+  cascading, const arguments being read-only in JS, the existing facade gates, the units check.
+
+### Broke, and what changed
+- **B1, commands' inputs can't be expressed.** The selection, an `objects` text input in P2's
+  form, Pointer inputs for single objects, TransformDelta flattened; new, link and unlink commands.
+- **B2, ortho views couldn't pick behind the eye; perspective scored clipped geometry.** The
+  projection's near plane is used for rays, clipping and the oracle; negative depth in ortho.
+- **B3, 10 ms was really 40 ms** (reproduced: 39–43). One bulk slot and cached, checked lookups:
+  8.5 to 10 ms measured, about 15 with `data()` again. Targets are 20 and 80 ms.
+- **B4, setWorld refused an object's own matrix** (29% and 76% with signs, reproduced). Eight
+  signs, nearest to the current channels; frames instead of an inverse.
+- **B5, the tolerance was wrong both ways.** Separate linear and translation checks, a stated
+  threshold, FailedPrecondition, a check for Closest, and refinement of the translation.
+- **B6, zero-scale targets gave NaN.** Completed from the other columns and the current rotation.
+- **B7, Möller-Trumbore leaks at edges** (8.8%, reproduced). A watertight test, aimed rays, and no
+  contraction in that file.
+- **B8, the largest singular value misranks thin curves.** Exact conic distance; hits before
+  misses. Its proposed formula is rejected, see below.
+- **B9, no source for parent states.** `computeState`, and a stated contract for pick.
+- **B10, a throwing model gave a zero matrix.** Errors are taken after each call; `ModelFailed`.
+- **B11, scripts can't return ids, and the check let it through.** No slot returns one; the check
+  is extended.
+- **B12, deleted objects stayed as cells** (confirmed in `destroyBlocks`). Undo removes the cell,
+  commands prune, P2's save writes null.
+- **B13, conflicts with P2 and P5.** `implementOn` is out; `invalidateData` is the only caller of
+  Invalidation and of `notify` for data blocks.
+- **B14, the setActive change was understated.** A separate `resolveActive`; `resolve()` isn't
+  touched; the file list is corrected.
+- **B15, gizmos lost winding; no custom basis.** Base and near channels; `quatd basis`.
+- **B16, weak FBX tests** (reproduced). Golden values, mutation checks; the Maya difference is
+  documented.
+- **B17, planes aren't exact in floating point.** Padding, a minimum radius, a conservative test,
+  outward rounding of world boxes.
+- **B18, small ones:** overflow and denormals (scaled areas, median split); Int range (the
+  setter); the skipped set (a refit condition); `unproject` at infinity; `contains` (a map).
+- **Parallel "chunk 1" doesn't balance; "at most 64" should be "at least"; options unchecked.**
+  Largest first, interleaved; reworded; checked.
+- **Purge destroyed the Scene.** It is created with Root.
+- **Several scenes, watchers of `worldMatrix`, `ObjectEval *` lifetimes, re-entry.** The evaluated
+  owner, copies, the second store, EvaluationScope.
+- **Out-of-scene parents.** `setParent` refuses them.
+- **`implName` reuse.** Type names are unique.
+- **Missing pieces:** scene commands, the time source, Matrix's rotation, `dpiScale`, flag checks,
+  rounding of overrides, the fallback rule, unrecorded deviations. Each is defined above.
+- **wasm-mt on a browser's main thread.** Serial there.
+- **Size.** Cut or deferred: `implementOn`, `rayTest`, world nearest, the load monitor, most of
+  the 10M matrix. Units are their own last step.
+- **Step 4 (View) did need PR D.** It is now step 5.
+- **The author's claim that PR D may rewrite `matrix.h`** (found broken while checking): the first
+  draft assumed nobody depended on `Matrix * Vec`; sculptcore does. PR D leaves the file alone.
+
+### Rejected
+- **B8's formula** (the support function along the separation direction is exact). It is a lower
+  bound: for an ellipse of radii 10 and 0.1 and a point at (8, 8) it gives 4.24; the distance is
+  7.94.
+- **B14's `Kind::Active` from `resolve()`.** It would reach every caller of `resolve()`
+  (`setPrefix`, Pointer values, P2's path text). A separate entry point doesn't.
+- **"TransformState's socket kind must be chosen here."** P5's plan leaves it to P5c, and either
+  fits.
+
+### Not verified
+- The FBX SDK; sculptcore, faberforge or UberTopo compiled against PR D; wasm-mt in a browser; the
+  TS side of B11 and of `at`/`put`; the near-plane rules (reasoned; tested in step 5); whether
+  contraction really breaks the triangle test; refit and SceneBvh times in the 20 ms target.
