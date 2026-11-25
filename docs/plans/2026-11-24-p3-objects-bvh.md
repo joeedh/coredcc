@@ -441,7 +441,8 @@ struct TransformModel : IfaceRef {
   (never by `evaluate`, which doesn't change data). Undo of `core.object.add` and `link` removes
   the cell itself. A save writes null for cells to deleted blocks (P2), and the load drops null
   cells.
-- **Parents:** `setParent` refuses a parent that isn't in the scene, and cycles. A parent that is
+- **Parents:** the command `core.object.setParent` refuses a parent that isn't in the scene, and cycles.
+  Writing the path `parent` refuses neither. A parent that is
   outside anyway (a host, undo, a file) is evaluated but not picked. Cycles found by `evaluate`
   (undo of two reparents, a file) get the identity parent and `EvalStatus::Cycle`.
 - **`evaluate(ctx)`:**
@@ -1099,6 +1100,81 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   needed, which has been removed. The other five change nothing a caller sees: four break the index of members,
   which checks itself and is made again, and one closes a nested batch early, which puts it into the outer one.
 
+### Review of objects and transforms, round 3
+- **What:** findings 3, 6, 9, 10, 14, 15, 19, 20 and 25 to 30 of the report.
+- **Files:**
+  - `overrides.{h,cc}`, `apply_delta.cc` (from `transform_commands.cc`), `object_commands.cc`,
+    `duplicate_commands.cc`, `object_struct.cc`, `host_channels.{h,cc}`, `evaluator_batch.cc`.
+  - Tests: `test_scene_{overrides,locks,drag,bulk,duplicate}`, `test_bind_scene_bulk`.
+- **`EvaluateResult{done, changed}`** is an optional out-parameter of `evaluateScene`, in place of
+  `Counters::completed`.
+- **Bounds are kept** for a Spatial block whose type implements Invalidation, until a change of it with
+  Topology or Positions in its aspects, a `notifyAll` or a move of the Library's epoch. A type without
+  Invalidation, or a block with an override of its Spatial, is asked each time.
+- **`TransformModel::evaluateMany`** is optional, and only evaluateScene calls it, for one level of the
+  hierarchy after the other. An error is that of all objects in the batch, which then stand where their parents
+  are. While any registered type has the slot, the evaluator keeps its order sorted by depth.
+- **`coredcc.SceneObject`** is the struct of every Transformable block by path: `scene.objects[i].transform`
+  works for hosts' objects. Their channels are copied for the path (one copy per block that was asked
+  for) and written back with writeChannels.
+- **Locks** are in a file as the names of their channels, in the entries that round 1 made, so there is no new
+  version. Names that the type doesn't have are kept.
+- **Not done:** a membership interface for hosts' scenes (finding 15 is documented); solving for a delta that
+  can't be had with the free channels by any other rule than dropping the fixed ones' changes.
+- **Benchmark** (`bench_scene`, 100,000 objects, best of 41, ms): unchanged 15, every root moved 17, epoch moved
+  21, structural 58. The targets are 20, 40 and 80.
+- **Mutations:** 140 distinct ones, one at a time: 122 were found. Nine survived in code that turned out not to be
+  needed, which has been removed. The other nine change nothing a caller sees: some only make a kept list
+  again, and some concern states that can't be reached.
+
+### What P4 and P5c rely on (the contract for overrides and deltas)
+**Who provides overrides**
+- One `OverrideProvider` per Library (`setOverrideProvider`, AlreadyExists for a second). P5c's evaluator is meant
+  to be it. Animation and graphs that both drive channels are combined behind it, by whoever sets it.
+- It answers `overridesOf(library, object, type, time, out)`:
+  - for the document as it is now, and for the time it is asked for, not for its last evaluation;
+  - if it has only another time's values, it fails or computes them, and never leaves channels out;
+  - for any Transformable, in a scene or not, as often as it is asked, with the same answer until the document
+    changes;
+  - without changing the document or evaluating a scene.
+- `evaluateScene`, `computeState`, `computePivot` and all commands ask it through one function, and nothing
+  about it is specific to graphs.
+- When its answers change, it posts that (a notification of the objects' blocks, or `notifyAll`); the provider
+  is asked again by the next `evaluateScene` anyway.
+- Its error gives the object `ModelFailed`. evaluateScene goes on and returns the first one. A command fails with
+  it, or leaves the object out if the code is FailedPrecondition.
+
+**What commands do with a driven channel**
+- Its stored value stays what it is, in all commands but two: `setTransformType` writes the channels of the new
+  type from the state that was seen, so the driven values are baked; by path, the stored value is
+  written, and isn't seen.
+- `applyDelta` and drags: a driven or locked channel is never an error. The solver sees the driven value, the
+  free channels do what they can without the fixed ones, and the object is counted in `driven` or `locked` if
+  one of them was in the way.
+- `core.object.setWorld`: CLOSEST as above, and counted in `approximate`. EXACT leaves the object out (`skipped`)
+  if a fixed channel was in the way.
+- With keepWorld (`setParent`, `setTransformType`, `delete`), driven channels are fixed and an object that can't
+  stay is counted in `approximate`. Locks are ignored: the user locked them against tools, and wants the object
+  to stay.
+- A drag uses the time of its start, throughout.
+
+**Deltas**
+- `ApplyDelta::update(ctx, delta)` is the same delta for all; `update(ctx, deltas)` one for each of `count()`
+  objects, as `object(i)` has them: those that aren't below another one and were usable at the start.
+- A delta is always the total since the start. It is applied to the stored channels as they were then.
+- `startParent(i)`, `startState(ctx, i)` and `startPivot(ctx, i)` are what a tool computes its deltas from.
+- `changed()` says whether there is anything to commit. A tool that has nothing cancels, so that a click makes
+  no empty step.
+- `gesture` (an input of `core.object.applyDelta`): nudges of one gesture on the same objects are one step.
+- The record of a drag with several deltas has inputs that don't tell what it did. Redo writes the stored
+  values. Tools that want a record that can run again use `core.object.setWorld`.
+
+**The pivot slot**
+- `TransformModel::pivot(ctx, parent)` (optional) is the point in the world that the object turns about.
+  FBX has one: translation, rotation offset and rotation pivot. Without it, the pivot is the translation of the
+  state's matrix.
+- `computePivot(library, object, time)` is it for an object, with overrides.
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms
@@ -1152,6 +1228,8 @@ Recorded there when the phase is done:
 - §8: `AABB<double3>` is `Box3d`; Transformable and PickSink are added; Invalidation is called
   only by `invalidateData`, and doesn't drive the evaluator or SceneBvh;
 - "gizmos skip descendants" is in `core.object.applyDelta`.
+
+Recorded in the architecture's §8 and §9 on 2026-11-25.
 
 ## Pressure test record (2026-11-24)
 A fresh agent was given the first draft (`1f88d05`) and the code, without the author's reasoning.

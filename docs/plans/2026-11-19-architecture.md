@@ -407,7 +407,7 @@ list of `ApiMember`s.
     - `refine` must declare its candidate structs so that static validation (§12) can
       check paths through it.
   - `collection`: callbacks for `length`, `at(i)`, `lookup(key)`, `keyOf(item)`,
-    `active`, `setActive` and `itemStruct(item)`.
+    `active`, `activeMember` (the member that holds it) and `itemStruct(item)`.
     - `keyOf` returns a stable key (a handle or a name). It is mandatory, because undo
       depends on it.
 - **Fluent builder:** `st.addFloat("radius", &Brush::radius).ui(...).range(...).soft(...).subtype(...).update(cb)`.
@@ -609,34 +609,34 @@ How it works:
 ## 8. Objects and transforms (`scene/`)
 
 ### TransformModel
-`TransformModel` is a §2a interface, agnostic about how the matrix is built. Every
-method receives the parent context. `parent` is a nullable interface value (null at the root).
+`TransformModel` is a §2a interface, agnostic about how the matrix is built. Its models are stateless: an
+object's channels are a flat array of doubles, which `EvalCtx` has, with the time and the overrides.
+What a child needs of its parent is the parent's `TransformState`: the world matrix, the rotation
+without scale, and the local scale. (The first draft had `components()` and parent interfaces.)
 
-- `local(EvalCtx&) -> mat4d`.
-- `components(EvalCtx&) -> TransformComponents`. This returns the global rotation and
-  scale and the local scale, which children with FBX inherit types need.
-  - The default implementation decomposes `local`, so a TRS parent works under an FBX
-    child.
-- `world(EvalCtx&, const mat4d &parentWorld, TransformModel parent) -> mat4d`.
-  - The default is `parentWorld * local`.
-  - FBX RrSs and RSrs use the parent's global R and S. Rrs uses the parent's local scale
-    via `parent->components(ctx)`.
-- `setWorld(EvalCtx&, const mat4d &target, const mat4d &parentWorld, TransformModel parent, SetMode) -> Status`.
+- `evaluate(EvalCtx, parent) -> TransformState`.
+- `setWorld(current, target, parent, mode, out) -> Status`: the channels that give the target.
   - The model inverts its own inheritance rule. This is not
     `parentWorld⁻¹ · target` in general.
-  - It returns an error when the target can't be represented.
-- `applyDelta(EvalCtx&, const TransformDelta&, const mat4d &parentWorld, TransformModel parent)`.
-  - The delta is a translate, rotate or scale with a space and a pivot.
-  - Gizmos use it so accumulated rotation doesn't wrap Euler angles.
-  - The default goes through `setWorld`.
-- `structId()`: the model's channels are exposed as datapaths.
+  - `SetWorldMode::Exact` fails if the target can't be represented; `Closest` doesn't.
+- `applyDelta` (optional): a translation, rotation or scale with a basis and a pivot, from the channels at the
+  start, near to the last ones. Gizmos use it so accumulated rotation doesn't wrap Euler angles.
+  The default goes through `setWorld`.
+- `pivot` (optional): the point that the object turns about.
+- `evaluateMany` (optional): many objects of one type at once, for scripts.
+- `upgrade` (optional): turns the channels of an older file into today's.
+- The channels are PropertyDefs of the registered type, and by path the members of its struct.
 
 **Built-in models:**
-- `TrsTransform`: Euler with an order, or a quaternion.
-- `FbxTransform`: implemented in P3, with RrSs, RSrs and Rrs, to prove the interface is
-  agnostic.
+- `core.transform.trs`: Euler with an order, or a quaternion.
+- `core.transform.fbx`: RrSs, RSrs and Rrs, pivots and offsets, to prove the interface is agnostic.
+- `core.transform.matrix`: any affine matrix.
 
-**Gizmo rule:** gizmos and transform tools skip descendants of selected objects.
+**Fixed channels:** an `OverrideProvider` drives channels from outside (P5c, animation). Locks are bits of the
+object's. Solvers leave both alone, and say if one was in the way.
+
+**Gizmo rule:** gizmos and transform tools skip descendants of selected objects
+(`core.object.applyDelta` does it).
 
 **Math prerequisites (P0b):** litestl's `quat.h` has never compiled, and litestl has no
 Euler conversion and no matrix decompose. P0b fixes the quaternion type and adds:
@@ -646,15 +646,18 @@ Euler conversion and no matrix decompose. P0b fixes the quaternion type and adds
 - translate, rotate, scale, perspective and lookAt helpers.
 
 ### Object
-- `id` (a generational handle), `name`, flags, a parent handle, `transform()`,
-  `structId()`.
-- `localBounds() -> AABB<double3>`. World bounds transform all 8 corners.
+- A block, of whatever type, that implements **Transformable**: its transform type, channels, parent, data
+  block, flags and locks. coredcc's own is `coredcc.Object`; hosts and scripts have theirs.
+- By path, all of them are the struct `coredcc.SceneObject`.
+- `Spatial::localBounds() -> Box3d`. World bounds transform all 8 corners.
 - Capabilities are interfaces (§2a), queried with `query<I>(objectBlock)`. They are
   named after faberforge's `geometry-contract.md` where one exists there:
-  - **Invalidation** (v1): `invalidate(Topology|Positions|Attributes|Selection|Materials)`.
-    The scene evaluator and SceneBvh use it to choose between refit and rebuild.
+  - **Transformable** (v1, coredcc's own).
+  - **Invalidation** (v1): `invalidate(Topology|Positions|Attributes|Selection|Materials)`. Only
+    `invalidateData` calls it, which posts the kinds as the change's aspects. The scene evaluator asks for the
+    bounds of a type that has it only after such a change.
   - **Spatial** (v1): `closestElements(co, radius, domain)` for snapping, plus the
-    pick queries in object space. This was called Pickable in the first draft.
+    pick queries in object space (`PickSink`). This was called Pickable in the first draft.
   - **OverlayDrawable** (v1, coredcc's own capability): draws into a DrawList.
   - **ElementAccess** (v1): handles plus `topoStamp`. Elements in earlier drafts; the code has that name
     for a graph payload.
@@ -670,15 +673,17 @@ Euler conversion and no matrix decompose. P0b fixes the quaternion type and adds
   - the active object and selection;
   - parenting, with cycle checks;
   - a `SceneBvh`.
-- **The scene evaluator is a graph client.** It owns an internal GraphInstance that it
+- **The scene evaluator** (P3): `evaluateScene` evaluates parents before children into a second store, compares,
+  and updates SceneBvh by the boxes that differ. It looks things up again when the Library's epoch or the
+  registries move. Its results, with what changed, are `Scene::results` and `Scene::lastChanges`.
+- **It becomes a graph client in P5c.** It then owns an internal GraphInstance that it
   builds from the hierarchy:
   - one generated transform node per object;
   - parent links become graph edges;
-  - user graphs connect to per-object override inputs.
+  - user graphs connect to per-object override inputs, and commands see them through the OverrideProvider.
   - So world matrices are graph outputs, which matches faberforge's §2.4 and avoids a
     one-frame lag when a driver's parent is graph-driven.
-- `evaluate()` runs the graph, then the apply phase (§7), then updates SceneBvh from
-  Invalidation flags.
+  - `evaluate()` runs the graph, then the apply phase (§7), then updates SceneBvh.
 - The full datablock library is still out of scope (§15).
 
 ## 8a. Datablocks (`lib/`)
@@ -865,10 +870,9 @@ So:
 ## 9. BVH (`bvh/`)
 
 ### Generic core
-- `template<BvhSource S> class Bvh`. The concept requires `Scalar`, `size()`, `bounds(i)`
-  and `centroid(i)`.
-- Per-query callbacks are concept-checked: `rayHit`, `coneHit`, `distSq`,
-  `frustumTest`.
+- `template<BvhSource S> class Bvh`. The concept requires `Scalar`, `size()` and `bounds(i)`
+  (P3 left out `centroid(i)`).
+- Queries take a callback for a primitive, instead of asking the source.
 - **Nodes:** a flat array of binary nodes. Each leaf covers a contiguous range of a
   reordered index array.
   - Built-in sources store their primitives in leaf order, structure-of-arrays.
@@ -887,7 +891,8 @@ So:
   not the primitive.
 
 ### Queries
-- Ray (closest, any, all), cone, nearest-within-radius, sphere overlap and frustum.
+- Ray (closest, any, all), nearest-within-radius, sphere overlap and region (planes). P3 made cone
+  queries regions, of which a frustum is one.
 - **Non-uniform scale.** A circular cone or a sphere in world space becomes elliptical in
   object space. So SceneBvh works in two phases:
   1. A **conservative broad phase in object space.** The cone or sphere is bounded using
@@ -924,7 +929,7 @@ explicitly:
 - the DPI scale;
 - whether the projection is orthographic.
 
-Helpers: `project`, `unproject`, `rayFromPixel`, `coneFromPixel(radiusPx)` and
+Helpers: `project`, `unproject`, `rayFromPixel`, `regionFromRect` and
 `pixelSizeAt(point)`. Each is tested against every convention combination.
 
 ### DrawList

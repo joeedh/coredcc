@@ -179,12 +179,40 @@ Unreal, coredcc is exactly one module, so they exist once.
   they would have written to it is written when it is back: `onHostRestored` calls its `writeChannels`, so
   its data must be there by then. If it can't be written just then (an evaluation is going on, an error is
   pending), the next `evaluateScene` does it.
+- **Bounds are kept** for a data block (or an object) whose type implements Invalidation. Its bounds are asked for
+  again after `invalidateData` with Topology or Positions, another notification of the block, or a move of the
+  Library's epoch. Without Invalidation they are asked for in each evaluation.
+- **Flags and locks** are written with the optional slots `setFlags` and `setLocks` of Transformable. The commands
+  for them leave out objects that don't have the slot.
+- **Paths to a host's object** (`scene.objects[0].transform.location`) go through `coredcc.SceneObject`: they read a
+  copy of its channels, one for each block that was asked for, and write with `writeChannels`.
+- **Channels that something else drives** (animation, a rig): implement `OverrideProvider` and give it to the
+  Library with `setOverrideProvider`. Evaluation and all commands ask it. The stored values stay. Post a
+  notification when its answers change. Clear it before it ends.
 - **Parents are kept alive** by their children, and saved with them, also when they are in no scene.
+
+## A host's own scenes
+- The Context's scene may be of any type for paths and layouts: `scene.x` goes through its struct.
+- `evaluateScene`, `pickScene` and the commands need a `coredcc.Scene`. There is no interface for another type's
+  membership yet.
+- **To mirror a scene of the host's:**
+  - make one `coredcc.Scene` for each of them (`newScene`), not a GC root if it shouldn't be saved as one;
+  - give the host's objects blocks whose type implements Transformable, as above;
+  - when the host adds or removes objects, call `Scene::addMany` and `Scene::removeMany` with the scene, outside
+    of undo (the host's own undo does it again);
+  - leave out `core.scene.link`, `core.scene.unlink` and `core.object.delete`, or give them the host's commands'
+    work: they change the mirror only;
+  - the selection is the mirror's. Listen to `selectedObjects` and `activeObject` of the scene, and set them with
+    `setSelection` and `activeCell` when the host's change.
+- **For drawing:** `Scene::results()`, with `lastChanges` for what is different. Scripts have `sceneResults`.
 
 ## Scenes in files
 - Objects and scenes are saved with the library. The Context's scene isn't: set it after a load.
 - Register transform types before loading. The objects of a type that isn't there stand where their
   parents are; their channels are kept, and read when it is registered.
+- **A transform type in TS** has all of it: `defineTransformType` takes full channel specs, `version`, `upgrade`,
+  `pivot` and `evaluateMany`. With thousands of objects, give it `evaluateMany`: a call into a script for each
+  object costs more than the work in it.
 - **A transform type that changes its channels** raises `TransformTypeInfo::version`, and has an `upgrade`
   slot that changes what older files have. A newer file's channels are kept unread.
 - What a newer build put into an object or a scene is kept, and saved again. `dataMatrix` and `parentKey`

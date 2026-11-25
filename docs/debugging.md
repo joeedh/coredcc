@@ -133,11 +133,14 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 - **Symptom:** `Scene::evaluated`, or `evaluated.objects[...]`, shows where an object was, or the
   bounds of geometry it had.
 - **Cause:** results are from the last `evaluateScene`. Hosts call it once a frame, before
-  drawing; nothing calls it by itself. It computes everything again, so it needs no
-  notification.
-- **If the bounds stay old after it:** the data block caches them. Whoever changes a block's data
+  drawing; nothing calls it by itself. It computes all transforms again, and needs no
+  notification for that.
+- **If the bounds stay old after it:** the evaluator keeps those of a type that implements Invalidation, and the
+  data block may keep them too. Whoever changes a block's data
   directly must call `invalidateData(ctx, block, kinds)`, which calls the block's `Invalidation`
-  and posts the change for watchers.
+  and posts the change for watchers. The kinds must include Topology or Positions.
+- **If a driven channel stays old:** ask the Library's `OverrideProvider` itself, for that time. Only one that
+  answers for another time or an older document can be the reason.
 - **Commands and tools** that must not see old results use `computeState`, which reads the
   objects themselves.
 - **The same goes for picking:** `pickScene` answers for what was drawn. Objects that were added or

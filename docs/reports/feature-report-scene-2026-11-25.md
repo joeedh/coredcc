@@ -42,7 +42,11 @@
      basis and pivot, mirrored and scaled parents; own axes; drags through 0; results that are exact only
      with another rotation, found with singular vectors; a mirror by command, with a child.
    - *Not exact, as before:* factors that would shear. They are applied along the object's own axes.
-3. **Commands will ignore P5c's channel overrides.** *Round 3.*
+3. **Commands will ignore P5c's channel overrides.** *Fixed:* `OverrideProvider`, one per Library, which
+   evaluation, `computeState` and all commands ask through one function. Solvers leave driven channels as they
+   are. The contract is in the P3 plan ("What P4 and P5c rely on").
+   - *Tested:* `test_scene_overrides`, against documents that store the driven values, with drags at a time
+     that isn't 0 under parents and models that depend on it (the mutant that survived).
 4. **Membership edits were quadratic.** *Fixed:* `Scene::removeMany`, `putBack` and `addMany` take one pass,
    and unlink uses them; the membership commands prune only after records have gone
    (`Library::removedCount`); `deletePreview` looks at each user once; the history destroys what leaves it
@@ -59,7 +63,10 @@
      that is the sticky error.
    - *Tested:* drags, commits and cancels with the object away and back at each point; parents, types and
      channels; an object that is deleted while it is away.
-6. **Scripts can't read results in bulk, write a world matrix, or walk the hierarchy.** *Round 3.*
+6. **Scripts can't read results in bulk, write a world matrix, or walk the hierarchy.** *Fixed:* `sceneResults` (flat
+   arrays, for some places or all, with `lastChanges`), `sceneObjects`, `children`, and `setWorld`, which is
+   `core.object.setWorld`. C++ has `Scene::results`, `children`, and `ObjectEval`'s flags, parent and data.
+   Paths and loops over the selection and the results no longer make a list at each step.
 
 ## Medium
 7. **Per-object ancestor walks made deep chains quadratic.** *Fixed for commands:* `StateCache` and `Ancestry`
@@ -75,8 +82,10 @@
    drag, an object that can't follow an update keeps its last place.
    - Exceptions of scripts are errors still, and so is a write that fails: all or nothing.
    - `core.scene.select` leaves out what isn't selectable, and counts it.
-9. **The delta model has one pivot and one basis for all objects.** *Round 3.*
-10. **There are no per-channel locks.** *Round 3.*
+9. **The delta model has one pivot and one basis for all objects.** *Fixed:* `ApplyDelta::update` takes a delta for
+   each object, `startState` and `startPivot` say what they were, and `TransformModel` has an optional `pivot`.
+10. **There are no per-channel locks.** *Fixed:* `ObjectInfo::locks`, `core.object.setLocks`, and in files by name
+    (no new version). Solvers leave locked channels alone; keepWorld ignores locks.
 11. **Payload formats were positional.** *Fixed:* objects and scenes are named entries. What this build doesn't
     know is kept with its references, and written again. The scene's units are in the file now.
     - A setting whose value a build can't read stays the last of its name until it is set to something.
@@ -86,14 +95,16 @@
     type's name, and the optional slot `TransformModel::upgrade(version, ChannelEntries)`. It runs when an
     older object is first asked for its channels. A newer file's channels, and those that can't be
     upgraded, are kept unread; the object's status is Invalid, and the error is reported once.
-    - Scripts get both in round 3, with finding 20.
+    - Scripts have both (finding 20).
 13. **The member index missed raw cell writes.** *Fixed:* an id that isn't found is looked for again when the
     Library's epoch moved. `objects()` lists a block once, `prune` drops doubles, and `remove` takes all
     of them.
     - `add` doesn't look again, so that adding many objects isn't quadratic. A double that gets in that
       way does no harm.
-14. **Host objects are second class by path.** *Round 3.*
-15. **The Context says any host scene works.** *Round 3.*
+14. **Host objects are second class by path.** *Fixed:* `coredcc.SceneObject` has all members of any Transformable
+    block, and is what the scene's lists and pointers have.
+15. **The Context says any host scene works.** *Documented* in `context.h`, and in `embedding.md` how to mirror a
+    host's scene. *Deferred:* an interface for membership.
 16. **`setTransformType` rewrote objects that have the type already.** *Fixed:* they stay to the bit. One whose
     channels are another type's is still converted.
 17. **keepWorld didn't keep descendants that inherit FBX-style.** *Fixed by counting:* `approximate` counts every
@@ -105,10 +116,11 @@
 18. **There is no geometric transform, instancing or object offset.** *Reserved:* `dataMatrix` and `parentKey` in
     the format, and `ObjectEval::dataWorld`, which bounds and picking use and which is the object's world
     for now. No feature yet.
-19. **There is no object-level duplicate.** *Round 3.*
-20. **A foreign transform type can declare very little.** *Round 3.*
+19. **There is no object-level duplicate.** *Fixed:* `core.object.duplicate` and `core.scene.duplicate`.
+20. **A foreign transform type can declare very little.** *Fixed:* channel specs with the names of `meta`, enums and
+    quaternions, `version`, `upgrade`, `pivot` and `evaluateMany`. Bounds are kept by Invalidation.
 21. **Change reporting was all or nothing.** *Fixed for C++:* `Scene::lastChanges` has a version and the places
-    that differ from the evaluation before. Scripts get it with the bulk facade (finding 6, round 3).
+    that differ from the evaluation before. Scripts have it in `sceneResults`.
     - *Deferred:* watchers of `evaluated` still hear of any change. An owner per object would be posted 100,000
       times in a drag of all.
 
@@ -125,7 +137,15 @@
 24. **Selected objects that are hidden or made unselectable later** were still transformed and deleted.
     *Decided:* they stay selected, so that showing them again brings the selection back, but commands that
     work on the selection leave them out. `objects` may name them. Documented in `commands.h`.
-25. to 30.: *Round 3.*
+25. **Error text repeated the name, and said "isn't Live" for what isn't Transformable.** *Fixed.*
+26. **`SetWorldMode::Closest` isn't closest.** *Documented:* what it fits, and in which order.
+27. **Nudges were a step each, and a click could record an empty one.** *Fixed:* the input `gesture` of
+    `core.object.applyDelta`; `ApplyDelta::changed` tells a tool to cancel.
+28. **`core.object.add` took no data, rotation or scale,** and didn't select; `core.scene.link` took one object.
+    *Fixed.*
+29. **`Counters::completed` was an API.** *Fixed:* `EvaluateResult`.
+30. **Docs.** *Fixed:* architecture §8 and §9, and the plan on `parent`. `CLAUDE.md` is left to the user, who is
+    changing it.
 
 ## Found on the way
 - **A transform type that is registered after its objects** changes what they answer. Registering one posts
