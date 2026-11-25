@@ -878,6 +878,29 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   - the ray for shapes that don't cover the cursor, which then misses;
   - errors taken right after the first two interface calls: they are taken later as well.
 
+### Step 10
+- **Needs litestl PR #14.** This part is transform types, the facades and the `objects` input. What
+  scripts need for picking follows with the BVH review's fixes.
+- **Files:** `bind/foreign_transform.{h,cc} scene_facades.{h,cc} ts/scene.ts`; tests
+  `test_bind_scene`, `test_scene_objects`, `tests/wasm/scene.test.ts`. `run.mjs` runs both TS suites.
+- **`objects` is P2's block id text** (`client,hex32;client,hex32`, `parseBlockIds`), not
+  `@block(...)`: no quoting in an invocation, and a length limit that is checked. An id without a Live
+  block is NotFound; a block outside the scene FailedPrecondition. `core.scene.select` takes it too.
+- **`PropAccess::NotRemembered` is new.** LastUsedStore keeps every input of a command that ran, and
+  `invoke` puts them back. A remembered `objects` made the next invocation, without one, work on the
+  old objects instead of the selection.
+- **`transformChannel` takes `distance`,** because solveWorld's tolerance comes from Distance channels.
+- **`TransformRegistry::canAdd`** finds whatever makes `add` fail, so a refused registration leaves no
+  table. Both are Busy while something evaluates.
+- **`blockIdText`, `vec3`, `vec3At`, `vec3Put`** are further facades: double3 has no bound accessors.
+- **A model's slots are like a graph kernel's:** everything that takes a Context is Busy
+  (`kernelGate`).
+- **`pick` after a failed evaluation:** a script's exception comes with the hits of the others; with
+  any other error there are none, so no old results. `Scene::Counters::completed` tells them apart.
+- **In TS,** a model gets and returns plain numbers: `evaluate({channels, time}, parent)`, and
+  `setWorld` and `applyDelta` return the channels. The bound objects stay inside scene.ts.
+- **Mutations:** 52, each alone; all are found.
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms

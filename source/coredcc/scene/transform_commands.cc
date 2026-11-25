@@ -133,7 +133,7 @@ void setApproximate(Context &ctx, int n)
 struct SetParent : ChangesCommand {
   Status canRun(Context &ctx) const
   {
-    Result<Vector<BlockHandle>> objects = detail::selectedObjects(ctx);
+    Result<Vector<BlockHandle>> objects = detail::targetObjects(ctx);
     if (!objects.ok()) {
       return objects.status();
     }
@@ -152,13 +152,13 @@ struct SetParent : ChangesCommand {
     Result<Walk> up =
         walkUp(*s.lib, *parent, [&](BlockHandle p) { return selected.lookup_ptr(p) != nullptr; });
     return !up.ok()  ? up.status() :
-           up->found ? detail::about(*s.lib, *parent, failed("is below a selected object")) :
+           up->found ? detail::about(*s.lib, *parent, failed("is below one of the objects")) :
                        Status();
   }
   Status exec(Context &ctx)
   {
     const SceneOf s = *detail::sceneOf(ctx);
-    const Vector<BlockHandle> objects = *detail::selectedObjects(ctx);
+    const Vector<BlockHandle> objects = *detail::targetObjects(ctx);
     const BlockHandle parent = *detail::blockOf(ctx, "parent");
     const BlockId id = parent ? s.lib->get(parent)->id() : BlockId();
     const bool keep = ctx.inputs()->get("keepWorld")->asBool();
@@ -221,7 +221,7 @@ struct SetTransformType : ChangesCommand {
   }
   Status canRun(Context &ctx) const
   {
-    CDCC_TRY(detail::selectedObjects(ctx).status());
+    CDCC_TRY(detail::targetObjects(ctx).status());
     return typeInput(ctx) ?
                Status() :
                Status::error(StatusCode::NotFound,
@@ -232,7 +232,7 @@ struct SetTransformType : ChangesCommand {
   Status exec(Context &ctx)
   {
     const SceneOf s = *detail::sceneOf(ctx);
-    const Vector<BlockHandle> objects = *detail::selectedObjects(ctx);
+    const Vector<BlockHandle> objects = *detail::targetObjects(ctx);
     const TransformType &type = *typeInput(ctx);
     const TypeId id = type.id();
     const bool keep = ctx.inputs()->get("keepWorld")->asBool();
@@ -279,7 +279,7 @@ struct SetTransformType : ChangesCommand {
 struct SetRotationMode : ChangesCommand {
   Status canRun(Context &ctx) const
   {
-    Result<Vector<BlockHandle>> objects = detail::selectedObjects(ctx);
+    Result<Vector<BlockHandle>> objects = detail::targetObjects(ctx);
     if (!objects.ok()) {
       return objects.status();
     }
@@ -299,7 +299,7 @@ struct SetRotationMode : ChangesCommand {
   Status exec(Context &ctx)
   {
     const int32_t mode = int32_t(ctx.inputs()->get("mode")->asEnum());
-    const Vector<BlockHandle> objects = *detail::selectedObjects(ctx);
+    const Vector<BlockHandle> objects = *detail::targetObjects(ctx);
     for (BlockHandle h : objects) {
       Result<ObjectRead> r = readObject(*ctx.library(), h);
       const ChannelBlock c = r.ok() ? models::withRotationMode(r->channels, mode) : ChannelBlock();
@@ -331,7 +331,7 @@ struct DeleteObjects : ChangesCommand {
 
   Status canRun(Context &ctx) const
   {
-    return detail::selectedObjects(ctx).status();
+    return detail::targetObjects(ctx).status();
   }
   /* Children of the blocks in `gone` that aren't in it, parents first. */
   static Status children(const Library &lib,
@@ -379,7 +379,7 @@ struct DeleteObjects : ChangesCommand {
   Status exec(Context &ctx)
   {
     const SceneOf s = *detail::sceneOf(ctx);
-    const Vector<BlockHandle> objects = *detail::selectedObjects(ctx);
+    const Vector<BlockHandle> objects = *detail::targetObjects(ctx);
     const double time = s.scene->time();
     int approximate = 0;
     if (ctx.inputs()->get("keepChildrenWorld")->asBool()) {
@@ -494,7 +494,8 @@ CommandDef deltaDef(const char *name, const char *uiName)
       .input(PropertyDef::vecProp("vector", 3))
       .input(PropertyDef::vecProp("axis", 3).defaultValue(
           PropValue::ofComponents(PropValue::Type::Vec3, z)))
-      .input(PropertyDef::floatProp("angle").subtype(PropSubtype::Angle).unit(UnitFamily::Angle));
+      .input(PropertyDef::floatProp("angle").subtype(PropSubtype::Angle).unit(UnitFamily::Angle))
+      .input(detail::objectsInput());
   return def;
 }
 
@@ -504,13 +505,13 @@ CommandDef deltaDef(const char *name, const char *uiName)
 
 Status ApplyDelta::canRun(Context &ctx) const
 {
-  return detail::selectedObjects(ctx).status();
+  return detail::targetObjects(ctx).status();
 }
 
 Status ApplyDelta::exec(Context &ctx)
 {
   const SceneOf s = *detail::sceneOf(ctx);
-  const Vector<BlockHandle> objects = *detail::selectedObjects(ctx);
+  const Vector<BlockHandle> objects = *detail::targetObjects(ctx);
   const HandleSet selected = setOf(objects);
   time_ = s.scene->time();
   for (BlockHandle h : objects) {
@@ -606,6 +607,7 @@ Status detail::registerTransformCommands(Runtime &rt)
   parent.uiName("Set Parent")
       .input(PropertyDef::pointerProp("parent", StructId()))
       .input(keepWorld())
+      .input(detail::objectsInput())
       .output(approximate());
   CDCC_TRY(addCommandOnce<SetParent>(rt, std::move(parent)));
 
@@ -613,12 +615,14 @@ Status detail::registerTransformCommands(Runtime &rt)
   type.uiName("Set Transform Type")
       .input(PropertyDef::stringProp("type").defaultValue(PropValue::ofString(kTrsTransform)))
       .input(keepWorld())
+      .input(detail::objectsInput())
       .output(approximate());
   CDCC_TRY(addCommandOnce<SetTransformType>(rt, std::move(type)));
 
   CommandDef mode(kSetRotationModeCommand);
   mode.uiName("Set Rotation Mode")
-      .input(models::orderEnum("mode").item("QUATERNION", trs::kQuaternionMode));
+      .input(models::orderEnum("mode").item("QUATERNION", trs::kQuaternionMode))
+      .input(detail::objectsInput());
   CDCC_TRY(addCommandOnce<SetRotationMode>(rt, std::move(mode)));
 
   CDCC_TRY(addCommandOnce<ApplyDelta>(rt, deltaDef(kApplyDeltaCommand, "Transform")));
@@ -629,6 +633,7 @@ Status detail::registerTransformCommands(Runtime &rt)
   CommandDef del(kDeleteObjectsCommand);
   del.uiName("Delete Objects")
       .input(PropertyDef::boolProp("keepChildrenWorld").defaultValue(PropValue::ofBool(true)))
+      .input(detail::objectsInput())
       .output(PropertyDef::intProp("count"))
       .output(approximate());
   return addCommandOnce<DeleteObjects>(rt, std::move(del));

@@ -1,11 +1,13 @@
 #include "coredcc/scene/commands.h"
 
 #include "coredcc/api/change_bus.h"
+#include "coredcc/api/ref_text.h"
 #include "coredcc/command/block_commands.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/scene/builtins.h"
 
 #include "litestl/binding/binding.h"
+#include "litestl/util/map.h"
 
 #include <string>
 
@@ -28,11 +30,57 @@ Result<SceneOf> sceneOf(Context &ctx)
   return s;
 }
 
-Result<Vector<BlockHandle>> selectedObjects(Context &ctx)
+PropertyDef objectsInput()
+{
+  return PropertyDef::stringProp("objects")
+      .access(PropAccess::Optional | PropAccess::NotRemembered);
+}
+
+Result<Vector<BlockHandle>> objectsOf(Context &ctx)
 {
   Result<SceneOf> s = sceneOf(ctx);
   if (!s.ok()) {
     return s.status();
+  }
+  const litestl::util::string text = ctx.inputs()->get("objects")->asString();
+  Result<Vector<BlockId>> ids = parseBlockIds(ctx.runtime(), text.c_str());
+  if (!ids.ok()) {
+    return Status::error(ids.status().code(),
+                         (std::string("objects: ") + ids.status().message()).c_str());
+  }
+  Vector<BlockHandle> out;
+  litestl::util::Map<BlockHandle, char> seen;
+  for (const BlockId &id : *ids) {
+    const BlockHandle h = s->lib->find(id);
+    const Datablock *b = s->lib->get(h);
+    if (!b || b->state() != BlockState::Live) {
+      return Status::error(
+          StatusCode::NotFound,
+          ("objects: there is no block " + formatBlockId(ctx.runtime(), id)).c_str());
+    }
+    if (!s->scene->contains(*s->lib, h)) {
+      return about(*s->lib, h, Status::error(StatusCode::FailedPrecondition, "isn't in the scene"));
+    }
+    if (!seen.lookup_ptr(h)) {
+      seen.add(h, 0);
+      out.append(h);
+    }
+  }
+  return out;
+}
+
+Result<Vector<BlockHandle>> targetObjects(Context &ctx)
+{
+  Result<SceneOf> s = sceneOf(ctx);
+  if (!s.ok()) {
+    return s.status();
+  }
+  if (!ctx.inputs()->get("objects")->isNone()) {
+    Result<Vector<BlockHandle>> named = objectsOf(ctx);
+    if (named.ok() && named->size() == 0) {
+      return Status::error(StatusCode::FailedPrecondition, "objects: no object is named");
+    }
+    return named;
   }
   Vector<BlockHandle> selected = s->scene->selected(*s->lib);
   if (selected.size() == 0) {
@@ -262,12 +310,12 @@ struct Unlink {
 
   Status canRun(Context &ctx) const
   {
-    return detail::selectedObjects(ctx).status();
+    return detail::targetObjects(ctx).status();
   }
   Status exec(Context &ctx)
   {
     Result<SceneOf> s = detail::sceneOf(ctx);
-    Result<Vector<BlockHandle>> selected = detail::selectedObjects(ctx);
+    Result<Vector<BlockHandle>> selected = detail::targetObjects(ctx);
     s->scene->prune(*s->lib);
     scene.block = HistoryBlock(*s->lib, s->handle);
     for (BlockHandle h : *selected) {
@@ -414,17 +462,41 @@ struct Select {
     if (m == SelectMode::All || m == SelectMode::None) {
       return Status();
     }
+    Result<Vector<BlockHandle>> named = namedObjects(ctx);
+    if (!named.ok()) {
+      return named.status();
+    }
+    if (m == SelectMode::Remove) {
+      return Status();
+    }
+    for (BlockHandle h : *named) {
+      if ((flagsOf(*s->lib, h) & uint32_t(ObjectFlags::Unselectable)) != 0) {
+        return detail::about(*s->lib, h, failed("isn't selectable"));
+      }
+    }
+    return Status();
+  }
+  /* What `object` or `objects` names. */
+  static Result<Vector<BlockHandle>> namedObjects(Context &ctx)
+  {
     Result<BlockHandle> h = memberOf(ctx, "object");
     if (!h.ok()) {
       return h.status();
     }
-    if (!*h) {
-      return m == SelectMode::Set ? Status() : failed("object: no such block");
+    if (!ctx.inputs()->get("objects")->isNone()) {
+      if (*h) {
+        return Status::error(StatusCode::InvalidArgument, "both object and objects are given");
+      }
+      return detail::objectsOf(ctx);
     }
-    const bool adds = m != SelectMode::Remove;
-    return adds && (flagsOf(*s->lib, *h) & uint32_t(ObjectFlags::Unselectable)) != 0 ?
-               detail::about(*s->lib, *h, failed("isn't selectable")) :
-               Status();
+    Vector<BlockHandle> out;
+    if (*h) {
+      out.append(*h);
+    }
+    else if (mode(ctx) != SelectMode::Set) {
+      return failed("object: no such block");
+    }
+    return out;
   }
   /* A block that isn't Transformable has none. */
   static uint32_t flagsOf(const Library &lib, BlockHandle h)
@@ -451,19 +523,23 @@ struct Select {
       }
     }
     else if (m != SelectMode::None) {
-      const BlockHandle h = *memberOf(ctx, "object");
-      const BlockId id = h ? lib.get(h)->id() : BlockId();
-      const Vector<BlockHandle> selected = s->scene->selected(lib);
-      const bool has = selected.contains(h);
-      if (m != SelectMode::Set) {
-        for (BlockHandle x : selected) {
-          if (x != h || m == SelectMode::Add) {
-            after.append(lib.get(x)->id());
-          }
+      const Vector<BlockHandle> named = *namedObjects(ctx);
+      const Vector<BlockHandle> selected =
+          m == SelectMode::Set ? Vector<BlockHandle>() : s->scene->selected(lib);
+      litestl::util::Map<BlockHandle, char> isNamed, isSelected;
+      for (BlockHandle h : named) {
+        isNamed.add(h, 0);
+      }
+      for (BlockHandle h : selected) {
+        isSelected.add(h, 0);
+        if (m == SelectMode::Add || !isNamed.lookup_ptr(h)) {
+          after.append(lib.get(h)->id());
         }
       }
-      if (m == SelectMode::Set || (m != SelectMode::Remove && !has)) {
-        after.append(id);
+      for (BlockHandle h : named) {
+        if (m != SelectMode::Remove && !isSelected.lookup_ptr(h)) {
+          after.append(lib.get(h)->id());
+        }
       }
     }
     return write(ctx, after);
@@ -631,7 +707,9 @@ Status detail::registerMembershipCommands(Runtime &rt)
   CDCC_TRY(addCommandOnce<Link>(rt, std::move(link)));
 
   CommandDef unlink(kUnlinkCommand);
-  unlink.uiName("Unlink from Scene").output(PropertyDef::intProp("count"));
+  unlink.uiName("Unlink from Scene")
+      .input(detail::objectsInput())
+      .output(PropertyDef::intProp("count"));
   CDCC_TRY(addCommandOnce<Unlink>(rt, std::move(unlink)));
 
   CommandDef active(kSetActiveCommand);
@@ -647,7 +725,8 @@ Status detail::registerMembershipCommands(Runtime &rt)
                  .item("TOGGLE", int64_t(SelectMode::Toggle))
                  .item("ALL", int64_t(SelectMode::All))
                  .item("NONE", int64_t(SelectMode::None)))
-      .input(blockInputDef("object"));
+      .input(blockInputDef("object"))
+      .input(detail::objectsInput());
   CDCC_TRY(addCommandOnce<Select>(rt, std::move(select)));
 
   CommandDef add(kAddObjectCommand);

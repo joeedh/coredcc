@@ -21,6 +21,7 @@ coredcc_test(test_scene_paths SOURCES scene/test_scene_paths.cc DEPS coredcc_sce
 coredcc_test(test_scene_membership SOURCES scene/test_scene_membership.cc DEPS coredcc_scene)
 coredcc_test(test_scene_transforms SOURCES scene/test_scene_transforms.cc DEPS coredcc_scene)
 coredcc_test(test_scene_outline SOURCES scene/test_scene_outline.cc DEPS coredcc_scene)
+coredcc_test(test_scene_objects SOURCES scene/test_scene_objects.cc DEPS coredcc_scene)
 coredcc_test(test_scene_pick SOURCES scene/test_scene_pick.cc DEPS coredcc_bind coredcc_scene)
 coredcc_test(test_scene_bvh SOURCES scene/test_scene_bvh.cc DEPS coredcc_scene)
 coredcc_test(test_draw_view SOURCES draw/test_view.cc DEPS coredcc_draw)
@@ -108,6 +109,7 @@ coredcc_test(test_bind_library SOURCES bind/test_bind_library.cc DEPS coredcc_bi
 coredcc_test(test_bind_catalog SOURCES bind/test_bind_catalog.cc DEPS coredcc_bind)
 coredcc_test(test_bind_graph SOURCES bind/test_bind_graph.cc DEPS coredcc_bind)
 coredcc_test(test_bind_graph_results SOURCES bind/test_bind_graph_results.cc DEPS coredcc_bind)
+coredcc_test(test_bind_scene SOURCES bind/test_bind_scene.cc DEPS coredcc_bind)
 if(WIN32)
   coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS
     coredcc_bvh coredcc_draw coredcc_scene coredcc_command coredcc_layout coredcc_graph)

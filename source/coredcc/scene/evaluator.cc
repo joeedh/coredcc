@@ -470,6 +470,7 @@ Status evaluateScene(Context &ctx, BlockHandle h)
     lib->beginNoCollect();
     scene->evaluator_->counters.evaluations++;
     status = scene->evaluator_->run(*scene, *lib, changed, foreign);
+    scene->evaluator_->counters.completed += status.ok() ? 1 : 0;
     lib->endNoCollect();
   }
   if (changed) {

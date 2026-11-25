@@ -58,7 +58,7 @@ template <class R> R failed(Status s)
  * `allowed`: a script's discard, run while the host clears the history, must not push into
  * it. */
 Status slotGate(Context &ctx, const char *what, std::initializer_list<const char *> allowed);
-/** Busy while the innermost script slot is a graph kernel's. */
+/** Busy while the innermost script slot is a graph kernel's or a transform model's. */
 Status kernelGate(Context &ctx, const char *what);
 
 /** Runs a command, as a sub-command from a script command's exec. */

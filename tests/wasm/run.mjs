@@ -1,4 +1,4 @@
-// Runs the TS suites (spike.test.ts, the P1f TS spike, and ui.test.ts) against the test app's wasm-st module, node
+// Runs the TS suites (spike.test.ts, the P1f TS spike, ui.test.ts and scene.test.ts) against the test app's wasm-st module, node
 // variant (source/coredcc/testapp):
 //
 //   node run.mjs --module <coredcc_testapp_node.mjs> [--out <scratch dir>]
@@ -23,7 +23,7 @@ const script = join(root, 'source/coredcc/bind/ts/index.ts')
 const genPaths = join(root, 'source/coredcc/bind/ts/gen_paths.ts')
 const genScript = join(root, 'source/coredcc/bind/ts/gen.ts')
 
-const suites = ['spike.test.ts', 'ui.test.ts']
+const suites = ['spike.test.ts', 'ui.test.ts', 'scene.test.ts']
 
 const {values: opts} = parseArgs({options: {module: {type: 'string'}, out: {type: 'string'}}})
 if (!opts.module) {

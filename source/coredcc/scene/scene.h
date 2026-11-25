@@ -106,9 +106,11 @@ class Scene {
    * aren't members. */
   litestl::util::Vector<BlockHandle> evaluatedObjects() const;
 
-  /** How often evaluateScene made its lookups again, and how often they had changed. */
+  /** How often evaluateScene ran, and to the end (a foreign exception doesn't stop it); how often
+   * it made its lookups again, and how often they had changed. */
   struct Counters {
     int evaluations = 0;
+    int completed = 0;
     int revalidations = 0;
     int rebuilds = 0;
   };

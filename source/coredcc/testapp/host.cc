@@ -13,6 +13,7 @@
 #include "coredcc/graph/commands.h"
 #include "coredcc/graph/provider.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/scene/commands.h"
 #include "coredcc/testapp/items.h"
 
 #include "litestl/binding/binding.h"
@@ -173,6 +174,14 @@ class Host {
                &Data::focus)
         .dynamic([](PropertyDef &d, const PointerRef &, Context &ctx) { addItemKeys(d, ctx); });
     rt_.ext<LastUsedStore>().addCollectionTo(s);
+    CDCC_CHECK(registerSceneCommands(rt_).ok(), "testapp: registering scenes");
+    PointerAccessor scene;
+    scene.target = StructId::of(kSceneType);
+    scene.get = [](const PointerRef &, Context &ctx) {
+      return coredcc::detail::blockRoot(ctx, ctx.scene());
+    };
+    s.addPointer(PropertyDef::pointerProp("scene", scene.target), std::move(scene));
+    addEvaluated(s);
     CDCC_CHECK(reg.add(std::move(s)).ok(), "testapp: registering the root struct");
     Data *data = &data_;
     CDCC_CHECK(reg.addRuntimeOwner("testapp", kData, [data]() { return (void *)data; }).ok(),

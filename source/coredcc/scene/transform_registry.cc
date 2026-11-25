@@ -146,11 +146,41 @@ TransformRegistry::~TransformRegistry()
   }
 }
 
+Status TransformRegistry::canAdd(const TransformTypeInfo &info) const
+{
+  CDCC_TRY(rt_.busyIfEvaluating("adding a transform type"));
+  if (info.name.size() == 0) {
+    return bad(info.name, "it has no name");
+  }
+  if (rt_.ext<ApiRegistry>().find(StructId::of(info.name.c_str()))) {
+    return Status::error(StatusCode::AlreadyExists,
+                         ("transform type '" + std::string(info.name.c_str()) +
+                          "': a transform type or a struct has that name already")
+                             .c_str());
+  }
+  for (int i = 0; i < int(info.channels.size()); i++) {
+    const std::string name = info.channels[i].apiName().c_str();
+    CDCC_TRY(checkDef(info.name, info.channels[i]));
+    if (name == "length" || name == "active") {
+      return bad(info.name, "'" + name + "' is reserved for collections");
+    }
+    for (int k = 0; k < i; k++) {
+      if (name == info.channels[k].apiName().c_str()) {
+        return bad(info.name, "two channels are named '" + name + "'");
+      }
+    }
+  }
+  return Status();
+}
+
 Result<const TransformType *> TransformRegistry::add(TransformTypeInfo info,
                                                      Owned<TransformModel> model)
 {
   if (!model) {
     return bad(info.name, "it has no model");
+  }
+  if (Status s = canAdd(info); !s.ok()) {
+    return s;
   }
   ApiStruct st(info.name.c_str());
   st.uiName(info.uiName.c_str()).description(info.description.c_str());
@@ -158,9 +188,6 @@ Result<const TransformType *> TransformRegistry::add(TransformTypeInfo info,
   ChannelBlock defaults;
   litestl::util::Vector<uint8_t> distance;
   for (const PropertyDef &def : info.channels) {
-    if (Status s = checkDef(info.name, def); !s.ok()) {
-      return s;
-    }
     const int32_t first = defaults.size();
     defaults.resize(first + channelsOf(def.kind()));
     encode(def.defaultValue(), first, defaults);

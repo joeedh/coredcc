@@ -25,6 +25,8 @@ struct TransformTypeInfo {
    * have subtype Distance: solveWorld's tolerance comes from their size.
    */
   litestl::util::Vector<PropertyDef, 1> channels;
+
+  static litestl::binding::types::Struct<TransformTypeInfo> *defineBindings();
 };
 
 /** A registered transform type. Lives as long as its Runtime. */
@@ -93,7 +95,10 @@ class TransformRegistry {
   TransformRegistry(const TransformRegistry &) = delete;
   TransformRegistry &operator=(const TransformRegistry &) = delete;
 
-  /** Registers a type and takes its model. A name that is taken is AlreadyExists. */
+  /** Why a type can't be added: a channel def, or a name that is taken (AlreadyExists). Busy while
+   * a scene or a graph evaluates. */
+  Status canAdd(const TransformTypeInfo &info) const;
+  /** Registers a type and takes its model. Fails as canAdd does, leaving nothing behind. */
   Result<const TransformType *> add(TransformTypeInfo info, Owned<TransformModel> model);
   const TransformType *find(TypeId id) const;
   const TransformType *find(std::string_view name) const

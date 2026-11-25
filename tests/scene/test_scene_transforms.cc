@@ -52,7 +52,7 @@ void testSetParent()
   d.select({q});
   test_assert(isError(d.fails(kSetParentCommand, {{"parent", d.ptr(c)}}),
                       StatusCode::FailedPrecondition,
-                      "'c': is below a selected object"));
+                      "'c': is below one of the objects"));
   test_assert(isError(d.fails(kSetParentCommand, {{"parent", d.ptr(q)}}),
                       StatusCode::FailedPrecondition,
                       "its own parent"));

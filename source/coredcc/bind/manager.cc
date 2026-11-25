@@ -4,12 +4,15 @@
 #include "coredcc/bind/checked.h"
 #include "coredcc/bind/facades.h"
 #include "coredcc/bind/foreign_command.h"
+#include "coredcc/bind/foreign_transform.h"
 #include "coredcc/bind/graph_facades.h"
 #include "coredcc/bind/layout_facades.h"
 #include "coredcc/bind/library_facades.h"
 #include "coredcc/bind/path_reader.h"
 #include "coredcc/bind/run_facades.h"
+#include "coredcc/bind/scene_facades.h"
 #include "coredcc/command/command.h"
+#include "coredcc/scene/evaluated.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/binding/manager.h"
@@ -50,6 +53,26 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<ToolChecks>());
   mgr->add(Bind<ScriptBytes>());
   mgr->add(Bind<SaveResult>());
+  mgr->add(Bind<mat4d>());
+  mgr->add(Bind<quatd>());
+  mgr->add(Bind<double3>());
+  mgr->add(Bind<Box3d>());
+  mgr->add(Bind<ChannelBlock>());
+  mgr->add(Bind<EvalCtx>());
+  mgr->add(Bind<TransformState>());
+  mgr->add(Bind<TransformDelta>());
+  mgr->add(Bind<SetWorldMode>());
+  mgr->add(Bind<TransformModel>());
+  mgr->add(Bind<TransformTypeInfo>());
+  mgr->add(Bind<EvalStatus>());
+  mgr->add(Bind<ObjectEval>());
+  mgr->add(Bind<View>());
+  mgr->add(Bind<ViewPoint>());
+  mgr->add(Bind<ViewMath>());
+  mgr->add(Bind<MatrixResult>());
+  mgr->add(Bind<PickedObject>());
+  mgr->add(Bind<PickList>());
+  mgr->add(Bind<PickResult>());
 }
 
 /* Those that return a def they make check their id themselves. */
@@ -384,6 +407,35 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::graphInstanceCount", script::graphInstanceCount, MARGS("ctx"));
 }
 
+void addSceneFacades(litestl::binding::BindingManager *mgr)
+{
+  BIND_FUNCTION(mgr, "coredcc::vec3", script::vec3, MARGS("x", "y", "z"));
+  BIND_FUNCTION(mgr, "coredcc::vec3At", script::vec3At, MARGS("v", "i"));
+  BIND_FUNCTION(mgr, "coredcc::vec3Put", script::vec3Put, MARGS("v", "i", "x"));
+
+  BIND_FUNCTION(mgr, "coredcc::newTransformType", script::newTransformType, MARGS("id"))
+      .returnsOwned();
+  BIND_FUNCTION(mgr,
+                "coredcc::transformTypeUiName",
+                script::transformTypeUiName,
+                MARGS("type", "s"));
+  BIND_FUNCTION(mgr,
+                "coredcc::transformChannel",
+                script::transformChannel,
+                MARGS("type", "name", "defaultValue", "distance"));
+  BIND_FUNCTION(mgr,
+                "coredcc::registerForeignTransformType",
+                script::registerForeignTransformType,
+                MARGS("ctx", "type", "model", "slots"));
+
+  BIND_FUNCTION(mgr, "coredcc::newScene", script::newScene, MARGS("ctx", "name"));
+  BIND_FUNCTION(mgr, "coredcc::setScene", script::setScene, MARGS("ctx", "scene"));
+  BIND_FUNCTION(mgr, "coredcc::blockIdText", script::blockIdText, MARGS("ctx", "block"));
+  BIND_FUNCTION(mgr, "coredcc::evaluateScene", script::evaluateScene, MARGS("ctx"));
+  BIND_FUNCTION(mgr, "coredcc::worldMatrix", script::worldMatrix, MARGS("ctx", "object"));
+  BIND_FUNCTION(mgr, "coredcc::pick", script::pick, MARGS("ctx", "view", "x", "y", "radius"));
+}
+
 } // namespace
 
 void addBindings(litestl::binding::BindingManager *mgr)
@@ -394,6 +446,7 @@ void addBindings(litestl::binding::BindingManager *mgr)
   addGraphFacades(mgr);
   addLayoutFacades(mgr);
   addLibraryFacades(mgr);
+  addSceneFacades(mgr);
 }
 
 litestl::binding::BindingManager *bindings()

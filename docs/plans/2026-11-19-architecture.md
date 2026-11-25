@@ -349,7 +349,8 @@ Design aim: one metadata type serves both roles, command input and datapath memb
     no bit-per-type scheme.
 - **`subtype`:** a presentation and unit hint, for example Color, ColorGamma, Angle,
   Distance, Factor, Percentage, Time, Direction, Euler, Xyz, FilePath or Password.
-- **`access` flags:** ReadOnly, Private, NoUndo, Optional, SaveLastValue, Animatable.
+- **`access` flags:** ReadOnly, Private, NoUndo, Optional, SaveLastValue, Animatable,
+  NotRemembered.
 - **`ui` hints:** iconsOnly, expand, slider style, multiline. These are kept apart from
   `access`.
 - **Kind-specific metadata,** in a `std::variant`. This is internal to C++; bindings

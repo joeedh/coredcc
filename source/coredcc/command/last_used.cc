@@ -14,7 +14,8 @@ namespace {
 
 bool storable(const PropertyDef &def)
 {
-  return def.kind() != PropKind::Pointer && def.kind() != PropKind::Collection;
+  return def.kind() != PropKind::Pointer && def.kind() != PropKind::Collection &&
+         !def.hasAccess(PropAccess::NotRemembered);
 }
 
 constexpr const char *kItemBase = "CommandDefaults";
@@ -84,7 +85,7 @@ Status LastUsedStore::set(const CommandDef &def, std::string_view input, const P
   }
   if (!storable(*in)) {
     return Status::error(StatusCode::Unsupported,
-                         (std::string(input) + ": Pointer and Collection inputs aren't kept")
+                         (std::string(input) + ": Pointer, Collection and NotRemembered inputs aren't kept")
                              .c_str());
   }
   Entry &e = entry(def);

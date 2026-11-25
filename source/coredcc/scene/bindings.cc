@@ -1,6 +1,7 @@
 /* Binding descriptors for the transform types. */
 #include "coredcc/scene/evaluated.h"
 #include "coredcc/scene/pick.h"
+#include "coredcc/scene/transform_registry.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
@@ -82,6 +83,17 @@ lbt::Struct<TransformState> *TransformState::defineBindings()
     BIND_STRUCT_MEMBER(st, rotation);
     BIND_STRUCT_MEMBER(st, localScale);
     BIND_STRUCT_METHOD(st, finite, MARGS());
+  }
+  return st;
+}
+
+lbt::Struct<TransformTypeInfo> *TransformTypeInfo::defineBindings()
+{
+  static lbt::Struct<TransformTypeInfo> *st = nullptr;
+  if (!st) {
+    litestl::alloc::PermanentGuard guard;
+    st = new lbt::Struct<TransformTypeInfo>("coredcc::TransformTypeInfo",
+                                            sizeof(TransformTypeInfo));
   }
   return st;
 }

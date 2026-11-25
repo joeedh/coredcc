@@ -54,6 +54,7 @@ export * from './layout.ts'
 export * from './library.ts'
 export * from './reader.ts'
 export * from './run.ts'
+export * from './scene.ts'
 export * from './typed.ts'
 
 /* ---- datapaths and commands ---- */
@@ -216,6 +217,19 @@ export interface CommandSpec {
   outputs?: Record<string, Writable>
 }
 
+/** Runs a slot's body. */
+function inSlot<T>(fn: () => T): T {
+  scriptSlots.depth++
+  try {
+    return fn()
+  } finally {
+    scriptSlots.depth--
+  }
+}
+
+/** For scene.ts; not for scripts. */
+export const internal = {take, check, checkCtx, withValue, statusOf, sync, inSlot}
+
 /** What C++ calls: the user's command with defaults for the slots it left out. */
 class Adapter {
   constructor(
@@ -228,16 +242,8 @@ class Adapter {
       throw new TypeError(`${id}: redo must be a method, not a field (redo would run exec instead)`)
     }
   }
-  private run<T>(fn: () => T): T {
-    scriptSlots.depth++
-    try {
-      return fn()
-    } finally {
-      scriptSlots.depth--
-    }
-  }
   canRun(ctx: Context): Status | undefined {
-    return this.run(() => {
+    return inSlot(() => {
       try {
         const r = sync('canRun', this.cmd.canRun?.(ctx))
         if (typeof r === 'string') return errorStatus(StatusCode.FailedPrecondition, r)
@@ -249,7 +255,7 @@ class Adapter {
     })
   }
   exec(ctx: Context): Status | undefined {
-    return this.run(() => {
+    return inSlot(() => {
       try {
         sync('exec', this.cmd.exec(ctx))
         return undefined
@@ -259,10 +265,10 @@ class Adapter {
     })
   }
   undo(ctx: Context) {
-    this.run(() => sync('undo', this.cmd.undo(ctx)))
+    inSlot(() => sync('undo', this.cmd.undo(ctx)))
   }
   redo(ctx: Context): Status | undefined {
-    return this.run(() => {
+    return inSlot(() => {
       try {
         sync('redo', this.cmd.redo?.(ctx))
         return undefined
@@ -273,7 +279,7 @@ class Adapter {
   }
   /* A failing memSize or discard would report an unrelated applied run as failed. */
   memSize(): number {
-    return this.run(() => {
+    return inSlot(() => {
       try {
         const n = Number(sync('memSize', this.cmd.memSize?.() ?? 0))
         return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), Number.MAX_SAFE_INTEGER) : 0
@@ -285,7 +291,7 @@ class Adapter {
     })
   }
   discard() {
-    this.run(() => {
+    inSlot(() => {
       try {
         sync('discard', this.cmd.discard?.())
       } catch (e) {

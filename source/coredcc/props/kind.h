@@ -101,6 +101,9 @@ enum class PropAccess : uint16_t {
   /** A command input remembered between runs (LastUsedStore). */
   SaveLastValue = 1 << 4,
   Animatable = 1 << 5,
+  /** A command input LastUsedStore doesn't keep, such as block ids as text: a later run without
+   * it must not get the old value. */
+  NotRemembered = 1 << 6,
 };
 CDCC_FLAG_OPERATORS(PropAccess)
 

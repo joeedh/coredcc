@@ -17,7 +17,7 @@ namespace coredcc {
  * The input values a command last ran with, per command. A Runtime extension.
  *
  * - The executor remembers a top-level command's inputs after it succeeds: the ones
- *   that were set, Pointer and Collection inputs excepted.
+ *   that were set, Pointer, Collection and NotRemembered inputs excepted.
  * - `apply` puts them in a fresh input bag (`invoke` does this), skipping any the def
  *   no longer accepts.
  * - The datapath sees them as `commandDefaults["mesh.extrude"].dist` once

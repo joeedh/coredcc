@@ -11,6 +11,7 @@
 #include "coredcc/graph/node_type.h"
 #include "coredcc/parse/invocation.h"
 #include "coredcc/props/units.h"
+#include "coredcc/scene/transform.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
@@ -64,11 +65,15 @@ ValueResult lookup(const PropertyBag &bag, const string &name)
 
 Status detail::kernelGate(Context &ctx, const char *what)
 {
-  if (!inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<GraphKernel>())) {
-    return Status();
+  if (inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<GraphKernel>())) {
+    return error(StatusCode::Busy, std::string(what) + ": not from a script kernel (only its "
+                                                       "node's inputs, params and outputs)");
   }
-  return error(StatusCode::Busy, std::string(what) + ": not from a script kernel (only its "
-                                                     "node's inputs, params and outputs)");
+  if (inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<TransformModel>())) {
+    return error(StatusCode::Busy, std::string(what) + ": not from a script's transform model "
+                                                       "(only what its slot is given)");
+  }
+  return Status();
 }
 
 Status detail::slotGate(Context &ctx,

@@ -33,6 +33,7 @@ void writeAccess(JsonWriter &out, PropAccess access)
       {PropAccess::ReadOnly, "ReadOnly"},           {PropAccess::Private, "Private"},
       {PropAccess::NoUndo, "NoUndo"},               {PropAccess::Optional, "Optional"},
       {PropAccess::SaveLastValue, "SaveLastValue"}, {PropAccess::Animatable, "Animatable"},
+      {PropAccess::NotRemembered, "NotRemembered"},
   };
   out.key("access").beginArray();
   for (const auto &n : kNames) {

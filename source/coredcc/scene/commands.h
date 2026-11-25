@@ -1,8 +1,12 @@
 #pragma once
 
 /** \file
- * The commands of scenes and objects. They work on the Context's scene, and those that take
- * several objects on its selection. Pointer inputs are blocks.
+ * The commands of scenes and objects. They work on the Context's scene. Pointer inputs are blocks.
+ *
+ * Those that take several objects work on the scene's selection, or on the objects that the
+ * optional String input `objects` names: block ids as text (parseBlockIds), in that order, with
+ * repeated ones ignored. Bad text is InvalidArgument, an id without a Live block NotFound, and an
+ * object outside the scene FailedPrecondition.
  */
 
 #include "coredcc/command/command.h"
@@ -17,29 +21,29 @@ namespace coredcc {
 inline constexpr const char *kNewSceneCommand = "core.scene.new";
 /** `object`: adds it at the end. */
 inline constexpr const char *kLinkCommand = "core.scene.link";
-/** Removes the selected objects. Undo puts each behind the one it was behind. Outputs `count`. */
+/** Removes `objects`. Undo puts each behind the one it was behind. Outputs `count`. */
 inline constexpr const char *kUnlinkCommand = "core.scene.unlink";
 /** `object`, or null for none. */
 inline constexpr const char *kSetActiveCommand = "core.scene.setActive";
-/** `mode` (SET, ADD, REMOVE, TOGGLE, ALL, NONE), and `object` for the first four; SET without
- * one selects nothing. ALL leaves out hidden and unselectable objects; naming one that is
+/** `mode` (SET, ADD, REMOVE, TOGGLE, ALL, NONE), and `object` or `objects` for the first four; SET
+ * with neither selects nothing. ALL leaves out hidden and unselectable objects; naming one that is
  * unselectable fails. */
 inline constexpr const char *kSelectCommand = "core.scene.select";
 /** `type` (a transform type's name), `name`, `location` (in the world) and `parent`, which must
  * be in the scene. Outputs `object`. */
 inline constexpr const char *kAddObjectCommand = "core.object.add";
 
-/* Transforms of the selected objects (transform_commands.cc). With `keepWorld`, objects stay where
- * they are: exactly, or as well as their type can, which the output `approximate` counts. */
+/* Transforms of `objects` (transform_commands.cc). With `keepWorld`, they stay where they are:
+ * exactly, or as well as their type can, which the output `approximate` counts. */
 
-/** `parent` (null for none), in the scene and not below a selected object, and `keepWorld`. */
+/** `parent` (null for none), in the scene and not below one of the objects, and `keepWorld`. */
 inline constexpr const char *kSetParentCommand = "core.object.setParent";
 /** `type` (a name), and `keepWorld`. */
 inline constexpr const char *kSetTransformTypeCommand = "core.object.setTransformType";
 /** `mode`: an item of the TRS type's rotationMode. The rotation stays. TRS objects only. */
 inline constexpr const char *kSetRotationModeCommand = "core.object.setRotationMode";
-/** A TransformDelta (`kind`, `basis`, `pivot`, `vector`, `axis`, `angle`). Objects below a selected
- * one move with it, and aren't changed themselves. */
+/** A TransformDelta (`kind`, `basis`, `pivot`, `vector`, `axis`, `angle`). Objects below another
+ * of them move with it, and aren't changed themselves. */
 inline constexpr const char *kApplyDeltaCommand = "core.object.applyDelta";
 /** The same as an Interactive command: see ApplyDelta. */
 inline constexpr const char *kDragDeltaCommand = "core.object.dragDelta";
@@ -155,8 +159,12 @@ struct SceneOf {
   BlockHandle handle;
 };
 Result<SceneOf> sceneOf(Context &ctx);
-/** The selected objects, at least one. */
-Result<litestl::util::Vector<BlockHandle>> selectedObjects(Context &ctx);
+/** The input `objects`. */
+PropertyDef objectsInput();
+/** The objects it names. */
+Result<litestl::util::Vector<BlockHandle>> objectsOf(Context &ctx);
+/** Those, or the selected ones if it isn't given: at least one. */
+Result<litestl::util::Vector<BlockHandle>> targetObjects(Context &ctx);
 /** A Pointer input's Live block; a null handle for a null pointer. */
 Result<BlockHandle> blockOf(Context &ctx, const char *input);
 /** A block as a Pointer value. */
