@@ -1,591 +1,711 @@
-# P2: layout and library IO
+# P2: library IO (P2a) and layout (P2b)
 
-Status: draft, not yet pressure-tested (2026-11-24). Architecture: §8a ("Files, linking
-and import", "Attachments"), §12, §14 P2. Test app stage TA2
-(`docs/plans/2026-11-19-test-app.md`). Branch `p2-layout`.
+Status: pressure-tested and revised (2026-11-24); not yet implemented. The record is at the
+end. Architecture: §8a ("Files, linking and import", "Attachments"), §12, §14 P2. Test app
+stage TA2 (`docs/plans/2026-11-19-test-app.md`). Branch `p2-layout`.
+
+- **P2a, library IO:** steps A1 to A6, then its feature review ("library IO", added to the
+  task list row).
+- **P2b, layout and TA2:** steps B1 to B5, then its feature review ("layout").
+- A1 is the shared step: it merges to master first, and P3 and P5 rebase onto it.
 
 ## Ownership between the parallel phases
-The same table is in the P2, P3 and P5 plans.
-
 | Phase | Owns |
 |---|---|
-| P2 | Value bytes (bounded, versioned reader and writer for `PropValue` and `PropertyBag`); `BlockProvider`'s optional `serialize`, `deserialize`, `duplicate` and `rekey`; the attachment type registry and the attach and detach commands; `Library::rename`; snapshot undo and lz4; CreatedBlocks with BlockIds; `layout/`; TA2. The shared pieces (value bytes, provider slots) are its first step, merged to master early so P3 and P5 can rebase onto them. |
+| P2 | Value bytes; `BlockProvider`'s optional slots; **library lifetime** (pin kinds, deferred destruction of pinned blocks, `LibraryRef`, `LibraryPin`); attachments; `Library::rename`; snapshot undo and lz4; CreatedBlocks with BlockIds; `layout/`; TA2; `gen-paths`. Value bytes, slots, lifetime and the attachment registry are step A1, merged early. |
 | P3 | `scene/`, `bvh/`, `draw/View` if it needs it for screen distance, `EvalCtx`, `CollectionAccessor::setActive`, the Context scene slot, display units and frames. Its providers' `serialize` is its last step. |
-| P5 | `graph/`, the Runtime's global version counter, payloads. GraphDef serialization is its last step. |
+| P5 | `graph/`, the Runtime's global version counter, payloads, and **immediate change notification**: ChangeBus listeners, notify before the `update` hook, `notifyAll()` (its step 1, merged early, independent of P2). GraphDef serialization is its last step. |
 | Shared files | `source/coredcc/CMakeLists.txt`, `tests/CMakeLists.txt`, the task list, `docs/debugging.md`, `docs/embedding.md`: small appended changes only. Task list: each phase edits its own row and focus lines. No phase edits `CLAUDE.md`. |
+
+**Files P2 shares with P5 and P3** (real conflicts, so each side keeps its change small):
+- `lib/`: P2 only, after A1. P5 no longer edits `destroyFromHistory` or `unpin`.
+- `api/change_bus.*`, the write path in `api/resolve.cc`, `base/runtime.h`, the Busy checks in
+  `command/executor.cc`: P5. P2's change in `executor.cc` is `inputsFromInvocation` only.
+- `api/struct.h`: P3 adds `setActive`; P2 adds `PointerAccessor::cell` and
+  `CollectionAccessor::staticItem` (one optional field each).
 
 ## Scope
 
 ### In scope, with where it was deferred from
-| Item | From |
-|---|---|
-| Layout nodes, builder, XML subset parser, `toJson`, validator, example layouts | architecture §12, §14 |
-| Library section: save, load, placeholders | architecture §8a, §14 |
-| Append with rekeying; duplicate | architecture §8a |
-| `serialize`, `deserialize`, `duplicate`, `rekey` slots | P1c notes |
-| Attachment type registry, serializer, duplicate policy, opaque attachments; attach and detach commands | P1c and P1e notes |
-| `Library::rename`; enumerating slots, attachments and overrides | lib and api review D8 |
-| `forceUnlink` for references held inside a placeholder's payload | architecture §8a (P1 only unlinks slots) |
-| Snapshot undo (before and after blobs), lz4 | command review design 8 |
-| `CreatedBlocks` with BlockIds | command review design 9 |
-| A text form for Pointer values (invocation arguments, testbus) | props review D5; TA1 review S2 |
-| `meta(path)`, enum and flags names, `resolve` returning a kind | TA1 review S3, S5 |
-| TA2: the property panel built from a layout file | test-app plan |
+| Item | From | Step |
+|---|---|---|
+| `serialize`, `deserialize`, `duplicate`, `rekey` slots | P1c notes | A1 |
+| Attachment type registry, serializer, duplicate policy, opaque attachments | P1c notes | A1, A4 |
+| Attach and detach commands | P1e notes | A3 |
+| `Library::rename`; enumerating slots, attachments, overrides | lib and api review D8 | A2 |
+| `forceUnlink` for references inside a placeholder | §8a | A2 |
+| `CreatedBlocks` with BlockIds | command review, design 9 | A3 |
+| Library section: save, load, placeholders | §8a, §14 | A4 |
+| Append with rekeying; duplicate | §8a | A5 |
+| Snapshot undo (before and after blobs), lz4 | command review, design 8 | A6 |
+| Text form of Pointer values | props review D5; TA1 review S2 | B1 |
+| `meta(path)`, enum and flags names, `resolve` giving a kind | TA1 review S3, S5 | B1 |
+| Layout nodes, builder, XML subset, `toJson`, validator, example layouts | §12, §14 | B2, B3 |
+| TA2: the property panel built from a layout file | test-app plan | B4 |
+| `gen-paths` (typed paths for TS) | §13 (no phase owned it) | B5 |
 
 ### Out of scope
-- **A scene file, or any file system access.** The library section is bytes in and bytes
-  out; the host puts them in its file.
+- **A scene file, or file system access.** The section is bytes in and bytes out.
 - **Link** (blocks that stay in another file), and unregistering types at run time.
-- **Block providers and attachment providers written in TS.** `BlockProvider::data`
-  returns `void *`, which `foreignImplementable` refuses. Native fakes only.
-- **`gen-paths`** (typed paths for TS). It belongs to no phase yet; the review of P2
-  should say whether it goes to P6.
-- **Frontends beyond the test app's panel:** path.ux, Slate and ImGui adapters.
-- **Mat4 writes, registry removal, enum inputs and ranges in script def builders:** still
-  deferred (P1f notes).
-- **A list or collection widget in layouts.** A `prop` on a Collection is an error.
+- **Host-owned block storage,** until the Unreal spike (P4). See "Blocks without a payload".
+- **Snapshot undo over single blocks** (`BlockSnapshotUndo`, `replaceData`): cut, no client.
+- **Block and attachment providers written in TS.** Their slots use `void *`, which
+  `foreignImplementable` refuses.
+- Frontends beyond the test app's panel. Mat4 writes, registry removal, enum inputs and
+  ranges in script def builders (deferred in P1f). A list widget in layouts.
 - **Migrating payloads:** a provider reads its own older versions.
 
 ## Module placement
 `base` ← `props`, `parse` ← `lib` ← `api` ← `command` ← `layout` ← `bind`
+- `lib` gains `props` (allowed by P1's layering) and, from A4, litestl's `io` target (lz4).
+- The root CMake's SYSTEM loop for host-supplied litestl gains `io` and `lz4`.
 
-- `base/bytes.h` (new): the byte reader and writer.
-- `props/value_io.h` (new): value bytes.
-- `lib` gains a dependency on `props` (allowed by the P1 layering, not used until now)
-  and on litestl's `io` target (lz4).
-- `layout/` (new module) depends on `command`, because the validator checks invocations.
+---
 
-## Step 1: shared pieces (merged to master before the rest)
+# P2a
 
-### What litestl gives us
-- `litestl/io/bytes.h`'s `ByteReader` is safe on hostile input: every read checks the
-  remaining size, an over-read is sticky and gives zeros, and `str()` compares the length
-  as 64 bits before narrowing (so it holds on wasm32). 200,000 random buffers ran clean in
-  a scratch test (clang-cl, no sanitizer).
-- What it doesn't do, and callers must:
-  - bound counts before allocating;
-  - narrow a `u64` safely before calling `view(size_t)` (wasm32);
-  - report where and why it failed;
-  - `ByteWriter::put` casts sizes to `int`, so it overflows at 2 GB.
-- `litestl/io/compress.h` (namespace `sculptcore::io`) uses `LZ4_decompress_safe` and
-  checks the exact size. `rawSize` is allocated up front, so the caller must bound it. The
-  best possible lz4 ratio is below 255:1 (measured 254.9 on zeros), which gives the bound.
-  200,000 corrupted blocks decoded without a crash, and 16,406 of them decoded
-  "successfully" to wrong bytes or an unintended length, so lz4 is not an integrity check:
-  the section needs checksums.
-- The `io` target builds in native-clang-debug, native-msvc-debug and wasm-st-debug today,
-  with exceptions off.
+## Step A1: the shared step
+Three commits: lifetime, bytes and values, slots and attachments. Saving isn't in it.
 
-### `base/bytes.h`
-- `BytesWriter`: `u8 u16 u32 u64 i64 f64 boolean str bytes`, over a litestl
-  `Vector<uint8_t>`. A write that would pass `kMaxBytes` (1 GiB; 512 MiB when pointers are
-  32 bits) sets a sticky OutOfRange and writes nothing more.
-- `BytesReader`: the same reads, over a borrowed span. Wraps litestl's `ByteReader`.
-  - The first failure is kept as a Status with the byte offset; later reads give zeros.
-  - `count(minItemBytes)` reads a u32 and fails when
-    `n * minItemBytes > remaining()`, in 64-bit arithmetic. It is the only way to read a
-    count.
-  - `str(maxLen)`: rejects a NUL (litestl strings end at NUL, and `lsString` aborts on
-    one), and invalid UTF-8.
-  - `fail(msg)`, `status()`, `remaining()`, `atEnd()`.
-- These, not litestl's, appear in coredcc headers, so `compile_embed` covers them and the
-  litestl include (`"util/vector.h"`, unprefixed) stays in a `.cc`.
-
-### `props/value_io.h`
+### Library lifetime
 ```cpp
-/** How block ids inside Pointer values are stored. */
-class BlockIdCodec {            // coredcc-internal polymorphism: an ordinary virtual class
-  virtual Status write(BytesWriter &out, const BlockId &id) = 0;
-  virtual Status read(BytesReader &in, BlockId &id) = 0;
+// lib/block.h
+enum class BlockState : uint8_t { Live, InHistory, Detached, Placeholder, Doomed };
+enum class PinKind : uint8_t { Host, History };
+int Datablock::pins() const;                 // both kinds
+int Datablock::pins(PinKind) const;
+uint64_t Datablock::stateChanges() const;    // bumped by every state transition
+
+// lib/library.h
+void pin(BlockHandle h, PinKind kind = PinKind::Host);
+void unpin(BlockHandle h, PinKind kind = PinKind::Host);
+bool busy() const;                           // sweeping or collecting
+
+// lib/pin.h
+class LibraryRef {                           // weak, copyable; from Library::ref()
+  Library *get() const;                      // null once the Library is being destroyed
 };
-/** Ids inline as client name + 128 bits: for preferences, clipboards and undo blobs. */
-class InlineIdCodec final : public BlockIdCodec;
-
-Status writeValue(const Runtime &rt, BytesWriter &out, const PropValue &v, BlockIdCodec &ids);
-Result<PropValue> readValue(BytesReader &in, BlockIdCodec &ids);
-
-struct BagIssue { string name; Status why; };   // unknown name, or a value that won't coerce
-Status writeBag(const Runtime &rt, BytesWriter &out, const PropertyBag &bag, BlockIdCodec &ids);
-/** Into a bag whose defs come from code. Set entries only; issues don't fail the read. */
-Status readBag(BytesReader &in, PropertyBag &bag, BlockIdCodec &ids, Vector<BagIssue> &issues);
+class LibraryPin {                           // RAII, move-only, over a LibraryRef
+  LibraryPin(Library &lib, BlockHandle h, PinKind kind = PinKind::Host);
+  LibraryPin copy() const;
+  void reset();
+  Library *library() const;
+  BlockHandle handle() const;
+  bool dataAlive() const;                    // library alive; Live, InHistory or Doomed
+};
 ```
-- **Value:** u8 wire tag, then the payload. Wire tags are their own constants, not
-  `PropValue::Type`'s numbers, with a static mapping both ways, so reordering the enum
-  can't change files.
-  - Vec, Quat and Mat4: their doubles. NaN and -0.0 round-trip bitwise.
-  - Pointer: owner kind, then the block id through the codec, or the runtime owner's
-    *name*; key segments (at most 256, strings at most 64 KiB, handles non-negative);
-    the struct's *name* (empty for null). Names come from `Runtime::nameOf`. An id with no
-    registered name fails the write with InvalidArgument: files store names, never hashes.
-- **Bag:** u32 count; per entry: name, u32 byte length, value. The length lets an unknown
-  wire tag be skipped, so an older build can read a newer bag.
-  - Enum and Flags entries are written as their keys (`"EDIT"`, `"A|B"`), because `coerce`
-    already accepts keys and item numbers may change. A value with no matching item is
-    written as a number.
-  - Entries that aren't `wasSet` are not written.
-- **No format version of its own.** Value bytes live inside versioned containers (a
-  payload version, the section's version).
+- **Who uses which:** graph payloads and evaluated state use Host. Undo records
+  (SetProperty, CreatedBlocks, P5's edits) use History. GC treats both as roots. A save
+  treats only Host pins as roots (A4), or the undo stack would put deleted content in files.
+- **`destroyFromHistory` on a block with Host pins** (after its usual check for Strong users)
+  returns ok and makes it **Doomed**:
+  - it leaves the id index at once: `find` gives nothing, and `createWithId` and `reviveAs`
+    accept its id. `get(handle)` still works; `forEach`, `usersOf` and saves skip it;
+  - `onWeakTargetLost` runs now (later the id may name another block);
+  - as a GC root it keeps its strong targets alive. Nothing else can keep it alive;
+  - it is destroyed when its last Host pin goes. Inside a sweep or a no-collect scope, that
+    waits for the end of it.
+  - **Rechecked at that time:** if a Live or Detached block holds a Strong ref to its id, and
+    no other record has the id, it goes back to InHistory instead, as if
+    `destroyFromHistory` had been refused. If another record has the id, that ref now means
+    the other record, so the block is destroyed.
+- History pins don't doom: the records holding them can't undo past the one being dropped.
+  This is today's behaviour. An unpin through a stale handle does nothing, as today.
+- **Errors from a deferred destroy** are taken from the sticky error and kept on the Library
+  (16 at most, plus a count). The next `collect()` returns them after doing its work.
+- `LibraryPin` and `unpin` are main-thread only. A payload released on a worker must hand its
+  pin back to the main thread; that is P5's side.
+- **The epoch is also bumped by** `attach`, `detach`, `setOverride` and `clearOverride`: they
+  change what `query` answers.
+- A host destroying data (`onHostDestroyed`) isn't delayed by pins. `dataAlive()` says so.
 
-### `lib/block_io.h`
+### Bytes: `base/bytes.h`
 ```cpp
-/** What a provider writes a block's payload with. Bound opaque, so slots can take it. */
+class BytesWriter {
+  void u8(uint8_t); void u16(uint16_t); void u32(uint32_t); void u64(uint64_t);
+  void i64(int64_t); void f64(double); void boolean(bool);
+  void str(std::string_view);                       // u32 length; stops at a NUL, as litestl strings do
+  void blob(std::span<const uint8_t>);              // u32 length
+  void fail(Status);  const Status &status() const;
+  const litestl::util::Vector<uint8_t> &data() const;
+  litestl::util::Vector<uint8_t> take();
+};
+class BytesReader {
+  BytesReader(std::span<const uint8_t> bytes);      // borrowed
+  uint8_t u8(); ... bool boolean(); double f64();
+  std::string_view str();                           // a view; a NUL inside is a failure
+  std::span<const uint8_t> blob();
+  uint32_t count(size_t minItemBytes);              // fails unless n * minItemBytes <= remaining()
+  size_t remaining() const;  size_t offset() const;  bool atEnd() const;
+  void fail(Status);  const Status &status() const; // the first failure, with its offset
+};
+```
+- Its own 100 lines rather than a wrapper: litestl's `ByteReader` is bounds-safe, but wrapping
+  it would put its unprefixed include (`"util/vector.h"`) in a coredcc header.
+- **The writer never emits what the reader rejects.** Text is any bytes without NUL: no UTF-8
+  check, and no length limit but the remaining bytes. P1 already accepts Latin-1 and
+  100,000-byte names, and a save must not produce a file that can't be opened.
+- A write past `kMaxBytes` (1 GiB; 256 MiB on 32-bit) is a sticky OutOfRange.
+
+### Names: `base/name_table.h`
+```cpp
+class NameTable {                                   // id -> name, per IdDomain; bounded (16 MiB)
+  bool add(IdDomain, std::string_view name);        // false when full or the id has another name
+  const char *nameOf(IdDomain, uint64_t id) const;
+};
+NameTable &Library::fileNames();
+```
+- Names that only a file knows (a missing add-on's struct, a runtime owner) go here, **never
+  into the Runtime's registry**: a file's name must not make a plug-in's registration fail.
+- On the wire a name is `u8 form`: null, name, or raw id. The writer looks in the Runtime, then
+  the table, and falls back to the raw id, so an unknown name never fails a save.
+- A name in a file that hashes to an id the Runtime registered under another name fails the
+  read (InvalidArgument). Only that file suffers.
+
+### Values: `props/value_io.h`
+```cpp
+class ValueCodec {                                  // an ordinary virtual class, internal to C++
+  ValueCodec(const Runtime &rt, NameTable *names);  // names may be null (names then come back as ids)
+  virtual void writeBlockId(BytesWriter &, const BlockId &);      // default: client name + 128 bits
+  virtual void readBlockId(BytesReader &, BlockId &);
+  void writeName(BytesWriter &, IdDomain, uint64_t id) const;
+  uint64_t readName(BytesReader &, IdDomain);
+};
+void writeValue(BytesWriter &out, const PropValue &v, ValueCodec &codec);
+PropValue readValue(BytesReader &in, ValueCodec &codec);       // None after a failure
+
+struct BagIssue { litestl::util::string name; Status why; };
+void writeBag(BytesWriter &out, const PropertyBag &bag, ValueCodec &codec);
+void readBag(BytesReader &in, PropertyBag &bag, ValueCodec &codec,
+             litestl::util::Vector<BagIssue> &issues);          // set entries into code's defs
+```
+- **Wire tags** are their own constants, not `PropValue::Type`'s numbers.
+- Floats keep their bits (NaN, -0.0). A Pointer is: owner kind; block id through the codec, or
+  the runtime owner's name; key segments; the struct's name. Handles must be non-negative.
+- **A bag entry** is name, tag, u32 length, bytes. The length lets an unknown tag be skipped.
+  Only set entries are written. Enum and Flags are written as keys (`"EDIT"`, `"A|B"`), or as
+  numbers when there is no item for the value; `coerce` then rejects the number on read, so
+  the entry is an issue (and, in a block, an unread entry that is kept).
+- These bag functions are for data outside blocks (preferences, clipboards). Blocks use the
+  entries below.
+
+### Payloads: `lib/block_io.h`
+```cpp
+/** A named value in a payload. */
+struct BlockEntry {
+  litestl::util::string name;
+  PropValue value;                          // None when unknown
+  litestl::util::Vector<RefCell, 1> refs;   // the block a Pointer value names; the truth for its id
+  uint8_t unknownTag = 0;                   // set: a tag this build doesn't know
+  litestl::util::Vector<uint8_t> raw;       // its bytes
+};
+
 class BlockWriter {
   BytesWriter &bytes();
-  void ref(const RefCell &cell);                         // index into the block's ref table
-  void value(const PropValue &v, RefKind pointerKind);   // Pointer ids go through the table
-  void bag(const PropertyBag &bag, RefKind pointerKind);
-  void fail(std::string_view why);
+  void ref(const RefCell &cell);            // appends a row to the ref table, writes its index
+  void entry(const BlockEntry &e);          // refs[0].kind is the row's kind
+  void entries(std::span<const BlockEntry> all);
+  void bag(const PropertyBag &bag, RefKind pointerKind, std::span<const BlockEntry> unread = {});
+  static const lbt::Struct<BlockWriter> *defineBindings();      // opaque
 };
 class BlockReader {
-  uint32_t version() const;                              // the payload version it was written with
+  uint32_t version() const;                 // the payload version it was written with
   BytesReader &bytes();
-  void ref(RefCell &cell);                               // sets target; keeps the cell's own kind
-  Result<PropValue> value();
-  Status bag(PropertyBag &bag);                          // issues go into the load report
-  void setData(void *data);                              // becomes the block's clientData
-  void fail(std::string_view why);
+  void ref(RefCell &cell);                  // sets the target; the cell keeps its own kind
+  void entries(litestl::util::Vector<BlockEntry> &out);
+  /** Entries no def takes, or that don't coerce, land in `unread`; keep and rewrite them. */
+  void bag(PropertyBag &bag, litestl::util::Vector<BlockEntry> &unread);
+  void setData(void *data);                 // becomes the record's clientData
+  Library &library() const;                 // ids and names only; no other block's data
+  static const lbt::Struct<BlockReader> *defineBindings();      // opaque
 };
-class BlockCopy { void setData(void *data); };
-```
-- **The payload rule** (§8a) becomes a mechanism: a payload never holds a `BlockId`. It
-  holds indices into the block's **ref table**, `(RefKind, BlockId)` rows the library
-  stores beside the payload. GC, remapping, append and placeholders work on the table
-  without understanding the payload.
-- `BlockWriter::ref` writes a null row for a null target and for an InHistory target: its
-  undo doesn't survive a save, and a saved optional ref to it would otherwise load as a
-  placeholder.
+class BlockCopy {
+  void setData(void *data);
+  static const lbt::Struct<BlockCopy> *defineBindings();        // opaque
+};
 
-### `BlockProvider` slots (all optional)
+struct BlockPayload {
+  uint32_t version = 1;
+  litestl::util::Vector<uint8_t> bytes;
+  litestl::util::Vector<RefCell> refs;      // the ref table
+};
+/** What save, load and duplicate use, and P3's and P5's tests. */
+Result<BlockPayload> writePayload(const Library &lib, BlockHandle h);
+Status readPayload(Library &lib, BlockHandle h, const BlockPayload &p);
+```
+- **A payload holds no BlockId, by convention:** it holds indices into the block's ref table,
+  which the library stores beside it. GC, remapping, append and placeholders work on the
+  table alone. `bytes()` can't enforce that, so the audit checks it.
+- **The table is written as is.** What a save nulls is decided by the save, on every table (the
+  provider's, slots, placeholders, attachments), not by the writer: duplicating must keep refs
+  to deleted blocks.
+- **Audit:** the *set* of non-null targets and strengths in the table, against what
+  `foreachRef` reports. Rows aren't deduplicated, and listing a ref twice is fine. A difference
+  is Internal with the relations audit on (debug), else an issue on the save.
+- **The raw entry's refs are laid out in the entry's header,** outside `raw`, so an unknown
+  entry's rows survive rewriting. A provider that keeps `unread` entries reports their `refs`
+  from `foreachRef`.
+- **For P5:** a node's Pointer parameter is a `BlockEntry` (or has its own RefCell) whose cell is
+  the truth; the `PropValue`'s block id is a copy. A node of an unknown type keeps its
+  `BlockEntry` list.
+
+### Provider slots
 ```cpp
+// BlockProvider, all optional
 Status serialize(const Datablock &block, BlockWriter &out) const;
 Status deserialize(const Datablock &block, BlockReader &in);
 Status duplicate(const Datablock &src, BlockCopy &out);
-BlockId rekey(const Datablock &imported) const;    // null: refuse the append
+BlockId rekey(const Datablock &imported) const;       // null: refuse the append
+
+// BlockTypeInfo
+enum class BlockStorage : uint8_t { Unspecified, Payload, Transient };
+BlockStorage storage = BlockStorage::Unspecified;     // becomes Payload when the slots exist
 ```
-- `deserialize` makes new data and calls `in.setData`. On an error it has freed what it
-  made. It never sees a partly filled library: no other block's data may be read from it
-  (blocks load in id order). Refs are set as ids and resolve later.
-- **Deviation from §8a:** `duplicate` is per block, without a handle list or an `IdMap`.
-  Handles are per Library and providers per Runtime (P1c note). The provider copies data,
-  refs verbatim; the library then rewrites the copy's refs through `foreachRef`.
-- **Deviation from §8a:** `rekey` gets the imported record, not a payload and a map, since
-  payloads hold no ids. It returns the new id, in the same client.
-- `BlockTypeRegistry::add` rejects a provider with only one of `serialize` and
-  `deserialize`. It also gains `BlockTypeInfo::storage`:
-  - `Payload` (default when the slots exist);
-  - `HostOwned`: no payload; the record loads as Detached until `onHostRestored`;
-  - `Transient` (default when they don't): not saved; a saved strong ref to one is listed
-    in the save report.
+- `deserialize` makes new data and calls `setData`; on an error it has freed what it made. The
+  record exists (id, name, slots); its data isn't there until it returns ok.
+- **Deviations from §8a:** `duplicate` is per block and copies refs verbatim; the library then
+  rewrites them through `foreachRef` (handles are per Library, providers per Runtime). `rekey`
+  gets the imported record: payloads hold no ids.
+- `BlockTypeRegistry::add` refuses one of `serialize` and `deserialize` without the other, and
+  Transient with either.
 
-### Rules for P3 and P5
-- Serialize through `BlockWriter`, refs through `ref()`, parameters through `bag()`.
-- **A Pointer in a bag must also have a RefCell that `foreachRef` reports.** A `PropValue`
-  holds a `StableRef`, which `RefVisitor` can't visit. P5's node parameters keep one
-  `RefCell` per Pointer parameter, as the truth, and build the `PropValue` from it.
-
-## Step 2: library bookkeeping
-- `Library::rename(h, name)`: InvalidArgument for a NUL or over `kMaxNameLength`
-  (64 KiB); bumps the epoch so watchers re-read. Names stay non-unique.
-  - `core.block.rename(block=... name="...")`, undoable, by BlockId.
-- `forEachSlot`, `forEachAttachment`, `forEachOverride` (const, record order).
-- `setSlot` requires `ns` to be a registered type name (InvalidArgument otherwise).
-  P1 accepts any hash, which a file can't store. The two existing callers are tests: one
-  uses a registered type, and one (a placeholder's slot) must register its name.
-- **Pin kinds:** `pin(h, PinKind = Host)`, with `History` for SetProperty and
-  CreatedBlocks. GC treats both as roots. A save treats only Host pins as roots, or an
-  unlinked block would be saved because the undo stack remembers it.
-- **Placeholder refs:** `Datablock` keeps a placeholder's ref table, and `foreachRef`
-  visits it, so `usersOf`, GC and remap see through placeholders.
-  - `Library::forceUnlinkRef(h, index)` nulls one row of it (the indices the payload holds
-    stay valid). `forceUnlink` on slots stays as it is.
-- **Placeholders have two reasons:** `MissingType` (has a payload) and `MissingBlock` (a
-  strong target no file held; no payload, no type).
-  - A `MissingBlock` placeholder stops being a GC root: it is collected when nothing
-    references it. `MissingType` stays a root.
-  - `Datablock::sourceName()` records where it came from.
-- `Library::resolvePlaceholders()`: after types are registered, deserializes the
-  `MissingType` placeholders whose type now exists (an add-on enabled late).
-
-## Step 3: the library section
-
-### API
+### Attachments
 ```cpp
-struct SaveOptions { bool compress = true; };
-struct SaveReport  { int blocks; Vector<IoIssue> issues; };
-Result<Vector<uint8_t>> saveLibrary(const Library &lib, const SaveOptions &, SaveReport *);
-
-struct LoadLimits  { uint64_t maxRawBytes = 1 GiB (512 MiB on 32-bit); uint32_t maxBlocks = 1 << 22; };
-struct LoadOptions { std::string_view sourceName; LoadLimits limits; };
-struct LoadReport  { Vector<BlockHandle> loaded; int placeholders; Vector<IoIssue> issues; };
-Result<LoadReport> loadLibrary(Library &lib, std::span<const uint8_t> bytes, const LoadOptions &);
-struct IoIssue { BlockId block; string blockName; Status why; };
+struct AttachmentProvider : IfaceRef {                 // lib/attachment.h
+  void destroy(void *data);
+  void *create();                                      // optional
+  void *copy(const void *data);                        // optional
+  Status serialize(const void *data, BlockWriter &out) const;      // optional, with the next
+  Status deserialize(BlockReader &in);                 // optional; in.setData
+  void foreachRef(const void *data, RefVisitor &visitor) const;    // optional
+};
+enum class DuplicatePolicy : uint8_t { Copy, Drop };
+struct AttachmentTypeInfo { string name; StructId dataStruct; uint32_t version = 1;
+                            DuplicatePolicy onDuplicate = DuplicatePolicy::Drop; };
+class AttachmentTypeRegistry {                         // a Runtime extension
+  Result<TypeId> add(AttachmentTypeInfo info, Owned<AttachmentProvider> provider);
+  const Entry *find(TypeId type) const;
+};
+Status Library::attach(BlockHandle h, TypeId type, void *data);    // the type must be registered
 ```
-- `saveLibrary` marks from the save roots and writes what it reaches. It doesn't collect,
-  so a save never frees anything. Roots: Root, FakeUser, Host pins, Detached blocks and
-  `MissingType` placeholders. InHistory blocks aren't written.
-- Blocks are written sorted by (client name, local id), so equal documents give equal
-  bytes whatever the pool order.
-- `loadLibrary` needs an empty library (no records), else FailedPrecondition. Append is
-  step 4.
+- It replaces P1's `attach(h, type, data, destroyFn)`. Its callers are three lines of one test;
+  P3 registers one attachment type for its script overrides.
+- `foreachRef` also visits attachments. `const void *` parameters need the same binding support
+  as `void *`; if litestl lacks it, the slots take `void *`.
+
+### A1's tests
+- Lifetime: P5's S4 to S6 scenarios: doomed then revive under the id; last unpin in a sweep, in
+  a no-collect scope and outside; a Strong user restored meanwhile (id free, id taken); a failing
+  destroy; pins after `~Library`; `LibraryRef` during `~Library`; `stateChanges` on every
+  transition; the epoch bumps.
+- Bytes and values: every type; every truncation; counts near 2^32; the writer's output always
+  reads back (random ugly strings, names, keys).
+- Payloads through `writePayload` and `readPayload`, natively and through the fake dispatcher;
+  unknown tags and unread entries rewritten with their refs; the audit both ways.
+
+## Step A2: library bookkeeping
+- **Deleting any state:** `markDeleted` takes Live, Placeholder and Detached blocks;
+  InHistory remembers the state it came from, and `restoreFromHistory` goes back to it.
+  `onHostDestroyed` and `onHostRestored` on an InHistory block change the remembered state.
+  - `foreachRef` and `destroyBlocks` treat an InHistory placeholder as a placeholder.
+  - `deletePreview` and `destroyFromHistory` count Placeholder users too. Detached users stay
+    out of the cascade (they are the host's).
+- **Placeholder refs:** a placeholder keeps its ref table, visited by `foreachRef`.
+  `forceUnlinkRef(h, index)` nulls a row (indices stay valid), and `core.block.unlinkRef` is the
+  undoable command. `forceUnlink` on slots stays.
+- **Two reasons** (`PlaceholderReason`):
+  - `MissingType`: a record from a file whose type or payload can't be read. A GC root.
+  - `MissingBlock`: the target of a Strong or OptStrong ref that has no record, or a record saved
+    without a payload. A GC root only if it was a record (it has a type name).
+  - `sourceName()` records where it came from.
+- **Adoption:** `createWithId` and `reviveAs` on a `MissingBlock` record fill it in place, keeping
+  its handle, pins, slots and attachments (a stored type name must match). It drops the ref
+  table: the provider is the truth from then on. This is a state change, not AlreadyExists.
+- **Rename:** `Library::rename`, epoch bump; `core.block.rename`, undoable, which also calls
+  `notify(owner, "name")`. Names stay non-unique.
+- `forEachSlot`, `forEachAttachment`, `forEachOverride`.
+- **The id index** is keyed by a hash seeded per Library (from the GUID source): `LocalId`'s hash
+  is invertible, so a file could make every id collide. The relations map uses the same key.
+- **SetProperty keeps links to blocks that aren't Live.** `PointerAccessor::cell` (optional)
+  returns the member's `RefCell`. With it, SetProperty saves and restores the target id, so
+  setting a pointer away from a placeholder and undoing restores the link. Without it, as
+  today. P3 and P5 fill it for their settable block pointers.
+
+## Step A3: undo of block commands
+- `CreatedBlocks` and DeleteBlock store the handle *and* the BlockId: the handle while it names
+  a record with that id, else `find(id)`. They pin with `PinKind::History`, and unpin only the
+  handle they pinned (an id could now name another record).
+- `core.block.attach` (needs `create`), `core.block.detach`, and
+  `attachUndo(ctx, h, type, data)`. The command owns detached data until it leaves the history.
+- `addAttachments(ApiStruct &)` (`api/`): the `attachments` collection of a block struct, keyed
+  by type name, so `objects["A"].attachments["my.data"].x` resolves and undoes.
+
+## Step A4: the library section
+```cpp
+struct IoIssue { BlockId block; string blockName; Status why; };
+struct IoIssues { Vector<IoIssue> first; int64_t total; };       // at most 1,000 kept
+Result<Vector<uint8_t>> saveLibrary(const Library &lib, SaveReport *report = nullptr);
+struct LoadLimits { uint64_t maxBytes; uint32_t maxBlocks = 1u << 20; };  // 2 GiB; 128 MiB on 32-bit
+Result<LoadReport> loadLibrary(Context &ctx, std::span<const uint8_t>, const LoadOptions &);
+Result<LoadReport> resolvePlaceholders(Context &ctx);            // after types were registered
+```
+- They take a Context so they can notify: they are in `api/library_io.h`, over functions in
+  `lib/io/`. A load, an append and a filled placeholder call `notify` for each block they
+  touched. (Adoption by a bare `createWithId` is seen through `stateChanges` and the epoch.)
+
+### What is saved
+- **Mark** from the save roots: Root, FakeUser, Host pins, Detached blocks, and placeholders that
+  were records. InHistory and Doomed blocks aren't written. Saving frees nothing.
+- **Blocks without a payload:**
+  - `Unspecified` type (no slots, nothing declared): **the save fails** with FailedPrecondition
+    naming the types. Forgetting to serialize is an error, not a loss.
+  - `Transient` type: not written. The mark goes through it, and the report lists every reachable
+    Transient block, and every block reachable only through one (kept in this file, but an
+    orphan after loading until the host links it again).
+  - A Detached block, whatever its type: its data is the host's and is gone. It is written as a
+    record without a payload: name, type, flags, slots, attachments, and the refs its provider
+    reports. It loads as `MissingBlock`, keeps those refs alive, and the host adopts it with
+    `createWithId`. The report lists it. This covers host-owned blocks until P4: such a type is
+    Transient while Live, its targets are refs the host re-creates, and refs *to* it load as
+    `MissingBlock` records that the host adopts under their stable ids.
+- **Refs to blocks that aren't saved,** in every table: OptStrong to an InHistory block, or to an
+  id with no record, is written null (the user deleted it). Strong and Weak keep the id.
+- Blocks are sorted by (client name, id), slots by (namespace, key), attachments by type name, so
+  equal libraries give equal bytes.
+- A `serialize` that fails fails the save, naming the block.
 
 ### Format, version 1
-Little-endian. All counts and lengths are checked as in step 1.
+Little-endian.
 ```
-header:  "CDCCLIB\n" | u32 version | u32 minReader | u32 chunkCount
-chunk:   u32 tag | u32 flags (1 critical, 2 lz4) | u64 stored | u64 raw | u64 fnv1a64(stored) | bytes
-NAME  (critical) strings: every name used below, by index
-BLCK  (critical) count, then records, each u32-length-prefixed:
-      client name, 128-bit local id, type name, block name, u32 flags (Root, FakeUser),
-      u8 storage (Payload, HostOwned, MissingType, MissingBlock), u8 detached,
-      u32 payloadVersion, source name,
-      ref table: count * (u8 kind, client name, 128 bits; null allowed)
-      slots: count * (ns name, i64 key, ref row)
-      attachments: count * (type name, u32 version, u32 bytes index, ref table)
-      payload index, or none
-DATA  (critical) payload and attachment blobs: count, then (u8 lz4, u64 raw, u64 stored, bytes)
+"CDCCLIB\n" | u32 version | u32 minReader | u64 totalBytes | u32 chunkCount (<= 16)
+chunk: u32 tag | u32 flags (1 critical, 2 lz4) | u64 raw | u64 stored | bytes
+NAME  critical, once: strings, by index
+BLCK  critical, once: records, each u32-length-prefixed:
+      client name, 128-bit local id, type name, block name, u32 flags, u8 storage
+      (Payload, MissingType, NoPayload), u32 payloadVersion, source name,
+      ref table: rows of (u8 kind, client name, 128 bits; null allowed),
+      slots: (namespace name, i64 key, row), attachments: (type name, u32 version, blob index,
+      ref table), payload blob index or none
+DATA  critical, once: blobs: u8 lz4, u64 raw, u64 stored, bytes
+u64 fnv1a64 of everything before it
 ```
-- A blob of at least 512 bytes is compressed when that makes it smaller. `BLCK` and `NAME`
-  are compressed as chunks. Saves use lz4hc's default level, undo uses plain lz4.
-- **Bombs:** a blob's or chunk's `raw` must be at most `stored * 255 + 64` and the running
-  total at most `maxRawBytes`, both checked before allocating.
-- **Versions:**
-  - `version` above ours with `minReader` at most ours: read; unknown non-critical chunks
-    and trailing record bytes are skipped (and not preserved).
-  - `minReader` above ours, or an unknown critical chunk: Unsupported, naming both.
-  - A payload newer than the registered `payloadVersion` loads as a `MissingType`
-    placeholder (it round-trips) with an issue.
+- Blobs of 512 bytes or more are compressed (lz4hc's default level) when that is smaller; `NAME`
+  and `BLCK` are compressed as chunks. `raw <= stored * 255 + 64` is checked before allocating.
+- **Versions:** newer `version` with `minReader` at most ours: read; unknown non-critical chunks
+  and trailing record bytes are skipped, and each kind skipped is an issue (a re-save drops it).
+  A newer `minReader` or an unknown critical chunk is Unsupported. The header is checked before
+  the checksum, so a newer file is reported as newer.
+- A payload newer than the registered version loads as `MissingType` (it round-trips).
+- Missing or repeated chunks, and bytes after the checksum, are errors.
 
-### Failure behaviour
-- **Phase A, parse:** the whole section is parsed and checked into a plain structure. The
-  Library and the Runtime are untouched. Errors: bad magic, a checksum mismatch, a short
-  read, a limit, a duplicate or null block id, an unknown ref kind, an index out of range,
-  a duplicate slot or attachment key. All are InvalidArgument with the byte offset, except
-  limits (OutOfRange) and versions (Unsupported).
-- **Phase B, register names:** client, type and slot names are registered. A hash
-  collision is AlreadyExists, and nothing has been added to the library. (Names stay
-  registered; they are harmless.)
-- **Phase C, fill:** records are added, then refs, slots and attachments, then each
-  provider's `deserialize`. It can't fail as a whole:
-  - an unregistered type, or a `deserialize` that fails (or leaves a sticky error, which
-    is taken): the block becomes a `MissingType` placeholder with its payload and table,
-    and the report has an issue. Nothing is lost on the next save;
-  - an unregistered attachment type becomes opaque bytes;
-  - a strong or optional-strong target with no record becomes a `MissingBlock`
-    placeholder. A weak one creates nothing.
-- **During phase C** the library is Busy to mutation (the sweep's rule), and reads work.
-- A provider whose `serialize` fails: the whole save fails with its Status and the block's
-  name. Saving the rest would lose data silently.
-- **Audit:** after each `serialize`, the rows it wrote are compared with what `foreachRef`
-  reports. A difference means GC and the file disagree. With the relations audit on (debug
-  builds) it is an Internal error, else an issue.
-- Detached blocks of a Payload type have no data to write: the record and slots are
-  written, and they load as Detached.
+### Loading
+- **Needs a library with no records.** Busy to mutation while it runs (the sweep's rule).
+- **Phase A, parse:** into a plain structure; the Library and Runtime are untouched. Corruption is
+  InvalidArgument with the offset; limits are OutOfRange.
+  - **One memory budget** (`maxBytes`) is charged with in-memory cost before each allocation:
+    about 1 KiB per record, the size of rows, entries and strings, and raw blob bytes times 1.5
+    (litestl `Vector` growth). `maxBlocks` counts the `MissingBlock` records a load would make.
+  - Before a large allocation the same size is allocated and released through litestl's
+    `alloc`, because its Vector writes through a null pointer when memory runs out.
+  - Duplicate checks sort. Nothing is quadratic in one record or over records.
+- **Phase B, ids:** client aliases and name collisions with the Runtime are checked.
+  - Two records that become one id through an alias: the one under the current name keeps it, the
+    other gets a fresh id and an issue. The document still opens.
+  - Nothing is registered in the Runtime. Names go to `fileNames()`.
+- **Phase C, fill;** it can't fail as a whole:
+  - records first, then slots, attachments and tables, then each `deserialize`;
+  - an unknown type, a type of another client than the record's, or a `deserialize` that fails (a
+    sticky error is taken) makes a `MissingType` placeholder, with an issue. Nothing is lost;
+  - an unknown attachment type becomes an **opaque attachment** (type name, version, bytes, ref
+    table), visited by `foreachRef` and written back;
+  - a null Strong slot is kept, with an issue;
+  - `MissingBlock` records are made from what `foreachRef` reports after `deserialize` (a table
+    row's kind may be out of date), and from tables for placeholders.
 
-## Step 4: append and duplicate
-- `appendLibrary(lib, bytes, options) -> {IdMap, LoadReport}`:
-  - ids are planned before anything changes: `coredcc` client blocks always get fresh ids;
-    other clients' blocks go through `rekey`. No `rekey` slot, a null answer, an id
-    already in use, or an id in another client refuses the whole append
-    (FailedPrecondition listing the types).
-  - Placeholders of unregistered clients can't be rekeyed: refused the same way.
-  - Refs inside the appended set follow the `IdMap`. Refs out of the set resolve in the
-    target library, or become `MissingBlock` placeholders.
-  - A `MissingBlock` record with a planned id is filled in place, keeping its handle.
-- `duplicateBlocks(lib, handles) -> IdMap`: the `duplicate` slot, else
-  serialize-then-deserialize through the table. Refs inside the set are remapped, others
-  are shared. Slots are copied and remapped; attachments follow their policy; flags other
-  than Root are copied; pins and overrides aren't. All or nothing.
-- Commands: `core.block.duplicate(block=...)` (outputs `block`), and
-  `appendUndo(ctx, bytes, options)` (through `runInstance`, as `setValueUndo` is), both
-  over CreatedBlocks.
+## Step A5: append and duplicate
+- `appendLibrary(ctx, bytes, options) -> {IdMap, LoadReport}`; ids are planned first:
+  - `coredcc` blocks, `MissingType` placeholders of the `coredcc` client included, always get
+    fresh ids; other clients' go through `rekey`. No slot, no type, a null answer, an id in use or
+    in another client refuses the whole append, listing the types.
+  - Refs within the appended set follow the map. Others resolve in the target library or become
+    `MissingBlock`.
+  - Root flags become FakeUser, so appended content survives the next save.
+- `duplicateBlocks(lib, handles) -> IdMap`: the slot, else `writePayload` and `readPayload`. Refs
+  within the set are remapped through `foreachRef`, others are shared. Slots are copied;
+  attachments follow their policy, opaque ones are copied; Root, pins and overrides aren't. A
+  failure undoes the whole call. The tables aren't nulled, so refs to deleted blocks survive.
+- Commands over CreatedBlocks: `core.block.duplicate(block=...)` (outputs `block`), and
+  `appendUndo(ctx, bytes, options)` through `runInstance`.
 
-## Step 5: attachments
-- `AttachmentProvider` (§2a interface): `destroy(void *)`; optional `create() -> void *`,
-  `copy`, `serialize`, `deserialize`, `foreachRef(void *, RefVisitor)`.
-- `AttachmentTypeRegistry` (a Runtime extension):
-  `{name, version, StructId, DuplicatePolicy Copy|Drop}` plus the provider. Copy needs
-  `copy`; `serialize` and `deserialize` come together.
-- `Library::attach(h, type, data)` requires a registered type, and replaces P1's
-  `destroy` function pointer (its callers are three lines of one test).
-  - Attachment refs are visited by `foreachRef`, after the provider's and the slots'.
-  - Opaque attachments keep the type name, version, bytes and ref table. They are written
-    back unchanged.
-- Commands: `core.block.attach(block=... type="...")` (needs `create`),
-  `core.block.detach(...)`, and `attachUndo(ctx, h, type, data)` for a native payload. The
-  command owns detached data until it leaves the history.
-- `addAttachments(ApiStruct &)` (`api/`): an `attachments` collection keyed by type name,
-  for block structs, so `objects["A"].attachments["my.data"].x` works.
+## Step A6: snapshot undo
+- `SnapshotRegistry` (a Runtime extension): `Owned<SnapshotProvider>` by name. Interface values
+  aren't stored.
+- `SnapshotUndo(name)`: `begin(ctx)` at the start of exec captures before; **`end(ctx)` at the end
+  of exec captures after**, sub-commands included. `undo` restores before, `redo` restores after.
+  - An interactive command's tool calls `end` before `commit`. Without it, undo works and redo is
+    FailedPrecondition.
+  - `rollback(ctx)` restores before when exec fails partway. A failed capture fails exec.
+  - Both blobs exist when the history reads `memSize`, so the budget counts them.
+  - Folding: the head takes the folded command's after blob.
+- Blobs are lz4 (plain), raw when that is smaller.
+- After a restore: `Library::noteRefsChanged`, `ChangeBus::bumpEpoch` and **`notifyAll()`** (P5's):
+  an opaque blob can't name what it changed. If P5's step 1 isn't merged yet, A6 waits for it.
+- A failed restore is the sticky error (undo) or the Status (redo).
+- A provider whose blobs hold block ids says which (`SnapshotProvider` optional slot
+  `foreachRef(blob, RefVisitor)`); SnapshotUndo History-pins those targets until `discard`, as
+  SetProperty does.
 
-## Step 6: undo
-- `CreatedBlocks` stores BlockIds and finds handles when it needs them. DeleteBlock does
-  the same. `add(lib, h)` is unchanged.
-- `SnapshotRegistry` (a Runtime extension): `Owned<SnapshotProvider>` by name, because
-  interface values must not be stored.
-- `SnapshotUndo(rt, name)`: `begin()` captures the before blob (in exec). The **after**
-  blob is captured by the first `undo`, when the state is exactly what the command left,
-  so a command that is never undone pays for one blob. `undo` restores before, `redo`
-  restores after.
-  - Blobs are kept lz4-compressed (plain lz4), raw when that is smaller; `memSize` is what
-    they hold.
-  - After a restore it calls `Library::noteRefsChanged` and `ChangeBus::bumpEpoch`.
-  - A failed capture in exec fails exec. A failed restore is the sticky error (undo) or the
-    Status (redo), which makes LinearHistory drop the command, as for any failed undo.
-- `BlockSnapshotUndo`: the same over named blocks' payloads, using the provider's
-  serialize and deserialize. It gives any Payload-type client undo without a journal.
-  - `Library::replaceData(h, bytes)` deserializes new data and swaps it in. The record,
-    handle, pins and slots are unchanged.
-  - Old data is destroyed at once, or on the last Host unpin if the block is host-pinned
-    (a graph payload may alias it).
-  - Unsupported when `data(block) != clientData` or the block has overrides (they hold
-    `self` pointers).
-  - It doesn't cover blocks made or deleted by the command: combine it with CreatedBlocks.
+---
 
-## Step 7: pointer text and `meta`
-- **`api/ref_text.h`:** `formatRef(rt, StableRef)` and `parseRef(rt, text)`:
-  ```
-  @block(<client name>, <32 hex digits>).key["x"][#3] : <struct name>
-  @owner(<runtime owner name>).key : <struct name>
-  ```
-  The `: struct` part is optional. Empty text is the null pointer. Names are quoted with
-  the path quoting rules when they aren't dotted identifiers.
-- **Literals:** `formatLiteral(rt, def, value)` writes a Pointer as a quoted ref text.
-  `inputsFromInvocation(Context &, ...)` accepts, for a Pointer input, a quoted string that
-  is either ref text (it starts with `@`) or a datapath, resolved now and made canonical.
-  A path to a Pointer member gives its target; a path to a struct gives the struct.
-  - The `Runtime &` overload stays, and refuses paths (Unsupported). LastUsed still
-    doesn't keep Pointers.
-- **Facades:** `makePointer(ctx, text)`, `readPointer(ctx, v)`, `pathMeta(ctx, path)`
-  (a JSON string), and `PathReader` (below).
-- **TS layer:** a pointer reads as a `Ref` (`{text}`, frozen, no WASM memory) or `null`,
-  and both can be written. A `Value` is then never an owned bound object.
-  `set(ctx, 'flags', ['SELECT', 'HIDE'])` joins the keys; `[]` is no flags. `toJs` takes
-  the context.
-  - `get(ctx, path, {names: true})` gives an enum's key, and a flags member's keys as an
-    array. A value with no item stays a number.
-- **`meta(path)`:** `kind` (a PropKind, or Struct, Component, EnumKey, Length), `struct`,
-  `members` (non-Private names, for a Struct), `subtype`, `uiName`, `description`, `icon`,
-  `access`, `readOnly`, `ui`, ranges, step, precision, unit, `items`, `maxLength`,
-  `target`, `default`, `canonical` (ref text).
-  - JSON numbers: infinities are omitted, 64-bit integers past 2^53 are strings. One small
-    writer, `base/json_writer.h`, shared with the layout's `toJson`.
-- **Testbus:** a pointer crosses as `{$ref: text}` both ways, null as `null`;
-  `get(path, {names})`; `meta(path)`; `resolve(path)` returns the kind. The host gains a
-  Pointer member, a block type with a payload, and an int64 member (TA1 test gaps).
+# P2b
 
-## Step 8: `layout/`
+## Step B1: pointer text, names and `meta`
+- **`api/ref_text.h`:** `formatRef(rt, ref)`, `parseRef(rt, text)`:
+  `@block(<client>, <32 hex>).key["x"][#3] : <struct>`, `@owner(<name>).key : <struct>`; the
+  struct is optional; empty text is null. Names are quoted unless they are dotted identifiers.
+- **Invocations:** `formatLiteral(rt, def, value)` writes a Pointer as quoted ref text.
+  `inputsFromInvocation(Context &, ...)` accepts, for a Pointer input, ref text or a datapath,
+  resolved now (with the Context's prefix) and made canonical. LastUsed still doesn't keep them.
+- **TS:** a pointer reads as a frozen `Ref {text}` or null, and both can be written; a `Value` is
+  then never a bound object. Arrays of strings write flags (`[]` is none). `toJs` takes the
+  context. `get(ctx, path, {names: true})` gives keys. `set(ctx, path, value, gesture?)`: a new
+  facade `setValueGesture`, so a slider drag folds into one undo step (§12).
+- **`meta(path)`:** JSON from `pathMeta(ctx, path)`: kind (PropKind, Struct, Component, EnumKey,
+  Length), struct, members, subtype, texts, access, readOnly, ui, ranges, step, precision, unit,
+  items, maxLength, target, default, canonical. Infinities are omitted; integers past 2^53 are
+  strings. The writer is `base/json_writer.h`.
+- **Testbus:** `{$ref: text}` both ways, null as null; `get(path, {names})`; `meta`; `resolve`
+  returns the kind. The host gains a Pointer member, a block type with a payload, and an int64.
 
-### Nodes
+## Step B2: layout nodes, XML, JSON, builder
 ```cpp
-enum class LayoutKind : uint8_t { Column, Row, Panel, Tabs, Tab, Prop, Tool, ToolOptions,
-                                  Label, Separator, Custom };
-struct LayoutNode {
-  LayoutKind kind; int parent, firstChild, nextSibling;   // indices into Layout
-  string path, label, icon, description, id, styleClass, visibleIf, enabledIf;
-  string invocation;       // Tool
-  string target;           // ToolOptions: a command id
-  string widget;           // Prop: a hint from a closed list ("slider", "color", ...)
-  bool closed, expand, iconsOnly, showLabel;
-  string tag; Vector<Attr> attrs;   // Custom
-  uint32_t offset;                  // in the source text; 0 for built nodes
-};
-class Layout { Vector<LayoutNode> nodes; ... };   // preorder; node 0 is the root Column
+enum class LayoutKind : uint8_t { Column, Row, Panel, Tabs, Tab, Prop, Tool, ToolOptions, Label,
+                                  Separator, Custom };
+struct LayoutNode { LayoutKind kind; int32_t parent, firstChild, nextSibling;
+                    uint32_t attrBegin, attrCount, offset; };
+struct LayoutAttr { LayoutAttrId id; string name; string value; };   // name: Custom only
+class Layout { Vector<LayoutNode> nodes; Vector<LayoutAttr> attrs; ... };   // preorder
 ```
-- A flat array with indices: litestl's `Vector` has inline storage, so a node can't hold a
-  `Vector` of itself, and an array binds and copies simply.
-- **Builder:** `LayoutBuilder b; auto p = b.panel("Brush").path("brush"); p.prop("radius")...`
-  Scopes are handles (indices), not pointers. `std::move(b).finish() -> Result<Layout>`
-  checks what the parser checks.
-- **Limits:** depth 64, 65,536 nodes, 1 MiB of text, 64 attributes per element.
+- Attributes are stored sparsely: a node with a field per attribute is 1.2 KB.
+- Attributes: `path`, `label`, `icon`, `description`, `id`, `class`, `visibleIf`, `enabledIf`,
+  `invocation` (tool), `target` (toolOptions), `widget` (prop; a free-form hint), `closed`,
+  `expand`, `iconsOnly`, `showLabel`.
+- **Builder:** scopes are indices. `finish()` checks what the parser checks.
+- **XML subset:** elements, attributes, comments, the five entities, text only inside `label`,
+  `tool` and `custom`. Optional BOM and `<?xml?>`. Rejected by name: DOCTYPE, processing
+  instructions, CDATA, numeric references, namespaces, duplicate attributes, control characters,
+  invalid UTF-8, stray text. Root `<layout>`; `sep` is `separator`. Unknown tags and attributes
+  are errors with suggestions, except under `custom`. Errors have offset, line and column. No
+  recursion.
+- **Limits:** depth 64, 16,384 nodes, 64 attributes per element, 1 MiB of text.
+- **path.ux:** `tabs`, `tab`, `panel`, `row`, `column`, `prop path`, `label` text and a container's
+  `path` mean the same. Its adapter handles `tool` (`path` and text there), `toolPanel`, the
+  missing `visibleIf` and `enabledIf`, and prefixes joined as strings.
+- **Paths:** prefixes join as parsed segments; a leading `/` means from the root. `effectivePath`.
+  A `tool` runs with the container's prefix as the Context's path prefix (§5), for both its
+  Pointer arguments and the command.
+- `toJson`: non-default fields, effective paths, children. No JSON parser.
 
-### XML subset
-- Elements, attributes (either quote), comments, `&lt; &gt; &amp; &quot; &apos;`, and text
-  only inside `label`, `tool` and `custom`. UTF-8, with an optional BOM.
-- Rejected with a message that names the feature: DOCTYPE, processing instructions (the
-  `<?xml ...?>` declaration is accepted at the start), CDATA, numeric references,
-  namespaces, duplicate attributes, control characters, stray text.
-- The root is `<layout>`. `sep` is accepted for `separator`.
-- Unknown tags and attributes are errors with suggestions, except under `custom`
-  (`<custom tag="my-widget" ...>`, any attributes, no child elements).
-- Errors carry the byte offset, line and column. No recursion: an explicit stack.
-- **Compatibility with path.ux xmlpage:** the tags `tabs`, `tab`, `panel`, `row`,
-  `column`, `prop path`, `label` text and a container's `path` prefix mean the same.
-  Differences, for its adapter: xmlpage's `tool` takes `path` and text, ours takes
-  `invocation`, `label` or text; `toolPanel` is `toolOptions`; `visibleIf` and `enabledIf`
-  don't exist there; xmlpage prefixes by string, ours by path segments.
+## Step B3: static resolution and the validator
+- **`api/static_resolve.h`** walks a Path over a *set* of possible structs:
+  - a pointer's target or candidates, and their registered subtypes; a collection's `itemStruct`
+    and subtypes, or `CollectionAccessor::staticItem(key)` when it has one (LastUsedStore does, so
+    `commandDefaults["id"].input` is checked, and its struct is registered on demand);
+  - accepted if any has the member, an error with suggestions if none; a pointer with no static
+    type makes the rest unknown (a warning);
+  - an enum key a dynamic hook adds is an error: the resolver uses the static def too.
+- `validateLayout(rt, root, layout) -> Vector<LayoutIssue {node, offset, severity, status}>`:
+  - `prop`: a Value or Pointer member, Component, EnumKey or Length;
+  - `visibleIf`, `enabledIf`: `[!]path` to Bools only; a container's `path`: a struct;
+  - `tool`: the command, its argument names and literals; Pointer arguments statically, under the
+    prefix; `toolOptions`: the command (tool ids come with P4).
+- Validate after commands and types are registered: later ones aren't known.
 
-### Paths
-- A container's `path` prefixes its children's. Prefixes join as parsed segments.
-- A leading `/` means "from the root", ignoring prefixes. It is the layout's syntax and is
-  removed before `parsePath`.
-- `effectivePath(node)` is what frontends bind to.
-- `visibleIf` and `enabledIf`: `[!]path`, with the same prefix rules.
+## Step B4: bindings and TA2
+- `layoutJson(xml)`, `validateLayoutXml(ctx, xml)`, `invokeAt(ctx, prefix, invocation)`.
+  **Deviation from §13:** LayoutNode isn't bound; frontends get JSON.
+- **`PathReader`** (owned by the script): `add(path)`, `read(ctx)`, `count()`, `value(i)`,
+  `status(i)`, and `watch(ctx)`, which watches the paths through the ChangeBus and marks what
+  fired; `changed(i)`, and `flushChanges(ctx)` runs the bus. This is §13's batched `getValues`
+  plus watchers. The session disposes its readers before its host, since watchers hold the
+  Context; `value(i)` is owned, and the TS layer copies and disposes it.
+- **Panel** (`apps/testapp/src/panel/`): DOM from layout JSON; widgets for Bool, Int, Float,
+  String, Enum, Flags, vectors, Pointer (text) and tools. It refreshes what `flushChanges` marks.
+- **Layout file:** `apps/testapp/layouts/testapp.xml`. Testbus: `panel({xml} | {file})`,
+  `panelState()`, `panelSet(id, value)`, `panelClick(id)`; the last two dispatch DOM events on the
+  widget. `info().build` is `ta2`.
 
-### `toJson`
-`{kind, path (effective), label, ..., children: [...]}`, only non-default fields. It is for
-frontends: there is no JSON parser.
+## Step B5: `gen-paths`
+- `apiCatalog(ctx)` (JSON: every ApiStruct's members through `meta`'s writer, and the commands
+  with their inputs), and a generator next to `gen.ts`: one TS interface per struct, and a command
+  catalog. No flat union of paths. `tsc` checks the output in the spike. Under a day, since the
+  JSON exists; if it isn't, it moves to P6 and the task list says so.
 
-### Validation
-`validateLayout(Runtime &, StructId root, const Layout &) -> Vector<LayoutIssue {node,
-offset, Severity, Status}>`.
-- **Static paths** (`api/static_resolve.h`): walks a Path over ApiStructs with a *set* of
-  possible structs, no instances:
-  - a pointer's static target or candidates, and their registered subtypes (the resolver
-    accepts subtypes, and takes an untyped target's type from its owner);
-  - a collection's `itemStruct` and its subtypes;
-  - a path is accepted if any struct in the set has the member. It is an error, with
-    suggestions from all of them, only if none has;
-  - a pointer with no static type ("any struct") makes the rest unknown: a warning;
-  - an unknown enum key on a dynamic def is a warning, since the hook may add it.
-- `prop`: a Value or Pointer member, a Component, an EnumKey or a Length. A Struct or a
-  Collection is an error. A widget hint that doesn't fit the kind is a warning.
-- `visibleIf` / `enabledIf`: every possible result is a Bool or an EnumKey.
-- `tool`: the invocation parses, the command exists, its arguments exist and their literals
-  parse. A Pointer argument's path is checked statically.
-- `toolOptions`: the command exists. (Tool ids come with P4.)
-- A container's `path` must be a struct.
-
-## Step 9: bindings and TA2
-- Facades: `layoutJson(xml)`, `validateLayoutXml(ctx, xml)` (JSON issues, against the
-  context root's struct), and `PathReader`:
-  ```cpp
-  class PathReader {           // owned by the script: newPathReader()
-    Status add(const string &path);      // parsed once
-    void read(Context &ctx);             // all paths, one call
-    int32_t count() const;  PropValue value(int32_t i) const;  Status status(int32_t i) const;
-  };
-  ```
-  It is the bound form of `getValues`. An index out of range gives None and OutOfRange.
-- **Panel** (`apps/testapp/src/panel/`): builds DOM from a layout's JSON. Widgets for
-  Bool, Int, Float, String, Enum (select), Flags (checkboxes), vectors (one input per
-  component), Pointer (its text) and `tool` (a button). It refreshes after every testbus
-  method that can change the document, through one `PathReader`.
-- **Layout file:** `apps/testapp/layouts/testapp.xml`, read at launch and by `panel(file)`.
-- **Testbus:** `panel({xml} | {file})`, `panelState()` (per widget: node id, path, kind,
-  label, visible, enabled, value, error), `panelSet(id, value)` and `panelClick(id)`, which
-  go through the widget's own DOM event handler, so the test covers it.
-- `build` in `info()` becomes `ta2`.
+---
 
 ## Files (each under 35 KB)
-- `base/bytes.{h,cc}`, `base/json_writer.{h,cc}`, `base/utf8.h`
-- `props/value_io.{h,cc}`
-- `lib/block_io.{h,cc}`, `lib/attachment.{h,cc}`, `lib/library_records.cc` (rename,
-  enumeration, placeholders: `library.cc` is 18 KB and would otherwise grow past 30),
-  `lib/io/section.{h,cc}` (parse and write, no Library), `lib/io/save.cc`,
-  `lib/io/load.cc`, `lib/io/append.cc`, `lib/duplicate.cc`
-- `api/ref_text.{h,cc}`, `api/static_resolve.{h,cc}`, `api/attachments.{h,cc}`
-- `command/snapshot_undo.{h,cc}`, `command/attachment_commands.cc`,
-  `command/library_commands.cc`
-- `layout/layout.{h,cc}`, `layout/builder.{h,cc}`, `layout/xml.{h,cc}`, `layout/json.cc`,
-  `layout/validate.{h,cc}`
-- `bind/meta.{h,cc}`, `bind/path_reader.{h,cc}`, `bind/layout_facades.cc`
+- `base/`: `bytes`, `name_table`, `json_writer`. `props/value_io`.
+- `lib/`: `pin`, `lifetime.cc` (pins, doomed), `block_io`, `attachment`, `placeholder.cc`,
+  `bookkeeping.cc`, `duplicate.cc`, `io/section`, `io/save.cc`, `io/load.cc`, `io/append.cc`.
+- `api/`: `library_io`, `ref_text`, `static_resolve`, `attachments`.
+- `command/`: `snapshot_undo`, `attachment_commands.cc`, `library_commands.cc`.
+- `layout/`: `layout`, `builder`, `xml`, `json.cc`, `validate`.
+- `bind/`: `meta`, `path_reader`, `layout_facades.cc`, `ts/gen_paths.ts`.
 
-## Tests
-- **Bytes and values:** every type round-trips; NaN, -0.0, int64 limits, 64-bit flags;
-  truncation at every byte; counts near 2^32; NUL and invalid UTF-8; unknown tags skipped
-  in bags; renamed, removed and retyped bag entries; enum keys surviving renumbering.
-- **Section:** golden bytes for a small library (so the format can't drift unnoticed);
-  save, load, save gives equal bytes; every byte flipped, every truncation, and 20,000
-  random mutations (`COREDCC_TEST_SCALE`) load or fail cleanly, with the checksum fixed up
-  so the mutation reaches the parser; bombs; duplicate ids; newer versions and chunks.
-- **Load:** each failure in phases A and B leaves `size()`, the epoch and `validate()`
-  unchanged; failing and sticky-error `deserialize`; unregistered client, type and
-  attachment; newer payload; missing strong, optional and weak targets; placeholder round
-  trip without the type, then with it, then `resolvePlaceholders`; client aliases;
-  `forceUnlinkRef`; a mutation from inside `deserialize` is Busy.
-- **Save:** orphans, history pins, InHistory targets, Transient and HostOwned types,
-  Detached; the ref audit.
-- **Append and duplicate:** twice from one file; cycles; `rekey` refusing; refs out of the
-  set; filling a `MissingBlock` record; undo, redo and purge between them.
-- **Attachments, undo, rename:** as specified, plus GC through attachment refs, replaced
-  data under a host pin, memory budgets, and a failed restore.
-- **Refs and meta:** format and parse round-trip, hostile text, Pointer arguments by path
-  and by ref, undo after the target was deleted.
-- **Layout:** parser goldens, a fuzz test like `test_parse_fuzz`, limits, builder equals
-  parser, JSON escapes, the validator over subtypes, candidates, refine, collections,
-  dynamic defs, prefixes and `/`.
-- **TA2** (`ta2.test.ts`): build the panel from the file; read and set each widget kind;
-  visibility; a tool button; undo and redo refresh it; a pointer round trip; `meta`; names;
-  a broken layout is reported, not fatal. The shipped layout validates with no issues.
-- **compile_embed** gets the new headers. **Foreign (native fake) provider** for the new
-  slots; every forwarder called.
+## Tests (beyond A1's)
+- **Section:** golden bytes for a library with two slots, two attachments, an alias client and
+  every ref kind; **a deep comparison of the loaded Library with the saved one** (a field dropped
+  by both save and load must fail), then equal bytes; libraries built in different orders give
+  equal bytes; every byte flip and truncation, and 20,000 mutations with the checksum fixed up,
+  each within a time and memory bound; bombs; colliding ids; 1M `MissingBlock` rows under the
+  budget; newer versions.
+- **Every writer output loads:** random libraries with ugly names and unknown ids.
+- **Load:** phase A and B failures change nothing; phase C's cases; placeholders without the type,
+  then with it; alias duplicates; a mutation from `deserialize` is Busy; no name leaks into the
+  Runtime.
+- **Save:** orphans; History pins; InHistory, dropped and Detached targets in every table; Transient
+  and Unspecified types.
+- **Bookkeeping:** delete and undo of placeholders and Detached blocks; adoption; SetProperty over a
+  placeholder; CreatedBlocks across an alias conflict and a revive.
+- **Append and duplicate:** twice from one file; cycles; refusal; saving right after; undo and redo.
+- **Snapshots:** with sub-commands (start 4, exec 109, undo 4, redo 109), a failing exec, folding,
+  interactive, budget accounting, a purge between.
+- **Layout:** goldens, fuzz, limits, builder equals parser, validator cases, prefixes.
+- **TA2:** each widget kind, visibility, a tool under a prefix, a drag as one undo step, a pointer
+  round trip, `meta`, names, a broken layout, a value changed from C++ reaching the panel through
+  the ChangeBus. The shipped layout has no issues.
+- `compile_embed` gets every new header.
 
-## Steps, each committed with the full gate green
-1. Shared pieces: bytes, value IO, `BlockWriter`/`BlockReader`, slots. **Merge to master.**
-2. Bookkeeping: rename, enumeration, pin kinds, placeholder refs.
-3. Library section: format, save, load.
-4. Append and duplicate.
-5. Attachments.
-6. Undo: CreatedBlocks, SnapshotUndo, BlockSnapshotUndo, the block commands.
-7. Pointer text and `meta`, with the TS layer and testbus changes.
-8. Layout: nodes, XML, JSON, builder, then static resolve and the validator.
-9. Bindings and TA2.
+## Steps
+| # | Step | Needs |
+|---|---|---|
+| A1 | Lifetime; bytes and values; payloads, slots, attachment registry. **Merged to master.** | — |
+| A2 | Bookkeeping: states, placeholders, adoption, rename, seeded index, pointer cells | A1 |
+| A3 | CreatedBlocks, attach and detach commands, attachment paths | A2 |
+| A4 | Library section: save, load, placeholders | A3 |
+| A5 | Append and duplicate | A4 |
+| A6 | Snapshot undo. *Feature review: library IO.* | A3; P5's `notifyAll` |
+| B1 | Pointer text, names, `meta` | A1 |
+| B2 | Layout nodes, XML, JSON, builder | — |
+| B3 | Static resolution, validator | B2 |
+| B4 | Bindings and TA2 | B1, B3 |
+| B5 | `gen-paths`. *Feature review: layout.* | B4 |
 
-After 6: a feature review of library IO (not in the task list's column today; it is a
-major feature, so this plan proposes adding it). After 9: the `layout` review.
+Each step is committed with the full gate green. P2a and P2b merge to master separately.
 
 ## Exit criteria
-- The gate: native tests in all four presets, and wasm-st-debug with `spike_ts` and
-  `testapp`. wasm-mt builds and passes its native suite.
-- A library with blocks of a registered and an unregistered type, slots, attachments and
-  every ref kind survives save, load, save byte for byte.
-- The section and layout fuzz tests run clean, natively and under node.
-- TA2 passes, with the panel built from a layout file.
-- `docs/embedding.md` lists lz4 and the size limits.
+- The gate: native tests in four presets, wasm-st-debug with `spike_ts` and `testapp`. wasm-mt
+  builds and passes its native suite.
+- A library with registered and unregistered types, slots, attachments and every ref kind survives
+  save and load (deep comparison), and its second save has equal bytes.
+- The section and layout fuzz tests run clean, natively and under node, within their bounds.
+- TA2 passes with the panel built from a layout file.
+- `docs/embedding.md` lists lz4, the limits, and what a host does about Transient blocks.
 
-## Claims to falsify
-1. litestl's `ByteReader` never reads out of bounds or hangs, on 32 and 64 bits.
-2. The lz4 bound `raw <= stored * 255 + 64` never rejects a block `compressBlock` made.
-3. litestl's `io` target links into coredcc's tests in all presets and wasm, also when a
-   host supplies litestl.
-4. Every block id a payload needs can go through the ref table, so placeholders, remap and
-   append never need to understand a payload.
-5. The InHistory rule (null rows) and the pin-kind split make a saved file free of blocks
-   and placeholders the user deleted.
-6. Phases A and B leave the Library unchanged on every failure, and phase C can't fail as a
-   whole.
-7. `serialize` then `deserialize` through the table is a correct duplicate for any
-   Payload type.
-8. Making `MissingBlock` placeholders collectable, and adding placeholder and attachment
-   refs to `foreachRef`, breaks no P1 rule (relations audit, `destroyBlocks`' severing,
-   `deletePreview`, `destroyFromHistory`).
-9. Severing the refs of a destroyed placeholder is harmless, because destroyed records are
-   never saved.
-10. Capturing the after blob at the first undo sees exactly the state the command left,
-    with sub-commands, folding, `rerunHead` and interactive commands.
-11. `replaceData` is safe with undo records, watchers and host pins that outlive the swap.
-12. CreatedBlocks and DeleteBlock behave the same with BlockIds, including a client
-    becoming an alias between exec and undo.
-13. No existing caller breaks when `setSlot` requires a registered `ns` and `attach` a
-    registered type.
-14. The binding system carries the new slots (`BlockWriter &`, `BlockId` by value), and
-    `PathReader`, `Status` and `PropValue` returns, in TS.
-15. Static resolution accepts every path the dynamic resolver can accept, given that
-    accessors return declared types (no false errors).
-16. A `Ref` needs no WASM memory, so no TS caller has to dispose of values any more, and
-    making `toJs` take a context breaks nothing but coredcc's own callers.
-17. The ref text can't collide with a datapath in an invocation (no path starts with `@`).
-18. Sorting by (client name, id) makes equal libraries give equal bytes (compression
-    included).
-19. The panel's DOM events work in a hidden NW.js window.
+## Claims to check while implementing
+Those the pressure test couldn't, or that the revision added:
+1. Nothing outside `lib/` depends on `destroyFromHistory` destroying a Host-pinned block at once.
+2. A Doomed block never reappears through relations, saves, `deletePreview` or `validate`.
+3. The writer's output always loads, for any library P1's API can build.
+4. Loading is linear, within the budget, on any input.
+5. `markDeleted` on Placeholder and Detached breaks no P1 rule (`destroyBlocks`' severing,
+   the audit, weak-target notices).
+6. Adoption keeps every pin, slot and attachment, and undo of the adopting command is sound.
+7. An unread entry and its refs survive any number of load and save rounds.
+8. wasm: an allocation beyond the memory limit fails the probe, and doesn't corrupt memory.
+9. DOM events work in a hidden NW.js window (TA0 already runs hidden).
+10. litestl's bindings carry `const void *` slot parameters, `BlockId` by value, and `PathReader`.
 
 ## Risks
-- **Size.** Steps 2 to 6 touch `library.cc` and the undo code heavily. P3 and P5 only read
-  them; conflicts should stay in CMake lists and `compile_embed.cc`.
-- **The step 1 API is frozen early.** P3 and P5 write providers against it, so changes
-  after the merge need both told.
-- **A format fixed too early.** Nothing ships yet: version 1 may change until P6, and the
-  golden test makes each change deliberate.
-- **Memory:** load holds the parsed section and the new data together, about twice the raw
-  size. `maxRawBytes` is the host's control.
-- **TS layer change** (`Value` no longer contains PropValue) may surface in the spike and
-  TA1 tests; both are in the gate.
-</content>
-</invoke>
-<invoke name="Bash">
-<parameter name="command">cd /c/dev/coredcc-p2-layout && wc -c docs/plans/2026-11-24-p2-layout-library-io.md source/coredcc/lib/library.cc && cat > /tmp/p2msg.txt <<'E'
-plan: P2 layout and library IO
+- **A1 freezes API for P3 and P5.** Changes after its merge go to both.
+- **A1 is three commits of core code** before P3 and P5 can serialize. They need it only for their
+  last steps, except P5's lifetime tests (its step 5) and P3's overrides (its step 9).
+- **A format fixed too early:** version 1 may change until P6; the golden test makes it deliberate.
+- **TS `Value` change** may surface in the spike and TA1; both are in the gate.
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01JrpoSSToc98mTvZFN5g64p
-E
-git add docs/plans/2026-11-24-p2-layout-library-io.md && git commit -q -F /tmp/p2msg.txt -- docs/plans/2026-11-24-p2-layout-library-io.md && git log --oneline -1 && git status --short
+---
+
+## Pressure test record (2026-11-24)
+A fresh agent had the plan and the code. It ran experiments linked against coredcc's libraries
+(native-clang RelWithDebInfo) and an lz4 test in 32 and 64 bits. The author checked each finding
+against the code. Its "B7" is named in the verdict but isn't in the report.
+
+### Survived
+- The lz4 bound (claim 2): 400 inputs, worst ratio 251.6. lz4hc gives the same bytes in 32 and 64
+  bits (claim 18, compression).
+- litestl's `ByteReader` and `decompressBlock` are bounds-safe, by reading (claim 1).
+- Severing a destroyed placeholder is harmless (9). No path starts with `@` (17). `BlockId` by value
+  follows `QueryAnswer` (14). `io` builds everywhere and a host has it (3, partly). Within P1, `attach`
+  and `setSlot` have only test callers (13). Nothing contradicts a `Ref` without WASM memory (16).
+- `lib` depending on `props`; folding; the section's structure and parse phase.
+
+### Broke, and what changed
+**Blocking**
+- **B1, nulling InHistory targets in the writer loses refs in duplicate and undo.** Nulling moved to
+  the save, over every table. *The suggested writer purpose was rejected:* payloads hold only
+  indices, so the save can null rows afterwards, and providers needn't know why they are written.
+- **B2, a name read from a file makes the next save fail.** `NameTable` per Library, and raw ids as a
+  last resort. *Registering them in the Runtime was rejected,* because of S10.
+- **B3, saves could write files that don't load.** The reader accepts any bytes without NUL, of any
+  length; the writer stops at a NUL. Tested as a property.
+- **B4, placeholders and Detached blocks couldn't be deleted or undone.** A2's states.
+- **B5, the lazy after blob is wrong with sub-commands** (checked in `CommandRecord::undo` and
+  `redo`). `end()` captures it in exec.
+- **B6, HostOwned lost GC edges and couldn't be restored.** HostOwned is cut; Detached records keep
+  their refs through a save, and are adopted. *`onHostRestored(id, data)` was rejected* as part of
+  the cut; adoption gives hosts what it would.
+
+**Serious**
+- **S1, deleted blocks came back as MissingBlock.** OptStrong rows to an id without a record are
+  nulled at save, in every table.
+- **S2, MissingBlock blocked the host from recreating a block.** Adoption. The append fill-in is cut.
+- **S3, alias duplicates failed phase C.** Checked in phase B; the second gets a fresh id. *Failing
+  the load was rejected:* registering an alias would make a document unopenable. Records of another
+  client than their type's become placeholders; null Strong slots are kept.
+- **S4, snapshot blobs don't keep targets alive.** With BlockSnapshotUndo cut, only opaque blobs
+  remain: the optional `foreachRef` slot and History pins.
+- **S5, after blobs escaped the budget.** Fixed by `end()`.
+- **S6, SetProperty undo lost links to placeholders.** `PointerAccessor::cell`.
+- **S7, P5's `notify` wasn't called.** Load, append, placeholder filling and rename notify per
+  block; opaque snapshots call `notifyAll()`. P5 hooks `notify` and `notifyAll`, so `bumpEpoch`
+  needs no listener.
+- **S8, incomplete limits.** One budget by in-memory cost, `maxBlocks` over placeholders, capped
+  issues, probed allocations, 128 MiB on 32-bit.
+- **S9, colliding ids are quadratic.** A seeded index, sorting instead of searching, time bounds in
+  the tests.
+- **S10, registered file names aren't harmless.** Nothing is registered.
+- **S11, the ownership table was wrong.** Rewritten; PinKind and the attachment registry are in A1.
+- **S12, P5's needs from bags.** `BlockEntry`, unread entries, a kind per Pointer, the audit as a set
+  comparison without deduplication. `duplicate` stays without an IdMap, and P5's revision accepts
+  that. With `replaceData` cut, nothing restores a GraphDef's old counters.
+- **S13, `replaceData`'s ownership.** Cut.
+- **S14, CreatedBlocks by id alone.** Both handle and id; unpin by handle.
+- **S15, step order.** New order: bookkeeping, undo, attachments, section, append.
+- **S16, static resolution of `commandDefaults`.** `staticItem`.
+- **S17, Transient by default.** Unspecified types fail the save; Transient is explicit and reported.
+
+**Minor**
+- M1 slots and attachments sorted; a deep comparison test. M2 MissingBlock records from `foreachRef`.
+  M3 placeholder users in the cascade, and `core.block.unlinkRef`. M4 the checksum covers
+  everything; chunk rules stated. M5 an unknown dynamic enum key is an error. M6 own reader. M7
+  stated as a convention, checked by the audit. M8 sparse attributes. M9 skipped data is an issue.
+  M10 `rollback`, and a failed capture fails exec. M11 kept as an unread entry. M12 the SYSTEM loop.
+  M13 opaque attachments are copied, Root becomes FakeUser.
+- **Undeclared deviations:** LayoutNode as JSON is now declared; the panel uses the ChangeBus;
+  `setValueGesture` added; prefixes apply to tool arguments.
+- **Size:** BlockSnapshotUndo, replaceData, HostOwned, the append fill-in and the closed widget list
+  are cut. The phase is split. `gen-paths` is B5.
+
+### From P5's pressure test (its S4 to S6) and its revised plan
+- Payload lifetime: `LibraryRef`, `LibraryPin`, `dataAlive()`. Doomed blocks leave the id index and
+  are rechecked when destroyed. Deferred destroy errors stay off the sticky error.
+  `stateChanges()`, `busy()` and the epoch bumps are in A1.
+- **Differs from P5's text:** if a Strong user appears and the id is taken by another record, the
+  doomed block is destroyed rather than kept until `collect()`: the user's ref names the other
+  record.
+- **P5's item 8** (refusing to alias HostOwned types): there is no HostOwned. P5 can refuse
+  Transient types, and must check `dataAlive()` in either case.
+
+### Couldn't be verified
+- wasm out-of-memory behaviour; DOM events in a hidden window; `compile_embed` with the new headers;
+  an actual FNV-1a collision. The first three are in "Claims to check while implementing".
