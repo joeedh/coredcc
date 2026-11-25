@@ -169,6 +169,23 @@ void testRemovedInGroups()
   test_assert(!known(inst, at(m)));
 }
 
+/* A socket that is there, but only while something is linked to it. */
+void testInterior()
+{
+  World w;
+  const Graph inner = newGraph(w.lib, "inner"), outer = newGraph(w.lib, "outer");
+  const NodeId n = add(*inner.def, "t.make"), group = add(*outer.def, "graph.group");
+  test_assert(outer.def->setGroup(group, inner.id).ok());
+  const std::string interior = "@" + std::to_string(n.value) + ".a";
+  const NodeId f = add(*outer.def, "math.float");
+  const LinkId l = connect(*outer.def, f, "value", group, interior);
+  GraphInstance inst(&w.rt, &w.lib, outer.id);
+  const SocketPath p = SocketPath::of(group, interior, SocketSide::Input);
+  test_assert(inst.evaluate(p).ok() && known(inst, p));
+  test_assert(outer.def->unlink(l).ok());
+  test_assert(hasCode(inst.evaluate(p), StatusCode::NotFound) && !known(inst, p));
+}
+
 void testForget()
 {
   World w;
@@ -300,6 +317,7 @@ int main()
   testRemovedNodes();
   test_assert(g_alive == 0);
   testRemovedInGroups();
+  testInterior();
   testForget();
   testInputs();
   testLibraries();

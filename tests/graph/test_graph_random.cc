@@ -300,9 +300,11 @@ std::string describe(World &w)
       const NodeState s = def.stateOf(n);
       std::string t = s.typeName.c_str() + (" g" + std::to_string(s.group.local.lo));
       t += storedText(n.params()) + ";" + storedText(n.literals());
+      NodeValues extras;
       for (const BlockEntry &e : n.extras()) {
-        t += std::string(" ") + e.name.c_str() + ":" + e.value.toString().c_str();
+        extras.append(NodeValue{e.name, e.value});
       }
+      t += ";" + storedText(extras);
       const NodeType *type = n.type();
       for (int i = 0; type && i < int(type->params.size()); i++) {
         const char *name = type->params[i].def.apiName().c_str();

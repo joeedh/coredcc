@@ -375,6 +375,7 @@ void testVersions()
     NodeTypeDef bad = t.copy();
     test_assert(hasCode(rt.ext<NodeTypeRegistry>().check(bad.version(0)),
                         StatusCode::InvalidArgument));
+    t = t.copy();
     addType<noneKernel>(rt, t, "io.versioned");
     test_assert(rt.ext<NodeTypeRegistry>().find("io.versioned")->version == version);
   };

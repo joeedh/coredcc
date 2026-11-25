@@ -431,6 +431,7 @@ void testReentrancy()
       const SocketPath p = out(s);
       test_assert(hasCode(x->evaluate({&p, 1}, results), StatusCode::Busy));
       test_assert(hasCode(x->setInput("in", GraphValue::ofFloat(1)), StatusCode::Busy));
+      test_assert(hasCode(x->forget(p), StatusCode::Busy));
       test_assert(hasCode(x->retry(), StatusCode::Busy) && hasCode(x->clear(), StatusCode::Busy));
     }
     test_assert(hasCode(w.lib.collect(), StatusCode::Busy));

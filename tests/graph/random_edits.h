@@ -590,6 +590,11 @@ class Editor {
         c.nodes.clear();
         c.frameDefs.clear();
         c.last.clear();
+        /* Inputs that the interface doesn't have go too. */
+        const Graph &root = w_.defs[size_t(c.def)];
+        for (auto it = c.external.begin(); w_.live(root) && it != c.external.end();) {
+          it = root.def->interfaceSocket(it->first) ? std::next(it) : c.external.erase(it);
+        }
         return;
       }
       case 4: {

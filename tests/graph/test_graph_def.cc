@@ -353,6 +353,7 @@ void testHome()
     test_assert(hasCode(def.removeNode(a), StatusCode::Busy));
     test_assert(hasCode(def.setLabel(a, ""), StatusCode::Busy));
     test_assert(hasCode(def.setPosition(a, 0, 0), StatusCode::Busy));
+    test_assert(hasCode(def.setExtra(a, "x", PropValue::ofInt(1)), StatusCode::Busy));
     test_assert(hasCode(def.setParam(a, "count", PropValue::ofInt(1)), StatusCode::Busy));
     test_assert(hasCode(def.setLiteral(a, "a", PropValue::ofInt(1)), StatusCode::Busy));
     test_assert(hasCode(def.setGroup(a, g.id), StatusCode::Busy));

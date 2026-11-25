@@ -42,6 +42,64 @@ static void test_set_value_undo()
   test_assert(t.ex.undo(t.ctx).code() == StatusCode::NotFound);
 }
 
+/* A member that says itself what to put back. */
+static void test_save()
+{
+  Setup s;
+  struct Data {
+    bool set = false;
+    double value = 0;
+    int updates = 0;
+  };
+  static Data data;
+  data = Data();
+  ApiStruct st("test.Saving");
+  ValueAccessor a;
+  a.get = [](const PointerRef &, Context &) {
+    return PropValue::ofFloat(data.set ? data.value : 7);
+  };
+  a.set = [](const PointerRef &, Context &, const PropValue &v) {
+    data.set = true;
+    data.value = v.asFloat();
+    return Status();
+  };
+  a.save = [](const PointerRef &, Context &) -> ValueAccessor::RestoreFn {
+    return [was = data](const PointerRef &, Context &) {
+      if (was.set && was.value < 0) {
+        return Status::error(StatusCode::Unsupported, "restore fails");
+      }
+      data.set = was.set;
+      data.value = was.value;
+      return Status();
+    };
+  };
+  st.add(PropertyDef::floatProp("value"), std::move(a)).update([](const PointerRef &, Context &) {
+    data.updates++;
+  });
+  ApiRegistry &reg = s.w.rt.ext<ApiRegistry>();
+  test_assert(reg.add(std::move(st)).ok());
+  test_assert(reg.addRuntimeOwner("saving", StructId::of("test.Saving"), []() {
+                   return static_cast<void *>(&data);
+                 }).ok());
+  Context ctx(&s.w.rt, &s.w.lib, reg.runtimeOwner("saving"));
+  ctx.setExecutor(&s.ex);
+  int fired = 0;
+  auto c = s.w.rt.ext<ChangeBus>().watch(
+      ctx, "value", [&](const PropValue &, const Status &) { fired++; });
+  auto flushed = [&](int want) {
+    s.w.rt.ext<ChangeBus>().flush();
+    return fired == want && data.updates == want;
+  };
+  test_assert(setValueUndo(ctx, "value", PropValue::ofFloat(3)).ok() && data.set && flushed(1));
+  test_assert(s.ex.undo(ctx).ok() && !data.set && flushed(2));
+  test_assert(s.ex.redo(ctx).ok() && data.set && data.value == 3 && flushed(3));
+  /* It may fail. */
+  test_assert(setValueUndo(ctx, "value", PropValue::ofFloat(-1)).ok());
+  test_assert(setValueUndo(ctx, "value", PropValue::ofFloat(5)).ok());
+  test_assert(s.ex.undo(ctx).code() == StatusCode::Unsupported && data.value == 5);
+  s.history.clear();
+}
+
 static void test_invoke_and_last_used()
 {
   Setup s;
@@ -176,6 +234,7 @@ static void test_registration()
 int main()
 {
   test_set_value_undo();
+  test_save();
   test_invoke_and_last_used();
   test_command_defaults_path();
   test_literals();

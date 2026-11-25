@@ -103,6 +103,11 @@ void testParams()
   test_assert(d.node().literals().size() == 0 && d.gives(10199) && same(before, d.save()));
   test_assert(d.redo().ok() && d.gives(30199) && d.undo().ok());
 
+  /* Others stay as they are. */
+  test_assert(d.g.def->setParam(d.n, "plain", fl(3)).ok());
+  test_assert(d.set(d.path(".params.maybe"), fl(5)).ok() && d.undo().ok());
+  test_assert(d.node().params().size() == 1 && d.g.def->setParam(d.n, "plain", PropValue()).ok());
+
   /* A gesture is one step. */
   for (int i = 0; i < 3; i++) {
     test_assert(setValueUndo(d.ctx, d.path(".params.maybe"), fl(i), 9).ok());
@@ -155,6 +160,15 @@ void testSockets()
   test_assert(d.set(socket + ".value", PropValue::ofInt(8)).ok());
   test_assert(d.undo().ok() && d.undo().ok() && n.literals().size() == 1);
   test_assert(n.literals()[0].value == fl(3));
+
+  /* Redo stores what was stored, not what the input has by now. */
+  test_assert(inner.def->setInterfaceType(a, "float").ok());
+  test_assert(d.g.def->setLiteral(group, key(a), PropValue()).ok());
+  test_assert(inner.def->setInterfaceDefault(a, fl(1)).ok());
+  test_assert(d.set(socket + ".isSet", PropValue::ofBool(true)).ok() && d.undo().ok());
+  test_assert(inner.def->setInterfaceDefault(a, fl(2)).ok() && d.is(socket + ".value", fl(2)));
+  test_assert(d.redo().ok() && d.is(socket + ".value", fl(1)) && d.undo().ok());
+  test_assert(inner.def->setInterfaceDefault(a, PropValue()).ok());
 
   /* A default that was never set follows its type. */
   test_assert(inner.def->setInterfaceType(a, "float").ok());
@@ -252,6 +266,24 @@ void testBytes()
                 return e.unlink(l);
               }).ok());
   test_assert(!same(before, d.save()) && d.undo().ok() && same(before, d.save()));
+}
+
+/* Literals of two types under one key. */
+void testLiteralBytes()
+{
+  UndoDoc d;
+  const Graph inner = newGraph(d.lib, "inner");
+  const int64_t a = addSocket(*inner.def, SocketSide::Input, "a", "float");
+  const NodeId group = add(*d.g.def, "graph.group");
+  test_assert(d.g.def->setGroup(group, inner.id).ok());
+  NodeValues values;
+  values.append(NodeValue{key(a).c_str(), fl(1)});
+  values.append(NodeValue{key(a).c_str(), PropValue::ofInt(2)});
+  test_assert(d.g.def->restoreValues(group, false, key(a), values).ok());
+  const auto before = d.save();
+  std::swap(values[0], values[1]);
+  test_assert(d.g.def->restoreValues(group, false, key(a), values).ok());
+  test_assert(same(before, d.save()));
 }
 
 /* ---- extras ---- */
@@ -414,6 +446,7 @@ int main()
   testSockets();
   testOrder();
   testBytes();
+  testLiteralBytes();
   testExtras();
   testLibraries();
   testMemory();
