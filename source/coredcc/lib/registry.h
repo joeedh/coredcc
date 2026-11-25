@@ -61,6 +61,17 @@ class ClientRegistry {
   litestl::util::Map<uint64_t, uint64_t> aliases_;
 };
 
+/** How a block type's data is saved. */
+enum class BlockStorage : uint8_t {
+  /** Not said: Payload if the provider has serialize and deserialize. A save reports the
+   * block's data as lost otherwise. */
+  Unspecified,
+  /** Through the provider's serialize and deserialize. */
+  Payload,
+  /** Never saved, on purpose. */
+  Transient,
+};
+
 /** A block type, as a client registers it. */
 struct BlockTypeInfo {
   /** The full type name, e.g. "coredcc.Mesh"; its TypeId is the registry key. */
@@ -68,7 +79,9 @@ struct BlockTypeInfo {
   ClientId client;
   /** The bound struct of the block's data, for the datapath layer. */
   StructId dataStruct;
+  /** The payload version serialize writes; deserialize reads it and older ones. */
   uint32_t payloadVersion = 1;
+  BlockStorage storage = BlockStorage::Unspecified;
 };
 
 /**
@@ -92,7 +105,8 @@ class BlockTypeRegistry {
   BlockTypeRegistry(const BlockTypeRegistry &) = delete;
   BlockTypeRegistry &operator=(const BlockTypeRegistry &) = delete;
 
-  /** Registers a block type. Its client must be registered. Takes the provider. */
+  /** Registers a block type. Its client must be registered. Takes the provider. Refuses one
+   * of serialize and deserialize without the other, and a `storage` that contradicts them. */
   Result<TypeId> add(BlockTypeInfo info, Owned<BlockProvider> provider);
   const Entry *find(TypeId type) const;
   /** The provider of `type`, or a null interface. */

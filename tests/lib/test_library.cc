@@ -466,29 +466,6 @@ static void test_query_order()
   test_assert(lib.validate().ok());
 }
 
-static int g_attachmentsFreed = 0;
-
-static void test_attachments()
-{
-  Runtime rt;
-  setup(rt);
-  Library lib(&rt);
-  BlockHandle h = make(lib, "a");
-  int *data = litestl::alloc::New<int>("att", 3);
-  auto freeInt = [](void *p) {
-    g_attachmentsFreed++;
-    litestl::alloc::Delete(static_cast<int *>(p));
-  };
-  test_assert(lib.attach(h, TypeId::of("test.Att"), data, freeInt).ok());
-  test_assert(lib.attach(h, TypeId::of("test.Att"), data, freeInt).code() ==
-              StatusCode::AlreadyExists);
-  test_assert(lib.attachment(h, TypeId::of("test.Att")) == data);
-  Result<void *> d = lib.detach(h, TypeId::of("test.Att"));
-  test_assert(d.ok() && *d == data && lib.attachment(h, TypeId::of("test.Att")) == nullptr);
-  test_assert(lib.attach(h, TypeId::of("test.Att"), data, freeInt).ok());
-  test_assert(*lib.collect() == 1 && g_attachmentsFreed == 1);
-}
-
 /* ---- a foreign provider through a fake dispatcher ---- */
 
 struct FakeHost : ForeignDispatcher {
@@ -645,7 +622,6 @@ int main()
   test_placeholders_and_slots();
   test_client_aliases();
   test_query_order();
-  test_attachments();
   test_foreign_provider();
   return test_end();
 }

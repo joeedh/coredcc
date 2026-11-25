@@ -1,10 +1,12 @@
 coredcc_library(coredcc_lib
   SOURCES
+    attachment.cc
     bindings.cc
+    block_io.cc
     gc.cc
     library.cc
     lifetime.cc
     registry.cc
   DEPS
-    coredcc_base
+    coredcc_props
 )

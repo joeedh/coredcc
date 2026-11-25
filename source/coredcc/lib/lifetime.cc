@@ -152,11 +152,7 @@ Status Library::doom(BlockHandle h)
   setState(*b, BlockState::Doomed);
   doomedCount_++;
   /* destroyBlocks of nothing would return early: run what the notices deferred here. */
-  Vector<litestl::util::function<void()>> later = std::move(deferred_);
-  deferred_.clear();
-  for (auto &fn : later) {
-    fn();
-  }
+  runDeferred();
   return rt_.hasStickyError() ? rt_.takeStickyError() : Status();
 }
 

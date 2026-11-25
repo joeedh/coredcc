@@ -1,5 +1,6 @@
 #include "coredcc/lib/library.h"
 
+#include "coredcc/lib/attachment.h"
 #include "coredcc/lib/pin.h"
 
 #include <cstring>
@@ -51,6 +52,7 @@ Status noBlock(const char *op)
 
 Library::Library(Runtime *rt)
     : rt_(*rt), types_(rt->ext<BlockTypeRegistry>()), clients_(rt->ext<ClientRegistry>()),
+      attachmentTypes_(rt->ext<AttachmentTypeRegistry>()),
       token_(std::make_shared<detail::LibraryToken>())
 {
   token_->lib = this;
@@ -418,32 +420,52 @@ Status Library::forceUnlink(BlockHandle owner, TypeId ns, int64_t key)
   return Status::error(StatusCode::NotFound, "forceUnlink: no such slot");
 }
 
-Status Library::foreachRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const
+Status Library::visitRefs(const Datablock &b,
+                          litestl::util::function<void(RefCell &)> &fn,
+                          litestl::util::function<void(RefVisitor &)> visit) const
 {
-  Datablock *b = const_cast<Library *>(this)->rec(h);
+  const bool stickyBefore = rt_.hasStickyError();
+  RefVisitor visitor([](void *ctx, RefCell &cell) {
+    (*static_cast<litestl::util::function<void(RefCell &)> *>(ctx))(cell);
+  }, &fn);
+  visit(visitor);
+  if (!stickyBefore && rt_.hasStickyError()) {
+    return Status::error(StatusCode::Internal,
+                         ("foreachRef: a provider of '" + std::string(b.name_.c_str()) +
+                          "' failed; see the Runtime's sticky error")
+                             .c_str());
+  }
+  return Status();
+}
+
+Status Library::foreachDataRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const
+{
+  const Datablock *b = rec(h);
   if (!b) {
-    return noBlock("foreachRef");
+    return noBlock("foreachDataRef");
   }
   /* The provider can enumerate while its data or wrapper exists: Live, held by the
    * history, Detached (whose targets must survive until the host restores it), or Doomed
    * (whose pinned data may reach them). */
-  if (b->state_ != BlockState::Placeholder) {
-    if (BlockProvider p = types_.provider(b->type_)) {
-      const bool stickyBefore = rt_.hasStickyError();
-      RefVisitor visitor([](void *ctx, RefCell &cell) {
-        (*static_cast<litestl::util::function<void(RefCell &)> *>(ctx))(cell);
-      }, &fn);
-      p.foreachRef(*b, visitor);
-      if (!stickyBefore && rt_.hasStickyError()) {
-        return Status::error(StatusCode::Internal,
-                             ("foreachRef: the provider of '" + std::string(b->name_.c_str()) +
-                              "' failed; see the Runtime's sticky error")
-                                 .c_str());
-      }
-    }
+  BlockProvider p = types_.provider(b->type_);
+  if (b->state_ == BlockState::Placeholder || !p) {
+    return Status();
   }
+  return visitRefs(*b, fn, [&](RefVisitor &v) { p.foreachRef(*b, v); });
+}
+
+Status Library::foreachRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const
+{
+  CDCC_TRY(foreachDataRef(h, fn));
+  Datablock *b = const_cast<Library *>(this)->rec(h);
   for (Datablock::Slot &s : b->slots_) {
     fn(s.cell);
+  }
+  for (const Datablock::Attachment &a : b->attachments_) {
+    const AttachmentProvider p = attachmentTypes_.find(a.type)->provider.get();
+    if (p.hasForeachRef()) {
+      CDCC_TRY(visitRefs(*b, fn, [&](RefVisitor &v) { p.foreachRef(a.data, v); }));
+    }
   }
   return Status();
 }
@@ -526,17 +548,24 @@ void Library::clearOverride(BlockHandle h, InterfaceId iface)
 
 /* ---- attachments ---- */
 
-Status Library::attach(BlockHandle h, TypeId type, void *data, void (*destroy)(void *data))
+Status Library::attach(BlockHandle h, TypeId type, void *data)
 {
   CDCC_TRY(busyIfSweeping("attach"));
   Datablock *b = rec(h);
   if (!b) {
     return noBlock("attach");
   }
+  if (!attachmentTypes_.find(type)) {
+    const char *name = rt_.nameOf(type);
+    return Status::error(StatusCode::NotFound,
+                         ("attach: '" + std::string(name ? name : "?") +
+                          "' is not a registered attachment type")
+                             .c_str());
+  }
   if (attachment(h, type)) {
     return Status::error(StatusCode::AlreadyExists, "attach: the block has this attachment");
   }
-  b->attachments_.append(Datablock::Attachment{type, data, destroy});
+  b->attachments_.append(Datablock::Attachment{type, data});
   epoch_++;
   return Status();
 }
@@ -571,6 +600,31 @@ void *Library::attachment(BlockHandle h, TypeId type) const
     }
   }
   return nullptr;
+}
+
+/* ---- payloads ---- */
+
+void Library::adoptData(BlockHandle h, void *data, bool keep)
+{
+  Datablock *b = rec(h);
+  if (!b) {
+    return;
+  }
+  b->clientData_ = data;
+  epoch_++;
+  if (keep) {
+    return;
+  }
+  /* Sever and destroy, as a sweep does. */
+  foreachDataRef(h, [](RefCell &cell) {
+    cell.target = BlockId();
+    cell.cache = BlockHandle();
+  }).ignore();
+  sweeping_ = true;
+  types_.provider(b->type_).destroy(*b);
+  sweeping_ = false;
+  b->clientData_ = nullptr;
+  runDeferred();
 }
 
 /* ---- validation ---- */

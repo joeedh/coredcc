@@ -83,6 +83,23 @@ Result<TypeId> BlockTypeRegistry::add(BlockTypeInfo info, Owned<BlockProvider> p
     return Status::error(StatusCode::InvalidArgument,
                          ("block type '" + name + "' has no provider").c_str());
   }
+  const bool canSave = provider->hasSerialize();
+  if (canSave != provider->hasDeserialize()) {
+    return Status::error(
+        StatusCode::InvalidArgument,
+        ("block type '" + name + "' has one of serialize and deserialize: it needs both or neither")
+            .c_str());
+  }
+  if (info.storage == (canSave ? BlockStorage::Transient : BlockStorage::Payload)) {
+    return Status::error(
+        StatusCode::InvalidArgument,
+        ("block type '" + name +
+         (canSave ? "' is Transient, but has serialize" : "' is Payload, but has no serialize"))
+            .c_str());
+  }
+  if (canSave) {
+    info.storage = BlockStorage::Payload;
+  }
   ClientRegistry &clients = rt_.ext<ClientRegistry>();
   if (!clients.isRegistered(info.client)) {
     return Status::error(StatusCode::NotFound,

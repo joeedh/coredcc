@@ -389,12 +389,6 @@ static void test_state_changes_and_epoch()
     at = w.lib.epoch();
     return yes;
   };
-  int x = 0;
-  const TypeId att = TypeId::of("test.Att");
-  test_assert(w.lib.attach(b, att, &x, nullptr).ok() && bumped());
-  test_assert(!w.lib.attach(b, att, &x, nullptr).ok() && !bumped());
-  test_assert(w.lib.detach(b, att).ok() && bumped());
-  test_assert(!w.lib.detach(b, att).ok() && !bumped());
   const BlockProvider p = w.rt.ext<BlockTypeRegistry>().provider(kThing);
   const InterfaceId iface = InterfaceId::of(BlockProvider::ifaceName);
   test_assert(w.lib.setOverride(b, iface, p).ok() && bumped());

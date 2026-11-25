@@ -6,6 +6,7 @@
  */
 
 #include "coredcc/base/handle_pool.h"
+#include "coredcc/base/name_table.h"
 #include "coredcc/base/runtime.h"
 #include "coredcc/lib/block.h"
 #include "coredcc/lib/registry.h"
@@ -19,6 +20,7 @@
 
 namespace coredcc {
 
+class AttachmentTypeRegistry;
 class LibraryRef;
 namespace detail {
 struct LibraryToken;
@@ -45,6 +47,12 @@ class Library {
   }
   /** A weak reference, for code that may outlive this Library (coredcc/lib/pin.h). */
   LibraryRef ref() const;
+  /** Names that files brought in and the Runtime doesn't know (a missing add-on's structs
+   * and runtime owners), so a save can write them again. */
+  NameTable &fileNames()
+  {
+    return fileNames_;
+  }
 
   /* ---- creating ---- */
 
@@ -156,8 +164,10 @@ class Library {
   /** Removes a slot. Also how a placeholder's refs are cut (forceUnlink). */
   Status forceUnlink(BlockHandle owner, TypeId ns, int64_t key);
 
-  /** Every reference out of `h`: the provider's, then the slots. */
+  /** Every reference out of `h`: the provider's, the slots', then the attachments'. */
   Status foreachRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const;
+  /** The references in the block's data alone, as its provider reports them. */
+  Status foreachDataRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const;
   /** Blocks with a reference (of any kind) to `target`. Cached by epoch. */
   litestl::util::Vector<BlockHandle> usersOf(BlockHandle target) const;
 
@@ -182,9 +192,10 @@ class Library {
 
   /* ---- attachments ---- */
 
-  /** Client data attached to a block under `type`; `destroy` frees it with the block.
-   * The undoable attach and detach commands are in command/. */
-  Status attach(BlockHandle h, TypeId type, void *data, void (*destroy)(void *data));
+  /** Attaches client data to a block under `type`, which must be in the
+   * AttachmentTypeRegistry; its provider destroys the data with the block. The undoable
+   * attach and detach commands are in command/. */
+  Status attach(BlockHandle h, TypeId type, void *data);
   /** Removes an attachment without destroying it, returning its data. */
   Result<void *> detach(BlockHandle h, TypeId type);
   void *attachment(BlockHandle h, TypeId type) const;
@@ -219,6 +230,10 @@ class Library {
   {
     audit_ = on;
   }
+  bool auditsRelations() const
+  {
+    return audit_;
+  }
   bool sweeping() const
   {
     return sweeping_;
@@ -240,6 +255,8 @@ class Library {
   Status validate() const;
 
  private:
+  friend Status readPayload(Library &lib, BlockHandle h, const BlockPayload &payload);
+
   Datablock *rec(BlockHandle h)
   {
     return pool_.get(h);
@@ -272,10 +289,20 @@ class Library {
   void releaseDoomed();
   void releaseOneDoomed(BlockHandle h);
   Status takeDeferredErrors();
+  /** Runs what was deferred during a sweep. */
+  void runDeferred();
+  /** readPayload's end: makes `data` the record's, or has the provider destroy it. */
+  void adoptData(BlockHandle h, void *data, bool keep);
+  /** Calls `visit` with a visitor over `fn`, and turns a new sticky error into a Status. */
+  Status visitRefs(const Datablock &b,
+                   litestl::util::function<void(RefCell &)> &fn,
+                   litestl::util::function<void(RefVisitor &)> visit) const;
 
   Runtime &rt_;
   BlockTypeRegistry &types_;
   ClientRegistry &clients_;
+  AttachmentTypeRegistry &attachmentTypes_;
+  NameTable fileNames_;
   HandlePool<Datablock> pool_;
   litestl::util::Map<BlockId, BlockHandle> byId_;
   uint64_t epoch_ = 1;

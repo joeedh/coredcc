@@ -1,5 +1,6 @@
 /* Library relations and garbage collection (architecture §8a, "Lifetime and garbage
  * collection"). */
+#include "coredcc/lib/attachment.h"
 #include "coredcc/lib/library.h"
 
 #include <string>
@@ -228,9 +229,8 @@ void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
       p.destroy(*b);
     }
     for (Datablock::Attachment &a : b->attachments_) {
-      if (a.destroy) {
-        a.destroy(a.data);
-      }
+      AttachmentProvider p = attachmentTypes_.find(a.type)->provider.get();
+      p.destroy(a.data);
     }
     if (b->state_ == BlockState::Doomed) {
       doomedCount_--; /* its id may be another record's */
@@ -242,7 +242,11 @@ void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
   }
   sweeping_ = false;
   epoch_++;
+  runDeferred();
+}
 
+void Library::runDeferred()
+{
   Vector<litestl::util::function<void()>> later = std::move(deferred_);
   deferred_.clear();
   for (auto &fn : later) {

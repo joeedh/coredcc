@@ -1,6 +1,7 @@
 #pragma once
 
 #include "coredcc/lib/block.h"
+#include "coredcc/lib/block_io.h"
 
 namespace coredcc {
 
@@ -21,8 +22,14 @@ namespace coredcc {
  * - `onWeakTargetLost` (optional) is told when a block it weakly references is about
  *   to be destroyed, so a child can keep its world transform.
  *
- * serialize, deserialize, duplicate and rekey come with library IO (P2), as optional
- * slots, which existing providers don't need to implement.
+ * - `serialize` and `deserialize` (optional, together) write the block's data to a payload
+ *   and make it again: what saving needs. `deserialize` makes new data and gives it to
+ *   `in.setData`; on an error it has freed what it made. The record exists then (id, name,
+ *   slots), but other blocks may not have their data yet.
+ * - `duplicate` (optional) copies the data, references as they are; the library then remaps
+ *   them through foreachRef.
+ * - `rekey` (optional) gives an imported block an id the client can resolve (a UUID in host
+ *   data). A null id refuses the import.
  */
 struct BlockProvider : IfaceRef {
   void *data(const Datablock &block) const
@@ -53,6 +60,38 @@ struct BlockProvider : IfaceRef {
   {
     CDCC_CALL(onWeakTargetLost, user, lost);
   }
+  bool hasSerialize() const
+  {
+    return CDCC_HAS(serialize);
+  }
+  Status serialize(const Datablock &block, BlockWriter &out) const
+  {
+    return CDCC_CALL(serialize, block, out);
+  }
+  bool hasDeserialize() const
+  {
+    return CDCC_HAS(deserialize);
+  }
+  Status deserialize(const Datablock &block, BlockReader &in)
+  {
+    return CDCC_CALL(deserialize, block, in);
+  }
+  bool hasDuplicate() const
+  {
+    return CDCC_HAS(duplicate);
+  }
+  Status duplicate(const Datablock &src, BlockCopy &out)
+  {
+    return CDCC_CALL(duplicate, src, out);
+  }
+  bool hasRekey() const
+  {
+    return CDCC_HAS(rekey);
+  }
+  BlockId rekey(const Datablock &imported) const
+  {
+    return CDCC_CALL(rekey, imported);
+  }
 
   CDCC_INTERFACE(BlockProvider, "coredcc::BlockProvider")
   {
@@ -61,6 +100,10 @@ struct BlockProvider : IfaceRef {
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_OPTIONAL_METHOD(st, queryInterface, MARGS("block", "iface"));
     BIND_OPTIONAL_METHOD(st, onWeakTargetLost, MARGS("user", "lost"));
+    BIND_OPTIONAL_METHOD(st, serialize, MARGS("block", "out"));
+    BIND_OPTIONAL_METHOD(st, deserialize, MARGS("block", "in"));
+    BIND_OPTIONAL_METHOD(st, duplicate, MARGS("src", "out"));
+    BIND_OPTIONAL_METHOD(st, rekey, MARGS("imported"));
   }
 };
 

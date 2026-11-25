@@ -1,6 +1,7 @@
 /* Binding descriptors for lib's value types. Datablock and RefCell expose no members
  * yet: their accessors are bound with the rest of bind/ (P1f). */
 #include "coredcc/lib/block.h"
+#include "coredcc/lib/block_io.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
@@ -51,6 +52,36 @@ const lbt::Struct<Datablock> *Datablock::defineBindings()
   if (!st) {
     PermanentGuard guard;
     st = new lbt::Struct<Datablock>("coredcc::Datablock", sizeof(Datablock));
+  }
+  return st;
+}
+
+const lbt::Struct<BlockWriter> *BlockWriter::defineBindings()
+{
+  static lbt::Struct<BlockWriter> *st = nullptr;
+  if (!st) {
+    PermanentGuard guard;
+    st = new lbt::Struct<BlockWriter>("coredcc::BlockWriter", sizeof(BlockWriter));
+  }
+  return st;
+}
+
+const lbt::Struct<BlockReader> *BlockReader::defineBindings()
+{
+  static lbt::Struct<BlockReader> *st = nullptr;
+  if (!st) {
+    PermanentGuard guard;
+    st = new lbt::Struct<BlockReader>("coredcc::BlockReader", sizeof(BlockReader));
+  }
+  return st;
+}
+
+const lbt::Struct<BlockCopy> *BlockCopy::defineBindings()
+{
+  static lbt::Struct<BlockCopy> *st = nullptr;
+  if (!st) {
+    PermanentGuard guard;
+    st = new lbt::Struct<BlockCopy>("coredcc::BlockCopy", sizeof(BlockCopy));
   }
   return st;
 }

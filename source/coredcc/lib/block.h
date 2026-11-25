@@ -236,7 +236,6 @@ class Datablock {
   struct Attachment {
     TypeId type;
     void *data = nullptr;
-    void (*destroy)(void *data) = nullptr;
   };
   struct Override {
     InterfaceId iface;

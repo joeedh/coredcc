@@ -741,3 +741,34 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
   being an issue.
 - A Pointer with a negative handle in its key fails the writer (InvalidArgument). Nothing in the
   API makes one.
+
+### A1, commit 3: payloads, slots, attachments (2026-11-24)
+- **An entry's layout:** name, tag, a ref count and the row indices, then the body with its length.
+  A block pointer's body holds an index into the entry's own refs (always 0 today), not a row, so
+  an unknown entry's `raw` stays right when its rows move.
+- `BlockWriter::entry(e)` is `entries()` of one, so `BlockReader::entries` reads it back.
+- **A Pointer into a block without a ref in `refs` fails the writer** (Internal), as does `raw` under
+  a tag this build knows: the reader would reject or misread either.
+- `BlockWriter::bag` writes the unread entries first. If the bag has since set the same name, the set
+  value wins on read. A bag's pointers are copies: the provider keeps a RefCell for each, and
+  reports it.
+- **Added to the published API:**
+  - `checkPayloadRefs(lib, h, payload)`: the audit on its own. `writePayload` runs it when the
+    library's relations audit is on (`Library::auditsRelations()`), and A4's save runs it
+    otherwise, to report an issue.
+  - `Library::foreachDataRef`: the provider's references without slots and attachments, which is
+    what the table is compared with.
+  - Public constructors, `BlockWriter::take(version)`, `BlockReader::data()` and
+    `BlockCopy::data()`: A4 and A5 use them for attachments and copies, and tests do now.
+  - `has...` queries on the new optional slots, as the existing ones have.
+- **`readPayload`** needs a Live record without data, opens a no-collect scope around the provider,
+  and takes back data from a provider that returned ok although the reader failed, bytes were left
+  over, or (with data) something else was wrong: it severs the data's refs and calls `destroy`
+  under the sweep's rules. Only a provider that returns an error cleans up after itself.
+  `setData(nullptr)` is the same as not calling it.
+- `writePayload` accepts Live and InHistory blocks, and refuses one with a sticky error pending, as
+  `collect` does.
+- The audit compares strong against weak: Strong and OptStrong rows count the same.
+- `const void *` parameters bind as `void *` does, so the attachment slots keep `const`.
+- `BlockTypeRegistry::add` also refuses `Payload` without the slots.
+- Attachment types and block types share TypeId names. Nothing stops one name being both.

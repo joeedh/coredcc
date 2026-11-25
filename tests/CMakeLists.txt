@@ -17,6 +17,8 @@ coredcc_test(test_parse_invocation SOURCES parse/test_invocation.cc DEPS coredcc
 coredcc_test(test_parse_fuzz SOURCES parse/test_fuzz.cc DEPS coredcc_parse)
 coredcc_test(test_lib_library SOURCES lib/test_library.cc DEPS coredcc_lib)
 coredcc_test(test_lib_lifetime SOURCES lib/test_lifetime.cc DEPS coredcc_lib)
+coredcc_test(test_lib_block_io SOURCES lib/test_block_io.cc DEPS coredcc_lib)
+coredcc_test(test_lib_attachment SOURCES lib/test_attachment.cc DEPS coredcc_lib)
 coredcc_test(test_api_resolve SOURCES api/test_resolve.cc DEPS coredcc_api)
 coredcc_test(test_api_change_bus SOURCES api/test_change_bus.cc DEPS coredcc_api)
 coredcc_test(test_command_history SOURCES command/test_command_history.cc DEPS coredcc_command)
