@@ -4,6 +4,7 @@ coredcc_library(coredcc_api
     bindings.cc
     change_bus.cc
     context.cc
+    format.cc
     library_io.cc
     ref_text.cc
     resolve.cc

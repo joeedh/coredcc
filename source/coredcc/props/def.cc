@@ -32,6 +32,33 @@ char toUpper(char c)
   return isLower(c) ? char(c - 'a' + 'A') : c;
 }
 
+/* Whether a value with this meaning can be in this unit. */
+bool unitAgrees(PropSubtype subtype, UnitFamily unit)
+{
+  switch (subtype) {
+    case PropSubtype::None:
+    case PropSubtype::Xyz:
+      return true;
+    case PropSubtype::Distance:
+      return unit == UnitFamily::Length;
+    case PropSubtype::Angle:
+    case PropSubtype::Euler:
+      return unit == UnitFamily::Angle;
+    case PropSubtype::Time:
+      return unit == UnitFamily::Time;
+    case PropSubtype::Factor:
+    case PropSubtype::Percentage:
+      return unit == UnitFamily::Factor;
+    case PropSubtype::Color:
+    case PropSubtype::ColorGamma:
+    case PropSubtype::Direction:
+    case PropSubtype::FilePath:
+    case PropSubtype::Password:
+      return false;
+  }
+  return false;
+}
+
 /* Flag values are bit masks: compare as uint64 so bit 63 works. */
 bool isSingleBit(int64_t v)
 {
@@ -388,6 +415,10 @@ Status PropertyDef::validate() const
     if ((std::isfinite(m->softMin) && m->softMin < m->hardMin) ||
         (std::isfinite(m->softMax) && m->softMax > m->hardMax)) {
       return fail("the soft range must lie inside the hard range");
+    }
+    if (m->unit != UnitFamily::None && !unitAgrees(subtype_, m->unit)) {
+      return fail(std::string("the subtype ") + propSubtypeName(subtype_) + " and the unit " +
+                  unitFamilyName(m->unit) + " don't agree");
     }
     if (m->precision < 0 || m->precision > 15) {
       return fail("precision must be 0 to 15");

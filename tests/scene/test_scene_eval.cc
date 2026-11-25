@@ -151,11 +151,12 @@ void testHierarchy()
   d.obj(a).setTransformType("test.time");
   d.obj(a).channels = ChannelBlock(1);
   d.sc().frame = 36.0;
-  d.sc().fps = 24.0;
+  d.sc().units.rate = FrameRate::nearest(24.0);
   d.evaluate();
   test_assert(d.isAt(a, 1.5) && d.isAt(c, 12.5));
-  d.sc().fps = 0.0;
-  test_assert(d.sc().time() == 36000.0);
+  d.sc().units.startFrame = 12.0;
+  d.evaluate();
+  test_assert(d.isAt(a, 1.0) && d.sc().time() == 1.0);
 }
 
 void testOutsideParent()

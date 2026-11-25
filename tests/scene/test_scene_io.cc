@@ -214,7 +214,7 @@ void testRoundTrip()
       must(d.lib->writeRef(d.sc().activeCell(), d.idOf(objects[r.below(uint32_t(n))])));
     }
     d.sc().frame = double(int64_t(r.next())) * 0x1p-50;
-    d.sc().fps = 1.0 + r.below(100);
+    d.sc().units.rate = *FrameRate::of(1 + r.below(100000), 1 + r.below(1001));
 
     const Bytes bytes = save(*d.lib);
     test_assert(same(bytes, save(*d.lib)));
@@ -240,7 +240,7 @@ void testRoundTrip()
     }
     test_assert(x.activeCell().target == y.activeCell().target);
     test_assert(y.activeCell().kind == RefKind::Weak);
-    test_assert(sameBits(x.frame, y.frame) && sameBits(x.fps, y.fps));
+    test_assert(sameBits(x.frame, y.frame) && x.units == y.units);
     test_assert(b.lib.get(b.byName("Scene"))->hasFlag(BlockFlags::Root));
     test_assert(b.lib.validate().ok());
     /* It is a document like any other. */
@@ -290,9 +290,8 @@ void testGone()
   test_assert(nulls.sc().selection().size() == 0);
   /* A host's number that isn't one doesn't make a file that can't be read. */
   d.sc().frame = std::numeric_limits<double>::quiet_NaN();
-  d.sc().fps = std::numeric_limits<double>::infinity();
   Loaded m(d, save(*d.lib));
-  test_assert(m.sc().frame == 0.0 && m.sc().fps == 24.0);
+  test_assert(m.sc().frame == 0.0 && m.sc().units == UnitSettings());
 }
 
 /* The data of an unregistered block type, and an object without its data in memory. */
@@ -575,7 +574,8 @@ void testDuplicate()
   d.select({b});
   must(d.lib->writeRef(d.sc().activeCell(), d.idOf(a)));
   d.sc().frame = 7.0;
-  d.sc().fps = 25.0;
+  d.sc().units.rate = *FrameRate::of(25);
+  must(d.sc().units.setDisplayUnit(UnitFamily::Time, "f"));
   d.evaluate();
   const BlockHandle set[] = {d.scene, b};
   const BlockId sceneId = d.idOf(d.scene);
@@ -587,7 +587,7 @@ void testDuplicate()
   test_assert(copy.objects(*d.lib)[1] == b2 && copy.indexOf(*d.lib, b2) == 1);
   test_assert(copy.indexOf(*d.lib, b) == -1 && copy.selected(*d.lib).size() == 1);
   test_assert(copy.selected(*d.lib)[0] == b2 && copy.active(*d.lib) == a && copy.frame == 7.0);
-  test_assert(copy.fps == 25.0 && copy.evaluatedObjects().size() == 0);
+  test_assert(copy.units == d.sc().units && copy.evaluatedObjects().size() == 0);
   test_assert(d.obj(b2).parent.target() == d.idOf(a) && d.obj(b2).data.target() == d.idOf(data));
   test_assert(sameChannels(d.obj(b2).channels, d.obj(b).channels));
   /* They are each on their own. */
@@ -658,7 +658,7 @@ void testAliases()
   d.lib->setAuditRelations(false);
   must(readInto(d, kSceneType, *PayloadAccess::take(out, 1), &h));
   const Scene &s = *Scene::of(*d.lib, h);
-  test_assert(s.cells().size() == 1 && s.selection().size() == 1 && s.fps == 2.0);
+  test_assert(s.cells().size() == 1 && s.selection().size() == 1 && s.units.rate == *FrameRate::of(2));
   test_assert(s.objects(*d.lib).size() == 1 && s.selected(*d.lib).size() == 1);
 }
 

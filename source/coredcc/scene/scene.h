@@ -1,5 +1,6 @@
 #pragma once
 
+#include "coredcc/props/unit_settings.h"
 #include "coredcc/scene/evaluated.h"
 #include "coredcc/scene/object.h"
 #include "coredcc/scene/scene_bvh.h"
@@ -89,12 +90,12 @@ class Scene {
   /* ---- time ---- */
 
   double frame = 0.0;
-  /** Frames per second. At least 1 / 1000. */
-  double fps = 24.0;
+  /** Display units, the frame rate and the frame at time 0. */
+  UnitSettings units;
   /** In seconds. */
   double time() const
   {
-    return frame / (fps >= 0.001 ? fps : 0.001);
+    return units.timeOf(frame);
   }
 
   /* ---- evaluation ---- */

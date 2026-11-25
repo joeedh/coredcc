@@ -5,6 +5,7 @@ coredcc_library(coredcc_props
     def.cc
     kind.cc
     ref.cc
+    unit_settings.cc
     units.cc
     value.cc
     value_io.cc

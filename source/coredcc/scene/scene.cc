@@ -1,5 +1,6 @@
 #include "coredcc/scene/scene.h"
 
+#include "coredcc/api/format.h"
 #include "coredcc/lib/provider.h"
 #include "coredcc/scene/evaluator.h"
 
@@ -234,7 +235,7 @@ void Scene::write(BlockWriter &out) const
   out.ref(active_.cell());
   writeCells(out, selection_);
   out.bytes().f64(frame);
-  out.bytes().f64(fps);
+  out.bytes().f64(units.rate.fps());
 }
 
 void Scene::readFrom(BlockReader &in)
@@ -244,7 +245,7 @@ void Scene::readFrom(BlockReader &in)
   readCells(in, RefKind::Weak, selection_);
   const double f = in.bytes().f64(), rate = in.bytes().f64();
   frame = std::isfinite(f) ? f : frame;
-  fps = std::isfinite(rate) ? rate : fps;
+  units.rate = FrameRate::nearest(rate);
 }
 
 Scene *Scene::duplicate() const
@@ -254,7 +255,7 @@ Scene *Scene::duplicate() const
   s->selection_ = selection_;
   s->active_ = active_;
   s->frame = frame;
-  s->fps = fps;
+  s->units = units;
   return s;
 }
 
@@ -463,13 +464,7 @@ ApiStruct sceneStruct()
   };
   st.add(PropertyDef::floatProp("frame"), std::move(frame));
 
-  ValueAccessor fps;
-  fps.get = [](const PointerRef &p, Context &) { return PropValue::ofFloat(self(p).fps); };
-  fps.set = [](const PointerRef &p, Context &, const PropValue &v) {
-    self(p).fps = v.asFloat();
-    return Status();
-  };
-  st.add(PropertyDef::floatProp("fps").range(0.001, 1e6).defaultValue(PropValue::ofFloat(24.0)), std::move(fps));
+  addUnitSettings(st, [](const PointerRef &p) { return &self(p).units; });
   return st;
 }
 
@@ -477,6 +472,7 @@ ApiStruct sceneStruct()
 
 Status registerSceneType(Runtime &rt)
 {
+  CDCC_TRY(registerUnitSettings(rt));
   CDCC_TRY(rt.ext<ApiRegistry>().add(sceneStruct()).status());
   const std::string impl = std::string(kSceneType) + "#provider";
   CDCC_TRY((registerImpl<BlockProvider, SceneProvider>(rt, impl)));

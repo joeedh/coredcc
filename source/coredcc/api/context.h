@@ -9,6 +9,7 @@
 #include "coredcc/lib/block.h"
 #include "coredcc/parse/path.h"
 #include "coredcc/props/ref.h"
+#include "coredcc/props/unit_settings.h"
 
 #include <cstddef>
 #include <utility>
@@ -91,6 +92,9 @@ class Context {
     return scene_;
   }
   void setScene(BlockHandle scene);
+
+  /** The active scene's unit settings (api/format.h), or the defaults for one without them. */
+  UnitSettings units();
 
   /** Paths resolve from `prefix` (itself resolved from the root) until cleared. It names a
    * struct, or a Pointer member, whose target is meant. */

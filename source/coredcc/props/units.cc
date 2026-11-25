@@ -1,6 +1,8 @@
 #include "coredcc/props/units.h"
 
 #include "coredcc/base/text.h"
+#include "coredcc/props/unit_settings.h"
+#include "coredcc/props/unit_text.h"
 
 #include <charconv>
 #include <cmath>
@@ -88,23 +90,6 @@ const Unit kFactor[] = {
     {"percent", "%", 0.01, false, kPercentAliases},
 };
 
-bool spelledAs(const Unit &u, std::string_view text)
-{
-  if (text == u.symbol || text == u.name) {
-    return true;
-  }
-  const size_t n = strlen(u.name);
-  if (text.size() == n + 1 && text.substr(0, n) == u.name && text[n] == 's') {
-    return true;
-  }
-  for (const char *const *a = u.aliases; *a; a++) {
-    if (text == *a) {
-      return true;
-    }
-  }
-  return false;
-}
-
 bool isDigit(char c)
 {
   return c >= '0' && c <= '9';
@@ -187,21 +172,35 @@ std::span<const Unit> unitsOf(UnitFamily family)
 const Unit *findUnit(UnitFamily family, std::string_view text)
 {
   for (const Unit &u : unitsOf(family)) {
-    if (spelledAs(u, text)) {
+    if (detail::spelledAs(u, text)) {
       return &u;
     }
   }
   return nullptr;
 }
 
-std::string format(double baseValue, UnitFamily family, std::string_view unit, int precision)
+namespace detail {
+
+bool spelledAs(const Unit &u, std::string_view text)
+{
+  if (text == u.symbol || text == u.name) {
+    return true;
+  }
+  const size_t n = strlen(u.name);
+  if (text.size() == n + 1 && text.substr(0, n) == u.name && text[n] == 's') {
+    return true;
+  }
+  for (const char *const *a = u.aliases; *a; a++) {
+    if (text == *a) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string formatNumber(double v, const Unit &u, int precision)
 {
   precision = precision < 0 ? 0 : (precision > 15 ? 15 : precision);
-  const Unit *u = findUnit(family, unit);
-  if (!u && !unitsOf(family).empty()) {
-    u = &unitsOf(family)[0];
-  }
-  const double v = u ? baseValue / u->scale : baseValue;
   char buf[512];
   std::to_chars_result r =
       std::to_chars(buf, buf + sizeof(buf), v, std::chars_format::fixed, precision);
@@ -217,24 +216,17 @@ std::string format(double baseValue, UnitFamily family, std::string_view unit, i
   if (out == "-0") {
     out = "0";
   }
-  if (u && u->symbol[0]) {
-    if (u->spaced) {
+  if (u.symbol[0]) {
+    if (u.spaced) {
       out += ' ';
     }
-    out += u->symbol;
+    out += u.symbol;
   }
   return out;
 }
 
-Result<double> parse(std::string_view text, UnitFamily family, std::string_view displayUnit)
+Result<Typed> parseNumber(std::string_view text)
 {
-  const Unit *display = findUnit(family, displayUnit);
-  if (!display && family != UnitFamily::None) {
-    return Status::error(StatusCode::InvalidArgument,
-                         (std::string("unknown display unit '") + std::string(displayUnit) +
-                          "' for " + unitFamilyName(family))
-                             .c_str());
-  }
   const std::string_view s = trim(text);
   const size_t n = scanNumber(s);
   if (n == 0) {
@@ -242,42 +234,97 @@ Result<double> parse(std::string_view text, UnitFamily family, std::string_view 
                          (std::string("expected a number, got '") + std::string(text) + "'")
                              .c_str());
   }
-  double v = 0.0;
+  Typed out;
   const char *first = s.data();
   if (*first == '+') {
     first++; /* from_chars doesn't take a leading '+' */
   }
-  std::from_chars_result fr = std::from_chars(first, s.data() + n, v);
+  std::from_chars_result fr = std::from_chars(first, s.data() + n, out.number);
   if (fr.ec != std::errc() || fr.ptr != s.data() + n) {
     return Status::error(StatusCode::OutOfRange,
                          (std::string("number out of range: '") + std::string(s.substr(0, n)) +
                           "'")
                              .c_str());
   }
-  const std::string_view rest = trim(s.substr(n));
-  const Unit *u = display;
-  if (!rest.empty()) {
-    u = findUnit(family, rest);
-    if (!u) {
-      Status err = Status::error(StatusCode::InvalidArgument,
-                                 (std::string("unknown ") + unitFamilyName(family) + " unit '" +
-                                  std::string(rest) + "'")
-                                     .c_str());
-      Suggester sg(rest);
-      for (const Unit &c : unitsOf(family)) {
-        sg.consider(c.symbol);
-        sg.consider(c.name);
-      }
-      sg.addTo(err);
-      return err;
-    }
-  }
-  const double base = u ? v * u->scale : v;
-  if (!std::isfinite(base)) {
+  out.unit = trim(s.substr(n));
+  return out;
+}
+
+Result<double> finite(double v, std::string_view text)
+{
+  if (!std::isfinite(v)) {
     return Status::error(StatusCode::OutOfRange,
                          (std::string("value out of range: '") + std::string(text) + "'").c_str());
   }
-  return base;
+  return v;
+}
+
+namespace {
+
+Status unknown(UnitFamily family, std::string_view unit, Suggester &suggestions)
+{
+  Status err = Status::error(StatusCode::InvalidArgument,
+                             (std::string("unknown ") + unitFamilyName(family) + " unit '" +
+                              std::string(unit) + "'")
+                                 .c_str());
+  suggestions.addTo(err);
+  return err;
+}
+
+} // namespace
+
+Status unknownUnit(UnitFamily family, std::string_view unit, const UnitSettings &settings)
+{
+  Suggester sg(unit);
+  for (int i = 0; i < UnitSettings::unitCount(family); i++) {
+    sg.consider(settings.unitAt(family, i).symbol);
+    sg.consider(settings.unitAt(family, i).name);
+  }
+  return unknown(family, unit, sg);
+}
+
+Status unknownUnit(UnitFamily family, std::string_view unit)
+{
+  Suggester sg(unit);
+  for (const Unit &c : unitsOf(family)) {
+    sg.consider(c.symbol);
+    sg.consider(c.name);
+  }
+  return unknown(family, unit, sg);
+}
+
+} // namespace detail
+
+std::string format(double baseValue, UnitFamily family, std::string_view unit, int precision)
+{
+  const Unit *u = findUnit(family, unit);
+  if (!u && !unitsOf(family).empty()) {
+    u = &unitsOf(family)[0];
+  }
+  return u ? detail::formatNumber(baseValue / u->scale, *u, precision) :
+             detail::formatNumber(baseValue, UnitSettings().unitAt(family, 0), precision);
+}
+
+Result<double> parse(std::string_view text, UnitFamily family, std::string_view displayUnit)
+{
+  const Unit *u = findUnit(family, displayUnit);
+  if (!u && family != UnitFamily::None) {
+    return Status::error(StatusCode::InvalidArgument,
+                         (std::string("unknown display unit '") + std::string(displayUnit) +
+                          "' for " + unitFamilyName(family))
+                             .c_str());
+  }
+  Result<detail::Typed> t = detail::parseNumber(text);
+  if (!t.ok()) {
+    return t.status();
+  }
+  if (!t->unit.empty()) {
+    u = findUnit(family, t->unit);
+    if (!u) {
+      return detail::unknownUnit(family, t->unit);
+    }
+  }
+  return detail::finite(u ? t->number * u->scale : t->number, text);
 }
 
 } // namespace units

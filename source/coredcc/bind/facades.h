@@ -142,6 +142,10 @@ StringResult pathMeta(Context &ctx, const string &path);
  * number without an item, InvalidArgument for another kind of value. */
 StringResult valueKeys(Context &ctx, const string &path, const PropValue &v);
 ValueResult getValue(Context &ctx, const string &path);
+/** The value at `path` as text, in the active scene's units (api/format.h). */
+StringResult formatValue(Context &ctx, const string &path);
+/** What to set `path` to for text that a user typed. Nothing is written. */
+ValueResult parseValue(Context &ctx, const string &path, const string &text);
 /**
  * An undoable set (setValueUndo): a command in the history, or a sub-command when
  * called from a command's exec. Needs an executor on `ctx`. Busy from any other slot of

@@ -758,7 +758,9 @@ Status detail::registerMembershipCommands(Runtime &rt)
   add.uiName("Add Object")
       .input(stringInput("type", kTrsTransform))
       .input(stringInput("name", "Object"))
-      .input(PropertyDef::vecProp("location", 3).subtype(PropSubtype::Distance))
+      .input(PropertyDef::vecProp("location", 3)
+                 .subtype(PropSubtype::Distance)
+                 .unit(UnitFamily::Length))
       .input(blockInputDef("parent"))
       .output(blockInputDef("object"));
   return addCommandOnce<AddObject>(rt, std::move(add));

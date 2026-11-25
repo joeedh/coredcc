@@ -65,6 +65,40 @@ static void test_defaults_and_meta()
       PropAccess::ReadOnly));
 }
 
+/* Which unit a subtype can have. No unit always can be. */
+static void test_units_agree()
+{
+  const UnitFamily none = UnitFamily::None, any = UnitFamily(99), bad = UnitFamily(98);
+  struct Row {
+    PropSubtype subtype;
+    UnitFamily unit;
+  };
+  const Row rows[] = {{PropSubtype::None, any},
+                      {PropSubtype::Color, bad},
+                      {PropSubtype::ColorGamma, bad},
+                      {PropSubtype::Angle, UnitFamily::Angle},
+                      {PropSubtype::Distance, UnitFamily::Length},
+                      {PropSubtype::Factor, UnitFamily::Factor},
+                      {PropSubtype::Percentage, UnitFamily::Factor},
+                      {PropSubtype::Time, UnitFamily::Time},
+                      {PropSubtype::Direction, bad},
+                      {PropSubtype::Euler, UnitFamily::Angle},
+                      {PropSubtype::Xyz, any},
+                      {PropSubtype::FilePath, bad},
+                      {PropSubtype::Password, bad}};
+  for (const Row &row : rows) {
+    for (UnitFamily u : {none, UnitFamily::Length, UnitFamily::Angle, UnitFamily::Time,
+                         UnitFamily::Mass, UnitFamily::Factor})
+    {
+      const PropertyDef def = PropertyDef::vecProp("v", 3).subtype(row.subtype).unit(u);
+      test_assert(def.validate().ok() == (u == none || row.unit == any || row.unit == u));
+    }
+  }
+  test_assert(hasMsg(
+      PropertyDef::floatProp("a").subtype(PropSubtype::Angle).unit(UnitFamily::Mass).validate(),
+      "the subtype Angle and the unit Mass"));
+}
+
 static void test_validate()
 {
   test_assert(modeDef().validate().ok());
@@ -369,6 +403,7 @@ int main()
   test_defaults_and_meta();
   test_validate();
   test_display();
+  test_units_agree();
   test_coerce_numbers();
   test_coerce_vectors();
   test_coerce_enums();

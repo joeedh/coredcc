@@ -101,8 +101,8 @@ void testScene()
   test_assert(read(d, "scene.name") == PropValue::ofString("Scene"));
   must(write(d, "scene.frame", PropValue::ofFloat(12.5)));
   test_assert(d.sc().frame == 12.5 && read(d, "scene.frame") == PropValue::ofFloat(12.5));
-  must(write(d, "scene.fps", PropValue::ofFloat(25.0)));
-  test_assert(d.sc().fps == 25.0);
+  must(write(d, "scene.units.fps", PropValue::ofFloat(25.0)));
+  test_assert(d.sc().units.rate == *FrameRate::of(25));
 
   test_assert(read(d, "scene.objects.length") == PropValue::ofInt(4));
   test_assert(read(d, "scene.objects[0].name") == PropValue::ofString("a"));

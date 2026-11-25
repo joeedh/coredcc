@@ -167,6 +167,13 @@ Unreal, coredcc is exactly one module, so they exist once.
   parents are; their channels are kept, and read when it is registered.
 - A duplicated or appended scene isn't a GC root (`BlockFlags::Root`); an appended one has FakeUser.
 
+## Units and frames
+- Values are stored in base units (meters, radians, seconds). A scene's `units` say how they are shown,
+  and hold the frame rate. `Context::units()` gives those of the active scene.
+- `formatValue` and `parseValue` (`api/format.h`; `cdcc.format` and `cdcc.parse`) turn a path's value into
+  text and back.
+- A host's own scene type has units when its struct calls `addUnitSettings`.
+
 ## Picking
 - **Positions are in device pixels** (x and y of `rayFromPixel`, `regionFromRect` and `pickScene`), y
   down. **Sizes are in logical pixels** (`PickOptions::radius`, `PickHit::distance`, the pixel radii of

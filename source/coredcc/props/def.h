@@ -232,9 +232,9 @@ class PropertyDef {
 
   /**
    * Checks the def: an identifier apiName, ordered ranges with the soft range inside
-   * the hard one, precision 0-15, enum items with unique identifier keys and unique
-   * values (single bits for Flags, at least one item), and a default value that
-   * coerce() accepts unchanged.
+   * the hard one, precision 0-15, a unit that the subtype can have (a Distance is a
+   * Length), enum items with unique identifier keys and unique values (single bits for Flags, at
+   * least one item), and a default value that coerce() accepts unchanged.
    */
   Status validate() const;
 

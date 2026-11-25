@@ -1,5 +1,6 @@
 #include "coredcc/bind/facades.h"
 
+#include "coredcc/api/format.h"
 #include "coredcc/api/ref_text.h"
 #include "coredcc/api/resolve.h"
 #include "coredcc/base/text.h"
@@ -373,6 +374,22 @@ ValueResult getValue(Context &ctx, const string &path)
     return failed<ValueResult>(std::move(s));
   }
   Result<PropValue> r = coredcc::getValue(ctx, view(path));
+  return r.ok() ? ok<ValueResult>(std::move(r).value()) : failed<ValueResult>(r.status());
+}
+StringResult formatValue(Context &ctx, const string &path)
+{
+  if (Status s = detail::kernelGate(ctx, "formatValue"); !s.ok()) {
+    return failed<StringResult>(std::move(s));
+  }
+  Result<std::string> r = coredcc::formatValue(ctx, view(path));
+  return r.ok() ? ok<StringResult>(string(r->c_str())) : failed<StringResult>(r.status());
+}
+ValueResult parseValue(Context &ctx, const string &path, const string &text)
+{
+  if (Status s = detail::kernelGate(ctx, "parseValue"); !s.ok()) {
+    return failed<ValueResult>(std::move(s));
+  }
+  Result<PropValue> r = coredcc::parseValue(ctx, view(path), view(text));
   return r.ok() ? ok<ValueResult>(std::move(r).value()) : failed<ValueResult>(r.status());
 }
 static Status setUndo(Context &ctx,

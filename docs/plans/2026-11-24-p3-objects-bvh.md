@@ -991,6 +991,32 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   memory charge that the ref table already bounds, an index reset); the test now finds the other 7.
   The 2 were written again and are found.
 
+### Step 12
+- **Needs litestl PR #14.** Files: `props/unit_settings.{h,cc}`, `props/unit_text.h` (shared with
+  `units.cc`), `api/format.{h,cc}`, `Context::units()`; tests `test_props_unit_settings` and
+  `test_scene_units`.
+- **`FrameRate`** is a fraction in lowest terms, 1/1000 to 1,000,000. 29.97, 23.976, 23.98 and the like are
+  the broadcast rates over 1001, however they are given. `nearest(fps())` is the same rate, so a
+  Float member (`scene.units.fps`) is enough for undo.
+- **`startFrame`** is the frame at time 0, so `Scene::time()` is `(frame - startFrame) / fps`. As a unit,
+  a frame is a length of time, without it.
+- **`Scene::fps` is `Scene::units.rate`,** and the path is `scene.units.fps`. The payload has
+  only the rate so far; the rest comes with the payload's entries (the review's finding 11).
+- **Members** are `lengthUnit`, `angleUnit`, ... since `length` is reserved by the datapath.
+- **`Context::units()`** finds the settings through the API struct of the active scene's block type: a
+  Pointer member `units` to `coredcc.UnitSettings` (`addUnitSettings`). So a host's own scene type has
+  them too, and `api/` doesn't know `scene/`.
+- **Subtype and unit:** a def with both is refused unless they agree. A subtype without a unit is not: a
+  bare number is shown. `location` of `core.object.add`, `pivot` of `core.object.applyDelta` and foreign
+  Distance channels now have Length.
+- **`formatValue` and `parseValue`** take a def and settings, or a Context and a path. Added: both as script
+  facades (`cdcc.format`, `cdcc.parse`), Busy in a graph kernel as other reads are.
+- **Percentage with a Factor unit** is in percent, whatever the settings say.
+- **Mutations:** 93, each alone. 76 were found at first and 5 didn't compile. Of the 12 that survived, 6
+  were in code that isn't needed, which is gone; the tests now find 4; and 2 change nothing that can be
+  seen (rounding where truncation gives the same, a guard before a cast of NaN). Of the 5, 4 were
+  written again and are found, and 1 was in code that is gone.
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms

@@ -126,6 +126,15 @@ export function get(ctx: Context, path: string, opts: {names?: boolean}): NamedV
 export function get(ctx: Context, path: string, opts: {names?: boolean} = {}): NamedValue {
   return take(cd.getValue(ctx, path), (v) => (opts.names ? toNamed(ctx, path, v) : toJs(ctx, v)))
 }
+/** The value at `path` as text, in the active scene's units: "1.5 cm". */
+export function format(ctx: Context, path: string): string {
+  return take(cd.formatValue(ctx, path), (text) => text)
+}
+/** What to set `path` to for text that a user typed, as "1 m, 20 cm, 0" for a vector. A number
+ * without a unit is in the active scene's. Nothing is set. */
+export function parse(ctx: Context, path: string, text: string): Value {
+  return take(cd.parseValue(ctx, path, text), (v) => toJs(ctx, v))
+}
 /** An undoable set; from a command's exec, a sub-command. Sets of one member with the same
  * `gesture` (one slider drag, from beginGesture) are one undo step. */
 export function set(ctx: Context, path: string, value: Writable, gesture?: number) {

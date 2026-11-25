@@ -4,7 +4,7 @@
  * Unit families for numeric properties: formatting a value in a display unit, and
  * parsing user text back. Values are always stored in the family's base unit (meters,
  * radians, seconds, kilograms, factor). No expressions: one number and an optional
- * unit.
+ * unit. Frames are in props/unit_settings.h.
  */
 
 #include "coredcc/base/status.h"

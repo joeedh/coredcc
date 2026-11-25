@@ -131,6 +131,8 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::apiCatalog", script::apiCatalog, MARGS("ctx"));
   BIND_FACADE(mgr, "coredcc::valueKeys", script::valueKeys, MARGS("ctx", "path", "v"));
   BIND_FACADE(mgr, "coredcc::getValue", script::getValue, MARGS("ctx", "path"));
+  BIND_FACADE(mgr, "coredcc::formatValue", script::formatValue, MARGS("ctx", "path"));
+  BIND_FACADE(mgr, "coredcc::parseValue", script::parseValue, MARGS("ctx", "path", "text"));
   BIND_FACADE(mgr, "coredcc::setValue", script::setValue, MARGS("ctx", "path", "value"));
   BIND_FACADE(mgr, "coredcc::beginGesture", script::beginGesture, MARGS("ctx"));
   BIND_FACADE(mgr, "coredcc::cancelGesture", script::cancelGesture, MARGS("ctx", "gesture"));

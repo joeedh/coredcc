@@ -165,7 +165,7 @@ const suite = () => {
     assert.deepEqual(cdcc.get(ctx, `${path}.v`), [1, 2, 3])
     assert.equal(cdcc.get(ctx, `${path}.n`), 4) /* it is there already: the model wasn't asked */
     assert.equal(cdcc.get(ctx, `${path}.b`), true)
-    cdcc.set(ctx, 'scene.fps', 10)
+    cdcc.set(ctx, 'scene.units.fps', 10)
     cdcc.set(ctx, 'scene.frame', 5)
     near(where(o), [1, 2, 3.5])
     const only = cdcc.blockIds(ctx, [o])
@@ -330,6 +330,24 @@ const suite = () => {
     assert.ok(inside(0.1, 2.1, 0) && inside(4.9, 4.9, 9.9) && inside(4.9, 4.9, -9.9))
     assert.ok(!inside(-0.1, 3, 0) && !inside(1, 5.1, 0) && !inside(1, 1.9, 0) && !inside(1, 3, 10.1) && !inside(1, 3, -10.1))
     assert.throws(() => cdcc.rayFromPixel({...view, viewport: [0, 0, 0, 0]}, 1, 1), fails(StatusCode.InvalidArgument, /./))
+  })
+
+  test('units', () => {
+    assert.equal(cdcc.format(ctx, 'scene.frame'), '0')
+    assert.equal(cdcc.format(ctx, 'scene.units.lengthUnit'), 'Meter')
+    cdcc.set(ctx, 'scene.units.lengthUnit', 'centimeter')
+    add('name="Cube" location=(1, 2, 3)')
+    const path = 'scene.objects["Cube"].transform.location'
+    assert.equal(cdcc.format(ctx, path), '100 cm, 200 cm, 300 cm')
+    assert.deepEqual(cdcc.parse(ctx, path, '1, 2 m, 0'), [0.01, 2, 0])
+    assert.equal(cdcc.parse(ctx, path + '[0]', '5'), 0.05)
+    assert.equal(cdcc.format(ctx, path), '100 cm, 200 cm, 300 cm')
+    assert.throws(() => cdcc.parse(ctx, path, '1 kg'), fails(StatusCode.InvalidArgument, /Length unit 'kg'/))
+    assert.throws(() => cdcc.format(ctx, 'scene.nothing'), fails(StatusCode.NotFound, /./))
+    cdcc.set(ctx, 'scene.units.fps', 29.97)
+    assert.equal(cdcc.get(ctx, 'scene.units.fps'), 30000 / 1001)
+    cdcc.undo(ctx)
+    assert.equal(cdcc.get(ctx, 'scene.units.fps'), 24)
   })
 
   test('a Bvh', () => {

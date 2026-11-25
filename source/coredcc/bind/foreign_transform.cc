@@ -42,7 +42,7 @@ Status transformChannel(TransformTypeInfo &type,
                    std::string("transformChannel: '") + name.c_str() +
                        "' isn't a Float or a vector, so it can't be a distance");
     }
-    def.subtype(PropSubtype::Distance);
+    def.subtype(PropSubtype::Distance).unit(UnitFamily::Length);
   }
   type.channels.append(std::move(def));
   return Status();

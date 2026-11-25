@@ -317,6 +317,8 @@ void testGates()
              sc::pathMeta(d.ctx, name).status,
              sc::valueKeys(d.ctx, name, PropValue::ofEnum(0)).status,
              sc::getValue(d.ctx, name).status,
+             sc::formatValue(d.ctx, name).status,
+             sc::parseValue(d.ctx, name, "x").status,
              sc::inputGet(d.ctx, "x").status,
              sc::outputSet(d.ctx, "x", sc::makeInt(1)),
              sc::outputGet(d.ctx, "x").status,
@@ -351,7 +353,7 @@ void testGates()
     };
     const int steps = d.history.size();
     test_assert(evaluate(8));
-    test_assert(seen.size() == 29);
+    test_assert(seen.size() == 31);
     for (size_t i = 0; i < seen.size(); i++) {
       if (!hasCode(seen[i], StatusCode::Busy)) {
         printf("facade %d\n", int(i));
