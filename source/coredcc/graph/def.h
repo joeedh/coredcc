@@ -211,6 +211,7 @@ class GraphNode {
 
  private:
   friend class GraphDef;
+  friend class GraphDefReader;
 
   GraphDef *def_ = nullptr;
   NodeId id_;
@@ -499,6 +500,7 @@ class GraphDef {
 
  private:
   friend class GraphNode;
+  friend class GraphDefReader;
   friend class GraphReachBuilder;
 
   Status busy(const char *what) const;
@@ -510,6 +512,8 @@ class GraphDef {
   int64_t newId();
   bool idTaken(int64_t id) const;
   void attachNode(GraphNode *n);
+  /** Adds the null references of the type's Pointer params that the node doesn't have. */
+  void addParamRefs(GraphNode *n);
   void attachLink(const LinkState &state, GraphNode *from, GraphNode *to);
   void detachLink(GraphLink *link);
   void refreshSockets(const GraphNode &node) const;

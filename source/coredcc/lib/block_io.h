@@ -118,6 +118,9 @@ class BlockReader {
    * takes, or that don't coerce, land in `unread`: keep them, report their refs from
    * foreachRef, and write them again, so a file survives a build that doesn't know them. */
   void bag(PropertyBag &bag, BagRefs &refs, litestl::util::Vector<BlockEntry> &unread);
+  /** Counts memory that is about to be allocated, so that the load's LoadLimits bound it.
+   * False, and a failure, when there isn't that much left. */
+  bool charge(uint64_t bytes);
   /** The new data, on success: what the record's clientData becomes. Not null. */
   void setData(void *data)
   {
@@ -138,7 +141,6 @@ class BlockReader {
   const RefCell *row();
   bool readEntry(BlockEntry &e);
   uint32_t entryCount();
-  bool charge(uint64_t bytes);
 
   Library &lib_;
   const BlockPayload &payload_;

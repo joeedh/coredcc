@@ -104,7 +104,10 @@ void readBag(BytesReader &in,
              ValueCodec &codec,
              litestl::util::Vector<BagIssue> &issues);
 
-/** Entry `i` of `bag` as it is stored: an Enum or Flags as its keys where it has them. */
+/** A value of `def` (not a dynamic one) as it is stored: an Enum or Flags as its keys where it
+ * has them. */
+PropValue storedValue(const PropertyDef &def, const PropValue &v);
+/** The same for entry `i` of `bag`. */
 PropValue storedBagValue(const PropertyBag &bag, int i);
 
 } // namespace coredcc

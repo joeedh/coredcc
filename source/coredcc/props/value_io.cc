@@ -359,10 +359,15 @@ PropValue readValue(BytesReader &in, ValueCodec &codec)
 PropValue storedBagValue(const PropertyBag &bag, int i)
 {
   const PropValue &v = bag.value(i);
+  const bool keys = v.type() == PropValue::Type::Enum || v.type() == PropValue::Type::Flags;
+  return keys ? storedValue(bag.def(i).resolved(&bag), v) : v;
+}
+
+PropValue storedValue(const PropertyDef &def, const PropValue &v)
+{
   if (v.type() != PropValue::Type::Enum && v.type() != PropValue::Type::Flags) {
     return v;
   }
-  const PropertyDef def = bag.def(i).resolved(&bag);
   const EnumMeta *meta = def.enumMeta();
   if (!meta) {
     return v;

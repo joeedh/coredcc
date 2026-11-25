@@ -2,6 +2,7 @@
 
 #include "coredcc/base/iface/owned.h"
 #include "coredcc/base/iface/registry.h"
+#include "coredcc/graph/def_io.h"
 #include "coredcc/lib/provider.h"
 
 #include "litestl/binding/binding.h"
@@ -21,11 +22,31 @@ struct GraphProvider {
   }
   void foreachRef(const Datablock &block, RefVisitor &visitor) const
   {
-    static_cast<GraphDef *>(block.clientData())->foreachRef(visitor);
+    /* None for a block that readPayload didn't fill. */
+    if (GraphDef *def = static_cast<GraphDef *>(block.clientData())) {
+      def->foreachRef(visitor);
+    }
   }
   void destroy(const Datablock &block)
   {
     litestl::alloc::Delete(static_cast<GraphDef *>(block.clientData()));
+  }
+  Status serialize(const Datablock &block, BlockWriter &out) const
+  {
+    if (!block.clientData()) {
+      return Status::error(StatusCode::FailedPrecondition, "a graph block without data");
+    }
+    writeGraphDef(*static_cast<GraphDef *>(block.clientData()), out);
+    return Status(); /* or the writer's */
+  }
+  Status deserialize(const Datablock &block, BlockReader &in)
+  {
+    GraphDef *def = readGraphDef(in, block.id());
+    if (!def) {
+      return in.bytes().status();
+    }
+    in.setData(def);
+    return Status();
   }
   static lbt::Struct<GraphProvider> *defineBindings()
   {
@@ -33,6 +54,8 @@ struct GraphProvider {
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
+    BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
+    BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
     return st;
   }
 };
@@ -56,6 +79,8 @@ Status registerGraphBlocks(Runtime &rt)
   info.name = kGraphDefType;
   info.client = ClientId::of(kCoredccClient);
   info.dataStruct = StructId::of(kGraphDefType);
+  info.payloadVersion = kGraphDefPayload;
+  info.storage = BlockStorage::Payload;
   return types.add(std::move(info), std::move(provider).value()).status();
 }
 

@@ -173,7 +173,7 @@ Result<SocketTypeRegistry::Entry *> SocketTypeRegistry::addEntry(SocketType type
 SocketTypeRegistry::Entry *SocketTypeRegistry::entry(std::string_view name) const
 {
   Entry *const *e = byId_.lookup_ptr(TypeId::of(idName(name)).value);
-  return e ? *e : nullptr;
+  return e && name == (*e)->type.name.c_str() ? *e : nullptr; /* a file's can have its id */
 }
 
 Result<const SocketType *> SocketTypeRegistry::addPayload(const char *name, const void *typeKey)

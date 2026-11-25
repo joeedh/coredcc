@@ -445,6 +445,27 @@ void GraphDef::attachNode(GraphNode *n)
   typeOf(*n);
 }
 
+void GraphDef::addParamRefs(GraphNode *n)
+{
+  if (!n->type_) {
+    return;
+  }
+  for (const NodeParamDef &p : n->type_->params) {
+    bool have = p.def.kind() != PropKind::Pointer;
+    for (NodeBlockRef &r : n->refs_) {
+      if (strcmp(r.name.c_str(), p.def.apiName().c_str()) == 0) {
+        have = true;
+      }
+    }
+    if (!have) {
+      NodeBlockRef ref;
+      ref.name = p.def.apiName();
+      ref.cell.kind = p.weak ? RefKind::Weak : RefKind::OptStrong;
+      n->refs_.append(ref);
+    }
+  }
+}
+
 void GraphDef::attachLink(const LinkState &state, GraphNode *from, GraphNode *to)
 {
   GraphLink *l = litestl::alloc::New<GraphLink>("coredcc::GraphLink");

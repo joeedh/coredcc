@@ -346,7 +346,7 @@ Result<NodeType *> NodeTypeRegistry::build(const NodeTypeDef &def) const
 const NodeType *NodeTypeRegistry::find(std::string_view name) const
 {
   NodeType *const *t = byId_.lookup_ptr(TypeId::of(idName(name)).value);
-  return t ? *t : nullptr;
+  return t && name == (*t)->name.c_str() ? *t : nullptr; /* a file's name can have its id */
 }
 
 Status NodeTypeRegistry::unknown(std::string_view name) const

@@ -508,9 +508,8 @@ void testSave()
   const Graph g = newGraph(d.lib, "g");
   test_assert(saveLibrary(d.lib).ok()); /* nothing keeps it */
   d.lib.setFlag(g.h, BlockFlags::Root, true);
-  Result<litestl::util::Vector<uint8_t>> saved = saveLibrary(d.lib);
-  test_assert(hasCode(saved, StatusCode::FailedPrecondition));
-  test_assert(strstr(saved.status().message(), kGraphDefType));
+  SaveReport report;
+  test_assert(saveLibrary(d.lib, &report).ok() && report.blocks == 1);
 }
 
 /* A group that a direct write made recursive can be removed, and come back. */

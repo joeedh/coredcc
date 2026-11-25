@@ -6,6 +6,7 @@ coredcc_library(coredcc_graph
     commands.cc
     def.cc
     def_edit.cc
+    def_io.cc
     evaluator.cc
     exec_context.cc
     foreach.cc

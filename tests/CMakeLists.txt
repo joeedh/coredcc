@@ -57,6 +57,8 @@ coredcc_test(test_graph_foreach_random SOURCES graph/test_graph_foreach_random.c
 coredcc_test(test_graph_interior SOURCES graph/test_graph_interior.cc DEPS coredcc_graph)
 coredcc_test(test_graph_interior_random SOURCES graph/test_graph_interior_random.cc DEPS coredcc_graph)
 coredcc_test(test_graph_scene SOURCES graph/test_graph_scene.cc DEPS coredcc_graph)
+coredcc_test(test_graph_io SOURCES graph/test_graph_io.cc DEPS coredcc_graph)
+coredcc_test(test_graph_io_hostile SOURCES graph/test_graph_io_hostile.cc DEPS coredcc_graph)
 coredcc_test(test_graph_limits SOURCES graph/test_graph_limits.cc DEPS coredcc_graph)
 coredcc_test(test_graph_blocks SOURCES graph/test_graph_blocks.cc DEPS coredcc_graph)
 coredcc_test(test_graph_lifetime SOURCES graph/test_graph_lifetime.cc DEPS coredcc_graph)

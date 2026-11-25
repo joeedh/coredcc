@@ -164,22 +164,7 @@ Status GraphDef::restoreNode(const NodeState &state)
     n->refs_.append(ref);
   }
   attachNode(n);
-  if (n->type_) {
-    for (const NodeParamDef &p : n->type_->params) {
-      bool have = p.def.kind() != PropKind::Pointer;
-      for (NodeBlockRef &r : n->refs_) {
-        if (strcmp(r.name.c_str(), p.def.apiName().c_str()) == 0) {
-          have = true;
-        }
-      }
-      if (!have) {
-        NodeBlockRef ref;
-        ref.name = p.def.apiName();
-        ref.cell.kind = p.weak ? RefKind::Weak : RefKind::OptStrong;
-        n->refs_.append(ref);
-      }
-    }
-  }
+  addParamRefs(n);
   if (refs) {
     for (int i = 0; i < int(state.refs.size()); i++) {
       lib->writeRef(n->refs_[i].cell, state.refs[i].target).ignore(); /* can't fail: checked */
