@@ -6,6 +6,7 @@
 #include "coredcc/parse/path_cache.h"
 
 #include <cstring>
+#include <optional>
 #include <string>
 
 namespace coredcc {
@@ -141,10 +142,26 @@ StructId pointerTargetType(const ApiMember &m, const PointerRef &target)
   return m.pointer().refine ? m.pointer().refine(target) : StructId();
 }
 
-const EnumItem *findItem(const ApiMember &m, std::string_view key)
+/* The member's def with both dynamic hooks applied, for the instance `self`. */
+PropertyDef effectiveDef(Context &ctx, const ApiMember &m, const PointerRef &self)
 {
-  const EnumMeta *em = m.def().enumMeta();
-  return em ? em->findKey(key) : nullptr;
+  PropertyDef def = m.def().isDynamic() ? m.def().resolved(self.data) : m.def();
+  if (m.dynamicFn()) {
+    m.dynamicFn()(def, self, ctx);
+  }
+  return def;
+}
+PropertyDef effectiveDef(Context &ctx, const ResolvedPath &rp)
+{
+  return effectiveDef(ctx, *rp.member, rp.ptr);
+}
+
+/* The value of one of an enum's or flags' items. */
+std::optional<int64_t> itemValue(const PropertyDef &def, std::string_view key)
+{
+  const EnumMeta *em = def.enumMeta();
+  const EnumItem *item = em ? em->findKey(key) : nullptr;
+  return item ? std::optional<int64_t>(item->value) : std::nullopt;
 }
 
 /* With `through`, a path that ends at a Pointer member is its target. */
@@ -187,12 +204,16 @@ Result<ResolvedPath> walkPath(Walk &w, const Path &path, bool through = false)
         if (sub.kind == SegmentKind::EnumKey &&
             (m->def().kind() == PropKind::Enum || m->def().kind() == PropKind::Flags))
         {
-          if (!findItem(*m, sub.text.c_str())) {
+          const std::optional<int64_t> value =
+              m->isDynamic() ? itemValue(effectiveDef(w.ctx, *m, w.cur), sub.text.c_str()) :
+                               itemValue(m->def(), sub.text.c_str());
+          if (!value) {
             return at(sub, err(StatusCode::NotFound,
                                std::string("'") + m->name() + "' has no key '" +
                                    sub.text.c_str() + "'"));
           }
           w.out.enumKey = sub.text;
+          w.out.enumValue = *value;
           return w.finish(ResolvedPath::Kind::EnumKey, m);
         }
         return at(sub, err(StatusCode::InvalidArgument,
@@ -478,17 +499,6 @@ Result<StableRef> canonicalize(Context &ctx, const Path &path)
 
 namespace {
 
-/* The member's def with both dynamic hooks applied. */
-PropertyDef effectiveDef(Context &ctx, const ResolvedPath &rp)
-{
-  PropertyDef def = rp.member->def().isDynamic() ? rp.member->def().resolved(rp.ptr.data) :
-                                                   rp.member->def();
-  if (rp.member->dynamicFn()) {
-    rp.member->dynamicFn()(def, rp.ptr, ctx);
-  }
-  return def;
-}
-
 /* The address a Pointer value stores for `target`: never a hop that can be reassigned
  * (see Walk::enter). */
 Result<StableRef> addressOf(Context &ctx, const ResolvedPath &rp, const PointerRef &target)
@@ -580,11 +590,10 @@ Result<PropValue> getValue(Context &ctx, const ResolvedPath &rp)
     return PropValue::ofFloat(v.component(rp.component));
   }
   if (rp.kind == ResolvedPath::Kind::EnumKey) {
-    const EnumItem *item = findItem(m, rp.enumKey.c_str());
     if (v.type() == PropValue::Type::Flags) {
-      return PropValue::ofBool((v.asFlags() & uint64_t(item->value)) != 0);
+      return PropValue::ofBool((v.asFlags() & uint64_t(rp.enumValue)) != 0);
     }
-    return PropValue::ofBool(v.asEnum() == item->value);
+    return PropValue::ofBool(v.asEnum() == rp.enumValue);
   }
   return v;
 }
@@ -614,6 +623,14 @@ Result<PropertyDef> getMeta(Context &ctx, const ResolvedPath &rp)
     }
     default:
       break;
+  }
+  return getMemberMeta(ctx, rp);
+}
+
+Result<PropertyDef> getMemberMeta(Context &ctx, const ResolvedPath &rp)
+{
+  if (rp.kind == ResolvedPath::Kind::Struct || rp.kind == ResolvedPath::Kind::Length) {
+    return err(StatusCode::InvalidArgument, "getMemberMeta: the path names no member");
   }
   PropertyDef def = effectiveDef(ctx, rp);
   if (rp.member->readOnly()) {
@@ -708,9 +725,8 @@ Result<PropValue> widen(Context &ctx, const ResolvedPath &rp, const PropValue &v
   if (!on.ok()) {
     return on.status();
   }
-  const EnumItem *item = findItem(m, rp.enumKey.c_str());
   if (whole.type() == PropValue::Type::Flags) {
-    const uint64_t bit = uint64_t(item->value);
+    const uint64_t bit = uint64_t(rp.enumValue);
     return PropValue::ofFlags(on->asBool() ? (whole.asFlags() | bit) : (whole.asFlags() & ~bit));
   }
   if (!on->asBool()) {
@@ -718,7 +734,7 @@ Result<PropValue> widen(Context &ctx, const ResolvedPath &rp, const PropValue &v
                std::string(m.name()) + "[" + rp.enumKey.c_str() +
                    "]: an enum key can only be set, not cleared");
   }
-  return PropValue::ofEnum(item->value);
+  return PropValue::ofEnum(rp.enumValue);
 }
 
 } // namespace

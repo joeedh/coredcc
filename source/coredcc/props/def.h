@@ -216,6 +216,9 @@ class PropertyDef {
   /** This def as seen for `owner`: a copy patched by the dynamic hook, if any. */
   PropertyDef resolved(const void *owner) const;
 
+  /** Whether `b` says the same, hooks aside: what a UI shows of them doesn't differ. */
+  bool sameAs(const PropertyDef &b) const;
+
   /**
    * Checks the def: an identifier apiName, ordered ranges with the soft range inside
    * the hard one, precision 0-15, enum items with unique identifier keys and unique

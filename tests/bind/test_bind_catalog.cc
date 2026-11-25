@@ -52,7 +52,9 @@ void test_small()
   const ValueAccessor none{[](const PointerRef &, Context &) { return PropValue(); }, {}};
   ApiStruct base("Base");
   base.description("a \"base\"");
-  base.add(PropertyDef::intProp("n").description("how many"), none);
+  base.add(PropertyDef::intProp("n").description("how many").dynamic([](PropertyDef &, const void *) {}),
+           none);
+  base.add(PropertyDef::boolProp("d"), none).dynamic([](PropertyDef &, const PointerRef &, Context &) {});
   base.add(PropertyDef::intProp("secret").access(PropAccess::Private), none);
   test_assert(reg.add(std::move(base)).ok());
   ApiStruct root("Root");
@@ -78,7 +80,8 @@ void test_small()
                                                 .description("does A")
                                                 .icon("a")
                                                 .flags(CommandFlags::NoUndo | CommandFlags::UndoBarrier)
-                                                .input(PropertyDef::boolProp("on"))
+                                                .input(PropertyDef::boolProp("on").dynamic(
+                                                    [](PropertyDef &, const void *) {}))
                                                 .input(PropertyDef::boolProp("hidden").access(
                                                     PropAccess::Private))
                                                 .output(PropertyDef::stringProp("out")))
@@ -91,8 +94,10 @@ void test_small()
   const std::string want =
       "{\"root\":\"Root\",\"structs\":["
       "{\"name\":\"Base\",\"uiName\":\"Base\",\"description\":\"a \\\"base\\\"\",\"members\":["
-      "{\"kind\":\"Int\",\"readOnly\":true,\"name\":\"n\",\"uiName\":\"N\",\"description\":"
-      "\"how many\",\"access\":[],\"ui\":{},\"precision\":0,\"default\":0}]},"
+      "{\"kind\":\"Int\",\"readOnly\":true,\"dynamic\":true,\"name\":\"n\",\"uiName\":\"N\",\"description\":"
+      "\"how many\",\"access\":[],\"ui\":{},\"precision\":0,\"default\":0},"
+      "{\"kind\":\"Bool\",\"readOnly\":true,\"dynamic\":true,\"name\":\"d\",\"uiName\":\"D\","
+      "\"access\":[],\"ui\":{},\"default\":false}]},"
       "{\"name\":\"Root\",\"uiName\":\"The Root\",\"parent\":\"Base\",\"members\":["
       "{\"kind\":\"Pointer\",\"readOnly\":true,\"targets\":[\"Base\",\"Root\"],\"name\":\"any\","
       "\"uiName\":\"Any\",\"access\":[],\"ui\":{},\"default\":null},"
@@ -101,7 +106,7 @@ void test_small()
       "{\"kind\":\"Collection\",\"readOnly\":true,\"active\":true,\"name\":\"list2\",\"uiName\":"
       "\"List2\",\"access\":[],\"ui\":{},\"target\":\"Base\"}]}],"
       "\"commands\":[{\"id\":\"test.a\",\"uiName\":\"Do A\",\"description\":\"does A\",\"icon\":"
-      "\"a\",\"flags\":[\"NoUndo\",\"UndoBarrier\"],\"inputs\":[{\"kind\":\"Bool\",\"name\":\"on\","
+      "\"a\",\"flags\":[\"NoUndo\",\"UndoBarrier\"],\"inputs\":[{\"kind\":\"Bool\",\"dynamic\":true,\"name\":\"on\","
       "\"uiName\":\"On\",\"access\":[],\"ui\":{},\"default\":false}],\"outputs\":[{\"kind\":"
       "\"String\",\"name\":\"out\",\"uiName\":\"Out\",\"access\":[],\"ui\":{},\"default\":\"\"}]}]}";
   const std::string got = apiCatalog(ctx);

@@ -13,6 +13,8 @@ export interface CatalogMember {
   uiName: string
   description?: string
   readOnly?: boolean
+  /** A hook may change its range, items and access per instance. */
+  dynamic?: boolean
   /** Of a Pointer or a Collection. */
   target?: string
   targets?: string[]

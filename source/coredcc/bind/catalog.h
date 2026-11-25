@@ -21,7 +21,8 @@ namespace coredcc {
  *   `inputs` and `outputs`.
  *
  * Members, inputs and outputs have `kind` (a PropKind's name) and what writePropertyMeta writes;
- * members also `readOnly`. A Pointer member without a static target has `targets`, the structs
+ * members also `readOnly`. `dynamic` is true if that is only what is known without an instance: a
+ * hook may change the range, the items and the access. A Pointer member without a static target has `targets`, the structs
  * that it may be. A Collection member's `active` says whether it has an active item.
  * Private members, inputs, outputs and commands are left out. The order is that of registration.
  */

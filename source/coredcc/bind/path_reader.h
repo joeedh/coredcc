@@ -49,6 +49,8 @@ void readerUnwatch(const PathReader &reader);
 /** A path that flushChanges found changed since it was last returned here, the lowest index
  * first; -1 when there is none. */
 int32_t readerTakeChanged(const PathReader &reader);
+/** As above, for paths whose `pathMeta` may have changed. */
+int32_t readerTakeChangedMeta(const PathReader &reader);
 
 /** Delivers the changes since the last flush to all watchers, of scripts and the host's own.
  * How many fired. Not from a script's slot. */

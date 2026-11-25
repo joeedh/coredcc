@@ -21,6 +21,7 @@
 
 #include <emscripten/emscripten.h>
 
+#include <algorithm>
 #include <functional>
 
 namespace testapp {
@@ -39,6 +40,9 @@ struct Data {
   int mode = 0;
   uint32_t flags = 0;
   int64_t big = 0;
+  /** `level` goes to `count`; `focus` is one of the items. */
+  double level = 0;
+  int64_t focus = 0;
   RefCell active{RefKind::Weak};
 };
 
@@ -154,6 +158,13 @@ class Host {
                     graphsAccessor());
     s.addField(PropertyDef::intProp("big"), &Data::big);
     addItemMembers(s, data_.active);
+    s.addField(PropertyDef::floatProp("level").range(0, 1).dynamic(
+                   [](PropertyDef &d, const void *owner) {
+                     d.range(0, std::max(1, static_cast<const Data *>(owner)->count));
+                   }),
+               &Data::level);
+    s.addField(PropertyDef::enumProp("focus").item("NONE", 0), &Data::focus)
+        .dynamic([](PropertyDef &d, const PointerRef &, Context &ctx) { addItemKeys(d, ctx); });
     rt_.ext<LastUsedStore>().addCollectionTo(s);
     CDCC_CHECK(reg.add(std::move(s)).ok(), "testapp: registering the root struct");
     Data *data = &data_;

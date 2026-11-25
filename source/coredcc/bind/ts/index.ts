@@ -72,6 +72,8 @@ export interface PathMeta {
   of?: PathKind
   key?: string
   readOnly?: boolean
+  /** A hook may change the range, the items and the access: see PathReader's takeChangedMeta. */
+  dynamic?: boolean
   name?: string
   uiName?: string
   description?: string

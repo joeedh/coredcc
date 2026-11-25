@@ -189,6 +189,10 @@ struct StaticResolver::Walk {
     {
       const EnumMeta *items = m.def().enumMeta();
       if (!items || !items->findKey(sub.text.c_str())) {
+        if (m.isDynamic()) {
+          out.unknown = true; /* its hook may add the key */
+          return;
+        }
         fail(i + 1, err(StatusCode::NotFound, name + " has no key '" + sub.text.c_str() + "'"));
         return;
       }

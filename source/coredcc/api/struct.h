@@ -154,6 +154,11 @@ class ApiMember {
   {
     return update_;
   }
+  /** Whether a hook patches its def: items, range and access then depend on the instance. */
+  bool isDynamic() const
+  {
+    return def_.isDynamic() || bool(dynamic_);
+  }
   const MemberDynamicFn &dynamicFn() const
   {
     return dynamic_;

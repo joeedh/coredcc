@@ -31,6 +31,8 @@ namespace coredcc {
  *   (`PropValue ==`, so NaN doesn't refire). That re-resolution is what makes aliases
  *   work:
  *   `objects["A"].x` and `objects.active.x` both see a change to A's x.
+ * - What a dynamic hook looks at isn't known, so a watcher of a member that has one is read at
+ *   every flush that has changes.
  * - A path that fails to resolve reads as None with the error; it fires once on the
  *   transition, and again when it resolves.
  *
@@ -44,6 +46,8 @@ class ChangeBus {
  public:
   static constexpr const char *kExtName = "coredcc.ChangeBus";
   using WatchFn = litestl::util::function<void(const PropValue &value, const Status &status)>;
+  /** For what `getMeta` gives for a path, or the struct it is in: it may differ now. */
+  using MetaFn = litestl::util::function<void()>;
   /** `owner` is what changed; null after notifyAll (anything may have). */
   using ListenFn = litestl::util::function<void(const OwnerKey *owner)>;
 
@@ -66,9 +70,14 @@ class ChangeBus {
   int pendingCount() const;
 
   /** Watches `path` from `ctx`, which must outlive the watcher. The current value is
-   * read now and does not fire. */
-  Result<ScopedConnection> watch(Context &ctx, const Path &path, WatchFn fn);
-  Result<ScopedConnection> watch(Context &ctx, std::string_view path, WatchFn fn);
+   * read now and does not fire. `meta` runs, before `fn`, at a flush that finds another def:
+   * the path leads to another member, or stopped or started resolving, or a dynamic hook gives
+   * another range, say. */
+  Result<ScopedConnection> watch(Context &ctx, const Path &path, WatchFn fn, MetaFn meta = {});
+  Result<ScopedConnection> watch(Context &ctx,
+                                 std::string_view path,
+                                 WatchFn fn,
+                                 MetaFn meta = {});
   int watcherCount() const;
 
   /**
@@ -79,7 +88,7 @@ class ChangeBus {
    */
   ScopedConnection addListener(ListenFn fn);
 
-  /** Delivers pending changes; returns how many callbacks ran. */
+  /** Delivers pending changes; returns how many watchers fired. */
   int flush();
 
   Status validate() const;

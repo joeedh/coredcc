@@ -290,6 +290,54 @@ PropertyDef &PropertyDef::maxLength(int64_t n)
   return *this;
 }
 
+namespace {
+
+bool same(const NumericMeta &a, const NumericMeta &b)
+{
+  return a.hardMin == b.hardMin && a.hardMax == b.hardMax && a.softMin == b.softMin &&
+         a.softMax == b.softMax && a.step == b.step && a.precision == b.precision &&
+         a.unit == b.unit;
+}
+
+bool same(const EnumMeta &a, const EnumMeta &b)
+{
+  bool out = a.items.size() == b.items.size();
+  for (int i = 0; out && i < int(a.items.size()); i++) {
+    const EnumItem &x = a.items[i], &y = b.items[i];
+    out = x.key == y.key && x.value == y.value && x.uiName == y.uiName &&
+          x.description == y.description && x.icon == y.icon;
+  }
+  return out;
+}
+
+bool same(const StringMeta &a, const StringMeta &b)
+{
+  return a.maxLength == b.maxLength;
+}
+
+bool same(const TargetMeta &a, const TargetMeta &b)
+{
+  return a.target == b.target;
+}
+
+/* Both or neither, and the same. */
+template <class T> bool sameOrNone(const T *a, const T *b)
+{
+  return a && b ? same(*a, *b) : a == b;
+}
+
+} // namespace
+
+bool PropertyDef::sameAs(const PropertyDef &b) const
+{
+  return kind_ == b.kind_ && apiName_ == b.apiName_ && uiName_ == b.uiName_ &&
+         description_ == b.description_ && icon_ == b.icon_ && subtype_ == b.subtype_ &&
+         access_ == b.access_ && ui_.iconsOnly == b.ui_.iconsOnly && ui_.expand == b.ui_.expand &&
+         ui_.slider == b.ui_.slider && ui_.multiline == b.ui_.multiline && default_ == b.default_ &&
+         sameOrNone(numeric(), b.numeric()) && sameOrNone(enumMeta(), b.enumMeta()) &&
+         sameOrNone(stringMeta(), b.stringMeta()) && sameOrNone(target(), b.target());
+}
+
 PropertyDef PropertyDef::resolved(const void *owner) const
 {
   PropertyDef copy = *this;

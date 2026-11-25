@@ -74,7 +74,7 @@ static void test_watch()
   sc::IntResult n = sc::flushChanges(ctx);
   test_assert(n.status.ok() && n.value == 2 && holds(r, 1, PropValue::ofFloat(0.75)));
   test_assert(sc::readerTakeChanged(r) == 0 && sc::readerTakeChanged(r) == 1 &&
-              sc::readerTakeChanged(r) == -1);
+              sc::readerTakeChanged(r) == -1 && sc::readerTakeChangedMeta(r) == -1);
   /* Undo, and a change made in C++. */
   test_assert(sc::undo(ctx).ok() && sc::flushChanges(ctx).value == 0);
   test_assert(sc::undo(ctx).ok() && sc::flushChanges(ctx).value == 1);
@@ -88,14 +88,16 @@ static void test_watch()
   s.w.scene.active = -1;
   bus.notifyAll();
   test_assert(sc::flushChanges(ctx).value == 1 && sc::readerTakeChanged(r) == 2 &&
-              !sc::readerValue(r, 2).status.ok());
+              !sc::readerValue(r, 2).status.ok() && sc::readerTakeChangedMeta(r) == 2 &&
+              sc::readerTakeChangedMeta(r) == -1);
   s.w.scene.active = active;
   bus.notifyAll();
   test_assert(sc::flushChanges(ctx).value == 1 && sc::readerValue(r, 2).status.ok());
   /* A path added later waits for the next watch, which forgets what had changed. */
   add(r, "tool.pick");
   test_assert(sc::watchedCount(ctx) == 4 && sc::readerWatch(ctx, r).ok() &&
-              sc::watchedCount(ctx) == 5 && sc::readerTakeChanged(r) == -1);
+              sc::watchedCount(ctx) == 5 && sc::readerTakeChanged(r) == -1 &&
+              sc::readerTakeChangedMeta(r) == -1);
   sc::readerUnwatch(r);
   test_assert(sc::watchedCount(ctx) == 0 && sc::setValue(ctx, "tool.count", sc::makeInt(1)).ok() &&
               sc::flushChanges(ctx).value == 0 && holds(r, 0, PropValue::ofInt(4)));

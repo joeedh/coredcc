@@ -24,6 +24,7 @@ struct Rich {
   int e = 0;
   uint32_t flags = 0;
   double secret = 0;
+  int cam = 0;
 };
 
 const StructId kRich = StructId::of("Rich");
@@ -38,6 +39,10 @@ void registerRich(Runtime &rt, Rich &rich)
   test_assert(reg.add(std::move(base)).ok());
   ApiStruct s("Rich");
   s.parent(StructId::of("RichBase")).uiName("Rich Thing").description("All of it");
+  s.addField(PropertyDef::enumProp("cam").item("NONE", 0).dynamic([](PropertyDef &d, const void *) {
+               d.item("Cam1", 1, "Camera 1");
+             }),
+             &Rich::cam);
   s.addField(PropertyDef::floatProp("f")
                  .uiName("Factor")
                  .description("how much")
@@ -107,6 +112,19 @@ bool hasField(Context &ctx, const char *path, const char *field)
 }
 
 } // namespace
+
+static void test_dynamic()
+{
+  MetaWorld m;
+  test_assert(metaIs(m.ctx, "cam",
+                     "{\"kind\":\"Enum\",\"canonical\":\"@owner(rich).cam\",\"struct\":\"Rich\","
+                     "\"readOnly\":false,\"dynamic\":true,\"name\":\"cam\",\"uiName\":\"Cam\","
+                     "\"access\":[],\"ui\":{},\"items\":[{\"key\":\"NONE\",\"value\":0,\"uiName\":"
+                     "\"NONE\"},{\"key\":\"Cam1\",\"value\":1,\"uiName\":\"Camera 1\"}],"
+                     "\"default\":\"NONE\"}"));
+  test_assert(hasField(m.ctx, "cam[Cam1]", "\"uiName\":\"Camera 1\""));
+  test_assert(hasField(m.ctx, "cam[Cam1]", "\"dynamic\":true"));
+}
 
 static void test_members()
 {
@@ -236,7 +254,7 @@ static void test_struct_members()
   test_assert(metaIs(ctx, "all[0]",
                      "{\"kind\":\"Struct\",\"canonical\":\"@owner(list).all[#7] : Rich\","
                      "\"struct\":\"Rich\",\"uiName\":\"Rich Thing\",\"description\":\"All of it\","
-                     "\"members\":[\"f\",\"i\",\"s\",\"v\",\"e\",\"flags\",\"b\"]}"));
+                     "\"members\":[\"cam\",\"f\",\"i\",\"s\",\"v\",\"e\",\"flags\",\"b\"]}"));
   test_assert(hasField(ctx, "all.length", "\"target\":\"Rich\""));
 }
 
@@ -304,6 +322,7 @@ static void test_facades()
 int main()
 {
   test_members();
+  test_dynamic();
   test_other_kinds();
   test_struct_members();
   test_facades();

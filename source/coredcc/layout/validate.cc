@@ -86,7 +86,8 @@ class Validator {
   {
     issue(node, a, LayoutSeverity::Warning,
           Status::error(StatusCode::Unsupported,
-                        "it can't be checked: it goes through a struct that isn't registered"));
+                        "it can't be checked: it goes through a struct that isn't registered, or "
+                        "names a key that only a dynamic def may have"));
   }
 
   /* Around a node's own paths. */

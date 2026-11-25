@@ -298,6 +298,9 @@ describe('coredcc wasm-st spike', () => {
       ['a default', () => cdcc.registerCommand(ctx, {id: 'ts.nul', inputs: {a: nul}}, Nothing)],
       ['an output', () => cdcc.registerCommand(ctx, {id: 'ts.nul', outputs: {[nul]: 1}}, Nothing)],
       ['a graph', () => cdcc.graphCreate(ctx, nul)],
+      ['a node type', () => cdcc.defineNodeType(ctx, {id: 'ts.n', uiName: nul, outputs: {}, evaluate() {}})],
+      ['a socket', () => cdcc.defineNodeType(ctx, {id: 'ts.n', outputs: {a: nul}, evaluate() {}})],
+      ['a param', () => cdcc.defineNodeType(ctx, {id: 'ts.n', params: {[nul]: 1}, outputs: {}, evaluate() {}})],
     ]
     for (const [what, call] of calls) assert.throws(call, refused, what)
     /* An id is refused as one that isn't an identifier. */
@@ -306,6 +309,31 @@ describe('coredcc wasm-st spike', () => {
     assert.equal(cdcc.get(ctx, 'items["Cube"].name'), 'Cube')
     /* The id wasn't taken by those. */
     cdcc.registerCommand(ctx, {id: 'ts.nul'}, Nothing)
+  })
+
+  test('a dynamic def: its keys, and watching what meta gives', () => {
+    assert.equal(cdcc.meta(ctx, 'strength').dynamic, undefined)
+    const focus = cdcc.meta(ctx, 'focus')
+    assert.equal(focus.dynamic, true)
+    assert.deepEqual(focus.items!.map((i) => i.key), ['NONE', 'Cube', 'Ball'])
+    cdcc.set(ctx, 'focus[Ball]', true)
+    assert.equal(cdcc.get(ctx, 'focus', {names: true}), 'Ball')
+    assert.throws(() => cdcc.get(ctx, 'focus[Cone]'), fails(StatusCode.NotFound, /no key 'Cone'/))
+    /* It can't be known without an instance. */
+    const issues = cdcc.validateLayout(ctx, '<layout><prop path="focus[Cone]" visibleIf="focus[Cube]"/></layout>')
+    assert.deepEqual(issues.map((i) => i.severity), ['Warning', 'Warning'])
+
+    const reader = new cdcc.PathReader(ctx, ['level', 'focus', 'strength', 'focus[Ball]'])
+    reader.watch()
+    cdcc.set(ctx, 'count', 5)
+    cdcc.set(ctx, 'items["Ball"].name', 'Sphere')
+    cdcc.flushChanges(ctx)
+    assert.deepEqual(reader.takeChangedMeta(), [0, 1, 3])
+    assert.deepEqual(reader.takeChangedMeta(), [])
+    assert.deepEqual(reader.takeChanged(), [3])
+    assert.equal(cdcc.meta(ctx, 'level').hardMax, 5)
+    assert.equal(reader.value(1, {names: true}), 'Sphere')
+    reader[Symbol.dispose]()
   })
 
   test('PathReader reads, watches, and goes with its session', () => {

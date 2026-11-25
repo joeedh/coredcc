@@ -63,6 +63,14 @@ export class PathReader implements Disposable {
     for (let i = cd.readerTakeChanged(this.reader); i >= 0; i = cd.readerTakeChanged(this.reader)) out.push(i)
     return out
   }
+  /** As takeChanged, for paths whose `meta` may have changed: make their widgets again. A path
+   * may be in either, or both. */
+  takeChangedMeta(): number[] {
+    const out: number[] = []
+    const next = () => cd.readerTakeChangedMeta(this.reader)
+    for (let i = next(); i >= 0; i = next()) out.push(i)
+    return out
+  }
   [Symbol.dispose]() {
     const raw = this.raw
     if (!raw) return

@@ -154,6 +154,16 @@ void addItems(Library &lib)
   }
 }
 
+void addItemKeys(PropertyDef &def, Context &ctx)
+{
+  for (BlockHandle h : itemsOf(*ctx.library())) {
+    const Datablock &b = *ctx.library()->get(h);
+    if (!def.enumMeta()->findKey(b.name().c_str())) {
+      def.item(b.name().c_str(), int64_t(b.id().local.lo));
+    }
+  }
+}
+
 void addItemMembers(ApiStruct &root, RefCell &cell)
 {
   PointerAccessor active = pointerIn([&cell](const PointerRef &, Context &) { return &cell; });

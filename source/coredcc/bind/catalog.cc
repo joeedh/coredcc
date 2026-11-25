@@ -22,6 +22,9 @@ void writeMember(JsonWriter &out, const Runtime &rt, const ApiMember &m)
   out.beginObject();
   out.key("kind").string(propKindName(m.def().kind()));
   out.key("readOnly").boolean(m.readOnly());
+  if (m.isDynamic()) {
+    out.key("dynamic").boolean(true);
+  }
   if (m.kind() == MemberKind::Pointer && !m.pointer().target) {
     out.key("targets").beginArray();
     for (StructId id : m.pointer().candidates) {
@@ -61,6 +64,9 @@ void writeDef(JsonWriter &out, const Runtime &rt, const PropertyDef &def)
   if (!def.hasAccess(PropAccess::Private)) {
     out.beginObject();
     out.key("kind").string(propKindName(def.kind()));
+    if (def.isDynamic()) {
+      out.key("dynamic").boolean(true);
+    }
     writePropertyMeta(out, rt, def);
     out.endObject();
   }

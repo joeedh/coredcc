@@ -44,6 +44,8 @@ struct ResolvedPath {
   const ApiMember *member = nullptr;
   int component = -1;
   litestl::util::string enumKey;
+  /** The key's value (EnumKey), as the member's def is now. */
+  int64_t enumValue = 0;
   /**
    * The canonical address: rooted at the innermost owner, with positions and `active`
    * replaced by keys, and component or enum-key accesses widened to the whole member.
@@ -77,6 +79,9 @@ Result<PropValue> getValue(Context &ctx, std::string_view path);
  * enum-key paths give the whole member's def; Length gives a read-only Int. */
 Result<PropertyDef> getMeta(Context &ctx, const ResolvedPath &rp);
 Result<PropertyDef> getMeta(Context &ctx, std::string_view path);
+/** As getMeta, but a component's or an enum key's is the whole member's, and a struct's or a
+ * length's is an error. */
+Result<PropertyDef> getMemberMeta(Context &ctx, const ResolvedPath &rp);
 
 /**
  * The single write path:

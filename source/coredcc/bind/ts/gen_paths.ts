@@ -69,7 +69,9 @@ export function generatePaths(catalog: Catalog): string {
     name === undefined ? 'unknown' : (unions.get(name) ?? names.get(name) ?? 'unknown')
 
   const typeOf = (m: CatalogMember): string => {
-    const items = m.items?.map((i) => quoted(i.key)).join(' | ')
+    let items = m.items?.map((i) => quoted(i.key)).join(' | ')
+    /* A hook may add any, so the known ones are only suggestions. */
+    if (m.dynamic && m.items) items = items ? `(string & {}) | ${items}` : 'string'
     switch (m.kind) {
       case 'Bool':
         return 'boolean'

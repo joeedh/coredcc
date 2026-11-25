@@ -27,7 +27,17 @@ struct PathReader::Core {
   /** By index: a callback finds its entry again, since adding moves them. */
   std::vector<Entry> entries;
   std::set<int> changed;
+  std::set<int> changedMeta;
 
+  static int take(std::set<int> &from)
+  {
+    if (from.empty()) {
+      return -1;
+    }
+    const int i = *from.begin();
+    from.erase(from.begin());
+    return i;
+  }
   void read(Context &ctx, int i)
   {
     Result<ResolvedPath> rp = resolve(ctx, entries[size_t(i)].path);
@@ -106,6 +116,7 @@ Status readerWatch(Context &ctx, const PathReader &reader)
   PathReader::Core &core = *reader.core();
   core.unwatch();
   core.changed.clear();
+  core.changedMeta.clear();
   ChangeBus &bus = ctx.runtime().ext<ChangeBus>();
   for (int i = 0; i < readerCount(reader); i++) {
     core.read(ctx, i);
@@ -117,6 +128,11 @@ Status readerWatch(Context &ctx, const PathReader &reader)
                       core->entries[size_t(i)].value = value;
                       core->entries[size_t(i)].status = status;
                       core->changed.insert(i);
+                    }
+                  },
+                  [weak, i]() {
+                    if (std::shared_ptr<PathReader::Core> core = weak.lock()) {
+                      core->changedMeta.insert(i);
                     }
                   });
     if (!c.ok()) {
@@ -135,13 +151,12 @@ void readerUnwatch(const PathReader &reader)
 
 int32_t readerTakeChanged(const PathReader &reader)
 {
-  std::set<int> &changed = reader.core()->changed;
-  if (changed.empty()) {
-    return -1;
-  }
-  const int i = *changed.begin();
-  changed.erase(changed.begin());
-  return i;
+  return PathReader::Core::take(reader.core()->changed);
+}
+
+int32_t readerTakeChangedMeta(const PathReader &reader)
+{
+  return PathReader::Core::take(reader.core()->changedMeta);
 }
 
 IntResult flushChanges(Context &ctx)

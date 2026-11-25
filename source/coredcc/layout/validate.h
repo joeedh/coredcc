@@ -12,7 +12,8 @@
 namespace coredcc {
 
 enum class LayoutSeverity : uint8_t {
-  /** It can't be checked: it goes through a struct that isn't registered (yet). */
+  /** It can't be checked: it goes through a struct that isn't registered (yet), or names a key
+   * that a dynamic def may have. */
   Warning,
   /** It can't work. */
   Error,

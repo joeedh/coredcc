@@ -6,6 +6,7 @@
 #include "coredcc/parse/path_cache.h"
 
 #include <cstring>
+#include <optional>
 
 namespace coredcc {
 
@@ -18,12 +19,31 @@ struct Change {
   litestl::util::string member; /* empty: the whole owner */
 };
 
+/* What a UI made a widget for. */
+struct Meta {
+  bool resolves = false;
+  ResolvedPath::Kind kind = ResolvedPath::Kind::Struct;
+  StructId type;
+  const ApiMember *member = nullptr;
+  /** Of a dynamic member. Others' don't change. */
+  std::optional<PropertyDef> def;
+
+  bool operator==(const Meta &b) const
+  {
+    return resolves == b.resolves && kind == b.kind && type == b.type && member == b.member &&
+           def.has_value() == b.def.has_value() && (!def || def->sameAs(*b.def));
+  }
+};
+
 struct Watcher {
   uint64_t id = 0;
   bool live = true;
   Context *ctx = nullptr;
   Path path;
   std::shared_ptr<ChangeBus::WatchFn> fn;
+  /** Null without one. */
+  std::shared_ptr<ChangeBus::MetaFn> metaFn;
+  Meta meta;
   PropValue last;
   Status lastStatus;
   Vector<PathTouch, 4> touched;
@@ -35,6 +55,7 @@ struct Watcher {
 /* One read of a watcher's path, into locals: getters run user code that may add
  * watchers and reallocate the list. */
 struct Reading {
+  Meta meta;
   PropValue value;
   Status status;
   Vector<PathTouch, 4> touched;
@@ -71,6 +92,14 @@ Reading read(Context &ctx, const Path &path)
     r.status = rp.status();
     return r;
   }
+  r.meta.resolves = true;
+  r.meta.kind = rp->kind;
+  r.meta.type = rp->ptr.type;
+  r.meta.member = rp->member;
+  if (rp->member && rp->member->isDynamic()) {
+    Result<PropertyDef> def = getMemberMeta(ctx, *rp);
+    r.meta.def = def.ok() ? std::move(def).value() : rp->member->def();
+  }
   Result<PropValue> v = getValue(ctx, *rp);
   r.touched = std::move(rp->touched);
   if (v.ok()) {
@@ -84,6 +113,7 @@ Reading read(Context &ctx, const Path &path)
 
 void store(Watcher &w, Reading r)
 {
+  w.meta = std::move(r.meta);
   w.last = std::move(r.value);
   w.lastStatus = std::move(r.status);
   w.touched = std::move(r.touched);
@@ -109,6 +139,7 @@ struct ChangeBus::State final : detail::SignalStateBase {
       if (w.id == id && w.live) {
         w.live = false;
         w.fn.reset();
+        w.metaFn.reset();
         dead++;
         break;
       }
@@ -175,7 +206,10 @@ int ChangeBus::pendingCount() const
   return int(state_->pending.size());
 }
 
-Result<ScopedConnection> ChangeBus::watch(Context &ctx, const Path &path, WatchFn fn)
+Result<ScopedConnection> ChangeBus::watch(Context &ctx,
+                                          const Path &path,
+                                          WatchFn fn,
+                                          MetaFn meta)
 {
   CDCC_CHECK(bool(fn), "ChangeBus::watch: an empty callback");
   Watcher w;
@@ -183,19 +217,25 @@ Result<ScopedConnection> ChangeBus::watch(Context &ctx, const Path &path, WatchF
   w.ctx = &ctx;
   w.path = path;
   w.fn = std::make_shared<WatchFn>(std::move(fn));
+  if (meta) {
+    w.metaFn = std::make_shared<MetaFn>(std::move(meta));
+  }
   store(w, read(ctx, path));
   const uint64_t id = w.id;
   state_->watchers.append(std::move(w));
   return ScopedConnection(Connection(state_, id));
 }
 
-Result<ScopedConnection> ChangeBus::watch(Context &ctx, std::string_view path, WatchFn fn)
+Result<ScopedConnection> ChangeBus::watch(Context &ctx,
+                                          std::string_view path,
+                                          WatchFn fn,
+                                          MetaFn meta)
 {
   Result<PathPtr> p = ctx.runtime().ext<PathCache>().get(path);
   if (!p.ok()) {
     return p.status();
   }
-  return watch(ctx, **p, std::move(fn));
+  return watch(ctx, **p, std::move(fn), std::move(meta));
 }
 
 ScopedConnection ChangeBus::addListener(ListenFn fn)
@@ -233,19 +273,28 @@ int ChangeBus::flush()
     {
       const Watcher &w = st->watchers[i];
       const bool libMoved = libraryEpoch(*w.ctx) != w.libEpoch;
-      const bool failing = !w.lastStatus.ok() && changes.size() > 0;
-      if (!epochMoved && !libMoved && !failing && !hits(w.touched, changes)) {
+      const bool always = (!w.lastStatus.ok() || w.meta.def) && changes.size() > 0;
+      if (!epochMoved && !libMoved && !always && !hits(w.touched, changes)) {
         continue;
       }
     }
     const PropValue before = st->watchers[i].last;
     const bool wasOk = st->watchers[i].lastStatus.ok();
+    const Meta metaBefore = st->watchers[i].meta;
     Context *ctx = st->watchers[i].ctx;
     const Path path = st->watchers[i].path;
     Reading now = read(*ctx, path);
     store(st->watchers[i], std::move(now));
+    bool metaFired = false;
+    if (!(st->watchers[i].meta == metaBefore)) {
+      if (std::shared_ptr<MetaFn> metaFn = st->watchers[i].metaFn) {
+        metaFired = true;
+        (*metaFn)();
+      }
+    }
     const Watcher &w = st->watchers[i];
-    if (w.last == before && w.lastStatus.ok() == wasOk) {
+    if (!w.live || (w.last == before && w.lastStatus.ok() == wasOk)) {
+      fired += metaFired;
       continue;
     }
     std::shared_ptr<WatchFn> fn = w.fn;

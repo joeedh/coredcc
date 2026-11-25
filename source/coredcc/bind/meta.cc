@@ -261,7 +261,9 @@ Result<std::string> pathMeta(Context &ctx, std::string_view path)
   else if (rp->kind == ResolvedPath::Kind::EnumKey) {
     out.key("key").string(rp->enumKey.c_str());
     out.key("of").string(propKindName(rp->member->def().kind()));
-    if (const EnumItem *item = rp->member->def().enumMeta()->findKey(rp->enumKey.c_str())) {
+    Result<PropertyDef> whole = getMemberMeta(ctx, *rp);
+    const EnumMeta *items = whole.ok() ? whole->enumMeta() : nullptr;
+    if (const EnumItem *item = items ? items->findKey(rp->enumKey.c_str()) : nullptr) {
       def->uiName(item->uiName.c_str()).description(item->description.c_str());
       def->icon(item->icon.c_str());
     }
@@ -270,6 +272,9 @@ Result<std::string> pathMeta(Context &ctx, std::string_view path)
     writeStructName(out, rt, "target", rp->member->collection().itemStruct);
   }
   out.key("readOnly").boolean(def->hasAccess(PropAccess::ReadOnly));
+  if (rp->member->isDynamic()) {
+    out.key("dynamic").boolean(true);
+  }
   writePropertyMeta(out, rt, *def);
   out.endObject();
   return out.take();

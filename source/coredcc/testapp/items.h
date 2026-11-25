@@ -17,6 +17,8 @@ inline const coredcc::StructId kItem = coredcc::StructId::of("TestItem");
 void registerItems(coredcc::Runtime &rt);
 /** The items "Cube" and "Ball", as roots, with the LocalIds 1 and 2. */
 void addItems(coredcc::Library &lib);
+/** An item of an enum per item, by name. */
+void addItemKeys(coredcc::PropertyDef &def, coredcc::Context &ctx);
 /** The `items` collection, by name, and `activeItem`, a pointer held in `cell`. */
 void addItemMembers(coredcc::ApiStruct &root, coredcc::RefCell &cell);
 
