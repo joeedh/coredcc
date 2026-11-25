@@ -83,6 +83,11 @@ PropValue makeString(const string &v);
 PropValue makeVec2(double x, double y);
 PropValue makeVec3(double x, double y, double z);
 PropValue makeVec4(double x, double y, double z, double w);
+/** Flags by their bits. */
+PropValue makeFlags(int64_t bits);
+PropValue makeNullPointer();
+/** A Pointer from its text (api/ref_text.h). */
+ValueResult makePointer(Context &ctx, const string &text);
 
 /** The value, or InvalidArgument when `v` holds another type. */
 BoolResult readBool(const PropValue &v);
@@ -95,6 +100,8 @@ FloatResult readComponent(const PropValue &v, int32_t i);
 IntResult readEnum(const PropValue &v);
 /** A Flags value's bits, as an int64 with the same bits. */
 IntResult readFlags(const PropValue &v);
+/** A Pointer's text (api/ref_text.h); "" for null. */
+StringResult pointerText(Context &ctx, const PropValue &v);
 /** A readable form for display and debugging (PropValue::toString): not an invocation
  * literal. */
 string valueToString(const PropValue &v);
@@ -115,8 +122,13 @@ ValueResult outputGet(Context &ctx, const string &name);
 
 /* ---- datapaths and commands ---- */
 
-/** Ok if `path` resolves; else the resolver's error, with suggestions. */
-Status resolvePath(Context &ctx, const string &path);
+/** What `path` is (bind/meta.h's pathKindName), or the resolver's error, with suggestions. */
+StringResult resolvePath(Context &ctx, const string &path);
+/** pathMeta's JSON (bind/meta.h). */
+StringResult pathMeta(Context &ctx, const string &path);
+/** `v`, read from `path`, by name: an Enum's key, or a Flags' keys joined by '|'. NotFound for a
+ * number without an item, InvalidArgument for another kind of value. */
+StringResult valueKeys(Context &ctx, const string &path, const PropValue &v);
 ValueResult getValue(Context &ctx, const string &path);
 /**
  * An undoable set (setValueUndo): a command in the history, or a sub-command when
@@ -124,6 +136,8 @@ ValueResult getValue(Context &ctx, const string &path);
  * a script command (undo, discard...): use writeValue there.
  */
 Status setValue(Context &ctx, const string &path, const PropValue &value);
+/** As setValue; calls with one `gesture` (positive) on one member fold into one undo step. */
+Status setValueGesture(Context &ctx, const string &path, const PropValue &value, int64_t gesture);
 /** The raw write, not recorded: for a command's exec and undo, on state they capture
  * themselves. Don't set one member through both setValue and writeValue in a command. */
 Status writeValue(Context &ctx, const string &path, const PropValue &value);

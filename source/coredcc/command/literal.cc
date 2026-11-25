@@ -1,5 +1,7 @@
 #include "coredcc/command/literal.h"
 
+#include "coredcc/api/ref_text.h"
+#include "coredcc/api/resolve.h"
 #include "coredcc/base/text.h"
 
 #include <cerrno>
@@ -24,7 +26,7 @@ void appendNumber(std::string &out, double v)
 
 } // namespace
 
-Result<std::string> formatLiteral(const PropertyDef &def, const PropValue &value)
+Result<std::string> formatLiteral(const Runtime &rt, const PropertyDef &def, const PropValue &value)
 {
   std::string out;
   switch (def.kind()) {
@@ -79,6 +81,8 @@ Result<std::string> formatLiteral(const PropertyDef &def, const PropValue &value
       out += ')';
       return out;
     case PropKind::Pointer:
+      appendQuoted(out, formatRef(rt, value.asPointer()));
+      return out;
     case PropKind::Collection:
       break;
   }
@@ -128,7 +132,7 @@ Result<double> number(const PropertyDef &def, const RawScalar &s)
 
 } // namespace
 
-Result<PropValue> parseLiteral(const PropertyDef &def, const RawValue &raw)
+Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw)
 {
   const int comps = componentCount(def.kind());
   if (comps > 1) {
@@ -184,7 +188,14 @@ Result<PropValue> parseLiteral(const PropertyDef &def, const RawValue &raw)
                                                           PropValue::ofFlags(uint64_t(*i)));
       }
       return coerce(def, PropValue::ofString(text)); /* a key, or "A|B" */
-    case PropKind::Pointer:
+    case PropKind::Pointer: {
+      if (s.kind != RawScalar::Kind::String) {
+        return bad(def, "expected a quoted reference or path");
+      }
+      Result<StableRef> ref = parseRef(rt, text);
+      return ref.ok() ? coerce(def, PropValue::ofPointer(std::move(ref).value())) :
+                        Result<PropValue>(bad(def, ref.status().message()));
+    }
     case PropKind::Collection:
       return Status::error(StatusCode::Unsupported,
                            (std::string(def.apiName().c_str()) + ": " +
@@ -198,6 +209,41 @@ Result<PropValue> parseLiteral(const PropertyDef &def, const RawValue &raw)
     return d.status();
   }
   return coerce(def, PropValue::ofFloat(*d));
+}
+
+Result<PropValue> parsePointer(Context &ctx, const PropertyDef &def, const RawValue &raw)
+{
+  Runtime &rt = ctx.runtime();
+  if (raw.isTuple || raw.items.size() != 1 || raw.items[0].kind != RawScalar::Kind::String) {
+    return parseLiteral(rt, def, raw); /* says why not */
+  }
+  const std::string_view s = raw.items[0].text.c_str();
+  const size_t start = s.find_first_not_of(" \t");
+  Result<PropValue> value = PropValue();
+  if (start == std::string_view::npos || s[start] == '@') {
+    value = parseLiteral(rt, PropertyDef::pointerProp(def.apiName().c_str(), StructId()), raw);
+  }
+  else {
+    Result<ResolvedPath> rp = resolve(ctx, s);
+    if (!rp.ok()) {
+      return rp.status();
+    }
+    const bool member = rp->kind == ResolvedPath::Kind::Member &&
+                        rp->member->kind() == MemberKind::Pointer;
+    if (rp->kind != ResolvedPath::Kind::Struct && !member) {
+      return bad(def, "'" + std::string(s) + "' is neither a struct nor a pointer");
+    }
+    value = getValue(ctx, *rp);
+  }
+  if (!value.ok()) {
+    return value.status();
+  }
+  StableRef ref = value->asPointer();
+  const StructId want = def.target()->target;
+  if (want && ref.type && rt.ext<ApiRegistry>().isA(ref.type, want)) {
+    ref.type = want; /* coerce can't see the parents */
+  }
+  return coerce(def, PropValue::ofPointer(std::move(ref)));
 }
 
 } // namespace coredcc

@@ -107,6 +107,7 @@ static void test_command_defaults_path()
 
 static void test_literals()
 {
+  Runtime rt;
   struct Case {
     PropertyDef def;
     PropValue value;
@@ -126,7 +127,7 @@ static void test_literals()
       {PropertyDef::mat4Prop("m"), PropValue::ofComponents(PropValue::Type::Mat4, m), nullptr},
   };
   for (Case &c : cases) {
-    Result<std::string> lit = formatLiteral(c.def, c.value);
+    Result<std::string> lit = formatLiteral(rt, c.def, c.value);
     test_assert(lit.ok());
     if (c.text && *lit != c.text) {
       fprintf(stderr, "literal was %s, expected %s\n", lit->c_str(), c.text);
@@ -134,20 +135,17 @@ static void test_literals()
     }
     Result<Invocation> inv = parseInvocation("x(a=" + *lit + ")");
     test_assert(inv.ok());
-    Result<PropValue> back = parseLiteral(c.def, inv->args[0].value);
+    Result<PropValue> back = parseLiteral(rt, c.def, inv->args[0].value);
     test_assert(back.ok() && *back == c.value);
   }
-  test_assert(formatLiteral(PropertyDef::enumProp("e").item("A", 0), PropValue::ofEnum(9))
+  test_assert(formatLiteral(rt, PropertyDef::enumProp("e").item("A", 0), PropValue::ofEnum(9))
                   .status()
                   .code() == StatusCode::InvalidArgument);
-  test_assert(formatLiteral(PropertyDef::pointerProp("p", StructId()), PropValue::nullPointer())
-                  .status()
-                  .code() == StatusCode::Unsupported);
   /* Clamped on the way in. */
   Result<Invocation> inv = parseInvocation("x(a=5)");
-  test_assert(*parseLiteral(PropertyDef::floatProp("f").range(0, 1), inv->args[0].value) ==
+  test_assert(*parseLiteral(rt, PropertyDef::floatProp("f").range(0, 1), inv->args[0].value) ==
               PropValue::ofFloat(1));
-  test_assert(!parseLiteral(PropertyDef::vecProp("v", 2), inv->args[0].value).ok());
+  test_assert(!parseLiteral(rt, PropertyDef::vecProp("v", 2), inv->args[0].value).ok());
 }
 
 static void test_registration()

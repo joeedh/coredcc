@@ -87,7 +87,8 @@ class Context {
   }
   void setScene(BlockHandle scene);
 
-  /** Paths resolve from `prefix` (itself resolved from the root) until cleared. */
+  /** Paths resolve from `prefix` (itself resolved from the root) until cleared. It names a
+   * struct, or a Pointer member, whose target is meant. */
   void setPrefix(Path prefix)
   {
     prefix_ = std::move(prefix);

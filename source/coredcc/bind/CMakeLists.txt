@@ -4,6 +4,7 @@ coredcc_library(coredcc_bind
     foreign_command.cc
     graph_facades.cc
     manager.cc
+    meta.cc
   DEPS
     coredcc_graph
 )

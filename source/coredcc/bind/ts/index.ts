@@ -40,10 +40,28 @@ import {StatusCode} from 'coredcc-gen/coredcc/StatusCode'
 export {CommandFlags, StatusCode}
 export type {Context}
 
+/**
+ * A pointer value: what it points to, as text (`api/ref_text.h`), e.g.
+ * `@block(coredcc, <32 hex digits>) : Mesh`. Frozen. Two with the same text are the same
+ * pointer.
+ */
+export class Ref {
+  readonly text: string
+  constructor(text: string) {
+    if (typeof text !== 'string') throw new TypeError(`Ref: expected a string, not ${typeof text}`)
+    this.text = text
+    Object.freeze(this)
+  }
+  toString() {
+    return this.text
+  }
+}
+
 /** A value as scripts read it. Vectors, quaternions and Mat4 are arrays; an Int past
- * 2^53 is a bigint; a pointer (or any value without a JS form) stays an owned
- * PropValue; None is `undefined`. */
-export type Value = boolean | number | bigint | string | number[] | PropValue | undefined
+ * 2^53 is a bigint; a pointer is a Ref, or null; None is `undefined`. */
+export type Value = boolean | number | bigint | string | number[] | Ref | null | undefined
+/** With `{names: true}`: an enum's key, and a flags' keys. */
+export type NamedValue = Value | string[]
 
 /** A Float, even when the number is whole: `inputs: {factor: float(1)}`. */
 export class FloatValue {
@@ -51,9 +69,20 @@ export class FloatValue {
 }
 export const float = (value: number) => new FloatValue(value)
 
-/** A value scripts can write. A whole number is an Int (use `float()` for a Float);
- * Mat4 can't be written yet. */
-export type Writable = boolean | number | bigint | string | ArrayLike<number> | FloatValue | PropValue
+/** A value scripts can write. A whole number is an Int (use `float()` for a Float); an array
+ * of strings is flags by their keys (`[]` for none); null is the null pointer. Mat4 can't be
+ * written yet. */
+export type Writable =
+  | boolean
+  | number
+  | bigint
+  | string
+  | ArrayLike<number>
+  | readonly string[]
+  | FloatValue
+  | Ref
+  | null
+  | PropValue
 
 /**
  * A failed coredcc call. `message` reads "Code: message (did you mean: ...)"; `detail`
@@ -186,8 +215,14 @@ function copyValue(v: PropValue): PropValue {
 
 const toNumber = (n: bigint): number | bigint => (n >= -(2n ** 53n) && n <= 2n ** 53n ? Number(n) : n)
 
+/** Graph sockets and params hold no pointers, so a node has no context to read them with. */
+const pointerCtx = (ctx: Context | undefined): Context => {
+  if (!ctx) throw new TypeError('a graph value is never a pointer')
+  return ctx
+}
+
 /** A JS form of `v`, copied out of it. */
-export function toJs(v: PropValue): Value {
+export function toJs(ctx: Context | undefined, v: PropValue): Value {
   const components = () => {
     const out: number[] = []
     for (let i = 0; i < v.componentCount(); i++) out.push(take(cd.readComponent(v, i), (x) => x))
@@ -214,8 +249,12 @@ export function toJs(v: PropValue): Value {
     case PropValueType.Quat:
     case PropValueType.Mat4:
       return components()
+    case PropValueType.Pointer: {
+      const text = take(cd.pointerText(pointerCtx(ctx), v), (x) => x)
+      return text === '' ? null : new Ref(text)
+    }
     default:
-      return copyValue(v)
+      throw new TypeError(`toJs: a value of an unknown type (${v.type()})`)
   }
 }
 
@@ -229,7 +268,9 @@ const INT64_MAX = 2n ** 63n - 1n
 /** An owned PropValue for `x`. A whole number is an Int, unless it is past 2^53 (then
  * a Float, which C++ range-checks); `float()` makes a Float. Bound PropValues are
  * copied. */
-export function fromJs(x: Writable): PropValue {
+export function fromJs(ctx: Context | undefined, x: Writable): PropValue {
+  if (x === null) return cd.makeNullPointer()
+  if (x instanceof Ref) return take(cd.makePointer(pointerCtx(ctx), x.text), copyValue)
   if (typeof x === 'boolean') return cd.makeBool(x)
   if (typeof x === 'bigint') {
     if (x < INT64_MIN || x > INT64_MAX) throw new RangeError(`fromJs: ${x} is outside int64`)
@@ -240,8 +281,14 @@ export function fromJs(x: Writable): PropValue {
   }
   if (typeof x === 'string') return cd.makeString(x)
   if (x instanceof FloatValue) return cd.makeFloat(x.value)
+  if (Array.isArray(x) && x.every((k) => typeof k === 'string')) {
+    if (x.length === 0) return cd.makeFlags(0n)
+    const odd = x.find((k) => k === '' || k.includes('|'))
+    if (odd !== undefined) throw new TypeError(`fromJs: '${odd}' is no flag's key`)
+    return cd.makeString(x.join('|'))
+  }
   if (isArrayLike(x)) {
-    const c = Array.from(x, Number)
+    const c = Array.from(x as ArrayLike<number>, Number)
     if (c.length === 2) return cd.makeVec2(c[0], c[1])
     if (c.length === 3) return cd.makeVec3(c[0], c[1], c[2])
     if (c.length === 4) return cd.makeVec4(c[0], c[1], c[2], c[3])
@@ -251,8 +298,8 @@ export function fromJs(x: Writable): PropValue {
   throw new TypeError(`fromJs: can't make a value of ${String(x)}`)
 }
 
-function withValue<R>(x: Writable, fn: (v: PropValue) => R): R {
-  const v = fromJs(x)
+function withValue<R>(ctx: Context | undefined, x: Writable, fn: (v: PropValue) => R): R {
+  const v = fromJs(ctx, x)
   try {
     return fn(v)
   } finally {
@@ -260,13 +307,13 @@ function withValue<R>(x: Writable, fn: (v: PropValue) => R): R {
   }
 }
 
-function bagToJs(bag: PropertyBag): Record<string, Value> {
+function bagToJs(ctx: Context, bag: PropertyBag): Record<string, Value> {
   const out: Record<string, Value> = {}
   const n = cd.bagSize(bag)
   for (let i = 0; i < n; i++) {
     const name = take(cd.bagName(bag, i), (s) => s)
     /* defineProperty: an output named __proto__ is data, not the prototype. */
-    const value = take(cd.bagGet(bag, name), toJs)
+    const value = take(cd.bagGet(bag, name), (v) => toJs(ctx, v))
     Object.defineProperty(out, name, {value, enumerable: true, writable: true, configurable: true})
   }
   return out
@@ -274,24 +321,84 @@ function bagToJs(bag: PropertyBag): Record<string, Value> {
 
 /* ---- datapaths and commands ---- */
 
-/** Throws (NotFound, with suggestions in the message) unless `path` resolves. */
-export function resolve(ctx: Context, path: string) {
-  check(cd.resolvePath(ctx, path))
+/** What a path is: a PropKind for a member, or what the rest can name. */
+export type PathKind =
+  | 'Bool' | 'Int' | 'Float' | 'String' | 'Enum' | 'Flags' | 'Vec2' | 'Vec3' | 'Vec4'
+  | 'Mat4' | 'Quat' | 'Pointer' | 'Collection' | 'Struct' | 'Component' | 'EnumKey' | 'Length'
+
+/** A property's description, or a path's (bind/meta.h says which fields there are when). An
+ * integer past 2^53 is a string. */
+export interface PathMeta {
+  kind: PathKind
+  canonical: string
+  struct?: string
+  members?: string[]
+  component?: number
+  of?: PathKind
+  key?: string
+  readOnly?: boolean
+  name?: string
+  uiName?: string
+  description?: string
+  icon?: string
+  subtype?: string
+  access?: string[]
+  ui?: {iconsOnly?: boolean; expand?: boolean; slider?: 'Slider' | 'Number'; multiline?: boolean}
+  hardMin?: number
+  hardMax?: number
+  softMin?: number
+  softMax?: number
+  step?: number
+  precision?: number
+  unit?: string
+  items?: {key: string; value: number | string; uiName: string; description?: string; icon?: string}[]
+  maxLength?: number
+  target?: string
+  default?: unknown
 }
-export function get(ctx: Context, path: string): Value {
-  return take(cd.getValue(ctx, path), toJs)
+
+/** What `path` is. Throws (NotFound, with suggestions in the message) unless it resolves. */
+export function resolve(ctx: Context, path: string): PathKind {
+  return take(cd.resolvePath(ctx, path), (kind) => kind as PathKind)
 }
-/** An undoable set; from a command's exec, a sub-command. */
-export function set(ctx: Context, path: string, value: Writable) {
-  withValue(value, (v) => check(cd.setValue(ctx, path, v)))
+/** What `path` is, in full. */
+export function meta(ctx: Context, path: string): PathMeta {
+  return JSON.parse(take(cd.pathMeta(ctx, path), (json) => json)) as PathMeta
+}
+/** With `names`, an enum reads as its key and flags as their keys; a number without an item
+ * stays a number. */
+export function get(ctx: Context, path: string): Value
+export function get(ctx: Context, path: string, opts: {names?: boolean}): NamedValue
+export function get(ctx: Context, path: string, opts: {names?: boolean} = {}): NamedValue {
+  return take(cd.getValue(ctx, path), (v) => {
+    const flags = v.type() === PropValueType.Flags
+    if (!opts.names || (!flags && v.type() !== PropValueType.Enum)) return toJs(ctx, v)
+    try {
+      const keys = take(cd.valueKeys(ctx, path, v), (s) => s)
+      return !flags ? keys : keys === '' ? [] : keys.split('|')
+    } catch (e) {
+      if (e instanceof ScriptError && e.code === StatusCode.NotFound) return toJs(ctx, v)
+      throw e
+    }
+  })
+}
+/** An undoable set; from a command's exec, a sub-command. Sets of one member with the same
+ * `gesture` (a positive integer: one slider drag) are one undo step. */
+export function set(ctx: Context, path: string, value: Writable, gesture?: number) {
+  if (gesture !== undefined && !(Number.isSafeInteger(gesture) && gesture > 0)) {
+    throw new TypeError(`set: a gesture is a positive integer, not ${gesture}`)
+  }
+  withValue(ctx, value, (v) =>
+    check(gesture === undefined ? cd.setValue(ctx, path, v) : cd.setValueGesture(ctx, path, v, BigInt(gesture)))
+  )
 }
 /** The raw, unrecorded write, for a command's exec, undo and redo. */
 export function write(ctx: Context, path: string, value: Writable) {
-  withValue(value, (v) => check(cd.writeValue(ctx, path, v)))
+  withValue(ctx, value, (v) => check(cd.writeValue(ctx, path, v)))
 }
 /** Runs `mesh.extrude(distance=2)`, returning its outputs. */
 export function invoke(ctx: Context, invocation: string): Record<string, Value> {
-  return take(cd.invoke(ctx, invocation), bagToJs)
+  return take(cd.invoke(ctx, invocation), (bag) => bagToJs(ctx, bag))
 }
 export function undo(ctx: Context) {
   check(cd.undo(ctx))
@@ -307,11 +414,11 @@ export function canRedo(ctx: Context): boolean {
 }
 /** The running command's input `name` (inside a slot). */
 export function input(ctx: Context, name: string): Value {
-  return take(cd.inputGet(ctx, name), toJs)
+  return take(cd.inputGet(ctx, name), (v) => toJs(ctx, v))
 }
 /** Sets the running command's output `name` (inside a slot). */
 export function output(ctx: Context, name: string, value: Writable) {
-  withValue(value, (v) => check(cd.outputSet(ctx, name, v)))
+  withValue(ctx, value, (v) => check(cd.outputSet(ctx, name, v)))
 }
 
 /* ---- script commands ---- */
@@ -477,10 +584,10 @@ export function registerCommand(ctx: Context, spec: CommandSpec, Cls: new () => 
     if (spec.icon !== undefined) check(cd.defIcon(def, spec.icon))
     check(cd.defFlags(def, flags))
     for (const [name, v] of Object.entries(spec.inputs ?? {})) {
-      withValue(v, (pv) => check(cd.defInput(def, name, pv)))
+      withValue(ctx, v, (pv) => check(cd.defInput(def, name, pv)))
     }
     for (const [name, v] of Object.entries(spec.outputs ?? {})) {
-      withValue(v, (pv) => check(cd.defOutput(def, name, pv)))
+      withValue(ctx, v, (pv) => check(cd.defOutput(def, name, pv)))
     }
     /* The adapter supplies every required slot; redo only when the class has one, so
      * a class without it keeps redo-by-exec. */
@@ -514,15 +621,15 @@ export class NodeContext {
   }
   /** Not for payload inputs, which can only be passed on. */
   input(name: string): Value {
-    return take(cd.nodeInput(this.raw, name), toJs)
+    return take(cd.nodeInput(this.raw, name), (v) => toJs(undefined, v))
   }
   param(name: string): Value {
-    return take(cd.nodeParam(this.raw, name), toJs)
+    return take(cd.nodeParam(this.raw, name), (v) => toJs(undefined, v))
   }
   /** Converted to the output's type, as `set` converts to a member's. */
   output(name: string, value: Writable) {
     const raw = this.raw
-    withValue(value, (v) => check(cd.nodeOutput(raw, name, v)))
+    withValue(undefined, value, (v) => check(cd.nodeOutput(raw, name, v)))
   }
   /** Sets an output to an input of the same type. */
   pass(input: string, output: string) {
@@ -568,10 +675,10 @@ export function defineNodeType(ctx: Context, spec: NodeTypeSpec) {
     if (spec.uiName !== undefined) check(cd.nodeTypeUiName(def, spec.uiName))
     for (const [name, v] of Object.entries(spec.inputs ?? {})) {
       if (v instanceof PayloadInput) check(cd.nodeTypePayloadInput(def, name, v.socketType))
-      else withValue(v, (pv) => check(cd.nodeTypeInput(def, name, pv)))
+      else withValue(undefined, v, (pv) => check(cd.nodeTypeInput(def, name, pv)))
     }
     for (const [name, v] of Object.entries(spec.params ?? {})) {
-      withValue(v, (pv) => check(cd.nodeTypeParam(def, name, pv)))
+      withValue(undefined, v, (pv) => check(cd.nodeTypeParam(def, name, pv)))
     }
     for (const [name, type] of Object.entries(spec.outputs)) check(cd.nodeTypeOutput(def, name, type))
     const kernel = {
@@ -651,11 +758,11 @@ export class GraphInstance implements Disposable {
   setInput(name: string, value: Writable | undefined) {
     const graph = this.graph
     if (value === undefined) check(cd.graphClearInput(graph, name))
-    else withValue(value, (v) => check(cd.graphSetInput(graph, name, v)))
+    else withValue(undefined, value, (v) => check(cd.graphSetInput(graph, name, v)))
   }
   /** An interface output's value, by name. */
   evaluate(output: string): Value {
-    return take(cd.graphEvaluate(this.graph, output), toJs)
+    return take(cd.graphEvaluate(this.graph, output), (v) => toJs(undefined, v))
   }
   /** Why `output` had no value when last evaluated; "" if it had one. */
   errorText(output: string): string {

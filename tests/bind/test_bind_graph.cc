@@ -311,7 +311,9 @@ void testGates()
     const string name = "graphs[\"g\"].name";
     auto all = [&](std::vector<Status> &out) {
       const string gp = "graphs[\"g\"]";
-      out = {sc::resolvePath(d.ctx, name),
+      out = {sc::resolvePath(d.ctx, name).status,
+             sc::pathMeta(d.ctx, name).status,
+             sc::valueKeys(d.ctx, name, PropValue::ofEnum(0)).status,
              sc::getValue(d.ctx, name).status,
              sc::inputGet(d.ctx, "x").status,
              sc::outputSet(d.ctx, "x", sc::makeInt(1)),
@@ -343,7 +345,7 @@ void testGates()
     };
     const int steps = d.history.size();
     test_assert(evaluate(8));
-    test_assert(seen.size() == 23);
+    test_assert(seen.size() == 25);
     for (size_t i = 0; i < seen.size(); i++) {
       if (!hasCode(seen[i], StatusCode::Busy)) {
         printf("facade %d\n", int(i));
@@ -356,7 +358,7 @@ void testGates()
     inside = []() {};
 
     /* Outside, the same calls work. */
-    test_assert(sc::resolvePath(d.ctx, name).ok() && sc::getValue(d.ctx, name).status.ok());
+    test_assert(sc::resolvePath(d.ctx, name).status.ok() && sc::getValue(d.ctx, name).status.ok());
     test_assert(sc::canUndo(d.ctx).value);
 
     /* Another interface's frame: not a Command's, though its slot has the name of one. */

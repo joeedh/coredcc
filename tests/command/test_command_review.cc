@@ -542,12 +542,13 @@ static void test_delete_cascade_states()
 
 static void test_literal_edges()
 {
-  auto roundTrip = [](const PropertyDef &def, const PropValue &v) {
-    Result<std::string> lit = formatLiteral(def, v);
+  Runtime rt;
+  auto roundTrip = [&rt](const PropertyDef &def, const PropValue &v) {
+    Result<std::string> lit = formatLiteral(rt, def, v);
     test_assert(lit.ok());
     Result<Invocation> inv = parseInvocation("x(a=" + *lit + ")");
     test_assert(inv.ok());
-    Result<PropValue> back = parseLiteral(def, inv->args[0].value);
+    Result<PropValue> back = parseLiteral(rt, def, inv->args[0].value);
     test_assert(back.ok() && *back == v);
   };
   roundTrip(PropertyDef::floatProp("f"), PropValue::ofFloat(-INFINITY)); /* B11 */
@@ -560,7 +561,7 @@ static void test_literal_edges()
     Result<Invocation> inv = parseInvocation(text);
     if (inv.ok()) {
       const PropertyDef def = text[4] == '1' ? PropertyDef::floatProp("f") : PropertyDef::intProp("i");
-      test_assert(hasMsg(parseLiteral(def, inv->args[0].value).status(), "out of range"));
+      test_assert(hasMsg(parseLiteral(rt, def, inv->args[0].value).status(), "out of range"));
     }
   }
 }

@@ -137,7 +137,7 @@ std::string LastUsedStore::serialize() const
     bool first = true;
     for (const Value &v : e->values) {
       const PropertyDef *in = e->def->findInput(v.name.c_str());
-      Result<std::string> lit = in ? formatLiteral(*in, v.value) : Result<std::string>("");
+      Result<std::string> lit = in ? formatLiteral(rt_, *in, v.value) : Result<std::string>("");
       if (!in || !lit.ok()) {
         continue;
       }
@@ -190,7 +190,7 @@ Status LastUsedStore::load(std::string_view text)
       if (!in) {
         continue;
       }
-      Result<PropValue> v = parseLiteral(*in, arg.value);
+      Result<PropValue> v = parseLiteral(rt_, *in, arg.value);
       if (v.ok()) {
         set(*def, arg.name.c_str(), *v).ignore();
       }

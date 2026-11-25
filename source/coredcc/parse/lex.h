@@ -1,7 +1,7 @@
 #pragma once
 
 /** \file
- * Lexing shared by the path and invocation parsers. Internal to coredcc_parse.
+ * Lexing shared by the path and invocation parsers, and api/ref_text. Not public API.
  */
 
 #include "coredcc/base/status.h"

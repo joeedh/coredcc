@@ -16,7 +16,7 @@ import {setFlagsFromString} from 'node:v8'
 import {runInNewContext} from 'node:vm'
 
 import * as cdcc from 'coredcc-script'
-import {CommandFlags, ScriptError, Session, StatusCode, type Context, type ScriptCommand} from 'coredcc-script'
+import {Ref, CommandFlags, ScriptError, Session, StatusCode, type Context, type ScriptCommand} from 'coredcc-script'
 import type {Host} from 'coredcc-gen/testapp/Host'
 import * as spike from 'coredcc-gen/testapp/functions'
 
@@ -100,6 +100,120 @@ describe('coredcc wasm-st spike', () => {
     cdcc.set(ctx, 'strength', 4)
     assert.equal(cdcc.get(ctx, 'strength'), 1)
     assert.throws(() => cdcc.set(ctx, 'strength', 'x'), ScriptError)
+  })
+
+  test('resolve gives the kind of a path', () => {
+    const kinds = {
+      count: 'Int', strength: 'Float', label: 'String', mode: 'Enum', 'mode[EDIT]': 'EnumKey',
+      flags: 'Flags', offset: 'Vec3', 'offset[1]': 'Component', items: 'Collection',
+      'items.length': 'Length', 'items[0]': 'Struct', activeItem: 'Pointer',
+    }
+    for (const [path, kind] of Object.entries(kinds)) assert.equal(cdcc.resolve(ctx, path), kind, path)
+  })
+
+  test('pointers are frozen Refs, or null, and can be written', () => {
+    assert.equal(cdcc.get(ctx, 'activeItem'), null)
+    const cube = cdcc.get(ctx, 'items["Cube"]') as Ref
+    assert.ok(cube instanceof Ref && Object.isFrozen(cube))
+    assert.equal(cube.text, `@block(testapp, ${'0'.repeat(31)}1) : TestItem`)
+    assert.equal(String(cube), cube.text)
+    cdcc.set(ctx, 'activeItem', cube)
+    assert.deepEqual(cdcc.get(ctx, 'activeItem'), cube)
+    assert.equal(cdcc.get(ctx, 'activeItem.name'), 'Cube')
+    cdcc.set(ctx, 'activeItem.other', new Ref(`@block(testapp, ${'0'.repeat(31)}2)`))
+    assert.equal(cdcc.get(ctx, 'items["Cube"].other.name'), 'Ball')
+    cdcc.set(ctx, 'activeItem', null)
+    assert.equal(cdcc.get(ctx, 'activeItem'), null)
+    cdcc.undo(ctx)
+    assert.deepEqual(cdcc.get(ctx, 'activeItem'), cube)
+    /* What a Ref names is checked when it is written. */
+    assert.throws(() => cdcc.set(ctx, 'activeItem', new Ref('nope')), fails(StatusCode.InvalidArgument, /reference:/))
+    assert.throws(
+      () => cdcc.set(ctx, 'activeItem', new Ref(`@block(testapp, ${'0'.repeat(31)}9)`)),
+      fails(StatusCode.NotFound, /./)
+    )
+    assert.throws(() => cdcc.set(ctx, 'activeItem', 3), ScriptError)
+    assert.throws(() => cdcc.set(ctx, 'count', null), ScriptError)
+    assert.throws(() => new Ref(3 as never), TypeError)
+    /* Graph values have no context, and are never pointers. */
+    assert.throws(() => cdcc.fromJs(undefined, new Ref('@')), TypeError)
+  })
+
+  test('pointers pass through a command', () => {
+    const seen: unknown[] = []
+    cdcc.registerCommand(
+      ctx,
+      {id: 'ts.pick', outputs: {label: ''}},
+      class implements cdcc.ScriptCommand {
+        exec(c: Context) {
+          const ball = cdcc.get(c, 'items["Ball"]') as Ref
+          cdcc.set(c, 'activeItem', ball)
+          seen.push(ball)
+          cdcc.output(c, 'label', ball.text)
+        }
+        undo() {}
+      }
+    )
+    const out = cdcc.invoke(ctx, 'ts.pick')
+    assert.deepEqual(cdcc.get(ctx, 'activeItem'), seen[0])
+    assert.equal(out.label, (seen[0] as Ref).text)
+    cdcc.undo(ctx)
+    assert.equal(cdcc.get(ctx, 'activeItem'), null)
+  })
+
+  test('enums and flags by name, both ways', () => {
+    assert.equal(cdcc.get(ctx, 'mode', {names: true}), 'OBJECT')
+    cdcc.set(ctx, 'mode', 'EDIT')
+    assert.equal(cdcc.get(ctx, 'mode', {names: true}), 'EDIT')
+    assert.equal(cdcc.get(ctx, 'mode'), 1)
+    assert.deepEqual(cdcc.get(ctx, 'flags', {names: true}), [])
+    cdcc.set(ctx, 'flags', ['SELECT', 'HIDE'])
+    assert.deepEqual(cdcc.get(ctx, 'flags', {names: true}), ['SELECT', 'HIDE'])
+    cdcc.set(ctx, 'flags', ['HIDE'])
+    assert.equal(cdcc.get(ctx, 'flags'), 2)
+    cdcc.set(ctx, 'flags', [])
+    assert.equal(cdcc.get(ctx, 'flags'), 0)
+    assert.throws(() => cdcc.set(ctx, 'flags', ['HIDDEN']), ScriptError)
+    assert.throws(() => cdcc.set(ctx, 'flags', ['SELECT|HIDE']), TypeError)
+    assert.throws(() => cdcc.set(ctx, 'flags', ['']), TypeError)
+    assert.throws(() => cdcc.set(ctx, 'label', []), ScriptError)
+    /* Other values are as without names. */
+    assert.equal(cdcc.get(ctx, 'strength', {names: true}), 0.5)
+    assert.equal(cdcc.get(ctx, 'mode[EDIT]', {names: true}), true)
+    assert.equal(cdcc.get(ctx, 'activeItem', {names: true}), null)
+  })
+
+  test('an Int past 2^53 is a bigint', () => {
+    const big = 2n ** 60n + 1n
+    cdcc.set(ctx, 'big', big)
+    assert.equal(cdcc.get(ctx, 'big'), big)
+    cdcc.set(ctx, 'big', -5)
+    assert.equal(cdcc.get(ctx, 'big'), -5)
+  })
+
+  test('meta describes a path', () => {
+    const m = cdcc.meta(ctx, 'strength')
+    assert.equal(m.kind, 'Float')
+    assert.equal(m.hardMax, 1)
+    assert.equal(m.canonical, '@owner(testapp).strength')
+    assert.deepEqual(
+      cdcc.meta(ctx, 'mode').items?.map((i) => i.key),
+      ['OBJECT', 'EDIT']
+    )
+    assert.equal(cdcc.meta(ctx, 'activeItem').target, 'TestItem')
+    assert.deepEqual(cdcc.meta(ctx, 'items[0]').members, ['name', 'weight', 'other'])
+    assert.throws(() => cdcc.meta(ctx, 'nope'), fails(StatusCode.NotFound, /nope/))
+  })
+
+  test('sets of one gesture are one undo step', () => {
+    for (const x of [0.6, 0.7, 0.8]) cdcc.set(ctx, 'strength', x, 5)
+    assert.equal(spike.historySize(hostOf(ctx)), 1)
+    cdcc.set(ctx, 'strength', 0.9, 6)
+    assert.equal(spike.historySize(hostOf(ctx)), 2)
+    cdcc.undo(ctx)
+    cdcc.undo(ctx)
+    assert.equal(cdcc.get(ctx, 'strength'), 0.5)
+    for (const g of [0, -1, 1.5, NaN, 2 ** 60]) assert.throws(() => cdcc.set(ctx, 'strength', 1, g), TypeError)
   })
 
   test('3. undoes the set', () => {
@@ -270,7 +384,7 @@ describe('coredcc wasm-st spike', () => {
     assert.equal(cdcc.get(ctx, 'strength'), 0.25)
     cdcc.set(ctx, 'strength', 1e19) /* a Float, clamped; not wrapped to int64 */
     assert.equal(cdcc.get(ctx, 'strength'), 1)
-    assert.throws(() => cdcc.fromJs(2n ** 64n), RangeError)
+    assert.throws(() => cdcc.fromJs(ctx, 2n ** 64n), RangeError)
     assert.throws(() => cdcc.registerCommand(ctx, {id: 'ts.flags', flags: 2 ** 40}, AddCount), TypeError)
   })
 

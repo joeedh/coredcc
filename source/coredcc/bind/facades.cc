@@ -1,9 +1,11 @@
 #include "coredcc/bind/facades.h"
 
+#include "coredcc/api/ref_text.h"
 #include "coredcc/api/resolve.h"
 #include "coredcc/base/text.h"
 #include "coredcc/bind/detail.h"
 #include "coredcc/bind/foreign_command.h"
+#include "coredcc/bind/meta.h"
 #include "coredcc/command/executor.h"
 #include "coredcc/command/set_property.h"
 #include "coredcc/graph/node_type.h"
@@ -140,6 +142,20 @@ PropValue makeVec4(double x, double y, double z, double w)
 {
   return PropValue::ofVec4(x, y, z, w);
 }
+PropValue makeFlags(int64_t bits)
+{
+  return PropValue::ofFlags(uint64_t(bits));
+}
+PropValue makeNullPointer()
+{
+  return PropValue::nullPointer();
+}
+ValueResult makePointer(Context &ctx, const string &text)
+{
+  Result<StableRef> ref = parseRef(ctx.runtime(), view(text));
+  return ref.ok() ? ok<ValueResult>(PropValue::ofPointer(std::move(ref).value())) :
+                    failed<ValueResult>(ref.status());
+}
 
 BoolResult readBool(const PropValue &v)
 {
@@ -181,6 +197,12 @@ IntResult readFlags(const PropValue &v)
 {
   std::optional<uint64_t> f = v.tryFlags();
   return f ? ok<IntResult>(int64_t(*f)) : failed<IntResult>(wrongType(v, "Flags"));
+}
+StringResult pointerText(Context &ctx, const PropValue &v)
+{
+  const StableRef *ref = v.tryPointer();
+  return ref ? ok<StringResult>(string(formatRef(ctx.runtime(), *ref).c_str())) :
+               failed<StringResult>(wrongType(v, "Pointer"));
 }
 string valueToString(const PropValue &v)
 {
@@ -240,11 +262,56 @@ ValueResult outputGet(Context &ctx, const string &name)
 
 /* ---- datapaths and commands ---- */
 
-Status resolvePath(Context &ctx, const string &path)
+StringResult resolvePath(Context &ctx, const string &path)
 {
-  CDCC_TRY(detail::kernelGate(ctx, "resolvePath"));
+  if (Status s = detail::kernelGate(ctx, "resolvePath"); !s.ok()) {
+    return failed<StringResult>(std::move(s));
+  }
   Result<ResolvedPath> r = resolve(ctx, view(path));
-  return r.ok() ? Status() : r.status();
+  return r.ok() ? ok<StringResult>(string(pathKindName(*r))) : failed<StringResult>(r.status());
+}
+StringResult pathMeta(Context &ctx, const string &path)
+{
+  if (Status s = detail::kernelGate(ctx, "pathMeta"); !s.ok()) {
+    return failed<StringResult>(std::move(s));
+  }
+  Result<std::string> r = coredcc::pathMeta(ctx, view(path));
+  return r.ok() ? ok<StringResult>(string(r->c_str())) : failed<StringResult>(r.status());
+}
+StringResult valueKeys(Context &ctx, const string &path, const PropValue &v)
+{
+  const std::optional<int64_t> number = v.tryEnum();
+  if (!number && !v.tryFlags()) {
+    return failed<StringResult>(wrongType(v, "Enum or Flags"));
+  }
+  if (Status s = detail::kernelGate(ctx, "valueKeys"); !s.ok()) {
+    return failed<StringResult>(std::move(s));
+  }
+  Result<PropertyDef> def = getMeta(ctx, view(path));
+  if (!def.ok()) {
+    return failed<StringResult>(def.status());
+  }
+  if (!def->enumMeta()) {
+    return failed<StringResult>(error(StatusCode::InvalidArgument,
+                                      std::string("'") + path.c_str() + "' has no items"));
+  }
+  if (number) {
+    const EnumItem *item = def->enumMeta()->findValue(*number);
+    return item ? ok<StringResult>(item->key) :
+                  failed<StringResult>(error(StatusCode::NotFound,
+                                             "no item is " + std::to_string(*number)));
+  }
+  uint64_t bits = *v.tryFlags();
+  std::string keys;
+  for (const EnumItem &item : def->enumMeta()->items) {
+    const uint64_t bit = uint64_t(item.value);
+    if (bit != 0 && (bits & bit) == bit) {
+      keys += std::string(keys.empty() ? "" : "|") + item.key.c_str();
+      bits &= ~bit;
+    }
+  }
+  return bits == 0 ? ok<StringResult>(string(keys.c_str())) :
+                     failed<StringResult>(error(StatusCode::NotFound, "a flag bit has no item"));
 }
 ValueResult getValue(Context &ctx, const string &path)
 {
@@ -254,16 +321,32 @@ ValueResult getValue(Context &ctx, const string &path)
   Result<PropValue> r = coredcc::getValue(ctx, view(path));
   return r.ok() ? ok<ValueResult>(std::move(r).value()) : failed<ValueResult>(r.status());
 }
-Status setValue(Context &ctx, const string &path, const PropValue &value)
+static Status setUndo(Context &ctx,
+                      const char *what,
+                      const string &path,
+                      const PropValue &value,
+                      uint64_t gesture)
 {
   CommandExecutor *ex = ctx.executor();
   if (!ex) {
     return error(StatusCode::FailedPrecondition,
-                 "setValue: the context has no executor (writeValue writes unrecorded)");
+                 std::string(what) +
+                     ": the context has no executor (writeValue writes unrecorded)");
   }
   /* From exec it becomes a sub-command; from any other slot it would push. */
-  CDCC_TRY(slotGate(ctx, "setValue", {"exec"}));
-  return setValueUndo(ctx, view(path), value);
+  CDCC_TRY(slotGate(ctx, what, {"exec"}));
+  return setValueUndo(ctx, view(path), value, gesture);
+}
+Status setValue(Context &ctx, const string &path, const PropValue &value)
+{
+  return setUndo(ctx, "setValue", path, value, 0);
+}
+Status setValueGesture(Context &ctx, const string &path, const PropValue &value, int64_t gesture)
+{
+  if (gesture <= 0) {
+    return error(StatusCode::InvalidArgument, "setValueGesture: a gesture's id is positive");
+  }
+  return setUndo(ctx, "setValueGesture", path, value, uint64_t(gesture));
 }
 Status writeValue(Context &ctx, const string &path, const PropValue &value)
 {
@@ -291,7 +374,7 @@ BagResult invoke(Context &ctx, const string &invocation)
   if (!def) {
     return failed<BagResult>(rt.ext<CommandRegistry>().unknown(inv->command.c_str()));
   }
-  Result<PropertyBag> inputs = inputsFromInvocation(rt, *def, *inv);
+  Result<PropertyBag> inputs = inputsFromInvocation(ctx, *def, *inv);
   if (!inputs.ok()) {
     return failed<BagResult>(inputs.status());
   }

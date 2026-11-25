@@ -51,6 +51,9 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FUNCTION(mgr, "coredcc::makeVec2", script::makeVec2, MARGS("x", "y"));
   BIND_FUNCTION(mgr, "coredcc::makeVec3", script::makeVec3, MARGS("x", "y", "z"));
   BIND_FUNCTION(mgr, "coredcc::makeVec4", script::makeVec4, MARGS("x", "y", "z", "w"));
+  BIND_FUNCTION(mgr, "coredcc::makeFlags", script::makeFlags, MARGS("bits"));
+  BIND_FUNCTION(mgr, "coredcc::makeNullPointer", script::makeNullPointer, MARGS());
+  BIND_FUNCTION(mgr, "coredcc::makePointer", script::makePointer, MARGS("ctx", "text"));
   BIND_FUNCTION(mgr, "coredcc::readBool", script::readBool, MARGS("v"));
   BIND_FUNCTION(mgr, "coredcc::readInt", script::readInt, MARGS("v"));
   BIND_FUNCTION(mgr, "coredcc::readFloat", script::readFloat, MARGS("v"));
@@ -58,6 +61,7 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FUNCTION(mgr, "coredcc::readComponent", script::readComponent, MARGS("v", "i"));
   BIND_FUNCTION(mgr, "coredcc::readEnum", script::readEnum, MARGS("v"));
   BIND_FUNCTION(mgr, "coredcc::readFlags", script::readFlags, MARGS("v"));
+  BIND_FUNCTION(mgr, "coredcc::pointerText", script::pointerText, MARGS("ctx", "v"));
   BIND_FUNCTION(mgr, "coredcc::valueToString", script::valueToString, MARGS("v"));
 
   BIND_FUNCTION(mgr, "coredcc::bagGet", script::bagGet, MARGS("bag", "name"));
@@ -68,8 +72,14 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FUNCTION(mgr, "coredcc::outputGet", script::outputGet, MARGS("ctx", "name"));
 
   BIND_FUNCTION(mgr, "coredcc::resolvePath", script::resolvePath, MARGS("ctx", "path"));
+  BIND_FUNCTION(mgr, "coredcc::pathMeta", script::pathMeta, MARGS("ctx", "path"));
+  BIND_FUNCTION(mgr, "coredcc::valueKeys", script::valueKeys, MARGS("ctx", "path", "v"));
   BIND_FUNCTION(mgr, "coredcc::getValue", script::getValue, MARGS("ctx", "path"));
   BIND_FUNCTION(mgr, "coredcc::setValue", script::setValue, MARGS("ctx", "path", "value"));
+  BIND_FUNCTION(mgr,
+                "coredcc::setValueGesture",
+                script::setValueGesture,
+                MARGS("ctx", "path", "value", "gesture"));
   BIND_FUNCTION(mgr, "coredcc::writeValue", script::writeValue, MARGS("ctx", "path", "value"));
   BIND_FUNCTION(mgr, "coredcc::invoke", script::invoke, MARGS("ctx", "invocation"));
   BIND_FUNCTION(mgr, "coredcc::undo", script::undo, MARGS("ctx"));

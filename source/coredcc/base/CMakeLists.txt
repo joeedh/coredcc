@@ -3,10 +3,12 @@ coredcc_library(coredcc_base
     assert.cc
     bindings.cc
     bytes.cc
+    json_writer.cc
     name_table.cc
     runtime.cc
     status.cc
     text.cc
+    utf8.cc
     iface/registry.cc
   DEPS
     util

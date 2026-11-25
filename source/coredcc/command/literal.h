@@ -2,10 +2,10 @@
 
 /** \file
  * Property values as invocation literals: the text form command logs, LastUsed files and
- * `invoke` use. formatLiteral and parseLiteral round-trip for every kind but Pointer
- * and Collection.
+ * `invoke` use. formatLiteral and parseLiteral round-trip for every kind but Collection.
  */
 
+#include "coredcc/api/context.h"
 #include "coredcc/parse/invocation.h"
 #include "coredcc/props/def.h"
 
@@ -19,12 +19,20 @@ namespace coredcc {
  *   (`nan`, `inf` and `-inf` as identifiers);
  * - String: a quoted string;
  * - Enum: the item's key; Flags: `"A|B"`, or `0` for none;
- * - vectors, Quat and Mat4: a tuple of numbers.
- * Pointer and Collection are Unsupported. An Enum value with no item is InvalidArgument.
+ * - vectors, Quat and Mat4: a tuple of numbers;
+ * - Pointer: its text (api/ref_text.h), quoted; `""` for null.
+ * Collection is Unsupported. An Enum value with no item is InvalidArgument.
  */
-Result<std::string> formatLiteral(const PropertyDef &def, const PropValue &value);
+Result<std::string> formatLiteral(const Runtime &rt, const PropertyDef &def, const PropValue &value);
 
 /** A parsed literal as a value of `def`, coerced (so clamped). */
-Result<PropValue> parseLiteral(const PropertyDef &def, const RawValue &raw);
+Result<PropValue> parseLiteral(const Runtime &rt, const PropertyDef &def, const RawValue &raw);
+
+/**
+ * As above for a Pointer, in a Context: the string is a reference's text, or a datapath,
+ * which is resolved now (with the Context's prefix). A datapath names a struct, or a Pointer
+ * member, whose target is meant. A target whose struct inherits from the def's is accepted.
+ */
+Result<PropValue> parsePointer(Context &ctx, const PropertyDef &def, const RawValue &raw);
 
 } // namespace coredcc

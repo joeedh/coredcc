@@ -240,6 +240,19 @@ static void test_prefix_and_batch()
   test_assert(c.ok() && c->owner == OwnerKey::ofBlock(w.objectId(1)));
   ctx.setPrefix(P("objects[0].location"));
   test_assert(hasMsg(getValue(ctx, "x").status(), "prefix must name a struct"));
+  /* A pointer is its target. */
+  ctx.setPrefix(*parsePath("objects[1].data"));
+  test_assert(getValue(ctx, "radius").ok());
+  test_assert(canonicalize(ctx, *parsePath("radius"))->owner == OwnerKey::ofBlock(w.meshId(1)));
+  w.object(1).mesh.target = BlockId();
+  w.lib.noteRefsChanged();
+  test_assert(getValue(ctx, "radius").status().code() == StatusCode::NotFound &&
+              hasMsg(getValue(ctx, "radius").status(), "pointer 'data' is null") &&
+              hasMsg(getValue(ctx, "radius").status(), "offset 10"));
+  ctx.setPrefix(*parsePath("tool.activeBrushNoAddress"));
+  test_assert(getValue(ctx, "size").status().code() == StatusCode::Unsupported);
+  w.object(1).mesh.target = w.meshId(1);
+  w.lib.noteRefsChanged();
   ctx.clearPrefix();
 
   const std::string_view paths[] = {"tool.strength", "objects.bogus", "objects.length"};

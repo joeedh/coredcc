@@ -224,6 +224,9 @@ class ApiStruct {
   litestl::util::Vector<ApiMember, 1> members_;
 };
 
+/** Runtime owners' names are Type names that start with this. */
+inline constexpr const char *kOwnerNamePrefix = "owner:";
+
 /**
  * Registered structs and runtime owners. A Runtime extension.
  *

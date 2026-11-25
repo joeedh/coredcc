@@ -306,8 +306,8 @@ class CommandExecutor {
 Result<PropertyBag> invoke(Context &ctx, std::string_view invocation);
 
 /** Builds the input bag for `def` from an invocation's arguments (unknown names are
- * NotFound with suggestions). */
-Result<PropertyBag> inputsFromInvocation(Runtime &rt, const CommandDef &def,
+ * NotFound with suggestions). A Pointer's datapath is resolved now, in `ctx`. */
+Result<PropertyBag> inputsFromInvocation(Context &ctx, const CommandDef &def,
                                          const struct Invocation &inv);
 
 } // namespace coredcc

@@ -6,9 +6,8 @@
  * The page holds one document as a `Session`; methods see only its context.
  */
 import * as cdcc from 'coredcc-script'
-import {ScriptError, Session, StatusCode, type Context, type ScriptCommand, type Value} from 'coredcc-script'
+import {ScriptError, Session, StatusCode, type Context, type ScriptCommand} from 'coredcc-script'
 import * as cd from 'coredcc-gen/coredcc/functions'
-import type {PropValue} from 'coredcc-gen/coredcc/PropValue'
 import type {Host} from 'coredcc-gen/testapp/Host'
 import * as ta from 'coredcc-gen/testapp/functions'
 import type {IBindingBackend} from '@litestl/typescript-runtime'
@@ -67,6 +66,15 @@ function openDoc(): Doc {
   return {host, session}
 }
 
+/* A Ref crosses the wire as `{$ref: text}`, both ways. */
+const wireValue = (v: cdcc.NamedValue): unknown => (v instanceof cdcc.Ref ? {$ref: v.text} : v)
+function unwireValue(v: unknown): cdcc.Writable {
+  if (v !== null && typeof v === 'object' && !Array.isArray(v) && '$ref' in v) {
+    return new cdcc.Ref((v as {$ref: unknown}).$ref as string)
+  }
+  return v as cdcc.Writable
+}
+
 /* `{$float: 1}` in a spec crosses the wire as a Float default: `float()` itself can't. */
 function specValues(values: Record<string, unknown> | undefined): Record<string, cdcc.Writable> | undefined {
   if (!values) return undefined
@@ -119,25 +127,11 @@ export function installMethods(register: Register, loaded: LoadedBackend, report
       }
     })
 
-  /* A value without a JS form (a pointer) crosses as its text; the copy is disposed of.
-   * `set` can't take that back: TA2 decides a writable form (feature-report-ta1, S2). */
-  const wireValue = (v: Value): unknown => {
-    if (typeof v !== 'object' || v === null || Array.isArray(v)) return v
-    const pv = v as PropValue
-    try {
-      return {text: cd.valueToString(pv)}
-    } finally {
-      pv[Symbol.dispose]()
-    }
-  }
-
-  method('resolve', (path: string) => {
-    cdcc.resolve(ctx(), path)
-    return true
-  })
-  method('get', (path: string) => wireValue(cdcc.get(ctx(), path)))
-  method('set', (path: string, value: cdcc.Writable) => {
-    cdcc.set(ctx(), path, value)
+  method('resolve', (path: string) => cdcc.resolve(ctx(), path))
+  method('meta', (path: string) => cdcc.meta(ctx(), path))
+  method('get', (path: string, opts?: {names?: boolean}) => wireValue(cdcc.get(ctx(), path, opts ?? {})))
+  method('set', (path: string, value: unknown, gesture?: number) => {
+    cdcc.set(ctx(), path, unwireValue(value), gesture)
     return true
   })
   method('exec', (invocation: string) => {

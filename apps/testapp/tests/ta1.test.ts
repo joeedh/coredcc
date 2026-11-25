@@ -104,7 +104,7 @@ describe('TA1: the wasm-st backend over CDP', () => {
   })
 
   step('1. resolves a path, with suggestions for a typo', async () => {
-    assert.equal(await value('resolve', 'count'), true)
+    assert.equal(await value('resolve', 'count'), 'Int')
     const e = await scriptError('resolve', 'cuont')
     assert.equal(e.code, 'NotFound')
     assert.match(e.message, /did you mean.*count/)
@@ -167,6 +167,54 @@ describe('TA1: the wasm-st backend over CDP', () => {
       }`
     )
     assert.deepEqual(await value('exec', 'ta1.kinds'), {v: [1, 2, 3], b: true, s: 'text'})
+  })
+
+  step('S2: pointers cross as {$ref}, both ways', async () => {
+    assert.equal(await value('get', 'activeItem'), null)
+    const cube = await value('get', 'items["Cube"]')
+    assert.deepEqual(cube, {$ref: `@block(testapp, ${'0'.repeat(31)}1) : TestItem`})
+    await value('set', 'activeItem', cube)
+    assert.deepEqual(await value('get', 'activeItem'), cube)
+    assert.equal(await value('get', 'activeItem.name'), 'Cube')
+    await value('undo')
+    assert.equal(await value('get', 'activeItem'), null)
+    await value('redo')
+    await value('set', 'activeItem', null)
+    assert.equal(await value('get', 'activeItem'), null)
+    assert.equal((await scriptError('set', 'activeItem', {$ref: '@'})).code, 'InvalidArgument')
+    const r = await call(app!, 'set', 'activeItem', {$ref: 3})
+    assert.equal(r.error?.name, 'TypeError')
+
+    await value(
+      'defineCommand',
+      'ta1.reads',
+      {outputs: {name: ''}},
+      `class { exec(ctx) { cdcc.output(ctx, 'name', cdcc.get(ctx, 'activeItem').text) } undo() {} }`
+    )
+    await value('set', 'activeItem', cube)
+    assert.deepEqual(await value('exec', 'ta1.reads'), {name: cube.$ref})
+  })
+
+  step('S3: enums and flags by name', async () => {
+    await value('set', 'mode', 'EDIT')
+    assert.equal(await value('get', 'mode', {names: true}), 'EDIT')
+    await value('set', 'flags', ['SELECT', 'HIDE'])
+    assert.deepEqual(await value('get', 'flags', {names: true}), ['SELECT', 'HIDE'])
+    await value('set', 'flags', [])
+    assert.deepEqual(await value('get', 'flags', {names: true}), [])
+  })
+
+  step('S5: meta, kinds, gestures and an int64', async () => {
+    assert.equal(await value('resolve', 'offset[0]'), 'Component')
+    const m = await value('meta', 'strength')
+    assert.equal(m.kind, 'Float')
+    assert.equal(m.hardMin, 0)
+    assert.equal((await scriptError('meta', 'strenght')).code, 'NotFound')
+    await value('set', 'strength', 0.6, 3)
+    await value('set', 'strength', 0.7, 3)
+    assert.equal((await value('history')).size, 1)
+    await value('set', 'big', 2n ** 62n)
+    assert.equal(await value('get', 'big'), 2n ** 62n)
   })
 
   step("errors: a command's code and detail, a refusing canRun, and a TypeError", async () => {

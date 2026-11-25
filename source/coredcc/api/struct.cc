@@ -215,7 +215,7 @@ Result<OwnerKey> ApiRegistry::addRuntimeOwner(std::string_view name,
                                               StructId type,
                                               litestl::util::function<void *()> data)
 {
-  Result<TypeId> id = rt_.registerId<IdDomain::Type>("owner:" + std::string(name));
+  Result<TypeId> id = rt_.registerId<IdDomain::Type>(kOwnerNamePrefix + std::string(name));
   if (!id.ok()) {
     return id.status();
   }
@@ -241,7 +241,7 @@ PointerRef ApiRegistry::runtimeOwner(const OwnerKey &owner) const
 
 PointerRef ApiRegistry::runtimeOwner(std::string_view name) const
 {
-  return runtimeOwner(OwnerKey::ofRuntime(TypeId::of("owner:" + std::string(name)).value));
+  return runtimeOwner(OwnerKey::ofRuntime(TypeId::of(kOwnerNamePrefix + std::string(name)).value));
 }
 
 namespace {

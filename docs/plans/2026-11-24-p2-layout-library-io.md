@@ -870,3 +870,24 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
   without a Library pins nothing.
 - Blobs under 512 bytes are raw, and so are those that lz4 doesn't make smaller. A blob over lz4's
   limit (about 2 GiB) is OutOfRange.
+
+### B1: pointer text form and meta (2026-11-24)
+- **Files:** `api/ref_text.{h,cc}`, `bind/meta.{h,cc}`, `base/json_writer.{h,cc}` and
+  `base/utf8.{h,cc}` (B2's parser uses it too), and `testapp/items.{h,cc}`.
+- **An id without a registered name** is written `#` and 16 hex digits, for clients, owners and
+  structs, so every ref has a text form. A member that isn't an identifier is quoted.
+- **`parseRef` makes a client alias canonical**, and doesn't check that the target exists.
+- **A pointer input accepts a target whose struct inherits the input's.** The value's type becomes the
+  input's struct, as the kind check needs. A ref text need not resolve; a datapath must.
+- **A datapath to a Pointer member means its target** as a pointer input and as a Context prefix.
+- **An array of flag names reaches C++ as `"A|B"`**, so the facade resolves the names with the same
+  code as text. An empty array is Flags 0.
+- **`pathMeta` has more than `PropertyDef`:** `target` (pointers, collections, lengths), `of` (the kind
+  of the member that an enum key or a component belongs to), `component`, `key`, and for a struct its
+  `members` without Private ones, its own first.
+- **`toJs` and `fromJs` take an optional context**: a graph's nodes have none, and their values are
+  never pointers (TypeError).
+- **The wasm test host's pointer member is `activeItem`**: `active` is reserved for collections.
+- **Mutations:** 85 in `json_writer`, `utf8`, `ref_text`, `literal`, `resolve`, `meta` and `facades`.
+  All are caught but one, which is equivalent: `unsignedInteger` one past 2^53 reaches `integer`,
+  which quotes it as well.

@@ -10,6 +10,7 @@
 #include "coredcc/graph/commands.h"
 #include "coredcc/graph/provider.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/testapp/items.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/binding/manager.h"
@@ -24,7 +25,8 @@ namespace testapp {
 using namespace coredcc;
 namespace lbt = litestl::binding::types;
 
-/* The context root: `count`, `strength`, and one member of each other value kind. */
+/* The context root: `count`, `strength`, and one member of each other value kind, with the
+ * items (items.h). */
 struct Data {
   int count = 0;
   double strength = 0.5;
@@ -33,6 +35,8 @@ struct Data {
   double offset[3] = {0, 0, 0};
   int mode = 0;
   uint32_t flags = 0;
+  int64_t big = 0;
+  RefCell active{RefKind::Weak};
 };
 
 inline const StructId kData = StructId::of("TestApp");
@@ -123,6 +127,8 @@ class Host {
  private:
   Context makeContext()
   {
+    registerItems(rt_);
+    addItems(lib_);
     ApiRegistry &reg = rt_.ext<ApiRegistry>();
     ApiStruct s("TestApp");
     s.addField(PropertyDef::intProp("count"), &Data::count);
@@ -135,6 +141,8 @@ class Host {
     CDCC_CHECK(registerGraphCommands(rt_).ok(), "testapp: registering graphs");
     s.addCollection(PropertyDef::collectionProp("graphs", StructId::of(kGraphDefType)),
                     graphsAccessor());
+    s.addField(PropertyDef::intProp("big"), &Data::big);
+    addItemMembers(s, data_.active);
     CDCC_CHECK(reg.add(std::move(s)).ok(), "testapp: registering the root struct");
     Data *data = &data_;
     CDCC_CHECK(reg.addRuntimeOwner("testapp", kData, [data]() { return (void *)data; }).ok(),

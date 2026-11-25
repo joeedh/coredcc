@@ -871,8 +871,9 @@ Status CommandExecutor::cancel(Context &ctx)
 
 /* ---- invocation ---- */
 
-Result<PropertyBag> inputsFromInvocation(Runtime &rt, const CommandDef &def, const Invocation &inv)
+Result<PropertyBag> inputsFromInvocation(Context &ctx, const CommandDef &def, const Invocation &inv)
 {
+  Runtime &rt = ctx.runtime();
   PropertyBag bag = def.newInputs();
   rt.ext<LastUsedStore>().apply(def, bag);
   for (const InvocationArg &arg : inv.args) {
@@ -890,7 +891,8 @@ Result<PropertyBag> inputsFromInvocation(Runtime &rt, const CommandDef &def, con
       sg.addTo(err);
       return err;
     }
-    Result<PropValue> v = parseLiteral(*in, arg.value);
+    Result<PropValue> v = in->kind() == PropKind::Pointer ? parsePointer(ctx, *in, arg.value) :
+                                                            parseLiteral(rt, *in, arg.value);
     if (!v.ok()) {
       return v.status();
     }
@@ -914,7 +916,7 @@ Result<PropertyBag> invoke(Context &ctx, std::string_view invocation)
   if (!def) {
     return rt.ext<CommandRegistry>().unknown(inv->command.c_str());
   }
-  Result<PropertyBag> inputs = inputsFromInvocation(rt, *def, *inv);
+  Result<PropertyBag> inputs = inputsFromInvocation(ctx, *def, *inv);
   if (!inputs.ok()) {
     return inputs.status();
   }

@@ -143,7 +143,8 @@ const EnumItem *findItem(const ApiMember &m, std::string_view key)
   return em ? em->findKey(key) : nullptr;
 }
 
-Result<ResolvedPath> walkPath(Walk &w, const Path &path)
+/* With `through`, a path that ends at a Pointer member is its target. */
+Result<ResolvedPath> walkPath(Walk &w, const Path &path, bool through = false)
 {
   const int n = path.size();
   int i = 0;
@@ -195,13 +196,14 @@ Result<ResolvedPath> walkPath(Walk &w, const Path &path)
                                ") has no members or components"));
       }
       case MemberKind::Pointer: {
-        if (last) {
+        if (last && !through) {
           return w.finish(ResolvedPath::Kind::Member, m);
         }
         PointerRef target = m->pointer().get(w.cur, w.ctx);
         if (target.isNull()) {
-          return at(path[i + 1], err(StatusCode::NotFound,
-                                     std::string("pointer '") + m->name() + "' is null"));
+          return at(path[last ? i : i + 1],
+                    err(StatusCode::NotFound,
+                        std::string("pointer '") + m->name() + "' is null"));
         }
         if (Status s = w.enter(target, *m, nullptr); !s.ok()) {
           return at(seg, s);
@@ -305,7 +307,7 @@ Result<Walk *> startAtRoot(Context &ctx, Walk &w)
   w.owner = ctx.root().owner;
   if (const Path *prefix = ctx.prefix()) {
     Walk pw{ctx, w.reg, ctx.root(), ctx.root().owner, {}, {}};
-    Result<ResolvedPath> base = walkPath(pw, *prefix);
+    Result<ResolvedPath> base = walkPath(pw, *prefix, true);
     if (!base.ok()) {
       return base.status();
     }

@@ -113,8 +113,8 @@ static void test_paths()
 {
   Setup s;
   Context &ctx = s.ctx;
-  test_assert(sc::resolvePath(ctx, "tool.strength").ok());
-  Status bad = sc::resolvePath(ctx, "tool.strenght");
+  test_assert(strcmp(sc::resolvePath(ctx, "tool.strength").value.c_str(), "Float") == 0);
+  Status bad = sc::resolvePath(ctx, "tool.strenght").status;
   test_assert(bad.code() == StatusCode::NotFound && bad.suggestions().size() >= 1);
   test_assert(sc::getValue(ctx, "tool.strength").value == PropValue::ofFloat(0.5));
   test_assert(sc::getValue(ctx, "tool.nope").status.code() == StatusCode::NotFound);
