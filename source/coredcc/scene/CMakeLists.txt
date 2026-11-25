@@ -1,0 +1,14 @@
+coredcc_library(coredcc_scene
+  SOURCES
+    bindings.cc
+    builtins.cc
+    fbx.cc
+    matrix.cc
+    solve.cc
+    transform.cc
+    transform_registry.cc
+    trs.cc
+  DEPS
+    coredcc_api
+    coredcc_bvh
+)

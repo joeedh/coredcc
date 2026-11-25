@@ -725,6 +725,35 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   from `Matrix * Matrix` by text; that stays with reviews.
 - Survivor: unproject's zero test at infinity. The inverse's entries cancel exactly in every test.
 
+### Step 6
+- **Needs litestl PR #14.**
+- **`solveWorld(type, current, target, parent, mode)` and `solveDelta`** are the model-level halves
+  of `setWorldOf`. Step 7 adds the ones that take an object, and `computeState`.
+- **The Matrix type has 12 channels** (three columns and a translation), not 16. A state's world is
+  affine, so the last row would be four channels that nothing reads.
+- **An FBX node's `inheritType` defaults to RSrs,** the ordinary hierarchy. `rotationOrder` has the
+  library's numbers, not FBX's, which swap YXZ and YZX. Angles are in radians.
+- **A delta keeps what it can of the node:**
+  - Translate changes the location only, and Scale the location and the scales: one factor per
+    own axis, the part of the stretched axis that stays along it. So it never turns the node, and
+    goes through 0 to a mirror. It is exact for uniform factors and along the node's axes.
+  - Rotate conjugates with the parent's carried rotation for RrSs and Rrs, which is exact under
+    any parent. For TRS and RSrs it turns around `P⁻¹ · axis` (the other way under a mirror),
+    so the axis stays where it is in the world. It is exact without non-uniform parents.
+  - A pivot at the node's origin doesn't move it, to the bit: the location gets an increment.
+- **The rotation pair** is the most independent in both A and X. With A alone, parallel columns of
+  X have no frame.
+- **The API struct's data is the ChannelBlock.** An object's `transform` pointer returns its own.
+- **A result's channels aren't checked for NaN,** only the state: a NaN in the Euler angles
+  of an object in quaternion mode mustn't make it immovable.
+- **Mutations:** 88, each alone. Dropping GSM (RrSs and Rrs), reordering it, and a decomposed `GR`
+  fail the golden values. The survivors:
+  - one step of refinement instead of two: the bound tested is 8 roundings;
+  - `1 + scale` in the translation bound: every construction that needs it also has a large
+    Distance channel;
+  - sign patterns of zero columns, which are only skipped to save time;
+  - each model's own check of the parent, which `solveWorld` and `solveDelta` make first.
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms

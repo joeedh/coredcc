@@ -100,6 +100,9 @@
 #include "coredcc/props/units.h"
 #include "coredcc/props/value.h"
 #include "coredcc/props/value_io.h"
+#include "coredcc/scene/builtins.h"
+#include "coredcc/scene/solve.h"
+#include "coredcc/scene/transform_registry.h"
 
 #include "test_util.h"
 
@@ -179,6 +182,7 @@ int main()
     test_assert(coredcc::layoutToJson(*layout.finish()).size() > 0);
     test_assert(coredcc::parseLayout("<layout/>").ok());
     test_assert(!coredcc::AnyBvh().build(rt, coredcc::AnyBvhSource()).ok());
+    test_assert(coredcc::registerTransformTypes(rt).ok());
     test_assert(!coredcc::ViewMath().set(coredcc::View()).ok());
     test_assert(rt.validateAll().ok());
   }
