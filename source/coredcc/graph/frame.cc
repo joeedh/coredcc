@@ -221,6 +221,38 @@ Frame *Evaluator::newFrame(Frame &parent, const GraphNode &node, GraphDef *def)
   return f;
 }
 
+void Evaluator::setReplaced(Frame &f, int group, Frame &c)
+{
+  c.replacing.clear();
+  c.replaced = nullptr;
+  const GraphTopology::Group &g = f.topo->groups[group];
+  auto add = [&c](const InteriorKey &key, int depth, const Vertex &by) {
+    if (depth < int(key.groups.size())) {
+      c.replacing.append(Frame::Replacing{&key, depth, by});
+      return;
+    }
+    const int at = c.topo->find(key.node);
+    const int input = at >= 0 ? c.topo->inputIndex(c.topo->nodes[at], key.key.c_str()) : -1;
+    if (input >= 0) {
+      if (!c.replaced) {
+        c.replaced = std::make_unique<litestl::util::Map<int, Vertex>>();
+      }
+      c.replaced->add_overwrite(c.topo->nodes[at].inBegin + input, by);
+    }
+  };
+  for (const GraphTopology::Interior &i : g.interior) {
+    if (i.side == SocketSide::Input && i.index >= 0) {
+      add(i.key, 0, Vertex{&f, f.topo->nodes[g.index].inBegin + i.index, false});
+    }
+  }
+  /* After the group's own, so that the outermost counts. */
+  for (const Frame::Replacing &r : f.replacing) {
+    if (r.key->groups[r.depth] == g.node->id()) {
+      add(*r.key, r.depth + 1, r.by);
+    }
+  }
+}
+
 Frame *Evaluator::child(Frame &f, int group, ErrorPtr &error)
 {
   Frame::Group &g = f.groups[group];
@@ -255,6 +287,7 @@ Frame *Evaluator::child(Frame &f, int group, ErrorPtr &error)
   g.child->groupIndex = f.topo->groups[group].index;
   pinDef(*g.child);
   sync(*g.child);
+  setReplaced(f, group, *g.child);
   g.pass = pass_;
   return g.child;
 }

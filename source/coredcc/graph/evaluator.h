@@ -117,6 +117,8 @@ class Evaluator {
   Frame *child(Frame &f, int group, ErrorPtr &error);
   /** Whether a node of `f` can evaluate `def`, its target. */
   Status checkGroup(const Frame &f, const GraphNode &node, const GraphDef *def) const;
+  /** Notes which inputs of `c`, and of the groups in it, others replace (graph/interior.h). */
+  void setReplaced(Frame &f, int group, Frame &c);
   Frame *newFrame(Frame &parent, const GraphNode &node, GraphDef *def);
   KernelState &kernel(Frame &f, int node);
   ErrorPtr makeError(const Frame &f, NodeId node, Status status, std::string_view socket = {}) const;
@@ -126,6 +128,13 @@ class Evaluator {
   bool walk(Vertex root);
   WalkState &walkState(const Vertex &v);
   void enter(const Vertex &v);
+  /** What an output of a node leads to: a vertex, an error, or neither for a constant. */
+  struct Feed {
+    Vertex vertex;
+    int output = 0;
+    ErrorPtr error;
+  };
+  Feed feed(Frame &f, int node, int output);
   /** The vertex an input waits for; none when it can be computed. */
   std::optional<Vertex> follow(Frame &f, int input);
   /** A value that doesn't come from a kernel: where from, and the value. */

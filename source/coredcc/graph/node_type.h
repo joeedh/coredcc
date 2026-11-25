@@ -124,11 +124,27 @@ struct NodeParamDef {
   bool weak = false;
 };
 
+enum class NodeTypeFlags : uint32_t {
+  None = 0,
+  /** Its nodes write to something outside the graph, which a program that evaluates it does
+   * from their outputs (GraphDef::forEachNode(flags) finds them). */
+  OutputAdapter = 1 << 0,
+};
+constexpr NodeTypeFlags operator|(NodeTypeFlags a, NodeTypeFlags b)
+{
+  return NodeTypeFlags(uint32_t(a) | uint32_t(b));
+}
+constexpr NodeTypeFlags operator&(NodeTypeFlags a, NodeTypeFlags b)
+{
+  return NodeTypeFlags(uint32_t(a) & uint32_t(b));
+}
+
 /** A registered node type. Lives as long as the Runtime, at a stable address. */
 struct NodeType {
   litestl::util::string name;
   litestl::util::string uiName;
   NodeRole role = NodeRole::Kernel;
+  NodeTypeFlags flags = NodeTypeFlags::None;
   /** Empty for roles other than Kernel, whose sockets come from interfaces. */
   litestl::util::Vector<NodeInputDef> inputs;
   litestl::util::Vector<NodeOutputDef> outputs;
@@ -171,6 +187,7 @@ class NodeTypeDef {
   /** `name` is dotted identifiers, e.g. "my.scale". */
   explicit NodeTypeDef(std::string_view name);
   NodeTypeDef &uiName(std::string_view s);
+  NodeTypeDef &flags(NodeTypeFlags f);
   NodeTypeDef &input(PropertyDef def);
   NodeTypeDef &payloadInput(std::string_view name, std::string_view socketType);
   NodeTypeDef &output(std::string_view name, std::string_view socketType);
@@ -202,6 +219,7 @@ class NodeTypeDef {
   };
   litestl::util::string name_;
   litestl::util::string uiName_;
+  NodeTypeFlags flags_ = NodeTypeFlags::None;
   litestl::util::Vector<Input> inputs_;
   litestl::util::Vector<Output> outputs_;
   litestl::util::Vector<PropertyDef> literalDefs_;

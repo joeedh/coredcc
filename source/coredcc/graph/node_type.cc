@@ -89,6 +89,12 @@ NodeTypeDef &NodeTypeDef::uiName(std::string_view s)
   return *this;
 }
 
+NodeTypeDef &NodeTypeDef::flags(NodeTypeFlags f)
+{
+  flags_ = f;
+  return *this;
+}
+
 NodeTypeDef &NodeTypeDef::input(PropertyDef def)
 {
   Input in;
@@ -176,6 +182,7 @@ NodeTypeDef NodeTypeDef::copy() const
 {
   NodeTypeDef d(name_.c_str());
   d.uiName_ = uiName_;
+  d.flags_ = flags_;
   d.inputs_ = inputs_;
   d.outputs_ = outputs_;
   d.literalDefs_ = literalDefs_;
@@ -252,6 +259,7 @@ Result<NodeType *> NodeTypeRegistry::build(const NodeTypeDef &def) const
   } guard{t};
   t->name = def.name_;
   t->uiName = def.uiName_;
+  t->flags = def.flags_;
 
   for (const NodeTypeDef::Input &in : def.inputs_) {
     CDCC_TRY(checkMemberName(where, in.name.c_str()));

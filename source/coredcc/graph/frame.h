@@ -181,6 +181,21 @@ struct Frame {
   /** By index in topo->groups. */
   litestl::util::Vector<Group, 1> groups;
 
+  /** Interior inputs of frames around this one that concern groups in it: the key, how many
+   * of its groups lead here, and the input that replaces it. Valid in pass `pass`. */
+  struct Replacing {
+    const InteriorKey *key = nullptr;
+    int depth = 0;
+    Vertex by;
+  };
+  litestl::util::Vector<Replacing, 1> replacing;
+  /** Inputs of this frame that are replaced, if any. Valid in pass `pass`. */
+  std::unique_ptr<litestl::util::Map<int, Vertex>> replaced;
+  const Vertex *replacedBy(int input) const
+  {
+    return replaced ? replaced->lookup_ptr(input) : nullptr;
+  }
+
   /** Calls fn(Element &) for every element of its foreach nodes. */
   template <class Fn> void forEachElement(Fn &&fn)
   {

@@ -203,6 +203,7 @@ bool Evaluator::worldMoved(Frame &f, int node, KernelState &k, const GraphDef &d
     const GraphDef &d = *list[i];
     defs.append(d.contentVersion()); /* unique, so it says which def, too */
     const std::shared_ptr<const GraphTopology> topo = d.topology();
+    defs.append(topo->serial); /* sockets of lost groups and interior ones */
     for (const GraphTopology::Group &g : topo->groups) {
       const GraphDef *target = d.groupTarget(*g.node);
       defs.append(target ? target->serial() : 0);

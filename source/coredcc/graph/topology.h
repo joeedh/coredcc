@@ -4,7 +4,7 @@
  * GraphTopology: a def compiled for evaluation.
  */
 
-#include "coredcc/graph/def.h"
+#include "coredcc/graph/interior.h"
 
 #include <memory>
 
@@ -41,8 +41,21 @@ struct GraphTopology {
      * range is the index in the interface. */
     int inBegin = 0, inCount = 0;
     int outBegin = 0, outCount = 0;
+    /** How many of them are of the node itself. Interior ones that links use follow. */
+    int interfaceIns = 0, interfaceOuts = 0;
     /** Index in `groups`, or -1. */
     int group = -1;
+  };
+  /** An interior key that a link of a group node uses. */
+  struct Interior {
+    InteriorKey key;
+    SocketSide side = SocketSide::Input;
+    /** Whether its socket is there, and the socket's type name. */
+    bool found = false;
+    litestl::util::string typeName;
+    /** Index in the node's inputs or outputs. -1 if it isn't there; and for an input whose
+     * link has no output, which replaces nothing. */
+    int index = -1;
   };
   struct Group {
     const GraphNode *node = nullptr;
@@ -51,6 +64,9 @@ struct GraphTopology {
     /** The interfaceVersion of its def; 0 while it isn't there, when its sockets are the
      * last known ones. */
     uint64_t targetInterface = 0;
+    /** GraphNode::socketsVersion: what is last known can change while nobody looks. */
+    uint64_t sockets = 0;
+    litestl::util::Vector<Interior, 1> interior;
   };
 
   litestl::util::Vector<Node> nodes;
@@ -78,11 +94,27 @@ struct GraphTopology {
   int outputIndex(const Node &n, std::string_view key) const;
 
   static std::shared_ptr<const GraphTopology> build(const GraphDef &def);
+
+ private:
+  /** The interior sockets of a group node, the last one added, at `index`. */
+  void addInterior(const GraphDef &def, Node &n, int index);
 };
 
-/** Which interface inputs each interface output of a def depends on. */
+/** Interior keys that a reach table has, after the interface's sockets. An `in` replaces the
+ * interior input's link, as it does in the group the table is for. */
+struct ReachKeys {
+  litestl::util::Vector<InteriorKey> outs;
+  litestl::util::Vector<InteriorKey> ins;
+  void add(SocketSide side, const InteriorKey &key);
+  /** Its index, or -1. */
+  int find(SocketSide side, const InteriorKey &key) const;
+  std::string toString() const;
+};
+
+/** Which inputs each output of a def depends on. */
 struct GraphReach {
-  /** Per interface output, the indices of inputs, ascending. */
+  /** Per interface output and then per ReachKeys::outs, the inputs, ascending: interface
+   * inputs by index, then ReachKeys::ins. */
   litestl::util::Vector<litestl::util::Vector<int>> inputs;
   /** The versions of its group defs' tables, in the order of GraphTopology::groups; 0 for
    * a group without one. */
@@ -92,8 +124,8 @@ struct GraphReach {
   uint64_t version = 0;
 };
 
-/** The reach table of `def`, computed or cached. Defs that (through a reference written
+/** A reach table of `def`, computed or cached. Defs that (through a reference written
  * directly) reach themselves are handled by leaving out the recursive group. */
-std::shared_ptr<const GraphReach> graphReach(const GraphDef &def);
+std::shared_ptr<const GraphReach> graphReach(const GraphDef &def, const ReachKeys &keys = {});
 
 } // namespace coredcc

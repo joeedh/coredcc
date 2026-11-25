@@ -29,7 +29,7 @@ bool isGroupType(const string &name)
   return is(name, kGraphGroupType) || is(name, kGraphForeachType);
 }
 
-int findSocket(const SocketInfos &list, std::string_view key)
+int indexOfSocket(const SocketInfos &list, std::string_view key)
 {
   for (int i = 0; i < int(list.size()); i++) {
     if (key == list[i].key.c_str()) {
@@ -361,7 +361,7 @@ Result<const SocketType *> GraphDef::literalType(const GraphNode &n,
                                                  int &index) const
 {
   const SocketInfos &list = sockets(n, SocketSide::Input);
-  index = findSocket(list, input);
+  index = indexOfSocket(list, input);
   if (index < 0) {
     return noSocket(n, list, "input", input);
   }
@@ -489,21 +489,19 @@ Result<LinkId> GraphDef::link(SocketRef from, SocketRef to)
   if (!a.ok() || !b.ok()) {
     return a.ok() ? b.status() : a.status();
   }
-  const SocketInfos &outs = sockets(**a, SocketSide::Output);
-  const int o = findSocket(outs, from.key);
-  if (o < 0) {
-    return noSocket(**a, outs, "output", from.key);
+  const std::optional<SocketInfo> out = findSocket(**a, SocketSide::Output, from.key);
+  if (!out) {
+    return noSocket(**a, sockets(**a, SocketSide::Output), "output", from.key);
   }
-  const SocketInfos &ins = sockets(**b, SocketSide::Input);
-  const int i = findSocket(ins, to.key);
-  if (i < 0) {
-    return noSocket(**b, ins, "input", to.key);
+  const std::optional<SocketInfo> in = findSocket(**b, SocketSide::Input, to.key);
+  if (!in) {
+    return noSocket(**b, sockets(**b, SocketSide::Input), "input", to.key);
   }
   const SocketTypeRegistry &types = rt_.ext<SocketTypeRegistry>();
-  const SocketType *fromType = types.find(outs[o].typeName.c_str());
-  const SocketType *toType = types.find(ins[i].typeName.c_str());
+  const SocketType *fromType = types.find(out->typeName.c_str());
+  const SocketType *toType = types.find(in->typeName.c_str());
   if (!fromType || !toType) {
-    return types.unknown((fromType ? ins[i] : outs[o]).typeName.c_str());
+    return types.unknown((fromType ? in : out)->typeName.c_str());
   }
   if (!types.canConvert(*fromType, *toType)) {
     return makeError(StatusCode::TypeMismatch,

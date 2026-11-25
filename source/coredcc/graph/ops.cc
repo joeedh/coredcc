@@ -2,6 +2,7 @@
 
 #include "coredcc/base/text.h"
 #include "coredcc/command/executor.h"
+#include "coredcc/graph/interior.h"
 #include "coredcc/graph/provider.h"
 #include "coredcc/lib/library.h"
 
@@ -343,6 +344,10 @@ Status GraphEdit::setGroup(NodeId id, BlockId block)
 
 Result<LinkId> GraphEdit::link(SocketRef from, SocketRef to)
 {
+  if (isInteriorKey(from.key) || isInteriorKey(to.key)) {
+    return Status::error(StatusCode::InvalidArgument,
+                         "a graph that is edited with undo has no links of interior sockets");
+  }
   const GraphNode *n = def_->node(to.node);
   const GraphLink *old = n ? n->linkInto(to.key) : nullptr;
   GraphOp removed;

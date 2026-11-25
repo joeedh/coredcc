@@ -94,6 +94,27 @@ void testErrors()
   test_assert(l.inner.def->insertLink(loop).ok());
   test_assert(l.fails(StatusCode::FailedPrecondition, {1}, "element 1: a cycle through "));
   test_assert(l.inner.def->unlink(loop.id).ok() && l.evaluate().ok());
+  /* The sockets of a lost group in it, as last known, moved while nothing was pulled. */
+  const Graph lost = newGraph(w.lib, "lost");
+  const int64_t lo = addSocket(*lost.def, SocketSide::Output, "lo", "float");
+  const NodeId group = add(*l.inner.def, "graph.group");
+  const GraphNode &groupNode = *l.inner.def->node(group);
+  test_assert(l.inner.def->setGroup(group, lost.id).ok());
+  const GraphLink *linkBefore = l.inner.def->node(l.innerOut)->linkInto(key(l.c2));
+  const LinkState was = linkBefore ? GraphDef::stateOf(*linkBefore) : LinkState();
+  connect(*l.inner.def, group, key(lo), l.innerOut, key(l.c2));
+  test_assert(lost.def->removeInterface(lo).ok());
+  test_assert(l.inner.def->sockets(groupNode, SocketSide::Output).size() == 0);
+  test_assert(w.lib.markDeleted(lost.h).ok() && l.evaluate().ok());
+  test_assert(w.lib.restoreFromHistory(lost.h).ok());
+  test_assert(lost.def->addInterface(SocketSide::Output, "lo", "float", -1, lo).ok());
+  test_assert(l.inner.def->sockets(groupNode, SocketSide::Output).size() == 1);
+  test_assert(w.lib.markDeleted(lost.h).ok() && hasCode(l.evaluate(), StatusCode::NotFound));
+  test_assert(l.inner.def->removeNode(group).ok());
+  if (was.id) {
+    test_assert(l.inner.def->insertLink(was).ok());
+  }
+  test_assert(l.evaluate().ok());
   /* A cycle outside, with a foreach above one of its nodes. */
   GraphDef &r = *l.root.def;
   const NodeId total = add(r, "t.total"), x = add(r, "t.sum"), y = add(r, "t.sum");

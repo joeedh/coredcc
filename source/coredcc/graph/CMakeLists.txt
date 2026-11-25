@@ -11,6 +11,7 @@ coredcc_library(coredcc_graph
     foreach.cc
     frame.cc
     instance.cc
+    interior.cc
     node_type.cc
     ops.cc
     payload.cc

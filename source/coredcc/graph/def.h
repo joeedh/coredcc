@@ -19,6 +19,7 @@
 #include <compare>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string_view>
 
 namespace coredcc {
@@ -201,6 +202,11 @@ class GraphNode {
   /** The literal in use at input `key` of that type, or null. */
   const NodeValue *literal(std::string_view key, const SocketType &type) const;
   const NodeValue *param(std::string_view name) const;
+  /** The interface version that a group node's sockets, as last known, are from. */
+  uint64_t socketsVersion() const
+  {
+    return socketsVersion_;
+  }
   const GraphSocketAddress *addressOf(std::string_view key);
 
  private:
@@ -362,6 +368,15 @@ class GraphDef {
       }
     }
   }
+  /** The same, for the nodes whose type has all of `flags`. */
+  template <class Fn> void forEachNode(NodeTypeFlags flags, Fn &&fn) const
+  {
+    forEachNode([&](const GraphNode &n) {
+      if (n.type() && (n.type()->flags & flags) == flags) {
+        fn(n);
+      }
+    });
+  }
   /** Calls fn(const GraphLink &), in no particular order. */
   template <class Fn> void forEachLink(Fn &&fn) const
   {
@@ -380,6 +395,10 @@ class GraphDef {
   /** A node's sockets: its type's, the interface's, or the last known ones when the type
    * or the group isn't there. */
   const SocketInfos &sockets(const GraphNode &node, SocketSide side) const;
+  /** A node's socket by key, interior ones (graph/interior.h) included. */
+  std::optional<SocketInfo> findSocket(const GraphNode &node,
+                                       SocketSide side,
+                                       std::string_view key) const;
   /** The def a group node evaluates; null if it has none or its block isn't Live. */
   GraphDef *groupTarget(const GraphNode &node) const;
   /** The effective value of a param: the one set, or the default. None for a pointer or an
@@ -427,8 +446,9 @@ class GraphDef {
 
   /* ---- links ---- */
 
-  /** Links an output to an input, replacing the input's link. NotFound if a socket doesn't
-   * exist, TypeMismatch without a conversion, InvalidArgument if it would make a cycle. */
+  /** Links an output to an input, replacing the input's link. The keys of a group node may
+   * be interior ones (graph/interior.h). NotFound if a socket doesn't exist, TypeMismatch
+   * without a conversion, InvalidArgument if it would make a cycle. */
   Result<LinkId> link(SocketRef from, SocketRef to);
   /** A link with a given id. The nodes must exist and the input must be free. Sockets,
    * types and cycles aren't checked: the evaluator reports them. */
@@ -527,8 +547,12 @@ class GraphDef {
   litestl::util::Vector<InterfaceSocket> ifaceOut_;
   mutable std::shared_ptr<const GraphTopology> topo_;
   mutable GraphPassKey topoKey_;
-  mutable std::shared_ptr<const GraphReach> reach_;
-  mutable GraphPassKey reachKey_;
+  struct CachedReach {
+    std::shared_ptr<const GraphReach> reach;
+    GraphPassKey key;
+  };
+  /** By ReachKeys::toString. */
+  mutable litestl::util::Map<litestl::util::string, CachedReach> reach_;
 };
 
 } // namespace coredcc

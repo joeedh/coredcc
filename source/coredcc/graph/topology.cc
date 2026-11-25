@@ -2,6 +2,9 @@
 
 namespace coredcc {
 
+using litestl::util::string;
+using litestl::util::Vector;
+
 int GraphTopology::inputIndex(const Node &n, std::string_view key) const
 {
   for (int i = 0; i < n.inCount; i++) {
@@ -20,6 +23,51 @@ int GraphTopology::outputIndex(const Node &n, std::string_view key) const
     }
   }
   return -1;
+}
+
+void GraphTopology::addInterior(const GraphDef &def, Node &n, int index)
+{
+  const SocketTypeRegistry &types = def.runtime().ext<SocketTypeRegistry>();
+  auto use = [&](SocketSide side, const string &text, bool works) {
+    const std::optional<InteriorKey> key = InteriorKey::parse(text.c_str());
+    Vector<Interior, 1> &list = groups.last().interior;
+    for (const Interior &i : list) {
+      if (key && i.side == side && i.key == *key) {
+        return;
+      }
+    }
+    if (!key) {
+      return;
+    }
+    Interior i;
+    i.key = *key;
+    i.side = side;
+    if (const std::optional<SocketInfo> s = findInterior(def, *n.node, side, *key)) {
+      i.found = true;
+      i.typeName = s->typeName;
+      const SocketType *type = types.find(s->typeName.c_str());
+      if (side == SocketSide::Output) {
+        i.index = n.outCount++;
+        outputs.append(Output{text, type});
+      }
+      else if (works) {
+        i.index = n.inCount++;
+        Input in;
+        in.key = text;
+        in.type = type;
+        in.node = index;
+        inputs.append(std::move(in));
+      }
+    }
+    list.append(std::move(i));
+  };
+  for (const GraphLink *l : n.node->linksIn()) {
+    const bool works = def.findSocket(*l->from, SocketSide::Output, l->fromKey.c_str()).has_value();
+    use(SocketSide::Input, l->toKey, works);
+  }
+  for (const GraphLink *l : n.node->linksOut()) {
+    use(SocketSide::Output, l->fromKey, true);
+  }
 }
 
 std::shared_ptr<const GraphTopology> GraphTopology::build(const GraphDef &def)
@@ -45,6 +93,8 @@ std::shared_ptr<const GraphTopology> GraphTopology::build(const GraphDef &def)
     out.inCount = int(ins.size());
     out.outBegin = int(t->outputs.size());
     out.outCount = int(outs.size());
+    out.interfaceIns = out.inCount;
+    out.interfaceOuts = out.outCount;
     const int index = int(t->nodes.size());
     for (const SocketInfo &s : ins) {
       Input in;
@@ -59,7 +109,10 @@ std::shared_ptr<const GraphTopology> GraphTopology::build(const GraphDef &def)
     if (hasGroup(out.role)) {
       out.group = int(t->groups.size());
       const GraphDef *target = def.groupTarget(n);
-      t->groups.append(Group{&n, index, target ? target->interfaceVersion() : 0});
+      t->groups.append(Group{&n, index, target ? target->interfaceVersion() : 0, n.socketsVersion(), {}});
+      if (out.role == NodeRole::Group) {
+        t->addInterior(def, out, index);
+      }
     }
     else if (out.role == NodeRole::Output) {
       t->outputNode = index;

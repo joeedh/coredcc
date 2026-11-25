@@ -114,6 +114,7 @@ class GraphEdit {
   Status setLiteral(NodeId id, std::string_view input, const PropValue &value);
   Status useLiteral(NodeId id, std::string_view input, bool on);
   Status setGroup(NodeId id, BlockId def);
+  /** Also InvalidArgument for interior sockets (graph/interior.h). */
   Result<LinkId> link(SocketRef from, SocketRef to);
   Status insertLink(const LinkState &state);
   Status unlink(LinkId id);

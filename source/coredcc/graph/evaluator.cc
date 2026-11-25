@@ -170,25 +170,20 @@ Evaluator::Request Evaluator::find(const SocketPath &path)
     return r;
   }
   const SocketType *type = f->topo->outputs[n.outBegin + s].type;
-  if (isOneStep(n.role)) {
-    r.vertex = Vertex{f, i, true};
-    r.output = s;
+  Feed source = feed(*f, i, s);
+  if (source.vertex.frame) {
+    r.vertex = source.vertex;
+    r.output = source.output;
     return r;
   }
-  if (n.role == NodeRole::Group) {
-    ErrorPtr error;
-    Frame *c = child(*f, n.group, error);
-    return c ? output(*c, s, type, path.node.node, *f) : failed(std::move(error));
-  }
-  /* An interface input. */
-  if (f->parent) {
-    r.vertex = Vertex{f->parent, f->parent->topo->nodes[f->groupIndex].inBegin + s, false};
-    return r;
+  if (source.error) {
+    return failed(std::move(source.error));
   }
   if (!type) {
     return failed(makeError(*f, path.node.node, unknownType()));
   }
-  return constant(external(s, *type), *type, chains_);
+  return constant(n.role == NodeRole::Input ? external(s, *type) : typeDefault(*type), *type,
+                  chains_);
 }
 
 void Evaluator::store(const SocketPath &path, const Request &r, Status &status)
@@ -315,7 +310,9 @@ bool Evaluator::walk(Vertex root)
     while (!(component_[first] == v)) {
       first--;
     }
-    if (first == int(component_.size()) - 1) {
+    /* A group's input can lead to itself directly, through an interior output. */
+    const bool self = !v.kernel && v.frame->inputs[v.index].source == v;
+    if (first == int(component_.size()) - 1 && !self) {
       if (v.kernel) {
         computeKernel(*v.frame, v.index);
         if (overBudget_) {
@@ -383,6 +380,57 @@ void Evaluator::failCycle(const Vector<Vertex> &members)
 
 /* ---- inputs ---- */
 
+Evaluator::Feed Evaluator::feed(Frame &f, int node, int output)
+{
+  const GraphTopology::Node &n = f.topo->nodes[node];
+  Feed out;
+  switch (n.role) {
+    case NodeRole::Kernel:
+    case NodeRole::Foreach:
+      out.vertex = Vertex{&f, node, true};
+      out.output = output;
+      break;
+    case NodeRole::Input:
+      if (f.parent && !f.element) {
+        const GraphTopology::Node &g = f.parent->topo->nodes[f.groupIndex];
+        out.vertex = Vertex{f.parent, g.inBegin + output, false};
+      }
+      break;
+    case NodeRole::Group: {
+      Frame *c = child(f, n.group, out.error);
+      if (!c) {
+        break;
+      }
+      if (output < n.interfaceOuts) {
+        if (c->topo->outputNode >= 0) {
+          const GraphTopology::Node &o = c->topo->nodes[c->topo->outputNode];
+          out.vertex = Vertex{c, o.inBegin + output, false};
+        }
+        break;
+      }
+      for (const GraphTopology::Interior &i : f.topo->groups[n.group].interior) {
+        if (i.side != SocketSide::Output || i.index != output) {
+          continue;
+        }
+        for (NodeId id : i.key.groups) {
+          const int at = c->topo->find(id);
+          c = at >= 0 ? child(*c, c->topo->nodes[at].group, out.error) : nullptr;
+          if (!c) {
+            return out;
+          }
+        }
+        const int at = c->topo->find(i.key.node);
+        const int o = at >= 0 ? c->topo->outputIndex(c->topo->nodes[at], i.key.key.c_str()) : -1;
+        return o >= 0 ? feed(*c, at, o) : out; /* a key names no interior one: this ends */
+      }
+      break;
+    }
+    case NodeRole::Output:
+      break; /* it has no outputs */
+  }
+  return out;
+}
+
 std::optional<Vertex> Evaluator::follow(Frame &f, int input)
 {
   const GraphTopology &t = *f.topo;
@@ -391,32 +439,19 @@ std::optional<Vertex> Evaluator::follow(Frame &f, int input)
   s.error = nullptr;
   s.value = nullptr;
   s.source = Vertex();
+  if (const Vertex *by = f.replacedBy(input)) {
+    s.source = *by;
+    s.sourceType = t.inputs[input].type; /* the replacing input has it too */
+    return s.source;
+  }
   if (in.fromNode < 0) {
     return std::nullopt;
   }
-  const GraphTopology::Node &from = t.nodes[in.fromNode];
-  s.sourceType = t.outputs[from.outBegin + in.fromOutput].type;
-  switch (from.role) {
-    case NodeRole::Kernel:
-    case NodeRole::Foreach:
-      s.source = Vertex{&f, in.fromNode, true};
-      s.sourceOutput = in.fromOutput;
-      break;
-    case NodeRole::Input:
-      if (f.parent && !f.element) {
-        const GraphTopology::Node &g = f.parent->topo->nodes[f.groupIndex];
-        s.source = Vertex{f.parent, g.inBegin + in.fromOutput, false};
-      }
-      break;
-    case NodeRole::Group:
-      if (Frame *c = child(f, from.group, s.error); c && c->topo->outputNode >= 0) {
-        const GraphTopology::Node &o = c->topo->nodes[c->topo->outputNode];
-        s.source = Vertex{c, o.inBegin + in.fromOutput, false};
-      }
-      break;
-    case NodeRole::Output:
-      break; /* it has no outputs */
-  }
+  s.sourceType = t.outputs[t.nodes[in.fromNode].outBegin + in.fromOutput].type;
+  Feed source = feed(f, in.fromNode, in.fromOutput);
+  s.source = source.vertex;
+  s.sourceOutput = source.output;
+  s.error = std::move(source.error);
   return s.source.frame ? std::optional<Vertex>(s.source) : std::nullopt;
 }
 
@@ -650,7 +685,8 @@ void Evaluator::run(Frame &f, int node, KernelState &k, Trace trace)
   Vector<NodeExecContext::Input> inputs;
   for (int i = 0; i < n.inCount; i++) {
     inputs.append(NodeExecContext::Input{f.inputs[n.inBegin + i].value,
-                                         f.topo->inputs[n.inBegin + i].fromNode >= 0});
+                                         f.inputs[n.inBegin + i].source.frame ||
+                                             f.topo->inputs[n.inBegin + i].fromNode >= 0});
   }
   Vector<PropValue> params;
   Vector<BlockId> blocks;

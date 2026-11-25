@@ -238,6 +238,22 @@ const SocketInfos &GraphDef::sockets(const GraphNode &node, SocketSide side) con
   return side == SocketSide::Input ? node.inputs_ : node.outputs_;
 }
 
+std::optional<SocketInfo> GraphDef::findSocket(const GraphNode &node,
+                                               SocketSide side,
+                                               std::string_view key) const
+{
+  if (isInteriorKey(key)) {
+    const std::optional<InteriorKey> k = InteriorKey::parse(key);
+    return k ? findInterior(*this, node, side, *k) : std::nullopt;
+  }
+  for (const SocketInfo &s : sockets(node, side)) {
+    if (key == s.key.c_str()) {
+      return s;
+    }
+  }
+  return std::nullopt;
+}
+
 GraphDef *GraphDef::groupTarget(const GraphNode &node) const
 {
   const Library *lib = lib_.get();
@@ -310,14 +326,12 @@ Vector<LinkDiagnostic> GraphDef::diagnostics() const
 {
   const SocketTypeRegistry &types = rt_.ext<SocketTypeRegistry>();
   auto typeOfSocket = [&](const GraphNode &n, SocketSide side, const string &key, Status &status) {
-    for (const SocketInfo &s : sockets(n, side)) {
-      if (strcmp(s.key.c_str(), key.c_str()) == 0) {
-        const SocketType *t = types.find(s.typeName.c_str());
-        if (!t) {
-          status = types.unknown(s.typeName.c_str());
-        }
-        return t;
+    if (const std::optional<SocketInfo> s = findSocket(n, side, key.c_str())) {
+      const SocketType *t = types.find(s->typeName.c_str());
+      if (!t) {
+        status = types.unknown(s->typeName.c_str());
       }
+      return t;
     }
     status = Status::error(StatusCode::NotFound,
                            (std::string("node ") + std::to_string(n.id().value) + " (" +
@@ -479,8 +493,18 @@ bool GraphDef::topologyCurrent() const
   }
   for (const GraphTopology::Group &g : topo_->groups) {
     const GraphDef *target = groupTarget(*g.node);
-    if (g.targetInterface != (target ? target->interfaceVersion_ : 0)) {
+    if (g.targetInterface != (target ? target->interfaceVersion_ : 0) ||
+        g.sockets != (target ? target->interfaceVersion_ : g.node->socketsVersion_))
+    {
       return false;
+    }
+    for (const GraphTopology::Interior &i : g.interior) {
+      const std::optional<SocketInfo> s = findInterior(*this, *g.node, i.side, i.key);
+      if (s.has_value() != i.found ||
+          (s && strcmp(s->typeName.c_str(), i.typeName.c_str()) != 0))
+      {
+        return false;
+      }
     }
   }
   return true;
