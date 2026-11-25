@@ -50,7 +50,7 @@ Status noSocket(const GraphNode &n,
   return s;
 }
 
-/* Sets, replaces or (on None) removes a value. */
+/* Sets, replaces or (on None) removes a param. */
 void store(NodeValues &list, std::string_view name, PropValue value, uint64_t version)
 {
   for (int i = 0; i < int(list.size()); i++) {
@@ -68,6 +68,20 @@ void store(NodeValues &list, std::string_view name, PropValue value, uint64_t ve
   if (!value.isNone()) {
     list.append(NodeValue{lsString(name), std::move(value), version});
   }
+}
+
+/* The literal of a name and type, in use or not. */
+NodeValue *findLiteral(NodeValues &list, std::string_view name, const SocketType &type)
+{
+  for (NodeValue &v : list) {
+    if (name == v.name.c_str()) {
+      Result<GraphValue> g = GraphValue::fromProp(v.value);
+      if (g.ok() && type.holds(*g)) {
+        return &v;
+      }
+    }
+  }
+  return nullptr;
 }
 
 } // namespace
@@ -90,6 +104,14 @@ Result<NodeId> GraphDef::addNode(std::string_view type)
 }
 
 Status GraphDef::insertNode(const NodeState &state)
+{
+  if (is(state.typeName, kGraphGroupType) && !state.group.isNull()) {
+    CDCC_TRY(checkRecursion(state.group));
+  }
+  return restoreNode(state);
+}
+
+Status GraphDef::restoreNode(const NodeState &state)
 {
   CDCC_TRY(busy("insertNode"));
   if (state.id.value <= 0 || state.id.value >= int64_t(1) << 52) {
@@ -115,9 +137,6 @@ Status GraphDef::insertNode(const NodeState &state)
   if (refs && !lib) {
     return makeError(StatusCode::FailedPrecondition,
                      "insertNode: a def without a Library can't refer to blocks");
-  }
-  if (isGroup && !state.group.isNull()) {
-    CDCC_TRY(checkRecursion(state.group));
   }
   if (lib && lib->sweeping()) {
     return makeError(StatusCode::Busy, "insertNode: the library is sweeping");
@@ -310,21 +329,47 @@ Status GraphDef::setParamRef(GraphNode *n, const NodeParamDef &param, const Prop
                        where + "a graph can't point at its own block");
     }
   }
-  const char *name = param.def.apiName().c_str();
+  return writeParamRef(n, param.def.apiName().c_str(), param.weak, target);
+}
+
+Status GraphDef::writeParamRef(GraphNode *n, std::string_view name, bool weak, BlockId target)
+{
+  Library *lib = lib_.get();
   for (NodeBlockRef &r : n->refs_) {
-    if (strcmp(r.name.c_str(), name) == 0) {
+    if (name == r.name.c_str()) {
       return lib ? lib->writeRef(r.cell, target) : Status();
     }
   }
   /* The type was registered after the node was made. */
   NodeBlockRef r;
-  r.name = param.def.apiName();
-  r.cell.kind = param.weak ? RefKind::Weak : RefKind::OptStrong;
+  r.name = lsString(name);
+  r.cell.kind = weak ? RefKind::Weak : RefKind::OptStrong;
   if (lib) {
     CDCC_TRY(lib->writeRef(r.cell, target));
   }
   n->refs_.append(r);
   return Status();
+}
+
+Result<const SocketType *> GraphDef::literalType(const GraphNode &n,
+                                                 std::string_view input,
+                                                 int &index) const
+{
+  const SocketInfos &list = sockets(n, SocketSide::Input);
+  index = findSocket(list, input);
+  if (index < 0) {
+    return noSocket(n, list, "input", input);
+  }
+  const SocketTypeRegistry &types = rt_.ext<SocketTypeRegistry>();
+  const SocketType *type = types.find(list[index].typeName.c_str());
+  if (!type) {
+    return types.unknown(list[index].typeName.c_str());
+  }
+  if (!type->hasLiteral()) {
+    return makeError(StatusCode::Unsupported,
+                     "input '" + std::string(input) + "' is a payload, which has no literal");
+  }
+  return type;
 }
 
 Status GraphDef::setLiteral(NodeId id, std::string_view input, const PropValue &value)
@@ -335,30 +380,61 @@ Status GraphDef::setLiteral(NodeId id, std::string_view input, const PropValue &
     return found.status();
   }
   GraphNode *n = *found;
-  const SocketInfos &list = sockets(*n, SocketSide::Input);
-  const int i = findSocket(list, input);
-  if (i < 0) {
-    return noSocket(*n, list, "input", input);
-  }
-  const SocketTypeRegistry &types = rt_.ext<SocketTypeRegistry>();
-  const SocketType *type = types.find(list[i].typeName.c_str());
-  if (!type) {
-    return types.unknown(list[i].typeName.c_str());
-  }
-  if (!type->hasLiteral()) {
-    return makeError(StatusCode::Unsupported,
-                     "input '" + std::string(input) + "' is a payload, which has no literal");
+  int i = 0;
+  Result<const SocketType *> type = literalType(*n, input, i);
+  if (!type.ok()) {
+    return type.status();
   }
   PropValue v;
   if (!value.isNone()) {
     const bool fixed = n->type_ && n->type_->role == NodeRole::Kernel;
-    Result<PropValue> c = coerce(fixed ? *n->type_->literal(i) : type->literalDef("value"), value);
+    Result<PropValue> c =
+        coerce(fixed ? *n->type_->literal(i) : (*type)->literalDef("value"), value);
     if (!c.ok()) {
       return c.status();
     }
     v = std::move(c).value();
   }
-  store(n->literals_, input, std::move(v), stamp(false));
+  NodeValue *old = findLiteral(n->literals_, input, **type);
+  const uint64_t version = stamp(false);
+  if (v.isNone()) {
+    if (old) {
+      n->literals_.remove_at(int(old - n->literals_.data()));
+    }
+  }
+  else if (old) {
+    old->value = std::move(v);
+    old->version = version;
+    old->off = false;
+  }
+  else {
+    n->literals_.append(NodeValue{lsString(input), std::move(v), version});
+  }
+  announce(false);
+  return Status();
+}
+
+Status GraphDef::useLiteral(NodeId id, std::string_view input, bool on)
+{
+  CDCC_TRY(busy("useLiteral"));
+  Result<GraphNode *> found = find(id, "useLiteral");
+  if (!found.ok()) {
+    return found.status();
+  }
+  GraphNode *n = *found;
+  int i = 0;
+  Result<const SocketType *> type = literalType(*n, input, i);
+  if (!type.ok()) {
+    return type.status();
+  }
+  if (NodeValue *old = findLiteral(n->literals_, input, **type)) {
+    old->off = !on;
+    old->version = stamp(false);
+  }
+  else if (on) {
+    PropValue v = literalValue(*n, input, **type).toProp();
+    n->literals_.append(NodeValue{lsString(input), std::move(v), stamp(false)});
+  }
   announce(false);
   return Status();
 }
@@ -532,13 +608,19 @@ Result<int64_t> GraphDef::addInterface(SocketSide side,
   s.name = lsString(name);
   s.typeName = lsString(socketType);
   const int64_t out = s.id;
-  list.append(std::move(s));
+  insertInterface(list, std::move(s), index);
+  return out;
+}
+
+void GraphDef::insertInterface(Vector<InterfaceSocket> &list, InterfaceSocket socket, int index)
+{
+  socket.def = this;
+  list.append(std::move(socket));
   for (int i = int(list.size()) - 1; index >= 0 && i > index; i--) {
     std::swap(list[i], list[i - 1]);
   }
   interfaceVersion_ = stamp(true);
   announce(true);
-  return out;
 }
 
 Status GraphDef::removeInterface(int64_t id)
@@ -593,6 +675,11 @@ Status GraphDef::setInterfaceType(int64_t id, std::string_view socketType)
   }
   s->typeName = lsString(socketType);
   interfaceVersion_ = stamp(true);
+  Result<GraphValue> v = GraphValue::fromProp(s->defaultValue);
+  if (!v.ok() || !types.find(socketType)->holds(*v)) {
+    s->defaultValue = PropValue();
+    s->defaultVersion = interfaceVersion_;
+  }
   announce(true);
   return Status();
 }
@@ -640,6 +727,103 @@ Status GraphDef::setInterfaceDefault(int64_t id, const PropValue &value)
     v = std::move(c).value();
   }
   s->defaultValue = std::move(v);
+  s->defaultVersion = stamp(false);
+  announce(false);
+  return Status();
+}
+
+/* ---- for undo ---- */
+
+Status GraphDef::restoreValues(NodeId id,
+                               bool param,
+                               std::string_view name,
+                               const NodeValues &values)
+{
+  CDCC_TRY(busy("restoreValues"));
+  Result<GraphNode *> n = find(id, "restoreValues");
+  if (!n.ok()) {
+    return n.status();
+  }
+  NodeValues &list = param ? (*n)->params_ : (*n)->literals_;
+  const uint64_t version = stamp(false);
+  for (int i = int(list.size()) - 1; i >= 0; i--) {
+    if (name == list[i].name.c_str()) {
+      list.remove_at(i);
+    }
+  }
+  for (const NodeValue &v : values) {
+    list.append(v);
+    list.last().version = version;
+  }
+  if (param) {
+    (*n)->paramVersion_ = version;
+  }
+  announce(false);
+  return Status();
+}
+
+Status GraphDef::restoreRef(NodeId id, std::string_view param, BlockId target)
+{
+  CDCC_TRY(busy("restoreRef"));
+  Result<GraphNode *> found = find(id, "restoreRef");
+  if (!found.ok()) {
+    return found.status();
+  }
+  GraphNode *n = *found;
+  Library *lib = lib_.get();
+  if (!target.isNull() && !lib) {
+    return makeError(StatusCode::FailedPrecondition,
+                     "a def without a Library can't refer to blocks");
+  }
+  const bool group = param.empty();
+  if (!group) {
+    const NodeType *type = typeOf(*n);
+    const int i = type ? type->paramIndex(param) : -1;
+    CDCC_TRY(writeParamRef(n, param, i >= 0 && type->params[i].weak, target));
+  }
+  else if (lib) {
+    CDCC_TRY(lib->writeRef(n->group_, target));
+  }
+  n->paramVersion_ = stamp(group);
+  announce(group);
+  return Status();
+}
+
+Status GraphDef::restoreInterface(SocketSide side, const InterfaceSocket &socket, int index)
+{
+  CDCC_TRY(busy("restoreInterface"));
+  Vector<InterfaceSocket> &list = side == SocketSide::Input ? ifaceIn_ : ifaceOut_;
+  if (idTaken(socket.id) || index < 0 || index > int(list.size())) {
+    return makeError(StatusCode::FailedPrecondition, "restoreInterface: its place is gone");
+  }
+  InterfaceSocket s = socket;
+  s.defaultVersion = rt_.touch();
+  insertInterface(list, std::move(s), index);
+  return Status();
+}
+
+Status GraphDef::restoreInterfaceType(int64_t id, const InterfaceSocket &was)
+{
+  CDCC_TRY(busy("restoreInterfaceType"));
+  InterfaceSocket *s = findInterface(id);
+  if (!s) {
+    return noInterface(id);
+  }
+  s->typeName = was.typeName;
+  s->defaultValue = was.defaultValue;
+  s->defaultVersion = interfaceVersion_ = stamp(true);
+  announce(true);
+  return Status();
+}
+
+Status GraphDef::restoreInterfaceDefault(int64_t id, const PropValue &value)
+{
+  CDCC_TRY(busy("restoreInterfaceDefault"));
+  InterfaceSocket *s = findInterface(id);
+  if (!s) {
+    return noInterface(id);
+  }
+  s->defaultValue = value;
   s->defaultVersion = stamp(false);
   announce(false);
   return Status();

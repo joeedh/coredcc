@@ -46,9 +46,41 @@ static const NodeValue *findValue(const NodeValues &list, std::string_view name)
   return nullptr;
 }
 
-const NodeValue *GraphNode::literal(std::string_view key) const
+GraphNode::~GraphNode()
 {
-  return findValue(literals_, key);
+  for (GraphSocketAddress *a : addresses_) {
+    litestl::alloc::Delete(a);
+  }
+}
+
+const NodeType *GraphNode::type() const
+{
+  return def_->typeOf(*this);
+}
+
+const NodeValue *GraphNode::literal(std::string_view key, const SocketType &type) const
+{
+  for (const NodeValue &v : literals_) {
+    if (key == v.name.c_str() && !v.off) {
+      Result<GraphValue> g = GraphValue::fromProp(v.value);
+      if (g.ok() && type.holds(*g)) {
+        return &v;
+      }
+    }
+  }
+  return nullptr;
+}
+
+const GraphSocketAddress *GraphNode::addressOf(std::string_view key)
+{
+  for (const GraphSocketAddress *a : addresses_) {
+    if (key == a->key.c_str()) {
+      return a;
+    }
+  }
+  addresses_.append(
+      litestl::alloc::New<GraphSocketAddress>("coredcc::GraphSocketAddress", this, lsString(key)));
+  return addresses_.last();
 }
 
 const NodeValue *GraphNode::param(std::string_view name) const
@@ -202,6 +234,50 @@ GraphDef *GraphDef::groupTarget(const GraphNode &node) const
   return lib && !node.group_.isNull() ? graphDefOf(*lib, lib->resolveRef(node.group_)) : nullptr;
 }
 
+const GraphNode *GraphDef::nodeAt(int index) const
+{
+  if (nodes_.size() == byId_.size()) {
+    return nodes_[index];
+  }
+  for (const GraphNode *n : nodes_) {
+    if (n && index-- == 0) {
+      return n;
+    }
+  }
+  return nullptr;
+}
+
+GraphValue GraphDef::literalValue(const GraphNode &node,
+                                  std::string_view key,
+                                  const SocketType &type) const
+{
+  if (const NodeValue *set = node.literal(key, type)) {
+    return GraphValue::fromProp(set->value).value();
+  }
+  const NodeType *t = typeOf(node);
+  if (t && t->role == NodeRole::Kernel) {
+    const int i = t->inputIndex(key);
+    return i >= 0 ? t->inputs[i].defaultValue : type.defaultValue;
+  }
+  if (t && t->role == NodeRole::Group) {
+    const GraphDef *group = groupTarget(node);
+    for (int i = 0; group && i < int(group->ifaceIn_.size()); i++) {
+      if (key == group->ifaceIn_[i].key().c_str()) {
+        Result<GraphValue> v = GraphValue::fromProp(group->ifaceIn_[i].defaultValue);
+        return v.ok() && type.holds(*v) ? *v : type.defaultValue;
+      }
+    }
+  }
+  return type.defaultValue;
+}
+
+bool GraphDef::usesLiteral(const GraphNode &node, std::string_view key) const
+{
+  int i = 0;
+  Result<const SocketType *> type = literalType(node, key, i);
+  return type.ok() && node.literal(key, **type);
+}
+
 PropValue GraphDef::paramValue(const GraphNode &node, std::string_view name) const
 {
   const NodeType *type = typeOf(node);
@@ -338,6 +414,7 @@ int64_t GraphDef::newId()
 
 void GraphDef::attachNode(GraphNode *n)
 {
+  n->def_ = this;
   n->slot_ = int(nodes_.size());
   nodes_.append(n);
   byId_.add(n->id_.value, n);

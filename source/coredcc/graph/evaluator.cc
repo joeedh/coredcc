@@ -468,17 +468,14 @@ Evaluator::Constant Evaluator::unlinked(const Frame &f, int input) const
   const GraphTopology::Node &n = f.topo->nodes[in.node];
   const int index = input - n.inBegin;
   Constant c;
-  if (const NodeValue *lit = n.node->literal(in.key.c_str())) {
-    Result<GraphValue> v = GraphValue::fromProp(lit->value);
-    if (v.ok() && in.type->holds(*v)) {
-      c.origin.kind = Origin::Kind::Literal;
-      c.origin.a = f.serial;
-      c.origin.b = n.node->id().value;
-      c.origin.c = coredcc::detail::fnv1a64(in.key.c_str());
-      c.origin.version = lit->version;
-      c.value = std::move(v).value();
-      return c;
-    }
+  if (const NodeValue *lit = n.node->literal(in.key.c_str(), *in.type)) {
+    c.origin.kind = Origin::Kind::Literal;
+    c.origin.a = f.serial;
+    c.origin.b = n.node->id().value;
+    c.origin.c = coredcc::detail::fnv1a64(in.key.c_str());
+    c.origin.version = lit->version;
+    c.value = GraphValue::fromProp(lit->value).value();
+    return c;
   }
   if (n.role == NodeRole::Kernel && n.type) {
     c.origin.kind = Origin::Kind::NodeDefault;

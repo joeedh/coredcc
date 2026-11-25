@@ -482,6 +482,7 @@ void testGroups()
   test_assert(num(alone, SocketPath::output("pass")) == 0);
   test_assert(in.setInterfaceType(ib, "float").ok());
   test_assert(num(alone, SocketPath::output("pass")) == 6);
+  test_assert(in.setInterfaceDefault(ib, fl(5)).ok()); /* it went with the type */
 
   /* Two groups of it, with state of their own. */
   const NodeId g1 = add(o, "graph.group"), g2 = add(o, "graph.group"), v = add(o, "value.float");

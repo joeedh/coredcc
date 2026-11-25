@@ -113,17 +113,19 @@ void testNodes()
   test_assert(w.rt.lastEdit() == failed);
 
   /* Literals: coerced to the input's def. */
+  const SocketType &floats = *w.rt.ext<SocketTypeRegistry>().find("float");
+  auto literal = [&](const char *name) { return n->literal(name, floats); };
   test_assert(def.setLiteral(a, "a", PropValue::ofInt(30)).ok());
-  test_assert(n->literal("a")->value == PropValue::ofFloat(10));
-  const uint64_t version = n->literal("a")->version;
+  test_assert(literal("a")->value == PropValue::ofFloat(10));
+  const uint64_t version = literal("a")->version;
   const uint64_t paramVersion = n->paramVersion();
   test_assert(version == def.contentVersion());
   test_assert(def.setLiteral(a, "b", PropValue::ofFloat(2)).ok());
-  test_assert(n->literal("a")->version == version && n->literal("b")->version > version);
+  test_assert(literal("a")->version == version && literal("b")->version > version);
   test_assert(n->paramVersion() == paramVersion);
   test_assert(def.setLiteral(a, "a", PropValue::ofFloat(5)).ok());
-  test_assert(n->literal("a")->value == PropValue::ofFloat(5) && n->literal("a")->version > version);
-  test_assert(def.setLiteral(a, "a", PropValue()).ok() && !n->literal("a") && n->literal("b"));
+  test_assert(literal("a")->value == PropValue::ofFloat(5) && literal("a")->version > version);
+  test_assert(def.setLiteral(a, "a", PropValue()).ok() && !literal("a") && literal("b"));
   test_assert(hasCode(def.setLiteral(a, "mesh", PropValue::ofFloat(1)), StatusCode::Unsupported));
   test_assert(hasCode(def.setLiteral(a, "x", PropValue::ofFloat(1)), StatusCode::NotFound));
   test_assert(hasCode(def.setLiteral(a, "a", PropValue::ofString("")), StatusCode::TypeMismatch));
@@ -139,7 +141,7 @@ void testNodes()
   n = def.node(a);
   test_assert(isText(n->label(), "First") && n->x() == 3);
   test_assert(def.paramValue(*n, "maybe") == PropValue::ofFloat(1));
-  test_assert(n->literal("b")->version == n->paramVersion() && n->paramVersion() > version);
+  test_assert(literal("b")->version == n->paramVersion() && n->paramVersion() > version);
   test_assert(def.link(l) && n->linkInto("a")->id == l);
   test_assert(hasCode(def.insertNode(state), StatusCode::AlreadyExists));
   test_assert(hasCode(def.insertLink(link), StatusCode::AlreadyExists));
@@ -385,7 +387,7 @@ void testHome()
   int seen = 0;
   ScopedConnection look = w.rt.ext<ChangeBus>().addListener([&](const OwnerKey *) {
     const GraphNode *n = def.node(a);
-    seen += def.paramValue(*n, "count") == PropValue::ofInt(5) && n->literal("b") &&
+    seen += def.paramValue(*n, "count") == PropValue::ofInt(5) && n->literal("b", *w.rt.ext<SocketTypeRegistry>().find("float")) &&
             n->paramVersion() == def.contentVersion();
   });
   test_assert(def.setLiteral(a, "b", PropValue::ofInt(1)).ok());

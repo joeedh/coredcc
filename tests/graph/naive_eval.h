@@ -635,7 +635,7 @@ class Evaluation {
     o.source.text = "type default " + type;
     o.source.chain = type;
     for (const NodeValue &l : n.literals()) {
-      if (v.key == l.name.c_str() && fromProp(l.value).type == type) {
+      if (v.key == l.name.c_str() && !l.off && fromProp(l.value).type == type) {
         o.value = fromProp(l.value);
         o.source.text = "literal " + pathText(v.frame) + std::to_string(v.node) + "." + v.key +
                         " v" + std::to_string(l.version);

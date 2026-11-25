@@ -51,7 +51,23 @@ class Editor {
   void edit()
   {
     g_counts.ops++;
-    Graph &g = w_.defs[rng_.below(kDefs)];
+    if (w_.undoable && rng_.below(5) == 0) {
+      const bool undo = rng_.below(5) > 1;
+      for (int n = 1 + int(rng_.below(3)); n > 0; n--) {
+        if (undo ? w_.history.canUndo() : w_.history.canRedo()) {
+          step(undo);
+        }
+      }
+      return;
+    }
+    if (w_.undoable && rng_.below(12) == 0) {
+      reviveDefs();
+    }
+    size_t at = rng_.below(kDefs);
+    while (w_.undoable && !w_.live(w_.defs[at])) { /* commands only edit Live blocks */
+      at = (at + 1) % kDefs;
+    }
+    Graph &g = w_.defs[at];
     switch (rng_.below(34)) {
       case 0:
       case 1:
@@ -115,7 +131,55 @@ class Editor {
     }
   }
 
+  /* Undoes until no def is deleted. */
+  void reviveDefs()
+  {
+    auto dead = [this](const Graph &g) { return !w_.live(g); };
+    while (w_.undoable && std::any_of(w_.defs.begin(), w_.defs.end(), dead)) {
+      step(true);
+    }
+  }
+  void step(bool undo)
+  {
+    (undo ? g_counts.undos : g_counts.redos)++;
+    const Status s = undo ? w_.executor.undo(*w_.ctx) : w_.executor.redo(*w_.ctx);
+    if (!s.ok()) {
+      printf("seed %llu, batch %d: %s failed: %s\n", (unsigned long long)g_seed, g_batch,
+             undo ? "undo" : "redo", s.toString().c_str());
+    }
+    test_assert(s.ok());
+  }
+
  private:
+  /* `fn`, generic, on the def itself or on an edit of it that can be undone. */
+  template <class Fn> Status act(GraphDef &def, Fn fn)
+  {
+    return w_.undoable ?
+               runGraphEdit(*w_.ctx, def.self(), "edit", [&fn](GraphEdit &e) { return fn(e); }) :
+               fn(def);
+  }
+  std::string graphPath(const GraphDef &def)
+  {
+    return "graphs[\"" + std::string(w_.lib.get(w_.lib.find(def.self()))->name().c_str()) + "\"]";
+  }
+  std::string path(const GraphDef &def, NodeId n)
+  {
+    return graphPath(def) + ".nodes[#" + std::to_string(n.value) + "]";
+  }
+  void setLiteralPath(GraphDef &def, const GraphNode &n, const std::string &key, const PropValue &v)
+  {
+    const std::string node = path(def, n.id());
+    if (n.type() && n.type()->role == NodeRole::Kernel) {
+      setValueUndo(*w_.ctx, node + ".inputs." + key, v).ignore(); /* a payload has none */
+      return;
+    }
+    const std::string socket = node + ".sockets[#" + key.substr(1) + "]";
+    if (rng_.below(2)) {
+      setValueUndo(*w_.ctx, socket + ".isSet", PropValue::ofBool(!v.isNone())).ignore();
+    }
+    setValueUndo(*w_.ctx, socket + ".value", v).ignore(); /* read-only unless set */
+  }
+
   const GraphNode *randomNode(const GraphDef &def)
   {
     if (def.nodeCount() == 0) {
@@ -173,7 +237,7 @@ class Editor {
                            "graph.group"};
     const std::string type = types[rng_.below(16)];
     if (type != "r.late" || w_.late) {
-      def.addNode(type).status().ignore();
+      act(def, [&](auto &e) { return e.addNode(type).status(); }).ignore();
       return;
     }
     NodeState s;
@@ -182,12 +246,13 @@ class Editor {
     s.inputs.append(SocketInfo{"a", "a", "float"});
     s.outputs.append(SocketInfo{"value", "value", "float"});
     s.outputs.append(SocketInfo{"z", "z", "r.Q"});
-    def.insertNode(s).ignore();
+    act(def, [&](auto &e) { return e.insertNode(s); }).ignore();
   }
   void removeNode(GraphDef &def)
   {
     if (const GraphNode *n = randomNode(def)) {
-      test_assert(def.removeNode(n->id()).ok());
+      const NodeId id = n->id();
+      test_assert(act(def, [&](auto &e) { return e.removeNode(id); }).ok());
     }
   }
   void removeAndRevive(GraphDef &def)
@@ -206,11 +271,14 @@ class Editor {
         links.push_back(GraphDef::stateOf(*l));
       }
     }
-    test_assert(def.removeNode(state.id).ok());
-    const bool ok = def.insertNode(state).ok(); /* a recursive group is refused */
-    for (const LinkState &l : links) {
-      test_assert(def.insertLink(l).ok() || !ok);
-    }
+    test_assert(act(def, [&](auto &e) {
+                  CDCC_TRY(e.removeNode(state.id));
+                  const bool ok = e.insertNode(state).ok(); /* a recursive group is refused */
+                  for (const LinkState &l : links) {
+                    test_assert(e.insertLink(l).ok() || !ok);
+                  }
+                  return Status();
+                }).ok());
   }
   void addLink(GraphDef &def, bool unchecked)
   {
@@ -222,7 +290,8 @@ class Editor {
       return;
     }
     if (!unchecked) {
-      for (int i = 0; i < 4 && !def.link({a->id(), from}, {b->id(), to}).ok(); i++) {
+      auto link = [&](auto &e) { return e.link({a->id(), from}, {b->id(), to}).status(); };
+      for (int i = 0; i < 4 && !act(def, link).ok(); i++) {
         a = randomNode(def);
         if (!randomKey(def, *a, SocketSide::Output, from)) {
           return;
@@ -236,13 +305,14 @@ class Editor {
     l.fromKey = from.c_str();
     l.to = b->id();
     l.toKey = to.c_str();
-    def.insertLink(l).ignore();
+    act(def, [&](auto &e) { return e.insertLink(l); }).ignore();
   }
   void unlink(GraphDef &def)
   {
     const GraphNode *n = randomNode(def);
     if (n && n->linksIn().size() > 0) {
-      test_assert(def.unlink(n->linksIn()[0]->id).ok());
+      const LinkId id = n->linksIn()[0]->id;
+      test_assert(act(def, [&](auto &e) { return e.unlink(id); }).ok());
     }
   }
   void setParam(GraphDef &def)
@@ -264,7 +334,13 @@ class Editor {
       v = p.kind() == PropKind::Int ? PropValue::ofInt(int(rng_.below(6)) - 2) :
                                       randomProp("string");
     }
-    test_assert(def.setParam(n->id(), p.apiName().c_str(), v).ok());
+    const NodeId id = n->id();
+    const std::string name = p.apiName().c_str();
+    if (w_.undoable && rng_.below(2) && !v.isNone()) {
+      setValueUndo(*w_.ctx, path(def, id) + ".params." + name, v).ignore(); /* a dead target */
+      return;
+    }
+    test_assert(act(def, [&](auto &e) { return e.setParam(id, name, v); }).ok());
   }
   void setLiteral(GraphDef &def)
   {
@@ -275,8 +351,12 @@ class Editor {
     }
     for (const SocketInfo &s : def.sockets(*n, SocketSide::Input)) {
       if (key == s.key.c_str()) {
-        def.setLiteral(n->id(), key, rng_.below(6) ? randomProp(s.typeName.c_str()) : PropValue())
-            .ignore();
+        const NodeId id = n->id();
+        const PropValue v = rng_.below(6) ? randomProp(s.typeName.c_str()) : PropValue();
+        if (w_.undoable && rng_.below(2)) {
+          return setLiteralPath(def, *n, key, v);
+        }
+        act(def, [&](auto &e) { return e.setLiteral(id, key, v); }).ignore();
         return;
       }
     }
@@ -289,8 +369,11 @@ class Editor {
       return removeInterface(def);
     }
     const std::string name = "s" + std::to_string(w_.names++);
-    test_assert(
-        def.addInterface(side, name, randomType(), int(rng_.below(uint32_t(n + 1)))).ok());
+    const std::string type = randomType();
+    const int at = int(rng_.below(uint32_t(n + 1)));
+    test_assert(act(def, [&](auto &e) {
+                  return e.addInterface(side, name, type, at).status();
+                }).ok());
   }
   const InterfaceSocket *randomInterface(GraphDef &def, SocketSide &side)
   {
@@ -306,13 +389,14 @@ class Editor {
       return;
     }
     removed_.push_back({&def, side, *s});
-    test_assert(def.removeInterface(s->id).ok());
+    const int64_t id = s->id;
+    test_assert(act(def, [&](auto &e) { return e.removeInterface(id); }).ok());
   }
   void editInterface(GraphDef &def)
   {
     SocketSide side;
     const InterfaceSocket *s = randomInterface(def, side);
-    if (rng_.below(3) == 0 && !removed_.empty()) {
+    if (rng_.below(3) == 0 && !removed_.empty() && !w_.undoable) {
       const Removed r = removed_.back();
       removed_.pop_back();
       r.def->addInterface(r.side, r.socket.name.c_str(), r.socket.typeName.c_str(), 0, r.socket.id)
@@ -328,20 +412,31 @@ class Editor {
       case 0:
         return removeInterface(def);
       case 1:
-        test_assert(def.moveInterface(id, int(rng_.below(uint32_t(
-                                              def.interfaceSockets(side).size()))))
-                        .ok());
+      {
+        const int to = int(rng_.below(uint32_t(def.interfaceSockets(side).size())));
+        test_assert(act(def, [&](auto &e) { return e.moveInterface(id, to); }).ok());
         return;
-      case 2:
-        test_assert(def.setInterfaceType(id, randomType()).ok());
+      }
+      case 2: {
+        const std::string type = randomType();
+        test_assert(act(def, [&](auto &e) { return e.setInterfaceType(id, type); }).ok());
         return;
-      case 3:
-        test_assert(def.setInterfaceName(id, "s" + std::to_string(w_.names++)).ok());
+      }
+      case 3: {
+        const std::string name = "s" + std::to_string(w_.names++);
+        test_assert(act(def, [&](auto &e) { return e.setInterfaceName(id, name); }).ok());
         return;
-      default:
-        def.setInterfaceDefault(id, rng_.below(5) ? randomProp(s->typeName.c_str()) : PropValue())
-            .ignore();
+      }
+      default: {
+        const PropValue v = rng_.below(5) ? randomProp(s->typeName.c_str()) : PropValue();
+        if (w_.undoable && side == SocketSide::Input && rng_.below(2) && !v.isNone()) {
+          setValueUndo(*w_.ctx, graphPath(def) + ".inputs[#" + std::to_string(id) + "].default", v)
+              .ignore(); /* a payload has none */
+          return;
+        }
+        act(def, [&](auto &e) { return e.setInterfaceDefault(id, v); }).ignore();
         return;
+      }
     }
   }
   void setGroup(GraphDef &def)
@@ -355,7 +450,14 @@ class Editor {
     });
     if (id) {
       const BlockId to = rng_.below(8) ? w_.defs[rng_.below(kDefs)].id : BlockId();
-      def.setGroup(id, to).ignore(); /* recursion is refused */
+      if (w_.undoable && rng_.below(2)) {
+        setValueUndo(*w_.ctx, path(def, id) + ".group",
+                     to.isNull() ? PropValue::nullPointer() :
+                                   pointerTo(to, StructId::of(kGraphDefType)))
+            .ignore();
+        return;
+      }
+      act(def, [&](auto &e) { return e.setGroup(id, to); }).ignore(); /* recursion is refused */
     }
   }
   void toggleDef(Graph &g)
@@ -364,7 +466,16 @@ class Editor {
     for (Graph &d : w_.defs) {
       dead = w_.live(d) ? dead : &d;
     }
-    if (dead) {
+    if (w_.undoable) {
+      reviveDefs();
+      if (!dead && rng_.below(3) == 0) {
+        const CommandDef *del = w_.rt.ext<CommandRegistry>().find(kDeleteBlockCommand);
+        PropertyBag in = del->newInputs();
+        test_assert(in.set("block", pointerTo(g.id, StructId::of(kGraphDefType))).ok());
+        test_assert(w_.executor.run(*w_.ctx, *del, std::move(in)).ok());
+      }
+    }
+    else if (dead) {
       test_assert(w_.lib.restoreFromHistory(dead->h).ok());
     }
     else if (rng_.below(3) == 0) {
@@ -435,6 +546,10 @@ class Editor {
         return w_.registerLateType();
       case 2:
       case 5: { /* a group that points anywhere, with no checks */
+        if (w_.undoable) { /* which no command can undo */
+          test_assert(w_.lib.collect().ok());
+          return;
+        }
         struct Args {
           World &w;
           SplitMix64 &rng;

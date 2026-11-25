@@ -1,7 +1,9 @@
 coredcc_library(coredcc_graph
   SOURCES
+    api.cc
     bindings.cc
     builtin_nodes.cc
+    commands.cc
     def.cc
     def_edit.cc
     evaluator.cc
@@ -9,6 +11,7 @@ coredcc_library(coredcc_graph
     frame.cc
     instance.cc
     node_type.cc
+    ops.cc
     payload.cc
     provider.cc
     reach.cc

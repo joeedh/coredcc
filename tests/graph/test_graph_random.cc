@@ -165,7 +165,7 @@ void checkRuns(Client &c, const naive::Evaluation &e, uint64_t before)
       const bool newValue = !k.failed && (n.outputs.empty() || n.outputs[i] != k.outputs[i]);
       const bool newObject = !k.failed && ran && k.outputs[i].type.substr(0, 2) == "r.";
       if (flip || newValue || newObject) {
-        n.versions[i]++;
+        n.versions[i] = ++c.versions; /* unique: a node may go and come back */
       }
     }
     if (!k.failed) {
@@ -262,10 +262,67 @@ void pull(World &w, Client &c, const std::vector<SocketPath> &paths)
   test_assert(check(c.inst->totalRuns() == runs, "an unchanged pull ran kernels"));
 }
 
+/* What undo must bring back: ids, links, and the values in effect. */
+std::string describe(World &w)
+{
+  std::string out;
+  for (const Graph &g : w.defs) {
+    std::map<int64_t, std::string> parts;
+    const GraphDef &def = *g.def;
+    def.forEachNode([&](const GraphNode &n) {
+      const NodeState s = def.stateOf(n);
+      std::string t = s.typeName.c_str() + (" g" + std::to_string(s.group.local.lo));
+      const NodeType *type = n.type();
+      for (int i = 0; type && i < int(type->params.size()); i++) {
+        const char *name = type->params[i].def.apiName().c_str();
+        t += std::string(" ") + def.paramValue(n, name).toString().c_str() + "/" +
+             std::to_string(n.blockTarget(name).local.lo);
+      }
+      /* Those last seen of a group that isn't there, which undo doesn't bring back. */
+      const bool lost = type && type->role == NodeRole::Group && !def.groupTarget(n);
+      for (const SocketInfo &in : def.sockets(n, SocketSide::Input)) {
+        if (lost) {
+          break;
+        }
+        const SocketType *st = w.rt.ext<SocketTypeRegistry>().find(in.typeName.c_str());
+        if (st && st->hasLiteral()) {
+          const Value v = toValue(def.literalValue(n, in.key.c_str(), *st));
+          t += " " + std::string(in.key.c_str()) + text(v);
+          if (type && type->role != NodeRole::Kernel) {
+            t += def.usesLiteral(n, in.key.c_str()) ? "!" : "";
+          }
+        }
+      }
+      parts[s.id.value] = t;
+    });
+    def.forEachLink([&](const GraphLink &l) {
+      parts[l.id.value] = std::to_string(l.from->id().value) + "." + l.fromKey.c_str() + ">" +
+                          std::to_string(l.to->id().value) + "." + l.toKey.c_str();
+    });
+    out += w.live(g) ? "def\n" : "dead\n";
+    for (const auto &[id, part] : parts) {
+      out += std::to_string(id) + ": " + part + "\n";
+    }
+    for (SocketSide side : {SocketSide::Input, SocketSide::Output}) {
+      for (const InterfaceSocket &s : def.interfaceSockets(side)) {
+        const SocketType *st = w.rt.ext<SocketTypeRegistry>().find(s.typeName.c_str());
+        const PropValue v = s.defaultValue.isNone() && st && st->hasLiteral() ?
+                                st->defaultValue.toProp() :
+                                s.defaultValue;
+        out += std::string(s.name.c_str()) + " " + s.typeName.c_str() + " " +
+               v.toString().c_str() + ";";
+      }
+      out += "|\n";
+    }
+  }
+  return out;
+}
+
 void runWorld(uint64_t seed, int batches)
 {
   g_seed = seed;
-  World w(seed);
+  const bool undoable = seed % 2 == 0;
+  World w(seed, undoable);
   SplitMix64 rng(seed);
   std::vector<Client> clients;
   for (int def : {0, 1, 0}) {
@@ -279,6 +336,10 @@ void runWorld(uint64_t seed, int batches)
   for (int i = 0; i < 200; i++) {
     editor.edit();
   }
+  editor.reviveDefs(); /* the clear would destroy a deleted one */
+  w.history.clear();
+  w.history.setMemoryBudget(uint64_t(1) << 40);
+  const std::string first = describe(w);
   for (g_batch = 0; g_batch < batches && !retval; g_batch++) {
     const int edits = int(rng.below(6));
     for (int i = 0; i < edits; i++) {
@@ -305,6 +366,35 @@ void runWorld(uint64_t seed, int batches)
       test_assert(w.rt.validateAll().ok() && w.lib.validate().ok());
     }
   }
+  if (!undoable || retval) {
+    return;
+  }
+  /* All the way back and forth. A pull in between, or instances that fall behind. */
+  const std::string last = describe(w);
+  int steps = 0;
+  auto same = [&](const std::string &want, const char *what) {
+    const std::string now = describe(w);
+    if (!check(now == want, what)) {
+      const size_t at = size_t(
+          std::mismatch(want.begin(), want.end(), now.begin(), now.end()).first - want.begin());
+      const size_t from = at < 100 ? 0 : at - 100;
+      printf("wanted: %s\ngot: %s\n", want.substr(from, 300).c_str(),
+             now.substr(from, 300).c_str());
+    }
+    test_assert(now == want);
+    for (Client &c : clients) {
+      pull(w, c, {editor.randomSocket(c), editor.randomSocket(c)});
+    }
+  };
+  while (w.history.canUndo() && !retval) {
+    editor.step(true);
+    steps++;
+  }
+  same(first, "undoing everything made another def");
+  for (; steps > 0 && !retval; steps--) {
+    editor.step(false);
+  }
+  same(last, "redoing everything made another def");
 }
 
 } // namespace
@@ -319,12 +409,13 @@ int main(int argc, char **argv)
     runWorld(first + uint64_t(i), batches);
   }
   printf("seeds %llu to %llu: %llu edits, %llu pulls, %llu kernel visits, %llu runs (%llu had "
-         "to, %llu might), %llu failures, %llu on cycles, %llu recursions, %llu groups\n",
+         "to, %llu might), %llu failures, %llu on cycles, %llu recursions, %llu groups, %llu undos, %llu redos\n",
          (unsigned long long)first, (unsigned long long)(first + uint64_t(worlds) - 1),
          (unsigned long long)g_counts.ops, (unsigned long long)g_counts.pulls,
          (unsigned long long)g_counts.visits, (unsigned long long)g_counts.runs,
          (unsigned long long)g_counts.musts, (unsigned long long)g_counts.mays,
          (unsigned long long)g_counts.errors, (unsigned long long)g_counts.cycles,
-         (unsigned long long)g_counts.recursions, (unsigned long long)g_counts.groups);
+         (unsigned long long)g_counts.recursions, (unsigned long long)g_counts.groups,
+         (unsigned long long)g_counts.undos, (unsigned long long)g_counts.redos);
   return test_end();
 }

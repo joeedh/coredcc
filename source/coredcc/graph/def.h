@@ -72,14 +72,16 @@ struct SocketRef {
 
 enum class SocketSide : uint8_t { Input, Output };
 
+class GraphDef;
+
 /** A socket of a def's interface. */
 struct InterfaceSocket {
+  GraphDef *def = nullptr;
   /** In the same id space as nodes and links; random too, so it is unique across defs. */
   int64_t id = 0;
   litestl::util::string name;
   litestl::util::string typeName;
-  /** An input's value when nothing feeds it; None for the socket type's default. Ignored
-   * while its type isn't the socket's. */
+  /** An input's value when nothing feeds it; None for the socket type's default. */
   PropValue defaultValue;
   /** Moves when defaultValue does. */
   uint64_t defaultVersion = 0;
@@ -97,6 +99,8 @@ struct NodeValue {
   PropValue value;
   /** Moves when the value does. */
   uint64_t version = 0;
+  /** A literal that is kept but not in use (GraphDef::useLiteral). */
+  bool off = false;
 };
 
 using NodeValues = litestl::util::Vector<NodeValue, 1>;
@@ -118,10 +122,21 @@ struct GraphLink {
   litestl::util::string toKey;
 };
 
+/** An input of a group or output node, for datapaths. Stays while its node does. */
+struct GraphSocketAddress {
+  GraphNode *node = nullptr;
+  litestl::util::string key;
+};
+
 /** A node. Read it here, change it through its GraphDef. Its address is stable while it
  * exists. */
 class GraphNode {
  public:
+  ~GraphNode();
+  GraphDef &def() const
+  {
+    return *def_;
+  }
   NodeId id() const
   {
     return id_;
@@ -131,10 +146,7 @@ class GraphNode {
     return typeName_;
   }
   /** The registered type; null while there is none of that name. */
-  const NodeType *type() const
-  {
-    return type_;
-  }
+  const NodeType *type() const;
   const litestl::util::string &label() const
   {
     return label_;
@@ -152,7 +164,8 @@ class GraphNode {
   {
     return params_;
   }
-  /** Literals that were set, by socket key. */
+  /** Literals that were set, by socket key. A key may have one of each value type: those
+   * that aren't the socket's type now are ignored, and back when the type is. */
   const NodeValues &literals() const
   {
     return literals_;
@@ -185,13 +198,15 @@ class GraphNode {
   }
   /** The link into input `key`, or null. */
   const GraphLink *linkInto(std::string_view key) const;
-  /** The set literal of input `key`, or null. */
-  const NodeValue *literal(std::string_view key) const;
+  /** The literal in use at input `key` of that type, or null. */
+  const NodeValue *literal(std::string_view key, const SocketType &type) const;
   const NodeValue *param(std::string_view name) const;
+  const GraphSocketAddress *addressOf(std::string_view key);
 
  private:
   friend class GraphDef;
 
+  GraphDef *def_ = nullptr;
   NodeId id_;
   litestl::util::string typeName_;
   mutable const NodeType *type_ = nullptr;
@@ -211,6 +226,8 @@ class GraphNode {
   mutable uint64_t socketsVersion_ = 0;
   /** Its place in GraphDef::nodes_. */
   int slot_ = 0;
+  /** Made when asked for. Owned. */
+  litestl::util::Vector<GraphSocketAddress *, 1> addresses_;
 };
 
 /** Everything a removed node needs to come back: undo, and reading files. */
@@ -334,6 +351,8 @@ class GraphDef {
   }
   const GraphNode *node(NodeId id) const;
   const GraphLink *link(LinkId id) const;
+  /** The node at `index`, 0 to nodeCount() - 1, in the order nodes were added. */
+  const GraphNode *nodeAt(int index) const;
   /** Calls fn(const GraphNode &), in the order nodes were added. */
   template <class Fn> void forEachNode(Fn &&fn) const
   {
@@ -366,6 +385,13 @@ class GraphDef {
   /** The effective value of a param: the one set, or the default. None for a pointer or an
    * unknown param. */
   PropValue paramValue(const GraphNode &node, std::string_view name) const;
+  /** The value input `key`, of that type, has while it isn't linked: the literal in use, or
+   * the default of the node's type or its group's interface. */
+  GraphValue literalValue(const GraphNode &node,
+                          std::string_view key,
+                          const SocketType &type) const;
+  /** Whether a literal is in use there. */
+  bool usesLiteral(const GraphNode &node, std::string_view key) const;
   /** Links that don't work. */
   litestl::util::Vector<LinkDiagnostic> diagnostics() const;
 
@@ -392,6 +418,9 @@ class GraphDef {
   /** Sets the value an input has while it isn't linked, coerced to the socket's type. None
    * resets it. Payload inputs have no literal (Unsupported). */
   Status setLiteral(NodeId id, std::string_view input, const PropValue &value);
+  /** Puts a literal in or out of use, keeping its value while it isn't. One that was never
+   * set starts with the value the input has. */
+  Status useLiteral(NodeId id, std::string_view input, bool on);
   /** Sets the def a group node evaluates; null for none. InvalidArgument if the def would
    * reach itself. */
   Status setGroup(NodeId id, BlockId def);
@@ -419,10 +448,24 @@ class GraphDef {
   Status removeInterface(int64_t id);
   /** Moves it to `index` on its side. */
   Status moveInterface(int64_t id, int index);
+  /** Also resets a default that isn't of the new type. */
   Status setInterfaceType(int64_t id, std::string_view socketType);
   Status setInterfaceName(int64_t id, std::string_view name);
   /** Sets an interface input's default, coerced to its type; None resets it. */
   Status setInterfaceDefault(int64_t id, const PropValue &value);
+
+  /* ---- for undo: states that were there before, put back without checks ---- */
+
+  /** insertNode, without the check for recursion. */
+  Status restoreNode(const NodeState &state);
+  /** Replaces what is stored for a param or (not `param`) a literal. Versions are ignored. */
+  Status restoreValues(NodeId id, bool param, std::string_view name, const NodeValues &values);
+  /** Sets the target of a Pointer param, or of the group (an empty name). */
+  Status restoreRef(NodeId id, std::string_view param, BlockId target);
+  Status restoreInterface(SocketSide side, const InterfaceSocket &socket, int index);
+  /** The type with the default it had. */
+  Status restoreInterfaceType(int64_t id, const InterfaceSocket &was);
+  Status restoreInterfaceDefault(int64_t id, const PropValue &value);
 
   /* ---- references and evaluation ---- */
 
@@ -435,6 +478,7 @@ class GraphDef {
   Status validate() const;
 
  private:
+  friend class GraphNode;
   friend class GraphReachBuilder;
 
   Status busy(const char *what) const;
@@ -452,6 +496,12 @@ class GraphDef {
   const NodeType *typeOf(const GraphNode &node) const;
   bool topologyCurrent() const;
   Status setParamRef(GraphNode *n, const NodeParamDef &param, const PropValue &value);
+  void insertInterface(litestl::util::Vector<InterfaceSocket> &list,
+                       InterfaceSocket socket,
+                       int index);
+  Status writeParamRef(GraphNode *n, std::string_view name, bool weak, BlockId target);
+  /** The type of an input that has literals. */
+  Result<const SocketType *> literalType(const GraphNode &n, std::string_view input, int &index) const;
   InterfaceSocket *findInterface(int64_t id, SocketSide *side = nullptr);
   Status checkInterfaceName(SocketSide side, std::string_view name, int64_t except) const;
 

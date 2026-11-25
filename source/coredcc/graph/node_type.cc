@@ -1,7 +1,9 @@
 #include "coredcc/graph/node_type.h"
 
+#include "coredcc/api/change_bus.h"
 #include "coredcc/base/assert.h"
 #include "coredcc/base/text.h"
+#include "coredcc/graph/api.h"
 
 #include "litestl/util/alloc.h"
 
@@ -131,6 +133,7 @@ NodeTypeDef &NodeTypeDef::kernel(Owned<GraphKernel> kernel)
 NodeTypeRegistry::NodeTypeRegistry(Runtime *rt) : rt_(*rt)
 {
   rt_.ext<SocketTypeRegistry>();
+  detail::addGraphStructs(rt_);
   struct Special {
     const char *name, *uiName;
     NodeRole role;
@@ -170,6 +173,11 @@ Result<const NodeType *> NodeTypeRegistry::store(NodeType *type)
     litestl::alloc::Delete(type);
     return id.status();
   }
+  if (Status s = detail::addNodeStructs(rt_, *type); !s.ok()) {
+    litestl::alloc::Delete(type);
+    return s;
+  }
+  rt_.ext<ChangeBus>().bumpEpoch(); /* nodes of the type show as another struct now */
   stamp_ = rt_.touch();
   type->stamp = stamp_;
   types_.append(type);
@@ -189,6 +197,7 @@ Result<const NodeType *> NodeTypeRegistry::add(NodeTypeDef def)
   if (find(def.name_.c_str())) {
     return Status::error(StatusCode::AlreadyExists, (where + " is registered already").c_str());
   }
+  CDCC_TRY(detail::checkNodeStructs(rt_, def.name_.c_str()));
   if (!def.kernel_) {
     return invalid(where + " has no kernel");
   }

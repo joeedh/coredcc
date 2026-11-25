@@ -49,6 +49,8 @@ coredcc_test(test_graph_eval SOURCES graph/test_graph_eval.cc DEPS coredcc_graph
 coredcc_test(test_graph_limits SOURCES graph/test_graph_limits.cc DEPS coredcc_graph)
 coredcc_test(test_graph_blocks SOURCES graph/test_graph_blocks.cc DEPS coredcc_graph)
 coredcc_test(test_graph_lifetime SOURCES graph/test_graph_lifetime.cc DEPS coredcc_graph)
+coredcc_test(test_graph_api SOURCES graph/test_graph_api.cc DEPS coredcc_graph)
+coredcc_test(test_graph_commands SOURCES graph/test_graph_commands.cc DEPS coredcc_graph)
 coredcc_test(test_graph_random SOURCES graph/test_graph_random.cc DEPS coredcc_graph)
 coredcc_test(test_bind_facades SOURCES bind/test_bind_facades.cc DEPS coredcc_bind)
 coredcc_test(test_bind_foreign SOURCES bind/test_bind_foreign.cc DEPS coredcc_bind)

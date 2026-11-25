@@ -2,6 +2,7 @@
 
 /* The Runtime, defs, kernels and late registrations of test_graph_random.cc, with what the
  * oracle (naive_eval.h) computes for each kernel, and what the test keeps of an instance. */
+#include "edit_fixture.h"
 #include "naive_eval.h"
 
 #include "fuzz.h"
@@ -179,8 +180,13 @@ struct World {
       {"vec3", "float"}, {"string", "float"}, {"r.P", "int"}};
   bool late = false;
   int names = 0;
+  /** Edits go through commands, and are undone and redone. */
+  const bool undoable;
+  LinearHistory history;
+  CommandExecutor executor;
+  std::unique_ptr<Context> ctx;
 
-  explicit World(uint64_t seed) : lib(&rt)
+  World(uint64_t seed, bool undo) : lib(&rt), undoable(undo), executor(&rt, &history)
   {
     /* Seeded ids, so that a seed always gives the same run. */
     rt.setGuidSource([ids = SplitMix64(~seed)]() mutable {
@@ -188,7 +194,12 @@ struct World {
       return LocalId{hi, ids.next()};
     });
     addThings(rt);
-    test_assert(registerGraphBlocks(rt).ok());
+    test_assert(registerGraphCommands(rt).ok() && registerBlockCommands(rt).ok());
+    addDocument(rt);
+    ctx = std::make_unique<Context>(&rt, &lib, rt.ext<ApiRegistry>().runtimeOwner("doc"));
+    ctx->setExecutor(&executor);
+    lib.setQuarantine(undo);
+    lib.setAuditRelations(undo);
     SocketTypeRegistry &sockets = rt.ext<SocketTypeRegistry>();
     test_assert(sockets.addPayloadType<P>().ok());
     env.rt = &rt;
@@ -267,7 +278,8 @@ struct World {
     };
 
     for (int i = 0; i < kDefs; i++) {
-      defs.push_back(newGraph(lib, "def"));
+      defs.push_back(newGraph(lib, ("def" + std::to_string(i)).c_str()));
+      lib.setFlag(defs.back().h, BlockFlags::Root, true);
     }
     for (int i = 0; i < kThings; i++) {
       things.push_back(idOf(lib, newThing(lib, "thing", i)));
@@ -389,6 +401,7 @@ struct Client {
   std::unique_ptr<GraphInstance> inst;
   std::map<int64_t, std::pair<Value, int>> external;
   int externalVersion = 0;
+  int versions = 0;
   std::map<std::pair<GroupIds, int64_t>, Node> nodes;
   std::map<GroupIds, uint64_t> frameDefs;
   std::map<std::string, Last> last;
@@ -410,7 +423,7 @@ struct Client {
 
 struct Counts {
   uint64_t ops = 0, pulls = 0, runs = 0, musts = 0, mays = 0, visits = 0, errors = 0, cycles = 0,
-           groups = 0, recursions = 0;
+           groups = 0, recursions = 0, undos = 0, redos = 0;
 };
 inline Counts g_counts;
 inline uint64_t g_seed = 0;
