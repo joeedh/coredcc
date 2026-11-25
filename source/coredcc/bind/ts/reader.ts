@@ -5,7 +5,67 @@ import type {Context} from 'coredcc-gen/coredcc/Context'
 import * as cd from 'coredcc-gen/coredcc/functions'
 import type {PathReader as RawReader} from 'coredcc-gen/coredcc/PathReader'
 
-import {check, checkCtx, disposeWith, forget, take, toJs, toNamed, type Disposable, type NamedValue} from './core.ts'
+import {
+  check,
+  checkCtx,
+  disposeWith,
+  forget,
+  Ref,
+  ScriptError,
+  take,
+  toJs,
+  toNamed,
+  wideNumber,
+  type Disposable,
+  type NamedValue,
+} from './core.ts'
+
+/** What became of a path. */
+export interface PathChange {
+  index: number
+  /** Whether the value changed, or the path has an error now, had one, or has another. */
+  changed: boolean
+  /** Whether its `meta` may have changed: make its widget again. */
+  metaChanged: boolean
+  value: NamedValue
+  /** Why there is no value. */
+  error?: ScriptError
+}
+
+type Entry = [index: number, what: number, kind: string, value: unknown, more?: unknown, text?: string]
+
+const floats: Record<string, number> = {nan: NaN, inf: Infinity, '-inf': -Infinity}
+const toFloat = (x: unknown) => (typeof x === 'string' ? floats[x] : (x as number))
+
+function decode([index, what, kind, value, more, text]: Entry, names: boolean): PathChange {
+  const out: PathChange = {index, changed: (what & 1) !== 0, metaChanged: (what & 2) !== 0, value: undefined}
+  switch (kind) {
+    case 'n':
+      break
+    case 'f':
+      out.value = toFloat(value)
+      break
+    case 'v':
+      out.value = (value as unknown[]).map(toFloat)
+      break
+    case 'i':
+      out.value = wideNumber(value as number | string)
+      break
+    case 'p':
+      out.value = value === null ? null : new Ref(value as string)
+      break
+    case 'e':
+    case 'g':
+      out.value = names && more !== undefined ? (more as string | string[]) : wideNumber(value as number | string)
+      break
+    case '!':
+      out.error = new ScriptError(value as number, more as string, text)
+      break
+    default: /* 'b' and 's' */
+      out.value = value as boolean | string
+  }
+  return out
+}
 
 /**
  * A list of paths, and their values when they were last read: by `read`, or by `flushChanges`
@@ -57,7 +117,20 @@ export class PathReader implements Disposable {
   unwatch() {
     cd.readerUnwatch(this.reader)
   }
-  /** The paths that changed since the last call, as of the last `flushChanges`. */
+  /** The paths that changed since they were last taken, as of the last `flushChanges`, with their
+   * values: one call for all, which is what a frame should use. */
+  takeChanges(opts: {names?: boolean} = {}): PathChange[] {
+    return this.entries(false, opts.names ?? false)
+  }
+  /** Every path, as takeChanges gives them: after `read` or `watch`. */
+  takeAll(opts: {names?: boolean} = {}): PathChange[] {
+    return this.entries(true, opts.names ?? false)
+  }
+  private entries(all: boolean, names: boolean): PathChange[] {
+    const json = take(cd.readerTake(this.ctx, this.reader, all), (s) => s)
+    return (JSON.parse(json) as Entry[]).map((e) => decode(e, names))
+  }
+  /** The paths that changed since they were last taken, as of the last `flushChanges`. */
   takeChanged(): number[] {
     const out: number[] = []
     for (let i = cd.readerTakeChanged(this.reader); i >= 0; i = cd.readerTakeChanged(this.reader)) out.push(i)

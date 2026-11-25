@@ -70,6 +70,9 @@ Result<PropertyDef> scriptProp(const char *what,
                                const PropValue &defaultValue,
                                bool taken);
 
+/** An enum value's key, or flags' keys joined by '|'. NotFound unless items have all of it. */
+Result<std::string> keysOf(const PropertyDef &def, const PropValue &value);
+
 /** The words of `slots`. */
 std::vector<std::string> splitSlots(const string &slots);
 

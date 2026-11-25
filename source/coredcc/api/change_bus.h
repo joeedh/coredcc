@@ -48,8 +48,8 @@ struct BusChange {
  *   `objects["A"].x` and `objects.active.x` both see a change to A's x.
  * - What a dynamic hook looks at isn't known, so a watcher of a member that has one is read at
  *   every flush that has changes.
- * - A path that fails to resolve reads as None with the error; it fires once on the
- *   transition, and again when it resolves.
+ * - A path that fails to resolve reads as None with the error; it fires on the transition, when
+ *   the error becomes another, and when it resolves.
  *
  * - A **listener** is called at once, from inside `notify` and `notifyAll`. It is for
  *   dependency tracking (graph evaluation); UIs use watchers.
@@ -60,6 +60,9 @@ struct BusChange {
 class ChangeBus {
  public:
   static constexpr const char *kExtName = "coredcc.ChangeBus";
+  /** Changes of distinct members that wait at a time: more, and the next flush reads every
+   * watcher, as after bumpEpoch. */
+  static constexpr int kMaxPending = 4096;
   using WatchFn = litestl::util::function<void(const PropValue &value, const Status &status)>;
   /** For what `getMeta` gives for a path, or the struct it is in: it may differ now. */
   using MetaFn = litestl::util::function<void()>;
@@ -85,15 +88,24 @@ class ChangeBus {
    * listeners aren't called. */
   void bumpEpoch();
   uint64_t epoch() const;
-  /** Changes waiting for the next flush. */
+  /** Distinct changes waiting for the next flush. */
   int pendingCount() const;
 
+  /** What a watcher read when it was made. */
+  struct Start {
+    PropValue value;
+    Status status;
+  };
   /** Watches `path` from `ctx`, which must outlive the watcher, with the prefix that `ctx` has now.
    * The current value is
-   * read now and does not fire. `meta` runs, before `fn`, at a flush that finds another def:
+   * read now, into `start` if that is given, and does not fire. `meta` runs, before `fn`, at a flush that finds another def:
    * the path leads to another member, or stopped or started resolving, or a dynamic hook gives
    * another range, say. */
-  Result<ScopedConnection> watch(Context &ctx, const Path &path, WatchFn fn, MetaFn meta = {});
+  Result<ScopedConnection> watch(Context &ctx,
+                                 const Path &path,
+                                 WatchFn fn,
+                                 MetaFn meta = {},
+                                 Start *start = nullptr);
   Result<ScopedConnection> watch(Context &ctx,
                                  std::string_view path,
                                  WatchFn fn,

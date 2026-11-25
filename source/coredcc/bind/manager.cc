@@ -181,6 +181,7 @@ void addLayoutFacades(litestl::binding::BindingManager *mgr)
               "coredcc::readerTakeChangedMeta",
               script::readerTakeChangedMeta,
               MARGS("reader"));
+  BIND_FACADE(mgr, "coredcc::readerTake", script::readerTake, MARGS("ctx", "reader", "all"));
   BIND_FACADE(mgr, "coredcc::flushChanges", script::flushChanges, MARGS("ctx"));
   BIND_FACADE(mgr, "coredcc::watchedCount", script::watchedCount, MARGS("ctx"));
 }

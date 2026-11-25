@@ -220,6 +220,8 @@ export function copyValue(v: PropValue): PropValue {
 
 /** A bigint only past 2^53, where a number would lose digits. */
 export const toNumber = (n: bigint): number | bigint => (n >= -(2n ** 53n) && n <= 2n ** 53n ? Number(n) : n)
+/** An integer as JSON has it: past 2^53, a string. */
+export const wideNumber = (n: number | string): number | bigint => (typeof n === 'number' ? n : toNumber(BigInt(n)))
 
 /** Graph sockets and params hold no pointers, so a node has no context to read them with. */
 const pointerCtx = (ctx: Context | undefined): Context => {
@@ -264,7 +266,8 @@ export function toJs(ctx: Context | undefined, v: PropValue): Value {
   }
 }
 
-/** As toJs, but an enum is its key, and flags their keys. A number without an item stays one. */
+/** As toJs, but an enum is its key, and flags their keys. A value that no item has is the number
+ * instead: an enum's items may be dynamic, and a document may hold one that they no longer have. */
 export function toNamed(ctx: Context, path: string, v: PropValue): NamedValue {
   const flags = v.type() === PropValueType.Flags
   if (!flags && v.type() !== PropValueType.Enum) return toJs(ctx, v)

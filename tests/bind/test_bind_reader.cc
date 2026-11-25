@@ -1,10 +1,13 @@
 /* Reading and watching many paths for scripts. */
 #include "script_fixture.h"
 
+#include "coredcc/api/ref_text.h"
 #include "coredcc/bind/path_reader.h"
 
 #include <chrono>
+#include <limits>
 #include <optional>
+#include <string>
 
 test_init;
 
@@ -146,6 +149,67 @@ static void test_slots()
   test_assert(sc::watchedCount(s.ctx) == 0);
 }
 
+/* The packed form, of each kind. */
+static void test_take()
+{
+  Setup s;
+  Context &ctx = s.ctx;
+  sc::PathReader r = sc::newPathReader();
+  const auto take = [&](bool all) {
+    sc::StringResult t = sc::readerTake(ctx, r, all);
+    test_assert(t.status.ok());
+    return std::string(t.value.c_str());
+  };
+  const auto is = [](const std::string &got, const char *want) {
+    if (got != want) {
+      fprintf(stderr, "got  %s\nwant %s\n", got.c_str(), want);
+    }
+    return got == want;
+  };
+  for (const char *path : {"tool.free", "tool.locked", "objects[0].name", "objects[0].mode",
+                           "objects[0].flags", "objects[0].location", "objects[0].data",
+                           "objects[0].mode[EDIT]", "objects.length"})
+  {
+    add(r, path);
+  }
+  test_assert(is(take(false), "[]"));
+  const char *unread = "\"the path wasn't read yet\",\"FailedPrecondition: the path wasn't read yet\"]";
+  test_assert(take(true).find(unread) != std::string::npos);
+  test_assert(sc::readerWatch(ctx, r).ok() && is(take(false), "[]"));
+  s.w.object(0).location[1] = -0.5f;
+  s.w.object(0).mesh.target = BlockId{};
+  ctx.runtime().ext<ChangeBus>().notifyAll();
+  test_assert(sc::flushChanges(ctx).value == 2);
+  test_assert(is(take(false), "[[5,1,\"v\",[0,-0.5,0]],[6,1,\"p\",null]]") && is(take(false), "[]"));
+  test_assert(sc::readerTakeChanged(r) == -1);
+  s.w.object(0).mesh.target = s.w.meshId(0);
+  test_assert(sc::readerRead(ctx, r).ok());
+  const StableRef mesh = getValue(ctx, "objects[0].data")->asPointer();
+  const std::string want =
+      "[[0,0,\"f\",0],[1,0,\"b\",false],[2,0,\"s\",\"Cube\"],[3,0,\"e\",0,\"OBJECT\"],"
+      "[4,0,\"g\",0,[]],[5,0,\"v\",[0,-0.5,0]],[6,0,\"p\",\"" +
+      formatRef(ctx.runtime(), mesh) + "\"],[7,0,\"b\",false],[8,0,\"i\",2]]";
+  test_assert(is(take(true), want.c_str()));
+  /* What no item has, what JSON can't hold, and errors. */
+  s.w.tool.free = -std::numeric_limits<double>::infinity();
+  s.w.object(0).mode = 7;
+  s.w.object(0).flags = 3;
+  test_assert(sc::readerRead(ctx, r).ok());
+  const std::string odd = take(true);
+  test_assert(odd.starts_with("[[0,0,\"f\",\"-inf\"],") && odd.find("[3,0,\"e\",7],") != odd.npos);
+  test_assert(odd.find("[4,0,\"g\",3,[\"SELECT\",\"HIDE\"]],") != odd.npos);
+  s.w.object(0).flags = 5;
+  test_assert(sc::readerRead(ctx, r).ok() && take(true).find("[4,0,\"g\",5],") != odd.npos);
+  s.w.scene.objects.clear();
+  ctx.runtime().ext<ChangeBus>().notifyAll();
+  sc::flushChanges(ctx);
+  const std::string gone = take(false);
+  const std::string code = std::to_string(int(StatusCode::OutOfRange));
+  test_assert(gone.find("[3,3,\"!\"," + code + ",\"") != gone.npos);
+  test_assert(gone.find("\"OutOfRange: ") != gone.npos);
+  test_assert(gone.find("[8,1,\"i\",0]]") != gone.npos && is(take(false), "[]"));
+}
+
 /* As many as a layout can have, in time. */
 static void test_many()
 {
@@ -177,6 +241,7 @@ int main()
 {
   test_read();
   test_watch();
+  test_take();
   test_lifetime();
   test_slots();
   test_many();

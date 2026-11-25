@@ -299,10 +299,32 @@ StringResult pathMeta(Context &ctx, const string &path)
   Result<std::string> r = coredcc::pathMeta(ctx, view(path));
   return r.ok() ? ok<StringResult>(string(r->c_str())) : failed<StringResult>(r.status());
 }
+Result<std::string> detail::keysOf(const PropertyDef &def, const PropValue &v)
+{
+  const EnumMeta *meta = def.enumMeta();
+  if (!meta) {
+    return error(StatusCode::InvalidArgument, "no items");
+  }
+  if (const std::optional<int64_t> number = v.tryEnum()) {
+    const EnumItem *item = meta->findValue(*number);
+    return item ? Result<std::string>(std::string(item->key.c_str())) :
+                  error(StatusCode::NotFound, "no item is " + std::to_string(*number));
+  }
+  uint64_t bits = v.tryFlags().value_or(0);
+  std::string keys;
+  for (const EnumItem &item : meta->items) {
+    const uint64_t bit = uint64_t(item.value);
+    if (bit != 0 && (bits & bit) == bit) {
+      keys += std::string(keys.empty() ? "" : "|") + item.key.c_str();
+      bits &= ~bit;
+    }
+  }
+  return bits == 0 ? Result<std::string>(keys) :
+                     error(StatusCode::NotFound, "a flag bit has no item");
+}
 StringResult valueKeys(Context &ctx, const string &path, const PropValue &v)
 {
-  const std::optional<int64_t> number = v.tryEnum();
-  if (!number && !v.tryFlags()) {
+  if (!v.tryEnum() && !v.tryFlags()) {
     return failed<StringResult>(wrongType(v, "Enum or Flags"));
   }
   if (Status s = detail::kernelGate(ctx, "valueKeys"); !s.ok()) {
@@ -316,23 +338,8 @@ StringResult valueKeys(Context &ctx, const string &path, const PropValue &v)
     return failed<StringResult>(error(StatusCode::InvalidArgument,
                                       std::string("'") + path.c_str() + "' has no items"));
   }
-  if (number) {
-    const EnumItem *item = def->enumMeta()->findValue(*number);
-    return item ? ok<StringResult>(item->key) :
-                  failed<StringResult>(error(StatusCode::NotFound,
-                                             "no item is " + std::to_string(*number)));
-  }
-  uint64_t bits = *v.tryFlags();
-  std::string keys;
-  for (const EnumItem &item : def->enumMeta()->items) {
-    const uint64_t bit = uint64_t(item.value);
-    if (bit != 0 && (bits & bit) == bit) {
-      keys += std::string(keys.empty() ? "" : "|") + item.key.c_str();
-      bits &= ~bit;
-    }
-  }
-  return bits == 0 ? ok<StringResult>(string(keys.c_str())) :
-                     failed<StringResult>(error(StatusCode::NotFound, "a flag bit has no item"));
+  Result<std::string> keys = detail::keysOf(*def, v);
+  return keys.ok() ? ok<StringResult>(string(keys->c_str())) : failed<StringResult>(keys.status());
 }
 ValueResult getValue(Context &ctx, const string &path)
 {

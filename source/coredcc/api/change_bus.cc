@@ -5,8 +5,10 @@
 #include "coredcc/lib/library.h"
 #include "coredcc/parse/path_cache.h"
 
-#include <cstring>
 #include <optional>
+#include <string>
+#include <unordered_set>
+#include <utility>
 
 namespace coredcc {
 
@@ -14,10 +16,37 @@ using litestl::util::Vector;
 
 namespace {
 
+struct ChangeKey {
+  OwnerKey owner;
+  std::string_view member; /* empty: the whole owner */
+
+  bool operator==(const ChangeKey &b) const = default;
+};
 struct Change {
   OwnerKey owner;
-  litestl::util::string member; /* empty: the whole owner */
+  std::string member;
+
+  operator ChangeKey() const
+  {
+    return {owner, member};
+  }
 };
+/* Of either, so that looking one up allocates nothing. */
+struct ChangeHash {
+  using is_transparent = void;
+  size_t operator()(const ChangeKey &k) const
+  {
+    return size_t(k.owner.computeHash() * 31 + std::hash<std::string_view>()(k.member));
+  }
+};
+struct ChangeEqual {
+  using is_transparent = void;
+  bool operator()(const ChangeKey &a, const ChangeKey &b) const
+  {
+    return a == b;
+  }
+};
+using Changes = std::unordered_set<Change, ChangeHash, ChangeEqual>;
 
 /* What a UI made a widget for. With the path, the struct says which member, if any. */
 struct Meta {
@@ -60,18 +89,24 @@ struct Reading {
   uint64_t libEpoch = 0;
 };
 
-bool hits(const Vector<PathTouch, 4> &touched, const Vector<Change> &changes)
+bool hits(const Vector<PathTouch, 4> &touched, const Changes &changes)
 {
-  for (const Change &c : changes) {
-    for (const PathTouch &t : touched) {
-      if (t.owner == c.owner &&
-          (c.member.size() == 0 || strcmp(c.member.c_str(), t.member.c_str()) == 0))
-      {
-        return true;
-      }
+  if (changes.empty()) {
+    return false;
+  }
+  for (const PathTouch &t : touched) {
+    const std::string_view member(t.member.c_str(), t.member.size());
+    if (changes.contains(ChangeKey{t.owner, member}) || changes.contains(ChangeKey{t.owner, {}})) {
+      return true;
     }
   }
   return false;
+}
+
+/* Of a watcher: a widget shows the error. */
+bool sameStatus(const Status &a, const Status &b)
+{
+  return a.code() == b.code() && std::string_view(a.message()) == b.message();
 }
 
 uint64_t libraryEpoch(const Context &ctx)
@@ -119,7 +154,7 @@ void store(Watcher &w, Reading r)
 
 struct ChangeBus::State final : detail::SignalStateBase {
   Vector<Watcher> watchers;
-  Vector<Change> pending;
+  Changes pending;
   Signal<const BusChange &> listeners;
   uint64_t nextId = 1;
   uint64_t epoch = 0;
@@ -128,6 +163,17 @@ struct ChangeBus::State final : detail::SignalStateBase {
   /** Dead watchers, which go when they are half of the list: many go at a time. */
   int dead = 0;
 
+  void queue(const OwnerKey &owner, std::string_view member)
+  {
+    if (pending.contains(ChangeKey{owner, member})) {
+      return;
+    }
+    if (pending.size() == size_t(kMaxPending)) {
+      pending.clear();
+      epoch++;
+    }
+    pending.insert(Change{owner, std::string(member)});
+  }
   void disconnect(uint64_t id) override
   {
     for (Watcher &w : watchers) {
@@ -176,7 +222,7 @@ void ChangeBus::notify(const OwnerKey &owner, std::string_view member, ChangeAsp
     return;
   }
   /* Queued first, so a listener that flushes sees it. */
-  state_->pending.append(Change{owner, lsString(member)});
+  state_->queue(owner, member);
   state_->listeners.emit(BusChange{&owner, member, aspects});
 }
 
@@ -204,7 +250,8 @@ int ChangeBus::pendingCount() const
 Result<ScopedConnection> ChangeBus::watch(Context &ctx,
                                           const Path &path,
                                           WatchFn fn,
-                                          MetaFn meta)
+                                          MetaFn meta,
+                                          Start *start)
 {
   CDCC_CHECK(bool(fn), "ChangeBus::watch: an empty callback");
   Watcher w;
@@ -217,6 +264,9 @@ Result<ScopedConnection> ChangeBus::watch(Context &ctx,
     w.metaFn = std::make_shared<MetaFn>(std::move(meta));
   }
   store(w, read(ctx, path));
+  if (start) {
+    *start = Start{w.last, w.lastStatus};
+  }
   const uint64_t id = w.id;
   state_->watchers.append(std::move(w));
   return ScopedConnection(Connection(state_, id));
@@ -259,8 +309,7 @@ int ChangeBus::flush()
 {
   /* Keep the state alive even if a callback destroys the bus's owner. */
   std::shared_ptr<State> st = state_;
-  Vector<Change> changes = std::move(st->pending);
-  st->pending.clear();
+  const Changes changes = std::exchange(st->pending, {});
   const bool epochMoved = st->epoch != st->flushedEpoch;
   st->flushedEpoch = st->epoch;
   st->flushDepth++;
@@ -275,13 +324,13 @@ int ChangeBus::flush()
     {
       const Watcher &w = st->watchers[i];
       const bool libMoved = libraryEpoch(*w.ctx) != w.libEpoch;
-      const bool always = (!w.lastStatus.ok() || w.meta.def) && changes.size() > 0;
+      const bool always = (!w.lastStatus.ok() || w.meta.def) && !changes.empty();
       if (!epochMoved && !libMoved && !always && !hits(w.touched, changes)) {
         continue;
       }
     }
     const PropValue before = st->watchers[i].last;
-    const bool wasOk = st->watchers[i].lastStatus.ok();
+    const Status statusBefore = st->watchers[i].lastStatus;
     const Meta metaBefore = st->watchers[i].meta;
     Context *ctx = st->watchers[i].ctx;
     const Path path = st->watchers[i].path;
@@ -299,7 +348,7 @@ int ChangeBus::flush()
       }
     }
     const Watcher &w = st->watchers[i];
-    if (!w.live || (w.last == before && w.lastStatus.ok() == wasOk)) {
+    if (!w.live || (w.last == before && sameStatus(w.lastStatus, statusBefore))) {
       fired += metaFired;
       continue;
     }

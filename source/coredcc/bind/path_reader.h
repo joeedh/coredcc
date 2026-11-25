@@ -51,6 +51,17 @@ void readerUnwatch(const PathReader &reader);
 int32_t readerTakeChanged(const PathReader &reader);
 /** As above, for paths whose `pathMeta` may have changed. */
 int32_t readerTakeChangedMeta(const PathReader &reader);
+/**
+ * Takes all of both at once, or if `all` is set, every path: a JSON array, by index, of
+ * `[index, what, kind, value]` with
+ * - `what`: 1 if the value changed, 2 if the meta may have, or their sum;
+ * - `kind` and `value`: `"n"` (None) without a value; `"b"` a Bool; `"i"` an Int; `"f"` a Float;
+ *   `"s"` a String; `"p"` a pointer's text or null; `"v"` an array of components; `"e"` an enum's
+ *   number, then its key if an item has it; `"g"` flags' bits, then the array of their keys if
+ *   items have them all; or `"!"`, for a path without a value: the error's code, message and text.
+ *   A number that JSON can't hold is a string (JsonWriter).
+ */
+StringResult readerTake(Context &ctx, const PathReader &reader, bool all);
 
 /** Delivers the changes since the last flush to all watchers, of scripts and the host's own.
  * How many fired. Not from a script's slot. */

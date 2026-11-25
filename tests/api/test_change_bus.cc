@@ -416,8 +416,106 @@ static void test_unwatching()
   test_assert(bus.watcherCount() == 3);
 }
 
+/* However many notifications: distinct ones are kept, up to a limit. */
+static void test_pending()
+{
+  World w;
+  Context ctx = w.context();
+  ChangeBus &bus = w.rt.ext<ChangeBus>();
+  const OwnerKey tool = w.rt.ext<ApiRegistry>().runtimeOwner("tool").owner;
+  Recorder count;
+  Recorder strength;
+  ScopedConnection c1 = watchOk(bus, ctx, "tool.count", count);
+  ScopedConnection c2 = watchOk(bus, ctx, "tool.strength", strength);
+  bus.flush();
+  int heard = 0;
+  ScopedConnection listener = bus.addListener([&](const OwnerKey *) { heard++; });
+  for (int i = 0; i < 100000; i++) {
+    bus.notify(tool, "count");
+  }
+  bus.notify(tool, "other");
+  test_assert(bus.pendingCount() == 2 && heard == 100001);
+  /* Another member, then the owner. */
+  w.tool.strength = 0.125f;
+  test_assert(bus.flush() == 0);
+  bus.notify(tool, "");
+  test_assert(bus.flush() == 1 && strength.calls == 1 && count.calls == 0);
+  bus.notify(OwnerKey::ofRuntime(tool.nameHash + 1), "");
+  bus.notify(OwnerKey::ofRuntime(tool.nameHash + 1), "strength");
+  w.tool.strength = 0.25f;
+  test_assert(bus.flush() == 0);
+  bus.notify(tool, "strength");
+  test_assert(bus.flush() == 1 && strength.calls == 2);
+
+  /* Below the limit, what isn't named isn't read; past it, everything is. */
+  for (const int n : {ChangeBus::kMaxPending, ChangeBus::kMaxPending + 1}) {
+    const uint64_t epoch = bus.epoch();
+    for (int i = 0; i < n; i++) {
+      bus.notify(tool, "m" + std::to_string(i));
+    }
+    const bool past = n > ChangeBus::kMaxPending;
+    test_assert(bus.epoch() == epoch + past && bus.pendingCount() == (past ? 1 : n));
+    w.tool.strength += 0.125f;
+    test_assert(bus.flush() == (past ? 1 : 0) && bus.pendingCount() == 0 && bus.flush() == 0);
+  }
+  heard = 0;
+  for (int i = 0; i < 100000; i++) {
+    bus.notify(tool, "m" + std::to_string(i));
+  }
+  test_assert(heard == 100000 && bus.pendingCount() <= ChangeBus::kMaxPending && bus.validate().ok());
+  bus.flush();
+}
+
+/* Many changes against many watchers that they don't touch. */
+static void test_many()
+{
+  World w;
+  Context ctx = w.context();
+  ChangeBus &bus = w.rt.ext<ChangeBus>();
+  const OwnerKey tool = w.rt.ext<ApiRegistry>().runtimeOwner("tool").owner;
+  Recorder r;
+  std::vector<ScopedConnection> watchers;
+  for (int i = 0; i < 1000; i++) {
+    watchers.push_back(watchOk(bus, ctx, "tool.count", r));
+  }
+  const auto start = std::chrono::steady_clock::now();
+  for (int round = 0; round < 10; round++) {
+    for (int i = 0; i < 4000; i++) {
+      bus.notify(tool, "m" + std::to_string(i));
+    }
+    test_assert(bus.flush() == 0);
+  }
+  const auto took = std::chrono::steady_clock::now() - start;
+  test_assert(r.calls == 0 && took < std::chrono::seconds(1));
+}
+
+/* A widget shows the error, so it fires for another one. */
+static void test_other_errors()
+{
+  World w;
+  Context ctx = w.context();
+  ChangeBus &bus = w.rt.ext<ChangeBus>();
+  Recorder r;
+  ScopedConnection c = watchOk(bus, ctx, "objects[\"Cube\"].data.radius", r);
+  test_assert(w.lib.markDeleted(w.meshes[0]).ok());
+  test_assert(bus.flush() == 1 && !r.lastStatus.ok());
+  const Status first = r.lastStatus;
+  bus.notifyAll();
+  test_assert(bus.flush() == 0);
+  /* No such object now. */
+  w.scene.objects.clear();
+  bus.notifyAll();
+  test_assert(bus.flush() == 1 && !r.lastStatus.ok());
+  test_assert(std::string(first.message()) != r.lastStatus.message());
+  bus.notifyAll();
+  test_assert(bus.flush() == 0);
+}
+
 int main()
 {
+  test_pending();
+  test_many();
+  test_other_errors();
   test_listeners();
   test_change_listeners();
   test_notify_all();

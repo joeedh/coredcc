@@ -1,13 +1,16 @@
 #include "coredcc/bind/path_reader.h"
 
 #include "coredcc/api/change_bus.h"
+#include "coredcc/api/ref_text.h"
 #include "coredcc/api/resolve.h"
+#include "coredcc/base/json_writer.h"
 #include "coredcc/bind/detail.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
 #include <set>
+#include <utility>
 #include <vector>
 
 namespace coredcc::script {
@@ -119,7 +122,7 @@ Status readerWatch(Context &ctx, const PathReader &reader)
   core.changedMeta.clear();
   ChangeBus &bus = ctx.runtime().ext<ChangeBus>();
   for (int i = 0; i < readerCount(reader); i++) {
-    core.read(ctx, i);
+    ChangeBus::Start start;
     std::weak_ptr<PathReader::Core> weak = reader.core();
     Result<ScopedConnection> c =
         bus.watch(ctx, core.entries[size_t(i)].path,
@@ -134,12 +137,16 @@ Status readerWatch(Context &ctx, const PathReader &reader)
                     if (std::shared_ptr<PathReader::Core> core = weak.lock()) {
                       core->changedMeta.insert(i);
                     }
-                  });
+                  },
+                  &start);
     if (!c.ok()) {
       core.unwatch();
       return c.status();
     }
-    core.entries[size_t(i)].watch = std::move(c).value();
+    PathReader::Core::Entry &e = core.entries[size_t(i)];
+    e.watch = std::move(c).value();
+    e.value = std::move(start.value);
+    e.status = std::move(start.status);
   }
   return Status();
 }
@@ -157,6 +164,108 @@ int32_t readerTakeChanged(const PathReader &reader)
 int32_t readerTakeChangedMeta(const PathReader &reader)
 {
   return PathReader::Core::take(reader.core()->changedMeta);
+}
+
+/* An enum's or flags' keys, if items have all of it. Only they need the path read again. */
+static void writeKeys(JsonWriter &out, Context &ctx, const Path &path, const PropValue &v)
+{
+  Result<ResolvedPath> rp = resolve(ctx, path);
+  Result<PropertyDef> def = rp.ok() ? getMeta(ctx, *rp) : rp.status();
+  Result<std::string> keys = def.ok() ? detail::keysOf(*def, v) : def.status();
+  if (!keys.ok()) {
+    return;
+  }
+  if (v.tryEnum()) {
+    out.string(*keys);
+    return;
+  }
+  out.beginArray();
+  std::string_view rest = *keys;
+  while (!rest.empty()) {
+    const size_t at = rest.find('|');
+    out.string(rest.substr(0, at));
+    rest = at == rest.npos ? std::string_view() : rest.substr(at + 1);
+  }
+  out.endArray();
+}
+
+static void writeEntry(JsonWriter &out, Context &ctx, const Path &path, const PropValue &v)
+{
+  switch (v.type()) {
+    case PropValue::Type::None:
+      out.string("n");
+      return;
+    case PropValue::Type::Bool:
+      out.string("b").boolean(v.asBool());
+      return;
+    case PropValue::Type::Int:
+      out.string("i").integer(v.asInt());
+      return;
+    case PropValue::Type::Float:
+      out.string("f").number(v.asFloat());
+      return;
+    case PropValue::Type::String:
+      out.string("s").string(v.asString().c_str());
+      return;
+    case PropValue::Type::Enum:
+      out.string("e").integer(v.asEnum());
+      writeKeys(out, ctx, path, v);
+      return;
+    case PropValue::Type::Flags:
+      out.string("g").unsignedInteger(v.asFlags());
+      writeKeys(out, ctx, path, v);
+      return;
+    case PropValue::Type::Pointer:
+      out.string("p");
+      if (v.asPointer().isNull()) {
+        out.null();
+      }
+      else {
+        out.string(formatRef(ctx.runtime(), v.asPointer()));
+      }
+      return;
+    default:
+      out.string("v").beginArray();
+      for (int i = 0; i < v.componentCount(); i++) {
+        out.number(v.component(i));
+      }
+      out.endArray();
+  }
+}
+
+StringResult readerTake(Context &ctx, const PathReader &reader, bool all)
+{
+  if (Status s = detail::kernelGate(ctx, "readerTake"); !s.ok()) {
+    return failed<StringResult>(std::move(s));
+  }
+  PathReader::Core &core = *reader.core();
+  const std::set<int> changed = std::exchange(core.changed, {});
+  const std::set<int> changedMeta = std::exchange(core.changedMeta, {});
+  std::set<int> which = changed;
+  which.insert(changedMeta.begin(), changedMeta.end());
+  for (int i = 0; all && i < readerCount(reader); i++) {
+    which.insert(i);
+  }
+  JsonWriter out;
+  out.beginArray();
+  for (const int i : which) {
+    /* A copy: a dynamic hook's code may add paths. */
+    const PathReader::Core::Entry &e = core.entries[size_t(i)];
+    const PropValue value = e.value;
+    const Path path = e.path;
+    const Status status = e.status;
+    out.beginArray().integer(i).integer(int(changed.contains(i)) + 2 * int(changedMeta.contains(i)));
+    if (status.ok()) {
+      writeEntry(out, ctx, path, value);
+    }
+    else {
+      out.string("!").integer(int(status.code())).string(status.message());
+      out.string(status.toString().c_str());
+    }
+    out.endArray();
+  }
+  out.endArray();
+  return ok<StringResult>(string(out.take().c_str()));
 }
 
 IntResult flushChanges(Context &ctx)

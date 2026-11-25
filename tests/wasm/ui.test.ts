@@ -132,6 +132,23 @@ describe('coredcc wasm-st UI', () => {
     spike.nudge(hostOf(ctx))
     assert.equal(cdcc.flushChanges(ctx), 1)
     assert.equal(reader.value(0), 0.375)
+    /* All at once. */
+    cdcc.set(ctx, 'mode', 'EDIT')
+    cdcc.set(ctx, 'strength', 0.25)
+    cdcc.flushChanges(ctx)
+    const change = (index: number, value: unknown) => ({index, changed: true, metaChanged: false, value})
+    assert.deepEqual(reader.takeChanges({names: true}), [change(0, 0.25), change(1, 'EDIT')])
+    assert.deepEqual(reader.takeChanges(), [])
+    cdcc.set(ctx, 'mode', 'OBJECT')
+    cdcc.flushChanges(ctx)
+    assert.deepEqual(reader.takeChanges(), [change(1, 0)])
+    const all = reader.takeAll({names: true})
+    assert.deepEqual(all.map((c) => [c.index, c.changed, c.value]), [
+      [0, false, 0.25], [1, false, 'OBJECT'], [2, false, ['HIDE']], [3, false, undefined],
+    ])
+    assert.ok(all[3].error instanceof ScriptError && all[3].error.code === StatusCode.NotFound)
+    assert.match(all[3].error.message, /^NotFound: no such item/)
+    assert.match(all[3].error.detail, /^no such item/)
     reader.unwatch()
     assert.equal(spike.watched(hostOf(ctx)), 0)
 
@@ -213,6 +230,46 @@ describe('coredcc wasm-st UI', () => {
   }
   const cube = 'items["Cube"].weight'
   const ball = 'items["Ball"].weight'
+
+  test('a PathReader gives what get gives, for values of each kind', () => {
+    const paths = [
+      'count', 'strength', 'label', 'mode', 'mode[EDIT]', 'flags', 'offset', 'offset[1]', 'items.length',
+      'items["Cube"]', 'activeItem', 'big', 'enabled',
+    ]
+    const reader = new cdcc.PathReader(ctx, paths)
+    const same = () => {
+      reader.read()
+      for (const names of [false, true]) {
+        const all = reader.takeAll({names})
+        assert.deepEqual(all.map((c) => c.value), paths.map((p) => cdcc.get(ctx, p, {names})))
+      }
+    }
+    same()
+    cdcc.write(ctx, 'big', 2n ** 60n + 1n)
+    cdcc.write(ctx, 'label', '"\\\u2028é')
+    cdcc.write(ctx, 'flags', ['SELECT', 'HIDE'])
+    cdcc.write(ctx, 'activeItem', cdcc.get(ctx, 'items["Ball"]') as cdcc.Ref)
+    cdcc.write(ctx, 'offset', [1.5, -0.1, 3])
+    same()
+    cdcc.write(ctx, 'big', -(2n ** 62n))
+    same()
+    reader[Symbol.dispose]()
+  })
+
+  test('1,000 changed values in one call, in time', (t) => {
+    const reader = new cdcc.PathReader(ctx, Array.from({length: 1000}, (_, i) => ['strength', 'mode', 'offset'][i % 3]))
+    reader.watch()
+    cdcc.write(ctx, 'strength', 0.25)
+    cdcc.write(ctx, 'mode', 'EDIT')
+    cdcc.write(ctx, 'offset', [1, 2, 3])
+    assert.equal(cdcc.flushChanges(ctx), 1000)
+    const start = performance.now()
+    assert.equal(reader.takeChanges({names: true}).length, 1000)
+    const took = performance.now() - start
+    t.diagnostic(`took ${took.toFixed(1)} ms`)
+    assert.ok(took < 500)
+    reader[Symbol.dispose]()
+  })
 
   test('run takes JS values, and canRun says why not', () => {
     weigh()
