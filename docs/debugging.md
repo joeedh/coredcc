@@ -139,9 +139,11 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   for the disabled marker to confirm it's gone.
 
 ### MSVC: LNK1235 "corrupt or invalid COFF symbol table"
-- Seen when many tests link at once, with several worktrees building and little memory free
-  (2026-11-24). Which links fail differs from run to run, and the library is fine: build again.
-  The cause isn't confirmed. If the same link fails each time, delete the `.lib` it names.
+- **Cause:** incremental linking. A build that changes many files (a rebase, a checkout) links
+  some executables against stale `.ilk` files. The library named in the error is fine, and the
+  next build works. Reproduced with the build cache off by building `4e3be76` then `3e6cc1d`
+  (2 of 2 with `/INCREMENTAL`, 0 of 2 without).
+- **Fix:** coredcc's own builds link with `/INCREMENTAL:NO` (`CMakeLists.txt`).
 
 ## Build cache and worktrees
 Design: `docs/plans/2026-11-23-build-cache-worktrees.md`. Windows only, native builds only.

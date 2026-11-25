@@ -21,6 +21,16 @@ if(PROJECT_IS_TOP_LEVEL)
   coredcc_disable_exceptions_and_rtti()
 endif()
 
+# link.exe's incremental linking fails at random with LNK1235 ("corrupt or invalid COFF symbol
+# table") after a rebase changes many files (docs/debugging.md).
+if(PROJECT_IS_TOP_LEVEL AND MSVC)
+  foreach(_kind EXE SHARED MODULE)
+    foreach(_config DEBUG RELWITHDEBINFO)
+      string(APPEND CMAKE_${_kind}_LINKER_FLAGS_${_config} " /INCREMENTAL:NO")
+    endforeach()
+  endforeach()
+endif()
+
 # WASM (Emscripten): litestl needs BUILD_WASM and -DWASM in every TU, or its Vector
 # layout and MemHead disagree between TUs and platform/wasm.cc isn't built.
 if(EMSCRIPTEN)
