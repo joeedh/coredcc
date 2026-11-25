@@ -1,0 +1,85 @@
+# The full gate: `node tools/gate.mjs ci`, one job per preset (docs/building.md, "CI").
+name: ci
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['docs/**', '**/*.md']
+  pull_request:
+    paths-ignore: ['docs/**', '**/*.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to a pull request stops the run of the older one. Every push to master runs.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 24
+  PNPM_VERSION: 12.15.0
+
+jobs:
+  presets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.presets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - id: presets
+        run: |
+          matrix="$(node tools/gate.mjs ci --matrix)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: presets
+    name: ${{ matrix.preset }}
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.presets.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Compiler versions
+        run: |
+          tools\devshell.cmd where cl clang-cl cmake ninja
+          tools\devshell.cmd clang-cl --version
+      - name: Install the Emscripten SDK
+        if: matrix.wasm
+        run: node tools/install-emsdk.mjs
+      - name: Install the script tests' dependencies
+        if: matrix.scripts
+        working-directory: tests/wasm
+        run: npm ci
+      - name: Install pnpm
+        if: matrix.scripts
+        run: npm install --global pnpm@$env:PNPM_VERSION
+      - name: Install the test app's dependencies
+        if: matrix.scripts
+        working-directory: apps/testapp
+        run: pnpm install --frozen-lockfile
+      - name: Gate
+        run: node tools/gate.mjs ci --only ${{ matrix.preset }} --jobs 4
+      - name: Keep the logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-${{ matrix.preset }}
+          path: |
+            build/gate
+            apps/testapp/test-artifacts

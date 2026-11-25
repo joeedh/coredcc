@@ -35,17 +35,18 @@ Ninja Multi-Config with `-debug` and `-release` (RelWithDebInfo) build/test pres
 - One test: `tools\devshell.cmd ctest --preset native-clang-debug -R test_base_signal`
 
 ### Gates
-Run them by hand; they are not git hooks. Both exit 0 only if everything passed, and a skipped
-test is a failure. Logs are in `build/gate/`.
-- **Pre-commit:** `node tools/gate.mjs pre-commit`, before committing anything but documentation.
-  Builds and tests clang RelWithDebInfo (`native-clang-release`).
-- **Pre-push:** `node tools/gate.mjs pre-push`, before pushing master, on the commit that is pushed.
-  Not needed if only documentation changed since it last passed.
+A skipped test is a failure in both.
+- **Pre-commit:** `node tools/gate.mjs pre-commit`, before committing anything but documentation. Run it
+  by hand; it is not a git hook. Builds and tests clang RelWithDebInfo (`native-clang-release`), with 5
+  compile jobs or `--jobs N`. Logs are in `build/gate/`.
+- **CI:** `.github/workflows/ci.yml` runs `node tools/gate.mjs ci` on GitHub, for each push to master and each
+  pull request, unless only documentation changed. Don't run it all locally.
   - Builds and tests the four native presets (msvc/clang x debug/release), `wasm-st-debug` and
     `wasm-mt-debug`, and builds the benchmarks.
-  - Needs the emsdk (`node tools/install-emsdk.mjs`), `npm ci` in `tests/wasm` and `pnpm install` in
+  - After a push, watch its run (`gh run watch`). If it fails, fix that before other work.
+  - To reproduce a failure: `node tools/gate.mjs ci --only <preset>`. WASM needs the emsdk
+    (`node tools/install-emsdk.mjs`), and `wasm-st-debug` also `npm ci` in `tests/wasm` and `pnpm install` in
     `apps/testapp`.
-- Compile jobs: 5, or `--jobs N`. `--only <preset>` runs a part, and is not the gate.
 
 ### Test app
 `cd apps/testapp && pnpm install && pnpm test` (builds the page, runs `node:test` files that

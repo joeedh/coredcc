@@ -53,8 +53,9 @@ then.
   - Worktrees are siblings of the repo: `C:\dev\coredcc-<branch>`.
   - Each branch is rebased onto master and merged with `git merge --ff-only`.
 - **The remote** is https://github.com/joeedh/coredcc (public, since 2026-11-25). Master is pushed after each
-  merge, once the pre-push gate has passed. Worktree branches stay local.
-- **Gates:** `node tools/gate.mjs pre-commit` and `pre-push` (`docs/building.md`). They are not git hooks.
+  merge, once the pre-commit gate has passed. Worktree branches stay local.
+- **Gates:** `node tools/gate.mjs pre-commit`, by hand, and CI (`.github/workflows/ci.yml`) for everything else,
+  since 2026-11-25 (`docs/building.md`). After a push, its CI run is watched, and a failure is fixed first.
 
 ### Build cache for the parallel phase
 - Done 2026-11-24: `docs/plans/2026-11-23-build-cache-worktrees.md`. How to use it:

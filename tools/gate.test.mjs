@@ -10,7 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {after, before, test} from 'node:test'
 import {root} from './checkout.mjs'
-import {GATES, judge} from './gate.mjs'
+import {GATES, judge, matrix} from './gate.mjs'
 
 const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'coredcc-gate-test-')))
 let all = ''
@@ -74,4 +74,12 @@ test('the gates name presets that exist', () => {
   for (const {preset} of Object.values(GATES).flat()) {
     assert.ok(buildPresets.some((p) => p.name === preset) && testPresets.some((p) => p.name === preset), preset)
   }
+})
+
+test("CI's matrix has every preset, with what it needs", () => {
+  const {include} = matrix(GATES.ci)
+  assert.deepEqual(include.map((job) => job.preset), GATES.ci.map((step) => step.preset))
+  const having = (key) => include.filter((job) => job[key]).map((job) => job.preset)
+  assert.deepEqual(having('wasm'), ['wasm-st-debug', 'wasm-mt-debug'])
+  assert.deepEqual(having('scripts'), ['wasm-st-debug'])
 })

@@ -92,7 +92,7 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 - **Cause:** litestl's `Vector::operator[]` takes `int`, and MSVC warns on the narrowing
   that clang-cl accepts. With `/WX` it is an error.
 - **Fix:** cast the index (`v[int(i)]`). The pre-commit gate builds with clang only, so
-  MSVC's errors show in the pre-push gate (`tools/gate.mjs`).
+  MSVC's errors show in CI. `node tools/gate.mjs ci --only native-msvc-debug` shows them sooner.
 
 ### The test app has no backend, or TA1's tests all skip
 - **Symptom:** `info().backend` is `'none'`, and TA1's tests are skipped (outside ctest)
@@ -151,8 +151,8 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 - **Symptom:** `bench_scene` gave 15 ms, and the same commit gave 21 ms elsewhere. Targets seemed met for hours.
 - **Cause:** the program was old. The benchmarks aren't in `all`, so building and gating the rest doesn't
   rebuild them.
-- **Fix:** `node tools/bench.mjs` builds before it runs, and prints the commit and the link time. The pre-push
-  gate builds the benchmarks, so that they compile.
+- **Fix:** `node tools/bench.mjs` builds before it runs, and prints the commit and the link time. CI builds
+  the benchmarks, so that they compile.
 - **How to spot it next time:** compare the program's time with the commit's. To find where a slowdown came
   from, build several commits from scratch, and run the programs in turns: that rules out the machine.
 

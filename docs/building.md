@@ -3,7 +3,7 @@
 Only Windows is built and tested so far.
 
 ## What you need
-- **Visual Studio 18** (Community), with the C++ and clang-cl components. `tools\devshell.cmd <command>`
+- **Visual Studio 18**, any edition, with the C++ and clang-cl components. `tools\devshell.cmd <command>`
   runs a command in its environment: cl, clang-cl, CMake (3.25 or later) and Ninja.
   - From Git Bash, set `MSYS_NO_PATHCONV=1`, or use PowerShell.
 - **litestl**, the submodule: `git submodule update --init`.
@@ -34,12 +34,11 @@ Only Windows is built and tested so far.
 - `wasm-mt` needs COOP and COEP headers in a browser. `wasm-st` doesn't.
 
 ## Gates
-Run them by hand: they are not git hooks, and nothing else runs them.
 
 | Gate | When | What |
 |---|---|---|
-| `node tools/gate.mjs pre-commit` | before a commit of anything but documentation | builds and tests `native-clang-release` |
-| `node tools/gate.mjs pre-push` | before master is pushed, on the commit that is pushed | builds and tests the four native presets, `wasm-st-debug` and `wasm-mt-debug`; builds the benchmarks |
+| `node tools/gate.mjs pre-commit` | by hand, before a commit of anything but documentation. It is not a git hook | builds and tests `native-clang-release` |
+| `node tools/gate.mjs ci` | by GitHub, after a push to master and for a pull request | builds and tests the four native presets, `wasm-st-debug` and `wasm-mt-debug`; builds the benchmarks |
 
 - **They fail** if a test fails, times out, is skipped, is disabled or can't run, and if the script tests
   (`spike_ts`, `testapp`) aren't there. Missing dependencies are a failure.
@@ -49,7 +48,19 @@ Run them by hand: they are not git hooks, and nothing else runs them.
   like, to run a part. A part isn't the gate.
 - **What they don't do:** sanitizers, `wasm-*-release`, running benchmarks, formatting, or any other
   operating system. The test app's `pnpm run typecheck` is separate.
-- The gate's own tests: `node --test tools/gate.test.mjs`.
+- The gates' own tests: `node --test tools/gate.test.mjs`.
+
+### CI
+`.github/workflows/ci.yml`, on GitHub's hosted Windows machines (Visual Studio 18 Enterprise).
+- **One job per preset.** The presets are those of `tools/gate.mjs` (`ci --matrix` prints them), so a preset is
+  added there and not in the workflow.
+- **It doesn't run** if only documentation changed. It can be started by hand: `gh workflow run ci`.
+- **Every push to master runs to the end.** A new push to a pull request stops the run of the previous one.
+- **If a job fails,** its log has the end of the gate's log. The whole logs, and the test app's artifacts, are
+  an artifact of the run: `gh run download <run> -n logs-<preset>`.
+- **To reproduce it:** `node tools/gate.mjs ci --only <preset>`.
+- There is no build cache there, so every job compiles everything.
+- The actions are pinned by commit. Node's and pnpm's versions are at the top of the file.
 
 ## Formatting
 `.clang-format` is litestl's, and all of `source/` and `tests/` is formatted with it (2026-11-25). Nothing checks

@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 // The gates: they configure, build and run every test, and say whether all of it passed.
-// Nothing runs them by itself (they aren't git hooks).
 //
-//   node tools/gate.mjs pre-commit   native-clang-release (RelWithDebInfo)
-//   node tools/gate.mjs pre-push     the four native presets, wasm-st-debug and wasm-mt-debug,
-//                                    and the benchmarks are built, though not run
+//   node tools/gate.mjs pre-commit   native-clang-release (RelWithDebInfo). Run it by hand: it
+//                                    isn't a git hook
+//   node tools/gate.mjs ci           the four native presets, wasm-st-debug and wasm-mt-debug,
+//                                    and the benchmarks are built, though not run.
+//                                    .github/workflows/ci.yml runs it, a job per preset
 //       [--only PRESET]...           some of the gate's presets. Doesn't count as the gate
 //       [--jobs N]                   compile jobs, 5 by default: more run out of memory
 //       [--fresh]                    configure from scratch
+//       [--matrix]                   only print the presets, as GitHub's job matrix
 //
 // - A test that is skipped or couldn't run fails the gate, and so does a script test that isn't
 //   there: both mean missing dependencies (docs/debugging.md, "spike_ts missing").
@@ -27,7 +29,7 @@ const LOG_TAIL = 40
 /** `benchmarks`: also build them. `tests`: what has to be among the tests. */
 export const GATES = {
   'pre-commit': [{preset: 'native-clang-release'}],
-  'pre-push': [
+  ci: [
     {preset: 'native-clang-debug'},
     {preset: 'native-clang-release', benchmarks: true},
     {preset: 'native-msvc-debug'},
@@ -39,6 +41,11 @@ export const GATES = {
 
 const ENTITIES = {lt: '<', gt: '>', quot: '"', apos: "'", amp: '&'}
 const unescape = (s) => s.replace(/&(lt|gt|quot|apos|amp);/g, (_, name) => ENTITIES[name])
+
+/** The gate's presets as GitHub's job matrix, and what each needs installed. */
+export const matrix = (gate) => ({
+  include: gate.map(({preset, tests}) => ({preset, wasm: preset.startsWith('wasm-'), scripts: tests !== undefined})),
+})
 
 /** What ctest's JUnit file says: how many tests, and everything in it that isn't a pass. */
 export function judge(junit, required = []) {
@@ -121,11 +128,16 @@ function main() {
       only: {type: 'string', multiple: true, default: []},
       jobs: {type: 'string', default: '5'},
       fresh: {type: 'boolean', default: false},
+      matrix: {type: 'boolean', default: false},
     },
   })
   const name = positionals[0]
   const gate = Object.hasOwn(GATES, name ?? '') ? GATES[name] : null
   if (!gate || positionals.length !== 1) throw new Error(`which gate: ${Object.keys(GATES).join(' or ')}`)
+  if (values.matrix) {
+    console.log(JSON.stringify(matrix(gate)))
+    return
+  }
   const jobs = Number(values.jobs)
   if (!Number.isInteger(jobs) || jobs < 1) throw new Error(`--jobs ${values.jobs}: not a number of jobs`)
   for (const preset of values.only) {
