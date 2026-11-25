@@ -1,6 +1,7 @@
 /* Layouts from XML: what the subset takes, what it refuses and where, prefixes, and JSON. */
 #include "coredcc/layout/layout.h"
 #include "coredcc/layout/xml.h"
+#include "coredcc/props/value.h"
 
 #include "test_util.h"
 
@@ -540,6 +541,30 @@ static void test_versions()
   }() + "/>"), "an element has more than 64 attributes", 1, 26 + 64 * 6, StatusCode::OutOfRange));
 }
 
+static void test_conditions()
+{
+  const auto holds = [](const PropValue &v) {
+    LayoutCondition c;
+    const bool out = conditionHolds(c, v);
+    test_assert(valueHolds(v) == out);
+    c.negated = true;
+    test_assert(conditionHolds(c, v) == !out);
+    return out;
+  };
+  test_assert(holds(PropValue::ofBool(true)) && !holds(PropValue::ofBool(false)));
+  test_assert(holds(PropValue::ofInt(2)) && !holds(PropValue::ofInt(0)));
+  test_assert(holds(PropValue::ofString("a")) && !holds(PropValue::ofString("")));
+  StableRef ref;
+  ref.owner = OwnerKey::ofRuntime(1);
+  test_assert(holds(PropValue::ofPointer(ref)) && !holds(PropValue::nullPointer()));
+  test_assert(!holds(PropValue()) && !holds(PropValue::ofFloat(1)));
+  for (const bool negated : {false, true}) {
+    LayoutCondition c;
+    c.negated = negated;
+    test_assert(!conditionHolds(c, Status::error(StatusCode::NotFound, "none")));
+  }
+}
+
 /* `data-` attributes, on any node. */
 static void test_data()
 {
@@ -594,6 +619,7 @@ static void test_tool_prefix()
 int main()
 {
   test_versions();
+  test_conditions();
   test_data();
   test_tool_prefix();
   test_golden();

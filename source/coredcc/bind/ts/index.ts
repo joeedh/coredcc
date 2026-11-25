@@ -53,6 +53,7 @@ export * from './graph.ts'
 export * from './layout.ts'
 export * from './library.ts'
 export * from './reader.ts'
+export * from './run.ts'
 
 /* ---- datapaths and commands ---- */
 

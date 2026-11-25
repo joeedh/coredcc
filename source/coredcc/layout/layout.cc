@@ -1,6 +1,7 @@
 #include "coredcc/layout/layout.h"
 
 #include "coredcc/command/last_used.h"
+#include "coredcc/props/value.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -8,6 +9,27 @@
 #include <utility>
 
 namespace coredcc {
+
+bool valueHolds(const PropValue &value)
+{
+  switch (value.type()) {
+    case PropValue::Type::Bool:
+      return value.asBool();
+    case PropValue::Type::Int:
+      return value.asInt() != 0;
+    case PropValue::Type::String:
+      return value.asString().size() > 0;
+    case PropValue::Type::Pointer:
+      return !value.asPointer().isNull();
+    default:
+      return false;
+  }
+}
+
+bool conditionHolds(const LayoutCondition &condition, const Result<PropValue> &value)
+{
+  return value.ok() && valueHolds(*value) != condition.negated;
+}
 
 Layout::Layout()
 {

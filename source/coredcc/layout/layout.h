@@ -17,6 +17,8 @@
 
 namespace coredcc {
 
+class PropValue;
+
 /** The version of the format that this library reads and writes, as XML and as JSON. */
 inline constexpr int kLayoutVersion = 1;
 
@@ -134,6 +136,12 @@ struct LayoutCondition {
   Path path;
   bool negated = false;
 };
+
+/** Whether a condition holds, or a container is there, whose path reads as `value`: of a Bool, a
+ * pointer, a number or a String, as LayoutCondition says. Other values don't. */
+bool valueHolds(const PropValue &value);
+/** Whether the condition holds, if its path reads as `value`. */
+bool conditionHolds(const LayoutCondition &condition, const Result<PropValue> &value);
 
 /** What a layout may hold, from text and from the builder. */
 struct LayoutLimits {

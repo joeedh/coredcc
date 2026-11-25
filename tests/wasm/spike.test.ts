@@ -11,43 +11,14 @@
  */
 import assert from 'node:assert/strict'
 import {afterEach, beforeEach, describe, test} from 'node:test'
-import {pathToFileURL} from 'node:url'
-import {setFlagsFromString} from 'node:v8'
-import {runInNewContext} from 'node:vm'
 
 import * as cdcc from 'coredcc-script'
 import {Ref, CommandFlags, ScriptError, Session, StatusCode, type Context, type ScriptCommand} from 'coredcc-script'
 import type {Host} from 'coredcc-gen/testapp/Host'
 import * as spike from 'coredcc-gen/testapp/functions'
 
+import {backend, create, fails, gc, hostOf, module, open, validate} from './fixture.ts'
 import {graphTests} from './graphs.ts'
-
-const create = (await import(pathToFileURL(process.env.SPIKE_MODULE as string).href)).default
-const module = await create()
-const backend = cdcc.load(module, 'TESTAPP_GetManager')
-
-setFlagsFromString('--expose-gc')
-const gc = runInNewContext('gc') as () => void
-
-/** A ScriptError with `code` whose message matches `re`. */
-const fails = (code: StatusCode, re: RegExp) => (e: unknown) =>
-  e instanceof ScriptError && e.code === code && re.test(e.message)
-
-const open = () => {
-  const host = spike.create() as Host
-  return new Session(host, spike.context(host) as Context)
-}
-
-const hostOf = (ctx: Context) => (ctx as unknown as {__host: Host}).__host
-
-const validate = (ctx: Context) => {
-  const st = spike.validate(hostOf(ctx))
-  try {
-    assert.ok(st.ok(), st.message())
-  } finally {
-    st[Symbol.dispose]()
-  }
-}
 
 /* Adds `amount` to `count`, keeping what undo needs; writes `result`. */
 class AddCount implements ScriptCommand {
@@ -226,59 +197,6 @@ describe('coredcc wasm-st spike', () => {
     for (const g of [0, -1, 1.5, NaN, 2 ** 60]) assert.throws(() => cdcc.set(ctx, 'strength', 1, g), TypeError)
   })
 
-  test('layouts: nodes, issues, and a tool under a prefix', () => {
-    const xml = `<layout path="items['Cube']">
-  <prop path="weight" enabledIf="!/enabled"/>
-  <tool invocation="ts.weigh(by=2)">Weigh</tool>
-</layout>`
-    const root = cdcc.parseLayout(xml)
-    assert.equal(root.kind, 'layout')
-    const [prop, tool] = root.children!
-    assert.equal(prop.effectivePath, '/items["Cube"].weight')
-    assert.equal(cdcc.get(ctx, prop.effectivePath), 1)
-    assert.deepEqual(prop.enabledIf, {path: '/enabled', not: true})
-    assert.equal(tool.label, 'Weigh')
-    assert.equal(tool.prefix, '/items["Cube"]')
-    assert.throws(() => cdcc.parseLayout(`<layout>
-<x/></layout>`), fails(StatusCode.InvalidArgument, /layout 2:1/))
-
-    const issues = cdcc.validateLayout(ctx, xml)
-    assert.deepEqual(issues.map((i) => [i.severity, i.line, i.node, i.code]), [['Error', 3, 2, 'NotFound']])
-
-    /* The command's own paths are under the prefix too, in its undo as well. */
-    class Weigh implements ScriptCommand {
-      before = 0
-      exec(c: Context) {
-        this.before = cdcc.get(c, 'weight') as number
-        cdcc.write(c, 'weight', this.before + (cdcc.input(c, 'by') as number))
-      }
-      undo(c: Context) {
-        cdcc.write(c, 'weight', this.before)
-      }
-    }
-    cdcc.registerCommand(ctx, {id: 'ts.weigh', inputs: {by: 1}}, Weigh)
-    assert.deepEqual(cdcc.validateLayout(ctx, xml), [])
-    cdcc.invokeAt(ctx, tool.prefix!, tool.invocation!)
-    assert.equal(cdcc.get(ctx, 'items["Cube"].weight'), 3)
-    cdcc.undo(ctx)
-    assert.equal(cdcc.get(ctx, 'items["Cube"].weight'), 1)
-    /* Undo is where the run was, whatever the prefix names by then. */
-    cdcc.write(ctx, 'activeItem', cdcc.get(ctx, 'items["Ball"]') as cdcc.Ref)
-    cdcc.invokeAt(ctx, 'activeItem', 'ts.weigh(by=2)')
-    cdcc.write(ctx, 'activeItem', cdcc.get(ctx, 'items["Cube"]') as cdcc.Ref)
-    cdcc.write(ctx, 'items["Cube"].weight', 50)
-    cdcc.undo(ctx)
-    cdcc.redo(ctx)
-    assert.equal(cdcc.get(ctx, 'items["Ball"].weight'), 3)
-    cdcc.write(ctx, 'items["Ball"].name', 'Sphere')
-    cdcc.undo(ctx)
-    assert.equal(cdcc.get(ctx, 'items["Sphere"].weight'), 1)
-    assert.equal(cdcc.get(ctx, 'items["Cube"].weight'), 50)
-    cdcc.write(ctx, 'items["Sphere"].name', 'Ball')
-    assert.throws(() => cdcc.invokeAt(ctx, 'items["Cone"]', tool.invocation!), ScriptError)
-    assert.throws(() => cdcc.invokeAt(ctx, '', tool.invocation!), fails(StatusCode.NotFound, /weight/))
-  })
-
   test('a string with a NUL is refused wherever it comes in', () => {
     const nul = 'a\0b'
     const refused = fails(StatusCode.InvalidArgument, /NUL/)
@@ -343,101 +261,6 @@ describe('coredcc wasm-st spike', () => {
     assert.equal(cdcc.get(ctx, 'items["Cube"].name'), 'Cube')
     /* The id wasn't taken by those. */
     cdcc.registerCommand(ctx, {id: 'ts.nul'}, Nothing)
-  })
-
-  test('a dynamic def: its keys, and watching what meta gives', () => {
-    assert.equal(cdcc.meta(ctx, 'strength').dynamic, undefined)
-    const focus = cdcc.meta(ctx, 'focus')
-    assert.equal(focus.dynamic, true)
-    assert.deepEqual(focus.items!.map((i) => i.key), ['NONE', 'Cube', 'Ball'])
-    cdcc.set(ctx, 'focus[Ball]', true)
-    assert.equal(cdcc.get(ctx, 'focus', {names: true}), 'Ball')
-    assert.throws(() => cdcc.get(ctx, 'focus[Cone]'), fails(StatusCode.NotFound, /no key 'Cone'/))
-    /* It can't be known without an instance. */
-    const issues = cdcc.validateLayout(ctx, '<layout><prop path="focus[Cone]" visibleIf="focus[Cube]"/></layout>')
-    assert.deepEqual(issues.map((i) => i.severity), ['Warning', 'Warning'])
-
-    const reader = new cdcc.PathReader(ctx, ['level', 'focus', 'strength', 'focus[Ball]'])
-    reader.watch()
-    cdcc.set(ctx, 'count', 5)
-    cdcc.set(ctx, 'items["Ball"].name', 'Sphere')
-    cdcc.flushChanges(ctx)
-    assert.deepEqual(reader.takeChangedMeta(), [0, 1, 3])
-    assert.deepEqual(reader.takeChangedMeta(), [])
-    assert.deepEqual(reader.takeChanged(), [3])
-    assert.equal(cdcc.meta(ctx, 'level').hardMax, 5)
-    assert.equal(reader.value(1, {names: true}), 'Sphere')
-    reader[Symbol.dispose]()
-  })
-
-  test('PathReader reads, watches, and goes with its session', () => {
-    const reader = new cdcc.PathReader(ctx, ['strength', 'mode', 'flags', 'items["Cone"].weight'])
-    assert.equal(reader.count, 4)
-    assert.throws(() => reader.value(0), fails(StatusCode.FailedPrecondition, /wasn't read/))
-    reader.read()
-    assert.equal(reader.value(0), 0.5)
-    assert.equal(reader.value(1), 0)
-    assert.equal(reader.value(1, {names: true}), 'OBJECT')
-    assert.deepEqual(reader.value(2, {names: true}), [])
-    assert.throws(() => reader.value(3), ScriptError)
-    assert.throws(() => reader.value(4), fails(StatusCode.OutOfRange, /path 4/))
-    assert.throws(() => reader.add('a..b'), ScriptError)
-    assert.throws(() => new cdcc.PathReader(ctx, ['count', 'a..b']), ScriptError)
-
-    reader.watch()
-    assert.equal(spike.watched(hostOf(ctx)), 4)
-    assert.equal(cdcc.flushChanges(ctx), 0)
-    cdcc.set(ctx, 'strength', 0.25)
-    cdcc.set(ctx, 'flags', ['HIDE'])
-    assert.equal(reader.value(0), 0.5)
-    assert.equal(cdcc.flushChanges(ctx), 2)
-    assert.deepEqual(reader.takeChanged(), [0, 2])
-    assert.deepEqual(reader.takeChanged(), [])
-    assert.deepEqual(reader.value(2, {names: true}), ['HIDE'])
-    /* A change made in C++. */
-    spike.nudge(hostOf(ctx))
-    assert.equal(cdcc.flushChanges(ctx), 1)
-    assert.equal(reader.value(0), 0.375)
-    reader.unwatch()
-    assert.equal(spike.watched(hostOf(ctx)), 0)
-
-    /* In a slot: reading, but not watching; a slot's context isn't a session's. */
-    let inSlot: unknown[] = []
-    class Slot implements ScriptCommand {
-      exec(c: Context) {
-        const tried = (fn: () => unknown) => {
-          try {
-            return fn()
-          } catch (e) {
-            return e instanceof ScriptError ? e.code : (e as Error).message
-          }
-        }
-        inSlot = [
-          tried(() => reader.read()),
-          tried(() => reader.watch()),
-          tried(() => cdcc.flushChanges(c)),
-          tried(() => new cdcc.PathReader(c, ['count'])),
-        ]
-      }
-      undo() {}
-    }
-    cdcc.registerCommand(ctx, {id: 'ts.slot'}, Slot)
-    cdcc.invoke(ctx, 'ts.slot()')
-    assert.deepEqual(inSlot, [undefined, StatusCode.Busy, StatusCode.Busy, "expected a session's context"])
-
-    /* Disposed of by hand, or with the session, before its host. */
-    const second = open()
-    const other = new cdcc.PathReader(second.ctx, ['count'])
-    other.watch()
-    other[Symbol.dispose]()
-    other[Symbol.dispose]()
-    assert.equal(spike.watched(hostOf(second.ctx)), 0)
-    assert.throws(() => other.read(), /disposed/)
-    const late = new cdcc.PathReader(second.ctx, ['count'])
-    late.watch()
-    second[Symbol.dispose]()
-    assert.throws(() => late.value(0), /disposed/)
-    assert.throws(() => new cdcc.PathReader(second.ctx, ['count']), /disposed/)
   })
 
   test('saves, loads, appends, with reports', () => {

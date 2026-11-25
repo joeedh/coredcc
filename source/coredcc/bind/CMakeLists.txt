@@ -10,6 +10,7 @@ coredcc_library(coredcc_bind
     manager.cc
     meta.cc
     path_reader.cc
+    run_facades.cc
     script_table.cc
   DEPS
     coredcc_graph

@@ -663,6 +663,29 @@ Result<PropertyBag> CommandExecutor::run(Context &ctx, std::string_view id, Prop
   return run(ctx, *def, std::move(inputs));
 }
 
+Status CommandExecutor::canRun(Context &ctx, const CommandDef &def, PropertyBag inputs)
+{
+  CDCC_TRY(rt_.busyIfEvaluating("canRun"));
+  if (running() || slotDepth_ > 0) {
+    return Status::error(StatusCode::FailedPrecondition, "canRun inside a command");
+  }
+  if (rt_.hasStickyError()) {
+    return Status::error(StatusCode::FailedPrecondition,
+                         "canRun: an earlier error was never collected");
+  }
+  if (open_) {
+    return busy(def.name().c_str());
+  }
+  Binding bind(ctx, this);
+  CDCC_TRY(bind.status());
+  Result<RecordPtr> rec = start(ctx, def, Owned<Command>(), std::move(inputs));
+  if (!rec.ok()) {
+    return rec.status();
+  }
+  discardRecord(**rec);
+  return collect(Status());
+}
+
 Result<PropertyBag> CommandExecutor::runSub(Context &ctx, Owned<Command> cmd, const CommandDef &def)
 {
   return subRun(ctx, def, std::move(cmd), def.newInputs());
@@ -868,6 +891,11 @@ Command *CommandExecutor::interactiveCommand()
   return open_ ? &open_->command() : nullptr;
 }
 
+const CommandDef *CommandExecutor::interactiveDef() const
+{
+  return open_ ? &open_->def() : nullptr;
+}
+
 Status CommandExecutor::updateInteractive(
     Context &ctx, litestl::util::function_ref<Status(Context &ctx, Command &cmd)> fn)
 {
@@ -970,26 +998,62 @@ Result<PropertyBag> inputsFromInvocation(Context &ctx, const CommandDef &def, co
   return bag;
 }
 
+/* What `ctx`'s executor needs for `invocation`. */
+static Result<PropertyBag> bagFor(Context &ctx,
+                                  const char *what,
+                                  const Invocation &inv,
+                                  const CommandDef *&def)
+{
+  if (!ctx.executor()) {
+    return Status::error(StatusCode::FailedPrecondition,
+                         (std::string(what) + ": the Context has no executor").c_str());
+  }
+  Runtime &rt = ctx.runtime();
+  def = rt.ext<CommandRegistry>().find(inv.command.c_str());
+  if (!def) {
+    return rt.ext<CommandRegistry>().unknown(inv.command.c_str());
+  }
+  return inputsFromInvocation(ctx, *def, inv);
+}
+
 Result<PropertyBag> invoke(Context &ctx, std::string_view invocation)
 {
-  CommandExecutor *ex = ctx.executor();
-  if (!ex) {
-    return Status::error(StatusCode::FailedPrecondition, "invoke: the Context has no executor");
-  }
   Result<Invocation> inv = parseInvocation(invocation);
   if (!inv.ok()) {
     return inv.status();
   }
-  Runtime &rt = ctx.runtime();
-  const CommandDef *def = rt.ext<CommandRegistry>().find(inv->command.c_str());
-  if (!def) {
-    return rt.ext<CommandRegistry>().unknown(inv->command.c_str());
-  }
-  Result<PropertyBag> inputs = inputsFromInvocation(ctx, *def, *inv);
+  const CommandDef *def = nullptr;
+  Result<PropertyBag> inputs = bagFor(ctx, "invoke", *inv, def);
   if (!inputs.ok()) {
     return inputs.status();
   }
-  return ex->run(ctx, *def, std::move(inputs).value());
+  return ctx.executor()->run(ctx, *def, std::move(inputs).value());
+}
+
+Result<PropertyBag> invokeAt(Context &ctx, const Path &prefix, std::string_view invocation)
+{
+  PrefixScope scope(ctx, prefix.size() > 0 ? &prefix : nullptr);
+  return invoke(ctx, invocation);
+}
+
+Status canInvoke(Context &ctx, const Invocation &invocation)
+{
+  const CommandDef *def = nullptr;
+  Result<PropertyBag> inputs = bagFor(ctx, "canInvoke", invocation, def);
+  return inputs.ok() ? ctx.executor()->canRun(ctx, *def, std::move(inputs).value()) :
+                       inputs.status();
+}
+
+Status canInvoke(Context &ctx, std::string_view invocation)
+{
+  Result<Invocation> inv = parseInvocation(invocation);
+  return inv.ok() ? canInvoke(ctx, *inv) : inv.status();
+}
+
+Status canInvokeAt(Context &ctx, const Path &prefix, std::string_view invocation)
+{
+  PrefixScope scope(ctx, prefix.size() > 0 ? &prefix : nullptr);
+  return canInvoke(ctx, invocation);
 }
 
 } // namespace coredcc

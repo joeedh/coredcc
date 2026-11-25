@@ -239,6 +239,13 @@ class CommandExecutor {
                                   const CommandDef &def,
                                   Owned<Command> cmd,
                                   PropertyBag inputs);
+  /**
+   * Why `run`, or `beginInteractive` of an Interactive command, would refuse it now: its canRun's
+   * answer, or what is wrong with its inputs or the prefix. An instance is made and discarded, and
+   * nothing else changes: a stray sticky error stays. For greying out a button: canRun slots
+   * should be cheap.
+   */
+  Status canRun(Context &ctx, const CommandDef &def, PropertyBag inputs);
   /** From inside exec: runs a command into the running command's group. */
   Result<PropertyBag> runSub(Context &ctx, const CommandDef &def, PropertyBag inputs);
   Result<PropertyBag> runSub(Context &ctx, Owned<Command> cmd, const CommandDef &def);
@@ -274,6 +281,8 @@ class CommandExecutor {
   }
   /** The open command, for the tool driving it; null when none is open. */
   Command *interactiveCommand();
+  /** Its def. */
+  const CommandDef *interactiveDef() const;
   /** Runs `fn` on the open command with its bags and its path prefix in `ctx`, as in its slots,
    * and returns what it returns. For live edits; commands can't be run from it. A sticky error
    * that it leaves stays for commit. */
@@ -333,6 +342,14 @@ class CommandExecutor {
  * LastUsed values, then their defaults.
  */
 Result<PropertyBag> invoke(Context &ctx, std::string_view invocation);
+/** As invoke, with `prefix` as the Context's path prefix: a Layout's Tool runs with its
+ * effectivePath. An empty one is none. */
+Result<PropertyBag> invokeAt(Context &ctx, const Path &prefix, std::string_view invocation);
+/** Why invoke (or beginInteractive) would refuse it: CommandExecutor::canRun's answer, or what is
+ * wrong with the invocation. */
+Status canInvoke(Context &ctx, std::string_view invocation);
+Status canInvoke(Context &ctx, const struct Invocation &invocation);
+Status canInvokeAt(Context &ctx, const Path &prefix, std::string_view invocation);
 
 /** Builds the input bag for `def` from an invocation's arguments (unknown names are
  * NotFound with suggestions). A Pointer's datapath is resolved now, in `ctx`. */

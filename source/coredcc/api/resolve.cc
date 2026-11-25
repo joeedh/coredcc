@@ -801,4 +801,19 @@ void getValues(Context &ctx,
   }
 }
 
+void getValues(Context &ctx,
+               std::span<const Path *const> paths,
+               Vector<PropValue> &values,
+               Vector<Status> &errors)
+{
+  values.clear();
+  errors.clear();
+  for (const Path *p : paths) {
+    Result<ResolvedPath> rp = resolve(ctx, *p);
+    Result<PropValue> v = rp.ok() ? getValue(ctx, *rp) : rp.status();
+    values.append(v.ok() ? *v : PropValue());
+    errors.append(v.status());
+  }
+}
+
 } // namespace coredcc

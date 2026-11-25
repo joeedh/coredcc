@@ -259,6 +259,24 @@ static void test_prefix_and_batch()
   litestl::util::Vector<PropValue> values;
   litestl::util::Vector<Status> errors;
   getValues(ctx, paths, values, errors);
+  {
+    std::vector<Path> parsed;
+    std::vector<const Path *> pointers;
+    for (std::string_view p : paths) {
+      parsed.push_back(parsePath(p).valueOr(Path()));
+    }
+    for (const Path &p : parsed) {
+      pointers.push_back(&p);
+    }
+    litestl::util::Vector<PropValue> same = values;
+    litestl::util::Vector<Status> sameErrors;
+    same.append(PropValue());
+    getValues(ctx, pointers, same, sameErrors);
+    test_assert(same.size() == values.size() && sameErrors.size() == errors.size());
+    for (int i = 0; i < int(values.size()); i++) {
+      test_assert(same[i] == values[i] && sameErrors[i].ok() == errors[i].ok());
+    }
+  }
   test_assert(values.size() == 3 && errors.size() == 3);
   test_assert(values[0] == PropValue::ofFloat(0.5) && errors[0].ok());
   test_assert(values[1].isNone() && errors[1].code() == StatusCode::NotFound);

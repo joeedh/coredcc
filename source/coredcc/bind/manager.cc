@@ -8,6 +8,7 @@
 #include "coredcc/bind/layout_facades.h"
 #include "coredcc/bind/library_facades.h"
 #include "coredcc/bind/path_reader.h"
+#include "coredcc/bind/run_facades.h"
 #include "coredcc/command/command.h"
 
 #include "litestl/binding/binding.h"
@@ -45,6 +46,8 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<ScriptGraph>());
   mgr->add(Bind<GraphResult>());
   mgr->add(Bind<PathReader>());
+  mgr->add(Bind<RunInputs>());
+  mgr->add(Bind<ToolChecks>());
   mgr->add(Bind<ScriptBytes>());
   mgr->add(Bind<SaveResult>());
 }
@@ -124,6 +127,43 @@ void addLayoutFacades(litestl::binding::BindingManager *mgr)
               "coredcc::validateLayoutXml",
               script::validateLayoutXml,
               MARGS("ctx", "xml"));
+  BIND_FACADE(mgr, "coredcc::newRunInputs", script::newRunInputs, MARGS());
+  BIND_FACADE(mgr,
+              "coredcc::runInputsSet",
+              script::runInputsSet,
+              MARGS("inputs", "name", "value"));
+  BIND_FACADE(mgr,
+              "coredcc::runAt",
+              script::runAt,
+              MARGS("ctx", "prefix", "id", "inputs", "lastUsed"));
+  BIND_FACADE(mgr,
+              "coredcc::canRunAt",
+              script::canRunAt,
+              MARGS("ctx", "prefix", "id", "inputs", "lastUsed"));
+  BIND_FACADE(mgr,
+              "coredcc::canInvokeAt",
+              script::canInvokeAt,
+              MARGS("ctx", "prefix", "invocation"));
+  BIND_FACADE(mgr, "coredcc::newToolChecks", script::newToolChecks, MARGS());
+  BIND_FACADE(mgr,
+              "coredcc::toolChecksAdd",
+              script::toolChecksAdd,
+              MARGS("tools", "prefix", "invocation"));
+  BIND_FACADE(mgr, "coredcc::toolChecksRun", script::toolChecksRun, MARGS("ctx", "tools"));
+  BIND_FACADE(mgr,
+              "coredcc::beginInteractiveAt",
+              script::beginInteractiveAt,
+              MARGS("ctx", "prefix", "id", "inputs", "lastUsed"));
+  BIND_FACADE(mgr, "coredcc::interactiveId", script::interactiveId, MARGS("ctx"));
+  BIND_FACADE(mgr,
+              "coredcc::writeInteractive",
+              script::writeInteractive,
+              MARGS("ctx", "path", "value"));
+  BIND_FACADE(mgr, "coredcc::commitInteractive", script::commitInteractive, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::cancelInteractive", script::cancelInteractive, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::lastCommandId", script::lastCommandId, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::lastCommandInputs", script::lastCommandInputs, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::rerunLast", script::rerunLast, MARGS("ctx", "inputs"));
   BIND_FACADE(mgr,
               "coredcc::invokeAt",
               script::invokeAt,

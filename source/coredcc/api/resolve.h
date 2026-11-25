@@ -55,8 +55,8 @@ struct ResolvedPath {
   litestl::util::Vector<PathTouch, 4> touched;
 };
 
-/** Resolves `path` from the context root, or from its prefix unless `path` starts with `/`. Errors name the failing
- * segment's offset and suggest members. */
+/** Resolves `path` from the context root, or from its prefix unless `path` starts with `/`.
+ * Errors name the failing segment's offset and suggest members. */
 Result<ResolvedPath> resolve(Context &ctx, const Path &path);
 Result<ResolvedPath> resolve(Context &ctx, std::string_view path);
 /** As resolve, for writing: a path that ends in `.active` of a collection with an
@@ -107,6 +107,11 @@ Status atSegment(const PathSegment &seg, const Status &s);
  * `errors[i]` holds the failure. Paths go through the Runtime's PathCache. */
 void getValues(Context &ctx,
                std::span<const std::string_view> paths,
+               litestl::util::Vector<PropValue> &values,
+               litestl::util::Vector<Status> &errors);
+/** Of parsed paths, such as a Layout gives. None may be null. */
+void getValues(Context &ctx,
+               std::span<const Path *const> paths,
                litestl::util::Vector<PropValue> &values,
                litestl::util::Vector<Status> &errors);
 

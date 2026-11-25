@@ -18,7 +18,8 @@
  *     scalar     := number | quoted | ident
  *
  * Values stay raw: the command layer converts them against the input's PropertyDef
- * (a quoted path becomes a Pointer there). Tuples hold scalars only. Argument names
+ * (a quoted path becomes a Pointer there: one
+ * from the Context's prefix, or with a leading `/` from its root). Tuples hold scalars only. Argument names
  * are unique.
  */
 

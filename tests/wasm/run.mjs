@@ -1,4 +1,4 @@
-// Runs the P1f TS spike (spike.test.ts) against the test app's wasm-st module, node
+// Runs the TS suites (spike.test.ts, the P1f TS spike, and ui.test.ts) against the test app's wasm-st module, node
 // variant (source/coredcc/testapp):
 //
 //   node run.mjs --module <coredcc_testapp_node.mjs> [--out <scratch dir>]
@@ -7,8 +7,8 @@
 //
 // 1. generates the bindings' TS with the generator inside the module;
 // 2. generates the test app's typed paths (gen-paths);
-// 3. type-checks all of it with coredcc's TS layer (source/coredcc/bind/ts) and the suite;
-// 4. bundles the suite with esbuild, and runs it under node:test.
+// 3. type-checks all of it with coredcc's TS layer (source/coredcc/bind/ts) and the suites;
+// 4. bundles the suites with esbuild, and runs them under node:test.
 import {spawnSync} from 'node:child_process'
 import {existsSync, mkdirSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
@@ -22,6 +22,8 @@ const runtime = join(root, 'extern/litestl/binding/typescriptRuntime/index.ts')
 const script = join(root, 'source/coredcc/bind/ts/index.ts')
 const genPaths = join(root, 'source/coredcc/bind/ts/gen_paths.ts')
 const genScript = join(root, 'source/coredcc/bind/ts/gen.ts')
+
+const suites = ['spike.test.ts', 'ui.test.ts']
 
 const {values: opts} = parseArgs({options: {module: {type: 'string'}, out: {type: 'string'}}})
 if (!opts.module) {
@@ -73,7 +75,7 @@ if (bundle(join(here, 'gen_paths.ts'), pathsBundle) !== 0 || run([pathsBundle, m
   process.exit(1)
 }
 
-console.log('== tsc: generated TS + coredcc TS layer + suite')
+console.log('== tsc: generated TS + coredcc TS layer + suites')
 const tsconfig = join(out, 'tsconfig.json')
 writeFileSync(
   tsconfig,
@@ -100,7 +102,7 @@ writeFileSync(
           'coredcc-gen/*': [join(gen, '*')],
         },
       },
-      files: [join(here, 'spike.test.ts'), join(here, 'gen_paths.ts'), join(here, 'paths.types.ts'), genScript],
+      files: [...suites.map((s) => join(here, s)), join(here, 'gen_paths.ts'), join(here, 'paths.types.ts'), genScript],
       include: [join(gen, '**', '*.ts')],
     },
     null,
@@ -111,9 +113,9 @@ if (run([tools.tsc, '-p', tsconfig]) !== 0) {
   process.exit(1)
 }
 
-console.log('== spike')
-const suite = join(out, 'spike.test.mjs')
-if (bundle(join(here, 'spike.test.ts'), suite) !== 0) {
+console.log('== suites')
+const bundles = suites.map((s) => join(out, s.replace(/\.ts$/, '.mjs')))
+if (suites.some((s, i) => bundle(join(here, s), bundles[i]) !== 0)) {
   process.exit(1)
 }
-process.exit(run(['--test', '--test-reporter=spec', suite], {SPIKE_MODULE: modulePath}))
+process.exit(run(['--test', '--test-reporter=spec', ...bundles], {SPIKE_MODULE: modulePath}))
