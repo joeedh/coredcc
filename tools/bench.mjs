@@ -7,10 +7,13 @@
 //   node tools/bench.mjs scene --against FILE        runs the baseline and the new one in turns
 //       [--rounds 3] [--cooldown 5]                  (seconds between runs), and compares best times
 //
+// `--against` waits until other programs leave the machine alone, and says how busy it was.
+//
 // Names: graph, scene, scene_commands. tools/bench-bvh.mjs is for the BVH. Run it on an idle machine.
 
 import {spawnSync} from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import {parseArgs} from 'node:util'
 import {fileURLToPath, pathToFileURL} from 'node:url'
@@ -58,20 +61,56 @@ function run(exe, args) {
   return r.stdout
 }
 
+/** How many cores worked while nothing of this ran, in `seconds`. */
+function busyCores(seconds) {
+  const sum = () => {
+    let idle = 0
+    let all = 0
+    for (const {times} of os.cpus()) {
+      idle += times.idle
+      all += times.idle + times.user + times.sys + times.nice + times.irq
+    }
+    return {idle, all}
+  }
+  const a = sum()
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, seconds * 1000)
+  const b = sum()
+  return os.cpus().length * (1 - (b.idle - a.idle) / Math.max(b.all - a.all, 1))
+}
+
+/** Waits until other programs leave the machine alone: at most `QUIET` cores in all. */
+const QUIET = 0.6
+function quiet(seconds) {
+  for (const from = Date.now(); Date.now() - from < 3600_000; ) {
+    const busy = busyCores(seconds)
+    if (busy <= QUIET) return busy
+  }
+  throw new Error('the machine was busy for an hour')
+}
+
 /** Best times by case, of bench_scene's lines. */
 const bests = (text) =>
   new Map([...text.matchAll(/^(.+?)\s+best\s+([\d.]+)/gm)].map(([, name, ms]) => [name.trim(), Number(ms)]))
 
 function compare(before, after, rounds, cooldown, args) {
   const seen = [new Map(), new Map()]
+  let most = 0
+  let dropped = 0
   for (let i = 0; i < rounds; i++) {
     for (const [k, exe] of [before, after].entries()) {
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, cooldown * 1000)
-      const found = bests(run(exe, args))
+      let found, before, after
+      do {
+        before = quiet(cooldown)
+        found = bests(run(exe, args))
+        after = busyCores(1)
+        dropped += after > QUIET ? 1 : 0
+      } while (after > QUIET)
+      most = Math.max(most, before, after)
       if (found.size === 0) throw new Error('--against needs a benchmark that prints "best" times')
       for (const [name, ms] of found) seen[k].set(name, [...(seen[k].get(name) ?? []), ms])
     }
   }
+  console.log(`at most ${most.toFixed(1)} cores were busy just before and after the runs; ${dropped} others were dropped`)
   console.log(`best ms of each of ${rounds} rounds: before | after`)
   for (const [name, times] of seen[1]) {
     const old = (seen[0].get(name) ?? []).map((t) => t.toFixed(2)).join(' ')
