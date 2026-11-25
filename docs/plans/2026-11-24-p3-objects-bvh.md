@@ -597,6 +597,41 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
 - If A2 is late, `cell` is filled in step 11. If B1 is late, step 10's text input moves after 12.
 - Channels are serialized as `BlockEntry`s by name, beside the type's name; unread ones are kept.
 
+## Implementation notes
+
+### Step 0
+- litestl PR #14 (`coredcc/math`). Deviations: `planeToLocal` instead of `transformPlane`; the
+  bindings are in `matrix_bindings.h`, because `binding.h` includes the existing
+  `math_bindings.h` everywhere and `matrix.h` brings in Eigen.
+
+### Steps 1 to 3
+- **Commits:** the parallel build and refit share the serial build's code, so they are in step
+  1's commit. Step 2 is AnyBvhSource and the binding, step 3 the benchmark.
+- **`Bvh<Scalar>`** is a template on the scalar, and `build` and `refit` on the source.
+  `onInvalidate` takes `GeometryChange` flags. More than 2³¹−1 primitives can't happen:
+  `size()` is an int.
+- **A median split** sorts by centroid, and by primitive on ties, once per subtree; below it
+  ranges are halved.
+- **Equal SAH costs** go to the more balanced split. Without that, evenly spaced primitives in a
+  line gave a deep tree.
+- **No check of the bins' scale:** for denormal extents it is infinite, the clamp handles it, and
+  no cost is then below the leaf's, so the median is used. The check was redundant (its mutant
+  survived), and so was swapping axes to keep the winding in the ray shear: u, v and t don't
+  depend on it.
+- **`poolUsable()`:** false on a browser's main thread and in wasm without threads (a test that
+  set a band count started the pool there and aborted).
+- **Claim 4, contraction:** confirmed. With fused products in two or three of the edge
+  functions, the aimed-ray test leaks 3 to 42 rays. wasm's clang doesn't have
+  `#pragma float_control`; the compile flags cover it.
+- **`region` is conservative at leaves too:** a primitive is dropped only if it is certainly
+  outside one plane.
+- **wasm-mt:** the four BVH tests pass in node.
+- **The leaf-size rule needs another look before the recorded run.** The build gets faster with
+  every larger leaf size, so "within 10% of the fastest build" keeps only the largest sizes. In
+  the smoke runs (10k triangles, not a measurement) it chose 1024, whose queries were 10 times
+  slower than 16's. The tool follows the plan's rule and also prints the largest size within 10%
+  of the best query time, which is the rule recommended instead.
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms

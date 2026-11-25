@@ -39,6 +39,8 @@ if(WIN32)
   coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_bvh coredcc_command)
 endif()
 
+add_subdirectory(bench)
+
 # Compile-fail tests. Each also builds the same file without the define, which must succeed.
 if(COREDCC_WERROR)
   # Catches any change that turns source/ into a system include directory (P0 pressure
