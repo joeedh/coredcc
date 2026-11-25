@@ -13,6 +13,8 @@
 
 #include "coredcc/bvh/kernels.h"
 
+#include <limits>
+
 namespace coredcc::bvh {
 
 namespace {
@@ -190,18 +192,25 @@ double3
 closestOnTriangle(const double3 &p, const double3 &a, const double3 &b, const double3 &c)
 {
   const double3 ab = b - a, ac = c - a, n = ab.cross(ac);
-  const double nn = dot(n, n);
+  const double nn = dot(n, n), sides = dot(ab, ab) * dot(ac, ac);
+  double3 best;
+  double bestD = (std::numeric_limits<double>::infinity)();
   if (nn > 0.0) {
-    /* Inside the prism over the triangle: the projection onto its plane. */
+    /* Inside the prism over the triangle: the projection onto its plane. A sliver's normal may be
+     * noise; the point is still one of the triangle's, but an edge may be nearer. */
     const double3 ap = p - a;
     const double v = dot(ap.cross(ac), n), w = dot(ab.cross(ap), n);
     if (v >= 0.0 && w >= 0.0 && v + w <= nn) {
-      return a + ab * (v / nn) + ac * (w / nn);
+      best = a + ab * (v / nn) + ac * (w / nn);
+      if (nn > 1e-8 * sides) {
+        return best;
+      }
+      bestD = distanceSq(p, best);
     }
   }
-  double3 best = closestOnSegment(p, a, b);
-  double bestD = distanceSq(p, best);
-  for (const double3 &e : {closestOnSegment(p, b, c), closestOnSegment(p, c, a)}) {
+  for (const double3 &e :
+       {closestOnSegment(p, a, b), closestOnSegment(p, b, c), closestOnSegment(p, c, a)})
+  {
     const double d = distanceSq(p, e);
     if (d < bestD) {
       best = e;

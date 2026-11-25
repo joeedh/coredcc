@@ -378,7 +378,8 @@ void testClosest()
     } else if (kind == 2) {
       c = a + (b - a) * r.range(-1, 2); /* collinear, up to rounding */
     }
-    const double3 p = r.vec(2.0 * scale);
+    /* Some on the line of a triangle without area, where its normal is noise. */
+    const double3 p = kind == 2 && r.unit() < 0.5 ? a + (b - a) * r.range(-1, 2) : r.vec(2.0 * scale);
     const double tol = 1e-9 * scale * scale;
     const double3 t = bvh::closestOnTriangle(p, a, b, c);
     /* (p - t).(x - t) <= 0 for every x of the set: its corners are enough. */
@@ -394,6 +395,10 @@ void testClosest()
       expect(u > -1e-9 && v > -1e-9 && u + v < 1 + 1e-9, "outside the triangle");
       expect(std::fabs(dot(t - a, normal)) < 1e-9 * length(normal) * scale, "off the plane");
     }
+    /* A point of a thin triangle, not of its edges. */
+    const double3 thin = a + (b - a) * 0.4 + (b - a).cross(r.vec(1.0)) * 1e-5;
+    const double3 in = (a + b + thin) / 3.0;
+    expect(length(bvh::closestOnTriangle(in, a, b, thin) - in) <= 1e-8 * scale, "a sliver");
     const double3 s = bvh::closestOnSegment(p, a, b);
     expect(dot(p - s, a - s) <= tol && dot(p - s, b - s) <= tol, "closestOnSegment");
 
