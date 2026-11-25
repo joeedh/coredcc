@@ -31,7 +31,7 @@ function comment(lines: (string | undefined)[], indent = ''): string {
     .filter((l) => l)
     .join('\n')
     .replace(/\*\//g, '*\\/')
-    .split(/[\r\n\u2028\u2029]+/)
+    .split(/[\r\n]+/)
   if (text.length === 1 && text[0] === '') return ''
   if (text.length === 1) return `${indent}/** ${text[0]} */\n`
   return `${indent}/**\n${text.map((l) => `${indent} * ${l}\n`).join('')}${indent} */\n`
@@ -95,7 +95,7 @@ export function generatePaths(catalog: Catalog): string {
       case 'Pointer': {
         const targets = m.targets ?? (m.target === undefined ? [] : [m.target])
         const types = [...new Set(targets.map(reference))]
-        return types.length === 0 || types.includes('unknown') ? 'unknown' : `${types.join(' | ')} | null`
+        return types.length === 0 ? 'unknown' : `${types.join(' | ')} | null`
       }
       case 'Collection':
         return `Collection<${reference(m.target)}${m.active ? '' : ', never'}>`
@@ -105,7 +105,7 @@ export function generatePaths(catalog: Catalog): string {
   }
   const property = (m: CatalogMember, indent: string, optional = false) =>
     comment([m.description], indent) +
-    `${indent}${m.readOnly || m.kind === 'Collection' ? 'readonly ' : ''}${key(m.name)}${optional ? '?' : ''}: ${typeOf(m)}\n`
+    `${indent}${m.readOnly ? 'readonly ' : ''}${key(m.name)}${optional ? '?' : ''}: ${typeOf(m)}\n`
 
   /* With the inherited members, which a struct's own ones of the same name hide. */
   const members = (s: CatalogStruct) => {

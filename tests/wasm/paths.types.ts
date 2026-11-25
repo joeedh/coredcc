@@ -47,9 +47,10 @@ check<Equal<odd.Kinds['q'], odd.a_b_2 | odd.Kinds | null>>(true)
 check<Equal<odd.Kinds['gone'], unknown>>(true)
 check<Equal<odd.Kinds['list']['active'], odd.Anycycle | null>>(true)
 check<Equal<odd.Kinds['plain']['active'], never>>(true)
-check<Equal<odd.Kinds['m'], number[]>>(true)
+check<Equal<odd.Kinds['any'], unknown>>(true)
+check<Equal<Pick<odd.Kinds, 'f' | 'm'>, {f: number | bigint; readonly m: number[]}>>(true)
 check<Equal<odd.Kinds['new'], unknown>>(true)
-check<Equal<odd.CommandId, 'a"b'>>(true)
+check<Equal<odd.CommandId, 'a"\'b'>>(true)
 
 declare const app: TestApp
 app.count = 3

@@ -43,6 +43,7 @@ const odd: cdcc.Catalog = {
         {...int('p'), kind: 'Pointer', target: 'string'},
         {...int('q'), kind: 'Pointer', targets: ['a-b', 'Kinds']},
         {...int('gone'), kind: 'Pointer', target: 'nowhere'},
+        {...int('any'), kind: 'Pointer'},
         {...int('list'), kind: 'Collection', target: 'cycle', active: true},
         {...int('plain'), kind: 'Collection', target: 'Kinds', active: false},
         {...int('m'), kind: 'Mat4', readOnly: true},
@@ -50,7 +51,7 @@ const odd: cdcc.Catalog = {
       ],
     },
   ],
-  commands: [{id: 'a"b', uiName: '', flags: [], inputs: [int('in')], outputs: []}],
+  commands: [{id: 'a"\'b', uiName: '', flags: [], inputs: [int('in')], outputs: []}],
 }
 writeFileSync(oddOut, generatePaths(odd))
 const text = generatePaths(cdcc.apiCatalog(session.ctx))
