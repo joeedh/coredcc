@@ -117,7 +117,7 @@
      Windows' 1 MB stack at 52 levels on both compilers, with no JS involved
      (`test_command_review`, `test_nesting_cap`). In litestl, `dispatch` now poisons the
      module on anything that escapes it, and reports an unprintable thrown value instead
-     of escaping: joeedh/litestl#11, open; the gitlink bump waits for its merge.
+     of escaping: joeedh/litestl#11, merged 2026-11-24 as `1c5b7df`.
 2. **A2 (medium-high): `check()` can't see the A1 state, and after an abort it reads the
    destroyed host.** *Experiment.*
    - `validate()` runs `Runtime::validateAll()` and `LinearHistory::validate()`. Neither

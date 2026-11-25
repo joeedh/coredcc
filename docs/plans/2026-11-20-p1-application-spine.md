@@ -1407,7 +1407,7 @@ The review is `docs/reports/feature-report-ta1-2026-11-23.md`. Its regressions a
     Debug builds overflowed Windows' 1 MB stack at 52 levels on both compilers, so 64
     was already too many with no JS involved.
   - In litestl, `dispatch` poisons the module on anything that escapes into wasm
-    (joeedh/litestl#11, open; the gitlink bump follows its merge).
+    (joeedh/litestl#11, merged 2026-11-24 as `1c5b7df`).
   - `testapp::validate` fails while the executor is still running.
 - **A dead module is reported:** methods treat a trap, exit or poisoning as fatal, keep
   the module's last stderr lines, report them in `info().backendError`, and refuse every
