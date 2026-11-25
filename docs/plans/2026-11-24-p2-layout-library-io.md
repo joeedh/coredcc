@@ -723,3 +723,21 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
   - The recheck at destruction counts only Strong refs (RefKind::Strong), the same check
     `destroyFromHistory` makes.
   - A sticky error that is pending when a deferred destroy runs is put back afterwards.
+
+### A1, commit 2: bytes and values (2026-11-24)
+- Added to the published API:
+  - `BytesWriter(size_t maxBytes = kMaxBytes)`, and `beginSection()` / `endSection(token)`, which
+    write what the reader gets as one `blob()`. Entries use them for their length.
+  - `BytesReader::ok()` and `fail(StatusCode, const char *)`. A failure moves the reader to its
+    end, so `atEnd()` alone never means success.
+  - `NameTable::debugAddAs`, a test hook for collisions, like the Runtime's.
+  - `ValueTag`, `valueTag`, `isKnownValueTag`, `writeValueBody`, `readValueBody` and
+    `storedBagValue`: payload entries write the same tags and bodies.
+- A name whose hash isn't its id (a collision forced by a test hook) is written as the raw id,
+  so it reads back.
+- A `NameTable` counts 64 bytes for each entry on top of its text, so millions of short names are
+  bounded too.
+- `readBag` keeps at most 1000 issues, and an entry whose body is damaged fails the read instead of
+  being an issue.
+- A Pointer with a negative handle in its key fails the writer (InvalidArgument). Nothing in the
+  API makes one.

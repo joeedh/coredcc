@@ -7,6 +7,7 @@ coredcc_library(coredcc_props
     ref.cc
     units.cc
     value.cc
+    value_io.cc
   DEPS
     coredcc_base
 )

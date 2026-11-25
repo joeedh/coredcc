@@ -2,6 +2,8 @@ coredcc_library(coredcc_base
   SOURCES
     assert.cc
     bindings.cc
+    bytes.cc
+    name_table.cc
     runtime.cc
     status.cc
     text.cc

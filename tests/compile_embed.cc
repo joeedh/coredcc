@@ -22,12 +22,14 @@
 #include "coredcc/command/set_property.h"
 #include "coredcc/command/undo_strategies.h"
 #include "coredcc/base/block_id.h"
+#include "coredcc/base/bytes.h"
 #include "coredcc/base/flags.h"
 #include "coredcc/base/handle_pool.h"
 #include "coredcc/base/id.h"
 #include "coredcc/base/iface/iface.h"
 #include "coredcc/base/iface/owned.h"
 #include "coredcc/base/iface/registry.h"
+#include "coredcc/base/name_table.h"
 #include "coredcc/base/runtime.h"
 #include "coredcc/base/signal.h"
 #include "coredcc/base/status.h"
@@ -46,6 +48,7 @@
 #include "coredcc/props/ref.h"
 #include "coredcc/props/units.h"
 #include "coredcc/props/value.h"
+#include "coredcc/props/value_io.h"
 
 #include "test_util.h"
 
