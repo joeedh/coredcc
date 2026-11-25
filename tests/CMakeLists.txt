@@ -49,6 +49,7 @@ coredcc_test(test_command_evaluating SOURCES command/test_command_evaluating.cc 
 coredcc_test(test_graph_values SOURCES graph/test_graph_values.cc DEPS coredcc_graph)
 coredcc_test(test_graph_node_types SOURCES graph/test_graph_node_types.cc DEPS coredcc_graph)
 coredcc_test(test_graph_def SOURCES graph/test_graph_def.cc DEPS coredcc_graph)
+coredcc_test(test_graph_refs SOURCES graph/test_graph_refs.cc DEPS coredcc_graph)
 coredcc_test(test_graph_eval SOURCES graph/test_graph_eval.cc DEPS coredcc_graph)
 coredcc_test(test_graph_limits SOURCES graph/test_graph_limits.cc DEPS coredcc_graph)
 coredcc_test(test_graph_blocks SOURCES graph/test_graph_blocks.cc DEPS coredcc_graph)

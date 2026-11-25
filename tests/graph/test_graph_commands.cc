@@ -606,6 +606,19 @@ void testCollect()
   d.history.clear(); /* the discard unpins */
   test_assert(d.lib.collect().ok() && !d.lib.get(t));
 
+  /* One pin per block, however often an edit names it. */
+  const NodeId m = add(*g.def, "t.add");
+  const BlockHandle v = newThing(d.lib, "v", 7);
+  const PropValue target = pointerTo(idOf(d.lib, v));
+  test_assert(runGraphEdit(d.ctx, g.id, "x", [&](GraphEdit &e) {
+                for (int i = 0; i < 5; i++) {
+                  CDCC_TRY(e.setParam(m, "thing", target));
+                  CDCC_TRY(e.setParam(m, "thing", PropValue::nullPointer()));
+                }
+                return Status();
+              }).ok());
+  test_assert(d.lib.get(v)->pins(PinKind::History) == 1);
+
   /* A group param the edit replaced, and the graph itself while only the history has it. */
   const Graph a = newGraph(d.lib, "a"), b = newGraph(d.lib, "b");
   const NodeId group = add(*g.def, "graph.group");
