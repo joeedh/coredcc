@@ -66,8 +66,7 @@ Manual: `pnpm run launch`, then `node apps/testapp/cdp.mjs --port <port> call in
     counterexample.
   - Construct concrete inputs or scenarios that would make the plan fail.
 - Record in the plan file which claims survived, which broke, and how the plan changed.
-- Keep a running debugging guide in `docs/debugging.md`. When a bug takes real effort to
-  track down, add an entry: symptom, cause, fix, and how to spot it next time.
+- Keep a running debugging guide in `docs/debugging.md`.
 
 ### File size
 
