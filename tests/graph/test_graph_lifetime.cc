@@ -393,6 +393,20 @@ void testDestroyedMidWalk()
   test_assert(j.clear().ok());
   const SocketPath both[] = {out(g, key(o1).c_str()), out(g, key(o2).c_str())};
   test_assert(j.evaluate(both, results).ok() && calls == before + 3);
+
+  /* Also when it goes straight to a vertex it knows, for a prepared socket. */
+  const BlockHandle thing = newThing(lib, "thing", 3);
+  const NodeId v = add(*in2.def, "t.view");
+  test_assert(in2.def->setParam(v, "thing", pointerTo(idOf(lib, thing))).ok());
+  connect(*in2.def, v, "view", a, "view");
+  const SocketHandle handle = *j.prepare(both[0]);
+  litestl::util::Vector<int> moved;
+  test_assert(j.evaluate({&handle, 1}, moved).ok() && calls == before + 4);
+  static_cast<Thing *>(lib.data(thing))->value = 4;
+  w.rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(idOf(lib, thing)));
+  const uint64_t full = j.totalFullPasses();
+  test_assert(j.evaluate({&handle, 1}, moved).ok() && calls == before + 5);
+  test_assert(j.totalFullPasses() == full && moved.size() == 1 && w.pins(in2.h) == 0);
 }
 
 /* A block owns an instance whose payload aliases that very block. */

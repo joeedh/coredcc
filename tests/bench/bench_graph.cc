@@ -445,6 +445,48 @@ void benchDefs()
           pull, runs);
 }
 
+/* ---- the size of a foreach's cache ---- */
+
+void benchForeachMemory(int maxCached, int kernels)
+{
+  World w;
+  const int n = sized(16384), inside = 50;
+  const Def inner = newDef(w, "inner"), root = newDef(w, "root");
+  const int64_t x = socket(*inner.def, SocketSide::Input, "x", "float");
+  const int64_t out = socket(*inner.def, SocketSide::Output, "out", "float");
+  const NodeId input = add(*inner.def, "graph.input"), output = add(*inner.def, "graph.output");
+  NodeId last = input;
+  for (int i = 0; i < inside; i++) {
+    const NodeId node = add(*inner.def, "math.float");
+    link(*inner.def, last, i ? "value" : key(x), node, "a");
+    last = node;
+  }
+  link(*inner.def, last, "value", output, key(out));
+  const int64_t table = socket(*root.def, SocketSide::Input, "table", "elements");
+  const NodeId rootIn = add(*root.def, "graph.input"), each = add(*root.def, kGraphForeachType);
+  check(root.def->setGroup(each, inner.id).ok(), "a group");
+  check(root.def->setParam(each, kMaxCachedParam, PropValue::ofInt(maxCached)).ok(), "a param");
+  link(*root.def, rootIn, key(table), each, kElementsSocket);
+  Elements t;
+  Elements::Column c;
+  c.name = "x";
+  for (int i = 0; i < n; i++) {
+    t.keys.append(i);
+    c.values.append(GraphValue::ofFloat(i));
+  }
+  t.columns.append(c);
+  GraphInstance inst(&w.rt, &w.lib, root.id);
+  inst.setMaxCachedKernels(kernels);
+  check(inst.setInput("table", GraphValue::ofPayload(makePayload(t))).ok(), "the table");
+  const size_t before = size_t(litestl::alloc::getMemorySize());
+  check(inst.evaluate(SocketPath::of(each, kElementsSocket)).ok(), "evaluating");
+  const GraphMemory m = inst.memory();
+  printf("{\"bench\": \"foreach, memory: %d cached, %d kernels\", \"size\": %d, \"elements\": %d, "
+         "\"kernels\": %d, \"mb\": %.1f, \"tracked_mb\": %.1f}\n",
+         maxCached, kernels, n, m.elements, m.kernels, double(m.bytes) / 1e6,
+         double(size_t(litestl::alloc::getMemorySize()) - before) / 1e6);
+}
+
 /* ---- many instances of a group ---- */
 
 void benchGroups()
@@ -615,5 +657,7 @@ int main(int argc, char **argv)
   benchForeach(1 << 20);
   benchForeach(0);
   benchForeach(4096, 100000);
+  benchForeachMemory(16384, 1 << 30);
+  benchForeachMemory(4096, 131072);
   return 0;
 }

@@ -211,7 +211,7 @@ class GraphInstance {
    * own: more than that share one, as those over `maxCached` do. */
   void setMaxFrames(int n);
   /** Kernels that elements with a state of their own may hold, over all foreach nodes
-   * (default 131,072, of about 1 KB each with their inputs). Elements that come when there
+   * (default 131,072, of about 0.7 KB each with their inputs). Elements that come when there
    * are more share a state. */
   void setMaxCachedKernels(int n);
   /** Off, every edit makes it look at all that the sockets depend on: for tests, and to find

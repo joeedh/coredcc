@@ -1,5 +1,5 @@
-/* What grows with the size of a graph: four times the size may take no more than ten times as
- * long, where something quadratic takes sixteen. And what an edit looks at, which doesn't grow. */
+/* What grows with the size of a graph: sixteen times the size may take no more than 64 times as
+ * long, where something quadratic takes 256. And what an edit looks at, which doesn't grow. */
 #include "edit_fixture.h"
 #include "foreach_fixture.h"
 
@@ -29,14 +29,14 @@ bool grows(const char *name, int n, const std::function<double(int)> &run)
   double small = 1e9, large = 1e9;
   for (int tries = 0; tries < 8; tries++) {
     small = std::min(small, run(n));
-    large = std::min(large, run(4 * n));
-    if (tries >= 1 && large < 8 * small + 0.002) {
+    large = std::min(large, run(16 * n));
+    if (tries >= 1 && large < 40 * small + 0.002) {
       break;
     }
   }
-  const bool ok = large < 10 * small + 0.002;
+  const bool ok = large < 64 * small + 0.002;
   if (!ok) {
-    printf("%s: %g ms for %d, %g ms for %d\n", name, small * 1000, n, large * 1000, 4 * n);
+    printf("%s: %g ms for %d, %g ms for %d\n", name, small * 1000, n, large * 1000, 16 * n);
   }
   return ok;
 }
@@ -62,7 +62,7 @@ struct Fan {
 
 void testLinks()
 {
-  test_assert(grows("links out of a node", 2000, [](int n) {
+  test_assert(grows("links out of a node", 500, [](int n) {
     Fan f(n);
     return secondsOf([&]() {
       for (const LinkSpec &s : f.specs) {
@@ -70,7 +70,7 @@ void testLinks()
       }
     });
   }));
-  test_assert(grows("removing nodes a node leads to", 2000, [](int n) {
+  test_assert(grows("removing nodes a node leads to", 500, [](int n) {
     Fan f(n);
     test_assert(f.g.def->linkAll(f.specs, f.ids).ok());
     return secondsOf([&]() {
@@ -79,7 +79,7 @@ void testLinks()
       }
     });
   }));
-  test_assert(grows("unlinking, the last first", 2000, [](int n) {
+  test_assert(grows("unlinking, the last first", 500, [](int n) {
     Fan f(n);
     test_assert(f.g.def->linkAll(f.specs, f.ids).ok());
     return secondsOf([&]() {
@@ -88,7 +88,7 @@ void testLinks()
       }
     });
   }));
-  test_assert(grows("linkAll of a chain", 2000, [](int n) {
+  test_assert(grows("linkAll of a chain", 500, [](int n) {
     Fan f(n);
     std::vector<LinkSpec> chain;
     for (size_t i = 1; i < f.nodes.size(); i++) {
@@ -96,7 +96,7 @@ void testLinks()
     }
     return secondsOf([&]() { test_assert(f.g.def->linkAll(chain, f.ids).ok()); });
   }));
-  test_assert(grows("a link in a chain that is as long as it gets", 2000, [](int n) {
+  test_assert(grows("a link in a chain that is as long as it gets", 500, [](int n) {
     Fan f(n);
     std::vector<LinkSpec> chain;
     for (size_t i = 1; i < f.nodes.size(); i++) {
@@ -184,14 +184,14 @@ void testWide()
       return out;
     };
     const std::string name = inside ? "interior sockets: " : "an interface: ";
-    test_assert(grows((name + "linkAll").c_str(), 500, [&](int n) { return wide(n)->linkAll(); }));
-    test_assert(grows((name + "evaluate").c_str(), 500, [&](int n) {
+    test_assert(grows((name + "linkAll").c_str(), 250, [&](int n) { return wide(n)->linkAll(); }));
+    test_assert(grows((name + "evaluate").c_str(), 250, [&](int n) {
       const auto f = wide(n);
       f->linkAll();
       GraphInstance i(&f->w.rt, &f->w.lib, f->g.id);
       return f->evaluate(i);
     }));
-    test_assert(grows((name + "evaluate again").c_str(), 500, [&](int n) {
+    test_assert(grows((name + "evaluate again").c_str(), 250, [&](int n) {
       const auto f = wide(n);
       f->linkAll();
       GraphInstance i(&f->w.rt, &f->w.lib, f->g.id);
@@ -199,12 +199,12 @@ void testWide()
       f->w.rt.touch();
       return f->evaluate(i);
     }));
-    test_assert(grows((name + "diagnostics").c_str(), 500, [&](int n) {
+    test_assert(grows((name + "diagnostics").c_str(), 250, [&](int n) {
       const auto f = wide(n);
       f->linkAll();
       return secondsOf([&]() { test_assert(f->g.def->diagnostics().size() == 0); });
     }));
-    test_assert(grows((name + "unlink").c_str(), 500, [&](int n) {
+    test_assert(grows((name + "unlink").c_str(), 250, [&](int n) {
       const auto f = wide(n);
       f->linkAll();
       return secondsOf([&]() {
@@ -214,7 +214,7 @@ void testWide()
       });
     }));
     /* With all the others there. */
-    test_assert(grows((name + "a link").c_str(), 500, [&](int n) {
+    test_assert(grows((name + "a link").c_str(), 250, [&](int n) {
       const auto f = wide(n);
       f->linkAll();
       return secondsOf([&]() { connect(*f->g.def, f->from, "value", f->group, f->keys[0]); });
@@ -284,11 +284,11 @@ void testEvaluation()
 {
   for (const int width : {1, 8, 1 << 20}) {
     const std::string name = "a tree of width " + std::to_string(width) + ": ";
-    test_assert(grows((name + "first").c_str(), 2000, [&](int n) {
+    test_assert(grows((name + "first").c_str(), 250, [&](int n) {
       Tree t(n, width);
       return secondsOf([&]() { t.evaluate(); });
     }));
-    test_assert(grows((name + "everything again").c_str(), 2000, [&](int n) {
+    test_assert(grows((name + "everything again").c_str(), 250, [&](int n) {
       Tree t(n, width);
       t.evaluate();
       test_assert(t.g.def->setLiteral(t.nodes[0], "b", PropValue::ofFloat(1)).ok());
@@ -313,7 +313,7 @@ void testEvaluation()
 /* Over its budget, a foreach costs what its rows do. */
 void testForeach()
 {
-  test_assert(grows("a foreach over its budget", 1000, [](int n) {
+  test_assert(grows("a foreach over its budget", 500, [](int n) {
     World w;
     Loop l(w);
     test_assert(l.root.def->setParam(l.node, kMaxCachedParam, PropValue::ofInt(10)).ok());

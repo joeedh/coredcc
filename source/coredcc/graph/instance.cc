@@ -420,8 +420,7 @@ Status Evaluator::clear()
     p.pulled = Pulled();
     p.reported = 0;
   }
-  passKey_ = Key();
-  askedKey_ = Key();
+  dropPass();
   failedKey_ = Key();
   layout_++;
   Status status;

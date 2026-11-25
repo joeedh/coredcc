@@ -132,8 +132,7 @@ Status Evaluator::prepareRoot()
     root_->serial = rt_.nextVersion();
     deps_.addFrame(*root_);
     layout_++;
-    passKey_ = Key();
-    askedKey_ = Key();
+    dropPass();
   }
   return Status();
 }

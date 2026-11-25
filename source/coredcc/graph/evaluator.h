@@ -155,6 +155,12 @@ class Evaluator {
   /** Whether nothing of this instance moved between passKey_ and `key`. */
   bool untouched(const Key &key) const;
   bool anyConcerns(const Key &key) const;
+  /** Nothing of the last pass stands. */
+  void dropPass()
+  {
+    passKey_ = Key();
+    askedKey_ = Key();
+  }
   /** Whether an edit concerns this instance. */
   bool concerns(const GraphEditNote &e) const;
   /** Whether a def is one that the root can reach through groups. */

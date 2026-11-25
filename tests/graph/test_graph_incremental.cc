@@ -112,6 +112,11 @@ void testElsewhere()
   test_assert(s.literal(*other.def, n, "a", 3).ok() && s.free());
   addSocket(*other.def, SocketSide::Input, "i", "float");
   test_assert(s.free());
+  /* What it said of one edit isn't its answer for the next. */
+  test_assert(s.literal(*other.def, n, "a", 4).ok() && s.inst->isCurrent(s.end()));
+  test_assert(s.literal(*s.g.def, s.row[99], "b", 2).ok() && s.costs(11, 40, 2));
+  test_assert(s.literal(*other.def, n, "a", 5).ok() && s.inst->isCurrent(s.end()));
+  test_assert(s.literal(*s.g.def, s.row[99], "b", 0).ok() && s.costs(11, 40, -2));
   test_assert(other.def->setGroup(add(*other.def, "graph.group"), s.g.id).ok());
   test_assert(s.pull().ok());
   test_assert(other.def->removeNode(n).ok() && s.free());
@@ -204,7 +209,7 @@ void testOwnInputs()
   pull();
   test_assert(i.setInput("b", GraphValue::ofFloat(4)).ok());
   Cost c = costOf(i, pull);
-  test_assert(c.runs == 2 && c.full == 0 && c.visits <= 6);
+  test_assert(c.runs == 2 && c.full == 0 && c.visits <= 4);
   test_assert(i.value(out(sb))->asFloat() == 4 && i.value(out(sc))->asFloat() == 4);
   test_assert(i.setInput("a", GraphValue::ofFloat(1)).ok() &&
               i.setInput("b", GraphValue::ofFloat(2)).ok());
@@ -516,6 +521,21 @@ void testHandlesOverBudget()
   test_assert(i.evaluate({&all[0], 1}, moved).ok() && moved.size() <= 1);
   i.setMaxFrames(2);
   test_assert(i.evaluate(all, moved).ok() && i.status(all[1]).ok() && i.frameCount() == 2);
+
+  /* A failure after an edit that it had said was no concern: that isn't so any more. */
+  const Graph other = newGraph(s.w.lib, "other");
+  const NodeId n = add(*other.def, "t.sum");
+  const NodeId user = add(*s.g.def, "t.sum");
+  connect(*s.g.def, second, key(s.go), user, "a");
+  GraphInstance j(&s.w.rt, &s.w.lib, s.g.id);
+  j.setMaxFrames(1);
+  test_assert(j.evaluate(s.end()).ok());
+  test_assert(s.literal(*other.def, n, "a", 1).ok() && j.isCurrent(s.end()));
+  test_assert(hasCode(j.evaluate(out(user)), StatusCode::OutOfRange));
+  test_assert(!j.isCurrent(s.end()));
+  j.setMaxFrames(2);
+  test_assert(j.evaluate(out(user)).ok() && j.value(out(user))->asFloat() == 0);
+  test_assert(j.evaluate(s.end()).ok() && j.value(s.end())->asFloat() == 1);
 }
 
 /* ---- over the budget ---- */
@@ -629,12 +649,32 @@ void testMaxCachedKernels()
   test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 4, 6}}, {"c2", {}}}, 2) && kept() == 4);
   l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 2, 3, 7, 6}}}));
   test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 6}}, {"c2", {}}}, 2) && kept() == 5);
+  /* A failed run makes room for another, and what it made goes with the next that doesn't. */
+  l.set(table({1, 2, 3, 4, 5, 9}, {{"a", {1, 2, 3, 7, 6, -100}}}));
+  test_assert(!l.evaluate().ok() && l.inst.elementCount() == 6);
+  l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 2, 3, 7, 5}}}));
+  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 5}}, {"c2", {}}}, 1) && kept() == 5);
+  l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 2, 3, 7, 6}}}));
+  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 6}}, {"c2", {}}}, 1) && kept() == 5);
   l.inst.setMaxCachedKernels(0);
   l.set(table({1, 6, 3, 4, 5}, {{"a", {1, 2, 3, 7, 6}}}));
   test_assert(l.is({1, 6, 3, 4, 5}, {{"sum", {1, 2, 3, 7, 6}}, {"c2", {}}}, 1) && kept() == 4);
   /* What has a state keeps it. */
   l.set(table({1, 6, 3, 4, 5}, {{"a", {1, 2, 3, 8, 6}}}));
   test_assert(l.is({1, 6, 3, 4, 5}, {{"sum", {1, 2, 3, 8, 6}}, {"c2", {}}}, 1) && kept() == 4);
+
+  /* States that go make room. */
+  World w2;
+  Loop m(w2);
+  m.inst.setMaxCachedKernels(6);
+  m.set(table({1, 2, 3}, {{"a", {1, 2, 3}}}));
+  test_assert(m.evaluate().ok() && m.inst.elementCount() == 3);
+  m.set(table({}, {{"a", {}}}));
+  test_assert(m.evaluate().ok() && m.inst.elementCount() == 0);
+  m.set(table({4, 5, 6}, {{"a", {1, 2, 3}}}));
+  test_assert(m.evaluate().ok() && m.inst.elementCount() == 3);
+  m.set(table({7, 8, 9, 10}, {{"a", {1, 2, 3, -100}}}));
+  test_assert(!m.evaluate().ok() && m.inst.elementCount() == 0);
 }
 
 } // namespace

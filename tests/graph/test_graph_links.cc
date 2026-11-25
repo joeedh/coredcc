@@ -81,7 +81,12 @@ void testLinkAll()
   const std::vector<LinkSpec> turn = {{{n[2], "x"}, {n[0], "a"}},
                                       {{n[5], "x"}, {n[1], "a"}},
                                       {{n[5], "x"}, {n[2], "b"}}};
+  int notified = 0;
+  ScopedConnection c = w.rt.ext<ChangeBus>().addListener([&](const OwnerKey *o) {
+    notified += o && *o == OwnerKey::ofBlock(g.id);
+  });
   test_assert(d.linkAll(turn, ids).ok() && d.linkCount() == 4 && ids.size() == 3);
+  test_assert(notified == 1);
   test_assert(d.linkAll({}, ids).ok() && ids.size() == 0);
 
   /* A cycle that was there (as from a file) and isn't the batch's is no matter. */
@@ -168,6 +173,19 @@ void testWide()
     most = std::max(most, count);
   }
   test_assert(most > 30 && d.validate().ok());
+  /* It follows the interface: a socket goes, and another comes. */
+  test_assert(in.def->removeInterface(sockets[0]).ok());
+  const GraphNode &n = *d.node(group);
+  test_assert(!d.findSocket(n, SocketSide::Input, key(sockets[0])));
+  test_assert(in.def->moveInterface(sockets[1], 38).ok());
+  const int64_t last = addSocket(*in.def, SocketSide::Input, "last", "int");
+  for (size_t i = 1; i < 40; i++) {
+    const auto s = d.findSocket(n, SocketSide::Input, key(sockets[i]));
+    test_assert(s && s->key == litestl::util::string(key(sockets[i]).c_str()) &&
+                isText(s->name, ("s" + std::to_string(i)).c_str()));
+  }
+  test_assert(isText(d.findSocket(n, SocketSide::Input, key(last))->typeName, "int"));
+  test_assert(!d.findSocket(n, SocketSide::Output, key(last)));
   /* A source that goes takes its links along. */
   for (NodeId id : from) {
     test_assert(d.removeNode(id).ok());

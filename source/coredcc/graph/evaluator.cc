@@ -81,7 +81,6 @@ Status Evaluator::prepareCall()
     keyMoves_++;
   }
   passKey_ = key;
-  askedKey_ = Key();
   seen_ = rt_.ext<GraphSystem>().journalEnd();
   numbers_ = 0;
   call_++;
@@ -104,8 +103,7 @@ Status Evaluator::endCall()
                            " groups, at node " + overBudgetAt_)
                               .c_str());
   dropNewFrames();
-  passKey_ = Key(); /* nothing of this pass stands */
-  askedKey_ = Key();
+  dropPass();
   return failed_;
 }
 
