@@ -5,6 +5,7 @@
  * Matrices are 16 numbers, column by column. Vectors are 3 numbers, and quaternions 4: x, y, z, w.
  */
 import {getBindingBackend} from '@litestl/typescript-runtime'
+import type {AnyBvh} from 'coredcc-gen/coredcc/AnyBvh'
 import type {ChannelBlock} from 'coredcc-gen/coredcc/ChannelBlock'
 import type {Context} from 'coredcc-gen/coredcc/Context'
 import type {EvalCtx} from 'coredcc-gen/coredcc/EvalCtx'
@@ -15,6 +16,7 @@ import type {TransformDelta as BoundDelta} from 'coredcc-gen/coredcc/TransformDe
 import type {TransformState as BoundState} from 'coredcc-gen/coredcc/TransformState'
 import type {PickOptions as BoundPickOptions} from 'coredcc-gen/coredcc/PickOptions'
 import type {View as BoundView} from 'coredcc-gen/coredcc/View'
+import type {ViewMath} from 'coredcc-gen/coredcc/ViewMath'
 import {internal, Ref, toJs, type Writable} from './index'
 
 /* ---- numbers ---- */
@@ -333,4 +335,124 @@ export function pick(ctx: Context, view: ViewSpec, x: number, y: number, options
     }
     return out
   })
+}
+
+/* ---- views ---- */
+
+/** Reads a bound value, and disposes of it. */
+function use<T extends {[Symbol.dispose](): void}, R>(value: T, fn: (v: T) => R): R {
+  try {
+    return fn(value)
+  } finally {
+    value[Symbol.dispose]()
+  }
+}
+
+function withViewMath<R>(spec: ViewSpec, fn: (m: ViewMath) => R): R {
+  return withView(spec, (v) => {
+    const m = getBindingBackend().construct('coredcc::ViewMath') as ViewMath
+    try {
+      internal.check(m.set(v))
+      return fn(m)
+    } finally {
+      m[Symbol.dispose]()
+    }
+  })
+}
+
+/** The ray through a device pixel: from the near plane, in the direction of increasing distance. */
+export function rayFromPixel(view: ViewSpec, x: number, y: number): {origin: number[]; dir: number[]} {
+  return withViewMath(view, (m) => ({
+    origin: use(m.rayOrigin(x, y), readVec3),
+    dir: use(m.rayDirection(x, y), readVec3),
+  }))
+}
+
+/** The half-spaces around what is in a rectangle of the image, whose corners are in device pixels, for
+ * Bvh.region: four numbers each, a normal and then `w`. */
+export function regionFromRect(view: ViewSpec, x0: number, y0: number, x1: number, y1: number): number[] {
+  return withViewMath(view, (m) =>
+    use(m.regionFromRect(x0, y0, x1, y1), (r) =>
+      Array.from({length: r.planeCount() * 4}, (_, i) => r.planeAt(i >> 2, i & 3))
+    )
+  )
+}
+
+/* ---- BVHs ---- */
+
+export interface BvhHit {
+  primitive: number
+  /** How far along the ray the box is entered, in lengths of its direction; tMin from inside. */
+  t: number
+}
+
+function withVec3<R>(v: ArrayLike<number>, what: string, fn: (p: Vec3) => R): R {
+  checkNumbers(what, v, 3)
+  const p = cd.vec3(v[0], v[1], v[2])
+  try {
+    return fn(p)
+  } finally {
+    p[Symbol.dispose]()
+  }
+}
+
+/**
+ * A bounding volume hierarchy over boxes, for finding the few primitives of a large set that a
+ * query's answer depends on. Bounds are six numbers for each primitive: the minimum, then the maximum.
+ * Primitives whose bounds are empty, or have a NaN, are left out. Dispose of it when it isn't needed any
+ * more.
+ */
+export class Bvh {
+  private bvh = getBindingBackend().construct('coredcc::AnyBvh') as AnyBvh
+
+  build(bounds: ArrayLike<number>) {
+    internal.check(this.bvh.buildFrom(Array.from(bounds)))
+  }
+  /** New bounds: of all primitives, or of `primitives`, in that order. */
+  refit(bounds: ArrayLike<number>, primitives?: ArrayLike<number>) {
+    const b = Array.from(bounds)
+    internal.check(
+      primitives === undefined ? this.bvh.refitFrom(b) : this.bvh.refitSome(Array.from(primitives), b)
+    )
+  }
+  get size() {
+    return this.bvh.size()
+  }
+  /** How much looser refits have made it, from 1. Build it again when it is about 2. */
+  get growth() {
+    return this.bvh.growth()
+  }
+  /** The box that the ray enters first, or null. */
+  rayClosest(origin: ArrayLike<number>, dir: ArrayLike<number>, tMin = 0, tMax = Number.MAX_VALUE): BvhHit | null {
+    return withVec3(origin, 'origin', (o) =>
+      withVec3(dir, 'dir', (d) =>
+        use(this.bvh.rayClosest(o, d, tMin, tMax), (h) =>
+          h.primitive < 0 ? null : {primitive: h.primitive, t: h.t}
+        )
+      )
+    )
+  }
+  /** The box that is nearest to a point, or null. */
+  nearest(point: ArrayLike<number>, radius = Infinity): {primitive: number; distance: number} | null {
+    return withVec3(point, 'point', (p) =>
+      use(this.bvh.nearest(p, radius), (h) =>
+        h.primitive < 0 ? null : {primitive: h.primitive, distance: h.distance}
+      )
+    )
+  }
+  /* What a ray, a sphere or half-spaces meet, in ascending order; nothing for input that isn't valid. */
+  rayAll(origin: ArrayLike<number>, dir: ArrayLike<number>, tMin = 0, tMax = Number.MAX_VALUE): number[] {
+    return withVec3(origin, 'origin', (o) => withVec3(dir, 'dir', (d) => this.bvh.rayAll(o, d, tMin, tMax)))
+  }
+  sphereOverlap(point: ArrayLike<number>, radius: number): number[] {
+    return withVec3(point, 'point', (p) => this.bvh.sphereOverlap(p, radius))
+  }
+  /** Four numbers for each plane: a normal, then `w`. As `regionFromRect` and a query's `planeValues` give
+   * them. */
+  region(planes: ArrayLike<number>): number[] {
+    return this.bvh.region(Array.from(planes))
+  }
+  [Symbol.dispose]() {
+    this.bvh[Symbol.dispose]()
+  }
 }

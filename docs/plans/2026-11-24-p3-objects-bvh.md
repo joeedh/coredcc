@@ -902,6 +902,11 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   `setWorld` and `applyDelta` return the channels. The bound objects stay inside scene.ts.
 - **Mutations:** 52, each alone; all are found.
 
+- **The rest, after the BVH review** (its finding 12): `Bvh`, `rayFromPixel` and `regionFromRect` in
+  scene.ts, over the bound `AnyBvh` and `ViewMath`; `test_bind_spatial` is a foreign `Spatial` end to
+  end. A block type can't be registered from a script yet, so there is no Spatial in a TS test: the
+  fake host stands in for it. Mutations of scene.ts: 11, all found.
+
 ### On P2's library IO round 2 (ff50545)
 - `core.object.delete` runs one `core.block.delete` with `blocks`, and one deletePreview for all.
 - Every scene command refuses a Context of another Library than its own, and one whose Library is

@@ -315,6 +315,67 @@ const suite = () => {
     cdcc.setScene(ctx, null)
     assert.throws(() => cdcc.pick(ctx, view, 1, 1), fails(StatusCode.FailedPrecondition, /no scene/))
   })
+
+  test('rays and regions of a view', () => {
+    const ray = cdcc.rayFromPixel(view, 75, 25)
+    near(ray.origin, [5, 5, 10])
+    near(ray.dir, [0, 0, -1])
+    const planes = cdcc.regionFromRect(view, 75, 25, 50, 40)
+    assert.equal(planes.length, 24)
+    const inside = (x: number, y: number, z: number) =>
+      [0, 1, 2, 3, 4, 5].every((i) => {
+        const [a, b, c, w] = planes.slice(i * 4, i * 4 + 4)
+        return a * x + b * y + c * z + w >= 0
+      })
+    assert.ok(inside(0.1, 2.1, 0) && inside(4.9, 4.9, 9.9) && inside(4.9, 4.9, -9.9))
+    assert.ok(!inside(-0.1, 3, 0) && !inside(1, 5.1, 0) && !inside(1, 1.9, 0) && !inside(1, 3, 10.1) && !inside(1, 3, -10.1))
+    assert.throws(() => cdcc.rayFromPixel({...view, viewport: [0, 0, 0, 0]}, 1, 1), fails(StatusCode.InvalidArgument, /./))
+  })
+
+  test('a Bvh', () => {
+    /* Unit boxes at whole numbers along x, and one that has no bounds. */
+    const count = 1000
+    const bounds = new Float64Array(count * 6)
+    for (let i = 0; i < count; i++) bounds.set([i, 0, 0, i + 0.5, 1, 1], i * 6)
+    bounds.set([1, 1, 1, 0, 0, 0], 7 * 6)
+    const bvh = new cdcc.Bvh()
+    try {
+      assert.equal(bvh.size, 0)
+      assert.equal(bvh.rayClosest([0, 0, 0], [1, 0, 0]), null)
+      bvh.build(bounds)
+      assert.equal(bvh.size, count)
+      assert.equal(bvh.growth, 1)
+      const hit = bvh.rayClosest([6.75, 0.5, 0.5], [2, 0, 0])!
+      assert.equal(hit.primitive, 8)
+      assert.ok(Math.abs(hit.t - 0.625) < 1e-6)
+      assert.equal(bvh.rayClosest([6.75, 0.5, 0.5], [2, 0, 0], 0, 0.5), null)
+      assert.equal(bvh.rayClosest([6.75, 0.5, 0.5], [2, 0, 0], 2)!.primitive, 11)
+      assert.equal(bvh.rayClosest([0, 0, 0], [0, 0, 0]), null)
+      assert.deepEqual(bvh.rayAll([6.75, 0.5, 0.5], [1, 0, 0], 0, 3), [8, 9])
+      assert.deepEqual(bvh.sphereOverlap([10.75, 0.5, 0.5], 0.3), [10, 11])
+      assert.deepEqual(bvh.sphereOverlap([NaN, 0, 0], 1), [])
+      const nearest = bvh.nearest([20.25, 3, 0.5])!
+      assert.equal(nearest.primitive, 20)
+      assert.ok(Math.abs(nearest.distance - 2) < 1e-6)
+      assert.equal(bvh.nearest([20.25, 3, 0.5], 1), null)
+      assert.deepEqual(bvh.region([1, 0, 0, -997.75]), [998, 999])
+      assert.deepEqual(bvh.region([1, 0, 0]), [])
+      /* Three are moved. */
+      bvh.refit([0, 5, 0, 1, 6, 1, 1, 5, 0, 2, 6, 1, 2, 5, 0, 3, 6, 1], new Int32Array([900, 8, 9]))
+      assert.deepEqual(bvh.rayAll([-1, 5.5, 0.5], [1, 0, 0]), [8, 9, 900])
+      assert.equal(bvh.rayClosest([6.75, 0.5, 0.5], [1, 0, 0])!.primitive, 10)
+      assert.ok(bvh.growth > 1)
+      bvh.refit(bounds)
+      assert.equal(bvh.rayClosest([6.75, 0.5, 0.5], [1, 0, 0])!.primitive, 8)
+      assert.throws(() => bvh.build([1, 2, 3]), fails(StatusCode.InvalidArgument, /./))
+      assert.throws(() => bvh.refit(bounds.subarray(6)), (e: unknown) => e instanceof ScriptError)
+      assert.throws(() => bvh.refit([0, 0, 0, 1, 1, 1], [count]), fails(StatusCode.OutOfRange, /./))
+      assert.throws(() => bvh.nearest([1, 2]), /point has 3 numbers, not 2/)
+      assert.equal(bvh.size, count)
+    } finally {
+      bvh[Symbol.dispose]()
+    }
+  })
 }
 
 describe('scenes from TS', suite)
