@@ -265,7 +265,7 @@ class NodeTypeRegistry {
    */
   Result<const NodeType *> add(NodeTypeDef def);
   /** What `add` would say of `def`, but for its kernel. */
-  Status check(const NodeTypeDef &def) const;
+  Status checkDef(const NodeTypeDef &def) const;
   /** The type, or null. */
   const NodeType *find(std::string_view name) const;
   /** The NotFound error for `name`, with suggestions. */

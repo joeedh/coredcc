@@ -51,6 +51,7 @@ struct Expected {
   std::vector<int64_t> elements;
   uint64_t runs = 0;
   bool exact = true;
+  bool shared = false;
 };
 
 struct Fuzz {
@@ -71,6 +72,9 @@ struct Fuzz {
   struct Side {
     GraphInstance inst;
     std::map<int64_t, Oracle> elements;
+    /* Elements may lack a state that their oracle has: those that shared one, or that lost
+     * theirs, don't run while their row is the same. Until all have one, runs aren't exact. */
+    bool stateless = false;
     Side(Runtime *rt, Library *lib, BlockId id) : inst(rt, lib, id) {}
   };
   std::unique_ptr<Side> sides[2];
@@ -99,6 +103,7 @@ struct Fuzz {
     connect(*root.def, input, key(in), node, kElementsSocket);
     for (auto &s : sides) {
       s = std::make_unique<Side>(&w.rt, &w.lib, root.id);
+      s->inst.setIncremental(r.below(4) != 0);
     }
     /* Something to run from the start. */
     for (int i = 0; i < 40; i++) {
@@ -401,6 +406,7 @@ struct Fuzz {
   Expected expected(Side &s)
   {
     Expected e;
+    e.exact = !s.stateless;
     auto fail = [&](StatusCode code, NodePath origin) {
       e.code = code;
       e.origin = std::move(origin);
@@ -410,7 +416,7 @@ struct Fuzz {
     if (!def) {
       return fail(StatusCode::NotFound, at({}, node));
     }
-    if (!tab.check().ok()) {
+    if (!tab.validate().ok()) {
       return fail(StatusCode::InvalidArgument, at({}, node));
     }
     const auto &outs = def->interfaceSockets(SocketSide::Output);
@@ -428,6 +434,7 @@ struct Fuzz {
       Oracle temp;
       const bool shared = row >= maxCached;
       e.exact &= !shared;
+      e.shared |= shared;
       Oracle &oracle = shared ? temp : s.elements[key];
       if (!oracle.inst) {
         oracle.inst = std::make_unique<GraphInstance>(&w.rt, &w.lib, defs[0].id);
@@ -469,7 +476,9 @@ struct Fuzz {
         wanted[tab.keys[row]] = true;
       }
       std::erase_if(s.elements, [&](const auto &p) { return !wanted.count(p.first); });
+      s.stateless |= failed;
     }
+    s.stateless |= e.shared;
     return e;
   }
 
@@ -508,11 +517,20 @@ struct Fuzz {
     if (e.exact && runs != e.runs) {
       return wrong("the runs");
     }
-    if (s.inst.elementCount() < int(s.elements.size())) {
+    if (e.exact && s.inst.elementCount() < int(s.elements.size())) {
       return wrong("the elements kept");
     }
+    const NodeReport report = s.inst.report(at({}, node));
+    if (st.ok()) {
+      if (report.elements != tab.size() || report.cachedElements > report.elements) {
+        return wrong("the report");
+      }
+      s.stateless &= e.shared || report.cachedElements < report.elements;
+    }
     /* Nothing moves: nothing runs, whatever it gave. */
-    w.rt.touch();
+    if (r.oneIn(3)) {
+      w.rt.touch();
+    }
     const uint64_t again = s.inst.totalRuns();
     s.inst.evaluate(p).ignore();
     return s.inst.totalRuns() == again ? true : wrong("runs after no edit");

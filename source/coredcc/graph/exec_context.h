@@ -105,8 +105,10 @@ class NodeExecContext {
   /** A block, recorded as a dependency: the node runs again when it changes, appears or
    * goes away. The handle is null if there is none. */
   BlockUse useBlock(BlockId id);
-  /** An interface of a block; the answer is recorded as a dependency. Null if it has
-   * none. */
+  /** An interface of a block; the answer is recorded as a dependency. Null if it has none.
+   * What a block answers may change only with a notification of the block or a move of the
+   * Library's epoch (an override does move it): without either, the node isn't looked at
+   * again. */
   template <class I> I queryBlock(BlockHandle h)
   {
     I out;

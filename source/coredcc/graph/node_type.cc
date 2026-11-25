@@ -234,7 +234,7 @@ Result<const NodeType *> NodeTypeRegistry::add(NodeTypeDef def)
   return store(*type);
 }
 
-Status NodeTypeRegistry::check(const NodeTypeDef &def) const
+Status NodeTypeRegistry::checkDef(const NodeTypeDef &def) const
 {
   CDCC_TRY(rt_.busyIfEvaluating("adding a node type"));
   Result<NodeType *> type = build(def);

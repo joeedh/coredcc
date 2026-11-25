@@ -1,5 +1,4 @@
-/* Reach tables, and what uses them at edit time: the cycle check of GraphDef::link and the
- * recursion check of setGroup. Nothing here recurses natively: defs may nest deeply. */
+/* Reach tables. Nothing here recurses natively: defs may nest deeply. */
 #include "coredcc/base/text.h"
 #include "coredcc/graph/interior.h"
 #include "coredcc/graph/provider.h"
@@ -18,27 +17,18 @@ using litestl::util::Vector;
 
 /* ---- ReachKeys ---- */
 
-static int indexOfKey(const Vector<InteriorKey> &list, const InteriorKey &key)
-{
-  for (int i = 0; i < int(list.size()); i++) {
-    if (list[i] == key) {
-      return i;
-    }
-  }
-  return -1;
-}
-
 void ReachKeys::add(SocketSide side, const InteriorKey &key)
 {
   Vector<InteriorKey> &list = side == SocketSide::Input ? ins : outs;
-  if (indexOfKey(list, key) < 0) {
+  if ((side == SocketSide::Input ? inAt_ : outAt_).add(key, int(list.size()))) {
     list.append(key);
   }
 }
 
 int ReachKeys::find(SocketSide side, const InteriorKey &key) const
 {
-  return indexOfKey(side == SocketSide::Input ? ins : outs, key);
+  const int *i = (side == SocketSide::Input ? inAt_ : outAt_).lookup_ptr(key);
+  return i ? *i : -1;
 }
 
 std::string ReachKeys::toString() const
@@ -79,7 +69,7 @@ class GraphReachBuilder {
           inner = keysInside(e, g);
         }
         const std::string text = inner.toString();
-        e.groups.append(GroupEntry{target, inner, text});
+        e.groups.append(GroupEntry{target, inner, text, {}, 0, 0});
         if (!target) {
           continue;
         }
@@ -106,8 +96,10 @@ class GraphReachBuilder {
   }
 
  private:
-  /* Cached tables of one def. Those of keys that aren't used any more go with the others. */
+  /* Cached tables of one def, and what they hold. Those of keys that aren't used any more go
+   * with the others. */
   static constexpr int kMaxTables = 256;
+  static constexpr size_t kMaxCells = size_t(1) << 20;
 
   struct Slot {
     bool done = false;
@@ -126,6 +118,11 @@ class GraphReachBuilder {
     const GraphDef *target = nullptr;
     ReachKeys keys;
     std::string name;
+    /* What keys.ins are outside: an input of the def, or ~i for the outer keys' i. */
+    Vector<int> ins;
+    /* The first rows and columns that are for keys. */
+    int interfaceOuts = 0;
+    int interfaceIns = 0;
   };
   struct Entry {
     const GraphDef *def = nullptr;
@@ -173,7 +170,31 @@ class GraphReachBuilder {
     return out;
   }
 
-  std::shared_ptr<const GraphReach> finish(const Entry &e)
+  static void mapKeys(Entry &e)
+  {
+    const GraphTopology &t = *e.topo;
+    for (int i = 0; i < int(e.groups.size()); i++) {
+      GroupEntry &g = e.groups[i];
+      if (!g.target) {
+        continue;
+      }
+      g.interfaceOuts = int(g.target->interfaceSockets(SocketSide::Output).size());
+      g.interfaceIns = int(g.target->interfaceSockets(SocketSide::Input).size());
+      const GraphTopology::Node &n = t.nodes[t.groups[i].index];
+      for (const InteriorKey &k : g.keys.ins) {
+        InteriorKey outer = k;
+        outer.groups = {};
+        outer.groups.append(n.id);
+        for (NodeId id : k.groups) {
+          outer.groups.append(id);
+        }
+        const int from = e.keys.find(SocketSide::Input, outer); /* the outermost counts */
+        g.ins.append(from >= 0 ? ~from : n.inBegin + t.inputIndex(n, k.toString()));
+      }
+    }
+  }
+
+  std::shared_ptr<const GraphReach> finish(Entry &e)
   {
     Vector<const GraphReach *> groups;
     Vector<uint64_t> versions;
@@ -193,22 +214,29 @@ class GraphReachBuilder {
         return old->reach;
       }
     }
+    mapKeys(e);
     std::shared_ptr<GraphReach> r = std::make_shared<GraphReach>();
     r->topology = e.topo->serial;
     r->groups = std::move(versions);
     r->version = e.def->runtime().nextVersion();
     compute(e, groups, *r);
     if (!recursive_) { /* with a recursion, it depends on where the walk started */
-      if (e.def->reach_.size() >= kMaxTables) {
-        e.def->reach_ = {};
+      size_t cells = 0;
+      for (const Vector<int> &row : r->inputs) {
+        cells += 1 + size_t(row.size());
       }
+      if (e.def->reach_.size() >= kMaxTables || e.def->reachCells_ + cells > kMaxCells) {
+        e.def->reach_ = {};
+        e.def->reachCells_ = 0;
+      }
+      e.def->reachCells_ += cells;
       e.def->reach_.add_overwrite(e.name.c_str(), GraphDef::CachedReach{r, key_});
     }
     return r;
   }
 
   /* Walks up from each interface output and each interior output. `seen` holds, per input
-   * socket, the last of them whose walk visited it. */
+   * socket, the last of them whose walk visited it; `reached` the same for the columns. */
   static void compute(const Entry &e, const Vector<const GraphReach *> &groups, GraphReach &out)
   {
     const GraphTopology &t = *e.topo;
@@ -230,8 +258,13 @@ class GraphReachBuilder {
     }
     Vector<int> stack;
     int row = 0;
+    Vector<int> reached;
+    for (int i = 0; i < nIns + int(e.keys.ins.size()); i++) {
+      reached.append(-1);
+    }
     auto reach = [&](int in) {
-      if (!out.inputs[row].contains(in)) {
+      if (reached[in] != row) {
+        reached[in] = row;
         out.inputs[row].append(in);
       }
     };
@@ -248,33 +281,20 @@ class GraphReachBuilder {
         return;
       }
       const GroupEntry &ge = e.groups[n.group];
-      const int groupIns = int(ge.target->interfaceSockets(SocketSide::Input).size());
       for (int i : g->inputs[groupRow]) {
-        if (i < groupIns) {
-          visit(n.inBegin + i);
-          continue;
-        }
-        InteriorKey k = ge.keys.ins[i - groupIns];
-        InteriorKey outer = k;
-        outer.groups = {};
-        outer.groups.append(n.id);
-        for (NodeId id : k.groups) {
-          outer.groups.append(id);
-        }
-        if (const int from = e.keys.find(SocketSide::Input, outer); from >= 0) {
-          reach(nIns + from); /* the outermost counts */
+        const int at = i < ge.interfaceIns ? n.inBegin + i : ge.ins[i - ge.interfaceIns];
+        if (at >= 0) {
+          visit(at);
         }
         else {
-          visit(n.inBegin + t.inputIndex(n, k.toString()));
+          reach(nIns + ~at);
         }
       }
     };
     auto interiorRow = [&](const GraphTopology::Node &n, const InteriorKey &k) {
       const GroupEntry &ge = e.groups[n.group];
       const int i = ge.keys.find(SocketSide::Output, k);
-      return ge.target && i >= 0 ?
-                 int(ge.target->interfaceSockets(SocketSide::Output).size()) + i :
-                 -1;
+      return ge.target && i >= 0 ? ge.interfaceOuts + i : -1;
     };
     auto fromOutput = [&](const GraphTopology::Node &n, int output) {
       if (n.role == NodeRole::Input) {
@@ -284,11 +304,7 @@ class GraphReachBuilder {
         throughGroup(n, output);
       }
       else if (n.role == NodeRole::Group) {
-        for (const GraphTopology::Interior &i : t.groups[n.group].interior) {
-          if (i.side == SocketSide::Output && i.index == output) {
-            throughGroup(n, interiorRow(n, i.key));
-          }
-        }
+        throughGroup(n, interiorRow(n, t.groups[n.group].interiorOutput(n, output).key));
       }
       else if (isOneStep(n.role)) {
         for (int i = 0; i < n.inCount; i++) {
@@ -342,196 +358,6 @@ std::shared_ptr<const GraphReach> graphReach(const GraphDef &def, const ReachKey
 {
   GraphReachBuilder b(def);
   return b.get(def, keys);
-}
-
-/* ---- link ---- */
-
-namespace {
-
-/* A socket of a group node in the table of its def: a row for an output, a column for an
- * input. -1 if it isn't there. */
-int tableIndex(const GraphDef &target, const ReachKeys &keys, SocketSide side, const string &key)
-{
-  const Vector<InterfaceSocket> &list = target.interfaceSockets(side);
-  for (int i = 0; i < int(list.size()); i++) {
-    if (strcmp(list[i].key().c_str(), key.c_str()) == 0) {
-      return i;
-    }
-  }
-  const std::optional<InteriorKey> k = InteriorKey::parse(key.c_str());
-  const int i = k ? keys.find(side, *k) : -1;
-  return i >= 0 ? int(list.size()) + i : -1;
-}
-
-/* One direction of the cycle check: a walk over sockets, one step at a time. Forward, the
- * sockets are inputs and the walk follows what depends on them; backward, they are outputs
- * and it follows what they depend on. */
-class CycleWalk {
- public:
-  struct Socket {
-    const GraphNode *node;
-    string key;
-  };
-
-  CycleWalk(const GraphDef &def, bool forward, Socket start, Socket goal)
-      : def_(def), forward_(forward), start_(start), goal_(std::move(goal))
-  {
-    add(std::move(start));
-  }
-  bool done() const
-  {
-    return next_ >= int(queue_.size());
-  }
-  /** Follows one socket; true if it found the goal. */
-  bool step()
-  {
-    const Socket s = queue_[next_++];
-    const NodeType *type = s.node->type();
-    const NodeRole role = type ? type->role : NodeRole::Kernel;
-    if (role == NodeRole::Input || role == NodeRole::Output) {
-      return false;
-    }
-    if (isOneStep(role)) {
-      return follow(s.node, [](const string &) { return true; });
-    }
-    const GraphDef *target = def_.groupTarget(*s.node);
-    if (!target) {
-      return false;
-    }
-    const SocketSide mine = forward_ ? SocketSide::Input : SocketSide::Output;
-    const SocketSide other = forward_ ? SocketSide::Output : SocketSide::Input;
-    const ReachKeys keys = interiorKeys(*s.node);
-    const int index = tableIndex(*target, keys, mine, s.key);
-    const std::shared_ptr<const GraphReach> reach = graphReach(*target, keys);
-    return follow(s.node, [&](const string &key) {
-      const int o = tableIndex(*target, keys, other, key);
-      if (index < 0 || o < 0) {
-        return false;
-      }
-      return reach->inputs[forward_ ? o : index].contains(forward_ ? index : o);
-    });
-  }
-
- private:
-  /* Of a group node's links, the new one included. */
-  ReachKeys interiorKeys(const GraphNode &n) const
-  {
-    ReachKeys keys;
-    auto use = [&keys](SocketSide side, const string &key) {
-      if (const std::optional<InteriorKey> k = InteriorKey::parse(key.c_str())) {
-        keys.add(side, *k);
-      }
-    };
-    for (const GraphLink *l : n.linksIn()) {
-      if (isInteriorKey(l->toKey.c_str()) &&
-          def_.findSocket(*l->from, SocketSide::Output, l->fromKey.c_str()))
-      {
-        use(SocketSide::Input, l->toKey); /* else it replaces nothing */
-      }
-    }
-    for (const GraphLink *l : n.linksOut()) {
-      use(SocketSide::Output, l->fromKey);
-    }
-    if (start_.node == &n) {
-      use(forward_ ? SocketSide::Input : SocketSide::Output, start_.key);
-    }
-    if (goal_.node == &n) {
-      use(forward_ ? SocketSide::Output : SocketSide::Input, goal_.key);
-    }
-    return keys;
-  }
-  void add(Socket s)
-  {
-    /* All sockets of such a node lead to the same places. */
-    const NodeType *type = s.node->type();
-    const bool kernel = !type || isOneStep(type->role);
-    const uint64_t at = uint64_t(uintptr_t(s.node));
-    if (seen_.add(Seen{at, kernel ? string() : s.key}, true)) {
-      queue_.append(std::move(s));
-    }
-  }
-  template <class Fn> bool follow(const GraphNode *node, Fn &&leadsTo)
-  {
-    if (node == goal_.node && leadsTo(goal_.key)) {
-      return true;
-    }
-    for (const GraphLink *l : forward_ ? node->linksOut() : node->linksIn()) {
-      if (leadsTo(forward_ ? l->fromKey : l->toKey)) {
-        add(forward_ ? Socket{l->to, l->toKey} : Socket{l->from, l->fromKey});
-      }
-    }
-    return false;
-  }
-
-  struct Seen {
-    uint64_t node = 0;
-    string key;
-    uint64_t computeHash() const
-    {
-      return detail::fnv1a64(key.c_str(), node * 0x9E3779B97F4A7C15ull);
-    }
-    bool operator==(const Seen &b) const
-    {
-      return node == b.node && strcmp(key.c_str(), b.key.c_str()) == 0;
-    }
-  };
-  const GraphDef &def_;
-  bool forward_;
-  Socket start_;
-  Socket goal_;
-  Vector<Socket> queue_;
-  int next_ = 0;
-  Map<Seen, bool> seen_;
-};
-
-} // namespace
-
-bool GraphDef::wouldCycle(const GraphNode &from,
-                          std::string_view fromKey,
-                          const GraphNode &to,
-                          std::string_view toKey) const
-{
-  /* Both directions at once, so adding to either end of a long chain is cheap. */
-  const CycleWalk::Socket out{&from, lsString(fromKey)};
-  const CycleWalk::Socket in{&to, lsString(toKey)};
-  CycleWalk down(*this, true, in, out);
-  CycleWalk up(*this, false, out, in);
-  while (!down.done() && !up.done()) {
-    if (down.step() || up.step()) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/* ---- setGroup ---- */
-
-Status GraphDef::checkRecursion(BlockId def) const
-{
-  const Library *lib = lib_.get();
-  if (self_.isNull() || !lib) {
-    return Status(); /* no group can name this def */
-  }
-  Vector<const GraphDef *> stack;
-  Map<const GraphDef *, bool> seen;
-  auto visit = [&](const GraphDef *d) {
-    if (d && seen.add(d, true)) {
-      stack.append(d);
-    }
-  };
-  visit(graphDefOf(*lib, lib->find(def)));
-  while (stack.size() > 0) {
-    const GraphDef *d = stack.pop_back();
-    if (d == this) {
-      return Status::error(StatusCode::InvalidArgument,
-                           "a graph can't contain itself, through groups either");
-    }
-    const std::shared_ptr<const GraphTopology> t = d->topology();
-    for (const GraphTopology::Group &g : t->groups) {
-      visit(d->groupTarget(*g.node));
-    }
-  }
-  return Status();
 }
 
 } // namespace coredcc

@@ -20,7 +20,7 @@ using litestl::util::Vector;
 PropertyDef foreachMaxCachedParam()
 {
   PropertyDef def = PropertyDef::intProp(kMaxCachedParam);
-  def.uiName("Cached Elements").range(0, 1 << 24).defaultValue(PropValue::ofInt(16384));
+  def.uiName("Cached Elements").range(0, 1 << 24).defaultValue(PropValue::ofInt(4096));
   return def;
 }
 
@@ -34,7 +34,7 @@ const Elements::Column *Elements::column(std::string_view name) const
   return nullptr;
 }
 
-Status Elements::check() const
+Status Elements::validate(bool checkKeys) const
 {
   auto invalid = [](const std::string &text) {
     return Status::error(StatusCode::InvalidArgument, text.c_str());
@@ -50,7 +50,8 @@ Status Elements::check() const
     }
   }
   Map<int64_t, bool> seen;
-  for (int64_t key : keys) {
+  for (int i = 0; checkKeys && i < size(); i++) {
+    const int64_t key = keys[i];
     if (!seen.add(key, true)) {
       return invalid("the key " + std::to_string(key) + " is in the table twice");
     }
@@ -87,17 +88,17 @@ size_t PayloadTraits<Elements>::bytes(const Elements &e)
 
 namespace graph {
 
-Element::Element(int64_t key, int *counter) : key(key), counter(counter)
+Element::Element(int64_t key, ElementCounts *counts) : key(key), counts(counts)
 {
-  if (counter) {
-    ++*counter;
+  if (counts) {
+    counts->elements++;
   }
 }
 
 Element::~Element()
 {
-  if (counter) {
-    --*counter;
+  if (counts) {
+    counts->elements--;
   }
   litestl::alloc::Delete(frame);
 }
@@ -117,6 +118,7 @@ void Foreach::clear()
     litestl::alloc::Delete(shared);
     shared = nullptr;
   }
+  madeFrom = PayloadRef();
 }
 
 /** Which columns of a table are for which interface inputs. */
@@ -124,9 +126,13 @@ struct ElementsMap {
   struct Input {
     int64_t id = 0;
     const Elements::Column *column = nullptr;
+    /** In the table the last output was made from. */
+    const Elements::Column *oldColumn = nullptr;
     const SocketType *type = nullptr;
   };
   litestl::util::Vector<Input, 4> inputs;
+  /** Whether an element's inputs are the same in a row of each. */
+  bool sameRow(int row, int oldRow) const;
 };
 
 /* ---- when it runs ---- */
@@ -161,8 +167,7 @@ void Evaluator::computeForeach(Frame &f, int node)
   if (world) {
     s.world = rt_.nextVersion();
     s.deps.clear();
-    k.trace.blocks.clear();
-    k.trace.queries.clear();
+    k.trace.more = nullptr;
   }
   if (world || table) {
     const auto start = std::chrono::steady_clock::now();
@@ -171,6 +176,9 @@ void Evaluator::computeForeach(Frame &f, int node)
     ErrorPtr error = runElements(f, node, k, *def, table);
     if (overBudget_) {
       return;
+    }
+    if (f.deps) {
+      f.deps->setBlocks(k, rt_.ext<ClientRegistry>());
     }
     k.ran = true;
     k.runError = std::move(error);
@@ -214,6 +222,10 @@ bool Evaluator::worldMoved(Frame &f, int node, KernelState &k, const GraphDef &d
   if (defs.size() != s.defs.size() || !std::equal(defs.begin(), defs.end(), s.defs.begin())) {
     moved = true;
     s.defs = std::move(defs);
+    s.serials.clear();
+    for (const GraphDef *d : list) {
+      s.serials.add(d->serial(), true);
+    }
   }
 
   /* The Library may write a Pointer param's cell, which moves its epoch but not the def. */
@@ -266,8 +278,11 @@ ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &de
     return fail(Status::error(StatusCode::FailedPrecondition,
                               "the table's blocks aren't there any more"));
   }
+  const Elements *old = s.madeIn == s.world ? s.madeFrom.get<Elements>() : nullptr;
+  const bool sameKeys = old && old->keys.size() == table->keys.size() &&
+                        std::equal(old->keys.begin(), old->keys.end(), table->keys.begin());
   if (newTable) {
-    s.table = table->check();
+    s.table = table->validate(!sameKeys);
   }
   if (!s.table.ok()) {
     return fail(s.table);
@@ -277,21 +292,33 @@ ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &de
   ElementsMap map;
   for (const InterfaceSocket &in : def.interfaceSockets(SocketSide::Input)) {
     map.inputs.append(ElementsMap::Input{in.id, table->column(in.name.c_str()),
+                                         old ? old->column(in.name.c_str()) : nullptr,
                                          types.find(in.typeName.c_str())});
   }
+  /* For the same keys it starts as a copy of the last one, made when the first value differs. */
   Elements out;
-  out.keys = table->keys;
-  for (const InterfaceSocket &o : def.interfaceSockets(SocketSide::Output)) {
-    Elements::Column c;
-    c.name = o.name;
-    c.values.resize(size_t(table->size()));
-    out.columns.append(std::move(c));
+  const Elements *oldOut = old ? k.outputs[0].value.payload<Elements>() : nullptr;
+  bool changed = !sameKeys;
+  if (!sameKeys) {
+    out.keys = table->keys;
+    for (const InterfaceSocket &o : def.interfaceSockets(SocketSide::Output)) {
+      Elements::Column c;
+      c.name = o.name;
+      c.values.resize(size_t(table->size()));
+      out.columns.append(std::move(c));
+    }
   }
-  auto newElement = [&](int64_t key, int *counter) {
-    Element *e = litestl::alloc::New<Element>("coredcc::GraphElement", key, counter);
+  const bool marks = !sameKeys || s.failed; /* else the elements there are, are the table's */
+  Map<int64_t, int> oldRows;
+  for (int i = 0; old && !sameKeys && i < old->size(); i++) {
+    oldRows.add(old->keys[i], i);
+  }
+  auto newElement = [&](int64_t key, ElementCounts *counts) {
+    Element *e = litestl::alloc::New<Element>("coredcc::GraphElement", key, counts);
     e->frame = newFrame(f, *n.node, &def);
     e->frame->top = e->frame;
     e->frame->element = e;
+    e->frame->counts = counts;
     return e;
   };
   auto evict = [&](auto &&gone) {
@@ -308,12 +335,27 @@ ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &de
   };
 
   const int64_t maxCached = f.def->paramValue(*n.node, kMaxCachedParam).asInt();
+  s.failed = true; /* until it is through */
   ErrorPtr error;
   for (int row = 0; row < table->size() && !error; row++) {
     const int64_t key = table->keys[row];
+    const int *was = old && !sameKeys ? oldRows.lookup_ptr(key) : nullptr;
+    const int oldRow = sameKeys ? row : was ? *was : -1;
+    if (oldRow >= 0 && map.sameRow(row, oldRow)) {
+      for (int i = 0; !sameKeys && i < int(out.columns.size()); i++) {
+        out.columns[i].values[row] = oldOut->columns[i].values[oldRow];
+      }
+      Element **kept = marks && row < maxCached ? s.cached.lookup_ptr(key) : nullptr;
+      if (kept) {
+        (*kept)->run = k.runs;
+      }
+      continue;
+    }
     Element **found = row < maxCached ? s.cached.lookup_ptr(key) : nullptr;
     Element *e = found ? *found : nullptr;
-    if (!found && row < maxCached && elements_ < maxFrames) {
+    if (!found && row < maxCached && elements_.elements < maxFrames &&
+        elements_.kernels < maxCachedKernels)
+    {
       e = newElement(key, &elements_);
       s.cached.add(key, e);
     }
@@ -338,13 +380,24 @@ ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &de
       continue;
     }
     e->world = s.world;
-    for (int i = 0; i < int(out.columns.size()); i++) {
-      out.columns[i].values[row] = e->outputs[i];
+    for (int i = 0; i < int(e->outputs.size()); i++) {
+      if (!changed && oldOut->columns[i].values[row] != e->outputs[i]) {
+        changed = true;
+        out = *oldOut;
+      }
+      if (changed) {
+        out.columns[i].values[row] = e->outputs[i];
+      }
     }
   }
+  s.rows = table->size();
+  s.failed = error != nullptr;
   if (error) {
+    s.cachedRows = int(s.cached.size());
     /* Elements that are gone are kept for when they are back, but not without limit. */
-    if (int64_t(s.cached.size()) > 2 * maxCached || elements_ >= maxFrames) {
+    if (int64_t(s.cached.size()) > 2 * maxCached || elements_.elements >= maxFrames ||
+        elements_.kernels >= maxCachedKernels)
+    {
       Map<int64_t, bool> wanted;
       for (int row = 0; row < table->size() && row < maxCached; row++) {
         wanted.add(table->keys[row], true);
@@ -353,13 +406,32 @@ ErrorPtr Evaluator::runElements(Frame &f, int node, KernelState &k, GraphDef &de
     }
     return error;
   }
-  evict([&](const Element &e) { return e.run != k.runs; });
-  GraphValue v = GraphValue::ofPayload(makePayload(std::move(out)));
-  if (k.outputs[0].value != v) {
-    k.outputs[0].value = std::move(v);
-    k.outputs[0].changedAt = rt_.nextVersion();
+  if (marks) {
+    evict([&](const Element &e) { return e.run != k.runs; });
   }
+  s.cachedRows = int(s.cached.size());
+  if (changed) {
+    GraphValue v = GraphValue::ofPayload(makePayload(std::move(out)));
+    if (sameKeys || k.outputs[0].value != v) {
+      k.outputs[0].value = std::move(v);
+      k.outputs[0].changedAt = rt_.nextVersion();
+    }
+  }
+  s.madeFrom = ref;
+  s.madeIn = s.world;
   return nullptr;
+}
+
+bool ElementsMap::sameRow(int row, int oldRow) const
+{
+  for (const Input &in : inputs) {
+    if (!in.column != !in.oldColumn ||
+        (in.column && in.column->values[row] != in.oldColumn->values[oldRow]))
+    {
+      return false;
+    }
+  }
+  return true;
 }
 
 Status Evaluator::setRow(Element &e, const ElementsMap &map, int row, bool &same)

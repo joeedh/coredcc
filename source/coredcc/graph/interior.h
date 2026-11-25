@@ -37,6 +37,7 @@ struct InteriorKey {
   /** This key as seen from inside its first group. */
   InteriorKey inner() const;
   bool operator==(const InteriorKey &b) const;
+  uint64_t computeHash() const;
 };
 
 inline bool isInteriorKey(std::string_view key)

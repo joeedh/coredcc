@@ -78,7 +78,7 @@ static Status registerWith(Runtime &rt,
                                         "for coredcc");
   }
   NodeTypeRegistry &types = rt.ext<NodeTypeRegistry>();
-  CDCC_TRY(types.check(def));
+  CDCC_TRY(types.checkDef(def));
   CDCC_TRY(foreignImplementable(coredcc::detail::ifaceDesc<GraphKernel>()));
   const std::vector<std::string> names = detail::splitSlots(slots);
   std::vector<const char *> present;

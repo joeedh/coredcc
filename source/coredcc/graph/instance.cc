@@ -119,7 +119,7 @@ Status GraphInstance::evaluate(const SocketPath &socket)
 const GraphValue *GraphInstance::value(const SocketPath &socket) const
 {
   const graph::Evaluator::Pulled *r = e_->result(socket);
-  return r && !r->error ? &r->value : nullptr;
+  return r && r->hasValue && !r->error ? &r->value : nullptr;
 }
 
 const GraphValue *GraphInstance::lastGood(const SocketPath &socket) const
@@ -143,7 +143,7 @@ const GraphError *GraphInstance::error(const SocketPath &socket) const
 bool GraphInstance::isCurrent(const SocketPath &socket) const
 {
   const graph::Evaluator::Pulled *r = e_->result(socket);
-  return r && r->key == e_->currentKey();
+  return r && e_->isCurrent(*r);
 }
 
 Status GraphInstance::setInput(std::string_view nameOrKey, GraphValue v)
@@ -178,7 +178,32 @@ void GraphInstance::setUserData(void *data)
 
 void GraphInstance::setMaxFrames(int n)
 {
-  e_->maxFrames = n;
+  e_->setMaxFrames(n);
+}
+
+void GraphInstance::setMaxCachedKernels(int n)
+{
+  e_->maxCachedKernels = n;
+}
+
+void GraphInstance::setIncremental(bool on)
+{
+  e_->incremental = on;
+}
+
+uint64_t GraphInstance::totalVisits() const
+{
+  return e_->visits;
+}
+
+uint64_t GraphInstance::totalFullPasses() const
+{
+  return e_->fullPasses;
+}
+
+GraphMemory GraphInstance::memory() const
+{
+  return e_->memory();
 }
 
 int GraphInstance::frameCount() const
@@ -188,7 +213,64 @@ int GraphInstance::frameCount() const
 
 int GraphInstance::elementCount() const
 {
-  return e_->elementCount();
+  return e_->elementCounts().elements;
+}
+
+/* ---- prepared sockets ---- */
+
+Result<SocketHandle> GraphInstance::prepare(const SocketPath &socket)
+{
+  return e_->prepare(socket);
+}
+
+Status GraphInstance::release(SocketHandle socket)
+{
+  return e_->release(socket);
+}
+
+Status GraphInstance::evaluate(std::span<const SocketHandle> sockets, Vector<int> &moved)
+{
+  return e_->evaluate(sockets, moved);
+}
+
+Status GraphInstance::status(SocketHandle socket) const
+{
+  const graph::Evaluator::Pulled *r = e_->result(socket);
+  if (!r || r->at == 0) {
+    return Status::error(StatusCode::FailedPrecondition,
+                         r ? "the socket wasn't evaluated yet" : "the handle isn't valid");
+  }
+  return r->error ? r->error->status : Status();
+}
+
+const GraphValue *GraphInstance::value(SocketHandle socket) const
+{
+  const graph::Evaluator::Pulled *r = e_->result(socket);
+  return r && r->hasValue && !r->error ? &r->value : nullptr;
+}
+
+const GraphValue *GraphInstance::lastGood(SocketHandle socket) const
+{
+  const graph::Evaluator::Pulled *r = e_->result(socket);
+  return r && r->hasValue ? &r->value : nullptr;
+}
+
+uint64_t GraphInstance::changedAt(SocketHandle socket) const
+{
+  const graph::Evaluator::Pulled *r = e_->result(socket);
+  return r ? r->changedAt : 0;
+}
+
+const GraphError *GraphInstance::error(SocketHandle socket) const
+{
+  const graph::Evaluator::Pulled *r = e_->result(socket);
+  return r ? r->error.get() : nullptr;
+}
+
+bool GraphInstance::isCurrent(SocketHandle socket) const
+{
+  const graph::Evaluator::Pulled *r = e_->result(socket);
+  return r && e_->isCurrent(*r);
 }
 
 uint64_t GraphInstance::totalRuns() const
@@ -236,6 +318,7 @@ Status Evaluator::setInput(std::string_view name, GraphValue v)
     if (old) {
       inputs_.remove(s->id);
       own_++;
+      ownInputs_.append(s->id);
     }
     return Status();
   }
@@ -253,8 +336,10 @@ Status Evaluator::setInput(std::string_view name, GraphValue v)
   if (old && old->value == v) {
     return Status();
   }
-  inputs_.add_overwrite(s->id, External{std::move(v), rt_.nextVersion()});
+  const int64_t id = s->id;
+  inputs_.add_overwrite(id, External{std::move(v), rt_.nextVersion()});
   own_++;
+  ownInputs_.append(id);
   return Status();
 }
 
@@ -273,6 +358,10 @@ NodeReport Evaluator::report(const NodePath &path) const
   }
   ErrorPtr error;
   if (const KernelState *k = f->kernels[at]) {
+    if (k->foreach) {
+      r.elements = k->foreach->rows;
+      r.cachedElements = k->foreach->cachedRows;
+    }
     r.runs = k->runs;
     r.seconds = k->seconds;
     if (k->visited) {
@@ -316,6 +405,7 @@ Status Evaluator::retry()
     }
   }
   own_++;
+  ownAll_ = true;
   return Status();
 }
 
@@ -326,7 +416,14 @@ Status Evaluator::clear()
   NoCollectScope noCollect(lib_.get());
   root_ = nullptr;
   results_.clear();
+  for (Prepared &p : prepared_) {
+    p.pulled = Pulled();
+    p.reported = 0;
+  }
   passKey_ = Key();
+  askedKey_ = Key();
+  failedKey_ = Key();
+  layout_++;
   Status status;
   if (const GraphDef *def = findDef(status)) {
     Vector<int64_t> gone;

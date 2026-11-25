@@ -10,6 +10,8 @@
 #include "coredcc/graph/instance.h"
 #include "coredcc/lib/payload_access.h"
 
+#include <algorithm>
+#include <chrono>
 #include <random>
 #include <vector>
 
@@ -540,6 +542,128 @@ struct RandomDoc : HostileDoc {
   }
 };
 
+/* As large as a file may make them. They are refused, or loaded, checked and evaluated, in about
+ * the time their size takes. */
+void testLarge()
+{
+  const auto start = std::chrono::steady_clock::now();
+  HostileDoc d;
+  /* A def with `n` sums, and a graph with a group of it and `links` links: in pairs, to an
+   * input inside and from an output inside. */
+  auto interior = [&](int links) {
+    const int n = links / 2;
+    const Graph inner = newGraph(d.lib, "inner");
+    for (int i = 0; i < n; i++) {
+      NodeState s;
+      s.id = NodeId{i + 1};
+      s.typeName = "t.sum";
+      test_assert(inner.def->insertNode(s).ok());
+    }
+    Fields f(d.lib);
+    f.noInterface();
+    f.count(uint32_t(n + 2));
+    f.head(1, "graph.group");
+    for (int i = 0; i < 4; i++) {
+      f.count(0);
+    }
+    RefCell group;
+    group.target = inner.id;
+    f.out.ref(group);
+    f.count(0);
+    f.count(0);
+    f.node(2, "t.sum");
+    for (int i = 0; i < n; i++) {
+      f.node(3 + i, "t.sum");
+    }
+    f.count(uint32_t(n * 2));
+    for (int i = 0; i < n; i++) {
+      const std::string at = "@" + std::to_string(i + 1);
+      f.link(1000000 + i, 2, 1, (at + ".a").c_str());
+      f.b().i64(2000000 + i);
+      f.b().i64(1);
+      f.b().str(at + ".value");
+      f.b().i64(3 + i);
+      f.b().str("a");
+    }
+    Result<BlockPayload> p = detail::PayloadAccess::take(f.out, kGraphDefPayload);
+    test_assert(p.ok());
+    const BlockId id{ClientId::of(kCoredccClient), d.rt.newLocalId()};
+    Result<BlockHandle> h = d.lib.createWithId(TypeId::of(kGraphDefType), id, "read", nullptr);
+    test_assert(h.ok());
+    const Status s = readPayload(d.lib, *h, *p);
+    if (!s.ok()) {
+      return s;
+    }
+    GraphDef &def = *graphDefOf(d.lib, *h);
+    test_assert(def.node(NodeId{1})->group().target == inner.id);
+    test_assert(def.setLiteral(NodeId{2}, "a", PropValue::ofFloat(3)).ok());
+    test_assert(def.validate().ok() && def.diagnostics().size() == 0);
+    test_assert(writePayload(d.lib, *h).ok());
+    GraphInstance i(&d.rt, &d.lib, id);
+    for (int k = 0; k < n; k += 100) {
+      test_assert(i.evaluate(SocketPath::of(NodeId{3 + k}, "value")).ok());
+      test_assert(*i.value(SocketPath::of(NodeId{3 + k}, "value")) == GraphValue::ofFloat(3));
+    }
+    return s;
+  };
+  test_assert(interior(GraphDef::kMaxInteriorLinks).ok());
+  test_assert(refused(interior(GraphDef::kMaxInteriorLinks + 2), "too many links to sockets"));
+  test_assert(refused(interior(80000), "too many links to sockets"));
+
+  auto interface = [&](int inputs, int outputs) {
+    Fields f(d.lib);
+    f.count(uint32_t(inputs));
+    for (int i = 0; i < inputs; i++) {
+      f.iface(10 + i, ("i" + std::to_string(i)).c_str(), "float");
+      f.entry("", PropValue());
+    }
+    f.count(uint32_t(outputs));
+    for (int i = 0; i < outputs; i++) {
+      f.iface(100000 + i, ("o" + std::to_string(i)).c_str(), "float");
+    }
+    f.count(2);
+    f.node(1, "graph.input");
+    f.node(2, "graph.output");
+    f.count(uint32_t(std::min(inputs, outputs)));
+    for (int i = 0; i < std::min(inputs, outputs); i++) {
+      f.b().i64(200000 + i);
+      f.b().i64(1);
+      f.b().str("#" + std::to_string(10 + i));
+      f.b().i64(2);
+      f.b().str("#" + std::to_string(100000 + i));
+    }
+    return f.read();
+  };
+  const int most = GraphDef::kMaxInterface;
+  test_assert(interface(most, most).ok());
+  test_assert(refused(interface(most + 1, 0), "too many interface sockets"));
+  test_assert(refused(interface(0, most + 1), "too many interface sockets"));
+  test_assert(refused(interface(200000, 0), "too many interface sockets"));
+  /* What an unknown node says its sockets are. */
+  auto sockets = [&](int n) {
+    Fields f(d.lib);
+    f.noInterface();
+    f.count(1);
+    f.head(1, "t.unknown");
+    for (int i = 0; i < 4; i++) {
+      f.count(0);
+    }
+    f.count(uint32_t(n));
+    for (int i = 0; i < n; i++) {
+      f.socket(("s" + std::to_string(i)).c_str(), "float");
+    }
+    f.count(0);
+    f.count(0);
+    return f.read();
+  };
+  test_assert(sockets(most + 1).ok() && refused(sockets(most + 2), "too many sockets"));
+  const std::chrono::duration<double> t = std::chrono::steady_clock::now() - start;
+  if (t.count() >= 20) {
+    printf("the large graphs took %g s\n", t.count());
+  }
+  test_assert(t.count() < 20);
+}
+
 void testRandom(int seeds)
 {
   int nodes = 0, links = 0, pulls = 0, damaged = 0, accepted = 0;
@@ -622,6 +746,7 @@ int main(int argc, char **argv)
 {
   testRules();
   testNames();
+  testLarge();
   testRandom(argc > 1 ? atoi(argv[1]) : 30 * coredcc_test::testScale());
   return test_end();
 }

@@ -417,7 +417,7 @@ void testLimits()
     l.set(text);
     test_assert(!l.evaluate().ok() && l.inst.elementCount() == 0);
     l.set(table({1, 2, 3}, {}));
-    test_assert(l.evaluate().ok() && l.inst.elementCount() == 2);
+    test_assert(l.evaluate().ok() && l.inst.elementCount() == 1); /* 1 and 2 needn't run */
     l.inst.setMaxFrames(1);
     l.set(table({1, 2, 3, 4}, {}));
     test_assert(l.evaluate().ok()); /* they have their groups */
@@ -479,7 +479,7 @@ void testDocument()
                   .ok());
   const NodeId n = g.def->nodeAt(0)->id();
   const std::string path = "graphs[\"g\"].nodes[#" + std::to_string(n.value) + "]";
-  test_assert(d.is(path + ".params.maxCached", PropValue::ofInt(16384)));
+  test_assert(d.is(path + ".params.maxCached", PropValue::ofInt(4096)));
   test_assert(d.set(path + ".params.maxCached", PropValue::ofInt(-5)).ok());
   test_assert(d.is(path + ".params.maxCached", PropValue::ofInt(0)));
   ref.owner = OwnerKey::ofBlock(inner.id);

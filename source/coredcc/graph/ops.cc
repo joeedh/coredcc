@@ -67,12 +67,32 @@ Status GraphOp::apply(GraphDef &def, bool forward) const
   return Status();
 }
 
+uint64_t memSizeOf(const PropValue &v)
+{
+  switch (v.type()) {
+    case PropValue::Type::String:
+      return sizeof(v) + uint64_t(v.asString().size());
+    case PropValue::Type::Mat4:
+      return sizeof(v) + 16 * sizeof(double);
+    default:
+      return sizeof(v);
+  }
+}
+
+uint64_t memSizeOf(const NodeValues &values)
+{
+  uint64_t n = 0;
+  for (const NodeValue &v : values) {
+    n += sizeof(v) + memSizeOf(v.value);
+  }
+  return n;
+}
+
 static uint64_t extraSize(const NodeExtras &extras)
 {
   uint64_t n = 0;
   for (const BlockEntry &e : extras) {
-    n += sizeof(e) + uint64_t(e.name.size() + e.raw.size());
-    n += e.value.type() == PropValue::Type::String ? uint64_t(e.value.asString().size()) : 0;
+    n += sizeof(e) + uint64_t(e.name.size() + e.raw.size()) + memSizeOf(e.value);
   }
   return n;
 }
@@ -80,14 +100,12 @@ static uint64_t extraSize(const NodeExtras &extras)
 uint64_t GraphOp::memSize() const
 {
   uint64_t n = sizeof(*this) + uint64_t(key.size());
-  for (const PropValue *v : {&before, &after}) {
-    n += v->type() == PropValue::Type::String ? uint64_t(v->asString().size()) : 0;
-  }
-  n += uint64_t(valuesBefore.size() + valuesAfter.size() + links.size()) * 128;
+  n += memSizeOf(before) + memSizeOf(after) + memSizeOf(valuesBefore) + memSizeOf(valuesAfter);
+  n += uint64_t(links.size()) * 128;
   n += extraSize(extraBefore) + extraSize(extraAfter);
   if (node) {
-    n += sizeof(NodeState) + extraSize(node->extras) +
-         uint64_t(node->params.size() + node->literals.size() + node->refs.size()) * 128;
+    n += sizeof(NodeState) + extraSize(node->extras) + memSizeOf(node->params) +
+         memSizeOf(node->literals) + uint64_t(node->refs.size()) * 128;
   }
   return n + (socket ? sizeof(InterfaceSocket) : 0);
 }
@@ -110,12 +128,7 @@ Result<GraphDef *> GraphEditRecord::def(Context &ctx) const
 void GraphEditRecord::pin(Library &lib, BlockId id)
 {
   const BlockHandle h = lib.find(id);
-  for (const LibraryPin &p : pins_) {
-    if (p.handle() == h) {
-      return;
-    }
-  }
-  if (h) {
+  if (h && pinned_.add(h, true)) {
     pins_.append(LibraryPin(lib, h, PinKind::History));
   }
 }
@@ -156,6 +169,7 @@ void GraphEditRecord::discard()
 {
   ops_.clear();
   pins_.clear();
+  pinned_.clear();
   block_.release();
 }
 
@@ -393,12 +407,17 @@ Status GraphEdit::setGroup(NodeId id, BlockId block)
   return Status();
 }
 
+static Status checkUndoable(const SocketRef &from, const SocketRef &to)
+{
+  return isInteriorKey(from.key) || isInteriorKey(to.key) ?
+             Status::error(StatusCode::InvalidArgument,
+                           "a graph that is edited with undo has no links of interior sockets") :
+             Status();
+}
+
 Result<LinkId> GraphEdit::link(SocketRef from, SocketRef to)
 {
-  if (isInteriorKey(from.key) || isInteriorKey(to.key)) {
-    return Status::error(StatusCode::InvalidArgument,
-                         "a graph that is edited with undo has no links of interior sockets");
-  }
+  CDCC_TRY(checkUndoable(from, to));
   const GraphNode *n = def_->node(to.node);
   const GraphLink *old = n ? n->linkInto(to.key) : nullptr;
   GraphOp removed;
@@ -419,6 +438,34 @@ Result<LinkId> GraphEdit::link(SocketRef from, SocketRef to)
   op.links.append(GraphDef::stateOf(*def_->link(*id)));
   push(std::move(op));
   return id;
+}
+
+Status GraphEdit::linkAll(std::span<const LinkSpec> links, Vector<LinkId> &ids)
+{
+  ids.clear();
+  Vector<GraphOp> removed;
+  for (const LinkSpec &s : links) {
+    CDCC_TRY(checkUndoable(s.from, s.to));
+    const GraphNode *n = def_->node(s.to.node);
+    if (const GraphLink *old = n ? n->linkInto(s.to.key) : nullptr) {
+      GraphOp op;
+      op.kind = GraphOp::Kind::Link;
+      op.inverse = true;
+      op.links.append(GraphDef::stateOf(*old));
+      removed.append(std::move(op));
+    }
+  }
+  CDCC_TRY(def_->linkAll(links, ids));
+  for (GraphOp &op : removed) {
+    push(std::move(op));
+  }
+  for (LinkId id : ids) {
+    GraphOp op;
+    op.kind = GraphOp::Kind::Link;
+    op.links.append(GraphDef::stateOf(*def_->link(id)));
+    push(std::move(op));
+  }
+  return Status();
 }
 
 Status GraphEdit::insertLink(const LinkState &state)

@@ -27,12 +27,18 @@ struct ValueAccessor {
   litestl::util::function<Status(const PointerRef &self, Context &ctx, const PropValue &v)> set;
   /** Puts a stored value back, into the same member of the same instance. */
   using RestoreFn = litestl::util::function<Status(const PointerRef &self, Context &ctx)>;
+  /** What `save` returns. */
+  struct Stored {
+    RestoreFn restore;
+    /** About what it keeps, for the undo history's budget. */
+    uint64_t bytes = 0;
+  };
   /**
    * Optional, for a member that `set(get())` would change: one that can be unset, where `get`
    * gives a default, or that stores more than `get` gives. Returns what puts back what is stored
    * now, without checks. Undo then uses it; it must not keep pointers into the instance.
    */
-  litestl::util::function<RestoreFn(const PointerRef &self, Context &ctx)> save = {};
+  litestl::util::function<Stored(const PointerRef &self, Context &ctx)> save = {};
 };
 
 /** A Pointer member: a nested struct, static or resolved per instance. */

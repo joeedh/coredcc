@@ -258,6 +258,8 @@ class GraphDefReader {
   {
     const uint32_t n = b_.count(kMinSocket);
     in_.charge(uint64_t(n) * sizeof(SocketInfo) * 2);
+    /* A foreach has one that isn't its group's. */
+    check(n <= uint32_t(GraphDef::kMaxInterface) + 1, "a graph: too many sockets");
     for (uint32_t i = 0; i < n && b_.ok(); i++) {
       SocketInfo s;
       s.key = text();
@@ -276,6 +278,7 @@ class GraphDefReader {
     std::set<std::string> names;
     const uint32_t n = b_.count(kMinInterface);
     in_.charge(uint64_t(n) * sizeof(InterfaceSocket) * 2);
+    check(n <= uint32_t(GraphDef::kMaxInterface), "a graph: too many interface sockets");
     for (uint32_t i = 0; i < n && b_.ok(); i++) {
       InterfaceSocket s;
       s.def = &def_;
@@ -353,6 +356,10 @@ class GraphDefReader {
     check(from && to, "a graph: a link to a node that isn't there");
     check(linked_.insert({s.to.value, s.toKey.c_str()}).second,
           "a graph: an input with two links");
+    if (b_.ok()) {
+      check(GraphDef::checkInterior(**from, s.fromKey.c_str(), **to, s.toKey.c_str()).ok(),
+            "a graph: too many links to sockets inside a group");
+    }
     if (b_.ok()) {
       def_.attachLink(s, *from, *to);
     }

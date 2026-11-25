@@ -29,8 +29,8 @@ struct SetProperty {
   PropValue oldValue;
   PropValue newValue;
   /* With a ValueAccessor::save, instead of the values. */
-  ValueAccessor::RestoreFn oldStored;
-  ValueAccessor::RestoreFn newStored;
+  ValueAccessor::Stored oldStored;
+  ValueAccessor::Stored newStored;
   /* With a PointerAccessor::cell: the linked ids, also of blocks that aren't Live (those
    * read as null). */
   bool hasCell = false;
@@ -107,19 +107,20 @@ struct SetProperty {
   }
   void undo(Context &ctx)
   {
-    Status s = writeStatus(ctx, oldValue, oldTarget, oldStored);
+    Status s = writeStatus(ctx, oldValue, oldTarget, oldStored.restore);
     if (!s.ok()) {
       ctx.runtime().setStickyError(std::move(s)); /* undo can't return a Status */
     }
   }
   Status redo(Context &ctx)
   {
-    return writeStatus(ctx, newValue, newTarget, newStored);
+    return writeStatus(ctx, newValue, newTarget, newStored.restore);
   }
   uint64_t memSize() const
   {
     uint64_t n = sizeof(*this) + uint64_t(ref.key.size()) * 32 +
-                 uint64_t(pins.size()) * sizeof(HistoryBlock);
+                 uint64_t(pins.size()) * sizeof(HistoryBlock) + oldStored.bytes +
+                 newStored.bytes;
     for (const PropValue *v : {&oldValue, &newValue}) {
       if (v->type() == PropValue::Type::String) {
         n += uint64_t(v->asString().size());
@@ -170,11 +171,11 @@ struct SetProperty {
                      ctx.library();
     return has ? rp.member->pointer().cell(rp.ptr, ctx) : nullptr;
   }
-  static ValueAccessor::RestoreFn stored(Context &ctx, const ResolvedPath &rp)
+  static ValueAccessor::Stored stored(Context &ctx, const ResolvedPath &rp)
   {
     const bool has =
         rp.member && rp.member->kind() == MemberKind::Value && rp.member->value().save;
-    return has ? rp.member->value().save(rp.ptr, ctx) : ValueAccessor::RestoreFn();
+    return has ? rp.member->value().save(rp.ptr, ctx) : ValueAccessor::Stored();
   }
   Status writeStatus(Context &ctx,
                      const PropValue &v,

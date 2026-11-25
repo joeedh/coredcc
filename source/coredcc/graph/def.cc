@@ -15,6 +15,7 @@
 
 namespace coredcc {
 
+using litestl::util::Map;
 using litestl::util::string;
 using litestl::util::Vector;
 
@@ -30,6 +31,10 @@ string InterfaceSocket::key() const
 
 const GraphLink *GraphNode::linkInto(std::string_view key) const
 {
+  if (inByKey_) {
+    GraphLink *const *l = inByKey_->lookup_ptr({lsString(key)});
+    return l ? *l : nullptr;
+  }
   for (const GraphLink *l : in_) {
     if (key == l->toKey.c_str()) {
       return l;
@@ -232,6 +237,15 @@ void GraphDef::refreshSockets(const GraphNode &node) const
     fromInterface(source->ifaceOut_,
                   type->role == NodeRole::Output ? node.inputs_ : node.outputs_);
   }
+  using Index = Map<detail::SocketKey, int>;
+  auto index = [](const SocketInfos &list, std::unique_ptr<Index> &out) {
+    out = list.size() > GraphNode::kScan ? std::make_unique<Index>() : nullptr;
+    for (int i = 0; out && i < int(list.size()); i++) {
+      out->add({list[i].key}, i);
+    }
+  };
+  index(node.inputs_, node.inputIndex_);
+  index(node.outputs_, node.outputIndex_);
 }
 
 const SocketInfos &GraphDef::sockets(const GraphNode &node, SocketSide side) const
@@ -251,7 +265,15 @@ std::optional<SocketInfo> GraphDef::findSocket(const GraphNode &node,
     const std::optional<InteriorKey> k = InteriorKey::parse(key);
     return k ? findInterior(*this, node, side, *k) : std::nullopt;
   }
-  for (const SocketInfo &s : sockets(node, side)) {
+  const SocketInfos &list = sockets(node, side);
+  const bool input = side == SocketSide::Input;
+  const Map<detail::SocketKey, int> *index =
+      (input ? node.inputIndex_ : node.outputIndex_).get();
+  if (index && &list == &(input ? node.inputs_ : node.outputs_)) {
+    const int *i = index->lookup_ptr({lsString(key)});
+    return i ? std::optional<SocketInfo>(list[*i]) : std::nullopt;
+  }
+  for (const SocketInfo &s : list) {
     if (key == s.key.c_str()) {
       return s;
     }
@@ -402,12 +424,26 @@ Result<GraphNode *> GraphDef::find(NodeId id, const char *what) const
                        (std::string(what) + ": no node " + std::to_string(id.value)).c_str());
 }
 
-uint64_t GraphDef::stamp(bool structural)
+uint64_t GraphDef::stampNode(NodeId node)
 {
-  contentVersion_ = rt_.touch();
+  GraphEditNote e;
+  e.kind = GraphEditNote::Kind::Node;
+  e.def = serial_;
+  e.node = node.value;
+  contentVersion_ = rt_.ext<GraphSystem>().touch(e);
+  return contentVersion_;
+}
+
+uint64_t GraphDef::stamp(bool structural, bool links)
+{
+  GraphSystem &system = rt_.ext<GraphSystem>();
+  GraphEditNote e;
+  e.kind = links ? GraphEditNote::Kind::Links : GraphEditNote::Kind::Def;
+  e.def = serial_;
+  contentVersion_ = system.touch(e);
   if (structural) {
     structureVersion_ = contentVersion_;
-    rt_.ext<GraphSystem>().noteStructure(structureVersion_);
+    system.noteStructure(structureVersion_);
   }
   return contentVersion_;
 }
@@ -500,7 +536,7 @@ void GraphDef::matchParamRefs(GraphNode *n)
   }
 }
 
-void GraphDef::attachLink(const LinkState &state, GraphNode *from, GraphNode *to)
+GraphLink *GraphDef::attachLink(const LinkState &state, GraphNode *from, GraphNode *to)
 {
   GraphLink *l = litestl::alloc::New<GraphLink>("coredcc::GraphLink");
   l->id = state.id;
@@ -508,15 +544,42 @@ void GraphDef::attachLink(const LinkState &state, GraphNode *from, GraphNode *to
   l->fromKey = state.fromKey;
   l->to = to;
   l->toKey = state.toKey;
+  from->interiorLinks_ += isInteriorKey(l->fromKey.c_str());
+  to->interiorLinks_ += isInteriorKey(l->toKey.c_str());
+  l->outSlot = int(from->out_.size());
+  l->inSlot = int(to->in_.size());
   from->out_.append(l);
   to->in_.append(l);
   links_.add(l->id.value, l);
+  if (to->inByKey_) {
+    to->inByKey_->add({l->toKey}, l);
+  }
+  else if (to->in_.size() > GraphNode::kScan) {
+    to->inByKey_ = std::make_unique<Map<detail::SocketKey, GraphLink *>>();
+    for (GraphLink *in : to->in_) {
+      to->inByKey_->add({in->toKey}, in);
+    }
+  }
+  return l;
 }
 
 void GraphDef::detachLink(GraphLink *link)
 {
-  link->from->out_.remove(link);
-  link->to->in_.remove(link);
+  link->from->interiorLinks_ -= isInteriorKey(link->fromKey.c_str());
+  link->to->interiorLinks_ -= isInteriorKey(link->toKey.c_str());
+  /* The last one takes its place. */
+  auto remove = [link](Vector<GraphLink *, 2> &list, int GraphLink::*slot) {
+    GraphLink *last = list.pop_back();
+    if (last != link) {
+      last->*slot = link->*slot;
+      list[link->*slot] = last;
+    }
+  };
+  remove(link->from->out_, &GraphLink::outSlot);
+  remove(link->to->in_, &GraphLink::inSlot);
+  if (link->to->inByKey_) {
+    link->to->inByKey_->remove({link->toKey});
+  }
   links_.remove(link->id.value);
   litestl::alloc::Delete(link);
 }
@@ -598,13 +661,28 @@ Status GraphDef::validate() const
       return bad("the index of nodes is out of date");
     }
     live++;
-    for (const GraphLink *l : n->in_) {
-      if (l->to != n || link(l->id) != l || n->linkInto(l->toKey.c_str()) != l) {
+    for (int i = 0; i < int(n->in_.size()); i++) {
+      const GraphLink *l = n->in_[i];
+      if (l->to != n || l->inSlot != i || link(l->id) != l ||
+          n->linkInto(l->toKey.c_str()) != l)
+      {
         return bad("an incoming link is wrong, or shares its input");
       }
     }
+    int interior = 0;
+    for (const GraphLink *l : n->in_) {
+      interior += isInteriorKey(l->toKey.c_str());
+    }
     for (const GraphLink *l : n->out_) {
-      if (l->from != n || link(l->id) != l) {
+      interior += isInteriorKey(l->fromKey.c_str());
+    }
+    if (interior != n->interiorLinks_ ||
+        (n->inByKey_ && n->inByKey_->size() != n->in_.size()))
+    {
+      return bad("the links of a node and their counts differ");
+    }
+    for (int i = 0; i < int(n->out_.size()); i++) {
+      if (n->out_[i]->from != n || n->out_[i]->outSlot != i || link(n->out_[i]->id) != n->out_[i]) {
         return bad("an outgoing link is wrong");
       }
     }
@@ -614,8 +692,8 @@ Status GraphDef::validate() const
   }
   Status status;
   forEachLink([&](const GraphLink &l) {
-    if (!l.from->out_.contains(const_cast<GraphLink *>(&l)) ||
-        !l.to->in_.contains(const_cast<GraphLink *>(&l)))
+    if (l.outSlot >= int(l.from->out_.size()) || l.from->out_[l.outSlot] != &l ||
+        l.inSlot >= int(l.to->in_.size()) || l.to->in_[l.inSlot] != &l)
     {
       status = bad("a link isn't in its nodes' lists");
     }

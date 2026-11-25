@@ -23,14 +23,17 @@ void DepSet::clear()
 
 void DepSet::add(const Trace &from, Trace &to)
 {
-  for (const BlockDep &d : from.blocks) {
+  if (!from.more) {
+    return;
+  }
+  for (const BlockDep &d : from.more->blocks) {
     if (blocks_.add(d.id, true)) {
-      to.blocks.append(d);
+      to.blocks().blocks.append(d);
     }
   }
-  for (const QueryDep &d : from.queries) {
+  for (const QueryDep &d : from.more->queries) {
     if (queries_.add(QueryKey{d.handle, d.iface.value}, true)) {
-      to.queries.append(d);
+      to.blocks().queries.append(d);
     }
   }
 }
@@ -64,12 +67,15 @@ QueryDep BlockReader::read(BlockHandle h, InterfaceId iface) const
 
 bool BlockReader::current(const Trace &t) const
 {
-  for (const BlockDep &d : t.blocks) {
+  if (!t.more) {
+    return true;
+  }
+  for (const BlockDep &d : t.more->blocks) {
     if (!(read(d.id) == d)) {
       return false;
     }
   }
-  for (const QueryDep &d : t.queries) {
+  for (const QueryDep &d : t.more->queries) {
     if (!(read(d.handle, d.iface) == d)) {
       return false;
     }
@@ -88,7 +94,7 @@ BlockUse BlockRecorder::useBlock(BlockId id)
   }
   BlockDep d = reader_.read(id);
   const BlockUse use{d.handle, reader_.library()->data(d.handle)};
-  trace_.blocks.append(d);
+  trace_.blocks().blocks.append(d);
   return use;
 }
 
@@ -98,7 +104,7 @@ IfaceRef BlockRecorder::queryBlock(BlockHandle h, InterfaceId iface)
     return IfaceRef();
   }
   const QueryDep d = reader_.read(h, iface);
-  trace_.queries.append(d);
+  trace_.blocks().queries.append(d);
   return IfaceRef(d.table, d.self);
 }
 

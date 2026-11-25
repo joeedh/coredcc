@@ -5,6 +5,8 @@
 #include "coredcc/api/library_io.h"
 #include "coredcc/graph/instance.h"
 
+#include <vector>
+
 using namespace fixture;
 
 test_init;
@@ -37,6 +39,7 @@ struct UndoDoc : Doc {
         .param(PropertyDef::floatProp("maybe").access(PropAccess::Optional))
         .param(PropertyDef::floatProp("plain").defaultValue(fl(2)))
         .param(PropertyDef::vecProp("vec", 3))
+        .param(PropertyDef::stringProp("text"))
         .output("value", "float");
     addType<paramKernel>(rt, t, "t.params");
     g = newGraph(lib, "g");
@@ -247,6 +250,36 @@ void testOrder()
 }
 
 /* Undo of other edits gives the same bytes too, though it stores things in another order. */
+/* linkAll: one step, with the links it replaced. */
+void testLinkAll()
+{
+  UndoDoc d;
+  NodeId m[3];
+  for (NodeId &id : m) {
+    id = add(*d.g.def, "t.params");
+  }
+  const LinkId old = connect(*d.g.def, m[0], "value", d.n, "a");
+  litestl::util::Vector<LinkId> ids;
+  const LinkSpec replace{{m[1], "value"}, {d.n, "a"}}, more{{m[0], "value"}, {m[1], "a"}};
+  auto linkAll = [&](std::vector<LinkSpec> list) {
+    return runGraphEdit(d.ctx, d.g.id, "links",
+                        [&](GraphEdit &e) { return e.linkAll(list, ids); });
+  };
+  test_assert(hasCode(linkAll({replace, more, {{m[1], "value"}, {m[0], "a"}}}),
+                      StatusCode::InvalidArgument));
+  test_assert(hasCode(linkAll({replace, {{d.n, "value"}, {m[2], "@5.a"}}}),
+                      StatusCode::InvalidArgument));
+  test_assert(d.g.def->linkCount() == 1 && d.node().linkInto("a")->id == old);
+  test_assert(linkAll({replace, more}).ok() && ids.size() == 2);
+  const LinkId made[2] = {ids[0], ids[1]};
+  for (int i = 0; i < 2; i++) {
+    test_assert(d.g.def->linkCount() == 2 && d.node().linkInto("a")->id == made[0]);
+    test_assert(d.g.def->node(m[1])->linkInto("a")->id == made[1]);
+    test_assert(d.undo().ok() && d.g.def->linkCount() == 1 && d.node().linkInto("a")->id == old);
+    test_assert(d.redo().ok());
+  }
+}
+
 void testBytes()
 {
   UndoDoc d;
@@ -438,6 +471,32 @@ void testMemory()
   test_assert(d.redo().ok() && d.history.memoryUsed() == done);
 }
 
+/* A SetProperty step counts what it stores of a graph, besides the old and new values. */
+void testValueMemory()
+{
+  UndoDoc d;
+  const Graph inner = newGraph(d.lib, "inner");
+  const int64_t a = addSocket(*inner.def, SocketSide::Input, "a", "string");
+  const NodeId group = add(*d.g.def, "graph.group");
+  test_assert(d.g.def->setGroup(group, inner.id).ok());
+  const std::string def = "graphs[\"inner\"].inputs[#" + std::to_string(a) + "].default";
+  test_assert(d.g.def->setLiteral(group, key(a), PropValue::ofString("")).ok());
+  const PropValue longText = PropValue::ofString(std::string(100000, 'x'));
+  for (const std::string &path :
+       {d.path(".params.text"), d.path(".sockets[\"a\"].value", group), def})
+  {
+    for (const PropValue &value : {longText, PropValue::ofString("")}) {
+      const uint64_t before = d.history.memoryUsed();
+      test_assert(d.set(path, value).ok());
+      const uint64_t used = d.history.memoryUsed() - before;
+      if (used < 200000 || used > 203000) {
+        printf("%s: %d\n", path.c_str(), int(used));
+      }
+      test_assert(used >= 200000 && used <= 203000);
+    }
+  }
+}
+
 } // namespace
 
 int main()
@@ -445,10 +504,12 @@ int main()
   testParams();
   testSockets();
   testOrder();
+  testLinkAll();
   testBytes();
   testLiteralBytes();
   testExtras();
   testLibraries();
   testMemory();
+  testValueMemory();
   return test_end();
 }

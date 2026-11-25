@@ -48,9 +48,41 @@ class Editor {
     return SocketPath::of(NodeId{1}, "missing");
   }
 
+  /* Only edits that instances should be able to follow without a full pass. */
+  bool quiet = false;
+
+  void quietEdit()
+  {
+    Graph &g = w_.defs[rng_.below(kDefs)];
+    if (!w_.live(g)) {
+      return;
+    }
+    switch (rng_.below(10)) {
+      case 0:
+        return addNode(*g.def);
+      case 1:
+      case 2:
+        return addLink(*g.def, rng_.below(8) == 0);
+      case 3:
+        return unlink(*g.def);
+      case 4:
+        return setParam(*g.def);
+      case 5:
+      case 6:
+        return setLiteral(*g.def);
+      case 7:
+        return setInput();
+      default:
+        return editThing();
+    }
+  }
+
   void edit()
   {
     g_counts.ops++;
+    if (quiet) {
+      return quietEdit();
+    }
     if (w_.undoable && rng_.below(5) == 0) {
       const bool undo = rng_.below(5) > 1;
       for (int n = 1 + int(rng_.below(3)); n > 0; n--) {
@@ -535,6 +567,7 @@ class Editor {
     const InterfaceSocket &s = list[int(rng_.below(uint32_t(list.size())))];
     if (rng_.below(5) == 0) {
       test_assert(c.inst->setInput(s.name.c_str(), GraphValue()).ok());
+      test_assert(c.batch->setInput(s.name.c_str(), GraphValue()).ok());
       c.external.erase(s.id);
       return;
     }
@@ -543,6 +576,8 @@ class Editor {
                              GraphValue::ofPayload(makePayload(P{int(rng_.below(4))})) :
                              *GraphValue::fromProp(randomProp(type));
     test_assert(c.inst->setInput(s.name.c_str(), v).ok());
+    test_assert(c.batch->setInput(s.name.c_str(), v).ok());
+    c.given[s.id] = v;
     auto it = c.external.find(s.id);
     if (it == c.external.end() || type == "r.P" || !(it->second.first == toValue(v))) {
       c.external[s.id] = {toValue(v), ++c.externalVersion};
@@ -586,10 +621,14 @@ class Editor {
       }
       case 3: {
         Client &c = clients_[rng_.below(uint32_t(clients_.size()))];
-        test_assert(c.inst->clear().ok());
+        test_assert(c.inst->clear().ok() && c.batch->clear().ok());
         c.nodes.clear();
         c.frameDefs.clear();
         c.last.clear();
+        for (Client::Prepared &p : c.prepared) {
+          p.evaluated = false;
+          p.changedAt = 0;
+        }
         /* Inputs that the interface doesn't have go too. */
         const Graph &root = w_.defs[size_t(c.def)];
         for (auto it = c.external.begin(); w_.live(root) && it != c.external.end();) {
@@ -599,7 +638,7 @@ class Editor {
       }
       case 4: {
         Client &c = clients_[rng_.below(uint32_t(clients_.size()))];
-        test_assert(c.inst->retry().ok());
+        test_assert(c.inst->retry().ok() && c.batch->retry().ok());
         for (auto &[key, n] : c.nodes) {
           n.hasRun = n.hasRun && !n.run.failed;
         }

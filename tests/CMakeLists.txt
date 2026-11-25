@@ -76,6 +76,9 @@ coredcc_test(test_graph_blocks SOURCES graph/test_graph_blocks.cc DEPS coredcc_g
 coredcc_test(test_graph_lifetime SOURCES graph/test_graph_lifetime.cc DEPS coredcc_graph)
 coredcc_test(test_graph_api SOURCES graph/test_graph_api.cc DEPS coredcc_graph)
 coredcc_test(test_graph_commands SOURCES graph/test_graph_commands.cc DEPS coredcc_graph)
+coredcc_test(test_graph_links SOURCES graph/test_graph_links.cc DEPS coredcc_graph)
+coredcc_test(test_graph_incremental SOURCES graph/test_graph_incremental.cc DEPS coredcc_graph)
+coredcc_test(test_graph_growth SOURCES graph/test_graph_growth.cc DEPS coredcc_graph)
 coredcc_test(test_graph_random SOURCES graph/test_graph_random.cc DEPS coredcc_graph)
 coredcc_test(test_bind_meta SOURCES bind/test_bind_meta.cc DEPS coredcc_bind)
 coredcc_test(test_bind_facades SOURCES bind/test_bind_facades.cc DEPS coredcc_bind)
@@ -87,7 +90,8 @@ coredcc_test(test_bind_library SOURCES bind/test_bind_library.cc DEPS coredcc_bi
 coredcc_test(test_bind_catalog SOURCES bind/test_bind_catalog.cc DEPS coredcc_bind)
 coredcc_test(test_bind_graph SOURCES bind/test_bind_graph.cc DEPS coredcc_bind)
 if(WIN32)
-  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_bvh coredcc_command coredcc_layout)
+  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_bvh coredcc_command coredcc_layout
+                                  coredcc_graph)
 endif()
 
 add_subdirectory(bench)

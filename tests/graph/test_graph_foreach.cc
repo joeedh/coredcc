@@ -10,17 +10,17 @@ namespace {
 void testTables()
 {
   Elements t = table({1, 2}, {{"a", {1, 2}}, {"b", {3, 4}}});
-  test_assert(t.check().ok() && t.size() == 2 && t.column("b") && !t.column("c"));
-  test_assert(t == table({1, 2}, {{"a", {1, 2}}, {"b", {3, 4}}}) && t.check().ok());
+  test_assert(t.validate().ok() && t.size() == 2 && t.column("b") && !t.column("c"));
+  test_assert(t == table({1, 2}, {{"a", {1, 2}}, {"b", {3, 4}}}) && t.validate().ok());
   test_assert(!(t == table({1, 3}, {{"a", {1, 2}}, {"b", {3, 4}}})));
   test_assert(!(t == table({1, 2}, {{"a", {1, 2}}, {"c", {3, 4}}})));
   test_assert(!(t == table({1, 2}, {{"a", {1, 2}}, {"b", {3, 5}}})));
   test_assert(!(t == table({1, 2}, {{"a", {1, 2}}})));
   test_assert(!(t == table({1, 2, 3}, {{"a", {1, 2}}, {"b", {3, 4}}})));
-  test_assert(hasCode(table({1, 1}, {}).check(), StatusCode::InvalidArgument));
-  test_assert(hasCode(table({1, 2}, {{"a", {1}}}).check(), StatusCode::InvalidArgument));
-  test_assert(hasCode(table({1}, {{"a", {1, 2}}}).check(), StatusCode::InvalidArgument));
-  test_assert(hasCode(table({1}, {{"a", {1}}, {"a", {1}}}).check(), StatusCode::InvalidArgument));
+  test_assert(hasCode(table({1, 1}, {}).validate(), StatusCode::InvalidArgument));
+  test_assert(hasCode(table({1, 2}, {{"a", {1}}}).validate(), StatusCode::InvalidArgument));
+  test_assert(hasCode(table({1}, {{"a", {1, 2}}}).validate(), StatusCode::InvalidArgument));
+  test_assert(hasCode(table({1}, {{"a", {1}}, {"a", {1}}}).validate(), StatusCode::InvalidArgument));
   Elements big = t;
   big.keys.append(3);
   test_assert(PayloadTraits<Elements>::bytes(big) > PayloadTraits<Elements>::bytes(t));
@@ -332,18 +332,30 @@ void testMaxCached()
   w.rt.touch();
   test_assert(l.is({1, 2, 3, 4, 5}, all, 0) && l.ran() == 0);
   l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 7, 3, 4, 5}}}));
-  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 5}}, {"c2", {0, 0, 0, 0, 0}}}, 1 + 3));
+  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 5}}, {"c2", {0, 0, 0, 0, 0}}}, 1));
   l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 7, 3, 4, 8}}}));
-  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 8}}, {"c2", {0, 0, 0, 0, 0}}}, 3));
-  /* 5 comes first: it gets a state, and 2 loses its own. */
+  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 8}}, {"c2", {0, 0, 0, 0, 0}}}, 1));
+  NodeReport report = l.inst.report(at({}, l.node));
+  test_assert(report.elements == 5 && report.cachedElements == 2);
+  /* 5 comes first: 2 loses its state, and 5 gets one when it runs. No row differs. */
   l.set(table({1, 5, 2, 3, 4}, {{"a", {1, 8, 7, 3, 4}}}));
-  test_assert(l.is({1, 5, 2, 3, 4}, {{"sum", {1, 8, 7, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 2 + 3));
-  l.set(table({1, 2, 5, 3, 4}, {{"a", {1, 7, 8, 3, 4}}}));
-  test_assert(l.is({1, 2, 5, 3, 4}, {{"sum", {1, 7, 8, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 2 + 3));
+  test_assert(l.is({1, 5, 2, 3, 4}, {{"sum", {1, 8, 7, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 0));
+  report = l.inst.report(at({}, l.node));
+  test_assert(report.elements == 5 && report.cachedElements == 1 && l.inst.elementCount() == 1);
+  l.set(table({1, 5, 2, 3, 4}, {{"a", {1, 9, 7, 3, 4}}}));
+  test_assert(l.is({1, 5, 2, 3, 4}, {{"sum", {1, 9, 7, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 2));
+  test_assert(l.inst.elementCount() == 2);
+  l.set(table({1, 2, 5, 3, 4}, {{"a", {1, 7, 9, 3, 4}}}));
+  test_assert(l.is({1, 2, 5, 3, 4}, {{"sum", {1, 7, 9, 3, 4}}, {"c2", {0, 0, 0, 0, 0}}}, 0));
+  /* A row gone, a new one, and one that changed. */
+  l.set(table({1, 6, 5, 4}, {{"a", {1, 7, 9, 5}}}));
+  test_assert(l.is({1, 6, 5, 4}, {{"sum", {1, 7, 9, 5}}, {"c2", {0, 0, 0, 0}}}, 2 + 1));
+  l.set(table({1, 2, 3, 4, 5}, {{"a", {1, 7, 3, 4, 8}}}));
+  test_assert(l.is({1, 2, 3, 4, 5}, {{"sum", {1, 7, 3, 4, 8}}, {"c2", {0, 0, 0, 0, 0}}}, 2 + 3));
   /* None, and all. */
   test_assert(setMax(0) && l.evaluate().ok());
   l.set(five);
-  test_assert(l.is({1, 2, 3, 4, 5}, all, 5));
+  test_assert(l.is({1, 2, 3, 4, 5}, all, 2));
   test_assert(setMax(16) && l.is({1, 2, 3, 4, 5}, all, 10));
   test_assert(l.root.def->setParam(l.node, kMaxCachedParam, PropValue()).ok());
   test_assert(l.is({1, 2, 3, 4, 5}, all, 0));

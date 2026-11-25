@@ -70,6 +70,15 @@ bool InteriorKey::operator==(const InteriorKey &b) const
          std::equal(groups.begin(), groups.end(), b.groups.begin());
 }
 
+uint64_t InteriorKey::computeHash() const
+{
+  uint64_t h = detail::fnv1a64(key.c_str());
+  for (NodeId id : groups) {
+    h = (h ^ id.computeHash()) * 0xC2B2AE3D27D4EB4Full;
+  }
+  return (h ^ node.computeHash()) * 0xC2B2AE3D27D4EB4Full;
+}
+
 std::optional<SocketInfo> findInterior(const GraphDef &def,
                                        const GraphNode &group,
                                        SocketSide side,

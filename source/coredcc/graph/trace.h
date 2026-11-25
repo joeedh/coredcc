@@ -13,6 +13,8 @@
 #include "litestl/util/vector.h"
 
 #include <cstdint>
+#include <memory>
+#include <span>
 
 namespace coredcc {
 
@@ -102,12 +104,30 @@ struct QueryDep {
 /** A node's type isn't part of it: a node whose type changed has new state. */
 struct Trace {
   uint64_t paramVersion = 0;
-  /** The target of each Pointer param's cell. A Library may write a cell, so paramVersion
-   * doesn't tell. */
-  litestl::util::Vector<BlockId, 1> paramBlocks;
   litestl::util::Vector<TraceInput, 2> inputs;
-  litestl::util::Vector<BlockDep, 1> blocks;
-  litestl::util::Vector<QueryDep, 1> queries;
+
+  /** What most kernels have none of. */
+  struct Blocks {
+    /** The target of each Pointer param's cell. A Library may write a cell, so paramVersion
+     * doesn't tell. */
+    litestl::util::Vector<BlockId, 1> params;
+    litestl::util::Vector<BlockDep, 1> blocks;
+    litestl::util::Vector<QueryDep, 1> queries;
+  };
+  std::unique_ptr<Blocks> more;
+
+  Blocks &blocks()
+  {
+    if (!more) {
+      more = std::make_unique<Blocks>();
+    }
+    return *more;
+  }
+  std::span<const BlockId> paramBlocks() const
+  {
+    return more ? std::span<const BlockId>(more->params.data(), size_t(more->params.size())) :
+                  std::span<const BlockId>();
+  }
 };
 
 /** Collects the blocks and queries of many traces in one, each as it was first seen: if it

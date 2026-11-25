@@ -63,8 +63,10 @@ static void test_save()
     data.value = v.asFloat();
     return Status();
   };
-  a.save = [](const PointerRef &, Context &) -> ValueAccessor::RestoreFn {
-    return [was = data](const PointerRef &, Context &) {
+  a.save = [](const PointerRef &, Context &) {
+    ValueAccessor::Stored out;
+    out.bytes = data.set ? 20000 : 1000;
+    out.restore = [was = data](const PointerRef &, Context &) {
       if (was.set && was.value < 0) {
         return Status::error(StatusCode::Unsupported, "restore fails");
       }
@@ -72,6 +74,7 @@ static void test_save()
       data.value = was.value;
       return Status();
     };
+    return out;
   };
   st.add(PropertyDef::floatProp("value"), std::move(a)).update([](const PointerRef &, Context &) {
     data.updates++;
@@ -90,7 +93,10 @@ static void test_save()
     s.w.rt.ext<ChangeBus>().flush();
     return fired == want && data.updates == want;
   };
+  const uint64_t empty = s.history.memoryUsed();
   test_assert(setValueUndo(ctx, "value", PropValue::ofFloat(3)).ok() && data.set && flushed(1));
+  const uint64_t held = s.history.memoryUsed() - empty; /* what both hold, and little more */
+  test_assert(held >= 21000 && held < 23000);
   test_assert(s.ex.undo(ctx).ok() && !data.set && flushed(2));
   test_assert(s.ex.redo(ctx).ok() && data.set && data.value == 3 && flushed(3));
   /* It may fail. */

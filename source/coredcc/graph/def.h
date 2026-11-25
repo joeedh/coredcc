@@ -8,6 +8,7 @@
 #include "coredcc/base/runtime.h"
 #include "coredcc/base/status.h"
 #include "coredcc/graph/node_type.h"
+#include "coredcc/graph/socket_key.h"
 #include "coredcc/graph/socket_type.h"
 #include "coredcc/lib/block.h"
 #include "coredcc/lib/block_io.h"
@@ -21,6 +22,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 
 namespace coredcc {
@@ -70,6 +72,12 @@ struct LinkId {
 struct SocketRef {
   NodeId node;
   std::string_view key;
+};
+
+/** A link to make: see GraphDef::linkAll. */
+struct LinkSpec {
+  SocketRef from;
+  SocketRef to;
 };
 
 enum class SocketSide : uint8_t { Input, Output };
@@ -128,6 +136,9 @@ struct GraphLink {
   litestl::util::string fromKey;
   GraphNode *to = nullptr;
   litestl::util::string toKey;
+  /** Its index in the nodes' linksOut and linksIn. */
+  int outSlot = 0;
+  int inSlot = 0;
 };
 
 /** An input of a group or output node, for datapaths. Stays while its node does. */
@@ -208,7 +219,7 @@ class GraphNode {
   {
     return paramVersion_;
   }
-  /** Links into this node, at most one per input. */
+  /** Links into this node, at most one per input. In no particular order, as linksOut. */
   const litestl::util::Vector<GraphLink *, 2> &linksIn() const
   {
     return in_;
@@ -253,11 +264,19 @@ class GraphNode {
   uint64_t paramVersion_ = 0;
   litestl::util::Vector<GraphLink *, 2> in_;
   litestl::util::Vector<GraphLink *, 2> out_;
+  /** `in_` by key, once there are more than kScan. */
+  static constexpr int kScan = 8;
+  std::unique_ptr<litestl::util::Map<detail::SocketKey, GraphLink *>> inByKey_;
+  /** How many of its links use interior keys of it. */
+  int interiorLinks_ = 0;
   /** The sockets when they were last known, unless the type says; not undoable. */
   mutable SocketInfos inputs_;
   mutable SocketInfos outputs_;
   /** The interface version the sockets are from. */
   mutable uint64_t socketsVersion_ = 0;
+  /** Their indices by key, where they are an interface's and there are more than kScan. */
+  mutable std::unique_ptr<litestl::util::Map<detail::SocketKey, int>> inputIndex_;
+  mutable std::unique_ptr<litestl::util::Map<detail::SocketKey, int>> outputIndex_;
   /** Node order. */
   GraphNode *prev_ = nullptr;
   GraphNode *next_ = nullptr;
@@ -333,7 +352,9 @@ inline LibraryRef libraryRef(Library *lib)
  *
  * **Links** name sockets by key. A link to a socket that doesn't exist (an interface input
  * was removed, say) is kept and ignored, and listed in diagnostics(). An input has at most
- * one link.
+ * one link. To make many, use linkAll, which checks for cycles once. A program that makes
+ * graphs it knows are right may use insertLink, which checks nothing: instances check for
+ * cycles too, so a wrong graph gives errors and no more.
  *
  * **Edits** are Busy while a graph evaluates. They stamp versions, which is how instances
  * see them; nothing is pushed to instances. Several defs may use each other through group
@@ -341,6 +362,11 @@ inline LibraryRef libraryRef(Library *lib)
  */
 class GraphDef {
  public:
+  /** Sockets a side of the interface may have. */
+  static constexpr int kMaxInterface = 4096;
+  /** Links a group node may have that use interior keys. */
+  static constexpr int kMaxInteriorLinks = 8192;
+
   explicit GraphDef(Runtime *rt, Library *lib = nullptr, BlockId self = {});
   ~GraphDef();
   GraphDef(const GraphDef &) = delete;
@@ -489,8 +515,13 @@ class GraphDef {
 
   /** Links an output to an input, replacing the input's link. The keys of a group node may
    * be interior ones (graph/interior.h). NotFound if a socket doesn't exist, TypeMismatch
-   * without a conversion, InvalidArgument if it would make a cycle. */
+   * without a conversion, InvalidArgument if it would make a cycle, OutOfRange for too many
+   * interior ones. The cost is that of looking for a cycle; with interior keys, that of
+   * finding out what depends on what in the group's def, for every link. */
   Result<LinkId> link(SocketRef from, SocketRef to);
+  /** Makes all links, or none. The checks are those of `link`, but the graph is searched for
+   * cycles once. InvalidArgument too if two go to one input. `ids` gets the new links'. */
+  Status linkAll(std::span<const LinkSpec> links, litestl::util::Vector<LinkId> &ids);
   /** A link with a given id. The nodes must exist and the input must be free. Sockets,
    * types and cycles aren't checked: the evaluator reports them. */
   Status insertLink(const LinkState &state);
@@ -499,7 +530,7 @@ class GraphDef {
   /* ---- interface ---- */
 
   /** A new interface socket, at `index` (-1: last), and its id. Pass `id` only to bring a
-   * removed one back. Names are unique per side. */
+   * removed one back. Names are unique per side. OutOfRange past kMaxInterface. */
   Result<int64_t> addInterface(SocketSide side,
                                std::string_view name,
                                std::string_view socketType,
@@ -548,8 +579,10 @@ class GraphDef {
 
   Status busy(const char *what) const;
   Result<GraphNode *> find(NodeId id, const char *what) const;
-  /** Stamps an edit; `announce` follows once the data is changed. */
-  uint64_t stamp(bool structural);
+  /** Stamps an edit of a param or literal; `announce` follows once the data is changed. */
+  uint64_t stampNode(NodeId node);
+  /** Stamps an edit of anything else. `links`: see GraphEditNote::Kind::Links. */
+  uint64_t stamp(bool structural, bool links = false);
   /** Tells the ChangeBus about an edit of a block's def. */
   void announce(bool structural);
   int64_t newId();
@@ -562,7 +595,7 @@ class GraphDef {
   void matchParamRefs(GraphNode *n);
   /** After a type was registered. */
   void typeAdded(const NodeType &type);
-  void attachLink(const LinkState &state, GraphNode *from, GraphNode *to);
+  GraphLink *attachLink(const LinkState &state, GraphNode *from, GraphNode *to);
   void detachLink(GraphLink *link);
   void refreshSockets(const GraphNode &node) const;
   bool topologyCurrent() const;
@@ -576,7 +609,17 @@ class GraphDef {
   InterfaceSocket *findInterface(int64_t id, SocketSide *side = nullptr);
   Status checkInterfaceName(SocketSide side, std::string_view name, int64_t except) const;
 
-  /* reach.cc */
+  /** Everything `link` checks but cycles. */
+  Status checkLink(const SocketRef &from, const SocketRef &to, GraphNode *&a, GraphNode *&b) const;
+  /** Whether a link would be more than kMaxInteriorLinks. */
+  static Status checkInterior(const GraphNode &from,
+                              std::string_view fromKey,
+                              const GraphNode &to,
+                              std::string_view toKey);
+
+  /* cycles.cc */
+  /** The index of one that is on a cycle, or -1. */
+  int findCycle(const litestl::util::Vector<GraphLink *> &links) const;
   bool wouldCycle(const GraphNode &from,
                   std::string_view fromKey,
                   const GraphNode &to,
@@ -612,6 +655,7 @@ class GraphDef {
   };
   /** By ReachKeys::toString. */
   mutable litestl::util::Map<litestl::util::string, CachedReach> reach_;
+  mutable size_t reachCells_ = 0;
 };
 
 } // namespace coredcc

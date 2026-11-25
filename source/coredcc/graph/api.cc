@@ -6,6 +6,7 @@
 #include "coredcc/base/assert.h"
 #include "coredcc/base/text.h"
 #include "coredcc/graph/def.h"
+#include "coredcc/graph/ops.h"
 #include "coredcc/graph/provider.h"
 #include "coredcc/lib/library.h"
 
@@ -122,7 +123,7 @@ RefCell *paramCell(GraphNode &n, const std::string &name)
 }
 
 /* The save of a param, or of a literal: what is stored under its name. */
-ValueAccessor::RestoreFn saveValues(const GraphNode &n, bool param, const std::string &name)
+ValueAccessor::Stored saveValues(const GraphNode &n, bool param, const std::string &name)
 {
   NodeValues stored;
   for (const NodeValue &v : param ? n.params() : n.literals()) {
@@ -130,9 +131,12 @@ ValueAccessor::RestoreFn saveValues(const GraphNode &n, bool param, const std::s
       stored.append(v);
     }
   }
-  return [node = n.id(), param, name, stored](const PointerRef &self, Context &) {
+  ValueAccessor::Stored out;
+  out.bytes = memSizeOf(stored);
+  out.restore = [node = n.id(), param, name, stored](const PointerRef &self, Context &) {
     return nodeOf(self).def().restoreValues(node, param, name, stored);
   };
+  return out;
 }
 
 /* ---- members every struct of a kind has ---- */
@@ -313,13 +317,14 @@ PropValue socketValue(const GraphSocketAddress &a, const SocketType &type)
   return a.node->def().literalValue(*a.node, a.key.c_str(), type).toProp();
 }
 
-ValueAccessor::RestoreFn saveSocket(const PointerRef &self, Context &)
+ValueAccessor::Stored saveSocket(const PointerRef &self, Context &)
 {
   const GraphSocketAddress &a = addressOf(self);
-  ValueAccessor::RestoreFn restore = saveValues(*a.node, false, a.key.c_str());
-  return [restore](const PointerRef &to, Context &ctx) {
+  ValueAccessor::Stored out = saveValues(*a.node, false, a.key.c_str());
+  out.restore = [restore = out.restore](const PointerRef &to, Context &ctx) {
     return restore(inside(addressOf(to).node, StructId()), ctx);
   };
+  return out;
 }
 
 void addSocketStructs(ApiRegistry &reg, const SocketType &type)
@@ -376,12 +381,15 @@ void addSocketStructs(ApiRegistry &reg, const SocketType &type)
     const InterfaceSocket &s = *static_cast<const InterfaceSocket *>(self.data);
     return s.def->setInterfaceDefault(s.id, v);
   };
-  def.save = [](const PointerRef &self, Context &) -> ValueAccessor::RestoreFn {
+  def.save = [](const PointerRef &self, Context &) {
     const PropValue stored = static_cast<const InterfaceSocket *>(self.data)->defaultValue;
-    return [stored](const PointerRef &to, Context &) {
+    ValueAccessor::Stored out;
+    out.restore = [stored](const PointerRef &to, Context &) {
       const InterfaceSocket &s = *static_cast<const InterfaceSocket *>(to.data);
       return s.def->restoreInterfaceDefault(s.id, stored);
     };
+    out.bytes = memSizeOf(stored);
+    return out;
   };
   iface.add(type.literalDef("default"), std::move(def))
       .dynamic([](PropertyDef &d, const PointerRef &self, Context &) {

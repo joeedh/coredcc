@@ -10,12 +10,18 @@
 #include "coredcc/graph/def.h"
 
 #include "litestl/util/function.h"
+#include "litestl/util/map.h"
 #include "litestl/util/vector.h"
 
 #include <memory>
+#include <span>
 #include <string_view>
 
 namespace coredcc {
+
+/** About the bytes a value takes, for undo budgets. */
+uint64_t memSizeOf(const PropValue &v);
+uint64_t memSizeOf(const NodeValues &values);
 
 /** One edit, as data. Which fields are used goes by the kind. */
 struct GraphOp {
@@ -91,6 +97,8 @@ class GraphEditRecord {
   HistoryBlock block_;
   litestl::util::Vector<GraphOp> ops_;
   litestl::util::Vector<LibraryPin> pins_;
+  /** The blocks of `pins_`. */
+  litestl::util::Map<BlockHandle, bool> pinned_;
 };
 
 /**
@@ -121,6 +129,8 @@ class GraphEdit {
   Status setGroup(NodeId id, BlockId def);
   /** Also InvalidArgument for interior sockets (graph/interior.h). */
   Result<LinkId> link(SocketRef from, SocketRef to);
+  /** GraphDef::linkAll. The same. */
+  Status linkAll(std::span<const LinkSpec> links, litestl::util::Vector<LinkId> &ids);
   Status insertLink(const LinkState &state);
   Status unlink(LinkId id);
   Result<int64_t> addInterface(SocketSide side,

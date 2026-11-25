@@ -398,9 +398,24 @@ struct Client {
     uint64_t changedAt = 0;
   };
 
+  /* A prepared socket, and what its handle gave last. */
+  struct Prepared {
+    SocketPath path;
+    SocketHandle handle;
+    bool evaluated = false;
+    StatusCode code = StatusCode::Ok;
+    std::string message;
+    GraphValue value;
+    uint64_t changedAt = 0;
+  };
+
   int def;
   std::unique_ptr<GraphInstance> inst;
+  /* Of the prepared sockets: an instance of its own, as the runs of `inst` are counted. */
+  std::unique_ptr<GraphInstance> batch;
+  std::vector<Prepared> prepared;
   std::map<int64_t, std::pair<Value, int>> external;
+  std::map<int64_t, GraphValue> given;
   int externalVersion = 0;
   int versions = 0;
   std::map<std::pair<GroupIds, int64_t>, Node> nodes;
@@ -424,7 +439,8 @@ struct Client {
 
 struct Counts {
   uint64_t ops = 0, pulls = 0, runs = 0, musts = 0, mays = 0, visits = 0, errors = 0, cycles = 0,
-           groups = 0, recursions = 0, undos = 0, redos = 0;
+           groups = 0, recursions = 0, undos = 0, redos = 0, fullPasses = 0, forcedPasses = 0,
+           handles = 0, moved = 0;
 };
 inline Counts g_counts;
 inline uint64_t g_seed = 0;

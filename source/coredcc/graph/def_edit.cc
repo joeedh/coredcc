@@ -1,6 +1,7 @@
 /* GraphDef's edits. Each is checked completely before it changes anything. */
 #include "coredcc/base/text.h"
 #include "coredcc/graph/def.h"
+#include "coredcc/graph/interior.h"
 #include "coredcc/graph/provider.h"
 #include "coredcc/lib/library.h"
 
@@ -192,7 +193,7 @@ Status GraphDef::restoreNode(const NodeState &state)
     }
     lib->noteRefsChanged(); /* the extras' */
   }
-  const uint64_t version = stamp(true);
+  const uint64_t version = stamp(true, !is(n->typeName_, kGraphOutputType));
   n->paramVersion_ = version;
   for (NodeValue &v : n->params_) {
     v.version = version;
@@ -302,7 +303,7 @@ Status GraphDef::setParam(NodeId id, std::string_view name, const PropValue &val
   const NodeParamDef &param = type->params[i];
   if (param.def.kind() == PropKind::Pointer) {
     CDCC_TRY(setParamRef(n, param, value));
-    n->paramVersion_ = stamp(false);
+    n->paramVersion_ = stampNode(id);
     announce(false);
     return Status();
   }
@@ -314,7 +315,7 @@ Status GraphDef::setParam(NodeId id, std::string_view name, const PropValue &val
     }
     v = std::move(c).value();
   }
-  n->paramVersion_ = stamp(false);
+  n->paramVersion_ = stampNode(id);
   store(n->params_, name, std::move(v), n->paramVersion_);
   announce(false);
   return Status();
@@ -411,7 +412,7 @@ Status GraphDef::setLiteral(NodeId id, std::string_view input, const PropValue &
     v = std::move(c).value();
   }
   NodeValue *old = findLiteral(n->literals_, input, **type);
-  const uint64_t version = stamp(false);
+  const uint64_t version = stampNode(id);
   if (v.isNone()) {
     if (old) {
       n->literals_.remove_at(int(old - n->literals_.data()));
@@ -444,11 +445,11 @@ Status GraphDef::useLiteral(NodeId id, std::string_view input, bool on)
   }
   if (NodeValue *old = findLiteral(n->literals_, input, **type)) {
     old->off = !on;
-    old->version = stamp(false);
+    old->version = stampNode(id);
   }
   else if (on) {
     PropValue v = literalValue(*n, input, **type).toProp();
-    n->literals_.append(NodeValue{lsString(input), std::move(v), stamp(false)});
+    n->literals_.append(NodeValue{lsString(input), std::move(v), stampNode(id)});
   }
   announce(false);
   return Status();
@@ -491,21 +492,38 @@ Status GraphDef::setGroup(NodeId id, BlockId def)
 
 /* ---- links ---- */
 
-Result<LinkId> GraphDef::link(SocketRef from, SocketRef to)
+Status GraphDef::checkInterior(const GraphNode &from,
+                               std::string_view fromKey,
+                               const GraphNode &to,
+                               std::string_view toKey)
 {
-  CDCC_TRY(busy("link"));
-  Result<GraphNode *> a = find(from.node, "link");
-  Result<GraphNode *> b = find(to.node, "link");
-  if (!a.ok() || !b.ok()) {
-    return a.ok() ? b.status() : a.status();
+  const bool full = (isInteriorKey(fromKey) && from.interiorLinks_ >= kMaxInteriorLinks) ||
+                    (isInteriorKey(toKey) && to.interiorLinks_ >= kMaxInteriorLinks);
+  return full ? makeError(StatusCode::OutOfRange,
+                          "a group node has at most " + std::to_string(kMaxInteriorLinks) +
+                              " links to sockets inside it") :
+                Status();
+}
+
+Status GraphDef::checkLink(const SocketRef &from,
+                           const SocketRef &to,
+                           GraphNode *&a,
+                           GraphNode *&b) const
+{
+  Result<GraphNode *> source = find(from.node, "link");
+  Result<GraphNode *> target = find(to.node, "link");
+  if (!source.ok() || !target.ok()) {
+    return source.ok() ? target.status() : source.status();
   }
-  const std::optional<SocketInfo> out = findSocket(**a, SocketSide::Output, from.key);
+  a = *source;
+  b = *target;
+  const std::optional<SocketInfo> out = findSocket(*a, SocketSide::Output, from.key);
   if (!out) {
-    return noSocket(**a, sockets(**a, SocketSide::Output), "output", from.key);
+    return noSocket(*a, sockets(*a, SocketSide::Output), "output", from.key);
   }
-  const std::optional<SocketInfo> in = findSocket(**b, SocketSide::Input, to.key);
+  const std::optional<SocketInfo> in = findSocket(*b, SocketSide::Input, to.key);
   if (!in) {
-    return noSocket(**b, sockets(**b, SocketSide::Input), "input", to.key);
+    return noSocket(*b, sockets(*b, SocketSide::Input), "input", to.key);
   }
   const SocketTypeRegistry &types = rt_.ext<SocketTypeRegistry>();
   const SocketType *fromType = types.find(out->typeName.c_str());
@@ -518,22 +536,93 @@ Result<LinkId> GraphDef::link(SocketRef from, SocketRef to)
                      "there is no conversion from " + std::string(fromType->name.c_str()) +
                          " to " + toType->name.c_str());
   }
-  if (wouldCycle(**a, from.key, **b, to.key)) {
-    return makeError(StatusCode::InvalidArgument,
-                     "linking '" + std::string(from.key) + "' to '" + std::string(to.key) +
-                         "' would make a cycle");
+  return checkInterior(*a, from.key, *b, to.key);
+}
+
+static Status makesCycle(std::string_view from, std::string_view to)
+{
+  return makeError(StatusCode::InvalidArgument, "linking '" + std::string(from) + "' to '" +
+                                                    std::string(to) + "' would make a cycle");
+}
+
+Result<LinkId> GraphDef::link(SocketRef from, SocketRef to)
+{
+  CDCC_TRY(busy("link"));
+  GraphNode *a = nullptr, *b = nullptr;
+  CDCC_TRY(checkLink(from, to, a, b));
+  if (wouldCycle(*a, from.key, *b, to.key)) {
+    return makesCycle(from.key, to.key);
   }
-  if (const GraphLink *old = (*b)->linkInto(to.key)) {
+  if (const GraphLink *old = b->linkInto(to.key)) {
     detachLink(const_cast<GraphLink *>(old));
   }
   LinkState state;
   state.id = LinkId{newId()};
   state.fromKey = lsString(from.key);
   state.toKey = lsString(to.key);
-  attachLink(state, *a, *b);
-  stamp(true);
+  attachLink(state, a, b);
+  stamp(true, !isInteriorKey(from.key) && !isInteriorKey(to.key));
   announce(true);
   return state.id;
+}
+
+Status GraphDef::linkAll(std::span<const LinkSpec> links, Vector<LinkId> &ids)
+{
+  ids.clear();
+  CDCC_TRY(busy("linkAll"));
+  Vector<GraphLink *> made;
+  Vector<LinkState> replaced;
+  bool interior = false;
+  Status status;
+  for (const LinkSpec &s : links) {
+    interior |= isInteriorKey(s.from.key) || isInteriorKey(s.to.key);
+    GraphNode *a = nullptr, *b = nullptr;
+    status = checkLink(s.from, s.to, a, b);
+    if (!status.ok()) {
+      break;
+    }
+    if (const GraphLink *old = b->linkInto(s.to.key)) {
+      if (old->id.value < 0) {
+        status = makeError(StatusCode::InvalidArgument,
+                           "linkAll: two links go to input '" + std::string(s.to.key) + "'");
+        break;
+      }
+      replaced.append(stateOf(*old));
+      detachLink(const_cast<GraphLink *>(old));
+    }
+    LinkState state;
+    state.id = LinkId{-1 - int64_t(made.size())}; /* so that a second one is seen */
+    state.fromKey = lsString(s.from.key);
+    state.toKey = lsString(s.to.key);
+    made.append(attachLink(state, a, b));
+  }
+  if (made.size() == 0 && replaced.size() == 0) {
+    return status;
+  }
+  stamp(true, !interior);
+  if (status.ok()) {
+    if (const int i = findCycle(made); i >= 0) {
+      status = makesCycle(made[i]->fromKey.c_str(), made[i]->toKey.c_str());
+    }
+  }
+  if (!status.ok()) {
+    for (GraphLink *l : made) {
+      detachLink(l);
+    }
+    for (const LinkState &s : replaced) {
+      attachLink(s, *byId_.lookup_ptr(s.from.value), *byId_.lookup_ptr(s.to.value));
+    }
+    stamp(true, !interior); /* the topology with the links may have been kept */
+    return status;
+  }
+  for (GraphLink *l : made) {
+    links_.remove(l->id.value);
+    l->id = LinkId{newId()};
+    links_.add(l->id.value, l);
+    ids.append(l->id);
+  }
+  announce(true);
+  return Status();
 }
 
 Status GraphDef::insertLink(const LinkState &state)
@@ -555,8 +644,9 @@ Status GraphDef::insertLink(const LinkState &state)
                      "insertLink: input '" + std::string(state.toKey.c_str()) +
                          "' is linked already");
   }
+  CDCC_TRY(checkInterior(**a, state.fromKey.c_str(), **b, state.toKey.c_str()));
   attachLink(state, *a, *b);
-  stamp(true);
+  stamp(true, !isInteriorKey(state.fromKey.c_str()) && !isInteriorKey(state.toKey.c_str()));
   announce(true);
   return Status();
 }
@@ -568,8 +658,10 @@ Status GraphDef::unlink(LinkId id)
   if (!l) {
     return makeError(StatusCode::NotFound, "unlink: no link " + std::to_string(id.value));
   }
+  const bool interior =
+      isInteriorKey((*l)->fromKey.c_str()) || isInteriorKey((*l)->toKey.c_str());
   detachLink(*l);
-  stamp(true);
+  stamp(true, !interior);
   announce(true);
   return Status();
 }
@@ -608,6 +700,11 @@ Result<int64_t> GraphDef::addInterface(SocketSide side,
     return types.unknown(socketType);
   }
   Vector<InterfaceSocket> &list = side == SocketSide::Input ? ifaceIn_ : ifaceOut_;
+  if (int(list.size()) >= kMaxInterface) {
+    return makeError(StatusCode::OutOfRange, "addInterface: a graph has at most " +
+                                                 std::to_string(kMaxInterface) +
+                                                 " sockets on a side");
+  }
   if (index < -1 || index > int(list.size())) {
     return makeError(StatusCode::OutOfRange, "addInterface: the index is out of range");
   }
@@ -759,7 +856,7 @@ Status GraphDef::restoreValues(NodeId id,
     return n.status();
   }
   NodeValues &list = param ? (*n)->params_ : (*n)->literals_;
-  const uint64_t version = stamp(false);
+  const uint64_t version = stampNode(id);
   for (int i = int(list.size()) - 1; i >= 0; i--) {
     if (name == list[i].name.c_str()) {
       list.remove_at(i);
@@ -824,7 +921,7 @@ Status GraphDef::restoreRef(NodeId id, std::string_view param, BlockId target)
   else if (lib) {
     CDCC_TRY(lib->writeRef(n->group_, target));
   }
-  n->paramVersion_ = stamp(group);
+  n->paramVersion_ = group ? stamp(true) : stampNode(id);
   announce(group);
   return Status();
 }

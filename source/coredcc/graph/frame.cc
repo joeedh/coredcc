@@ -13,15 +13,29 @@ namespace coredcc::graph {
 using litestl::util::Vector;
 
 KernelState::KernelState() = default;
-KernelState::~KernelState() = default;
+
+KernelState::~KernelState()
+{
+  InputLink::detachAll(consumers);
+  if (frame && frame->deps) {
+    frame->deps->removeKernel(*this);
+  }
+  if (frame && frame->counts) {
+    frame->counts->kernels--;
+  }
+}
 
 Frame::~Frame()
 {
+  links.reset(); /* while what they are lists of is there */
   for (KernelState *k : kernels) {
     litestl::alloc::Delete(k);
   }
   for (Group &g : groups) {
     litestl::alloc::Delete(g.child);
+  }
+  if (deps) {
+    deps->removeFrame(*this);
   }
 }
 
@@ -116,6 +130,10 @@ Status Evaluator::prepareRoot()
     root_->def = def;
     root_->defSerial = def->serial();
     root_->serial = rt_.nextVersion();
+    deps_.addFrame(*root_);
+    layout_++;
+    passKey_ = Key();
+    askedKey_ = Key();
   }
   return Status();
 }
@@ -132,17 +150,15 @@ void Evaluator::sync(Frame &f)
   }
   /* What was kept for a node goes to its new place, or goes. */
   const std::shared_ptr<const GraphTopology> old = std::move(f.topo);
-  Vector<KernelState *, 2> kernels = std::move(f.kernels);
-  Vector<Frame::Group, 1> groups = std::move(f.groups);
+  Array<KernelState *> kernels = std::move(f.kernels);
+  Array<Frame::Group> groups = std::move(f.groups);
   f.topo = std::move(topo);
-  f.inputs = {};
-  f.inputs.resize(size_t(f.topo->inputs.size()));
-  f.kernels = {};
-  for (int i = 0; i < int(f.topo->nodes.size()); i++) {
-    f.kernels.append(nullptr);
+  f.inputs.reset(int(f.topo->inputs.size()));
+  f.kernels.reset(int(f.topo->nodes.size()));
+  f.groups.reset(int(f.topo->groups.size()));
+  if (f.deps) {
+    f.links.reset(int(f.topo->inputs.size()));
   }
-  f.groups = {};
-  f.groups.resize(size_t(f.topo->groups.size()));
   for (int i = 0; i < int(kernels.size()); i++) {
     if (KernelState *k = kernels[i]) {
       const int at = f.topo->find(old->nodes[i].id);
@@ -150,6 +166,7 @@ void Evaluator::sync(Frame &f)
           f.topo->nodes[at].type == k->type)
       {
         f.kernels[at] = k;
+        k->index = at;
       }
       else {
         litestl::alloc::Delete(k);
@@ -185,10 +202,18 @@ KernelState &Evaluator::kernel(Frame &f, int node)
   KernelState *&k = f.kernels[node];
   if (!k) {
     k = litestl::alloc::New<KernelState>("coredcc::KernelState");
+    k->frame = &f;
+    k->index = node;
     k->type = f.topo->nodes[node].type;
+    if (f.counts) {
+      f.counts->kernels++;
+    }
     if (k->type && k->type->role == NodeRole::Foreach) {
       k->outputs.resize(1);
       k->foreach = std::make_unique<Foreach>();
+      if (f.deps) {
+        f.deps->foreachs.add(k, true);
+      }
     }
     else if (k->type) {
       k->outputs.resize(size_t(k->type->outputs.size()));
@@ -231,14 +256,23 @@ Frame *Evaluator::newFrame(Frame &parent, const GraphNode &node, GraphDef *def)
   return f;
 }
 
+void Evaluator::setOverBudget(const Frame &f, NodeId node)
+{
+  overBudget_ = true;
+  overBudgetAt_ = f.pathOf(node).toString();
+}
+
 void Evaluator::setReplaced(Frame &f, int group, Frame &c)
 {
-  c.replacing.clear();
+  c.replacing = nullptr;
   c.replaced = nullptr;
   const GraphTopology::Group &g = f.topo->groups[group];
   auto add = [&c](const InteriorKey &key, int depth, const Vertex &by) {
     if (depth < int(key.groups.size())) {
-      c.replacing.append(Frame::Replacing{&key, depth, by});
+      if (!c.replacing) {
+        c.replacing = std::make_unique<Vector<Frame::Replacing>>();
+      }
+      c.replacing->append(Frame::Replacing{&key, depth, by});
       return;
     }
     const int at = c.topo->find(key.node);
@@ -256,7 +290,8 @@ void Evaluator::setReplaced(Frame &f, int group, Frame &c)
     }
   }
   /* After the group's own, so that the outermost counts. */
-  for (const Frame::Replacing &r : f.replacing) {
+  for (int i = 0; f.replacing && i < int(f.replacing->size()); i++) {
+    const Frame::Replacing &r = (*f.replacing)[i];
     if (r.key->groups[r.depth] == g.node->id()) {
       add(*r.key, r.depth + 1, r.by);
     }
@@ -288,10 +323,14 @@ Frame *Evaluator::child(Frame &f, int group, ErrorPtr &error)
   }
   if (!g.child) {
     if (f.top->frames >= maxFrames) {
-      overBudget_ = true;
+      setOverBudget(f, node.id());
       return nullptr;
     }
     g.child = newFrame(f, node, def);
+    g.child->counts = f.counts;
+    if (f.deps) {
+      f.deps->addFrame(*g.child);
+    }
     f.top->frames++;
   }
   g.child->groupIndex = f.topo->groups[group].index;

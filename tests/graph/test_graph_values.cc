@@ -104,7 +104,7 @@ void testPayloads()
 
 void testValues()
 {
-  test_assert(sizeof(GraphValue) <= 136);
+  test_assert(sizeof(GraphValue) == 40);
   const double nan = std::numeric_limits<double>::quiet_NaN();
   const double m[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
   const GraphValue values[] = {

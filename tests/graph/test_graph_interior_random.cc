@@ -9,6 +9,7 @@
 #include "coredcc/graph/instance.h"
 #include "coredcc/graph/interior.h"
 
+#include <algorithm>
 #include <map>
 #include <optional>
 #include <random>
@@ -308,6 +309,7 @@ struct Naive {
 
 struct Totals {
   int edits = 0, links = 0, interior = 0, refused = 0, pulls = 0, errors = 0, cycles = 0;
+  int batches = 0, batchesRefused = 0, fullPasses = 0;
 };
 
 struct Fuzz {
@@ -333,6 +335,7 @@ struct Fuzz {
       add(*g.def, "t.sum");
     }
     inst = std::make_unique<GraphInstance>(&w.rt, &w.lib, defs[0].id);
+    inst->setIncremental(seed % 4 != 0);
     for (int i = 0; i < 60; i++) {
       edit();
     }
@@ -407,6 +410,99 @@ struct Fuzz {
     }
   }
 
+  static std::vector<LinkState> linksOf(const GraphDef &d)
+  {
+    std::vector<LinkState> out;
+    d.forEachLink([&](const GraphLink &l) { out.push_back(GraphDef::stateOf(l)); });
+    std::sort(out.begin(), out.end(),
+              [](const LinkState &a, const LinkState &b) { return a.id < b.id; });
+    return out;
+  }
+  static bool sameLinks(const std::vector<LinkState> &a, const std::vector<LinkState> &b)
+  {
+    return std::equal(a.begin(), a.end(), b.begin(), b.end(),
+                      [](const LinkState &x, const LinkState &y) {
+                        return x.id == y.id && x.from == y.from && x.to == y.to &&
+                               strcmp(x.fromKey.c_str(), y.fromKey.c_str()) == 0 &&
+                               strcmp(x.toKey.c_str(), y.toKey.c_str()) == 0;
+                      });
+  }
+
+  /* Several at once: all, or none if one of them is on a cycle. */
+  void linkMany(int index)
+  {
+    GraphDef &d = *defs[index].def;
+    struct Spec {
+      NodeId a, b;
+      std::string from, to;
+    };
+    std::vector<Spec> specs;
+    bool twice = false;
+    for (int i = 0, n = 1 + below(5); i < n; i++) {
+      const GraphNode &a = *d.nodeAt(below(d.nodeCount())), &b = *d.nodeAt(below(d.nodeCount()));
+      Spec s{a.id(), b.id(), socketOf(d, a, SocketSide::Output), socketOf(d, b, SocketSide::Input)};
+      if (s.from.empty() || s.to.empty()) {
+        continue;
+      }
+      bool taken = false;
+      for (const Spec &o : specs) {
+        taken |= o.b == s.b && o.to == s.to;
+      }
+      if (taken && below(4)) {
+        continue;
+      }
+      twice |= taken;
+      specs.push_back(s);
+    }
+    std::vector<LinkSpec> list;
+    for (const Spec &s : specs) {
+      list.push_back(LinkSpec{{s.a, s.from}, {s.b, s.to}});
+    }
+    const bool before = Naive(d).hasCycle();
+    const std::vector<LinkState> was = linksOf(d);
+    litestl::util::Vector<LinkId> ids;
+    const Status status = d.linkAll(list, ids);
+    totals.batches++;
+    if (status.ok()) {
+      test_assert(!twice && ids.size() == list.size() && (before || !Naive(d).hasCycle()));
+      for (size_t i = 0; i < specs.size(); i++) {
+        const GraphLink *l = d.link(ids[int(i)]);
+        test_assert(l && l->from->id() == specs[i].a && l->fromKey.c_str() == specs[i].from &&
+                    d.node(specs[i].b)->linkInto(specs[i].to) == l);
+      }
+      return;
+    }
+    totals.batchesRefused++;
+    test_assert(hasCode(status, StatusCode::InvalidArgument) && ids.size() == 0);
+    test_assert(sameLinks(linksOf(d), was));
+    if (before || twice) {
+      return;
+    }
+    std::vector<LinkState> olds;
+    std::vector<LinkId> forced;
+    for (const Spec &s : specs) {
+      if (const GraphLink *old = d.node(s.b)->linkInto(s.to)) {
+        olds.push_back(GraphDef::stateOf(*old));
+        test_assert(d.unlink(old->id).ok());
+      }
+      LinkState l;
+      l.id = LinkId{1 + forcedLinks++};
+      l.from = s.a;
+      l.fromKey = s.from.c_str();
+      l.to = s.b;
+      l.toKey = s.to.c_str();
+      test_assert(d.insertLink(l).ok());
+      forced.push_back(l.id);
+    }
+    test_assert(Naive(d).hasCycle());
+    for (LinkId id : forced) {
+      test_assert(d.unlink(id).ok());
+    }
+    for (const LinkState &l : olds) {
+      test_assert(d.insertLink(l).ok());
+    }
+  }
+
   void edit()
   {
     totals.edits++;
@@ -472,6 +568,8 @@ struct Fuzz {
           (live ? w.lib.markDeleted(g.h) : w.lib.restoreFromHistory(g.h)).ignore();
         }
         return;
+      case 10:
+        return linkMany(index);
       default:
         return link(index);
     }
@@ -528,7 +626,9 @@ struct Fuzz {
       }
     });
     /* What was pulled before the last edits stays right: nothing runs twice. */
-    w.rt.touch();
+    if (below(3) == 0) {
+      w.rt.touch();
+    }
     return good;
   }
 
@@ -561,13 +661,15 @@ int main(int argc, char **argv)
   for (int seed = first; seed < first + count && !retval; seed++) {
     Fuzz f(uint64_t(seed), t);
     const bool ok = f.run(40);
+    t.fullPasses += int(f.inst->totalFullPasses());
     if (!ok || retval) {
       printf("seed %d\n", seed);
     }
     test_assert(ok);
   }
-  printf("seeds %d to %d: %d edits, %d links (%d interior, %d refused), %d pulls, %d errors, %d of cycles\n",
-         first, first + count - 1, t.edits, t.links, t.interior, t.refused, t.pulls, t.errors,
-         t.cycles);
+  printf("seeds %d to %d: %d edits, %d links (%d interior, %d refused), %d batches (%d refused), "
+         "%d pulls, %d errors, %d of cycles, %d full passes\n",
+         first, first + count - 1, t.edits, t.links, t.interior, t.refused, t.batches,
+         t.batchesRefused, t.pulls, t.errors, t.cycles, t.fullPasses);
   return test_end();
 }

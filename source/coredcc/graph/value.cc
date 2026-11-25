@@ -5,6 +5,7 @@
 
 #include "litestl/util/alloc.h"
 
+#include <atomic>
 #include <cstring>
 #include <new>
 #include <string>
@@ -90,10 +91,28 @@ GraphValue::Type graphTypeFor(PropKind kind)
 
 /* ---- copying ---- */
 
+/* The count is atomic: workers may copy values. Plain new: there are many. */
+struct GraphValue::Matrix {
+  std::atomic<int> refs{1};
+  double m[16];
+};
+
+double *GraphValue::newMatrix()
+{
+  m_ = new Matrix;
+  type_ = Type::Mat4;
+  return m_->m;
+}
+
 void GraphValue::reset()
 {
   if (type_ == Type::String) {
     litestl::alloc::Delete(s_);
+  }
+  else if (type_ == Type::Mat4) {
+    if (m_->refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+      delete m_;
+    }
   }
   else if (type_ == Type::Payload) {
     p_.~PayloadRef();
@@ -114,6 +133,10 @@ GraphValue::GraphValue(const GraphValue &b)
   }
   else if (b.type_ == Type::Int) {
     i_ = b.i_;
+  }
+  else if (b.type_ == Type::Mat4) {
+    m_ = b.m_;
+    m_->refs.fetch_add(1, std::memory_order_relaxed);
   }
   else {
     memcpy(d_, b.d_, sizeof(double) * size_t(graphComponentCount(b.type_)));
@@ -144,6 +167,13 @@ GraphValue &GraphValue::operator=(GraphValue &&b) noexcept
     reset();
     s_ = s;
     type_ = Type::String;
+  }
+  else if (b.type_ == Type::Mat4) {
+    Matrix *m = b.m_;
+    b.type_ = Type::None;
+    reset();
+    m_ = m;
+    type_ = Type::Mat4;
   }
   else if (b.type_ == Type::Payload) {
     PayloadRef p = std::move(b.p_);
@@ -198,7 +228,7 @@ GraphValue GraphValue::ofComponents(Type type, const double *components)
   const int n = graphComponentCount(type);
   CDCC_CHECK(n > 0, "GraphValue::ofComponents: a type without components");
   GraphValue g;
-  memcpy(g.d_, components, sizeof(double) * size_t(n));
+  memcpy(type == Type::Mat4 ? g.newMatrix() : g.d_, components, sizeof(double) * size_t(n));
   g.type_ = type;
   return g;
 }
@@ -306,7 +336,7 @@ PropValue GraphValue::toProp() const
   }
   for (const TypePair &t : kComponentTypes) {
     if (t.graph == type_) {
-      return PropValue::ofComponents(t.prop, d_);
+      return PropValue::ofComponents(t.prop, components());
     }
   }
   return PropValue();
@@ -346,7 +376,19 @@ int GraphValue::componentCount() const
 const double *GraphValue::components() const
 {
   CDCC_CHECK(componentCount() > 0, "GraphValue::components on a type without any");
-  return d_;
+  return type_ == Type::Mat4 ? m_->m : d_;
+}
+
+size_t GraphValue::heapBytes() const
+{
+  switch (type_) {
+    case Type::String:
+      return sizeof(string) + size_t(s_->size());
+    case Type::Mat4:
+      return sizeof(Matrix);
+    default:
+      return 0;
+  }
 }
 
 const PayloadRef &GraphValue::asPayload() const
@@ -372,7 +414,8 @@ bool GraphValue::operator==(const GraphValue &b) const
     case Type::Payload:
       return p_ == b.p_;
     default:
-      return memcmp(d_, b.d_, sizeof(double) * size_t(graphComponentCount(type_))) == 0;
+      return memcmp(components(), b.components(),
+                    sizeof(double) * size_t(graphComponentCount(type_))) == 0;
   }
 }
 

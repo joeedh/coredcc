@@ -11,10 +11,12 @@
  * Elements run in table order, up to the first that fails, which fails the node: its
  * GraphError has the element's key and the node that failed inside.
  *
- * The first `maxCached` elements of the table have a state of their own, found by key, so
- * only what changed for an element runs again. The others share one and run whenever
- * anything the node reads changed. Results don't depend on which is which. An element that
- * isn't in the table any more keeps its state until a run succeeds.
+ * When the table changes, elements whose row is the same as in the last one that succeeded
+ * don't run. When something else does, all do. The first `maxCached` elements of the table
+ * have a state of their own, found by key, so that only what changed for an element runs
+ * again; the others share one, and all of their kernels run. Results don't depend on which
+ * is which, and NodeReport has the numbers. An element that isn't in the table any more keeps
+ * its state until a run succeeds.
  */
 
 #include "coredcc/graph/payload.h"
@@ -46,8 +48,8 @@ struct Elements {
   /** The column of that name, or null. */
   const Column *column(std::string_view name) const;
   /** InvalidArgument for a key or column name that is there twice, or a column with more or
-   * fewer values than there are keys. */
-  Status check() const;
+   * fewer values than there are keys. `checkKeys` off: the keys are known to be unique. */
+  Status validate(bool checkKeys = true) const;
   bool operator==(const Elements &b) const;
 };
 
@@ -62,7 +64,8 @@ template <> struct PayloadTraits<Elements> {
 
 /** The sockets of `graph.foreach` that hold tables. */
 inline constexpr const char *kElementsSocket = "elements";
-/** Its param: how many elements have a state of their own. */
+/** Its param: how many elements have a state of their own, if there is room for it (see
+ * GraphInstance::setMaxCachedKernels). */
 inline constexpr const char *kMaxCachedParam = "maxCached";
 PropertyDef foreachMaxCachedParam();
 

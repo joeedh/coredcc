@@ -323,7 +323,7 @@ struct Loop {
     const Elements *t = s.ok() ? result() : nullptr;
     bool ok = t && runs == kernels && t->size() == int(keys.size()) &&
               std::equal(keys.begin(), keys.end(), t->keys.begin()) &&
-              t->columns.size() == columns.size() && t->check().ok();
+              t->columns.size() == columns.size() && t->validate().ok();
     for (int i = 0; ok && i < int(columns.size()); i++) {
       ok = strcmp(t->columns[i].name.c_str(), columns[size_t(i)].name) == 0;
       for (int j = 0; ok && j < int(columns[size_t(i)].values.size()); j++) {

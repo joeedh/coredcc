@@ -4,13 +4,16 @@ coredcc_library(coredcc_graph
     bindings.cc
     builtin_nodes.cc
     commands.cc
+    cycles.cc
     def.cc
     def_edit.cc
     def_io.cc
+    dependents.cc
     evaluator.cc
     exec_context.cc
     foreach.cc
     frame.cc
+    incremental.cc
     instance.cc
     interior.cc
     node_type.cc

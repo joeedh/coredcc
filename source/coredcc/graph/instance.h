@@ -63,6 +63,28 @@ struct GraphError {
   bool operator==(const GraphError &b) const;
 };
 
+/** A socket that GraphInstance::prepare looked up. */
+struct SocketHandle {
+  uint32_t index = 0;
+  /** 0 for a null handle. */
+  uint32_t generation = 0;
+  bool operator==(const SocketHandle &) const = default;
+};
+
+/** What an instance takes, besides its def and the values set on it. */
+struct GraphMemory {
+  /** Evaluated graphs: the root, its groups, and those in elements. */
+  int frames = 0;
+  int inputs = 0;
+  int kernels = 0;
+  /** Elements with a state of their own. */
+  int elements = 0;
+  /** All of it, about; without payloads. */
+  size_t bytes = 0;
+  /** Payloads in its outputs. One that several share counts for each. */
+  size_t payloadBytes = 0;
+};
+
 struct NodeReport {
   enum class State : uint8_t {
     /** Never reached by an evaluation, or not a node that can fail. */
@@ -80,6 +102,10 @@ struct NodeReport {
   uint64_t runs = 0;
   /** How long its last run took. */
   double seconds = 0;
+  /** Foreach nodes: the elements of its last run, and how many of them have a state of their
+   * own. The others share one: to run them again costs all of their kernels. */
+  int elements = 0;
+  int cachedElements = 0;
 };
 
 /** What an instance evaluates: a graph block, or a def the client keeps alive. */
@@ -97,7 +123,10 @@ struct GraphSource {
  *
  * Evaluation is pulled and incremental: `evaluate` visits what the requested sockets depend
  * on, and runs a node's kernel when something it read differs from its last run. Between
- * edits it costs almost nothing. See docs/plans/2026-11-24-p5-graph.md.
+ * edits it costs almost nothing, and after an edit, what depends on what was edited is
+ * looked at, not all of it. (All of it is when blocks were created, destroyed or renamed or
+ * references written, an interface changed, or something called Runtime::touch.) See
+ * docs/plans/2026-11-24-p5-graph.md.
  */
 class GraphInstance {
  public:
@@ -139,6 +168,29 @@ class GraphInstance {
    * the socket was evaluated. Cheap. */
   bool isCurrent(const SocketPath &socket) const;
 
+  /* Prepared sockets: for a client that evaluates the same ones again and again. They are
+   * looked up once, and a batch of them says which moved. They aren't part of the results
+   * above, and a socket may be prepared more than once. */
+
+  /** A handle for a socket, there or not, until `release`. A socket that is gone is NotFound
+   * until it is back. Busy while a graph evaluates, as `release`. */
+  Result<SocketHandle> prepare(const SocketPath &socket);
+  Status release(SocketHandle socket);
+  /** Evaluates sockets, and gives the positions in `sockets` of those whose changedAt moved
+   * since this last listed them (at first, all). What each gave is in `status`. The call
+   * itself fails as with paths, or for a handle that isn't valid (InvalidArgument). */
+  Status evaluate(std::span<const SocketHandle> sockets, litestl::util::Vector<int> &moved);
+  /** What its last evaluation gave: ok, the error's, or NotFound for a socket that isn't
+   * there. */
+  Status status(SocketHandle socket) const;
+  /* The same as for paths; the pointers are valid until the next call of `evaluate`,
+   * `prepare` or `clear`, or the handle's `release`. */
+  const GraphValue *value(SocketHandle socket) const;
+  const GraphValue *lastGood(SocketHandle socket) const;
+  uint64_t changedAt(SocketHandle socket) const;
+  const GraphError *error(SocketHandle socket) const;
+  bool isCurrent(SocketHandle socket) const;
+
   /** Sets an interface input, by name or by key (`#<id>`). None unsets it: the interface's
    * default then applies. NotFound for an unknown input (or def), TypeMismatch for a value of
    * another type. The value of an input that is removed stays, for when undo brings it back;
@@ -158,12 +210,25 @@ class GraphInstance {
    * inside. It is also how many elements, of all its foreach nodes, have a state of their
    * own: more than that share one, as those over `maxCached` do. */
   void setMaxFrames(int n);
+  /** Kernels that elements with a state of their own may hold, over all foreach nodes
+   * (default 131,072, of about 1 KB each with their inputs). Elements that come when there
+   * are more share a state. */
+  void setMaxCachedKernels(int n);
+  /** Off, every edit makes it look at all that the sockets depend on: for tests, and to find
+   * out whether a wrong result is an edit that nobody was notified of. */
+  void setIncremental(bool on);
+  /** What it takes. Walks all of it. */
+  GraphMemory memory() const;
   /** Groups it holds, not counting those inside elements. */
   int frameCount() const;
   /** Elements of foreach nodes that have a state of their own. */
   int elementCount() const;
   /** Kernel runs since it was made, for tests and profiling. */
   uint64_t totalRuns() const;
+  /** Sockets and nodes it looked at since it was made, whether or not they ran. */
+  uint64_t totalVisits() const;
+  /** How often everything had to be looked at again. */
+  uint64_t totalFullPasses() const;
 
  private:
   std::unique_ptr<graph::Evaluator> e_;

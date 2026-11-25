@@ -5,6 +5,7 @@
  */
 
 #include "coredcc/graph/frame.h"
+#include "coredcc/graph/system.h"
 
 #include "litestl/util/map.h"
 #include "litestl/util/vector.h"
@@ -45,6 +46,10 @@ Status unknownType();
  * an explicit stack, and computes each when everything below it is done. Vertices on a
  * cycle (strongly connected components of more than one, by Tarjan's algorithm) fail
  * instead. What was computed under one key (see `Key`) stands until the key moves.
+ *
+ * When it moves, the GraphSystem's journal says which edits moved it. If it knows them all,
+ * the vertices they touch and everything that depends on those lose their state, and the
+ * rest stands; else nothing does (incremental.cc).
  */
 class Evaluator {
  public:
@@ -62,31 +67,59 @@ class Evaluator {
   };
   /** What a requested socket had. */
   struct Pulled {
-    Key key;
+    /** The pass and the number of `keyMoves_` it was pulled at. */
+    uint64_t at = 0;
     ErrorPtr error;
     /** The value's source, so an unchanged one needn't be compared. */
     TraceInput origin;
     GraphValue value;
     bool hasValue = false;
+    /** There is no such socket. */
+    bool missing = false;
     uint64_t changedAt = 0;
+    /** The vertex it led to, while `layout` is the Evaluator's. */
+    Vertex vertex;
+    int output = 0;
+    uint64_t layout = 0;
   };
 
   Status evaluate(std::span<const SocketPath> sockets, litestl::util::Vector<Status> &results);
   const Pulled *result(const SocketPath &socket) const;
+  /** Whether nothing `p` depends on can have moved since. */
+  bool isCurrent(const Pulled &p) const;
   Key currentKey() const;
+
+  /* prepared sockets */
+  Result<SocketHandle> prepare(const SocketPath &socket);
+  Status release(SocketHandle h);
+  Status evaluate(std::span<const SocketHandle> sockets, litestl::util::Vector<int> &moved);
+  /** Null for a handle that isn't valid. */
+  const Pulled *result(SocketHandle h) const;
   Status setInput(std::string_view name, GraphValue v);
   NodeReport report(const NodePath &node) const;
   Status retry();
   Status clear();
   Status forget(const SocketPath &socket);
 
+  GraphMemory memory() const;
+  void setMaxFrames(int n)
+  {
+    maxFrames = n;
+    failedKey_ = Key();
+  }
+
   void *userData = nullptr;
   int maxFrames = 262144;
+  int maxCachedKernels = 131072;
+  bool incremental = true;
+  /** Vertices visited, and passes that kept nothing, for tests and profiling. */
+  uint64_t visits = 0;
+  uint64_t fullPasses = 0;
   int frameCount() const
   {
     return root_ ? root_->frames : 0;
   }
-  int elementCount() const
+  const ElementCounts &elementCounts() const
   {
     return elements_;
   }
@@ -105,6 +138,31 @@ class Evaluator {
     GraphValue value;
   };
 
+  /** What an evaluate call needs. */
+  Status begin();
+  /** Sets up the pass. */
+  Status prepareCall();
+  /** Not ok if the call went over the budget. */
+  Status endCall();
+  /** Pulls a socket into `p`, unless it goes over the budget. */
+  void pull(const SocketPath &socket, Pulled &p, Status &status);
+
+  /* incremental.cc */
+  /** Marks what moved between passKey_ and `key` as stale. False if that isn't known, or
+   * there is nothing to keep: then everything is. */
+  bool absorb(const Key &key);
+  bool absorb(const GraphEditNote &e);
+  /** Whether nothing of this instance moved between passKey_ and `key`. */
+  bool untouched(const Key &key) const;
+  bool anyConcerns(const Key &key) const;
+  /** Whether an edit concerns this instance. */
+  bool concerns(const GraphEditNote &e) const;
+  /** Whether a def is one that the root can reach through groups. */
+  bool reaches(uint64_t defSerial) const;
+  void findReachable() const;
+  void markStale(const Vertex &v);
+  void markFrame(Frame &f);
+
   /** The def, if it is this Runtime's and Library's. */
   GraphDef *findDef(Status &status) const;
   Status prepareRoot();
@@ -122,6 +180,7 @@ class Evaluator {
   /** Notes which inputs of `c`, and of the groups in it, others replace (graph/interior.h). */
   void setReplaced(Frame &f, int group, Frame &c);
   Frame *newFrame(Frame &parent, const GraphNode &node, GraphDef *def);
+  void setOverBudget(const Frame &f, NodeId node);
   KernelState &kernel(Frame &f, int node);
   ErrorPtr makeError(const Frame &f, NodeId node, Status status, std::string_view socket = {}) const;
 
@@ -167,7 +226,7 @@ class Evaluator {
   void settle(KernelState &k, ErrorPtr error, bool inputFailed);
   void failCycle(const litestl::util::Vector<Vertex> &members);
 
-  void store(const SocketPath &socket, const Request &r, Status &status);
+  void store(Pulled &p, const Request &r, Status &status);
   /** Whether the defs have the socket. True where a group fails, so that it can't be known. */
   bool exists(const SocketPath &socket) const;
   /** Drops results of sockets that are gone. */
@@ -176,8 +235,8 @@ class Evaluator {
   Runtime &rt_;
   LibraryRef lib_;
   GraphSource source_;
-  /** Counted by the elements themselves. */
-  int elements_ = 0;
+  ElementCounts elements_;
+  Dependents deps_;
   std::unique_ptr<Frame> root_;
   BlockReader blocks_;
   TypeChains chains_;
@@ -189,7 +248,21 @@ class Evaluator {
   litestl::util::Map<int64_t, External> inputs_;
   /** Moves with setInput and retry. */
   uint64_t own_ = 1;
+  /** The inputs (by interface id) it moved for since the last evaluation; `ownAll_` if it
+   * wasn't for those only. */
+  litestl::util::Vector<int64_t> ownInputs_;
+  bool ownAll_ = false;
   litestl::util::Map<SocketPath, Pulled> results_;
+  struct Prepared {
+    SocketPath path;
+    Pulled pulled;
+    /** The changedAt that was last in a `moved` list. */
+    uint64_t reported = 0;
+    uint32_t generation = 0;
+    bool used = false;
+  };
+  litestl::util::Vector<Prepared> prepared_;
+  litestl::util::Vector<uint32_t> freePrepared_;
   /** GraphSystem::structureVersion, and the Library's epoch (a write of a group's cell moves
    * only that), when results_ was last pruned. */
   uint64_t prunedStructure_ = 0;
@@ -206,10 +279,32 @@ class Evaluator {
   };
   Sink sink_;
   Key passKey_;
+  /** What `untouched` said last, as isCurrent may be asked of many sockets. */
+  mutable Key askedKey_;
+  mutable bool answer_ = false;
+  /** Counts the moves of passKey_. */
+  uint64_t keyMoves_ = 0;
+  /** The first edit that passKey_ doesn't include. */
+  uint64_t seen_ = 0;
+  /** Moves when frames may have moved or gone. */
+  uint64_t layout_ = 1;
+  /** The defs that the root reaches, and whether one uses interior sockets. Valid while
+   * reachablePass_ is pass_. */
+  mutable litestl::util::Map<uint64_t, bool> reachable_;
+  mutable bool interior_ = false;
+  mutable uint64_t reachablePass_ = 0;
+  litestl::util::Vector<Vertex> marks_;
   uint64_t call_ = 0;
   litestl::util::Vector<LibraryPin, 4> pins_;
   bool running_ = false;
   bool overBudget_ = false;
+  std::string overBudgetAt_;
+  /** The last call that went over the budget: its key, and its sockets up to the one that
+   * did. Another like it would too. */
+  Key failedKey_;
+  Status failed_;
+  litestl::util::Vector<SocketPath> failedPaths_;
+  litestl::util::Vector<SocketHandle> failedHandles_;
 
   struct Item {
     Vertex vertex;

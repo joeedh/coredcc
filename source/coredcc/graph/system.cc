@@ -21,14 +21,38 @@ uint64_t GraphSystem::versionOf(BlockId id)
 void GraphSystem::changed(const OwnerKey *owner)
 {
   if (!owner) {
-    rt_.touch();
+    touch(GraphEditNote());
     versions_.clear(); /* each gets a new version when it is next asked for */
   }
   else if (owner->kind == OwnerKey::Kind::Block) {
-    if (uint64_t *v = versions_.lookup_ptr(clients_.canonical(owner->block))) {
-      *v = rt_.touch();
+    GraphEditNote e;
+    e.kind = GraphEditNote::Kind::Block;
+    e.block = clients_.canonical(owner->block);
+    if (uint64_t *v = versions_.lookup_ptr(e.block)) {
+      *v = touch(e);
     }
   }
+}
+
+uint64_t GraphSystem::touch(const GraphEditNote &edit)
+{
+  if (!journalCurrent()) {
+    note(GraphEditNote());
+  }
+  note(edit);
+  noted_ = rt_.touch();
+  return noted_;
+}
+
+void GraphSystem::note(const GraphEditNote &edit)
+{
+  if (journal_.size() < kJournal) {
+    journal_.append(edit);
+  }
+  else {
+    journal_[int(end_ % kJournal)] = edit;
+  }
+  end_++;
 }
 
 } // namespace coredcc

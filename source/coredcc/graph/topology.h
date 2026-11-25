@@ -67,6 +67,13 @@ struct GraphTopology {
     /** GraphNode::socketsVersion: what is last known can change while nobody looks. */
     uint64_t sockets = 0;
     litestl::util::Vector<Interior, 1> interior;
+    /** The index in `interior` of each of the node's interior outputs, in their order. */
+    litestl::util::Vector<int, 1> interiorOuts;
+    /** The entry of an interior output of the node, by its index there. */
+    const Interior &interiorOutput(const Node &n, int output) const
+    {
+      return interior[interiorOuts[output - n.interfaceOuts]];
+    }
   };
 
   litestl::util::Vector<Node> nodes;
@@ -74,6 +81,8 @@ struct GraphTopology {
   litestl::util::Vector<Output> outputs;
   litestl::util::Vector<Group> groups;
   litestl::util::Map<int64_t, int> indexOf;
+  /** Inputs with a link from a graph.input node. Their fromOutput is the interface's. */
+  litestl::util::Vector<int> fromInterface;
   /** The graph.output node, or -1. */
   int outputNode = -1;
   /** Unique per build. */
@@ -96,8 +105,22 @@ struct GraphTopology {
   static std::shared_ptr<const GraphTopology> build(const GraphDef &def);
 
  private:
+  /** Nodes with more sockets on a side than this are looked up in `wide_`. */
+  static constexpr int kScan = 16;
+  struct SocketAt {
+    NodeId node;
+    SocketSide side = SocketSide::Input;
+    litestl::util::string key;
+    uint64_t computeHash() const;
+    bool operator==(const SocketAt &b) const;
+  };
+
   /** The interior sockets of a group node, the last one added, at `index`. */
   void addInterior(const GraphDef &def, Node &n, int index);
+  void indexSockets(const Node &n);
+  int wideIndex(const Node &n, SocketSide side, std::string_view key) const;
+
+  litestl::util::Map<SocketAt, int> wide_;
 };
 
 /** Interior keys that a reach table has, after the interface's sockets. An `in` replaces the
@@ -109,6 +132,10 @@ struct ReachKeys {
   /** Its index, or -1. */
   int find(SocketSide side, const InteriorKey &key) const;
   std::string toString() const;
+
+ private:
+  litestl::util::Map<InteriorKey, int> outAt_;
+  litestl::util::Map<InteriorKey, int> inAt_;
 };
 
 /** Which inputs each output of a def depends on. */

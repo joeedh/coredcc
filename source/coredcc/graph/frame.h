@@ -4,6 +4,8 @@
  * An instance's state, per group: frames, input sockets and kernels. Internal to graph/.
  */
 
+#include "coredcc/graph/array.h"
+#include "coredcc/graph/dependents.h"
 #include "coredcc/graph/instance.h"
 #include "coredcc/graph/topology.h"
 #include "coredcc/graph/trace.h"
@@ -17,20 +19,10 @@ namespace coredcc::graph {
 
 using ErrorPtr = std::shared_ptr<const GraphError>;
 
-struct Frame;
 struct Foreach;
 
-/** A vertex of the walk: an input socket, or a kernel node with its outputs. Outputs of
- * groups and interface inputs need none: each leads to exactly one other vertex. */
-struct Vertex {
-  Frame *frame = nullptr;
-  /** In GraphTopology::inputs, or ::nodes for a kernel. */
-  int index = -1;
-  bool kernel = false;
-  bool operator==(const Vertex &) const = default;
-};
-
-/** Tarjan's numbers, valid in pass `pass`. */
+/** Tarjan's numbers, valid in pass `pass`. A vertex that an edit may have touched has no
+ * pass any more (Evaluator::markStale). */
 struct WalkState {
   uint64_t pass = 0;
   int number = 0;
@@ -46,7 +38,8 @@ struct InputState {
   /** What feeds it, and that vertex's output if it is a kernel. */
   Vertex source;
   int sourceOutput = 0;
-  const SocketType *sourceType = nullptr;
+  /** Whether `source` is an input around this frame that replaces this one. */
+  bool replaced = false;
   ErrorPtr error;
   TraceInput origin;
   /** In a kernel's outputs, a registry, or `own`. */
@@ -63,26 +56,40 @@ struct InputState {
 struct KernelState {
   KernelState();
   ~KernelState();
+  KernelState(const KernelState &) = delete;
+  KernelState &operator=(const KernelState &) = delete;
 
   struct Output {
     GraphValue value;
     uint64_t changedAt = 0;
   };
   WalkState walk;
+  /** Where it is. */
+  Frame *frame = nullptr;
+  int index = -1;
+  /** The last run: whether there was one, and whether it isn't to be used again. */
+  bool ran = false;
+  /** The outcome of the last visit: the run's error, or an input's. */
+  bool visited = false;
+  bool inputFailed = false;
   const NodeType *type = nullptr;
   litestl::util::Vector<Output, 1> outputs;
-  /** The last run. */
-  bool ran = false;
   Trace trace;
   ErrorPtr runError;
+  ErrorPtr error;
   uint64_t runs = 0;
   double seconds = 0;
   /** Foreach nodes. */
   std::unique_ptr<Foreach> foreach;
-  /** The outcome of the last visit: the run's error, or an input's. */
-  bool visited = false;
-  bool inputFailed = false;
-  ErrorPtr error;
+  /** What reads its outputs, and the blocks it used. In a frame with Dependents. */
+  InputLink *consumers = nullptr;
+  Array<BlockLink> blockLinks;
+};
+
+/** What cached elements take, over all foreach nodes of an instance. */
+struct ElementCounts {
+  int elements = 0;
+  int kernels = 0;
 };
 
 /** An element of a foreach, or the state its uncached elements share. */
@@ -95,12 +102,12 @@ struct Element {
     GraphValue value;
     uint64_t version = 0;
   };
-  Element(int64_t key, int *counter);
+  Element(int64_t key, ElementCounts *counts);
   ~Element();
 
   int64_t key = 0;
-  /** How many there are. Null if it isn't counted. */
-  int *counter = nullptr;
+  /** How many there are. Null for a shared one. */
+  ElementCounts *counts = nullptr;
   /** Owned. */
   Frame *frame = nullptr;
   /** By index in the def's interface. */
@@ -125,11 +132,22 @@ struct Foreach {
   uint64_t world = 0;
   /** What the table's check gave. */
   Status table;
+  /** The table that the node's output was made from, and the world it was made in: rows that
+   * are the same in both have the same output. */
+  PayloadRef madeFrom;
+  uint64_t madeIn = 0;
+  /** Rows of the last run's table, and of those, how many had a state of their own. */
+  int rows = 0;
+  int cachedRows = 0;
+  /** Whether the last run failed, or stopped. */
+  bool failed = false;
   /** The evaluate call that pinned the def. */
   uint64_t pinned = 0;
 
   /** Every def the elements may evaluate, with its version and its groups, flattened. */
   litestl::util::Vector<uint64_t> defs;
+  /** Their serials. */
+  litestl::util::Map<uint64_t, bool> serials;
   /** The targets of their nodes' references, as of `epoch`. */
   litestl::util::Vector<BlockId> refs;
   uint64_t epoch = 0;
@@ -141,7 +159,10 @@ struct Foreach {
 
 /** One evaluated def: the root, a group, or an element of a foreach. */
 struct Frame {
+  Frame() = default;
   ~Frame();
+  Frame(const Frame &) = delete;
+  Frame &operator=(const Frame &) = delete;
 
   GraphDef *def = nullptr;
   uint64_t defSerial = 0;
@@ -166,10 +187,20 @@ struct Frame {
   uint64_t pinned = 0;
 
   std::shared_ptr<const GraphTopology> topo;
-  litestl::util::Vector<InputState, 1> inputs;
+  Array<InputState> inputs;
   /** By node index; null until visited, and for nodes that are neither kernels nor
    * foreach. Owned. */
-  litestl::util::Vector<KernelState *, 2> kernels;
+  Array<KernelState *> kernels;
+  /** A cached element's: where its kernels are counted. */
+  ElementCounts *counts = nullptr;
+
+  /** Null in elements, whose foreach node depends on things for them. */
+  Dependents *deps = nullptr;
+  /** By input, where there are `deps`. */
+  Array<InputLink> links;
+  /** Other frames of the def, in `deps`. */
+  Frame *nextOfDef = nullptr;
+  Frame *prevOfDef = nullptr;
 
   /** A group node's child, checked once per pass. */
   struct Group {
@@ -179,7 +210,7 @@ struct Frame {
     ErrorPtr error;
   };
   /** By index in topo->groups. */
-  litestl::util::Vector<Group, 1> groups;
+  Array<Group> groups;
 
   /** Interior inputs of frames around this one that concern groups in it: the key, how many
    * of its groups lead here, and the input that replaces it. Valid in pass `pass`. */
@@ -188,7 +219,7 @@ struct Frame {
     int depth = 0;
     Vertex by;
   };
-  litestl::util::Vector<Replacing, 1> replacing;
+  std::unique_ptr<litestl::util::Vector<Replacing>> replacing;
   /** Inputs of this frame that are replaced, if any. Valid in pass `pass`. */
   std::unique_ptr<litestl::util::Map<int, Vertex>> replaced;
   const Vertex *replacedBy(int input) const

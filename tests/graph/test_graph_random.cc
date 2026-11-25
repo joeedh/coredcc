@@ -271,6 +271,90 @@ void pull(World &w, Client &c, const std::vector<SocketPath> &paths)
   test_assert(check(c.inst->totalRuns() == runs, "an unchanged pull ran kernels"));
 }
 
+/* Pulls some prepared sockets, right after some of their paths were pulled. */
+void pullPrepared(World &w, Client &c, SplitMix64 &rng, const std::vector<SocketPath> &paths)
+{
+  if (rng.below(8) == 0 && !c.prepared.empty()) {
+    const size_t at = rng.below(uint32_t(c.prepared.size()));
+    const SocketHandle h = c.prepared[at].handle;
+    test_assert(c.batch->release(h).ok() && hasCode(c.batch->release(h), StatusCode::InvalidArgument));
+    test_assert(hasCode(c.batch->status(h), StatusCode::FailedPrecondition) && !c.batch->value(h));
+    c.prepared.erase(c.prepared.begin() + int(at));
+  }
+  if (c.prepared.size() < 12) {
+    Client::Prepared p;
+    p.path = paths[rng.below(uint32_t(paths.size()))];
+    Result<SocketHandle> h = c.batch->prepare(p.path);
+    test_assert(h.ok());
+    p.handle = *h;
+    c.prepared.push_back(p);
+  }
+  std::vector<SocketHandle> handles;
+  std::vector<size_t> which;
+  for (size_t i = 0; i < c.prepared.size(); i++) {
+    if (rng.below(4)) {
+      handles.push_back(c.prepared[i].handle);
+      which.push_back(i);
+    }
+  }
+  litestl::util::Vector<int> moved;
+  const Status status = c.batch->evaluate(handles, moved);
+  if (!w.live(w.defs[size_t(c.def)])) {
+    test_assert(check(status.code() == StatusCode::NotFound && moved.size() == 0,
+                      "a deleted root was evaluated by handles"));
+    return;
+  }
+  test_assert(check(status.ok(), "evaluating handles failed"));
+  for (size_t i = 0; i < which.size(); i++) {
+    Client::Prepared &p = c.prepared[which[i]];
+    const std::string where = "prepared " + pathKey(p.path);
+    const Status now = c.batch->status(p.handle);
+    const GraphError *error = c.batch->error(p.handle);
+    const GraphValue *value = c.batch->value(p.handle);
+    test_assert(check(now.ok() == (value != nullptr) && now.ok() == (error == nullptr),
+                      where + ": the status isn't the error's"));
+    test_assert(check(c.batch->isCurrent(p.handle), where + " isn't current"));
+    /* What a path gives, in an instance of its own that looks at everything. */
+    GraphInstance fresh(&w.rt, &w.lib, w.defs[size_t(c.def)].id);
+    for (const auto &[id, v] : c.external) {
+      if (const InterfaceSocket *s = w.defs[size_t(c.def)].def->interfaceSocket(id)) {
+        fresh.setInput(s->key().c_str(), c.given.at(id)).ignore();
+      }
+    }
+    const Status want = fresh.evaluate(p.path);
+    const bool payload = value && value->type() == GraphValue::Type::Payload;
+    test_assert(check(want.code() == now.code(), where + ": " + now.toString().c_str() +
+                                                     " instead of " + want.toString().c_str()));
+    test_assert(check(!value || payload || *value == *fresh.value(p.path),
+                      where + ": the wrong value"));
+    test_assert(check(!error || now.code() == StatusCode::NotFound ||
+                          error->origin == fresh.error(p.path)->origin,
+                      where + ": the wrong origin"));
+    /* changedAt, and the list of those where it moved. */
+    const bool changed = !p.evaluated || p.code != now.code() || p.message != now.message() ||
+                         (value && *value != p.value);
+    const uint64_t at = c.batch->changedAt(p.handle);
+    bool listed = false;
+    for (int m : moved) {
+      listed |= m == int(i);
+    }
+    test_assert(check(!changed || at > p.changedAt, where + ": changedAt stood still"));
+    test_assert(check(listed == (at != p.changedAt), where + ": wrongly in the list, or not"));
+    test_assert(check(changed || payload || error || !listed, where + ": listed for nothing"));
+    g_counts.handles++;
+    g_counts.moved += listed;
+    p.evaluated = true;
+    p.code = now.code();
+    p.message = now.message();
+    p.value = value ? *value : p.value;
+    p.changedAt = at;
+  }
+  /* Nothing moves. */
+  const uint64_t visits = c.batch->totalVisits();
+  test_assert(c.batch->evaluate(handles, moved).ok() && moved.size() == 0);
+  test_assert(check(c.batch->totalVisits() == visits, "an unchanged batch visited something"));
+}
+
 std::string storedText(const NodeValues &values)
 {
   std::set<std::string> out;
@@ -358,6 +442,9 @@ void runWorld(uint64_t seed, int batches)
     Client c;
     c.def = def;
     c.inst = std::make_unique<GraphInstance>(&w.rt, &w.lib, w.defs[size_t(def)].id);
+    c.batch = std::make_unique<GraphInstance>(&w.rt, &w.lib, w.defs[size_t(def)].id);
+    c.inst->setIncremental(seed % 3 != 0);
+    c.batch->setIncremental(seed % 3 != 0);
     clients.push_back(std::move(c));
   }
   Editor editor(w, rng, clients);
@@ -371,6 +458,7 @@ void runWorld(uint64_t seed, int batches)
   const std::string first = describe(w);
   for (g_batch = 0; g_batch < batches && !retval; g_batch++) {
     const int edits = int(rng.below(6));
+    editor.quiet = rng.below(3) > 0;
     for (int i = 0; i < edits; i++) {
       editor.edit();
     }
@@ -384,8 +472,15 @@ void runWorld(uint64_t seed, int batches)
         paths.push_back(editor.randomSocket(c));
       }
       pull(w, c, paths);
+      if (!retval && rng.below(3) == 0) {
+        pullPrepared(w, c, rng, paths);
+      }
       if (retval) {
         return;
+      }
+      if (seed % 3 == 1 && rng.below(4) == 0) {
+        c.inst->setIncremental(rng.below(2));
+        c.batch->setIncremental(rng.below(2));
       }
     }
     if (g_batch % 64 == 0) {
@@ -394,6 +489,9 @@ void runWorld(uint64_t seed, int batches)
       }
       test_assert(w.rt.validateAll().ok() && w.lib.validate().ok());
     }
+  }
+  for (const Client &c : clients) {
+    (seed % 3 ? g_counts.fullPasses : g_counts.forcedPasses) += c.inst->totalFullPasses();
   }
   if (!undoable || retval) {
     return;
@@ -438,13 +536,16 @@ int main(int argc, char **argv)
     runWorld(first + uint64_t(i), batches);
   }
   printf("seeds %llu to %llu: %llu edits, %llu pulls, %llu kernel visits, %llu runs (%llu had "
-         "to, %llu might), %llu failures, %llu on cycles, %llu recursions, %llu groups, %llu undos, %llu redos\n",
+         "to, %llu might), %llu failures, %llu on cycles, %llu recursions, %llu groups, %llu undos, %llu redos, "
+         "%llu full passes (and %llu forced), %llu handles (%llu moved)\n",
          (unsigned long long)first, (unsigned long long)(first + uint64_t(worlds) - 1),
          (unsigned long long)g_counts.ops, (unsigned long long)g_counts.pulls,
          (unsigned long long)g_counts.visits, (unsigned long long)g_counts.runs,
          (unsigned long long)g_counts.musts, (unsigned long long)g_counts.mays,
          (unsigned long long)g_counts.errors, (unsigned long long)g_counts.cycles,
          (unsigned long long)g_counts.recursions, (unsigned long long)g_counts.groups,
-         (unsigned long long)g_counts.undos, (unsigned long long)g_counts.redos);
+         (unsigned long long)g_counts.undos, (unsigned long long)g_counts.redos,
+         (unsigned long long)g_counts.fullPasses, (unsigned long long)g_counts.forcedPasses,
+         (unsigned long long)g_counts.handles, (unsigned long long)g_counts.moved);
   return test_end();
 }
