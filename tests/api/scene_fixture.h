@@ -4,6 +4,7 @@
  * collection of Object blocks with an active item, and `tool`, a pointer to the Tool
  * runtime owner. Each Object points at a Mesh block through `data`. */
 
+#include "coredcc/api/attachments.h"
 #include "coredcc/api/change_bus.h"
 #include "coredcc/api/resolve.h"
 #include "coredcc/api/struct.h"
@@ -184,6 +185,7 @@ inline void registerStructs(Runtime &rt, Scene &scene, Tool &tool)
     return PointerRef{&static_cast<Object *>(self.data)->mod, kMod, OwnerKey()};
   };
   object.addPointer(PropertyDef::pointerProp("mod", kMod), std::move(modPtr));
+  addAttachments(object);
   test_assert(reg.add(std::move(object)).ok());
 
   ApiStruct t("Tool");

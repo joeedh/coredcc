@@ -152,14 +152,6 @@ struct UnlinkRef {
   }
 };
 
-template <class Cmd> Status addOnce(Runtime &rt, CommandDef def)
-{
-  if (rt.ext<CommandRegistry>().find(def.name().c_str())) {
-    return Status();
-  }
-  return addNativeCommand<Cmd>(rt, std::move(def)).status();
-}
-
 } // namespace
 
 Status detail::registerBlockEdits(Runtime &rt)
@@ -168,12 +160,12 @@ Status detail::registerBlockEdits(Runtime &rt)
   rename.uiName("Rename Block")
       .input(PropertyDef::pointerProp("block", StructId()))
       .input(PropertyDef::stringProp("name"));
-  CDCC_TRY(addOnce<RenameBlock>(rt, std::move(rename)));
+  CDCC_TRY(detail::addCommandOnce<RenameBlock>(rt, std::move(rename)));
   CommandDef unlink(kUnlinkRefCommand);
   unlink.uiName("Unlink Reference")
       .input(PropertyDef::pointerProp("block", StructId()))
       .input(PropertyDef::intProp("index"));
-  return addOnce<UnlinkRef>(rt, std::move(unlink));
+  return detail::addCommandOnce<UnlinkRef>(rt, std::move(unlink));
 }
 
 } // namespace coredcc

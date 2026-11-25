@@ -1,5 +1,6 @@
 coredcc_library(coredcc_api
   SOURCES
+    attachments.cc
     bindings.cc
     change_bus.cc
     context.cc

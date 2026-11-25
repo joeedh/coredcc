@@ -9,6 +9,7 @@
 #undef TEXT
 #define TEXT(x) L##x
 
+#include "coredcc/api/attachments.h"
 #include "coredcc/api/change_bus.h"
 #include "coredcc/api/context.h"
 #include "coredcc/api/resolve.h"
@@ -16,6 +17,7 @@
 #include "coredcc/base/assert.h"
 #include "coredcc/bvh/any_source.h"
 #include "coredcc/bvh/geometry_bvh.h"
+#include "coredcc/command/attachment_commands.h"
 #include "coredcc/command/block_commands.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/command/command.h"

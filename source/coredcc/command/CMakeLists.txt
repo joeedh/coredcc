@@ -1,5 +1,6 @@
 coredcc_library(coredcc_command
   SOURCES
+    attachment_commands.cc
     block_commands.cc
     block_edits.cc
     bindings.cc

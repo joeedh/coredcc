@@ -7,6 +7,7 @@
  */
 
 #include "coredcc/command/command.h"
+#include "coredcc/command/history_block.h"
 #include "coredcc/lib/library.h"
 
 namespace coredcc {
@@ -23,7 +24,8 @@ litestl::util::Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle
  * Blocks a command created, for its undo: undo moves them to the history, redo brings
  * them back with their ids, and a discard while undone destroys them. Call `add` from
  * exec after each create. Each block is pinned until the discard (a history pin, §8a),
- * so a purge can't free a block that redo would bring back.
+ * so a purge can't free a block that redo would bring back. Blocks are found by id, so a
+ * block recreated under its id in between is still the one that is undone.
  */
 class CreatedBlocks {
  public:
@@ -37,7 +39,7 @@ class CreatedBlocks {
   void discard(Library &lib);
 
  private:
-  litestl::util::Vector<BlockHandle> blocks_;
+  litestl::util::Vector<HistoryBlock> blocks_;
   bool undone_ = false;
 };
 
@@ -47,6 +49,7 @@ class CreatedBlocks {
  *   its preview. With `cascade=false` a non-empty cascade is FailedPrecondition naming
  *   the users. Undo restores them all with their ids. Outputs `count`.
  * - `core.block.rename` and `core.block.unlinkRef` (block_edits.h).
+ * - `core.block.attach` and `core.block.detach` (attachment_commands.h).
  * - `core.block.purge()` collects garbage (NoUndo). Outputs `count`, the blocks freed.
  */
 Status registerBlockCommands(Runtime &rt);

@@ -21,6 +21,15 @@ namespace detail {
  * Library, or no such block. */
 Result<BlockHandle> blockInput(Context &ctx);
 Status registerBlockEdits(Runtime &rt);
+
+/** Registers a command unless one of its name exists. */
+template <class Cmd> Status addCommandOnce(Runtime &rt, CommandDef def)
+{
+  if (rt.ext<CommandRegistry>().find(def.name().c_str())) {
+    return Status();
+  }
+  return addNativeCommand<Cmd>(rt, std::move(def)).status();
+}
 } // namespace detail
 
 } // namespace coredcc

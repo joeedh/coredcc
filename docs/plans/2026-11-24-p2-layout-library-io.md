@@ -794,3 +794,16 @@ against the code. Its "B7" is named in the verdict but isn't in the report.
   and write the cell directly (with the same notification and update hook) otherwise, which also
   covers a placeholder that was filled in between.
 - `api/struct.h` includes `lib/block.h` for `RefCell`.
+
+### A3: blocks by id, attach and detach (2026-11-24)
+- CreatedBlocks and DeleteBlock hold `HistoryBlock`s. Dropping either from the history destroys
+  only blocks that are InHistory then: a block that was recreated under its id, or restored behind
+  the command's back, is left alone.
+- DeleteBlock's `canRun` uses the block commands' shared input check.
+- `attachUndo` takes the data: on an error the provider has destroyed it, unless the type isn't
+  registered. The command behind it, `core.block.attachData`, is Private.
+- A command that holds detached data History-pins what the data's `foreachRef` reports. A
+  `foreachRef` that throws fails the detach and puts the data back.
+- The `attachments` collection lists attachments whose type has a `dataStruct`; its item struct id
+  is `coredcc.Attachment`, which has no struct, so items are only reached through their own type's.
+- Attach and detach post a change of the owner's `attachments` member.

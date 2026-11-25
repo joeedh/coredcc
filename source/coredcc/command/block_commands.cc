@@ -1,5 +1,6 @@
 #include "coredcc/command/block_commands.h"
 
+#include "coredcc/command/attachment_commands.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/command/executor.h"
 
@@ -48,10 +49,15 @@ Vector<BlockHandle> deletePreview(const Library &lib, BlockHandle target)
 
 namespace {
 
-/* A failure while leaving the history has no caller to return to. */
-void reportDestroy(Library &lib, Status s)
+/* Destroys a block that leaves the history, unless it is gone or was recreated Live. A
+ * failure has no caller to return to. */
+void destroyDeleted(Library &lib, BlockHandle h)
 {
-  if (!s.ok() && s.code() != StatusCode::NotFound) {
+  const Datablock *b = lib.get(h);
+  if (!b || b->state() != BlockState::InHistory) {
+    return;
+  }
+  if (Status s = lib.destroyFromHistory(h); !s.ok()) {
     lib.runtime().setStickyError(std::move(s));
   }
 }
@@ -60,14 +66,13 @@ void reportDestroy(Library &lib, Status s)
 
 void CreatedBlocks::add(Library &lib, BlockHandle h)
 {
-  lib.pin(h, PinKind::History);
-  blocks_.append(h);
+  blocks_.append(HistoryBlock(lib, h));
 }
 
 void CreatedBlocks::undo(Library &lib)
 {
   for (int i = int(blocks_.size()) - 1; i >= 0; i--) {
-    Status s = lib.markDeleted(blocks_[i]);
+    Status s = lib.markDeleted(blocks_[i].get());
     if (!s.ok()) {
       lib.runtime().setStickyError(std::move(s));
     }
@@ -78,9 +83,9 @@ void CreatedBlocks::undo(Library &lib)
 Status CreatedBlocks::redo(Library &lib)
 {
   for (int i = 0; i < int(blocks_.size()); i++) {
-    if (Status s = lib.restoreFromHistory(blocks_[i]); !s.ok()) {
+    if (Status s = lib.restoreFromHistory(blocks_[i].get()); !s.ok()) {
       for (int j = i - 1; j >= 0; j--) {
-        lib.markDeleted(blocks_[j]).ignore(); /* back to undone */
+        lib.markDeleted(blocks_[j].get()).ignore(); /* back to undone */
       }
       return s;
     }
@@ -91,12 +96,11 @@ Status CreatedBlocks::redo(Library &lib)
 
 void CreatedBlocks::discard(Library &lib)
 {
-  for (BlockHandle h : blocks_) {
-    lib.unpin(h, PinKind::History);
-  }
-  if (undone_) {
-    for (BlockHandle h : blocks_) {
-      reportDestroy(lib, lib.destroyFromHistory(h)); /* already gone is fine */
+  for (HistoryBlock &b : blocks_) {
+    const BlockHandle h = b.get();
+    b.release();
+    if (undone_) {
+      destroyDeleted(lib, h);
     }
   }
   blocks_.clear();
@@ -114,21 +118,21 @@ Library *libraryOf(Context &ctx, Status &err)
 
 struct DeleteBlock {
   Library *lib = nullptr;
-  Vector<BlockHandle> deleted;
+  Vector<HistoryBlock> deleted;
   bool applied = false;
 
+  bool isDeleted(BlockHandle h) const
+  {
+    for (const HistoryBlock &b : deleted) {
+      if (b.get() == h) {
+        return true;
+      }
+    }
+    return false;
+  }
   Status canRun(Context &ctx) const
   {
-    Status err;
-    Library *l = libraryOf(ctx, err);
-    if (!l) {
-      return err;
-    }
-    const StableRef *ref = ctx.inputs()->get("block")->tryPointer();
-    if (!ref || ref->owner.kind != OwnerKey::Kind::Block || !l->get(l->find(ref->owner.block))) {
-      return Status::error(StatusCode::FailedPrecondition, "block: no such block");
-    }
-    return Status();
+    return detail::blockInput(ctx).status();
   }
   Status exec(Context &ctx)
   {
@@ -149,7 +153,7 @@ struct DeleteBlock {
         undo(ctx); /* leave nothing half-done */
         return s;
       }
-      deleted.append(h);
+      deleted.append(HistoryBlock(*lib, h));
     }
     applied = true;
     ctx.outputs()->set("count", PropValue::ofInt(int64_t(deleted.size()))).ignore();
@@ -158,7 +162,7 @@ struct DeleteBlock {
   void undo(Context &ctx)
   {
     for (int i = int(deleted.size()) - 1; i >= 0; i--) {
-      Status s = lib->restoreFromHistory(deleted[i]);
+      Status s = lib->restoreFromHistory(deleted[i].get());
       if (!s.ok()) {
         ctx.runtime().setStickyError(std::move(s));
       }
@@ -169,10 +173,10 @@ struct DeleteBlock {
    * the redo fails, rather than leaving its ref dangling. */
   Status redo(Context &ctx)
   {
-    Vector<BlockHandle> preview = deletePreview(*lib, deleted[0]);
+    Vector<BlockHandle> preview = deletePreview(*lib, deleted[0].get());
     Vector<BlockHandle> extra;
     for (BlockHandle h : preview) {
-      if (!deleted.contains(h)) {
+      if (!isDeleted(h)) {
         extra.append(h);
       }
     }
@@ -182,14 +186,18 @@ struct DeleteBlock {
                             std::string(lib->get(extra[0])->name().c_str()) + "'")
                                .c_str());
     }
-    Vector<BlockHandle> did;
+    Vector<BlockHandle> all, did;
+    for (const HistoryBlock &b : deleted) {
+      all.append(b.get());
+    }
+    for (BlockHandle h : extra) {
+      all.append(h);
+    }
     Status s;
-    for (const Vector<BlockHandle> *list : {&deleted, &extra}) {
-      for (int i = 0; i < int(list->size()) && s.ok(); i++) {
-        s = lib->markDeleted((*list)[i]);
-        if (s.ok()) {
-          did.append((*list)[i]);
-        }
+    for (int i = 0; i < int(all.size()) && s.ok(); i++) {
+      s = lib->markDeleted(all[i]);
+      if (s.ok()) {
+        did.append(all[i]);
       }
     }
     if (!s.ok()) {
@@ -199,20 +207,22 @@ struct DeleteBlock {
       return s;
     }
     for (BlockHandle h : extra) {
-      deleted.append(h);
+      deleted.append(HistoryBlock(*lib, h));
     }
     applied = true;
     return Status();
   }
   uint64_t memSize() const
   {
-    return sizeof(*this) + uint64_t(deleted.size()) * sizeof(BlockHandle);
+    return sizeof(*this) + uint64_t(deleted.size()) * sizeof(HistoryBlock);
   }
   void discard()
   {
-    if (applied) {
-      for (BlockHandle h : deleted) {
-        reportDestroy(*lib, lib->destroyFromHistory(h));
+    for (HistoryBlock &b : deleted) {
+      const BlockHandle h = b.get();
+      b.release();
+      if (applied) {
+        destroyDeleted(*lib, h);
       }
     }
     deleted.clear();
@@ -287,7 +297,8 @@ Status registerBlockCommands(Runtime &rt)
       return d.status();
     }
   }
-  return detail::registerBlockEdits(rt);
+  CDCC_TRY(detail::registerBlockEdits(rt));
+  return detail::registerAttachmentCommands(rt);
 }
 
 } // namespace coredcc
