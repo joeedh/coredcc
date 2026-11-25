@@ -6,6 +6,7 @@
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
+#include <cmath>
 #include <string>
 
 namespace coredcc {
@@ -189,6 +190,79 @@ const SceneBvh &Scene::bvh() const
   return evaluator_->bvh;
 }
 
+/* ---- files ---- */
+
+namespace {
+
+constexpr uint32_t kScenePayload = 1;
+
+void writeCells(BlockWriter &out, const Vector<RefCell> &cells)
+{
+  uint32_t n = 0;
+  for (const RefCell &c : cells) {
+    n += c.isNull() ? 0 : 1;
+  }
+  out.bytes().u32(n);
+  for (const RefCell &c : cells) {
+    if (!c.isNull()) {
+      out.ref(c);
+    }
+  }
+}
+
+/* Those that aren't null, once each, so it takes no more memory than the ref table. A save writes null
+ * for a deleted block. */
+void readCells(BlockReader &in, RefKind kind, Vector<RefCell> &out)
+{
+  const uint32_t n = in.bytes().count(sizeof(uint32_t));
+  const ClientRegistry &clients = in.library().runtime().ext<ClientRegistry>();
+  litestl::util::Map<BlockId, int> seen;
+  for (uint32_t i = 0; i < n; i++) {
+    RefCell cell(kind);
+    in.ref(cell);
+    if (!cell.isNull() && seen.add(clients.canonical(cell.target), 0)) {
+      out.append(cell);
+    }
+  }
+}
+
+} // namespace
+
+void Scene::write(BlockWriter &out) const
+{
+  writeCells(out, cells_);
+  out.ref(active_.cell());
+  writeCells(out, selection_);
+  out.bytes().f64(frame);
+  out.bytes().f64(fps);
+}
+
+void Scene::readFrom(BlockReader &in)
+{
+  readCells(in, RefKind::OptStrong, cells_);
+  in.ref(active_.cell());
+  readCells(in, RefKind::Weak, selection_);
+  const double f = in.bytes().f64(), rate = in.bytes().f64();
+  frame = std::isfinite(f) ? f : frame;
+  fps = std::isfinite(rate) ? rate : fps;
+}
+
+Scene *Scene::duplicate() const
+{
+  Scene *s = litestl::alloc::New<Scene>("coredcc::Scene");
+  s->cells_ = cells_;
+  s->selection_ = selection_;
+  s->active_ = active_;
+  s->frame = frame;
+  s->fps = fps;
+  return s;
+}
+
+uint64_t Scene::memSize() const
+{
+  return sizeof(Scene) + (uint64_t(cells_.size()) + selection_.size()) * sizeof(RefCell);
+}
+
 /* ---- the block ---- */
 
 namespace {
@@ -208,12 +282,44 @@ struct SceneProvider {
   {
     litestl::alloc::Delete(static_cast<Scene *>(b.clientData()));
   }
+  Status serialize(const Datablock &b, BlockWriter &out) const
+  {
+    if (!b.clientData()) {
+      return Status::error(StatusCode::FailedPrecondition, "a scene without data");
+    }
+    static_cast<Scene *>(b.clientData())->write(out);
+    return Status(); /* or the writer's */
+  }
+  Status deserialize(const Datablock &, BlockReader &in)
+  {
+    Scene *s = litestl::alloc::New<Scene>("coredcc::Scene");
+    s->readFrom(in);
+    in.setData(s);
+    return Status(); /* or the reader's: `destroy` gets it back */
+  }
+  Status duplicate(const Datablock &src, BlockCopy &out)
+  {
+    if (!src.clientData()) {
+      return Status::error(StatusCode::FailedPrecondition, "a scene without data");
+    }
+    out.setData(static_cast<Scene *>(src.clientData())->duplicate());
+    return Status();
+  }
+  uint64_t memSize(const Datablock &b) const
+  {
+    const Scene *s = static_cast<Scene *>(b.clientData());
+    return s ? s->memSize() : 0;
+  }
   static lbt::Struct<SceneProvider> *defineBindings()
   {
     auto *st = new lbt::Struct<SceneProvider>("coredcc::SceneProvider", sizeof(SceneProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
+    BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
+    BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
+    BIND_STRUCT_METHOD(st, duplicate, MARGS("src", "out"));
+    BIND_STRUCT_METHOD(st, memSize, MARGS("block"));
     return st;
   }
 };
@@ -383,7 +489,8 @@ Status registerSceneType(Runtime &rt)
   info.name = kSceneType;
   info.client = ClientId::of(kCoredccClient);
   info.dataStruct = StructId::of(kSceneType);
-  info.storage = BlockStorage::Transient; /* until step 11 gives it a payload */
+  info.payloadVersion = kScenePayload;
+  info.storage = BlockStorage::Payload;
   return rt.ext<BlockTypeRegistry>().add(std::move(info), std::move(*provider)).status();
 }
 

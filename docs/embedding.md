@@ -161,6 +161,12 @@ Unreal, coredcc is exactly one module, so they exist once.
   - `evaluateScene`, for the scene's BVH only. `rt.ext<SceneSettings>().bvh.parallel = false` keeps it
     off the pool; `leafSize` and `bins` are there too.
 
+## Scenes in files
+- Objects and scenes are saved with the library. The Context's scene isn't: set it after a load.
+- Register transform types before loading. The objects of a type that isn't there stand where their
+  parents are; their channels are kept, and read when it is registered.
+- A duplicated or appended scene isn't a GC root (`BlockFlags::Root`); an appended one has FakeUser.
+
 ## Picking
 - **Positions are in device pixels** (x and y of `rayFromPixel`, `regionFromRect` and `pickScene`), y
   down. **Sizes are in logical pixels** (`PickOptions::radius`, `PickHit::distance`, the pixel radii of

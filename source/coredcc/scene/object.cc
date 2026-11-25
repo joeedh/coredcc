@@ -3,6 +3,7 @@
 #include "coredcc/api/change_bus.h"
 #include "coredcc/lib/provider.h"
 #include "coredcc/scene/builtins.h"
+#include "coredcc/scene/channel_io.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
@@ -53,11 +54,19 @@ void Object::read(ObjectInfo &info, ChannelBlock &out) const
   info.parent = parent.target();
   info.data = data.target();
   info.flags = uint32_t(flags);
+  if (pending_) {
+    const_cast<Object *>(this)->resolve(); /* the type came after the object */
+  }
   out = channels;
 }
 
 Status Object::writeChannels(const ChannelBlock &in)
 {
+  /* No channels are what read() gave of an object that waits for its type: an undo. */
+  if (pending_ && unreadType_ == typeName_ && in.size() > 0) {
+    pending_ = false;
+    unread_.clear();
+  }
   channels = in;
   return Status();
 }
@@ -76,6 +85,80 @@ Status Object::setTransformTypeId(const TypeId &type)
   }
   setTransformType(name);
   return Status();
+}
+
+/* ---- files ---- */
+
+namespace {
+
+constexpr uint32_t kObjectPayload = 1;
+
+} // namespace
+
+/* The type's name, the flags and the references; the channels by name; and plain numbers, for channels
+ * without names: the type isn't there, or has another count. */
+void Object::write(BlockWriter &out) const
+{
+  if (pending_) {
+    const_cast<Object *>(this)->resolve();
+  }
+  out.bytes().str(typeName_.c_str());
+  out.bytes().u32(uint32_t(flags));
+  out.ref(parent.cell());
+  out.ref(data.cell());
+  Vector<BlockEntry> entries;
+  for (const BlockEntry &e : unread()) {
+    entries.append(e);
+  }
+  const TransformType *type = rt_->ext<TransformRegistry>().find(type_);
+  const bool named = type && channels.size() == type->channelCount();
+  if (named) {
+    detail::appendChannels(*type, channels, entries);
+  }
+  out.entries(std::span<const BlockEntry>(entries.data(), size_t(entries.size())));
+  out.bytes().array(
+      std::span<const double>(channels.data(), size_t(named ? 0 : channels.size())));
+}
+
+void Object::readFrom(BlockReader &in)
+{
+  BytesReader &b = in.bytes();
+  const std::string type(b.str());
+  flags = ObjectFlags(b.u32());
+  in.ref(parent.cell());
+  in.ref(data.cell());
+  in.entries(unread_);
+  Vector<double> numbers;
+  b.array(numbers);
+  if (!b.ok()) {
+    return;
+  }
+  setTransformType(type);
+  channels.resize(int32_t(numbers.size()));
+  for (int32_t i = 0; i < int32_t(numbers.size()); i++) {
+    channels.set(i, numbers[i]);
+  }
+  unreadType_ = typeName_;
+  pending_ = numbers.size() == 0;
+  resolve();
+}
+
+void Object::resolve()
+{
+  const TransformType *type = rt_->ext<TransformRegistry>().find(type_);
+  if (pending_ && type && unreadType_ == typeName_) {
+    channels = detail::takeChannels(*type, unread_);
+    pending_ = false;
+  }
+}
+
+uint64_t Object::memSize() const
+{
+  uint64_t n = sizeof(Object) + uint64_t(channels.size()) * sizeof(double);
+  for (const BlockEntry &e : unread_) {
+    n += sizeof(BlockEntry) + e.raw.size() + e.refs.size() * sizeof(RefCell);
+  }
+  return n;
 }
 
 lbt::Struct<Object> *Object::defineBindings()
@@ -102,13 +185,41 @@ struct ObjectProvider {
   void foreachRef(const Datablock &b, RefVisitor &v) const
   {
     if (Object *o = static_cast<Object *>(b.clientData())) {
-      v.visit(o->parent.cell());
-      v.visit(o->data.cell());
+      o->foreachCell([&v](RefCell &cell) { v.visit(cell); });
     }
   }
   void destroy(const Datablock &b)
   {
     litestl::alloc::Delete(static_cast<Object *>(b.clientData()));
+  }
+  Status serialize(const Datablock &b, BlockWriter &out) const
+  {
+    if (!b.clientData()) {
+      return failed("an object without data");
+    }
+    static_cast<Object *>(b.clientData())->write(out);
+    return Status(); /* or the writer's */
+  }
+  Status deserialize(const Datablock &, BlockReader &in)
+  {
+    Object *o = litestl::alloc::New<Object>("coredcc::Object", &in.library().runtime());
+    o->readFrom(in);
+    in.setData(o);
+    return Status(); /* or the reader's: `destroy` gets it back */
+  }
+  Status duplicate(const Datablock &src, BlockCopy &out)
+  {
+    if (!src.clientData()) {
+      return failed("an object without data");
+    }
+    out.setData(litestl::alloc::New<Object>("coredcc::Object",
+                                            *static_cast<Object *>(src.clientData())));
+    return Status();
+  }
+  uint64_t memSize(const Datablock &b) const
+  {
+    const Object *o = static_cast<Object *>(b.clientData());
+    return o ? o->memSize() : 0;
   }
   static lbt::Struct<ObjectProvider> *defineBindings()
   {
@@ -116,6 +227,10 @@ struct ObjectProvider {
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
     BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
+    BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
+    BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
+    BIND_STRUCT_METHOD(st, duplicate, MARGS("src", "out"));
+    BIND_STRUCT_METHOD(st, memSize, MARGS("block"));
     return st;
   }
 };
@@ -384,6 +499,7 @@ Status writeTransformType(Context &ctx,
   const Status s = r->iface.setTransformTypeId(type);
   CDCC_TRY(thrown(ctx.runtime()));
   CDCC_TRY(s);
+  ctx.library()->noteRefsChanged(); /* those of Object::unread */
   return writeTransform(ctx, object, channels);
 }
 
@@ -516,6 +632,7 @@ ApiStruct objectStruct()
   transform.get = [](const PointerRef &p, Context &ctx) {
     const TransformType *t =
         ctx.runtime().ext<TransformRegistry>().find(self(p).transformTypeId());
+    self(p).resolve();
     return t ? PointerRef{&self(p).channels, t->structId(), OwnerKey()} : PointerRef();
   };
   transform.target = StructId::of(TransformRegistry::kChannelsStruct);
@@ -544,7 +661,8 @@ Status addObjectBlock(Runtime &rt)
   info.name = kObjectType;
   info.client = ClientId::of(kCoredccClient);
   info.dataStruct = StructId::of(kObjectType);
-  info.storage = BlockStorage::Transient; /* until step 11 gives it a payload */
+  info.payloadVersion = kObjectPayload;
+  info.storage = BlockStorage::Payload;
   return rt.ext<BlockTypeRegistry>().add(std::move(info), std::move(*provider)).status();
 }
 

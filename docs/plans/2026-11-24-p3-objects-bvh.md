@@ -964,6 +964,31 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   - Code that turned out redundant is gone (the ranking's third group, an occlusion check, `keep` for
     solids, checks that the BVH's own validation repeats).
 
+### Step 11
+- **Needs litestl PR #14.** Files: `scene/channel_io.{h,cc}`, `Object::write/readFrom`,
+  `Scene::write/readFrom/duplicate`; test `test_scene_io`. Both block types are `Payload` now.
+- **An Object's payload:** the transform type's name, flags, parent, data, the channels as entries by name,
+  and plain numbers. Enums are their items' keys. Numbers are only for channels that have no
+  names: the type isn't there, or has another count.
+- **A file's channels without their type** are kept as entries (`Object::unread`), written again
+  byte for byte, and read once the type is registered: `read()`, the datapath and a save look. What no
+  channel takes (another build's channel, item, kind or value type, with its references) stays in the
+  file beside the others.
+- **A change of the transform type keeps them in memory** for its undo, but doesn't write or report them.
+  Channels that are written while the type isn't there replace them.
+- **Values are exact:** no ranges and no coercion, except that a whole Float may become an Int, and an Int
+  that a double holds a Float. An Int or Enum channel is written as it reads (rounded, first item).
+- **A Scene's payload:** members, the active object, the selection, frame and fps. Null cells aren't
+  written, and a member is read once, also under a client's alias. Numbers that aren't finite
+  become the defaults, so that no scene is saved that can't be loaded.
+- **No `rekey`:** it isn't asked for blocks of the coredcc client, which get fresh ids.
+- **`duplicate` doesn't copy Root** (the library's rule), so whoever duplicates a Scene sets it, or FakeUser.
+- **Deleted members:** the save writes their OptStrong cells null, and the load drops those. Weak
+  references (parent, active, selection) keep the id of a block that isn't there, and answer none.
+- **`memSize`** is implemented for both.
+- **Mutations:** 82, each alone, against `test_scene_io`. All are found, or their code was redundant and is gone
+  (an unknown-tag check, two early returns, a memory charge that the ref table already bounds).
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms

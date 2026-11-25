@@ -118,6 +118,15 @@ class Scene {
   /** Over the bounds of the last evaluation. */
   const SceneBvh &bvh() const;
 
+  /* ---- files ---- */
+
+  void write(BlockWriter &out) const;
+  /** Fails the reader for a payload that is wrong. */
+  void readFrom(BlockReader &in);
+  /** A copy for another block, not evaluated. */
+  Scene *duplicate() const;
+  uint64_t memSize() const;
+
   /** Every reference, for the provider. */
   template <class Fn> void foreachCell(Fn &&fn)
   {

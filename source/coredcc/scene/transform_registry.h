@@ -53,6 +53,11 @@ class TransformType {
   {
     return defaults_;
   }
+  /** The defs of its channels, in order. */
+  const litestl::util::Vector<PropertyDef, 1> &channelDefs() const
+  {
+    return defs_;
+  }
   /** Whether channel i belongs to a def of subtype Distance. */
   bool isDistance(int32_t i) const
   {
@@ -73,6 +78,7 @@ class TransformType {
   litestl::util::string name_;
   StructId struct_;
   ChannelBlock defaults_;
+  litestl::util::Vector<PropertyDef, 1> defs_;
   litestl::util::Vector<uint8_t> distance_;
   Owned<TransformModel> model_;
   Runtime *rt_ = nullptr;

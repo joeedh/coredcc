@@ -2,6 +2,7 @@ coredcc_library(coredcc_scene
   SOURCES
     bindings.cc
     builtins.cc
+    channel_io.cc
     evaluated.cc
     evaluator.cc
     fbx.cc

@@ -27,6 +27,7 @@ coredcc_test(test_scene_objects SOURCES scene/test_scene_objects.cc DEPS coredcc
 coredcc_test(test_scene_pick SOURCES scene/test_scene_pick.cc DEPS coredcc_bind coredcc_scene)
 coredcc_test(test_scene_queries SOURCES scene/test_scene_queries.cc DEPS coredcc_bind coredcc_scene)
 coredcc_test(test_scene_rank SOURCES scene/test_scene_rank.cc DEPS coredcc_bind coredcc_scene)
+coredcc_test(test_scene_io SOURCES scene/test_scene_io.cc DEPS coredcc_scene)
 coredcc_test(test_scene_bvh SOURCES scene/test_scene_bvh.cc DEPS coredcc_scene)
 coredcc_test(test_draw_view SOURCES draw/test_view.cc DEPS coredcc_draw)
 coredcc_test(test_props_value SOURCES props/test_value.cc DEPS coredcc_props)

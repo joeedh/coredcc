@@ -1,86 +1,16 @@
 #include "coredcc/scene/transform_registry.h"
 
+#include "coredcc/scene/channel_io.h"
+
 #include "litestl/util/alloc.h"
 
 #include <string>
 
 namespace coredcc {
 
+using namespace detail;
+
 namespace {
-
-/* The channels of a def, or 0 for a kind that has none. */
-int32_t channelsOf(PropKind kind)
-{
-  switch (kind) {
-    case PropKind::Bool:
-    case PropKind::Int:
-    case PropKind::Float:
-    case PropKind::Enum:
-      return 1;
-    case PropKind::Vec2:
-      return 2;
-    case PropKind::Vec3:
-      return 3;
-    case PropKind::Vec4:
-    case PropKind::Quat:
-      return 4;
-    default:
-      return 0;
-  }
-}
-
-bool exactInt(int64_t v)
-{
-  return v >= -int64_t(channels::kMaxInt) && v <= int64_t(channels::kMaxInt);
-}
-
-void encode(const PropValue &v, int32_t first, ChannelBlock &out)
-{
-  switch (v.type()) {
-    case PropValue::Type::Bool:
-      out.set(first, v.asBool() ? 1.0 : 0.0);
-      break;
-    case PropValue::Type::Int:
-      out.set(first, double(v.asInt()));
-      break;
-    case PropValue::Type::Enum:
-      out.set(first, double(v.asEnum()));
-      break;
-    case PropValue::Type::Float:
-      out.set(first, v.asFloat());
-      break;
-    default:
-      for (int32_t i = 0; i < int32_t(v.componentCount()); i++) {
-        out.set(first + i, v.component(i));
-      }
-      break;
-  }
-}
-
-PropValue decode(const PropertyDef &def, int32_t first, const ChannelBlock &in)
-{
-  const double v = in.get(first);
-  switch (def.kind()) {
-    case PropKind::Bool:
-      return PropValue::ofBool(v >= 0.5);
-    case PropKind::Int:
-      return PropValue::ofInt(channels::toInt(v));
-    case PropKind::Float:
-      return PropValue::ofFloat(v);
-    case PropKind::Enum: {
-      const EnumMeta &m = *def.enumMeta();
-      const EnumItem *item = m.findValue(channels::toInt(v));
-      return PropValue::ofEnum(item ? item->value : m.items[0].value);
-    }
-    default: {
-      double c[4];
-      for (int32_t i = 0; i < 4; i++) {
-        c[i] = in.get(first + i);
-      }
-      return PropValue::ofComponents(valueTypeFor(def.kind()), c);
-    }
-  }
-}
 
 Status bad(const litestl::util::string &type, const std::string &why)
 {
@@ -111,7 +41,7 @@ ValueAccessor accessorFor(const PropertyDef &def, int32_t first)
 {
   ValueAccessor a;
   a.get = [def, first](const PointerRef &self, Context &) {
-    return decode(def, first, *static_cast<const ChannelBlock *>(self.data));
+    return decodeChannels(def, first, *static_cast<const ChannelBlock *>(self.data));
   };
   const int32_t end = first + channelsOf(def.kind());
   a.set = [first, end](const PointerRef &self, Context &, const PropValue &v) {
@@ -123,7 +53,7 @@ ValueAccessor accessorFor(const PropertyDef &def, int32_t first)
     if (v.type() == PropValue::Type::Int && !exactInt(v.asInt())) {
       return Status::error(StatusCode::OutOfRange, "an integer channel holds +-2^53");
     }
-    encode(v, first, block);
+    encodeChannels(v, first, block);
     return Status();
   };
   return a;
@@ -190,7 +120,7 @@ Result<const TransformType *> TransformRegistry::add(TransformTypeInfo info,
   for (const PropertyDef &def : info.channels) {
     const int32_t first = defaults.size();
     defaults.resize(first + channelsOf(def.kind()));
-    encode(def.defaultValue(), first, defaults);
+    encodeChannels(def.defaultValue(), first, defaults);
     for (int32_t i = first; i < defaults.size(); i++) {
       distance.append(uint8_t(def.subtype() == PropSubtype::Distance ? 1 : 0));
     }
@@ -210,6 +140,7 @@ Result<const TransformType *> TransformRegistry::add(TransformTypeInfo info,
   type->struct_ = (*added)->id();
   type->defaults_ = std::move(defaults);
   type->distance_ = std::move(distance);
+  type->defs_ = std::move(info.channels);
   type->model_ = std::move(model);
   type->rt_ = &rt_;
   types_.append(type);

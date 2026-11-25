@@ -2,7 +2,10 @@
 
 #include "coredcc/api/context.h"
 #include "coredcc/scene/capabilities.h"
+#include "coredcc/lib/block_io.h"
 #include "coredcc/scene/transform_registry.h"
+
+#include <span>
 
 namespace coredcc {
 
@@ -22,6 +25,7 @@ class Object {
   ObjectFlags flags = ObjectFlags::None;
   WeakRef<Object> parent;
   OptRef<void> data;
+  /** Empty for an object of a file until its transform type is registered: read() has them. */
   ChannelBlock channels;
 
   /** The transform type's name, kept also while no such type is registered. */
@@ -42,6 +46,35 @@ class Object {
   Status setParentId(const BlockId &id);
   Status setTransformTypeId(const TypeId &type);
 
+  /* Files. Channels that this build doesn't know are kept, and written again. */
+
+  void write(BlockWriter &out) const;
+  /** Fails the reader for a payload that is wrong. */
+  void readFrom(BlockReader &in);
+  /** Reads the file's channels, if the transform type has been registered since. */
+  void resolve();
+  /** What a file has for this transform type that no channel takes, or that waits for the type. */
+  std::span<const BlockEntry> unread() const
+  {
+    return unreadType_ == typeName_ ?
+               std::span<const BlockEntry>(unread_.data(), size_t(unread_.size())) :
+               std::span<const BlockEntry>();
+  }
+  /** Every reference, for the provider. */
+  template <class Fn> void foreachCell(Fn &&fn)
+  {
+    fn(parent.cell());
+    fn(data.cell());
+    if (unreadType_ == typeName_) {
+      for (BlockEntry &e : unread_) {
+        for (RefCell &c : e.refs) {
+          fn(c);
+        }
+      }
+    }
+  }
+  uint64_t memSize() const;
+
   explicit Object(Runtime *rt) : rt_(rt) {}
   static litestl::binding::types::Struct<Object> *defineBindings();
 
@@ -49,6 +82,12 @@ class Object {
   Runtime *rt_;
   litestl::util::string typeName_;
   TypeId type_;
+
+  /* Of the type `unreadType_`. After a change to another type they are kept for an undo, but aren't
+   * the object's. `pending_`: they are all of the type's channels, not read yet. */
+  litestl::util::Vector<BlockEntry> unread_;
+  litestl::util::string unreadType_;
+  bool pending_ = false;
 };
 
 /** A new Object with a transform type's defaults. */
