@@ -1,5 +1,5 @@
 /* Binding descriptors for the transform types. */
-#include "coredcc/scene/transform.h"
+#include "coredcc/scene/evaluated.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
@@ -17,6 +17,23 @@ const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::SetWorldM
   return e;
 }
 
+const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::EvalStatus>::bind()
+{
+  using coredcc::EvalStatus;
+  static types::Enum *e = nullptr;
+  if (!e) {
+    alloc::PermanentGuard guard;
+    e = new types::Enum("coredcc::EvalStatus", sizeof(EvalStatus));
+    e->addItem("Ok", int(EvalStatus::Ok));
+    e->addItem("Invalid", int(EvalStatus::Invalid));
+    e->addItem("ModelFailed", int(EvalStatus::ModelFailed));
+    e->addItem("MissingModel", int(EvalStatus::MissingModel));
+    e->addItem("Cycle", int(EvalStatus::Cycle));
+    e->addItem("NoTransform", int(EvalStatus::NoTransform));
+  }
+  return e;
+}
+
 namespace coredcc {
 
 namespace lbt = litestl::binding::types;
@@ -30,6 +47,7 @@ lbt::Struct<ChannelBlock> *ChannelBlock::defineBindings()
     BIND_STRUCT_DEFAULT_CONSTRUCTOR(st);
     BIND_STRUCT_COPY_CONSTRUCTOR(st);
     BIND_STRUCT_METHOD(st, size, MARGS());
+    BIND_STRUCT_METHOD(st, resize, MARGS("size"));
     BIND_STRUCT_METHOD(st, get, MARGS("i"));
     BIND_STRUCT_METHOD(st, set, MARGS("i", "v"));
   }
@@ -84,6 +102,39 @@ lbt::Struct<TransformDelta> *TransformDelta::defineBindings()
     BIND_STRUCT_METHOD(st, setKind, MARGS("k"));
     BIND_STRUCT_METHOD(st, matrix, MARGS());
     BIND_STRUCT_METHOD(st, rotation, MARGS());
+  }
+  return st;
+}
+
+lbt::Struct<ObjectInfo> *ObjectInfo::defineBindings()
+{
+  static lbt::Struct<ObjectInfo> *st = nullptr;
+  if (!st) {
+    litestl::alloc::PermanentGuard guard;
+    st = new lbt::Struct<ObjectInfo>("coredcc::ObjectInfo", sizeof(ObjectInfo));
+    BIND_STRUCT_DEFAULT_CONSTRUCTOR(st);
+    BIND_STRUCT_COPY_CONSTRUCTOR(st);
+    BIND_STRUCT_MEMBER(st, transformType);
+    BIND_STRUCT_MEMBER(st, parent);
+    BIND_STRUCT_MEMBER(st, data);
+    BIND_STRUCT_MEMBER(st, flags);
+  }
+  return st;
+}
+
+lbt::Struct<ObjectEval> *ObjectEval::defineBindings()
+{
+  static lbt::Struct<ObjectEval> *st = nullptr;
+  if (!st) {
+    litestl::alloc::PermanentGuard guard;
+    st = new lbt::Struct<ObjectEval>("coredcc::ObjectEval", sizeof(ObjectEval));
+    BIND_STRUCT_DEFAULT_CONSTRUCTOR(st);
+    BIND_STRUCT_COPY_CONSTRUCTOR(st);
+    BIND_STRUCT_MEMBER(st, state);
+    BIND_STRUCT_MEMBER(st, localBounds);
+    BIND_STRUCT_MEMBER(st, bounds);
+    BIND_STRUCT_MEMBER(st, status);
+    BIND_STRUCT_MEMBER(st, member);
   }
   return st;
 }

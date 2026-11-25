@@ -129,6 +129,18 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 - **How to spot it next time:** read the message's tail, or the run's `cdp-log.json`
   under `apps/testapp/test-artifacts/`, which a failed run keeps.
 
+### An object's world or bounds are old
+- **Symptom:** `Scene::evaluated`, or `evaluated.objects[...]`, shows where an object was, or the
+  bounds of geometry it had.
+- **Cause:** results are from the last `evaluateScene`. Hosts call it once a frame, before
+  drawing; nothing calls it by itself. It computes everything again, so it needs no
+  notification.
+- **If the bounds stay old after it:** the data block caches them. Whoever changes a block's data
+  directly must call `invalidateData(ctx, block, kinds)`, which calls the block's `Invalidation`
+  and posts the change for watchers.
+- **Commands and tools** that must not see old results use `computeState`, which reads the
+  objects themselves.
+
 ## Techniques
 
 ### Checking that a regression test can fail

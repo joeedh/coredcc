@@ -2,13 +2,17 @@ coredcc_library(coredcc_scene
   SOURCES
     bindings.cc
     builtins.cc
+    evaluated.cc
+    evaluator.cc
     fbx.cc
     matrix.cc
+    object.cc
+    scene.cc
     solve.cc
     transform.cc
     transform_registry.cc
     trs.cc
   DEPS
-    coredcc_api
     coredcc_bvh
+    coredcc_command
 )

@@ -101,6 +101,10 @@
 #include "coredcc/props/value.h"
 #include "coredcc/props/value_io.h"
 #include "coredcc/scene/builtins.h"
+#include "coredcc/scene/capabilities.h"
+#include "coredcc/scene/evaluated.h"
+#include "coredcc/scene/object.h"
+#include "coredcc/scene/scene.h"
 #include "coredcc/scene/solve.h"
 #include "coredcc/scene/transform_registry.h"
 

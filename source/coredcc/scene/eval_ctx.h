@@ -55,7 +55,7 @@ class ChannelBlock {
   static litestl::binding::types::Struct<ChannelBlock> *defineBindings();
 
  private:
-  litestl::util::Vector<double> values_;
+  litestl::util::Vector<double, 16> values_;
 };
 
 /**

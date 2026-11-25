@@ -754,6 +754,57 @@ Each step ends with the gate (4 native presets, wasm-st-debug) and a commit.
   - sign patterns of zero columns, which are only skipped to save time;
   - each model's own check of the parent, which `solveWorld` and `solveDelta` make first.
 
+### Step 7
+- **Needs litestl PR #14.**
+- **Files:** `capabilities.h object.{h,cc} scene.{h,cc} evaluator.{h,cc} evaluated.{h,cc}`. The API
+  structs are with their types, so there is no `api.cc`.
+- **`Transformable` has one more optional slot,** `setTransformTypeId`, for
+  `core.object.setTransformType`. `Spatial::pick` comes with step 9.
+- **Two empty API structs:** `coredcc.ObjectData`, the parent of structs that can be an object's
+  `data`, and `coredcc.SceneObject`, the parent of structs that can be a `parent` or
+  `activeObject`. A host's own objects use them. `transformType` (read-only) and `fps` are members
+  too, and the selection is the collection `selectedObjects`.
+- **`active` and `selected` leave out what isn't a member,** so an unlink needn't touch them, and
+  its undo brings them back.
+- **`SceneEvaluator::run(scene, library, changed, foreign)`** keeps both stores itself. It compares
+  each result with the last one, and starts to write the second store where the first
+  difference is. An unchanged scene writes nothing and swaps nothing.
+- **Revalidation asks only what `evaluateAll` doesn't check anyway** (the list, overrides,
+  Live targets, `queryInterface`). `read` and `data` are compared while evaluating. Where they
+  differ, everything is looked up again, and evaluated again.
+- **Looking up again** uses the last parent and data handles as hints: checking one is several times
+  faster than finding its id. The store's index is an array over handle indices, not a hash map.
+- **`ChannelBlock` holds 16 channels inline,** and the evaluator prefetches eight objects ahead
+  (addresses of the last evaluation). Each saved about 4 ms of 100,000 objects: nearly all of the
+  rest is waiting for memory.
+- **A model or `read` that throws** is returned by `evaluateScene` after everything else is
+  computed. Errors of a pass that was thrown away aren't.
+- **`computeState`** returns a foreign error, and is FailedPrecondition for a block that isn't
+  Live and Transformable. A parent that isn't Transformable is the identity there too.
+- **An object's type name is registered with the Runtime** when it is set, so undo can come
+  back to a missing type by id.
+- **`blockIdText` and `parseBlockIdText`** (`evaluated.h`) are the text of a block id. P2's B1 should
+  use or replace them.
+- **Asked-for ids are kept** in a Runtime extension for the life of the Runtime (24 bytes each):
+  a PointerRef into the results mustn't point into the store.
+- **Measured on a busy machine** (two other worktrees building; CPU load between 5 and 100 %;
+  the same binary varied by 10 to 20 % from run to run). `bench_scene`, 41 repetitions, ms, best and
+  median:
+
+  | | without SceneBvh | a 100,000-box refit |
+  |---|---|---|
+  | Unchanged (target 20) | 13.3, 16.0 | 4.8, 5.3 |
+  | Every root moved | 13.2, 15.7 | |
+  | The epoch moved (target 40) | 19.7, 23.2 | |
+  | Structural, a parent (target 80) | 56.7, 62.5 | build: 17.3, 20.3 |
+  | Structural, unlink and link (target 80) | 34.9, 39.0 | |
+
+  The sums meet the targets: 18 to 21, 25 to 28, and 62 to 83 (with a build, if a changed parent
+  needs one). The numbers to record come from an idle machine, with step 9's SceneBvh.
+- **Mutations:** 86, each alone; those that survived and weren't redundant code (removed) got tests.
+  What survives: the places where `add` keeps the index instead of making it again (speed only),
+  and the Live checks of revalidation, which null data shows too.
+
 ## Exit criteria
 - The gate passes; wasm-mt builds and its BVH and scene tests pass in node.
 - **`evaluate` on 100,000 native objects with data blocks, Release, idle machine: at most 20 ms
