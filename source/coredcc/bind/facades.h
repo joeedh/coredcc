@@ -85,6 +85,13 @@ ValueResult makeString(const string &v);
 PropValue makeVec2(double x, double y);
 PropValue makeVec3(double x, double y, double z);
 PropValue makeVec4(double x, double y, double z, double w);
+/** A rotation, xyzw. */
+PropValue makeQuat(double x, double y, double z, double w);
+/** A matrix of four Vec4 columns. */
+ValueResult makeMat4(const PropValue &a,
+                     const PropValue &b,
+                     const PropValue &c,
+                     const PropValue &d);
 /** Flags by their bits. */
 PropValue makeFlags(int64_t bits);
 PropValue makeNullPointer();

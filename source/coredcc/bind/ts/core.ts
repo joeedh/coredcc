@@ -48,9 +48,18 @@ export class FloatValue {
 }
 export const float = (value: number) => new FloatValue(value)
 
+/** A rotation, xyzw. Written to a Quat, an array of 4 numbers does as well. */
+export class QuatValue {
+  readonly value: readonly number[]
+  constructor(x: number, y: number, z: number, w: number) {
+    this.value = [x, y, z, w]
+  }
+}
+export const quat = (x: number, y: number, z: number, w: number) => new QuatValue(x, y, z, w)
+
 /** A value scripts can write. A whole number is an Int (use `float()` for a Float); an array
- * of strings is flags by their keys (`[]` for none); null is the null pointer. Mat4 can't be
- * written yet. */
+ * of strings is flags by their keys (`[]` for none); null is the null pointer. Arrays of 2-4
+ * numbers are vectors, and of 16 a Mat4 (column by column); `quat()` makes a Quat. */
 export type Writable =
   | boolean
   | number
@@ -59,6 +68,7 @@ export type Writable =
   | ArrayLike<number>
   | readonly string[]
   | FloatValue
+  | QuatValue
   | Ref
   | null
   | PropValue
@@ -273,6 +283,15 @@ const isArrayLike = (x: unknown): x is ArrayLike<number> =>
 const INT64_MIN = -(2n ** 63n)
 const INT64_MAX = 2n ** 63n - 1n
 
+function mat4(c: number[]): PropValue {
+  const columns = [0, 4, 8, 12].map((i) => cd.makeVec4(c[i], c[i + 1], c[i + 2], c[i + 3]))
+  try {
+    return take(cd.makeMat4(columns[0], columns[1], columns[2], columns[3]), copyValue)
+  } finally {
+    for (const v of columns) v[Symbol.dispose]()
+  }
+}
+
 /** An owned PropValue for `x`. A whole number is an Int, unless it is past 2^53 (then
  * a Float, which C++ range-checks); `float()` makes a Float. Bound PropValues are
  * copied. */
@@ -289,6 +308,7 @@ export function fromJs(ctx: Context | undefined, x: Writable): PropValue {
   }
   if (typeof x === 'string') return take(cd.makeString(x), copyValue)
   if (x instanceof FloatValue) return cd.makeFloat(x.value)
+  if (x instanceof QuatValue) return cd.makeQuat(x.value[0], x.value[1], x.value[2], x.value[3])
   if (Array.isArray(x) && x.every((k) => typeof k === 'string')) {
     if (x.length === 0) return cd.makeFlags(0n)
     const odd = x.find((k) => k === '' || k.includes('|'))
@@ -300,7 +320,8 @@ export function fromJs(ctx: Context | undefined, x: Writable): PropValue {
     if (c.length === 2) return cd.makeVec2(c[0], c[1])
     if (c.length === 3) return cd.makeVec3(c[0], c[1], c[2])
     if (c.length === 4) return cd.makeVec4(c[0], c[1], c[2], c[3])
-    throw new TypeError(`fromJs: a vector has 2-4 components, not ${c.length} (Mat4 can't be written yet)`)
+    if (c.length === 16) return mat4(c)
+    throw new TypeError(`fromJs: a vector has 2-4 components, and a Mat4 16, not ${c.length}`)
   }
   if (isBoundValue(x)) return copyValue(x)
   throw new TypeError(`fromJs: can't make a value of ${String(x)}`)
@@ -327,3 +348,29 @@ export function bagToJs(ctx: Context, bag: PropertyBag): Record<string, Value> {
   return out
 }
 
+/* ---- slots ---- */
+
+/** An error Status for a slot's return, disposed of after C++ copies it. */
+export function errorStatus(code: StatusCode, message: string): Status {
+  const s = cd.statusError(code, message)
+  queueMicrotask(() => s[Symbol.dispose]())
+  return s
+}
+
+export function statusOf(code: StatusCode, e: unknown): Status {
+  if (isFatal(e)) throw e
+  if (e instanceof ScriptError) return errorStatus(e.code, e.detail)
+  return errorStatus(code, e instanceof Error ? e.message : String(e))
+}
+
+const isThenable = (v: unknown) =>
+  (typeof v === 'object' || typeof v === 'function') && v !== null && typeof (v as {then?: unknown}).then === 'function'
+
+/** `r`, unless it is a Promise: slots are synchronous. */
+export function sync<T>(slot: string, r: T): T {
+  if (isThenable(r)) {
+    ;(r as unknown as Promise<unknown>).catch(() => {}) /* reported here, not as unhandled */
+    throw new TypeError(`${slot} returned a Promise: slots are synchronous`)
+  }
+  return r
+}

@@ -1,10 +1,13 @@
 #include "coredcc/bind/graph_facades.h"
 
-#include "coredcc/api/resolve.h"
+#include "coredcc/api/change_bus.h"
+#include "coredcc/api/ref_text.h"
 #include "coredcc/base/iface/registry.h"
+#include "coredcc/base/json_writer.h"
 #include "coredcc/base/text.h"
 #include "coredcc/bind/detail.h"
 #include "coredcc/bind/foreign_command.h"
+#include "coredcc/bind/graph_detail.h"
 #include "coredcc/graph/commands.h"
 #include "coredcc/graph/provider.h"
 #include "coredcc/lib/library.h"
@@ -34,9 +37,28 @@ Status nodeTypeUiName(NodeTypeDef &def, const string &s)
   return Status();
 }
 
+/* As detail::scriptProp, also of a Quat or Mat4. */
+static Result<PropertyDef> graphProp(const char *what,
+                                     const string &name,
+                                     const PropValue &defaultValue)
+{
+  const PropValue::Type type = defaultValue.type();
+  const bool quat = type == PropValue::Type::Quat;
+  if (!quat && type != PropValue::Type::Mat4) {
+    return detail::scriptProp(what, name, defaultValue, false);
+  }
+  Result<PropertyDef> named = detail::scriptProp(what, name, PropValue::ofBool(false), false);
+  if (!named.ok()) {
+    return named;
+  }
+  PropertyDef p = quat ? PropertyDef::quatProp(view(name)) : PropertyDef::mat4Prop(view(name));
+  p.defaultValue(defaultValue);
+  return p;
+}
+
 Status nodeTypeInput(NodeTypeDef &def, const string &name, const PropValue &defaultValue)
 {
-  Result<PropertyDef> p = detail::scriptProp("nodeTypeInput", name, defaultValue, false);
+  Result<PropertyDef> p = graphProp("nodeTypeInput", name, defaultValue);
   if (!p.ok()) {
     return p.status();
   }
@@ -58,11 +80,91 @@ Status nodeTypeOutput(NodeTypeDef &def, const string &name, const string &socket
 
 Status nodeTypeParam(NodeTypeDef &def, const string &name, const PropValue &defaultValue)
 {
-  Result<PropertyDef> p = detail::scriptProp("nodeTypeParam", name, defaultValue, false);
+  Result<PropertyDef> p = graphProp("nodeTypeParam", name, defaultValue);
   if (!p.ok()) {
     return p.status();
   }
   def.param(std::move(p).value());
+  return Status();
+}
+
+static Status notThere(const char *what, const string &name)
+{
+  return error(StatusCode::NotFound,
+               std::string(what) + ": the def has no '" + name.c_str() + "'");
+}
+
+Status nodeTypeItemParam(NodeTypeDef &def, const string &name, bool flags, int64_t defaultValue)
+{
+  Result<PropertyDef> named =
+      detail::scriptProp("nodeTypeItemParam", name, PropValue::ofBool(false), false);
+  if (!named.ok()) {
+    return named.status();
+  }
+  PropertyDef p = flags ? PropertyDef::flagsProp(view(name)) : PropertyDef::enumProp(view(name));
+  p.defaultValue(flags ? PropValue::ofFlags(uint64_t(defaultValue)) :
+                         PropValue::ofEnum(defaultValue));
+  def.param(std::move(p));
+  return Status();
+}
+
+Status nodeTypeItem(NodeTypeDef &def,
+                    const string &param,
+                    const string &key,
+                    int64_t value,
+                    const string &uiName)
+{
+  PropertyDef *p = def.paramDef(view(param));
+  if (!p) {
+    return notThere("nodeTypeItem", param);
+  }
+  if (!p->enumMeta()) {
+    return error(StatusCode::TypeMismatch,
+                 std::string("nodeTypeItem: '") + param.c_str() + "' has no items");
+  }
+  p->item(view(key), value, view(uiName));
+  return Status();
+}
+
+Status nodeTypePointerParam(NodeTypeDef &def, const string &name, const string &target, bool weak)
+{
+  Result<PropertyDef> named =
+      detail::scriptProp("nodeTypePointerParam", name, PropValue::ofBool(false), false);
+  if (!named.ok()) {
+    return named.status();
+  }
+  if (target.size() == 0) {
+    return error(StatusCode::InvalidArgument, "nodeTypePointerParam: there is no struct ''");
+  }
+  def.param(PropertyDef::pointerProp(view(name), StructId::of(view(target))), weak);
+  return Status();
+}
+
+Status nodeTypeSocketName(NodeTypeDef &def, bool output, const string &name, const string &uiName)
+{
+  return def.setSocketUiName(output, view(name), view(uiName)) ?
+             Status() :
+             notThere("nodeTypeSocketName", name);
+}
+
+Status nodeTypeRange(NodeTypeDef &def, const string &name, double min, double max)
+{
+  PropertyDef *p = def.paramDef(view(name));
+  p = p ? p : def.inputDef(view(name));
+  if (!p) {
+    return notThere("nodeTypeRange", name);
+  }
+  if (!p->numeric()) {
+    return error(StatusCode::TypeMismatch,
+                 std::string("nodeTypeRange: '") + name.c_str() + "' is no number");
+  }
+  p->range(min, max);
+  return Status();
+}
+
+Status nodeTypeOutputAdapter(NodeTypeDef &def)
+{
+  def.flags(NodeTypeFlags::OutputAdapter);
   return Status();
 }
 
@@ -122,6 +224,61 @@ Status registerForeignNodeType(Context &ctx,
   return s;
 }
 
+/* The type's kernel is replaced; its old handle in `old`. */
+static Status replaceWith(Runtime &rt,
+                          const NodeTypeDef &def,
+                          lf::Handle kernel,
+                          const string &slots,
+                          lf::Handle &old)
+{
+  NodeTypeRegistry &types = rt.ext<NodeTypeRegistry>();
+  CDCC_TRY(types.checkReplace(def));
+  const NodeType *type = types.find(def.name().c_str());
+  const IfaceTable *table = type->kernel.get().table();
+  if (table->dispatcher != rt.ext<ForeignBindings>().dispatcher()) {
+    return error(StatusCode::FailedPrecondition,
+                 std::string("node type '") + def.name().c_str() + "' isn't a script's");
+  }
+  const std::vector<std::string> names = detail::splitSlots(slots);
+  if (names.size() != 1 || names[0] != "evaluate") {
+    return error(StatusCode::TypeMismatch,
+                 std::string("node type '") + def.name().c_str() +
+                     "': a kernel has the slot 'evaluate', and no other");
+  }
+  old = lf::Handle(reinterpret_cast<uintptr_t>(type->kernel.get().self()));
+  const std::string impl = std::string(def.name().c_str()) + "#kernel";
+  GraphKernel k =
+      query<GraphKernel>(rt, TypeId::of(impl), reinterpret_cast<void *>(uintptr_t(kernel)));
+  if (!k) {
+    return error(StatusCode::Internal,
+                 std::string("node type '") + def.name().c_str() + "': its kernel's table is gone");
+  }
+  NodeTypeDef copy = def.copy();
+  copy.kernel(Owned<GraphKernel>(k, [](void *, void *) {}, nullptr));
+  return types.replaceKernel(std::move(copy));
+}
+
+Status replaceForeignNodeType(Context &ctx,
+                              const NodeTypeDef &def,
+                              uint32_t kernel,
+                              const string &slots)
+{
+  if (kernel == 0) {
+    return error(StatusCode::InvalidArgument, "replaceForeignNodeType: no kernel handle");
+  }
+  Runtime &rt = ctx.runtime();
+  lf::Handle old = 0;
+  Status s = replaceWith(rt, def, kernel, slots, old);
+  if (s.ok()) {
+    rt.ext<ForeignBindings>().keepHandle(kernel);
+    rt.ext<ForeignBindings>().dropHandle(old);
+  }
+  else {
+    lf::release(kernel);
+  }
+  return s;
+}
+
 /* ---- in a kernel ---- */
 
 template <class List> static Status noSuch(const char *what, const string &name, const List &list)
@@ -136,43 +293,15 @@ template <class List> static Status noSuch(const char *what, const string &name,
   return s;
 }
 
-/* A socket's value for scripts. */
-static ValueResult toScript(const char *what, const string &name, const GraphValue &v)
-{
-  if (v.type() == GraphValue::Type::Payload) {
-    return failed<ValueResult>(error(StatusCode::Unsupported,
-                                     std::string(what) + " '" + name.c_str() +
-                                         "' is a payload, which scripts can't read (nodePass "
-                                         "passes it on)"));
-  }
-  return ok<ValueResult>(v.toProp());
-}
-
-/* A script's value for a socket. */
-static Result<GraphValue> fromScript(const SocketType &type,
-                                     const string &name,
-                                     const PropValue &value)
-{
-  if (!type.hasLiteral()) {
-    return error(StatusCode::Unsupported, std::string("'") + name.c_str() + "' is a payload (" +
-                                              type.name.c_str() + "), which scripts can't make");
-  }
-  Result<PropValue> v = coerce(type.literalDef(view(name)), value);
-  return v.ok() ? GraphValue::fromProp(*v) : Result<GraphValue>(v.status());
-}
-
 ValueResult nodeInput(NodeExecContext &node, const string &name)
 {
   const GraphValue *v = node.input(view(name));
-  return v ? toScript("input", name, *v) :
+  return v ? detail::toScript("input", name, *v) :
              failed<ValueResult>(noSuch("input", name, node.type().inputs));
 }
 
-ValueResult nodeParam(NodeExecContext &node, const string &name)
+static Status noParam(const NodeExecContext &node, const string &name)
 {
-  if (const PropValue *v = node.param(view(name))) {
-    return ok<ValueResult>(*v);
-  }
   Status s = error(StatusCode::NotFound, std::string("the node has no param '") + name.c_str() +
                                              "'");
   Suggester sg(view(name));
@@ -180,7 +309,13 @@ ValueResult nodeParam(NodeExecContext &node, const string &name)
     sg.consider(p.def.apiName().c_str());
   }
   sg.addTo(s);
-  return failed<ValueResult>(std::move(s));
+  return s;
+}
+
+ValueResult nodeParam(NodeExecContext &node, const string &name)
+{
+  const PropValue *v = node.param(view(name));
+  return v ? ok<ValueResult>(*v) : failed<ValueResult>(noParam(node, name));
 }
 
 Status nodeOutput(NodeExecContext &node, const string &name, const PropValue &value)
@@ -189,7 +324,7 @@ Status nodeOutput(NodeExecContext &node, const string &name, const PropValue &va
   if (i < 0) {
     return noSuch("output", name, node.type().outputs);
   }
-  Result<GraphValue> v = fromScript(*node.type().outputs[i].type, name, value);
+  Result<GraphValue> v = detail::fromScript(*node.type().outputs[i].type, name, value);
   return v.ok() ? node.setOutput(i, std::move(v).value()) : v.status();
 }
 
@@ -203,33 +338,60 @@ Status nodePass(NodeExecContext &node, const string &input, const string &output
   return i >= 0 ? node.setOutput(i, *v) : noSuch("output", output, node.type().outputs);
 }
 
-/* ---- editing ---- */
-
-/* The graph block `path` names: itself, or through a pointer member. */
-static Result<BlockId> graphAt(Context &ctx, const string &path)
+BoolResult nodeIsLinked(NodeExecContext &node, const string &name)
 {
-  Result<ResolvedPath> r = resolve(ctx, view(path));
-  if (!r.ok()) {
-    return r.status();
-  }
-  StableRef ref;
-  if (r->kind == ResolvedPath::Kind::Struct) {
-    ref = r->canonical;
-  }
-  else if (r->kind == ResolvedPath::Kind::Member && r->member->def().kind() == PropKind::Pointer) {
-    Result<PropValue> v = coredcc::getValue(ctx, view(path));
-    if (!v.ok()) {
-      return v.status();
-    }
-    ref = *v->tryPointer();
-  }
-  const Library *lib = ctx.library();
-  const bool block = ref.owner.kind == OwnerKey::Kind::Block && ref.key.size() == 0;
-  if (!block || !lib || !graphDefOf(*lib, lib->find(ref.owner.block))) {
-    return error(StatusCode::InvalidArgument, std::string("'") + path.c_str() + "' isn't a graph");
-  }
-  return ref.owner.block;
+  return node.input(view(name)) ?
+             ok<BoolResult>(node.isLinked(view(name))) :
+             failed<BoolResult>(noSuch("input", name, node.type().inputs));
 }
+
+StringResult nodeUseBlock(NodeExecContext &node, const string &param, uint32_t aspects)
+{
+  if (!node.param(view(param))) {
+    return failed<StringResult>(noParam(node, param));
+  }
+  const BlockUse use =
+      node.paramBlock(view(param), aspects ? ChangeAspects(aspects) : kAllAspects);
+  const Datablock *b = use.handle && node.library() ? node.library()->get(use.handle) : nullptr;
+  return ok<StringResult>(
+      string(b && use.data ? formatBlockId(node.runtime(), b->id()).c_str() : ""));
+}
+
+bool nodeCancelled(NodeExecContext &node)
+{
+  return node.cancelled();
+}
+
+Status nodeProgress(NodeExecContext &node, double fraction, const string &text)
+{
+  node.progress(fraction, view(text));
+  return Status();
+}
+
+TableResult nodeInputTable(NodeExecContext &node, const string &name)
+{
+  const int i = node.type().inputIndex(view(name));
+  if (i < 0) {
+    return failed<TableResult>(noSuch("input", name, node.type().inputs));
+  }
+  if (node.type().inputs[i].type->payload != payloadTypeId<Elements>()) {
+    return failed<TableResult>(error(
+        StatusCode::TypeMismatch, std::string("input '") + name.c_str() + "' isn't a table"));
+  }
+  return ok<TableResult>(ScriptTable(node.input(i).asPayload()));
+}
+
+Status nodeOutputTable(NodeExecContext &node, const string &name, const ScriptTable &table)
+{
+  const int i = node.type().outputIndex(view(name));
+  if (i < 0) {
+    return noSuch("output", name, node.type().outputs);
+  }
+  CDCC_TRY(table.check());
+  return node.setOutput(i, GraphValue::ofPayload(table.ref()));
+}
+
+/* ---- editing ---- */
 
 static PropValue pointerTo(BlockId graph)
 {
@@ -263,7 +425,7 @@ static Result<PropertyBag> runGraph(Context &ctx,
   }
   PropertyBag in = def->newInputs();
   if (path) {
-    Result<BlockId> graph = graphAt(ctx, *path);
+    Result<BlockId> graph = detail::graphAt(ctx, *path);
     if (!graph.ok()) {
       return graph.status();
     }
@@ -339,167 +501,43 @@ IntResult graphAddInterface(Context &ctx,
                    "socket");
 }
 
-/* ---- evaluating ---- */
+/* ---- looking at a graph ---- */
 
-struct ScriptGraph::Core {
-  /** Shared with the evaluation in progress. Null once closed. */
-  std::shared_ptr<GraphInstance> instance;
-  Runtime *rt = nullptr;
-  LibraryRef lib;
-  BlockId graph;
-};
-
-namespace {
-
-/* The Runtime's script instances, which it takes along: a script's GC may drop the last
- * handle only after the Runtime is gone. */
-class ScriptGraphs {
- public:
-  static constexpr const char *kExtName = "coredcc.script.ScriptGraphs";
-  explicit ScriptGraphs(Runtime *rt)
-  {
-    rt->ext<NodeTypeRegistry>(); /* made first, so it goes after the instances */
-  }
-  ~ScriptGraphs()
-  {
-    for (const std::weak_ptr<ScriptGraph::Core> &w : cores_) {
-      if (std::shared_ptr<ScriptGraph::Core> c = w.lock()) {
-        c->instance.reset();
-      }
-    }
-  }
-  void add(const std::shared_ptr<ScriptGraph::Core> &core)
-  {
-    std::erase_if(cores_, [](const auto &w) { return w.expired(); });
-    cores_.push_back(core);
-  }
-  int count() const
-  {
-    int n = 0;
-    for (const std::weak_ptr<ScriptGraph::Core> &w : cores_) {
-      const std::shared_ptr<ScriptGraph::Core> c = w.lock();
-      n += c && c->instance;
-    }
-    return n;
-  }
-
- private:
-  std::vector<std::weak_ptr<ScriptGraph::Core>> cores_;
-};
-
-Result<std::shared_ptr<GraphInstance>> instanceOf(const ScriptGraph &graph, const char *what)
+/* The def at a path, for what reads it. */
+static Result<GraphDef *> defAt(Context &ctx, const char *what, const string &path)
 {
-  if (!graph.core() || !graph.core()->instance) {
-    return error(StatusCode::FailedPrecondition,
-                 std::string(what) + ": the graph instance was closed");
-  }
-  return graph.core()->instance;
-}
-
-} // namespace
-
-GraphResult graphInstance(Context &ctx, const string &graphPath)
-{
-  if (Status s = detail::kernelGate(ctx, "graphInstance"); !s.ok()) {
-    return failed<GraphResult>(std::move(s));
-  }
-  Result<BlockId> graph = graphAt(ctx, graphPath);
+  CDCC_TRY(detail::kernelGate(ctx, what));
+  Result<BlockId> graph = detail::graphAt(ctx, path);
   if (!graph.ok()) {
-    return failed<GraphResult>(graph.status());
+    return graph.status();
   }
-  Runtime &rt = ctx.runtime();
-  auto core = std::make_shared<ScriptGraph::Core>();
-  core->rt = &rt;
-  core->lib = ctx.library()->ref();
-  core->graph = *graph;
-  core->instance = std::make_shared<GraphInstance>(&rt, ctx.library(), *graph);
-  rt.ext<ScriptGraphs>().add(core);
-  return ok<GraphResult>(ScriptGraph(std::move(core)));
+  return graphDefOf(*ctx.library(), ctx.library()->find(*graph));
 }
 
-Status graphSetInput(const ScriptGraph &graph, const string &name, const PropValue &value)
+IntResult graphNewId(Context &ctx, const string &graphPath)
 {
-  Result<std::shared_ptr<GraphInstance>> inst = instanceOf(graph, "graphSetInput");
-  if (!inst.ok()) {
-    return inst.status();
-  }
-  const ScriptGraph::Core &core = *graph.core();
-  const Library *lib = core.lib.get();
-  const GraphDef *def = lib ? graphDefOf(*lib, lib->find(core.graph)) : nullptr;
-  const InterfaceSocket *s = def ? def->interfaceSocket(SocketSide::Input, view(name)) : nullptr;
-  const SocketType *type =
-      s ? core.rt->ext<SocketTypeRegistry>().find(s->typeName.c_str()) : nullptr;
-  if (!type) { /* the instance says which of these is wrong */
-    return (*inst)->setInput(view(name), GraphValue::ofBool(false));
-  }
-  Result<GraphValue> v = fromScript(*type, name, value);
-  return v.ok() ? (*inst)->setInput(view(name), std::move(v).value()) : v.status();
+  Result<GraphDef *> def = defAt(ctx, "graphNewId", graphPath);
+  return def.ok() ? ok<IntResult>((*def)->newId()) : failed<IntResult>(def.status());
 }
 
-Status graphClearInput(const ScriptGraph &graph, const string &name)
+StringResult graphDiagnostics(Context &ctx, const string &graphPath)
 {
-  Result<std::shared_ptr<GraphInstance>> inst = instanceOf(graph, "graphClearInput");
-  return inst.ok() ? (*inst)->setInput(view(name), GraphValue()) : inst.status();
+  Result<GraphDef *> def = defAt(ctx, "graphDiagnostics", graphPath);
+  if (!def.ok()) {
+    return failed<StringResult>(def.status());
+  }
+  JsonWriter out;
+  out.beginArray();
+  for (const LinkDiagnostic &d : (*def)->diagnostics()) {
+    out.beginObject();
+    out.key("link").integer(d.link.value);
+    out.key("code").string(statusCodeName(d.status.code()));
+    out.key("message").string(d.status.message());
+    out.key("interior").boolean(d.interior);
+    out.endObject();
+  }
+  out.endArray();
+  return ok<StringResult>(string(out.take().c_str()));
 }
-
-ValueResult graphEvaluate(const ScriptGraph &graph, const string &output)
-{
-  /* Kept here: a kernel may close the graph, or drop the script's last handle. */
-  Result<std::shared_ptr<GraphInstance>> inst = instanceOf(graph, "graphEvaluate");
-  if (!inst.ok()) {
-    return failed<ValueResult>(inst.status());
-  }
-  const string name = output;
-  const SocketPath path = SocketPath::output(view(name));
-  if (Status s = (*inst)->evaluate(path); !s.ok()) {
-    return failed<ValueResult>(std::move(s));
-  }
-  return toScript("output", name, *(*inst)->value(path));
-}
-
-string graphErrorText(const ScriptGraph &graph, const string &output)
-{
-  Result<std::shared_ptr<GraphInstance>> inst = instanceOf(graph, "graphErrorText");
-  if (!inst.ok()) {
-    return inst.status().toString();
-  }
-  const GraphError *e = (*inst)->error(SocketPath::output(view(output)));
-  if (!e) {
-    return string();
-  }
-  std::string text = e->status.toString().c_str();
-  if (e->origin.node) {
-    text += " (node " + e->origin.toString();
-    text += e->socket.size() > 0 ? std::string(", input '") + e->socket.c_str() + "')" : ")";
-  }
-  return string(text.c_str());
-}
-
-void graphClose(const ScriptGraph &graph)
-{
-  if (graph.core()) {
-    const std::shared_ptr<GraphInstance> last = std::move(graph.core()->instance);
-    graph.core()->instance.reset();
-  }
-}
-
-int32_t graphInstanceCount(Context &ctx)
-{
-  const ScriptGraphs *graphs = ctx.runtime().findExt<ScriptGraphs>();
-  return graphs ? graphs->count() : 0;
-}
-
-const lbt::Struct<ScriptGraph> *ScriptGraph::defineBindings()
-{
-  static lbt::Struct<ScriptGraph> *st = nullptr;
-  if (!st) {
-    litestl::alloc::PermanentGuard guard;
-    st = new lbt::Struct<ScriptGraph>("coredcc::ScriptGraph", sizeof(ScriptGraph));
-    BIND_STRUCT_COPY_CONSTRUCTOR(st);
-  }
-  return st;
-}
-
-CDCC_RESULT_BINDINGS(GraphResult)
 
 } // namespace coredcc::script

@@ -142,6 +142,27 @@ PropValue makeVec4(double x, double y, double z, double w)
 {
   return PropValue::ofVec4(x, y, z, w);
 }
+PropValue makeQuat(double x, double y, double z, double w)
+{
+  return PropValue::ofQuat(x, y, z, w);
+}
+ValueResult makeMat4(const PropValue &a,
+                     const PropValue &b,
+                     const PropValue &c,
+                     const PropValue &d)
+{
+  double m[16];
+  int n = 0;
+  for (const PropValue *column : {&a, &b, &c, &d}) {
+    if (column->type() != PropValue::Type::Vec4) {
+      return failed<ValueResult>(wrongType(*column, "Vec4"));
+    }
+    for (int i = 0; i < 4; i++) {
+      m[n++] = column->component(i);
+    }
+  }
+  return ok<ValueResult>(PropValue::ofComponents(PropValue::Type::Mat4, m));
+}
 PropValue makeFlags(int64_t bits)
 {
   return PropValue::ofFlags(uint64_t(bits));

@@ -75,6 +75,22 @@ Unreal, coredcc is exactly one module, so they exist once.
   change only with a notification of the block, or a move of the Library's epoch: an override does move
   it. That holds for providers' `queryInterface` too. Otherwise a graph keeps the old answer, and calls a
   table or `self` that may be gone.
+- **Kernels are pure:** what they give depends on their inputs and params, and on blocks they got with
+  `useBlock`, `paramBlock` and `queryBlock`. One that reads anything else (a file, a clock, its own state,
+  `userData` that changes) keeps its old outputs until `GraphInstance::clear`, `drop` or an edit.
+- **An error is kept as a value is,** until something the kernel read changes, or `retry`. Cancelled isn't
+  kept: the node runs again in the next evaluation that needs it.
+- **Stopping and progress:** `GraphInstance::setMonitor`. Its functions are called while a graph evaluates,
+  so they can't edit or evaluate.
+- **Threads:** kernels run one at a time, on the main thread. `NodeTypeFlags::ThreadSafe` says that a kernel
+  wouldn't mind otherwise; nothing uses it yet.
+- **Memory:** every kernel that was needed keeps its outputs, and every element of a foreach with a state of
+  its own keeps a graph's worth of them (`maxCached` of the node, `setMaxCachedKernels` of the instance).
+  `memory` and `report` say how much, `drop` gives up a node's, and `clear` everything.
+- **Values pin blocks:** a payload that aliases a block's data keeps the block, deleted or not, for as long
+  as a socket or a client has the payload. `clear` lets go of the instance's.
+- **Reloading code:** `NodeTypeRegistry::replaceKernel` (`replaceNodeType` in TS). Sockets, params and the
+  version must be as they were.
 - A program that evaluates graphs for the user's objects builds a standalone GraphDef around theirs, and
   connects with interior sockets (`graph/interior.h`). `tests/graph/test_graph_scene.cc` is an example.
 

@@ -94,6 +94,7 @@ coredcc_test(test_bind_reader SOURCES bind/test_bind_reader.cc DEPS coredcc_bind
 coredcc_test(test_bind_library SOURCES bind/test_bind_library.cc DEPS coredcc_bind)
 coredcc_test(test_bind_catalog SOURCES bind/test_bind_catalog.cc DEPS coredcc_bind)
 coredcc_test(test_bind_graph SOURCES bind/test_bind_graph.cc DEPS coredcc_bind)
+coredcc_test(test_bind_graph_results SOURCES bind/test_bind_graph_results.cc DEPS coredcc_bind)
 if(WIN32)
   coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_bvh coredcc_command coredcc_layout
                                   coredcc_graph)

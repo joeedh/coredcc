@@ -40,6 +40,8 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<NodeTypeDef>());
   mgr->add(Bind<NodeExecContext>());
   mgr->add(Bind<GraphKernel>());
+  mgr->add(Bind<ScriptTable>());
+  mgr->add(Bind<TableResult>());
   mgr->add(Bind<ScriptGraph>());
   mgr->add(Bind<GraphResult>());
   mgr->add(Bind<PathReader>());
@@ -60,6 +62,8 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::makeVec2", script::makeVec2, MARGS("x", "y"));
   BIND_FACADE(mgr, "coredcc::makeVec3", script::makeVec3, MARGS("x", "y", "z"));
   BIND_FACADE(mgr, "coredcc::makeVec4", script::makeVec4, MARGS("x", "y", "z", "w"));
+  BIND_FACADE(mgr, "coredcc::makeQuat", script::makeQuat, MARGS("x", "y", "z", "w"));
+  BIND_FACADE(mgr, "coredcc::makeMat4", script::makeMat4, MARGS("a", "b", "c", "d"));
   BIND_FACADE(mgr, "coredcc::makeFlags", script::makeFlags, MARGS("bits"));
   BIND_FACADE(mgr, "coredcc::makeNullPointer", script::makeNullPointer, MARGS());
   BIND_FACADE(mgr, "coredcc::makePointer", script::makePointer, MARGS("ctx", "text"));
@@ -182,11 +186,68 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
               "coredcc::registerForeignNodeType",
               script::registerForeignNodeType,
               MARGS("ctx", "def", "kernel", "slots"));
+  BIND_FACADE(mgr,
+              "coredcc::replaceForeignNodeType",
+              script::replaceForeignNodeType,
+              MARGS("ctx", "def", "kernel", "slots"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeTypeSocketName",
+              script::nodeTypeSocketName,
+              MARGS("def", "output", "name", "uiName"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeTypeRange",
+              script::nodeTypeRange,
+              MARGS("def", "name", "min", "max"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeTypeItemParam",
+              script::nodeTypeItemParam,
+              MARGS("def", "name", "flags", "defaultValue"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeTypeItem",
+              script::nodeTypeItem,
+              MARGS("def", "param", "key", "value", "uiName"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeTypePointerParam",
+              script::nodeTypePointerParam,
+              MARGS("def", "name", "target", "weak"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeTypeOutputAdapter",
+              script::nodeTypeOutputAdapter,
+              MARGS("def"));
 
   BIND_FACADE(mgr, "coredcc::nodeInput", script::nodeInput, MARGS("node", "name"));
   BIND_FACADE(mgr, "coredcc::nodeParam", script::nodeParam, MARGS("node", "name"));
   BIND_FACADE(mgr, "coredcc::nodeOutput", script::nodeOutput, MARGS("node", "name", "value"));
   BIND_FACADE(mgr, "coredcc::nodePass", script::nodePass, MARGS("node", "input", "output"));
+
+  BIND_FACADE(mgr, "coredcc::nodeIsLinked", script::nodeIsLinked, MARGS("node", "name"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeUseBlock",
+              script::nodeUseBlock,
+              MARGS("node", "param", "aspects"));
+  BIND_FACADE(mgr, "coredcc::nodeCancelled", script::nodeCancelled, MARGS("node"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeProgress",
+              script::nodeProgress,
+              MARGS("node", "fraction", "text"));
+  BIND_FACADE(mgr, "coredcc::nodeInputTable", script::nodeInputTable, MARGS("node", "name"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeOutputTable",
+              script::nodeOutputTable,
+              MARGS("node", "name", "table"));
+
+  BIND_FACADE(mgr, "coredcc::newTable", script::newTable, MARGS());
+  BIND_FACADE(mgr, "coredcc::tableRows", script::tableRows, MARGS("table"));
+  BIND_FACADE(mgr, "coredcc::tableColumns", script::tableColumns, MARGS("table"));
+  BIND_FACADE(mgr, "coredcc::tableColumnName", script::tableColumnName, MARGS("table", "column"));
+  BIND_FACADE(mgr, "coredcc::tableKey", script::tableKey, MARGS("table", "row"));
+  BIND_FACADE(mgr, "coredcc::tableAddColumn", script::tableAddColumn, MARGS("table", "name"));
+  BIND_FACADE(mgr, "coredcc::tableAddRow", script::tableAddRow, MARGS("table", "key"));
+  BIND_FACADE(mgr,
+              "coredcc::tableSet",
+              script::tableSet,
+              MARGS("table", "column", "row", "value"));
+  BIND_FACADE(mgr, "coredcc::tableGet", script::tableGet, MARGS("table", "column", "row"));
 
   BIND_FACADE(mgr, "coredcc::graphCreate", script::graphCreate, MARGS("ctx", "name"));
   BIND_FACADE(mgr,
@@ -210,6 +271,12 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
               script::graphAddInterface,
               MARGS("ctx", "graphPath", "output", "name", "type"));
 
+  BIND_FACADE(mgr, "coredcc::graphNewId", script::graphNewId, MARGS("ctx", "graphPath"));
+  BIND_FACADE(mgr,
+              "coredcc::graphDiagnostics",
+              script::graphDiagnostics,
+              MARGS("ctx", "graphPath"));
+
   BIND_FACADE(mgr, "coredcc::graphInstance", script::graphInstance, MARGS("ctx", "graphPath"));
   BIND_FACADE(mgr,
               "coredcc::graphSetInput",
@@ -218,6 +285,52 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::graphClearInput", script::graphClearInput, MARGS("graph", "name"));
   BIND_FACADE(mgr, "coredcc::graphEvaluate", script::graphEvaluate, MARGS("graph", "output"));
   BIND_FACADE(mgr, "coredcc::graphErrorText", script::graphErrorText, MARGS("graph", "output"));
+  BIND_FACADE(mgr,
+              "coredcc::graphSetInputTable",
+              script::graphSetInputTable,
+              MARGS("graph", "name", "table"));
+  BIND_FACADE(mgr,
+              "coredcc::graphEvaluateTable",
+              script::graphEvaluateTable,
+              MARGS("graph", "output"));
+  BIND_FACADE(mgr, "coredcc::graphWatch", script::graphWatch, MARGS("graph", "node", "socket"));
+  BIND_FACADE(mgr, "coredcc::graphUnwatch", script::graphUnwatch, MARGS("graph", "watch"));
+  BIND_FACADE(mgr, "coredcc::graphUpdate", script::graphUpdate, MARGS("graph"));
+  BIND_FACADE(mgr, "coredcc::graphWatchStatus", script::graphWatchStatus, MARGS("graph", "watch"));
+  BIND_FACADE(mgr, "coredcc::graphWatchValue", script::graphWatchValue, MARGS("graph", "watch"));
+  BIND_FACADE(mgr, "coredcc::graphWatchTable", script::graphWatchTable, MARGS("graph", "watch"));
+  BIND_FACADE(mgr,
+              "coredcc::graphWatchLastGood",
+              script::graphWatchLastGood,
+              MARGS("graph", "watch"));
+  BIND_FACADE(mgr,
+              "coredcc::graphWatchChangedAt",
+              script::graphWatchChangedAt,
+              MARGS("graph", "watch"));
+  BIND_FACADE(mgr,
+              "coredcc::graphWatchIsCurrent",
+              script::graphWatchIsCurrent,
+              MARGS("graph", "watch"));
+  BIND_FACADE(mgr,
+              "coredcc::graphWatchErrorText",
+              script::graphWatchErrorText,
+              MARGS("graph", "watch"));
+  BIND_FACADE(mgr,
+              "coredcc::graphPeek",
+              script::graphPeek,
+              MARGS("graph", "node", "socket", "input"));
+  BIND_FACADE(mgr,
+              "coredcc::graphPeekTable",
+              script::graphPeekTable,
+              MARGS("graph", "node", "socket", "input"));
+  BIND_FACADE(mgr, "coredcc::graphReport", script::graphReport, MARGS("graph", "node"));
+  BIND_FACADE(mgr, "coredcc::graphRetry", script::graphRetry, MARGS("graph"));
+  BIND_FACADE(mgr, "coredcc::graphClear", script::graphClear, MARGS("graph"));
+  BIND_FACADE(mgr, "coredcc::graphDrop", script::graphDrop, MARGS("graph", "node"));
+  BIND_FACADE(mgr,
+              "coredcc::graphSetTimeLimit",
+              script::graphSetTimeLimit,
+              MARGS("graph", "milliseconds"));
   BIND_FACADE(mgr, "coredcc::graphClose", script::graphClose, MARGS("graph"));
   BIND_FACADE(mgr, "coredcc::graphInstanceCount", script::graphInstanceCount, MARGS("ctx"));
 }

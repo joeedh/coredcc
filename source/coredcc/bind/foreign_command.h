@@ -99,6 +99,8 @@ class ForeignBindings {
   /** Takes the count of a handle (a factory's, a kernel's), released when the Runtime
    * goes. */
   void keepHandle(litestl::binding::foreign::Handle h);
+  /** Releases a kept handle now. */
+  void dropHandle(litestl::binding::foreign::Handle h);
 
  private:
   class Dispatcher;

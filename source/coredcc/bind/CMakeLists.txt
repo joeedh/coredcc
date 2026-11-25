@@ -4,11 +4,13 @@ coredcc_library(coredcc_bind
     facades.cc
     foreign_command.cc
     graph_facades.cc
+    graph_instance_facades.cc
     layout_facades.cc
     library_facades.cc
     manager.cc
     meta.cc
     path_reader.cc
+    script_table.cc
   DEPS
     coredcc_graph
     coredcc_layout

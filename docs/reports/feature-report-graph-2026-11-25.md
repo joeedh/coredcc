@@ -90,7 +90,10 @@
 4. **M4, small hostile files hang the first evaluation.** *Fixed*, by what H4 has and by limits: 4096 sockets
    on a side of an interface, 8192 links of interior sockets on a node. Files and edits past them are refused.
    *Tested:* `test_graph_io_hostile` loads and evaluates graphs at the limits, in bounded time.
-5. **M5, block dependencies are per block:** the notified member is dropped. *Round 3.*
+5. **M5, block dependencies are per block:** the notified member is dropped. *Fixed:* a notification says which
+   aspects of the block changed (`ChangeAspects`, 32 bits), and kernels which they use
+   (`useBlock(id, aspects)`). Aspects, and not members: a kernel reads the block's data and knows no member
+   names. A write by datapath has all aspects.
 6. **M6, deleting children of a hub is quadratic.** *Fixed:* a link knows its place in both lists, and the last
    one takes it. So the order of `linksIn` and `linksOut` isn't kept (M10, round 3). 100,000 children: 62-88 ms
    (50,000 of them took 921).
@@ -98,14 +101,25 @@
 8. **M8, foreach has a cliff past `maxCached`.** *Fixed:* a row that is as it was in the last table keeps its
    outputs, whether or not it has a state. Of 100,000 elements with one changed, 10 kernels run, in 3.5-4.4 ms
    (83,616 and 490 ms).
-9. **M9, foreach can't be used without native code.** *Round 3.*
-10. **M10, what a node editor needs and can't get.** *Round 3*, but for:
+9. **M9, foreach can't be used without native code.** *Fixed:* the built-in nodes `elements.range`, `elements.count`,
+   `elements.value.<type>`, `elements.rename` and `elements.combine`, and tables in scripts: `node.table`,
+   `node.output(name, new Table(..))`, and instances' inputs and outputs. There is no `append`: keys of two
+   tables may collide.
+10. **M10, what a node editor needs and can't get.** *Fixed:* `peek`, element keys in `NodePath`, reports of groups
+    (worst state, sums), `current`, links by id and O(1), `error` of links, `newId`, a group's `value` that can
+    be set when it wasn't. In scripts: `peek`, `report`, watches (`update` evaluates them together and lists
+    what moved; `changedAt`, `lastGood`, `isCurrent`), `retry`, `clear`, `drop`, `graphDiagnostics`,
+    `graphNewId`. *Left out:* a warning channel, and timing of single elements. And:
     - per-node UI data: nodes have extras (`GraphDef::setExtra`, with undo, kept in files). Those of a kind
       this build doesn't know, and references in them, are kept too.
     - `nodes[i]` is O(1), also after removals.
-11. **M11, what TS kernels can't express.** *Round 3.* Geometry payloads in TS: *deferred to P6*.
-12. **M12, parallel evaluation isn't free later.** *Round 3.*
-13. **M13, P5c can't cheaply find out that adapters changed.** *Round 3.*
+11. **M11, what TS kernels can't express.** *Fixed:* Quat and Mat4, enum, flags and pointer params, ranges, names of
+    sockets, `isLinked`, `useBlock`, `cancelled` and `progress`, tables, `replaceNodeType`. Cancelled isn't
+    cached. Async kernels: the shape is in the plan, not built. Geometry payloads in TS: *deferred to P6*.
+12. **M12, parallel evaluation isn't free later.** *Fixed:* `NodeTypeFlags::ThreadSafe`, opt-in, with what it promises
+    at its declaration. Nothing uses it yet. Script kernels can't have it.
+13. **M13, P5c can't cheaply find out that adapters changed.** *Fixed:* `GraphDef::refsVersion`, `forEachNode(flags)`
+    at the cost of the flagged nodes, and `LinkDiagnostic::interior`.
 14. **M14, nothing guards performance.** *Fixed:* `test_graph_growth` compares the time at 16n with that at n
     (at most 64 times; quadratic is 256) for links, deletion, interior sockets, interfaces, undo pins,
     evaluation and foreach, and checks that the number of vertices an edit looks at doesn't grow.
@@ -129,16 +143,18 @@
    that were pulled up to it, until anything is edited, or the budget changes, or `clear`. The error names the
    group node that was one too many.
 7. **L7, `GraphEditRecord::pin` is quadratic.** *Fixed:* a hash map of the pinned blocks.
-8. **L8, unused nodes keep their outputs.** *Round 3.*
+8. **L8, unused nodes keep their outputs.** *Fixed:* `GraphInstance::drop(node)`, beside `clear`. Nothing is dropped
+   by itself.
 9. **L9, node types have no version.** *The format has it:* `NodeTypeDef::version`; nodes keep the version they
    were made with, in files too. There is no migration hook yet.
 10. **L10, an edit costs O(groups), also of unrelated graphs.** *Fixed* for values, nodes and links of a def: only
     its own frames are looked at. 4,000 groups of as many defs: 0.11-0.16 ms for a literal and 1-3 ms for a node
     more (5.6). Interface and group edits, and nodes removed, are still for everything (5-8 ms).
-11. **L11, `GraphSystem::versions_` and `TypeChains` only grow.** *Round 3.*
+11. **L11, `GraphSystem::versions_` and `TypeChains` only grow.** *Fixed:* blocks that no trace follows
+    are pruned; type chains go with `clear`.
 12. **L12, an interface socket named `#123` shadows a key.** *Fixed:* names can't start with `#` or `@`, in
     files neither.
-13. **L13, docs.** *Round 3.*
+13. **L13, docs.** *Fixed:* instance.h, and embedding.md on kernel purity, memory and pinned blocks.
 14. **L14, all inputs of a node are needed.** *Deferred*, tracked in the plan.
 
 ## Also found

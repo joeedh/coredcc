@@ -134,7 +134,7 @@ void testRegistration()
     def = sc::newNodeType("js.b");
     test_assert(sc::nodeTypeOutput(*def, "o", "float").ok());
     test_assert(hasCode(sc::nodeTypeInput(*def, "no name", sc::makeInt(1)), StatusCode::InvalidArgument));
-    test_assert(hasCode(sc::nodeTypeParam(*def, "m", PropValue::identityMat4()), StatusCode::InvalidArgument));
+    test_assert(hasCode(sc::nodeTypeParam(*def, "m", PropValue::ofEnum(1)), StatusCode::InvalidArgument));
     test_assert(sc::nodeTypeInput(*def, "x", sc::makeInt(1)).ok());
     test_assert(sc::nodeTypeInput(*def, "x", sc::makeInt(1)).ok());
     refused(StatusCode::InvalidArgument); /* two inputs */

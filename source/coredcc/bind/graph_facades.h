@@ -4,16 +4,15 @@
  * Graphs for scripts: node types with script kernels, editing, and evaluating. The rules of
  * facades.h hold here too.
  *
- * **Inside a script kernel** (`evaluate` of a node type) only `nodeInput`, `nodeParam`,
- * `nodeOutput` and `nodePass` do anything. Reading datapaths or the running command's bags
+ * **Inside a script kernel** (`evaluate` of a node type) only the calls that take its node, and
+ * those of tables, do anything. Reading datapaths or the running command's bags
  * there is Busy, as is every edit: the graph couldn't see what the kernel depends on.
  */
 
 #include "coredcc/bind/facades.h"
-#include "coredcc/graph/instance.h"
+#include "coredcc/bind/graph_instance_facades.h"
+#include "coredcc/bind/script_table.h"
 #include "coredcc/graph/node_type.h"
-
-#include <memory>
 
 namespace coredcc::script {
 
@@ -24,13 +23,29 @@ namespace coredcc::script {
 NodeTypeDef *newNodeType(const string &id);
 Status nodeTypeUiName(NodeTypeDef &def, const string &s);
 /** An input whose socket type and default come from `defaultValue`: Bool, Int, Float,
- * String or Vec2-4. */
+ * String, Vec2-4, Quat or Mat4. */
 Status nodeTypeInput(NodeTypeDef &def, const string &name, const PropValue &defaultValue);
-/** An input of a payload type, which scripts can only pass on. */
+/** An input of a payload type: a table (`elements`), or one that scripts can only pass on. */
 Status nodeTypePayloadInput(NodeTypeDef &def, const string &name, const string &socketType);
 Status nodeTypeOutput(NodeTypeDef &def, const string &name, const string &socketType);
 /** A param, typed as for nodeTypeInput. */
 Status nodeTypeParam(NodeTypeDef &def, const string &name, const PropValue &defaultValue);
+
+/** An Enum param, or a Flags one; its items come with nodeTypeItem. */
+Status nodeTypeItemParam(NodeTypeDef &def, const string &name, bool flags, int64_t defaultValue);
+Status nodeTypeItem(NodeTypeDef &def,
+                    const string &param,
+                    const string &key,
+                    int64_t value,
+                    const string &uiName);
+/** A Pointer param to blocks of the api struct `target`. `weak` ones don't keep them. */
+Status nodeTypePointerParam(NodeTypeDef &def, const string &name, const string &target, bool weak);
+/** What an input or output is shown as. NotFound for one that wasn't added. */
+Status nodeTypeSocketName(NodeTypeDef &def, bool output, const string &name, const string &uiName);
+/** The range of a number: of a param, else of an input. NotFound, or TypeMismatch for others. */
+Status nodeTypeRange(NodeTypeDef &def, const string &name, double min, double max);
+/** NodeTypeFlags::OutputAdapter. The other flag, ThreadSafe, isn't for scripts. */
+Status nodeTypeOutputAdapter(NodeTypeDef &def);
 
 /**
  * Registers a copy of `def` with the script object `kernel`, which implements the
@@ -46,6 +61,17 @@ Status registerForeignNodeType(Context &ctx,
                                uint32_t kernel,
                                const string &slots);
 
+/**
+ * Replaces the kernel of a script's node type, when code is reloaded. All nodes of the type run
+ * again when they are needed. `def` must say the same as the type (NodeTypeRegistry's
+ * replaceKernel). FailedPrecondition for a type that isn't a script's. Takes one count of
+ * `kernel` in any case, and releases the old one.
+ */
+Status replaceForeignNodeType(Context &ctx,
+                              const NodeTypeDef &def,
+                              uint32_t kernel,
+                              const string &slots);
+
 /* ---- in a kernel ---- */
 
 /** An input's value. NotFound for an unknown name; Unsupported for a payload. */
@@ -56,6 +82,20 @@ ValueResult nodeParam(NodeExecContext &node, const string &name);
 Status nodeOutput(NodeExecContext &node, const string &name, const PropValue &value);
 /** Sets an output to an input's value, which may be a payload. */
 Status nodePass(NodeExecContext &node, const string &input, const string &output);
+
+BoolResult nodeIsLinked(NodeExecContext &node, const string &name);
+/** Makes the node run again when the block that a Pointer param points to changes, in one of
+ * `aspects` (ChangeAspects; 0 for all). The block's id as text (api/ref_text.h's parseBlockId),
+ * or "" when there is none. */
+StringResult nodeUseBlock(NodeExecContext &node, const string &param, uint32_t aspects);
+/** Whether the evaluation should end: a kernel that takes long asks, and then throws or
+ * returns Cancelled. */
+bool nodeCancelled(NodeExecContext &node);
+Status nodeProgress(NodeExecContext &node, double fraction, const string &text);
+/** An input that is a table. TypeMismatch for others. */
+TableResult nodeInputTable(NodeExecContext &node, const string &name);
+/** Sets an output to a table, which has to pass ScriptTable::check. */
+Status nodeOutputTable(NodeExecContext &node, const string &name, const ScriptTable &table);
 
 /* ---- editing: undoable commands, allowed where `invoke` is ---- */
 
@@ -79,49 +119,12 @@ IntResult graphAddInterface(Context &ctx,
                             const string &name,
                             const string &type);
 
-/* ---- evaluating ---- */
+/* ---- looking at a graph ---- */
 
-/**
- * A graph instance for scripts. Copies share it; it goes with the last one, or with the
- * Runtime, after which calls are FailedPrecondition. One dropped during its own evaluation
- * lasts until that is done.
- */
-class ScriptGraph {
- public:
-  struct Core;
-  ScriptGraph() = default;
-  explicit ScriptGraph(std::shared_ptr<Core> core) : core_(std::move(core)) {}
-  const std::shared_ptr<Core> &core() const
-  {
-    return core_;
-  }
-  static const litestl::binding::types::Struct<ScriptGraph> *defineBindings();
-
- private:
-  std::shared_ptr<Core> core_;
-};
-
-struct GraphResult {
-  Status status;
-  ScriptGraph value;
-  static const litestl::binding::types::Struct<GraphResult> *defineBindings();
-};
-
-/** A new instance of the graph block at `graphPath`. */
-GraphResult graphInstance(Context &ctx, const string &graphPath);
-/** Sets an interface input by name, converting `value` as nodeOutput does. */
-Status graphSetInput(const ScriptGraph &graph, const string &name, const PropValue &value);
-/** Back to the interface's default. */
-Status graphClearInput(const ScriptGraph &graph, const string &name);
-/** Evaluates an interface output, by name. Unsupported for a payload that has a value. */
-ValueResult graphEvaluate(const ScriptGraph &graph, const string &output);
-/** Why the output has no value as of its last evaluation, with the node at fault; "" when
- * it has one. */
-string graphErrorText(const ScriptGraph &graph, const string &output);
-/** Drops the instance now, for all copies. */
-void graphClose(const ScriptGraph &graph);
-
-/** How many instances are alive, for tests of leaks. */
-int32_t graphInstanceCount(Context &ctx);
+/** An id that no node, link or socket of the graph has, for pasting. */
+IntResult graphNewId(Context &ctx, const string &graphPath);
+/** What is wrong with its links, as JSON: an array of `link`, `code`, `message`, and
+ * `interior`: whether it leads to a node inside a group. */
+StringResult graphDiagnostics(Context &ctx, const string &graphPath);
 
 } // namespace coredcc::script

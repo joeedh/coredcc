@@ -20,6 +20,8 @@ import {Ref, CommandFlags, ScriptError, Session, StatusCode, type Context, type 
 import type {Host} from 'coredcc-gen/testapp/Host'
 import * as spike from 'coredcc-gen/testapp/functions'
 
+import {graphTests} from './graphs.ts'
+
 const create = (await import(pathToFileURL(process.env.SPIKE_MODULE as string).href)).default
 const module = await create()
 const backend = cdcc.load(module, 'TESTAPP_GetManager')
@@ -284,6 +286,10 @@ describe('coredcc wasm-st spike', () => {
       exec() {}
       undo() {}
     }
+    const defineNul = (more: Partial<cdcc.NodeTypeSpec>) =>
+      cdcc.defineNodeType(ctx, {id: 'ts.n', outputs: {}, evaluate() {}, ...more})
+    cdcc.graphCreate(ctx, 'nul')[Symbol.dispose]()
+    using graph = new cdcc.GraphInstance(ctx, 'graphs["nul"]')
     const calls: [string, () => unknown][] = [
       ['set', () => cdcc.set(ctx, 'label', nul)],
       ['an enum', () => cdcc.set(ctx, 'mode', nul)],
@@ -310,6 +316,25 @@ describe('coredcc wasm-st spike', () => {
       ['a node type', () => cdcc.defineNodeType(ctx, {id: 'ts.n', uiName: nul, outputs: {}, evaluate() {}})],
       ['a socket', () => cdcc.defineNodeType(ctx, {id: 'ts.n', outputs: {a: nul}, evaluate() {}})],
       ['a param', () => cdcc.defineNodeType(ctx, {id: 'ts.n', params: {[nul]: 1}, outputs: {}, evaluate() {}})],
+      ['an item', () => defineNul({params: {p: cdcc.enumParam({[nul]: 1}, nul)}})],
+      ['an item param', () => defineNul({params: {[nul]: cdcc.enumParam({A: 1}, 'A')}})],
+      ['a pointer param', () => defineNul({params: {[nul]: cdcc.pointerParam('Item')}})],
+      ['a target', () => defineNul({params: {p: cdcc.pointerParam(nul)}})],
+      ['an input name', () => defineNul({inputs: {a: 1}, inputNames: {a: nul}})],
+      ['an output name', () => defineNul({outputs: {a: 'float'}, outputNames: {[nul]: 'x'}})],
+      ['a range', () => defineNul({params: {p: 1}, ranges: {[nul]: [0, 1]}})],
+      ['a new id', () => cdcc.graphNewId(ctx, nul)],
+      ['diagnostics', () => cdcc.graphDiagnostics(ctx, nul)],
+      ['a table', () => graph.setInput('in', new cdcc.Table([1], {[nul]: [1]}))],
+      ['a cell', () => graph.setInput('in', new cdcc.Table([1], {c: [nul]}))],
+      ['a table input', () => graph.setInput(nul, new cdcc.Table())],
+      ['a table output', () => graph.evaluateTable(nul)],
+      ['a watched node', () => graph.watch('x', nul)],
+      ['a watch', () => graph.watch(nul)],
+      ['peek', () => graph.peek(nul, 'x')],
+      ['peek at a socket', () => graph.peekTable(1, nul)],
+      ['report', () => graph.report(nul)],
+      ['drop', () => graph.drop(nul)],
     ]
     for (const [what, call] of calls) assert.throws(call, refused, what)
     /* An id is refused as one that isn't an identifier. */
@@ -734,146 +759,16 @@ describe('coredcc wasm-st spike', () => {
     }
   })
 
-  /* graphs["g"] with a node of `type`, its `value` the output `out`, its `a` the input `in`. */
-  const makeGraph = (type: string) => {
-    const path = 'graphs["g"]'
-    cdcc.graphCreate(ctx, 'g')[Symbol.dispose]()
-    const out = cdcc.graphAddInterface(ctx, path, 'output', 'out', 'float')
-    const in_ = cdcc.graphAddInterface(ctx, path, 'input', 'in', 'float')
-    const node = cdcc.graphAddNode(ctx, path, type, 10, 20)
-    const output = cdcc.graphAddNode(ctx, path, 'graph.output')
-    const input = cdcc.graphAddNode(ctx, path, 'graph.input')
-    const link = cdcc.graphLink(ctx, path, node, 'value', output, `#${out}`)
-    cdcc.graphLink(ctx, path, input, `#${in_}`, node, 'a')
-    return {path, node, link, at: `${path}.nodes[#${node}]`}
-  }
-
-  test('a TS node type: evaluated, cached, edited, undone', () => {
-    let runs = 0
-    cdcc.defineNodeType(ctx, {
-      id: 'ts.scale',
-      uiName: 'Scale',
-      inputs: {a: cdcc.float(1), offset: cdcc.float(0.5)},
-      params: {factor: 2, label: 'x'},
-      outputs: {value: 'float', text: 'string', copy: 'float'},
-      evaluate(node) {
-        runs++
-        const a = node.input('a') as number
-        node.output('value', a * (node.param('factor') as number) + (node.input('offset') as number))
-        node.output('text', `${node.param('label')}${a}`)
-        node.pass('a', 'copy')
-      },
-    })
-    const {path, node, link, at} = makeGraph('ts.scale')
-    assert.deepEqual(cdcc.get(ctx, `${at}.position`), [10, 20])
-    using graph = new cdcc.GraphInstance(ctx, path)
-    assert.equal(spike.graphInstances(hostOf(ctx)), 1)
-    assert.equal(graph.evaluate('out'), 0.5)
-    graph.setInput('in', 3)
-    assert.equal(graph.evaluate('out'), 6.5)
-    assert.equal(runs, 2)
-    assert.equal(graph.evaluate('out'), 6.5)
-    assert.equal(runs, 2)
-    cdcc.set(ctx, `${at}.params.factor`, 10)
-    assert.equal(graph.evaluate('out'), 30.5)
-    cdcc.undo(ctx)
-    assert.equal(graph.evaluate('out'), 6.5)
-    graph.setInput('in', undefined)
-    assert.equal(graph.evaluate('out'), 0.5)
-    const steps = spike.historySize(hostOf(ctx))
-    cdcc.graphRemoveNode(ctx, path, node)
-    assert.equal(graph.evaluate('out'), 0)
-    cdcc.undo(ctx)
-    assert.equal(graph.evaluate('out'), 0.5)
-    assert.equal(spike.historySize(hostOf(ctx)), steps) /* instead of the one undone */
-    cdcc.graphUnlink(ctx, path, link) /* back with its id */
-    assert.equal(graph.evaluate('out'), 0)
-    assert.throws(() => graph.evaluate('no'), fails(StatusCode.NotFound, /no/))
-    assert.throws(() => cdcc.graphAddNode(ctx, path, 'ts.sclae'), fails(StatusCode.NotFound, /ts\.scale/))
-  })
-
-  test('a TS kernel that throws, or misuses what it has', () => {
-    let body: (node: cdcc.NodeContext) => unknown = () => {}
-    let kept: cdcc.NodeContext | undefined
-    cdcc.defineNodeType(ctx, {
-      id: 'ts.odd',
-      inputs: {a: cdcc.float(1)},
-      outputs: {value: 'float'},
-      evaluate(node) {
-        kept = node
-        return body(node) as void
-      },
-    })
-    const {path, node} = makeGraph('ts.odd')
-    using graph = new cdcc.GraphInstance(ctx, path)
-    let value = 0
-    const run = (f: typeof body) => {
-      body = f
-      graph.setInput('in', ++value) /* so that it runs */
-      return graph.evaluate('out')
-    }
-    const boom = () => {
-      throw new Error('boom')
-    }
-    assert.throws(() => run(boom), fails(StatusCode.Internal, /boom/))
-    assert.match(graph.errorText('out'), new RegExp(`boom.*node ${node}`))
-    const coded = () => {
-      throw new ScriptError(StatusCode.OutOfRange, 'too far')
-    }
-    assert.throws(() => run(coded), fails(StatusCode.OutOfRange, /too far/))
-    assert.throws(() => run(() => {}), fails(StatusCode.Internal, /value/)) /* no output */
-    assert.throws(() => run(async () => {}), fails(StatusCode.Internal, /Promise/))
-    assert.throws(() => run((n) => n.input('b')), fails(StatusCode.NotFound, /'b'/))
-    assert.throws(() => run((n) => n.output('value', 'x')), fails(StatusCode.TypeMismatch, /./))
-    /* The document is out of reach, and it can't be closed. */
-    assert.throws(() => run(() => cdcc.get(ctx, 'count')), fails(StatusCode.Busy, /kernel/))
-    assert.throws(() => run(() => cdcc.set(ctx, 'count', 1)), fails(StatusCode.Busy, /kernel/))
-    assert.throws(() => run(() => cdcc.graphCreate(ctx, 'x')), fails(StatusCode.Busy, /kernel/))
-    assert.throws(() => run(() => session[Symbol.dispose]()), fails(StatusCode.Internal, /from inside/))
-    assert.equal(cdcc.get(ctx, 'count'), 0)
-    /* And it works again. */
-    assert.equal(run((n) => n.output('value', (n.input('a') as number) + 0.5)), value + 0.5)
-    assert.equal(graph.errorText('out'), '')
-    assert.throws(() => kept!.input('a'), /already evaluated/)
-  })
-
-  test('a TS kernel that disposes of its own graph instance', () => {
-    let graph: cdcc.GraphInstance | undefined
-    cdcc.defineNodeType(ctx, {
-      id: 'ts.dispose',
-      inputs: {a: cdcc.float(1)},
-      outputs: {value: 'float'},
-      evaluate(node) {
-        graph?.[Symbol.dispose]()
-        node.output('value', 7)
-      },
-    })
-    const {path} = makeGraph('ts.dispose')
-    graph = new cdcc.GraphInstance(ctx, path)
-    assert.equal(graph.evaluate('out'), 7)
-    assert.equal(spike.graphInstances(hostOf(ctx)), 0)
-    graph[Symbol.dispose]()
-    assert.throws(() => graph!.evaluate('out'), /graph instance was disposed/)
-  })
-
-  test('node type registration errors; an instance outlives its document', () => {
-    const spec = {id: 'ts.n', outputs: {value: 'float'}, evaluate() {}}
-    assert.throws(() => cdcc.defineNodeType(ctx, {...spec, id: 'graph.n'}), fails(StatusCode.InvalidArgument, /reserved/))
-    assert.throws(() => cdcc.defineNodeType(ctx, {...spec, outputs: {}}), fails(StatusCode.InvalidArgument, /output/))
-    assert.throws(
-      () => cdcc.defineNodeType(ctx, {...spec, inputs: {m: cdcc.payload('no.Mesh')}}),
-      fails(StatusCode.NotFound, /no\.Mesh/)
-    )
-    assert.throws(() => cdcc.defineNodeType(ctx, {...spec, evaluate: 1 as never}), TypeError)
-    cdcc.defineNodeType(ctx, spec)
-    assert.throws(() => cdcc.defineNodeType(ctx, spec), fails(StatusCode.AlreadyExists, /ts\.n/))
-    assert.throws(() => new cdcc.GraphInstance(ctx, 'count'), fails(StatusCode.InvalidArgument, /graph/))
-
-    const other = open()
-    cdcc.graphCreate(other.ctx, 'g')[Symbol.dispose]()
-    using late = new cdcc.GraphInstance(other.ctx, 'graphs["g"]')
-    other[Symbol.dispose]()
-    assert.throws(() => late.evaluate('out'), fails(StatusCode.FailedPrecondition, /closed/))
+  graphTests({
+    get ctx() {
+      return ctx
+    },
+    get session() {
+      return session
+    },
+    open,
+    hostOf,
+    fails,
   })
 
   test('T4, T14: one module per realm', async () => {

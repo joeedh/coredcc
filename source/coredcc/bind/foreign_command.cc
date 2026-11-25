@@ -113,6 +113,17 @@ void ForeignBindings::keepHandle(lf::Handle h)
   handles_.append(h);
 }
 
+void ForeignBindings::dropHandle(lf::Handle h)
+{
+  for (int i = 0; i < int(handles_.size()); i++) {
+    if (handles_[i] == h) {
+      handles_.remove_at(i);
+      lf::release(h);
+      return;
+    }
+  }
+}
+
 bool inForeignCall(const Runtime &rt)
 {
   const ForeignBindings *fb = rt.findExt<ForeignBindings>();

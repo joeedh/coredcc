@@ -19,7 +19,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 6 | [P2 library IO and layout](plans/2026-11-24-p2-layout-library-io.md) | P2 | 5 | in progress (P2a reviewed, B1-B5 done; layout review round 1 of 2 done) | [library IO](reports/feature-report-library-io-2026-11-24.md); [layout](reports/feature-report-layout-2026-11-25.md) |
 | 7 | P3 objects, transforms and BVH | P3 | 5 | in progress | objects and transforms; BVH |
 | 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | todo | tools and overlay |
-| 9 | [P5 graph and instancing](plans/2026-11-24-p5-graph.md) | P5 | 5 | in progress (reviewed; round 2 of 3 done) | [graph](reports/feature-report-graph-2026-11-25.md) |
+| 9 | [P5 graph and instancing](plans/2026-11-24-p5-graph.md) | P5 | 5 | in progress (reviewed; all 3 rounds done) | [graph](reports/feature-report-graph-2026-11-25.md) |
 | 10 | P5c scene evaluator | P5c | 7, 9 | todo | scene evaluator |
 | 11 | P6 integration: N-API addon, faberforge and ubertopo spikes | P6 | 8, 10, litestl N-API PR | todo | integration |
 
