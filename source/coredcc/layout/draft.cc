@@ -516,9 +516,9 @@ Result<Layout> LayoutAssembler::assemble(std::vector<DraftNode> nodes, DraftFaul
     }
     i = i < 0 ? -1 : next[i];
   }
-  std::sort(out.skipped_.begin(), out.skipped_.begin() + out.skipped_.size(),
+  std::sort(out.skipped_.data(), out.skipped_.data() + out.skipped_.size(),
             [](const LayoutSkipped &a, const LayoutSkipped &b) { return a.offset < b.offset; });
-  std::sort(out.byId_.begin(), out.byId_.begin() + out.byId_.size(), [&out](int32_t a, int32_t b) {
+  std::sort(out.byId_.data(), out.byId_.data() + out.byId_.size(), [&out](int32_t a, int32_t b) {
     return std::string_view(out.text(a, Id::Id)) < out.text(b, Id::Id);
   });
   for (int j = 0; j < count; j++) {

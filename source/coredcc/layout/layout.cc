@@ -83,8 +83,8 @@ const LayoutAttr *Layout::freeAttr(int node, std::string_view name) const
 
 int Layout::findId(std::string_view id) const
 {
-  const auto end = byId_.begin() + byId_.size();
-  const auto at = std::lower_bound(byId_.begin(), end, id, [this](int32_t i, std::string_view id) {
+  const int32_t *end = byId_.data() + byId_.size();
+  const int32_t *at = std::lower_bound(byId_.data(), end, id, [this](int32_t i, std::string_view id) {
     return text(i, LayoutAttrId::Id) < id;
   });
   return at != end && text(*at, LayoutAttrId::Id) == id ? *at : -1;
