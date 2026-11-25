@@ -14,6 +14,7 @@
 #include "coredcc/api/resolve.h"
 #include "coredcc/api/struct.h"
 #include "coredcc/base/assert.h"
+#include "coredcc/bvh/geometry_bvh.h"
 #include "coredcc/command/block_commands.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/command/command.h"
@@ -120,6 +121,14 @@ int main()
     test_assert(coredcc::coerce(coredcc::PropertyDef::floatProp("f").range(0, 1),
                                 coredcc::PropValue::ofFloat(2))
                     .ok());
+    coredcc::TriangleSource<float> triangles;
+    triangles.append({0, 0, 0}, {1, 0, 0}, {0, 1, 0});
+    coredcc::GeometryBvh<coredcc::TriangleSource<float>> bvh;
+    test_assert(bvh.build(triangles).ok());
+    coredcc::Ray ray;
+    ray.origin = {0.25, 0.25, -1};
+    ray.dir = {0, 0, 1};
+    test_assert(bvh.rayClosest(ray) && bvh.rayAny(ray) && bvh.nearest(ray.origin, 2));
     test_assert(rt.validateAll().ok());
   }
   return test_end();

@@ -8,6 +8,9 @@ coredcc_test(test_base_bytes SOURCES base/test_bytes.cc DEPS coredcc_base)
 coredcc_test(test_base_text SOURCES base/test_text.cc DEPS coredcc_base)
 coredcc_test(test_base_iface SOURCES base/test_iface.cc DEPS coredcc_base)
 coredcc_test(test_base_iface_rules SOURCES base/test_iface_rules.cc DEPS coredcc_base)
+coredcc_test(test_bvh_kernels SOURCES bvh/test_bvh_kernels.cc DEPS coredcc_bvh)
+coredcc_test(test_bvh_build SOURCES bvh/test_bvh_build.cc DEPS coredcc_bvh)
+coredcc_test(test_bvh_queries SOURCES bvh/test_bvh_queries.cc DEPS coredcc_bvh)
 coredcc_test(test_props_value SOURCES props/test_value.cc DEPS coredcc_props)
 coredcc_test(test_props_def SOURCES props/test_def.cc DEPS coredcc_props)
 coredcc_test(test_props_units SOURCES props/test_units.cc DEPS coredcc_props)
@@ -32,7 +35,7 @@ coredcc_test(test_bind_facades SOURCES bind/test_bind_facades.cc DEPS coredcc_bi
 coredcc_test(test_bind_foreign SOURCES bind/test_bind_foreign.cc DEPS coredcc_bind)
 coredcc_test(test_bind_review SOURCES bind/test_bind_review.cc DEPS coredcc_bind)
 if(WIN32)
-  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_command)
+  coredcc_test(test_compile_embed SOURCES compile_embed.cc DEPS coredcc_bvh coredcc_command)
 endif()
 
 # Compile-fail tests. Each also builds the same file without the define, which must succeed.
