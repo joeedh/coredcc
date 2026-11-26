@@ -88,8 +88,9 @@ A module uses those above it, and no others.
   build graphs around a user's.
 
 ### `drive/`
-- `drive.h`: `SceneDrivers`, the Library's `OverrideProvider` for the graphs that scenes list
-  (`Scene::graphs`), and `registerDriveTypes`.
+- `drive.h`: `SceneDrivers`, the Library's `OverrideProvider` for the graphs of the document's list of
+  drivers, and `registerDriveTypes`.
+- `driver_list.h`: that list, a block type (`coredcc.DriverList`), and the root collection `driverGraphs`.
 - `node_types.h`: the adapters of users' graphs (`scene.time`, `scene.object.state`, `scene.drive.<kind>`)
   and the transform node types. `sync.cc` makes the generated graph; `provider.cc` answers from it.
 

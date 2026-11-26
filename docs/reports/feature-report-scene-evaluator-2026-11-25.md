@@ -63,13 +63,21 @@
    no node, and was written as "" (the graph). *Fixed:* such a path is written as its groups. *Tested:*
    `test_drive_facades`, with a chain of 70 nested groups.
 8. **The TS wrappers quoted the graph's ref by hand,** which breaks on refs that contain `"`, and duplicated
-   `invoke`. *Fixed:* `addSceneGraph` and `removeSceneGraph` use `run` with JS values.
+   `invoke`. *Fixed:* `addSceneGraph` and `removeSceneGraph` (now `addDriverGraph` and `removeDriverGraph`) use `run`
+   with JS values.
 
 ## Design findings
 - **A. Every scene's list drives the whole document** (duplicates make objects "driven twice", and it is in
   the file format). The reviewer's probes: duplicating a scene with its graph drives the original object
-  twice, and a graph listed only by an unrelated scene still drives. *Pending the user's decision;* the design
-  is unchanged.
+  twice, and a graph listed only by an unrelated scene still drives. *Fixed* (the user's decision of
+  2026-11-26), in `eea0f18`:
+  - one document-wide list of driver graphs, a block of drive/'s (`coredcc.DriverList`), replaces
+    `Scene::graphs`; scenes don't list graphs;
+  - the commands are `core.drivers.addGraph` and `core.drivers.removeGraph`, without a `scene` input;
+  - a copy of the list is empty, and a graph that two lists name (after an append) drives once;
+  - the plan has the design, why a block and not a part of the file, and its pressure test.
+  - *Tested:* `test_drive_list`, with the probes P3 (a duplicated scene, or list, drives nothing twice) and
+    P5 (the graphs drive objects of every scene; no scene has a `graphs` member).
 - **B. Driven objects are notified only when someone evaluates the graphs.** After a graph edit, nothing is
   notified until `prepare`, `update` or `overridesOf` runs; and `computeState` and a command's `canRun` can
   post notifications. *Kept, and documented as the contract* in `drive.h` and `docs/debugging.md`. Why:
@@ -81,11 +89,12 @@
     driven objects calls `update` first, as evaluateScene does.
   - *Tested:* `testNotifiedOnEvaluation` (no notification from the edit, one from `update`).
 - **C. The commands lacked the promised `scene` input,** and undo of `removeGraph` restored one cell where
-  it had removed several. *Fixed:* an optional `scene` input (the Context's scene when unset), in TS too;
-  undo brings back every removed cell at its place (`Scene::insertGraphCell`). Recorded in the plan.
-  - The names stay `addGraph` and `removeGraph`, not `link` and `unlink`: those commands are about objects'
-    membership, and "link" in a graph means a socket link. *Rejected.*
-  - *Tested:* `testCommandScene`.
+  it had removed several.
+  - *Fixed in `6cb92ff`:* an optional `scene` input, and undo that brings back every removed cell at its
+    place.
+  - *Then superseded by A:* the commands are `core.drivers.addGraph` and `core.drivers.removeGraph`, and take
+    no scene. Undo still brings back every cell, in every list. This also settles the naming question.
+  - *Tested:* `test_drive_list`.
 - **D. Scripts and hosts' drivers.**
   - `driverDiagnostics` saw only drivers made by scripts. *Fixed:* `SceneDrivers::of(lib)` finds the
     Library's drivers, whoever made them; the facade reports those, and `enableDrivers` refuses when a host

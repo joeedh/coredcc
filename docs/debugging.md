@@ -152,8 +152,10 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   `localBounds`) can't be picked at all.
 
 ### An object doesn't follow its driver graph
-- **Is there a `SceneDrivers` for the Library,** and does a Live scene list the graph (`Scene::graphs`)?
-  Without one the graph is data and drives nothing.
+- **Is there a `SceneDrivers` for the Library,** and does the document's list of drivers name the graph
+  (`DriverList::allGraphs`, or the path `driverGraphs`)? Without both the graph is data and drives nothing.
+  A list that is a placeholder (its type wasn't registered when the file was loaded) drives nothing, and
+  is a diagnostic.
 - **Look at `SceneDrivers::diagnostics()`:** a channel the transform type doesn't have, an adapter of another
   kind, a channel driven twice (also by one subgraph used twice), a link that would make a cycle, an
   adapter inside a foreach body.

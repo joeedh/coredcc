@@ -14,7 +14,8 @@
   ancestors. All other objects are evaluated by P3's direct pass, which gets the driven channels through
   the `OverrideProvider`. Putting every object into the graph would miss P3's targets by a factor of 2 to 3
   (measured below).
-- The graphs are listed by scenes (`Scene::graphs`). One `SceneDrivers` object per Library is the
+- The graphs are listed by the document's list of drivers (`coredcc.DriverList`, since 2026-11-26; at
+  first by scenes). One `SceneDrivers` object per Library is the
   Library's `OverrideProvider`, so commands, drags and `computeState` see the same driven values as
   `evaluateScene`.
 - Part B makes P3's direct pass incremental: an evaluation recomputes only the objects whose blocks were
@@ -24,7 +25,8 @@
 ## Decisions (user, 2026-11-25)
 The open questions at the end were answered as the plan recommends:
 1. Only the objects that a graph reads, and their ancestors, get a node. The deviation from §8 is accepted.
-2. Driver graphs are listed per scene (`Scene::graphs`) and drive the whole document.
+2. Driver graphs are listed per scene (`Scene::graphs`) and drive the whole document. (Replaced on
+   2026-11-26 by one document-wide list.)
 3. Part B (the incremental direct pass) stays in P5c, separable as planned.
 4. Step 8 adds the missing notifications to P3's tests, and `incremental` is on by default.
 5. A graph that reads an object whose driver failed fails too. There is no silent fallback.
@@ -96,12 +98,53 @@ P4 (tools, gizmos, drags, DrawList, ToolManager) runs at the same time in `C:\de
 - A driven channel behaves as P3's contract says: the solvers leave it alone, and the object is counted
   in `driven`.
 
+## Decisions (user, 2026-11-26)
+Finding A of the [review](../reports/feature-report-scene-evaluator-2026-11-25.md) (per-scene lists drive
+the whole document; duplicating a scene with its list drives objects twice):
+1. **One document-wide list of driver graphs** replaces `Scene::graphs`, like Houdini's `/obj`. A listed graph
+   drives the whole document, as before. Scenes no longer list graphs, so duplicating a scene can't make a
+   second driver. Neither Blender nor Houdini scopes drivers by scene.
+2. **A graph attached to the object it drives** (Blender's drivers, "acting on self") was the other option.
+   It isn't done now; see "Out".
+
+### The document's list (design, 2026-11-26)
+- **Where it lives: a block type of drive/'s, `coredcc.DriverList`** (a block named "Drivers", a GC root).
+  Why a block and not a Library-level part of the file:
+  - The library section of a file holds blocks and nothing else (`lib/io/format.h`). A document-level field
+    would need a new part of the format, its own undo and its own datapath root, all in lib/, which is below
+    graphs and doesn't know them.
+  - A block gets all of that already: it is saved and loaded by its provider (with unread fields kept), its
+    OptStrong cells keep the graphs alive and are followed by save, collect, append and duplicate; commands
+    undo it with `HistoryBlock` and `CreatedBlocks`; and a struct makes it reachable by datapath.
+  - The block type lives in drive/, so scene/ no longer has anything about graphs.
+- **One list, in practice:** `DriverList::find(lib)` is the document's list: of the Live list blocks, a Root
+  one before others, then the least canonical id. Not the Library's order, which slot reuse and loading
+  change. The commands make it (undoably, `CreatedBlocks`) when there is none, and hold it by
+  `HistoryBlock`, never by `find` again.
+- **More than one can exist** after an append (its list is FakeUser, not Root). `SceneDrivers` reads them
+  all, sorted by id, and a graph that two name counts once.
+- **A duplicate of a list is empty,** so duplicating a list with its graphs drives nothing twice.
+- **Commands:** `core.drivers.addGraph(graph)` and `core.drivers.removeGraph(graph)`, with no `scene` input.
+  - addGraph checks the graph and AlreadyExists against every list before it makes a list.
+  - removeGraph takes the graph out of every list; undo brings back each cell, at its place, in each list.
+  - Both fail with FailedPrecondition while a list is a placeholder, and `SceneDrivers` reports such a list,
+    so that a list that becomes readable later can't bring back graphs that were removed.
+  - TS: `addDriverGraph`, `removeDriverGraph`.
+- **Datapath:** the struct `coredcc.DriverList` has the collection `graphs` (read-only). A host gives its root
+  the collection `driverGraphs` with `addDriverGraphsMember(root)`: every list's graphs, each once, never
+  null. It looks at every block on each read.
+- **Files:** the list block's payload has the field `graphs`. A scene's `graphs` field, written by builds of
+  this branch before 2026-11-26, is kept as an unread field and drives nothing. No released file has it.
+- **SceneDrivers' scan** looks for list blocks instead of scenes; the placeholder tracking (B5) stays, for a
+  list block that is a placeholder until drive/'s types are registered.
+
 ## Scope
 
 ### In
 - **From architecture §14:** generated transform nodes, override inputs, adapter nodes and the apply
   phase.
-- **Where graphs that drive objects are listed:** `Scene::graphs`, with commands, paths and files.
+- **Where graphs that drive objects are listed:** the document's list (`coredcc.DriverList`, 2026-11-26),
+  with commands, paths and files.
 - **`SceneDrivers`:** the Library's `OverrideProvider`, which owns the generated graph and its instance.
 - **Node types for users' graphs:** `scene.time`, `scene.object.state` (reads an object's state) and
   `scene.drive.<kind>` (drives a channel).
@@ -122,6 +165,9 @@ P4 (tools, gizmos, drags, DrawList, ToolManager) runs at the same time in `C:\de
   driver scan reports them as diagnostics.
 - **An incremental pass after a time change or an epoch move.** Both stay full passes (see Part B).
 - **Parallel evaluation** of the generated graph or the direct pass.
+- **A graph attached to the object it drives** (Blender-style drivers acting on self; option 2 of the
+  2026-11-26 decision). Possible later work: such graphs could be listed by the object, and scanned with
+  the document's list.
 
 ## What the code says
 Checked against master `8ca89b9`.
@@ -243,7 +289,7 @@ The scene of `bench_scene` (100,000 objects, 200,001 blocks), 21 repetitions, ms
    - An object in `G` is evaluated twice per pass, by its node and by the direct pass. Both call
      `evaluateObject` with the same channels, overrides, time and parent state, so they agree bitwise for
      models that are pure, as `TransformModel` requires. A test checks it.
-2. **Graphs that drive objects are listed by scenes,** in `Scene::graphs` (OptStrong cells to graph
+2. **Graphs that drive objects are listed by scenes,** (*Superseded on 2026-11-26:* scenes no longer list graphs; see "The document's list".) in `Scene::graphs` (OptStrong cells to graph
    blocks), and they drive the document: `SceneDrivers` serves the union of the lists of the Library's
    Live scenes.
    - The P3 contract asks for one provider per Library, whose answer doesn't depend on a scene. A list per
@@ -287,6 +333,7 @@ The scene of `bench_scene` (100,000 objects, 200,001 blocks), 21 repetitions, ms
 ## Design, part A: graphs that drive objects
 
 ### Where graphs are listed (`scene/`)
+- *Superseded on 2026-11-26:* scenes no longer list graphs; see "The document's list".
 - `Scene` gets `graphs_`, a list of OptStrong `RefCell`s, enumerated by `foreachCell`, saved as the entry
   `graphs` (a list of references) and read back. Old files have no such entry: the list is empty.
 - `scene/` doesn't look at what the cells point to. The datapath has a read-only collection `graphs`;
@@ -295,6 +342,7 @@ The scene of `bench_scene` (100,000 objects, 200,001 blocks), 21 repetitions, ms
   Library's epoch, as `objects()` is.
 
 ### Finding the scenes (`drive/`)
+- *Since 2026-11-26* it finds the list blocks instead (`DriverList::allLists`), in the same way.
 - `SceneDrivers` keeps the handles of the Library's Scene records, found by `Library::forEach`.
 - It scans again only when `Library::size()` or `Library::removedCount()` differ from the last scan, or
   after `notifyAll`. A record that is made or destroyed moves one of the two.
@@ -433,6 +481,8 @@ struct DrivenObjects { bool all = true; uint64_t version = 0; litestl::util::Vec
   of changes, so no caller can use it up.
 
 ### Commands and paths (`drive/commands.cc`)
+- *Superseded on 2026-11-26:* the commands are `core.drivers.addGraph` and `core.drivers.removeGraph`,
+  without a `scene` input; see "The document's list".
 - `core.scene.addGraph(graph)` and `core.scene.removeGraph(graph)`: Pointer inputs; the scene is the
   Context's, or the optional input `scene`. Undo through the cells, as membership commands do. `addGraph`
   refuses a block that isn't a `coredcc.GraphDef` (InvalidArgument) and one that is listed
@@ -497,9 +547,10 @@ public:
 };
 struct DriverDiagnostic { BlockId graph; NodePath node; litestl::util::string message; };
 
-// scene/scene.h
-const litestl::util::Vector<BlockHandle> &Scene::graphs(const Library &) const;
-const litestl::util::Vector<RefCell> &Scene::graphCells() const;
+// drive/driver_list.h (2026-11-26; replaces Scene::graphs)
+class DriverList { static BlockHandle find(const Library &); const Vector<BlockHandle> &graphs(const Library &) const; ... };
+Result<BlockHandle> newDriverList(Library &);
+void addDriverGraphsMember(ApiStruct &root);
 // scene/scene_bvh.h: SceneSettings::incremental (default true)
 ```
 
@@ -507,11 +558,11 @@ const litestl::util::Vector<RefCell> &Scene::graphCells() const;
 - **Facades** (`bind/drive_facades.{h,cc}`, BIND_FACADE): `enableDrivers(ctx)` and `disableDrivers(ctx)`
   (a Runtime extension keeps one `SceneDrivers` per Library, by `LibraryRef`; `disableDrivers` must come
   before the Library goes, and a host's `Session` calls it), `driverDiagnostics(ctx) -> string` (JSON).
-- **Commands** run through the existing facades: `core.scene.addGraph(graph=@block(...))`.
+- **Commands** run through the existing facades: `core.drivers.addGraph(graph=@block(...))`.
 - **Graph editing** uses P5's facades: `graphAddNode(ctx, path, "scene.drive.vec3", x, y)`, and the param
   paths `nodes[#id].params.object` and `.channel`.
-- **TS** (`bind/ts/scene.ts`): `enableDrivers`, `disableDrivers`, `addSceneGraph(ctx, graph)`,
-  `removeSceneGraph`, `driverDiagnostics() -> DriverDiagnostic[]`.
+- **TS** (`bind/ts/scene.ts`): `enableDrivers`, `disableDrivers`, `addDriverGraph(ctx, graph)`,
+  `removeDriverGraph`, `driverDiagnostics() -> DriverDiagnostic[]`.
 - **wasm test** (`tests/wasm/drive.test.ts`): a graph that makes one object follow another's location,
   evaluated, undone, saved and loaded.
 
@@ -548,7 +599,7 @@ tests/   drive/  scene/test_scene_incremental.cc  wasm/drive.test.ts  bench/benc
   oracle that computes every object's state with `computeState` and a provider that evaluates every
   driver graph from scratch with a fresh GraphInstance. States compared bitwise; the states of `G`
   compared with the direct pass's; diagnostics compared.
-- **`test_drive_files`:** a scene's graphs saved and loaded; old files; append; a graph block that is a
+- **`test_drive_files`** and **`test_drive_list`** (2026-11-26): the list saved and loaded; old files; append; a graph block that is a
   placeholder.
 - **`test_drive_lifetime`:** `SceneDrivers` destroyed before the Library; a second provider refused;
   `disableDrivers` from scripts. `SceneDrivers` holds a `LibraryRef`; when the Library is gone, its
@@ -660,7 +711,7 @@ Kept as the work goes; each item says what changed from the design above and why
   A driven object whose type isn't registered gets a diagnostic, but isn't failed: it is MissingModel, as
   in the direct pass.
 - **Bindings (step 6):** `bind/drive_facades.{h,cc}` keep the drivers in a Runtime extension
-  (`ScriptDrivers`); a TS `Session` calls `disableDrivers` when it closes. `addSceneGraph` and
+  (`ScriptDrivers`); a TS `Session` calls `disableDrivers` when it closes. `addSceneGraph` (now `addDriverGraph`) and
   `removeSceneGraph` run the commands. `test_drive_facades` tests the facades natively.
 - **The wasm test (`tests/wasm/drive.test.ts`) wasn't run here:** this worktree has no emsdk, and only the
   pre-commit gate runs locally; CI runs the wasm suites. It was type-checked, with the TS layer, against the
@@ -682,6 +733,10 @@ Kept as the work goes; each item says what changed from the design above and why
     blocks whose data it swaps; `test_scene_overrides` notifies when its provider's answers change.
   - The box-by-box BVH refit is tested in `test_scene_incremental`'s growth case: the random documents are
     too small for it (it needs fewer than 1% of the boxes).
+- **The document's list (2026-11-26, `eea0f18`)** replaces `Scene::graphs`, as designed in "The document's list", with
+  the pressure test's changes. `scene/` is back to what it was before P5c, apart from part B. P3's
+  `test_scene_graphs` keeps only its `prepare` cases, as `test_scene_prepare`; the list's tests are in
+  `test_drive_list`. The commands' `scene` input added after the review is gone again.
 - **After the review** ([feature report](../reports/feature-report-scene-evaluator-2026-11-25.md), `6cb92ff`):
   - The commands take an optional `scene` input (the Context's scene when unset), as planned; the first build
     lacked it. Undo of `removeGraph` brings back every cell it removed, at its place.
@@ -693,7 +748,8 @@ Kept as the work goes; each item says what changed from the design above and why
   - `kDrivenAspect` is in `api/change_bus.h`.
 - **Not done yet:** a Scene made from a placeholder (B5) has code but no test; the foreach diagnostic has no
   test; the wasm suites haven't run with part B or with the review's fixes; scripts can't set an inner
-  provider; finding A of the review (which scenes' lists drive) waits for the user.
+  provider; the placeholder refusal of the list's commands has no test (making a list a placeholder needs a
+  file loaded before drive/'s types are registered).
 
 ### Measured, part A (`node tools/bench.mjs drive -- --reps 15`, busy machine, provisional)
 | Case, 100,000 objects | Best ms | Target |
@@ -789,6 +845,26 @@ Each was applied alone, built and run; each made a test fail.
 ## litestl PRs
 - None planned. If one turns out to be needed, it is a branch `coredcc/<topic>` in this worktree's
   `extern/litestl`, and a PR against `joeedh/litestl`, as the P0b and P3 PRs were.
+
+## Pressure test record (2026-11-26): the document's list
+A fresh agent got the design of "The document's list" and the code, not the author's reasoning. It worked
+read-only.
+- **Survived:** a block is the right home (the library section holds only blocks, and save, load, unread
+  fields, GC roots, append and undo of a creation all work for one); an empty list and a placeholder list
+  are kept and saved; the old scene field is harmless.
+- **Broke, and changed:**
+  - "The first Live list in the Library's order" isn't stable: slots are reused, and a load orders records
+    by id. *Changed:* Root first, then the least id; the scan sorts the lists by id.
+  - The commands edited one list while every list drives, so a graph in an appended list couldn't be
+    removed. *Changed:* removeGraph and the AlreadyExists check cover every list.
+  - A duplicated list (not Root) could be the one `find` chose, and wasn't saved; a list duplicated with its
+    graphs drove every object twice. *Changed:* Root first, and a duplicate is empty.
+  - A placeholder list next to a new one would come back driving. *Changed:* the commands refuse, and a
+    diagnostic says so.
+  - The pointer member `drivers` showed one list, and could be null. *Changed:* the collection
+    `driverGraphs`, the union.
+- **Kept:** reading `driverGraphs` walks the Library each time. Watchers of the root aren't notified when a
+  list is made; they are notified of the list's `graphs`.
 
 ## Pressure test record (2026-11-25)
 A fresh agent got the draft and the code, without the author's reasoning. It built probes in a scratch
