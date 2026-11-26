@@ -144,7 +144,7 @@ void testRotate()
   Vector<int32_t> arcs;
   frontArc(d.vm, f.pivot, f.axes[2], f.unit, pts, arcs);
   test_assert(pts.size() > 16);
-  const Pixel start = d.pixelOf(pts[pts.size() / 2]);
+  const Pixel start = d.pixelOf(pts[int(pts.size() / 2)]);
   const double r = std::hypot(start.x - f.centre.x, start.y - f.centre.y);
   const double a0 = std::atan2(f.centre.y - start.y, start.x - f.centre.x);
   /* Round the pivot on the screen, counter-clockwise, 720° and then 90° more. */
