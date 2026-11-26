@@ -1,0 +1,12 @@
+coredcc_library(coredcc_drive
+  SOURCES
+    adapters.cc
+    builtins.cc
+    commands.cc
+    node_types.cc
+    provider.cc
+    sync.cc
+  DEPS
+    coredcc_graph
+    coredcc_scene
+)
