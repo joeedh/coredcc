@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <string>
 #include <vector>
 
 test_init;
@@ -244,6 +245,58 @@ void testFuzz()
   test_assert(accepted > 0 && accepted < rounds);
 }
 
+/* The rules other than sizes and counts (docs/drawlist-format.md, "Errors"). The TS
+ * decoder's test in tests/wasm/tool.test.ts makes the same changes, so the two agree. */
+void testRules()
+{
+  DrawList d;
+  fill(d, double3(1, 2, 3));
+  const std::vector<uint8_t> good(d.bytes().begin(), d.bytes().end());
+  DrawListReader r;
+  test_assert(r.read(good).ok() && r.items().size() == 9);
+  uint32_t at[9];
+  for (int i = 0; i < 9; i++) {
+    at[i] = r.items()[i].offset + uint32_t(DrawList::kRecordHeaderBytes); /* payloads */
+  }
+  const auto refused = [&](uint64_t offset, const void *value, size_t n, const char *why) {
+    std::vector<uint8_t> b = good;
+    std::memcpy(b.data() + offset, value, n);
+    const Status s = r.read(b);
+    test_assert(!s.ok() && std::string(s.message()).find(why) != std::string::npos);
+  };
+  const uint8_t one = 1;
+  const double half = 0.5, two = 2.0;
+  const float negative = -1.0f;
+  refused(6, &one, 1, "header flags");
+  refused(40, &one, 1, "reserved");
+  refused(at[1] + 12, &one, 1, "padding"); /* one point: 12 bytes, then 4 of padding */
+  refused(at[3] + 8 * 3, &half, 8, "affine"); /* the shape's last row */
+  refused(at[4] + 8 * 15, &two, 8, "affine"); /* the push's */
+  refused(at[7] + 8, &negative, 4, "negative radius");
+  test_assert(r.read(good).ok());
+}
+
+/* A slot lent the list can't pop its caller's push; what it leaves is popped. */
+void testFloor()
+{
+  DrawList d;
+  test_assert(d.begin(double3(0, 0, 0)).ok());
+  test_assert(d.pushMatrix(translation(1, 0, 0)).ok());
+  {
+    DrawSlotScope slot(d);
+    test_assert(d.floor() == 1);
+    test_assert(d.popMatrix().code() == StatusCode::InvalidArgument && d.depth() == 1);
+    test_assert(d.pushMatrix(translation(0, 1, 0)).ok());
+    test_assert(d.pushMatrix(translation(0, 0, 1)).ok() && d.popMatrix().ok());
+    const Status s = slot.close("the slot");
+    test_assert(s.code() == StatusCode::InvalidArgument && d.depth() == 1 && d.floor() == 0);
+    test_assert(slot.close("again").ok());
+  }
+  test_assert(d.popMatrix().ok() && d.end().ok());
+  DrawListReader r;
+  test_assert(r.read(d.bytes()).ok());
+}
+
 } // namespace
 
 int main()
@@ -253,5 +306,7 @@ int main()
   testRefusals();
   testScripts();
   testFuzz();
+  testRules();
+  testFloor();
   return test_end();
 }

@@ -107,6 +107,13 @@ struct InputEvent {
     return type == EventType::PointerDown || type == EventType::PointerMove ||
            type == EventType::PointerUp;
   }
+  /** Whether `type` and `pointer` are values of their enums (scripts set them as
+   * numbers). ToolManager::dispatch refuses an event that isn't. */
+  bool valid() const
+  {
+    return int32_t(type) >= 0 && int32_t(type) <= int32_t(EventType::FocusLost) &&
+           int32_t(pointer) >= 0 && int32_t(pointer) <= int32_t(PointerType::Touch);
+  }
 
   /* Moves: the positions that the host coalesced into this one, oldest first. The
    * event's own position is the newest and isn't repeated here. */

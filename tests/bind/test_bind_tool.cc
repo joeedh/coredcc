@@ -226,6 +226,13 @@ void testScriptDrag()
     }
     numbers[4] = numbers[16 + 4] = 1.0; /* identity bases */
     numbers[8] = 1.0;                   /* a moves 1 in x, b stays */
+    /* A kind that isn't 0, 1 or 2 (casting NaN or 7 to DeltaKind was undefined). */
+    for (double kind : {7.0, 0.5, -1.0, std::nan("")}) {
+      numbers[16] = kind;
+      test_assert(
+          isCode(sc::dragUpdateEach(*d.ctx, numbers), StatusCode::InvalidArgument, "kind"));
+    }
+    numbers[16] = 0.0;
     must(sc::dragUpdateEach(*d.ctx, numbers));
     d.evaluate();
     test_assert(std::abs(d.position(a)[0] - 3.5) < 1e-9 &&
@@ -310,8 +317,12 @@ void testBuiltinGizmo()
     int32_t id = -1;
     s.onEvent = [&](Context &ctx, ToolManager &, const InputEvent &e) {
       if (e.type == EventType::KeyDown) {
-        test_assert(isCode(sc::toolAddGizmo(ctx, "lasso").status, StatusCode::NotFound));
-        const sc::IntResult g = sc::toolAddGizmo(ctx, "transform");
+        test_assert(
+            isCode(sc::toolAddGizmo(ctx, "lasso", "").status, StatusCode::NotFound));
+        /* Another tool's settings: one that isn't registered. */
+        test_assert(isCode(sc::toolAddGizmo(ctx, "transform", "js.gone").status,
+                           StatusCode::NotFound));
+        const sc::IntResult g = sc::toolAddGizmo(ctx, "transform", "js.nudge");
         must(g.status);
         id = int32_t(g.value);
       }

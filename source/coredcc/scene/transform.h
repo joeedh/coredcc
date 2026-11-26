@@ -66,6 +66,11 @@ struct TransformDelta {
 
   /** The delta as a matrix. A scale by 0 is singular. */
   mat4d matrix() const;
+  /** Whether `kind` is one, every number is finite, the basis isn't 0 and a rotation's
+   * axis isn't: what ApplyDelta and ElementsDelta take. */
+  bool valid() const;
+  /** Whether it moves nothing, exactly: a translation by 0, a turn by 0, a scale by 1. */
+  bool identity() const;
   /** The rotation of a Rotate delta, in world space; the identity for the others. */
   quatd rotation() const;
 

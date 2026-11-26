@@ -4,6 +4,7 @@
 
 #include "coredcc/command/executor.h"
 #include "coredcc/scene/commands.h"
+#include "coredcc/scene/scene.h"
 #include "coredcc/tool/elements.h"
 #include "coredcc/tool/settings.h"
 
@@ -290,6 +291,45 @@ void Frame::draw(
       .ignore();
 }
 
+namespace {
+
+/* The pivot as the begun command found the objects or the elements. A command since the
+ * last evaluation may have moved them, so `placement` may be stale. */
+double3 pivotOfDrag(Context &ctx, const TransformSettings &s, const Placement &placement)
+{
+  CommandExecutor *ex = ctx.executor();
+  Command *cmd = ex ? ex->interactiveCommand() : nullptr;
+  if (const ElementsDelta *el = cmd ? cmd->as<ElementsDelta>() : nullptr) {
+    double3 c;
+    return el->centre(c) ? c : placement.pivot;
+  }
+  const ApplyDelta *a = cmd ? cmd->as<ApplyDelta>() : nullptr;
+  Library *lib = ctx.library();
+  Scene *scene = lib ? Scene::of(*lib, ctx.scene()) : nullptr;
+  if (!a || !scene) {
+    return placement.pivot;
+  }
+  const BlockHandle active = scene->active(*lib);
+  double3 sum(0.0, 0.0, 0.0);
+  int n = 0;
+  for (int i = 0; i < a->count(); i++) {
+    Result<TransformState> st = a->startState(ctx, i);
+    if (!st.ok()) {
+      continue;
+    }
+    const double *w = st->world;
+    const double3 at(w[12], w[13], w[14]);
+    if (s.pivot == PivotMode::Active && a->object(i) == active) {
+      return at;
+    }
+    sum = sum + at;
+    n++;
+  }
+  return n > 0 ? sum * (1.0 / double(n)) : placement.pivot;
+}
+
+} // namespace
+
 /* ---- the gizmo ---- */
 
 void TransformGizmo::update(Context &ctx)
@@ -372,6 +412,7 @@ Status TransformGizmo::beginDrag(
   m->settings = settings;
   m->placement = placement;
   m->frame = makeFrame(view, placement, settings);
+  m->pivot = pivotOfDrag(ctx, settings, placement);
   m->part = p;
   m->id = uint32_t(tm.hoverGizmo()) * ToolManager::kIdStride + uint32_t(p);
   m->press = Pixel{e.x, e.y};

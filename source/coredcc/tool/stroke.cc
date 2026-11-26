@@ -44,11 +44,12 @@ Status StrokeSampler::configure(const StrokeSettings &s)
   if (s.method < int32_t(StrokeMethod::Path) || s.method > int32_t(StrokeMethod::DragDot)) {
     return Status::error(StatusCode::InvalidArgument, "StrokeSettings: no such method");
   }
-  if (!(s.radius > 0.0) || !std::isfinite(s.radius) || !(s.spacing > 0.0) ||
-      !std::isfinite(s.spacing))
+  if (!(s.radius >= StrokeSettings::kMinRadius) || !std::isfinite(s.radius) ||
+      !(s.spacing >= StrokeSettings::kMinSpacing) || !std::isfinite(s.spacing))
   {
     return Status::error(StatusCode::InvalidArgument,
-                         "StrokeSettings: the radius and the spacing must be positive");
+                         "StrokeSettings: the radius must be finite and 1e-6 or more, and "
+                         "the spacing finite and 0.01 or more");
   }
   settings_ = s;
   reset();
@@ -74,6 +75,7 @@ void StrokeSampler::reset()
   out_.clear();
   carry_ = 0.0;
   distance_ = 0.0;
+  dropped_ = 0;
   firstHit_ = false;
   lastHit_ = double3(0, 0, 0);
   hasPrev_ = false;
@@ -201,17 +203,21 @@ void StrokeSampler::emitSegment(int i, bool rightClamp)
   if (settings_.space == int32_t(StrokeSpace::World)) {
     const double r =
         settings_.radiusIsWorld ? settings_.radius : worldRadiusAt(middle, settings_.radius);
-    step = std::max(settings_.spacing * 2.0 * r, 1e-5);
-    walk = stroke::arcLengthWalk(worldB, step, carry_);
+    /* At least half a device pixel at the segment's middle, as on the screen. */
+    const double dpi = view_.view().dpiScale > 0.0 ? view_.view().dpiScale : 1.0;
+    const double floor = 0.5 / dpi * view_.pixelSizeAt(middle);
+    step = std::max(settings_.spacing * 2.0 * r, floor > 0.0 ? floor : 1e-5);
+    walk = stroke::arcLengthWalk(worldB, step, carry_, 32, room());
   }
   else {
     /* A world radius in pixels first, or a sub-pixel spacing floods the stroke. */
     const double r = settings_.radiusIsWorld ? pixelRadiusAt(middle, settings_.radius)
                                              : settings_.radius;
-    step = std::max(settings_.spacing * 2.0 * r * view_.view().dpiScale, 1e-5);
-    walk = stroke::arcLengthWalk(screenB, step, carry_);
+    step = std::max(settings_.spacing * 2.0 * r * view_.view().dpiScale, kMinStepPixels);
+    walk = stroke::arcLengthWalk(screenB, step, carry_, 32, room());
   }
   carry_ = walk.carry;
+  dropped_ += walk.dropped;
 
   for (double t : walk.ts) {
     const double2 sp = stroke::evalCubic(screenB, t);
@@ -266,8 +272,17 @@ StrokeSample StrokeSampler::makeSample(const double3 &world,
   return s;
 }
 
+int32_t StrokeSampler::room() const
+{
+  return std::max(kMaxSamplesPerPoll - int32_t(out_.size()), 0);
+}
+
 void StrokeSampler::emit(StrokeSample s)
 {
+  if (int32_t(out_.size()) >= kMaxSamplesPerPoll) {
+    dropped_++;
+    return;
+  }
   out_.append(s);
   prev_ = s;
   hasPrev_ = true;

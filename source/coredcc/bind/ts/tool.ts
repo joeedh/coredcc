@@ -6,6 +6,10 @@
  * Events are plain objects (`ToolEvent`). A tool's `onEvent`, a modal's `onEvent` and a
  * gizmo's `beginDrag` may do what a script's top level may: run commands, begin a drag,
  * push a modal. Draw and hit-test slots, and a gizmo's `update`, may only read.
+ *
+ * During a slot the context's ToolManager is the one that called it, so `pushModal`,
+ * `addGizmo` and the rest act on that viewport's. What a slot is handed (the view, the
+ * `Drawer`) is valid during the call only: a Drawer kept for later throws.
  */
 import {getBindingBackend} from '@litestl/typescript-runtime'
 import type {Context} from 'coredcc-gen/coredcc/Context'
@@ -21,7 +25,7 @@ import type {TransformDelta as BoundDelta} from 'coredcc-gen/coredcc/TransformDe
 import type {View as BoundView} from 'coredcc-gen/coredcc/View'
 import type {ViewMath} from 'coredcc-gen/coredcc/ViewMath'
 
-import {check, checkCtx, inSlot, isFatal, Ref, statusOf, sync, take, withValue, type Writable} from './core.ts'
+import {check, checkCtx, inSlot, isFatal, Ref, ScriptError, statusOf, sync, take, withValue, type Writable} from './core.ts'
 import {decodeDrawList, Drawer, readDrawList, type DecodedDrawList} from './drawlist.ts'
 import type {TransformDelta, ViewSpec} from './scene.ts'
 
@@ -112,7 +116,7 @@ function withEvent<R>(event: Partial<ToolEvent> & {type: ToolEventType}, fn: (e:
     e.x = event.x ?? 0
     e.y = event.y ?? 0
     e.button = event.button ?? 0
-    e.buttons = event.buttons ?? (event.type === 'pointerdown' || event.type === 'pointermove' ? 1 : 0)
+    e.buttons = event.buttons ?? (event.type === 'pointerdown' ? 1 : 0)
     e.pointerId = event.pointerId ?? 0
     e.pressure = event.pressure ?? 0.5
     e.tiltX = event.tiltX ?? 0
@@ -239,9 +243,15 @@ export interface ToolSpec {
 const isKeys = (v: unknown): v is {keys: readonly string[]} =>
   typeof v === 'object' && v !== null && Array.isArray((v as {keys?: unknown}).keys)
 
-/* A throw from a draw slot is reported (the Runtime's sticky error); the manager keeps the drag. */
-function guarded(what: string, fn: () => void) {
-  inSlot(() => sync(what, fn()))
+/* A throw from a draw slot is reported (the Runtime's sticky error); the manager keeps the drag.
+ * The Drawer is closed when the slot returns. */
+function guarded(what: string, out: DrawList, fn: (draw: Drawer) => void) {
+  const draw = new Drawer(out)
+  try {
+    inSlot(() => sync(what, fn(draw)))
+  } finally {
+    draw.close()
+  }
 }
 
 class ToolAdapter {
@@ -263,14 +273,15 @@ class ToolAdapter {
     return inSlot(() => (sync('onEvent', this.spec.onEvent(ctx, eventOf(e), view)) ? 1 : 0))
   }
   drawOverlay(view: ViewMath, out: DrawList) {
-    guarded('drawOverlay', () => this.spec.drawOverlay!(new Drawer(out), view))
+    guarded('drawOverlay', out, (draw) => this.spec.drawOverlay!(draw, view))
   }
   settingsChanged(ctx: Context) {
     inSlot(() => sync('settingsChanged', this.spec.settingsChanged?.(ctx)))
   }
 }
 
-/** Registers tool `spec.id`: each activation makes a new instance of its slots' state. */
+/** Registers tool `spec.id`. Every activation calls the same `spec`: state kept on it outlives
+ * an activation, so reset it in `activate`. */
 export function defineTool(ctx: Context, spec: ToolSpec) {
   checkCtx(ctx)
   if (typeof spec.onEvent !== 'function') throw new TypeError(`defineTool: ${spec.id}: onEvent must be a function`)
@@ -321,7 +332,7 @@ class ModalAdapter {
     })
   }
   drawOverlay(view: ViewMath, out: DrawList) {
-    guarded('drawOverlay', () => this.spec.drawOverlay!(new Drawer(out), view))
+    guarded('drawOverlay', out, (draw) => this.spec.drawOverlay!(draw, view))
   }
   end(ctx: Context, committed: boolean) {
     inSlot(() => sync('end', this.spec.end?.(ctx, committed)))
@@ -374,7 +385,7 @@ class GizmoAdapter {
     })
   }
   draw(view: ViewMath, hover: number, active: number, idBase: number, out: DrawList) {
-    guarded('draw', () => this.spec.draw(new Drawer(out), view, hover, active, idBase))
+    guarded('draw', out, (draw) => this.spec.draw(draw, view, hover, active, idBase))
   }
   beginDrag(ctx: Context, _tm: unknown, view: ViewMath, e: BoundEvent, part: number): Status | undefined {
     return inSlot(() => {
@@ -388,10 +399,18 @@ class GizmoAdapter {
   }
 }
 
-/** From a tool's slot: a gizmo, `'transform'` for the built-in one that follows core.tool.transform's
+/** The built-in transform gizmo, following the settings of tool `settingsOf` (mode, pivot,
+ * orientation, target and the rest, by core.tool.transform's names; a missing one is its default). */
+export interface BuiltinGizmo {
+  kind: 'transform'
+  settingsOf?: string
+}
+
+/** From a tool's slot: a gizmo. `'transform'` is the built-in one with core.tool.transform's
  * settings. Its id. */
-export function addGizmo(ctx: Context, gizmo: 'transform' | GizmoSpec): number {
-  if (typeof gizmo === 'string') return take(cd.toolAddGizmo(ctx, gizmo), Number)
+export function addGizmo(ctx: Context, gizmo: 'transform' | BuiltinGizmo | GizmoSpec): number {
+  if (typeof gizmo === 'string') return take(cd.toolAddGizmo(ctx, gizmo, ''), Number)
+  if ('kind' in gizmo) return take(cd.toolAddGizmo(ctx, gizmo.kind, gizmo.settingsOf ?? ''), Number)
   const handle = getBindingBackend().foreignHandle(new GizmoAdapter(gizmo))
   return take(cd.toolAddForeignGizmo(ctx, handle, 'update hitTest draw beginDrag'), Number)
 }
@@ -528,17 +547,41 @@ export function setActiveTool(ctx: Context, id: string) {
 export function activeTool(ctx: Context): string | undefined {
   return take(cd.toolActive(ctx), (s) => s) || undefined
 }
-/** Hands the context's ToolManager an event in `view`. Whether it was used. */
+/** A ScriptError of `sendEvent` that came after the event was dispatched: `used` says whether it was. */
+export type ToolEventError = ScriptError & {used?: boolean}
+
+/** Hands the context's ToolManager an event in `view`. Whether it was used. A gizmo's update or
+ * hit test that failed throws after the event went on: the error's `used` is then set. */
 export function sendEvent(ctx: Context, view: ViewSpec, event: Partial<ToolEvent> & {type: ToolEventType}): boolean {
-  return withView(view, (v) => withEvent(event, (e) => take(cd.toolEvent(ctx, v, e), (r) => Number(r) !== 0)))
+  return withView(view, (v) =>
+    withEvent(event, (e) => {
+      const r = cd.toolEvent(ctx, v, e)
+      try {
+        const used = Number(r.value) !== 0
+        if (!r.status.ok()) throw Object.assign(ScriptError.from(r.status), {used}) as ToolEventError
+        return used
+      } finally {
+        r[Symbol.dispose]()
+      }
+    })
+  )
 }
-/** What the tools draw over `view` this frame: the scene's overlays, the gizmos, the modal's. */
-export function drawTools(ctx: Context, view: ViewSpec): {bytes: Uint8Array; decoded: DecodedDrawList} {
+/** What the tools draw over `view` this frame: the scene's overlays, the gizmos, the modal's. A slot
+ * that failed doesn't lose the rest: `error` is set, and the list has what was drawn. */
+export function drawTools(ctx: Context, view: ViewSpec): {bytes: Uint8Array; decoded: DecodedDrawList; error?: ScriptError} {
   const list = getBindingBackend().construct('coredcc::DrawList') as DrawList
   try {
-    withView(view, (v) => check(cd.toolDraw(ctx, v, list)))
+    let error: ScriptError | undefined
+    withView(view, (v) => {
+      const s = cd.toolDraw(ctx, v, list)
+      try {
+        if (!s.ok()) error = ScriptError.from(s)
+      } finally {
+        s[Symbol.dispose]()
+      }
+    })
     const bytes = readDrawList(list)
-    return {bytes, decoded: decodeDrawList(bytes)}
+    return {bytes, decoded: decodeDrawList(bytes), ...(error ? {error} : {})}
   } finally {
     list[Symbol.dispose]()
   }
@@ -552,4 +595,8 @@ export function toolStatus(ctx: Context): string {
 }
 export function setToolStatus(ctx: Context, text: string) {
   check(cd.toolSetStatus(ctx, text))
+}
+/** The status once the gesture in progress is over (why it did nothing, say), instead of empty. */
+export function setToolOutcome(ctx: Context, text: string) {
+  check(cd.toolSetOutcome(ctx, text))
 }

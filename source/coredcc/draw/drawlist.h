@@ -119,6 +119,17 @@ public:
   {
     return depth_;
   }
+  /** A pop to below this depth is refused, so that a slot lent the list can't pop its
+   * caller's pushes (DrawSlotScope sets it). 0 after `begin`; clamped to 0 to `depth()`.
+   */
+  int32_t floor() const
+  {
+    return floor_;
+  }
+  void setFloor(int32_t depth)
+  {
+    floor_ = depth < 0 ? 0 : depth > depth_ ? depth_ : depth;
+  }
 
   /* ---- 3D ---- */
 
@@ -187,7 +198,35 @@ private:
   int32_t records_ = 0;
   double3 origin_;
   int32_t depth_ = 0;
+  int32_t floor_ = 0;
   bool frozen_ = false;
+};
+
+/**
+ * For a caller that lends a DrawList to a slot: while it lives, the slot can't pop what
+ * was pushed before it; `close` (or the destructor) pops what the slot left pushed and
+ * puts the floor back.
+ */
+class DrawSlotScope {
+public:
+  explicit DrawSlotScope(DrawList &list)
+      : list_(list), depth_(list.depth()), floor_(list.floor())
+  {
+    list.setFloor(depth_);
+  }
+  ~DrawSlotScope()
+  {
+    close(nullptr).ignore();
+  }
+  DrawSlotScope(const DrawSlotScope &) = delete;
+  DrawSlotScope &operator=(const DrawSlotScope &) = delete;
+  /** InvalidArgument, naming `who`, when the slot left pushes; they are popped. Once. */
+  Status close(const char *who);
+
+private:
+  DrawList &list_;
+  int32_t depth_, floor_;
+  bool closed_ = false;
 };
 
 /** One record, as DrawListReader found it. Pointers are into the bytes it read. */

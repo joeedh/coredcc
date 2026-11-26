@@ -74,9 +74,21 @@ function withStyle<R>(style: DrawStyle, fn: (s: BoundStyle) => R): R {
   }
 }
 
-/** Appends to a list that a slot was handed. Each throws a ScriptError for what the format refuses. */
+/** Appends to a list that a slot was handed, during that call only. Each throws a ScriptError for
+ * what the format refuses, and a TypeError once the slot has returned. */
 export class Drawer {
-  constructor(readonly list: DrawList) {}
+  #list: DrawList | undefined
+  constructor(list: DrawList) {
+    this.#list = list
+  }
+  get list(): DrawList {
+    if (!this.#list) throw new TypeError('a Drawer is valid during the slot it was handed to only')
+    return this.#list
+  }
+  /** Ends it: later calls throw. */
+  close() {
+    this.#list = undefined
+  }
   lines(xyz: ArrayLike<number>, style: DrawStyle = {}) {
     withStyle(style, (s) => check(this.list.linesXyz(s, Array.from(xyz))))
   }
@@ -144,82 +156,97 @@ export function readDrawList(list: DrawList, opts: {view?: boolean} = {}): Uint8
   return bytes
 }
 
-/** Plain records of a list's bytes. Throws a TypeError, naming the byte offset, for a list that
- * isn't valid version 1 (a C++ writer never makes one). */
+/**
+ * Plain records of a list's bytes. Throws a TypeError, naming the byte offset, for a list that
+ * isn't valid version 1. It checks what C++'s DrawListReader checks (docs/drawlist-format.md,
+ * "Errors"), so a list one takes the other takes.
+ */
 export function decodeDrawList(bytes: Uint8Array): DecodedDrawList {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const fail = (at: number, what: string): never => {
     throw new TypeError(`DrawList: ${what} at byte ${at}`)
   }
-  if (bytes.byteLength < 48) fail(0, 'no header')
+  const total = bytes.byteLength
+  if (total < 48) fail(0, 'no header')
   if (dv.getUint32(0, true) !== kDrawListMagic) fail(0, 'not a DrawList')
   if (dv.getUint16(4, true) !== kDrawListVersion) fail(4, `version ${dv.getUint16(4, true)}`)
+  if (dv.getUint16(6, true) !== 0) fail(6, "header flags that don't exist")
   const count = dv.getUint32(8, true)
-  const total = dv.getUint32(12, true)
-  if (total !== bytes.byteLength) fail(12, `a size of ${total} for ${bytes.byteLength} bytes`)
+  if (dv.getUint32(12, true) !== total) fail(12, `a size of ${dv.getUint32(12, true)} for ${total} bytes`)
   const origin = [0, 1, 2].map((i) => dv.getFloat64(16 + 8 * i, true))
+  if (!origin.every(Number.isFinite)) fail(16, "an origin that isn't finite")
+  if (dv.getBigUint64(40, true) !== 0n) fail(40, "a reserved word that isn't 0")
   const f32 = (at: number, n: number) => Array.from({length: n}, (_, i) => dv.getFloat32(at + 4 * i, true))
   const f64 = (at: number, n: number) => Array.from({length: n}, (_, i) => dv.getFloat64(at + 8 * i, true))
+  const pad8 = (n: number) => (n + 7) & ~7
   const records: DrawRecord[] = []
   let at = 48
   let depth = 0
-  for (let r = 0; r < count; r++) {
-    if (at + 24 > total) fail(at, 'a record past the end')
-    const kind = recordKinds[dv.getUint16(at, true) - 1] ?? fail(at, `kind ${dv.getUint16(at, true)}`)
-    const mode = depthModes[dv.getUint8(at + 2)] ?? fail(at + 2, `depth mode ${dv.getUint8(at + 2)}`)
+  while (at < total) {
+    if (total - at < 24) fail(at, 'a record header past the end')
+    const kindNo = dv.getUint16(at, true)
+    const kind = recordKinds[kindNo - 1] ?? fail(at, `no such kind ${kindNo}`)
+    const mode = depthModes[dv.getUint8(at + 2)] ?? fail(at, `no such depth mode ${dv.getUint8(at + 2)}`)
     const flags = dv.getUint8(at + 3)
+    const allowed = kind === 'triangles' ? 1 : kind === 'circle2d' ? 2 : 0
+    if (flags & ~allowed) fail(at, "flags that this kind doesn't have")
+    const width = dv.getFloat32(at + 12, true)
+    if (!Number.isFinite(width) || width < 0) fail(at, "a width that isn't a number of 0 or more")
     const size = dv.getUint32(at + 4, true)
-    if (size < 24 || size % 8 !== 0 || at + size > total) fail(at + 4, `a record size of ${size}`)
+    if (size % 8 !== 0 || size < 24 || size > total - at) fail(at, `a record size of ${size}`)
     const aux = dv.getUint32(at + 20, true)
-    const rec: DrawRecord = {
-      kind,
-      depth: mode,
-      color: dv.getUint32(at + 8, true),
-      width: dv.getFloat32(at + 12, true),
-      id: dv.getUint32(at + 16, true),
+    const rec: DrawRecord = {kind, depth: mode, color: dv.getUint32(at + 8, true), width, id: dv.getUint32(at + 16, true)}
+    const multiple = kind === 'lines' ? 2 : kind === 'triangles' ? 3 : 1
+    if ((kind === 'lines' || kind === 'triangles') && aux % multiple !== 0) {
+      fail(at, `a vertex count that isn't a multiple of ${multiple}`)
     }
+    if (kind === 'shape' && (aux < 1 || aux > shapeKinds.length)) fail(at, `no such shape ${aux}`)
+    const need =
+      kind === 'lines' || kind === 'points' || kind === 'triangles' ? 12 * aux + (flags & 1 ? 4 * aux : 0)
+      : kind === 'shape' || kind === 'push' ? 128
+      : kind === 'circle2d' ? 12
+      : kind === 'line2d' ? 8 * aux
+      : 0
+    if (pad8(need) !== size - 24) fail(at, "a record size that doesn't fit its count")
     const p = at + 24
-    const need = (n: number) => {
-      if (p + n > at + size) fail(at, `${kind} needs ${n} payload bytes`)
+    for (let i = p + need; i < at + size; i++) if (bytes[i] !== 0) fail(at, "padding that isn't zeros")
+    const matrix = kind === 'shape' || kind === 'push'
+    const numbers = matrix ? f64(p, 16) : f32(p, kind === 'line2d' ? 2 * aux : kind === 'circle2d' ? 3 : kind === 'pop' ? 0 : 3 * aux)
+    if (!numbers.every(Number.isFinite)) fail(at, "a number that isn't finite")
+    if (matrix && (numbers[3] !== 0 || numbers[7] !== 0 || numbers[11] !== 0 || numbers[15] !== 1)) {
+      fail(at, "a matrix that isn't affine")
     }
     switch (kind) {
       case 'lines':
       case 'points':
       case 'triangles':
-        need(12 * aux)
-        rec.positions = f32(p, 3 * aux)
-        if (kind === 'triangles' && flags & 1) {
-          need(16 * aux)
-          rec.colors = Array.from({length: aux}, (_, i) => dv.getUint32(p + 12 * aux + 4 * i, true))
-        }
+        rec.positions = numbers
+        if (flags & 1) rec.colors = Array.from({length: aux}, (_, i) => dv.getUint32(p + 12 * aux + 4 * i, true))
         break
       case 'shape':
-        need(128)
-        rec.shape = shapeKinds[aux - 1] ?? fail(at + 20, `shape ${aux}`)
-        rec.matrix = f64(p, 16)
+        rec.shape = shapeKinds[aux - 1]
+        rec.matrix = numbers
         break
       case 'push':
-        need(128)
-        rec.matrix = f64(p, 16)
+        rec.matrix = numbers
         depth++
         break
       case 'pop':
         if (--depth < 0) fail(at, 'a pop without a push')
         break
       case 'circle2d':
-        need(12)
-        rec.positions = f32(p, 3)
+        if (numbers[2] < 0) fail(at, 'a negative radius')
+        rec.positions = numbers
         rec.filled = (flags & 2) !== 0
         break
       case 'line2d':
-        need(8 * aux)
-        rec.positions = f32(p, 2 * aux)
+        rec.positions = numbers
         break
     }
     records.push(rec)
     at += size
   }
-  if (at !== total) fail(at, `${total - at} bytes after the last record`)
-  if (depth !== 0) fail(at, `${depth} pushes without a pop`)
+  if (records.length !== count) fail(8, `a record count of ${count} for ${records.length} records`)
+  if (depth !== 0) fail(total, `${depth} pushes without a pop`)
   return {origin, records}
 }

@@ -297,7 +297,8 @@ public:
    * against its settings' struct. Busy while a graph evaluates.
    */
   Result<const ToolDef *> add(ToolDef def);
-  /** add's checks without registering. */
+  /** add's checks without registering the def. A def with a layout registers the struct
+   * its layout is checked against, once for each set of settings' names and kinds. */
   Status validateDef(const ToolDef &def) const;
   const ToolDef *find(std::string_view id) const;
   /** NotFound for `id`, with suggestions. */
@@ -315,8 +316,6 @@ private:
   Runtime &rt_;
   litestl::util::Vector<ToolDef *> defs_;
   litestl::util::Map<uint64_t, ToolDef *> byId_;
-  /* Names the structs that layouts are checked against. */
-  mutable uint64_t checks_ = 0;
 };
 
 /** Registers a bound C++ class as a tool's implementation, and the def. */

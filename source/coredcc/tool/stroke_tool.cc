@@ -53,7 +53,7 @@ namespace tools {
 struct StrokeModal {
   double x = 0.0, y = 0.0, radius = 25.0;
 
-  int32_t onEvent(Context &ctx, ToolManager &, const ViewMath &view, const InputEvent &e)
+  int32_t onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e)
   {
     if ((e.type == EventType::KeyDown && e.key == keys::kEscape) ||
         (e.type == EventType::PointerDown && e.button == 2))
@@ -71,6 +71,7 @@ struct StrokeModal {
     x = e.x;
     y = e.y;
     int32_t samples = 0;
+    int64_t dropped = 0;
     Status s = ex->updateInteractive(ctx, [&](Context &c, Command &cmd) {
       StrokeCommand *stroke = cmd.as<StrokeCommand>();
       if (!stroke) {
@@ -78,8 +79,14 @@ struct StrokeModal {
       }
       Status u = release ? stroke->finish(c, view) : stroke->update(c, view, e);
       samples = stroke->sampleCount();
+      dropped = stroke->sampler().dropped();
       return u;
     });
+    if (dropped > 0) {
+      tm.setStatus("Stroke: " + std::to_string(dropped) +
+                   " samples dropped: more than " +
+                   std::to_string(StrokeSampler::kMaxSamplesPerPoll) + " in one event");
+    }
     if (!s.ok()) {
       ctx.runtime().setStickyError(s); /* the manager cancels the stroke and returns it */
       return modalresult::kCancel;
@@ -135,11 +142,14 @@ struct StrokeTool {
     if (e.type != EventType::PointerDown || e.button != 0) {
       return eventresult::kUnhandled;
     }
+    CommandExecutor *ex = ctx.executor();
+    const uint64_t before = ex ? ex->interactiveSerial() : 0;
     Status s = begin(ctx, tm, view, e);
     if (!s.ok()) {
       tm.setStatus(std::string("Stroke: ") + s.message());
-      if (ctx.executor() && ctx.executor()->interactiveOpen()) {
-        ctx.executor()->cancel(ctx).ignore();
+      /* Only a stroke this press began: another's command (the host's) stays. */
+      if (ex && ex->interactiveOpen() && ex->interactiveSerial() != before) {
+        ex->cancel(ctx).ignore();
       }
     }
     return eventresult::kHandled;
@@ -224,10 +234,10 @@ Status registerStrokeBuiltins(Runtime &rt)
       .setting(detail::strokeMethodProp())
       .setting(PropertyDef::floatProp("spacing")
                    .defaultValue(PropValue::ofFloat(d.spacing))
-                   .range(1e-4, 100.0))
+                   .range(StrokeSettings::kMinSpacing, 100.0))
       .setting(PropertyDef::floatProp("radius")
                    .defaultValue(PropValue::ofFloat(d.radius))
-                   .range(1e-9, 1e9))
+                   .range(StrokeSettings::kMinRadius, 1e9))
       .setting(PropertyDef::boolProp("radiusIsWorld"))
       .setting(PropertyDef::boolProp("symmetry"))
       .layout("<layout><prop path='brush'/><prop path='space'/><prop path='method'/>"

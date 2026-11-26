@@ -94,9 +94,13 @@ struct TransformGizmo {
  * makes no step); Escape and a right press cancel it.
  */
 struct TransformModal {
-  /** Where the gizmo was at the press, and its frame then: the drag's math uses it. */
+  /** Where the gizmo was drawn at the press, and its frame then: the drag's screen math
+   * uses it, as the press was on what was drawn. */
   Placement placement;
   Frame frame;
+  /** What the deltas turn and scale about: the objects' pivot when the drag began, from
+   * its command, which is newer than the last evaluation `placement` is from. */
+  double3 pivot;
   TransformSettings settings;
   int32_t part = -1;
   uint32_t id = 0;

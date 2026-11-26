@@ -190,7 +190,7 @@ test('decodeDrawList refuses what is not a list', () => {
   dv.setUint16(4, 1, true)
   dv.setUint32(8, 1, true)
   dv.setUint32(12, 48, true)
-  assert.throws(() => cdcc.decodeDrawList(bad), /past the end at byte 48/)
+  assert.throws(() => cdcc.decodeDrawList(bad), /a record count of 1 for 0 records at byte 8/)
   dv.setUint32(8, 0, true)
   assert.deepEqual(cdcc.decodeDrawList(bad), {origin: [0, 0, 0], records: []})
 })
@@ -237,4 +237,101 @@ test('a TS stroke brush through core.tool.stroke: samples, one undo step, and a 
   cdcc.redo(ctx)
   assert.equal(calls.length, 1 + before)
   near(samples.slice(before).map((s) => s.x), samples.slice(0, before).map((s) => s.x))
+})
+
+test('decodeDrawList checks what DrawListReader checks', () => {
+  // The same changes as tests/draw/test_drawlist.cc's testRules, and the C++ reader's other rules.
+  cdcc.defineTool(ctx, {
+    id: 'ts.records',
+    onEvent: () => false,
+    drawOverlay(draw) {
+      draw.points([1, 2, 3])
+      draw.pushMatrix(at(1, 0, 0))
+      draw.shape('cube', at(0, 1, 0))
+      draw.popMatrix()
+      draw.circle2d(10, 10, 4)
+    },
+  })
+  cdcc.setActiveTool(ctx, 'ts.records')
+  const {bytes} = cdcc.drawTools(ctx, view)
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const record: Record<number, number> = {} // the first record of each kind, by its number
+  for (let o = 48; o < bytes.length; o += dv.getUint32(o + 4, true)) record[dv.getUint16(o, true)] ??= o
+  const [points, shape, push, circle] = [record[2], record[4], record[7], record[5]]
+  const refused = (set: (d: DataView) => void, re: RegExp) => {
+    const b = bytes.slice()
+    set(new DataView(b.buffer))
+    assert.throws(() => cdcc.decodeDrawList(b), re)
+  }
+  refused((d) => d.setUint8(6, 1), /header flags/)
+  refused((d) => d.setUint8(40, 1), /reserved/)
+  refused((d) => d.setUint8(points + 24 + 12, 1), /padding/)
+  refused((d) => d.setFloat64(shape + 24 + 8 * 3, 0.5, true), /affine/)
+  refused((d) => d.setFloat64(push + 24 + 8 * 15, 2, true), /affine/)
+  refused((d) => d.setFloat32(circle + 24 + 8, -1, true), /negative radius/)
+  refused((d) => d.setFloat32(points + 24, NaN, true), /isn't finite/)
+  refused((d) => d.setFloat32(points + 12, -1, true), /width/)
+  refused((d) => d.setUint8(points + 3, 1), /flags that this kind/)
+  refused((d) => d.setUint32(points + 20, 2, true), /doesn't fit its count/)
+  assert.equal(cdcc.decodeDrawList(bytes).records.length, 5)
+})
+
+test('a slot that fails: the rest of the frame, its error alongside, and a Drawer that closes', () => {
+  let kept: cdcc.Drawer | undefined
+  cdcc.defineTool(ctx, {
+    id: 'ts.throws',
+    onEvent: () => false,
+    drawOverlay(draw) {
+      kept = draw
+      draw.lines([0, 0, 0, 1, 0, 0])
+      throw new Error('boom')
+    },
+  })
+  cdcc.setActiveTool(ctx, 'ts.throws')
+  const {decoded, error} = cdcc.drawTools(ctx, view)
+  assert.ok(error && /boom/.test(error.message), String(error))
+  assert.equal(decoded.records.filter((r) => r.kind === 'lines').length, 1)
+  assert.throws(() => kept!.points([0, 0, 0]), /during the slot/)
+})
+
+test('sendEvent: a failed gizmo update after the event was used; an outcome text; a gizmo with its own settings', () => {
+  const a = add('name="a"')
+  select(a)
+  let outcome = false
+  cdcc.defineTool(ctx, {
+    id: 'ts.late',
+    settings: {mode: {keys: ['TRANSLATE', 'ROTATE', 'SCALE']}},
+    activate(ctx) {
+      cdcc.addGizmo(ctx, {
+        update() {
+          throw new Error('stale')
+        },
+        hitTest: () => undefined,
+        draw() {},
+        beginDrag() {},
+      })
+      assert.throws(() => cdcc.addGizmo(ctx, {kind: 'transform', settingsOf: 'ts.none'}), fails(StatusCode.NotFound, /ts.none/))
+      cdcc.addGizmo(ctx, {kind: 'transform', settingsOf: 'ts.late'})
+    },
+    onEvent(ctx, e) {
+      if (e.type !== 'keydown') return e.type === 'pointermove'
+      cdcc.pushModal(ctx, {
+        onEvent(ctx, e) {
+          if (e.type !== 'keyup') return 'continue'
+          if (outcome) cdcc.setToolOutcome(ctx, 'nothing to do')
+          return 'finish'
+        },
+      }, {ownsInteractive: false})
+      return true
+    },
+  })
+  cdcc.setActiveTool(ctx, 'ts.late')
+  cdcc.evaluateScene(ctx)
+  assert.throws(() => cdcc.sendEvent(ctx, view, {type: 'pointermove', x: 1, y: 1}),
+    (e: unknown) => e instanceof ScriptError && /stale/.test(e.message) && (e as cdcc.ToolEventError).used === true)
+  outcome = true
+  send({type: 'keydown', key: 'g'.codePointAt(0)})
+  cdcc.setToolStatus(ctx, 'grabbing')
+  send({type: 'keyup', key: 'g'.codePointAt(0)})
+  assert.equal(cdcc.toolStatus(ctx), 'nothing to do')
 })

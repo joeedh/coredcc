@@ -40,7 +40,12 @@ double3 eyeOf(const View &view)
 struct ToolManager::ModalEntry {
   Owned<Modal> modal;
   bool owns = false;
+  /* The command it owns: the executor's open one with this serial. */
+  const CommandExecutor *executor = nullptr;
   uint64_t serial = 0;
+  /* Pushed during a pointer event: that pointer's events only. */
+  bool boundPointer = false;
+  int32_t pointerId = 0;
 };
 
 struct ToolManager::GizmoEntry {
@@ -53,16 +58,20 @@ struct ToolManager::ToolSlot {
   Owned<Tool> tool;
 };
 
-/* Marks the manager as inside a call, so that its slots can't call it again. */
+/* Marks the manager as inside a call, so that its slots can't call it again, and makes
+ * it the Context's ToolManager for the call. */
 class ToolManager::Call {
 public:
-  explicit Call(ToolManager &tm) : tm_(tm)
+  Call(ToolManager &tm, Context &ctx) : tm_(tm), ctx_(ctx), was_(ctx.tools())
   {
     tm_.inCall_ = true;
+    ctx_.setTools(&tm_);
   }
   ~Call()
   {
+    ctx_.setTools(was_);
     tm_.inCall_ = false;
+    tm_.event_ = nullptr;
     tm_.flushRemoved();
   }
   Call(const Call &) = delete;
@@ -70,6 +79,8 @@ public:
 
 private:
   ToolManager &tm_;
+  Context &ctx_;
+  ToolManager *was_;
 };
 
 ToolManager::ToolManager(Runtime &rt) : rt_(rt)
@@ -104,6 +115,11 @@ void ToolManager::setStatus(std::string_view text)
   status_ = litestl::util::string(std::string(text).c_str());
 }
 
+void ToolManager::setOutcome(std::string_view text)
+{
+  outcome_ = litestl::util::string(std::string(text).c_str());
+}
+
 Status ToolManager::enter(Context &ctx, const char *what)
 {
   CDCC_TRY(rt_.busyIfEvaluating(what));
@@ -134,13 +150,14 @@ Status ToolManager::slotError()
 bool ToolManager::valid(Context &ctx, const ModalEntry &m) const
 {
   const CommandExecutor *ex = ctx.executor();
-  return !m.owns || (ex && ex->interactiveOpen() && ex->interactiveSerial() == m.serial);
+  return !m.owns || (ex && ex == m.executor && ex->interactiveOpen() &&
+                     ex->interactiveSerial() == m.serial);
 }
 
-bool ToolManager::owned(uint64_t serial) const
+bool ToolManager::owned(const CommandExecutor *ex, uint64_t serial) const
 {
   for (const ModalEntry *m : modals_) {
-    if (m->owns && m->serial == serial) {
+    if (m->owns && m->executor == ex && m->serial == serial) {
       return true;
     }
   }
@@ -165,7 +182,8 @@ Status ToolManager::finish(Context &ctx, int i, bool commit)
   litestl::alloc::Delete(m);
   if (modals_.size() == 0) {
     activeGizmo_ = activePart_ = -1;
-    status_ = litestl::util::string(); /* the gesture's text */
+    status_ = outcome_; /* the gesture's text goes */
+    outcome_ = litestl::util::string();
   }
   return s;
 }
@@ -179,21 +197,24 @@ Status ToolManager::cancelFrom(Context &ctx, int i)
   return s;
 }
 
+/* Only the stale ones go: a modal that ended its command and pushed another for the
+ * next one stays. */
 Status ToolManager::prune(Context &ctx)
 {
-  for (int i = 0; i < int(modals_.size()); i++) {
-    if (!valid(ctx, *modals_[i])) {
-      return cancelFrom(ctx, i);
+  Status s;
+  for (int i = int(modals_.size()) - 1; i >= 0; i--) {
+    if (i < int(modals_.size()) && !valid(ctx, *modals_[i])) {
+      s = first(s, finish(ctx, i, false));
     }
   }
-  return Status();
+  return s;
 }
 
 Status ToolManager::orphan(Context &ctx, uint64_t before)
 {
   CommandExecutor *ex = ctx.executor();
   if (!ex || !ex->interactiveOpen() || ex->interactiveSerial() == before ||
-      owned(ex->interactiveSerial()))
+      owned(ex, ex->interactiveSerial()))
   {
     return Status();
   }
@@ -301,7 +322,7 @@ Status ToolManager::setActive(Context &ctx, std::string_view toolId)
       return rt_.ext<ToolRegistry>().unknown(toolId);
     }
   }
-  Call call(*this);
+  Call call(*this, ctx);
   deactivate(ctx);
   if (!def) {
     return Status();
@@ -329,14 +350,14 @@ Status ToolManager::pushModal(Context &ctx, Owned<Modal> modal, bool ownsInterac
     return Status::error(StatusCode::InvalidArgument, "pushModal: no modal");
   }
   uint64_t serial = 0;
+  const CommandExecutor *ex = ctx.executor();
   if (ownsInteractive) {
-    const CommandExecutor *ex = ctx.executor();
     if (!ex || !ex->interactiveOpen()) {
       return Status::error(StatusCode::FailedPrecondition,
                            "pushModal: it owns no command: none is open");
     }
     serial = ex->interactiveSerial();
-    if (owned(serial)) {
+    if (owned(ex, serial)) {
       return Status::error(StatusCode::FailedPrecondition,
                            "pushModal: another modal owns the open command");
     }
@@ -344,7 +365,12 @@ Status ToolManager::pushModal(Context &ctx, Owned<Modal> modal, bool ownsInterac
   ModalEntry *m = litestl::alloc::New<ModalEntry>("coredcc::ToolManager::ModalEntry");
   m->modal = std::move(modal);
   m->owns = ownsInteractive;
+  m->executor = ownsInteractive ? ex : nullptr;
   m->serial = serial;
+  if (event_ && event_->isPointer()) {
+    m->boundPointer = true;
+    m->pointerId = event_->pointerId;
+  }
   modals_.append(m);
   return Status();
 }
@@ -354,10 +380,24 @@ int32_t ToolManager::addGizmo(Owned<Gizmo> gizmo)
   if (!gizmo) {
     return -1;
   }
+  if (int32_t(gizmos_.size()) >= kMaxGizmos) {
+    return -1;
+  }
+  /* The smallest free id: gizmos_ is kept sorted by id. */
+  int at = 0;
+  int32_t id = 1;
+  while (at < int(gizmos_.size()) && gizmos_[at]->id == id) {
+    at++;
+    id++;
+  }
   GizmoEntry *g = litestl::alloc::New<GizmoEntry>("coredcc::ToolManager::GizmoEntry");
-  g->id = nextGizmo_++;
+  g->id = id;
   g->gizmo = std::move(gizmo);
   gizmos_.append(g);
+  for (int i = int(gizmos_.size()) - 1; i > at; i--) {
+    gizmos_[i] = gizmos_[i - 1];
+  }
+  gizmos_[at] = g;
   return g->id;
 }
 
@@ -381,8 +421,13 @@ void ToolManager::removeGizmo(int32_t id)
 
 void ToolManager::clearGizmos()
 {
+  /* Not by removeGizmo: outside a call, it erases from the vector being walked. */
   for (GizmoEntry *g : gizmos_) {
-    removeGizmo(g->id);
+    g->removed = true;
+  }
+  activeGizmo_ = activePart_ = hoverGizmo_ = hoverPart_ = -1;
+  if (!inCall_) {
+    flushRemoved();
   }
 }
 
@@ -402,6 +447,9 @@ ToolManager::toModal(Context &ctx, const ViewMath &view, const InputEvent &e)
 {
   const int top = int(modals_.size()) - 1;
   ModalEntry *m = modals_[top];
+  if (e.isPointer() && m->boundPointer && e.pointerId != m->pointerId) {
+    return eventresult::kUnhandled; /* another finger or pen: the host's */
+  }
   const CommandExecutor *ex = ctx.executor();
   const uint64_t before = ex ? ex->interactiveSerial() : 0;
   int32_t r = m->modal->onEvent(ctx, *this, view, e);
@@ -436,22 +484,48 @@ ToolManager::toModal(Context &ctx, const ViewMath &view, const InputEvent &e)
   return r == modalresult::kPassThrough ? eventresult::kUnhandled : eventresult::kHandled;
 }
 
-Result<int32_t> ToolManager::dispatch(Context &ctx, const View &view, const InputEvent &e)
+Result<int32_t> ToolManager::dispatch(Context &ctx,
+                                      const View &view,
+                                      const InputEvent &e,
+                                      Status *lateOut)
 {
+  if (lateOut) {
+    *lateOut = Status();
+  }
   CDCC_TRY(enter(ctx, "dispatch"));
+  if (!e.valid()) {
+    return Status::error(StatusCode::InvalidArgument,
+                         "dispatch: the event's type or pointer isn't one");
+  }
   ViewMath vm;
   CDCC_TRY(vm.set(view));
-  Call call(*this);
+  Call call(*this, ctx);
+  event_ = &e;
   CDCC_TRY(prune(ctx));
-  CDCC_TRY(checkSettings(ctx));
+  const CommandExecutor *ex = ctx.executor();
+  uint64_t before = ex ? ex->interactiveSerial() : 0;
+  if (Status s = checkSettings(ctx); !s.ok()) {
+    return first(s, first(cancelFrom(ctx, 0), orphan(ctx, before)));
+  }
+  CDCC_TRY(orphan(ctx, before));
+  CDCC_TRY(prune(ctx));
+  before = ex ? ex->interactiveSerial() : 0;
   if (modalOpen()) {
     return toModal(ctx, vm, e);
   }
-  const CommandExecutor *ex = ctx.executor();
-  const uint64_t before = ex ? ex->interactiveSerial() : 0;
   const bool press = e.type == EventType::PointerDown && e.button == 0;
-  /* Errors of update and hitTest are returned once the event is dispatched. */
+  /* Errors of update and hitTest are given once the event is dispatched. */
   Status late;
+  const auto deliver = [&](int32_t r) -> Result<int32_t> {
+    if (late.ok()) {
+      return r;
+    }
+    if (!lateOut) {
+      return late;
+    }
+    *lateOut = late;
+    return r;
+  };
   if (press || e.type == EventType::PointerMove) {
     late = updateGizmos(ctx);
     int32_t part = -1;
@@ -470,21 +544,19 @@ Result<int32_t> ToolManager::dispatch(Context &ctx, const View &view, const Inpu
         activeGizmo_ = entry->id;
         activePart_ = part;
       }
-      CDCC_TRY(late);
-      return eventresult::kHandled;
+      return deliver(eventresult::kHandled);
     }
   }
   if (!tool_) {
-    CDCC_TRY(late);
-    return eventresult::kUnhandled;
+    return deliver(eventresult::kUnhandled);
   }
   const int32_t r = tool_->tool->onEvent(ctx, *this, vm, e);
   if (Status err = slotError(); !err.ok()) {
     return first(err, first(cancelFrom(ctx, 0), orphan(ctx, before)));
   }
   CDCC_TRY(orphan(ctx, before));
-  CDCC_TRY(late);
-  return r == eventresult::kHandled ? eventresult::kHandled : eventresult::kUnhandled;
+  return deliver(r == eventresult::kHandled ? eventresult::kHandled
+                                            : eventresult::kUnhandled);
 }
 
 Status ToolManager::draw(Context &ctx, const View &view, DrawList &out)
@@ -492,46 +564,47 @@ Status ToolManager::draw(Context &ctx, const View &view, DrawList &out)
   CDCC_TRY(enter(ctx, "draw"));
   ViewMath vm;
   CDCC_TRY(vm.set(view));
-  Call call(*this);
-  Status s = out.begin(eyeOf(view));
+  Call call(*this, ctx);
+  Status s = out.begin(drawOrigin ? *drawOrigin : eyeOf(view));
   s = first(s, drawSceneOverlays(ctx, ctx.scene(), vm, out));
   s = first(s, prune(ctx));
-  s = first(s, checkSettings(ctx));
   if (!modalOpen()) {
     /* During a gesture the modal draws what moves: placing a gizmo can be O(selection).
      */
     s = first(s, updateGizmos(ctx));
   }
   if (tool_ && tool_->tool->hasDrawOverlay()) {
+    DrawSlotScope slot(out);
     tool_->tool->drawOverlay(vm, out);
-    s = first(s, slotError());
+    s = first(s, first(slotError(), slot.close("the tool's drawOverlay")));
   }
   for (const GizmoEntry *g : gizmos_) {
     if (g->removed) {
       continue;
     }
     const bool active = g->id == activeGizmo_;
+    DrawSlotScope slot(out);
     g->gizmo->draw(vm,
                    g->id == hoverGizmo_ && !modalOpen() ? hoverPart_ : -1,
                    active ? activePart_ : -1,
                    uint32_t(g->id) * kIdStride,
                    out);
-    s = first(s, slotError());
+    s = first(s, first(slotError(), slot.close("a gizmo's draw")));
   }
   for (const ModalEntry *m : modals_) {
     if (m->modal->hasDrawOverlay()) {
+      DrawSlotScope slot(out);
       m->modal->drawOverlay(vm, out);
-      s = first(s, slotError());
+      s = first(s, first(slotError(), slot.close("a modal's drawOverlay")));
     }
   }
-  /* A slot that pushed and didn't pop is the slot's mistake: end pops. */
   return first(s, out.end());
 }
 
 Status ToolManager::cancel(Context &ctx)
 {
   CDCC_TRY(enter(ctx, "cancel"));
-  Call call(*this);
+  Call call(*this, ctx);
   return cancelFrom(ctx, 0);
 }
 
@@ -540,7 +613,7 @@ void ToolManager::shutdown(Context &ctx)
   if (inCall_) {
     return;
   }
-  Call call(*this);
+  Call call(*this, ctx);
   cancelFrom(ctx, 0).ignore();
   deactivate(ctx);
   slotError().ignore();

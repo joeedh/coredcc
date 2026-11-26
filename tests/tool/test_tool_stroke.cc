@@ -453,6 +453,61 @@ void testErrors()
   test_assert(!d.ex->interactiveOpen() && std::string(d.tm.status().c_str()).find("no active object") != std::string::npos);
 }
 
+/* A press whose stroke can't begin, because the host has a drag open: the host's drag
+ * stays (the tool cancelled it). */
+void testHostDragKept()
+{
+  StrokeDoc d;
+  const BlockHandle b = d.box("b");
+  d.select({b});
+  d.set("brush", PropValue::ofString("test.recorder"));
+  d.useTool(kStrokeTool);
+  const CommandDef *drag = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  must(d.ex->beginInteractive(*d.ctx, *drag, drag->newInputs()));
+  const uint64_t serial = d.ex->interactiveSerial();
+  InputEvent e;
+  e.type = EventType::PointerDown;
+  e.x = 400;
+  e.y = 300;
+  must(d.tm.dispatch(*d.ctx, d.view, e).status());
+  test_assert(d.ex->interactiveOpen() && d.ex->interactiveSerial() == serial);
+  test_assert(std::string(d.tm.status().c_str()).rfind("Stroke: ", 0) == 0);
+  must(d.ex->cancel(*d.ctx));
+}
+
+/* The smallest radius and spacing: half a device pixel apart, and at most
+ * kMaxSamplesPerPoll from one poll (the review's 400 pixels gave 30,000,001). */
+void testFlood()
+{
+  ToolDoc d;
+  StrokeSampler sm;
+  StrokeSettings st;
+  st.radius = 1e-9;
+  st.spacing = 1e-4;
+  test_assert(sm.configure(st).code() == StatusCode::InvalidArgument);
+  st.radius = StrokeSettings::kMinRadius;
+  st.spacing = StrokeSettings::kMinSpacing;
+  must(sm.configure(st));
+  sm.setView(d.vm);
+  int64_t total = 0;
+  for (double x : {100.0, 200.0, 300.0, 400.0, 500.0}) {
+    PointerSample p;
+    p.x = x;
+    p.y = 300;
+    sm.push(p);
+    total += sm.poll();
+  }
+  /* 300 pixels fixed (the last segment is held back), at 0.5: about 600. */
+  test_assert(total > 550 && total < 650 && sm.dropped() == 0);
+  PointerSample far;
+  far.x = 3500;
+  far.y = 300;
+  sm.push(far);
+  far.x = 3501;
+  sm.push(far);
+  test_assert(sm.poll() == StrokeSampler::kMaxSamplesPerPoll && sm.dropped() > 1000);
+}
+
 int main()
 {
   testGoldens();
@@ -461,5 +516,7 @@ int main()
   testMirror();
   testMethods();
   testErrors();
+  testHostDragKept();
+  testFlood();
   return test_end();
 }

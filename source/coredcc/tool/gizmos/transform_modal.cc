@@ -62,7 +62,7 @@ void TransformModal::begin(const ViewMath &view)
     handedness = screenHandedness(view, f.pivot);
   }
   last = TransformDelta();
-  last.pivot = f.pivot;
+  last.pivot = pivot;
   if (f.mode == Mode::Scale) {
     last.kind = DeltaKind::Scale;
     last.basis = f.basis;
@@ -77,7 +77,7 @@ bool TransformModal::deltaAt(const ViewMath &view,
 {
   const Frame &f = frame;
   out = TransformDelta();
-  out.pivot = f.pivot;
+  out.pivot = pivot;
   if (!pressOk) {
     return false;
   }

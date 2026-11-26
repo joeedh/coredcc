@@ -48,6 +48,11 @@ struct StrokeSettings {
   double radius = 25.0;
   bool radiusIsWorld = false;
 
+  /** The smallest that `configure` takes. However small, the samples are at least half
+   * a device pixel apart (StrokeSampler::kMinStepPixels). */
+  static constexpr double kMinSpacing = 0.01;
+  static constexpr double kMinRadius = 1e-6;
+
   static litestl::binding::types::Struct<StrokeSettings> *defineBindings();
 };
 
@@ -96,8 +101,8 @@ using StrokeHitTest =
  */
 class StrokeSampler {
 public:
-  /** InvalidArgument for an unknown space or method, or a radius or spacing that isn't
-   * positive. Resets the stroke. */
+  /** InvalidArgument for an unknown space or method, or a radius or spacing that is
+   * below its minimum or isn't finite. Resets the stroke. */
   Status configure(const StrokeSettings &settings);
   const StrokeSettings &settings() const
   {
@@ -117,7 +122,17 @@ public:
   /** The pointer went up: the next poll gives the last segment. */
   void end();
   void reset();
+  /** At most kMaxSamplesPerPoll: the ones past it are dropped and counted (`dropped`). */
   int32_t poll();
+  /** Samples are never nearer than this on the screen, nor than its size in the world at
+   * the segment's middle in World space. */
+  static constexpr double kMinStepPixels = 0.5;
+  static constexpr int32_t kMaxSamplesPerPoll = 4096;
+  /** Samples dropped since the stroke began, because a poll had too many. */
+  int64_t dropped() const
+  {
+    return dropped_;
+  }
   /** An empty sample out of range. */
   StrokeSample sample(int32_t i) const
   {
@@ -153,6 +168,8 @@ private:
                           const double3 &normal,
                           bool hit) const;
   void emit(StrokeSample s);
+  /* How many more this poll may give. */
+  int32_t room() const;
   double3 synthesizeMiss(double x, double y) const;
   double worldRadiusAt(const double3 &p, double radiusPixels) const;
   double pixelRadiusAt(const double3 &p, double radiusWorld) const;
@@ -165,6 +182,7 @@ private:
   litestl::util::Vector<StrokeSample> out_;
   double carry_ = 0.0;
   double distance_ = 0.0;
+  int64_t dropped_ = 0;
   bool firstHit_ = false;
   double3 lastHit_;
   StrokeSample prev_;

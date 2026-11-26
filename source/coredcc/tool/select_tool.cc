@@ -125,7 +125,7 @@ int32_t SelectModal::onEvent(Context &ctx,
   const Status s =
       box ? boxSelect(ctx, view, press, now, e.modifiers) : clickSelect(ctx, tm, view, e);
   if (!s.ok()) {
-    tm.setStatus(s.message());
+    tm.setOutcome(s.message());
   }
   return modalresult::kFinish;
 }

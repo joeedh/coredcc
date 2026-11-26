@@ -14,6 +14,7 @@
 #include "litestl/util/string.h"
 #include "litestl/util/vector.h"
 
+#include <optional>
 #include <string_view>
 
 namespace coredcc {
@@ -22,6 +23,7 @@ struct Tool;
 struct Modal;
 struct Gizmo;
 class ToolDef;
+class CommandExecutor;
 
 /**
  * Dispatches an event to, in this order:
@@ -43,6 +45,13 @@ class ToolDef;
  *   takes it and fails with FailedPrecondition.
  * - **Busy:** `setActive` while a modal is open, and every call of the manager from
  * inside one of its own slots; everything while a graph evaluates.
+ * - **The Context's ToolManager** is this one during each of its calls (and restored
+ *   after), so that what a slot does through `ctx.tools()`, as scripts do, acts on the
+ *   manager that called it.
+ * - **Slots' arguments** (the manager, the view, the event, the DrawList) are lent for
+ *   the call only: a slot mustn't keep them.
+ * - **Pointers:** a modal pushed during a pointer event gets the pointer events of that
+ *   `pointerId` only; another pointer's are Unhandled, for the host.
  * - **Lifetime:** destroy it before the Runtime, and call `shutdown` before, with a
  *   Context, so that an open gesture is cancelled and the tool deactivated.
  */
@@ -61,11 +70,24 @@ public:
   {
     return def_;
   }
-  /** An eventresult. */
-  Result<int32_t> dispatch(Context &ctx, const View &view, const InputEvent &e);
-  /** Begins `out` at the camera's position, draws the tool's, the gizmos' and the modals'
-   * overlays, and ends it. */
+  /**
+   * An eventresult. InvalidArgument for an event whose type or pointer isn't one
+   * (`InputEvent::valid`). An error of a gizmo's `update` or `hitTest` comes after the
+   * event went on to the tool: with `late`, it goes there and the result is still
+   * returned; without, it is returned instead of the result. The active tool's
+   * `settingsChanged` is called first when its settings changed since the last event.
+   */
+  Result<int32_t> dispatch(Context &ctx,
+                           const View &view,
+                           const InputEvent &e,
+                           Status *late = nullptr);
+  /** Begins `out` at `drawOrigin`, draws the scene's, the tool's, the gizmos' and the
+   * modals' overlays, and ends it. Each slot draws above what was pushed before it: it
+   * can't pop that, and what it leaves pushed is popped after it. */
   Status draw(Context &ctx, const View &view, DrawList &out);
+  /** The DrawLists' origin: unset (the default), the camera's position. A host that
+   * renders relative to another point (a floating origin, a tile's centre) sets it. */
+  std::optional<double3> drawOrigin;
   /** Ends the gesture in progress, cancelling its command. Nothing without one. */
   Status cancel(Context &ctx);
   /** cancel, then deactivates the tool. */
@@ -87,7 +109,9 @@ public:
   {
     return int32_t(modals_.size());
   }
-  /** Its id, 1 or more. The manager owns it until it is removed, or the tool changes. */
+  /** Its id, 1 to kMaxGizmos: the smallest that no gizmo has, so ids are reused. -1 when
+   * there are kMaxGizmos already. The manager owns it until it is removed, or the tool
+   * changes. */
   int32_t addGizmo(Owned<Gizmo> gizmo);
   /** During a dispatch or a draw, the gizmo goes when that ends. */
   void removeGizmo(int32_t id);
@@ -111,17 +135,23 @@ public:
   {
     return activePart_;
   }
-  /** For the host's status bar; tools set it. Emptied when a gesture ends. */
+  /** For the host's status bar; tools set it. When a gesture ends it becomes the
+   * outcome's text, empty unless a slot set one. */
   const litestl::util::string &status() const
   {
     return status_;
   }
   void setStatus(std::string_view text);
+  /** The text to show once the gesture in progress is over (why a click did nothing,
+   * say), instead of an empty status. */
+  void setOutcome(std::string_view text);
 
   /** Logical pixels. */
   double hitRadius = 6.0;
   /** Each gizmo's records' ids are its id times this, plus the part. */
   static constexpr uint32_t kIdStride = 65536;
+  /** So that every record id fits in 32 bits. */
+  static constexpr int32_t kMaxGizmos = 65535;
 
   Runtime &runtime() const
   {
@@ -141,14 +171,17 @@ private:
   /* The sticky error a slot left, if any. */
   Status slotError();
   bool valid(Context &ctx, const ModalEntry &m) const;
-  bool owned(uint64_t serial) const;
-  /* Pops modal i, which must be the top one, committing or cancelling its command. */
+  bool owned(const CommandExecutor *ex, uint64_t serial) const;
+  /* Pops modal i, committing or cancelling its command; the last one to go puts the
+   * outcome in the status. */
   Status finish(Context &ctx, int i, bool commit);
   /* Pops every modal from the top down to i, cancelling. */
   Status cancelFrom(Context &ctx, int i);
+  /* Pops the modals whose command isn't open any more. */
   Status prune(Context &ctx);
   /* A slot began an interactive command and pushed no modal for it. */
   Status orphan(Context &ctx, uint64_t before);
+  /* Only from dispatch, as settingsChanged is an event slot. */
   Status checkSettings(Context &ctx);
   Status updateGizmos(Context &ctx);
   /* The best part under a pixel: its gizmo's index, or -1. A gizmo's error goes in
@@ -164,10 +197,11 @@ private:
   uint64_t settingsVersion_ = 0;
   litestl::util::Vector<ModalEntry *> modals_;
   litestl::util::Vector<GizmoEntry *> gizmos_;
-  int32_t nextGizmo_ = 1;
   int32_t hoverGizmo_ = -1, hoverPart_ = -1;
   int32_t activeGizmo_ = -1, activePart_ = -1;
   litestl::util::string status_;
+  litestl::util::string outcome_;
+  const InputEvent *event_ = nullptr; /* the event being dispatched */
   bool inCall_ = false;
 };
 

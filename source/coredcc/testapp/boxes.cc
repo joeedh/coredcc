@@ -139,7 +139,7 @@ void registerBoxes(Runtime &rt)
 
   ApiStruct s("TestBox");
   s.parent(StructId::of(kObjectDataStruct));
-  s.addField(PropertyDef::floatProp("size").range(0, 100), &Box::half);
+  s.addField(PropertyDef::floatProp("half").range(0, 100), &Box::half); /* half the edge */
   CDCC_CHECK(rt.ext<ApiRegistry>().add(std::move(s)).ok(),
              "testapp: registering TestBox");
 }

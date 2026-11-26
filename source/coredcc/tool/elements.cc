@@ -299,6 +299,18 @@ Status ElementsDelta::exec(Context &ctx)
 
 Status ElementsDelta::update(Context &ctx, const TransformDelta &delta)
 {
+  if (!delta.valid()) {
+    return Status::error(StatusCode::InvalidArgument, "the transform delta isn't valid");
+  }
+  if (delta.identity()) {
+    /* All where they began, partners too, unsnapped: a click changes nothing. */
+    for (Block &b : blocks_) {
+      CDCC_TRY(write(ctx, b, b.before));
+      b.after = b.before;
+    }
+    return Status();
+  }
+  Vector<Vector<double>> all;
   for (Block &b : blocks_) {
     const int n = int(b.handles.size());
     Vector<double> pos;
@@ -306,15 +318,24 @@ Status ElementsDelta::update(Context &ctx, const TransformDelta &delta)
     mat4d full = b.inverse * delta.matrix() * b.world;
     for (int i = 0; i < n; i++) {
       const double w = b.weights[i];
-      const mat4d m = w == 1.0 ? full : b.inverse * weighted(delta, w).matrix() * b.world;
+      const TransformDelta d = w == 1.0 ? delta : weighted(delta, w);
       const double3 p(b.start[3 * i], b.start[3 * i + 1], b.start[3 * i + 2]);
-      double3 q = litestl::math::transformPoint(m, p);
-      for (int axis = 0; axis < 3; axis++) {
-        if (b.onPlanes[i] & (1u << axis)) {
-          q[axis] = 0.0; /* it stays on the mirror plane */
+      double3 q = p;
+      if (!d.identity()) { /* a weight of 0: not snapped either */
+        q = litestl::math::transformPoint(w == 1.0 ? full : b.inverse * d.matrix() * b.world,
+                                          p);
+        for (int axis = 0; axis < 3; axis++) {
+          if (b.onPlanes[i] & (1u << axis)) {
+            q[axis] = 0.0; /* it stays on the mirror plane */
+          }
         }
       }
       for (int k = 0; k < 3; k++) {
+        if (!std::isfinite(q[k])) {
+          return Status::error(StatusCode::InvalidArgument,
+                               "the transform delta moves a point to where it isn't "
+                               "finite (a zero axis or basis?); nothing was moved");
+        }
         pos[3 * i + k] = q[k];
       }
     }
@@ -325,8 +346,12 @@ Status ElementsDelta::update(Context &ctx, const TransformDelta &delta)
         pos[3 * (n + j) + k] = (b.partnerAxes[j] & (1u << k)) ? -v : v;
       }
     }
-    CDCC_TRY(write(ctx, b, pos));
-    b.after = std::move(pos);
+    all.append(std::move(pos));
+  }
+  /* Checked for every block before any is written. */
+  for (int i = 0; i < int(blocks_.size()); i++) {
+    CDCC_TRY(write(ctx, blocks_[i], all[i]));
+    blocks_[i].after = std::move(all[i]);
   }
   return Status();
 }

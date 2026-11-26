@@ -91,6 +91,31 @@ quatd TransformDelta::rotation() const
              : quatd();
 }
 
+bool TransformDelta::valid() const
+{
+  const int32_t k = int32_t(kind);
+  if (k < 0 || k > int32_t(DeltaKind::Scale) || !finiteQuat(basis) || !finite3(pivot) ||
+      !finite3(vector) || !finite3(axis) || !bvh::finite(angle))
+  {
+    return false;
+  }
+  /* A basis or an axis of length 0 has no direction: normalized, it isn't a rotation. */
+  const double b = basis[0] * basis[0] + basis[1] * basis[1] + basis[2] * basis[2] +
+                   basis[3] * basis[3];
+  return b > 0.0 && (kind != DeltaKind::Rotate || axis.dot(axis) > 0.0);
+}
+
+bool TransformDelta::identity() const
+{
+  if (kind == DeltaKind::Translate) {
+    return vector[0] == 0.0 && vector[1] == 0.0 && vector[2] == 0.0;
+  }
+  if (kind == DeltaKind::Rotate) {
+    return angle == 0.0;
+  }
+  return vector[0] == 1.0 && vector[1] == 1.0 && vector[2] == 1.0;
+}
+
 mat4d TransformDelta::matrix() const
 {
   const quatd b = basis.normalized();
@@ -297,11 +322,7 @@ Result<ChannelBlock> solveDelta(const TransformType &type,
   FixedChannels ignored;
   FixedChannels &inTheWay = fixed ? *fixed : ignored;
   inTheWay = FixedChannels();
-  const int32_t kind = delta.kindValue();
-  if (kind < 0 || kind > int32_t(DeltaKind::Scale) || !finiteQuat(delta.basis) ||
-      !finite3(delta.pivot) || !finite3(delta.vector) || !finite3(delta.axis) ||
-      !bvh::finite(delta.angle))
-  {
+  if (!delta.valid()) {
     return Status::error(StatusCode::InvalidArgument, "the transform delta isn't valid");
   }
   if (Status s = ready(type, base); !s.ok()) {

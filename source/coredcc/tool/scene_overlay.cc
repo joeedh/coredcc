@@ -47,16 +47,18 @@ Status drawSceneOverlays(Context &ctx,
     if (!out.pushMatrix(ev.dataWorld()).ok()) {
       continue; /* a matrix that isn't affine or finite: nothing to draw it in */
     }
-    const int32_t depth = out.depth();
-    d.drawOverlay(view, state, out);
-    if (rt.hasStickyError()) {
-      Status err = rt.takeStickyError();
-      first = first.ok() ? err : first;
+    Status s;
+    {
+      /* The slot can't pop the object's push; what it leaves pushed is popped. */
+      DrawSlotScope slot(out);
+      d.drawOverlay(view, state, out);
+      s = rt.hasStickyError() ? rt.takeStickyError() : Status();
+      const Status left = slot.close("an object's drawOverlay");
+      s = s.ok() ? left : s;
     }
-    while (out.depth() > depth) {
-      out.popMatrix().ignore(); /* what the slot pushed and left */
-    }
-    out.popMatrix().ignore();
+    const Status popped = out.popMatrix();
+    s = s.ok() ? popped : s;
+    first = first.ok() ? s : first;
   }
   return first;
 }

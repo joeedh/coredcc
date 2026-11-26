@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace coredcc::stroke {
 
@@ -135,6 +136,8 @@ struct Walk {
   litestl::util::Vector<double> ts;
   /** The arc length since the last one, for the next segment. */
   double carry = 0.0;
+  /** Those past `maxSamples`, which aren't in `ts`. */
+  int64_t dropped = 0;
 };
 
 /**
@@ -143,7 +146,11 @@ struct Walk {
  * with the parameter linear inside each.
  */
 template <int N>
-inline Walk arcLengthWalk(const Cubic<N> &B, double spacing, double carry = 0.0, int chords = 32)
+inline Walk arcLengthWalk(const Cubic<N> &B,
+                          double spacing,
+                          double carry = 0.0,
+                          int chords = 32,
+                          int32_t maxSamples = INT32_MAX)
 {
   Walk res;
   if (spacing <= kEps) {
@@ -162,6 +169,15 @@ inline Walk arcLengthWalk(const Cubic<N> &B, double spacing, double carry = 0.0,
     }
     double local = 0.0;
     while (acc + seg * (1.0 - local) >= spacing) {
+      if (int32_t(res.ts.size()) >= maxSamples) {
+        /* Counted, not walked: the rest of this chord at once. */
+        const double rest = acc + seg * (1.0 - local);
+        const double n = std::floor(rest / spacing);
+        res.dropped += int64_t(n);
+        acc = rest - n * spacing;
+        local = 1.0;
+        break;
+      }
       local += (spacing - acc) / seg;
       res.ts.append(sA + (sB - sA) * local);
       acc = 0.0;

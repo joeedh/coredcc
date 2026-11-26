@@ -316,8 +316,14 @@ IntResult toolEvent(Context &ctx, const View &v, const InputEvent &e)
   if (!tm.ok()) {
     return failed<IntResult>(tm.status());
   }
-  Result<int32_t> r = (*tm)->dispatch(ctx, v, e);
-  return r.ok() ? ok<IntResult>(int64_t(*r)) : failed<IntResult>(r.status());
+  Status late;
+  Result<int32_t> r = (*tm)->dispatch(ctx, v, e, &late);
+  if (!r.ok()) {
+    return failed<IntResult>(r.status());
+  }
+  IntResult out = ok<IntResult>(int64_t(*r));
+  out.status = late;
+  return out;
 }
 
 Status toolDraw(Context &ctx, const View &v, DrawList &out)
@@ -354,6 +360,15 @@ Status toolSetStatus(Context &ctx, const string &text)
   return Status();
 }
 
+Status toolSetOutcome(Context &ctx, const string &text)
+{
+  CDCC_TRY(slotGate(ctx, "toolSetOutcome", {}));
+  Result<ToolManager *> tm = managerOf(ctx, "toolSetOutcome");
+  CDCC_TRY(tm.status());
+  (*tm)->setOutcome(view(text));
+  return Status();
+}
+
 StringResult toolActive(Context &ctx)
 {
   if (Status s = slotGate(ctx, "toolActive", {}, Gate::Read); !s.ok()) {
@@ -385,7 +400,7 @@ toolPushModal(Context &ctx, uint32_t modal, const string &slots, bool ownsIntera
   return (*tm)->pushModal(ctx, std::move(m).value(), ownsInteractive);
 }
 
-IntResult toolAddGizmo(Context &ctx, const string &kind)
+IntResult toolAddGizmo(Context &ctx, const string &kind, const string &settingsOf)
 {
   if (Status s = slotGate(ctx, "toolAddGizmo", {}); !s.ok()) {
     return failed<IntResult>(std::move(s));
@@ -400,10 +415,16 @@ IntResult toolAddGizmo(Context &ctx, const string &kind)
                                        std::string(view(kind)) +
                                        "' (there is 'transform')"));
   }
-  const ToolDef *def = ctx.runtime().ext<ToolRegistry>().find(kTransformTool);
+  ToolRegistry &reg = ctx.runtime().ext<ToolRegistry>();
+  const std::string_view of = view(settingsOf).empty() ? std::string_view(kTransformTool)
+                                                       : view(settingsOf);
+  const ToolDef *def = reg.find(of);
   if (!def) {
-    return failed<IntResult>(error(StatusCode::FailedPrecondition,
-                                   "toolAddGizmo: the built-in tools aren't registered"));
+    Status s = view(settingsOf).empty()
+                   ? error(StatusCode::FailedPrecondition,
+                           "toolAddGizmo: the built-in tools aren't registered")
+                   : reg.unknown(of);
+    return failed<IntResult>(std::move(s));
   }
   auto *g = litestl::alloc::New<gizmo::TransformGizmo>("coredcc::gizmo::TransformGizmo");
   g->tool = def;
@@ -484,6 +505,12 @@ Status dragUpdateEach(Context &ctx, const Vector<double> &numbers)
     Vector<TransformDelta> deltas;
     for (int i = 0; i < d.count(); i++) {
       const double *n = numbers.data() + kEach * i;
+      if (!(n[0] == 0.0 || n[0] == 1.0 || n[0] == 2.0)) {
+        return error(StatusCode::InvalidArgument,
+                     "dragUpdateEach: delta " + std::to_string(i) +
+                         ": a kind of 0 (translate), 1 (rotate) or 2 (scale), not " +
+                         std::to_string(n[0]));
+      }
       TransformDelta t;
       t.kind = DeltaKind(int32_t(n[0]));
       t.basis = quatd(n[1], n[2], n[3], n[4]);
@@ -579,13 +606,15 @@ void addToolBindings(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::toolCancel", script::toolCancel, MARGS("ctx"));
   BIND_FACADE(mgr, "coredcc::toolStatus", script::toolStatus, MARGS("ctx"));
   BIND_FACADE(mgr, "coredcc::toolSetStatus", script::toolSetStatus, MARGS("ctx", "text"));
+  BIND_FACADE(mgr, "coredcc::toolSetOutcome", script::toolSetOutcome, MARGS("ctx", "text"));
   BIND_FACADE(mgr, "coredcc::toolActive", script::toolActive, MARGS("ctx"));
   BIND_OWNING_FACADE(mgr,
                      "coredcc::toolPushModal",
                      script::toolPushModal,
                      2,
                      MARGS("ctx", "modal", "slots", "ownsInteractive"));
-  BIND_FACADE(mgr, "coredcc::toolAddGizmo", script::toolAddGizmo, MARGS("ctx", "kind"));
+  BIND_FACADE(
+      mgr, "coredcc::toolAddGizmo", script::toolAddGizmo, MARGS("ctx", "kind", "settingsOf"));
   BIND_OWNING_FACADE(mgr,
                      "coredcc::toolAddForeignGizmo",
                      script::toolAddForeignGizmo,

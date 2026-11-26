@@ -55,15 +55,32 @@ struct Script {
   bool reenter = false;  /* the tool calls the manager from its slot */
   bool stickyInModal = false;
   bool stickyInUpdate = false;
+  bool handover = false;    /* 'n' in the modal commits and begins the next drag */
+  bool outcome = false;     /* the modal's release sets an outcome text */
+  bool popInDraw = false;   /* the modal's drawOverlay pops what it didn't push */
+  ToolManager *seen = nullptr; /* ctx.tools() in the tool's onEvent */
   Status reentered;
 };
 Script g_script;
 
+Status pushDragModal(Context &ctx, ToolManager &tm);
+
 /* Sets tool.strength from x while the button is down; up finishes, Escape cancels. */
 struct DragModal {
-  int32_t onEvent(Context &ctx, ToolManager &, const ViewMath &, const InputEvent &e)
+  int32_t onEvent(Context &ctx, ToolManager &tm, const ViewMath &, const InputEvent &e)
   {
     g_log += "modal;";
+    if (g_script.handover && e.type == EventType::KeyDown && e.key == 'n') {
+      /* Ends its own drag and hands over to a new one, with a modal of its own. */
+      ctx.executor()->commit(ctx).ignore();
+      beginDragCommand(ctx).ignore();
+      pushDragModal(ctx, tm).ignore();
+      return modalresult::kContinue;
+    }
+    if (g_script.outcome && e.type == EventType::PointerUp) {
+      tm.setStatus("dragging");
+      tm.setOutcome("nothing to drag");
+    }
     if (g_script.stickyInModal) {
       ctx.runtime().setStickyError(Status::error(StatusCode::Internal, "thrown"));
       return modalresult::kContinue;
@@ -83,6 +100,12 @@ struct DragModal {
   {
     const double xy[4] = {0, 0, 10, 10};
     out.line2d(DrawStyle(), std::span<const double>(xy, 4)).ignore();
+    if (g_script.popInDraw) {
+      g_script.reentered = out.popMatrix(); /* refused: nothing of its own to pop */
+      mat4d m;
+      m.identity();
+      out.pushMatrix(m).ignore(); /* and left: popped after it, and an error */
+    }
   }
   void end(Context &, bool committed)
   {
@@ -171,6 +194,7 @@ struct DragTool {
   }
   int32_t onEvent(Context &ctx, ToolManager &tm, const ViewMath &, const InputEvent &e)
   {
+    g_script.seen = ctx.tools();
     if (g_script.reenter) {
       g_script.reentered = tm.setActive(ctx, "");
     }
@@ -278,11 +302,15 @@ static void test_registry()
                                           .layout("<layout><prop path='nope'/></layout>"))
                   .status()
                   .code() == StatusCode::InvalidArgument);
+  /* Checked twice (by addNativeTool, then add) against one struct, made once. */
+  ApiRegistry &api = s.w.rt.ext<ApiRegistry>();
+  const int structs = api.structCount();
   test_assert(addNativeTool<DragTool>(s.w.rt,
                                       ToolDef("test.tool.layout")
                                           .setting(PropertyDef::intProp("a"))
                                           .layout("<layout><prop path='a'/></layout>"))
                   .ok());
+  test_assert(api.structCount() == structs + 1);
   Status unknown = reg.unknown("test.tool.drga");
   test_assert(unknown.code() == StatusCode::NotFound &&
               unknown.suggestions().size() >= 1);
@@ -524,6 +552,100 @@ static void test_errors_and_busy()
   test_assert(s.tm.cancel(s.ctx).ok() && !s.ex.interactiveOpen());
 }
 
+/* What the tools-and-overlay review found (docs/reports/feature-report-tools-overlay-
+ * 2026-11-26.md), each as it was proved. */
+static void test_review_fixes()
+{
+  ToolSetup s;
+  test_assert(s.tm.setActive(s.ctx, "test.tool.drag").ok() && s.tm.gizmoCount() == 1);
+  const auto gizmo = [&] {
+    Result<Owned<Gizmo>> g = own<Gizmo>(
+        s.w.rt, "test.gizmo", litestl::alloc::New<DiscGizmo>("test::DiscGizmo"));
+    return s.tm.addGizmo(std::move(g).value());
+  };
+
+  /* clearGizmos outside a call, with three: all of them go (it skipped every other). */
+  test_assert(gizmo() == 2 && gizmo() == 3 && s.tm.gizmoCount() == 3);
+  s.tm.clearGizmos();
+  test_assert(s.tm.gizmoCount() == 0);
+  /* Ids are reused, the smallest free first, so record ids stay within 32 bits. */
+  test_assert(gizmo() == 1 && gizmo() == 2 && gizmo() == 3);
+  s.tm.removeGizmo(2);
+  test_assert(gizmo() == 2 && s.tm.gizmoCount() == 3);
+  s.tm.clearGizmos();
+  test_assert(gizmo() == 1);
+
+  /* A slot's ctx.tools() is the manager that called it, and is put back after. */
+  ToolManager other(s.w.rt);
+  test_assert(other.setActive(s.ctx, "test.tool.drag").ok());
+  test_assert(other.dispatch(s.ctx, s.view, event(EventType::KeyDown, 0, 0)).ok());
+  test_assert(g_script.seen == &other && s.ctx.tools() == &s.tm);
+  other.shutdown(s.ctx);
+
+  /* settingsChanged is an event slot: a draw doesn't call it; the next event does. */
+  ToolSettingsStore &st = s.w.rt.ext<ToolSettingsStore>();
+  test_assert(st.set(*s.tool, "size", PropValue::ofFloat(7)).ok());
+  g_log.clear();
+  DrawList out;
+  test_assert(s.tm.draw(s.ctx, s.view, out).ok() && g_log.find("settings;") == std::string::npos);
+  test_assert(s.send(event(EventType::PointerMove, 500, 500)).ok());
+  test_assert(g_log.find("settings;") != std::string::npos);
+
+  /* An event whose type isn't one. */
+  InputEvent junk = event(EventType::PointerMove, 0, 0);
+  junk.setType(42);
+  test_assert(s.send(junk).status().code() == StatusCode::InvalidArgument);
+  junk = event(EventType::PointerMove, 0, 0);
+  junk.setPointer(-1);
+  test_assert(s.send(junk).status().code() == StatusCode::InvalidArgument);
+
+  /* A modal gets its own pointer's events only. */
+  test_assert(s.send(event(EventType::PointerDown, 500, 500)).ok() && s.tm.modalOpen());
+  InputEvent finger = event(EventType::PointerMove, 900, 500);
+  finger.pointerId = 5;
+  g_log.clear();
+  Result<int32_t> r = s.send(finger);
+  test_assert(r.ok() && *r == eventresult::kUnhandled && g_log.empty());
+  test_assert(strength(s.ctx) == 0.5);
+
+  /* A modal hands over to a new drag: the new modal stays, with its command. */
+  g_script.handover = true;
+  InputEvent next = event(EventType::KeyDown, 0, 0);
+  next.key = 'n';
+  test_assert(s.send(next).ok());
+  test_assert(s.tm.modalCount() == 1 && s.ex.interactiveOpen() && s.history.size() == 1);
+  g_script.handover = false;
+
+  /* The outcome text outlives the gesture; the gesture's own doesn't. */
+  g_script.outcome = true;
+  test_assert(s.send(event(EventType::PointerUp, 500, 500)).ok() && !s.tm.modalOpen());
+  test_assert(std::string(s.tm.status().c_str()) == "nothing to drag");
+  g_script.outcome = false;
+
+  /* A gizmo's update that throws, with `late`: the result and the error, both. */
+  g_script.stickyInUpdate = true;
+  Status late;
+  r = s.tm.dispatch(s.ctx, s.view, event(EventType::PointerDown, 500, 500), &late);
+  test_assert(r.ok() && *r == eventresult::kHandled && late.code() == StatusCode::Internal);
+  test_assert(s.tm.modalOpen());
+  g_script.stickyInUpdate = false;
+
+  /* A slot can't pop what was pushed before it, and what it leaves is an error. */
+  g_script.popInDraw = true;
+  const Status drawn = s.tm.draw(s.ctx, s.view, out);
+  test_assert(drawn.code() == StatusCode::InvalidArgument);
+  test_assert(g_script.reentered.code() == StatusCode::InvalidArgument);
+  DrawListReader rd;
+  test_assert(rd.read(out.bytes()).ok());
+  g_script.popInDraw = false;
+  test_assert(s.tm.cancel(s.ctx).ok());
+
+  /* The host chooses the origin. */
+  s.tm.drawOrigin = double3(5, 6, 7);
+  test_assert(s.tm.draw(s.ctx, s.view, out).ok() && rd.read(out.bytes()).ok());
+  test_assert(rd.origin()[0] == 5.0 && rd.origin()[1] == 6.0 && rd.origin()[2] == 7.0);
+}
+
 static void test_shutdown()
 {
   ToolSetup s;
@@ -546,6 +668,7 @@ int main()
   test_undo_during_drag();
   test_gizmo();
   test_errors_and_busy();
+  test_review_fixes();
   test_shutdown();
   return test_end();
 }

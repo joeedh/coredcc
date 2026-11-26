@@ -77,6 +77,7 @@ Status DrawList::begin(const double3 &origin)
   size_ = kHeaderBytes;
   records_ = 0;
   depth_ = 0;
+  floor_ = 0;
   frozen_ = false;
   finishHeader();
   return ok ? Status() : bad("begin", "the origin isn't finite");
@@ -88,6 +89,7 @@ Status DrawList::end()
     return Status();
   }
   const int32_t left = depth_;
+  floor_ = 0;
   while (depth_ > 0) {
     popMatrix().ignore();
   }
@@ -139,6 +141,7 @@ uint8_t *DrawList::append(DrawKind kind,
   put<float>(p + 12, style.width);
   put<uint32_t>(p + 16, style.id);
   put<uint32_t>(p + 20, aux);
+  std::memset(p + kRecordHeaderBytes + payloadBytes, 0, rec - kRecordHeaderBytes - payloadBytes);
   size_ += rec;
   records_++;
   finishHeader();
@@ -265,10 +268,35 @@ Status DrawList::popMatrix()
   if (depth_ == 0) {
     return bad("popMatrix", "no push to pop");
   }
+  if (depth_ <= floor_) {
+    return bad("popMatrix", "the push to pop was made before this slot was called");
+  }
   CDCC_TRY(room(kRecordHeaderBytes, "popMatrix"));
   append(DrawKind::PopMatrix, DrawStyle(), 0, 0, 0);
   depth_--;
   return Status();
+}
+
+Status DrawSlotScope::close(const char *who)
+{
+  if (closed_) {
+    return Status();
+  }
+  closed_ = true;
+  const int32_t left = list_.depth() - depth_;
+  while (list_.depth() > depth_) {
+    if (!list_.popMatrix().ok()) {
+      break; /* a frozen list: end popped them */
+    }
+  }
+  list_.setFloor(floor_);
+  if (left <= 0 || !who) {
+    return Status();
+  }
+  return Status::error(StatusCode::InvalidArgument,
+                       (std::string(who) + " left " + std::to_string(left) +
+                        (left == 1 ? " push" : " pushes") + " on the DrawList, now popped")
+                           .c_str());
 }
 
 Status

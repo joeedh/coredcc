@@ -301,6 +301,33 @@ void testDraw()
   must(d.tm.cancel(*d.ctx));
 }
 
+/* A command moved the object after the last evaluation, and the press comes before the
+ * next: the scale is about where the object is, not where it was drawn. */
+void testPivotAfterCommand()
+{
+  ToolDoc d;
+  const BlockHandle a = d.box("a", 1, 1, 0);
+  d.select({a});
+  d.settingKey("mode", "SCALE");
+  d.useTool(kTransformTool);
+  const Frame f = d.gizmoFrame();
+  const Pixel press = d.pixelOf(f.pivot + f.axes[0] * (f.unit * 0.8));
+  const double dx = press.x - f.centre.x, dy = press.y - f.centre.y;
+  d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(3, 0, 0)}});
+  must(d.send(EventType::PointerDown, press.x, press.y).status());
+  for (int i = 1; i <= 4; i++) {
+    const double t = 1.0 + double(i) / 4;
+    must(d.send(EventType::PointerMove, f.centre.x + dx * t, f.centre.y + dy * t,
+                modifiers::kCtrl)
+             .status());
+  }
+  must(d.send(EventType::PointerUp, f.centre.x + dx * 2, f.centre.y + dy * 2,
+              modifiers::kCtrl)
+           .status());
+  const double3 p = d.position(a);
+  test_assert(std::abs(p[0] - 4) < 1e-9 && std::abs(p[1] - 1) < 1e-9 && std::abs(p[2]) < 1e-9);
+}
+
 } // namespace
 
 int main()
@@ -312,5 +339,6 @@ int main()
   testLockedAndChildren();
   testPivotAndSize();
   testDraw();
+  testPivotAfterCommand();
   return test_end();
 }

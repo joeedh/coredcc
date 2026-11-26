@@ -339,6 +339,43 @@ void testToolDrag()
   test_assert(d.history->size() == 1 && d.history->canRedo());
 }
 
+/* From the tools-and-overlay review: a click moves no point on a mirror plane, and a
+ * delta that isn't finite, or gives points that aren't, is refused before any write. */
+void testReviewFixes()
+{
+  ElementsDoc d;
+  const BlockHandle o = d.pointsObject("o", {{1, 0, 0}, {0, 1, 0}, {1e-13, 2, 0}});
+  Points &p = d.pointsOf(0);
+  p.symAxes = 1;
+  p.selected = {1, 1, 1};
+  d.select({o});
+  d.evaluate();
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kElementsDragDeltaCommand);
+  PropertyBag in = def->newInputs();
+  must(in.set("symmetry", PropValue::ofBool(true)));
+  must(d.ex->beginInteractive(*d.ctx, *def, std::move(in)));
+  test_assert(!d.ex->interactiveCommand()->as<ElementsDelta>()->changed());
+  test_assert(p.pos[2][0] == 1e-13); /* not snapped to 0 */
+  const int writes = p.writes;
+  const auto update = [&](const TransformDelta &t) {
+    return d.ex->updateInteractive(*d.ctx, [&](Context &c, Command &cmd) {
+      return cmd.as<ElementsDelta>()->update(c, t);
+    });
+  };
+  TransformDelta nan;
+  nan.vector = double3(std::nan(""), 0, 0);
+  test_assert(update(nan).code() == StatusCode::InvalidArgument);
+  TransformDelta zeroAxis;
+  zeroAxis.kind = DeltaKind::Rotate;
+  zeroAxis.axis = double3(0, 0, 0);
+  zeroAxis.angle = 0.5;
+  test_assert(update(zeroAxis).code() == StatusCode::InvalidArgument);
+  test_assert(p.writes == writes && p.pos[0][0] == 1.0 && std::isfinite(p.pos[1][1]));
+  if (d.ex->interactiveOpen()) {
+    must(d.ex->cancel(*d.ctx));
+  }
+}
+
 } // namespace
 
 int main()
@@ -348,5 +385,6 @@ int main()
   testSymmetry();
   testSkipsAndDetail();
   testToolDrag();
+  testReviewFixes();
   return test_end();
 }

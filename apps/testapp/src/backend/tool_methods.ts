@@ -107,8 +107,10 @@ export function installToolMethods(method: DefineMethod, ctx: () => Context, gpu
   method('frame', async () => {
     const c = ctx()
     cdcc.evaluateScene(c)
-    last = cdcc.drawTools(c, view()).decoded
+    const drawn = cdcc.drawTools(c, view())
+    last = drawn.decoded /* what was drawn, even when a slot failed */
     const gpuError = await gpu?.renderNow()
+    if (drawn.error) throw drawn.error
     if (gpuError) throw new Error(`frame: WebGPU: ${gpuError}`)
     return {records: last.records.length, rendered: !!gpu?.gpuState()}
   })

@@ -47,6 +47,23 @@ bool finiteDoubles(const uint8_t *p, int count)
   return true;
 }
 
+/* A column-major matrix's last row is 0, 0, 0, 1. */
+bool affineAt(const uint8_t *p)
+{
+  return get<double>(p + 8 * 3) == 0.0 && get<double>(p + 8 * 7) == 0.0 &&
+         get<double>(p + 8 * 11) == 0.0 && get<double>(p + 8 * 15) == 1.0;
+}
+
+bool zeros(const uint8_t *p, uint64_t count)
+{
+  for (uint64_t i = 0; i < count; i++) {
+    if (p[i] != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /* The payload's size that `item` needs, or an error. */
 Status payloadOf(const DrawItem &item, uint64_t at, uint64_t &need)
 {
@@ -109,6 +126,12 @@ Status DrawListReader::read(std::span<const uint8_t> bytes)
   if (get<uint16_t>(b + 4) != DrawList::kVersion) {
     return bad(4, "version " + std::to_string(get<uint16_t>(b + 4)) + ", not 1");
   }
+  if (get<uint16_t>(b + 6) != 0) {
+    return bad(6, "header flags that don't exist");
+  }
+  if (get<uint64_t>(b + 40) != 0) {
+    return bad(40, "a reserved word that isn't 0");
+  }
   const uint32_t count = get<uint32_t>(b + 8);
   if (get<uint32_t>(b + 12) != size) {
     return bad(12,
@@ -156,6 +179,9 @@ Status DrawListReader::read(std::span<const uint8_t> bytes)
     }
     item.payload = r + DrawList::kRecordHeaderBytes;
     item.payloadBytes = uint32_t(need);
+    if (!zeros(item.payload + need, pad8(need) - need)) {
+      return bad(at, "padding that isn't zeros");
+    }
     const bool isMatrix =
         item.kind == DrawKind::Shape || item.kind == DrawKind::PushMatrix;
     const uint64_t floats = isMatrix                           ? 0
@@ -166,6 +192,12 @@ Status DrawListReader::read(std::span<const uint8_t> bytes)
     if (isMatrix ? !finiteDoubles(item.payload, 16) : !finiteFloats(item.payload, floats))
     {
       return bad(at, "a number that isn't finite");
+    }
+    if (isMatrix && !affineAt(item.payload)) {
+      return bad(at, "a matrix that isn't affine");
+    }
+    if (item.kind == DrawKind::Circle2D && get<float>(item.payload + 8) < 0.0f) {
+      return bad(at, "a negative radius");
     }
     if (item.kind == DrawKind::PushMatrix) {
       depth++;

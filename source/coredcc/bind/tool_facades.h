@@ -65,12 +65,15 @@ Status registerForeignStrokeBrush(Context &ctx,
 /* ---- the Context's ToolManager ---- */
 
 Status toolSetActive(Context &ctx, const string &id);
-/** An eventresult. */
+/** An eventresult. An error of a gizmo's update or hit test (ToolManager::dispatch's
+ * `late`) is the status, with the result still the value. */
 IntResult toolEvent(Context &ctx, const View &view, const InputEvent &e);
+/** `out` has what was drawn even when this fails. */
 Status toolDraw(Context &ctx, const View &view, DrawList &out);
 Status toolCancel(Context &ctx);
 StringResult toolStatus(Context &ctx);
 Status toolSetStatus(Context &ctx, const string &text);
+Status toolSetOutcome(Context &ctx, const string &text);
 /** The active tool's id, or "". */
 StringResult toolActive(Context &ctx);
 
@@ -80,9 +83,10 @@ StringResult toolActive(Context &ctx);
  * is its (ToolManager::pushModal). */
 Status
 toolPushModal(Context &ctx, uint32_t modal, const string &slots, bool ownsInteractive);
-/** Adds a built-in gizmo: "transform", which follows core.tool.transform's settings. Its
- * id. */
-IntResult toolAddGizmo(Context &ctx, const string &kind);
+/** Adds a built-in gizmo: "transform", which follows the settings of the tool
+ * `settingsOf` (mode, pivot, orientation, target and so on, as core.tool.transform has
+ * them; a missing one is its default), or core.tool.transform's for "". Its id. */
+IntResult toolAddGizmo(Context &ctx, const string &kind, const string &settingsOf);
 /** Adds the script gizmo `gizmo`. Its id. */
 IntResult toolAddForeignGizmo(Context &ctx, uint32_t gizmo, const string &slots);
 Status toolRemoveGizmo(Context &ctx, int32_t id);

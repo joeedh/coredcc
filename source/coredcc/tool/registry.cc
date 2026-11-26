@@ -7,6 +7,7 @@
 #include "coredcc/tool/settings.h"
 #include "coredcc/tool/tool.h"
 
+#include <cstdio>
 #include <string>
 
 namespace coredcc {
@@ -83,14 +84,26 @@ Status refuse(const std::string &tool, const std::string &why)
                        ("tool '" + tool + "': " + why).c_str());
 }
 
-/* A struct of the settings' defs alone, under a name of its own, to check a layout
- * against before the def is registered. Its accessors are never called. */
-StructId scratchStruct(Runtime &rt, const ToolDef &def, uint64_t serial)
+/* A struct of the settings' defs alone, to check a layout against before the def is
+ * registered. Named by the settings' names and kinds, so checking the same def again (as
+ * addNativeTool and add both do) finds the one made before. Its accessors are never
+ * called. */
+StructId scratchStruct(Runtime &rt, const ToolDef &def)
 {
   ApiRegistry &reg = rt.ext<ApiRegistry>();
   rt.ext<ToolSettingsStore>(); /* its base struct */
-  const std::string name = std::string("ToolSettingsCheck:") + def.name().c_str() + "#" +
-                           std::to_string(serial);
+  std::string shape;
+  for (int i = 0; i < def.settingCount(); i++) {
+    const PropertyDef &s = def.settingDef(i);
+    shape += std::string(s.apiName().c_str()) + ":" + std::to_string(int(s.kind())) + ";";
+  }
+  char hash[17];
+  snprintf(hash, sizeof hash, "%016llx", (unsigned long long)TypeId::of(shape).value);
+  const std::string name =
+      std::string("ToolSettingsCheck:") + def.name().c_str() + "#" + hash;
+  if (reg.find(StructId::of(name))) {
+    return StructId::of(name);
+  }
   ApiStruct st(name);
   st.parent(ToolSettingsStore::baseStruct());
   for (int i = 0; i < def.settingCount(); i++) {
@@ -140,7 +153,7 @@ Status ToolRegistry::validateDef(const ToolDef &def) const
     if (!layout.ok()) {
       return refuse(name, std::string("its layout: ") + layout.status().message());
     }
-    const StructId root = scratchStruct(rt_, def, ++checks_);
+    const StructId root = scratchStruct(rt_, def);
     for (const LayoutIssue &issue : validateLayout(rt_, root, *layout)) {
       if (issue.severity == LayoutSeverity::Error) {
         return refuse(name, std::string("its layout: ") + issue.status.message());

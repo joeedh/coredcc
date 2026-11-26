@@ -16,8 +16,9 @@ namespace coredcc {
  * block's, else its own), with the object's `dataWorld` pushed. `state` has
  * OverlayState::Selected and Active. A null scene draws nothing.
  *
- * A foreign slot's exception is the Runtime's sticky error: the first one is taken and
- * returned, after the others drew.
+ * A slot can't pop the object's push (DrawSlotScope). What it leaves pushed is popped
+ * and is an error. A foreign slot's exception is the Runtime's sticky error. The first
+ * error is returned, after the others drew.
  */
 Status
 drawSceneOverlays(Context &ctx, BlockHandle scene, const ViewMath &view, DrawList &out);
