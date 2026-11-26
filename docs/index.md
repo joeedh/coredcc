@@ -18,6 +18,8 @@ Each phase has one, pressure-tested before it was implemented, with notes on wha
 - [P3: objects, transforms and BVH](plans/2026-11-24-p3-objects-bvh.md). "What P4 and P5c rely on" is the
   contract for overrides and drags.
 - [P5: graph and instancing](plans/2026-11-24-p5-graph.md). It also has what P5c needs of it.
+- [P5c: the scene evaluator](plans/2026-11-25-p5c-scene-evaluator.md): graphs that drive objects, and an
+  incremental evaluation.
 - [Integration test app](plans/2026-11-19-test-app.md)
 - [Build cache and worktrees](plans/2026-11-23-build-cache-worktrees.md)
 
