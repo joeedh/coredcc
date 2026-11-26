@@ -4,6 +4,7 @@
 
 #include "coredcc/command/executor.h"
 #include "coredcc/scene/commands.h"
+#include "coredcc/tool/elements.h"
 #include "coredcc/tool/settings.h"
 
 #include "litestl/binding/binding.h"
@@ -107,6 +108,10 @@ TransformSettings TransformSettings::read(Runtime &rt, const ToolDef &def)
   s.angleStep = settingFloat(st, def, "angleStep", s.angleStep);
   s.scaleStep = settingFloat(st, def, "scaleStep", s.scaleStep);
   s.size = settingFloat(st, def, "size", s.size);
+  s.elements = settingEnum(st, def, "target") == 1;
+  s.domain = int32_t(settingEnum(st, def, "domain"));
+  const PropValue *sym = st.get(def, "symmetry");
+  s.symmetry = sym && sym->tryBool().value_or(false);
   return s;
 }
 
@@ -294,7 +299,9 @@ void TransformGizmo::update(Context &ctx)
     return;
   }
   settings = TransformSettings::read(ctx.runtime(), *tool);
-  placement = computePlacement(ctx, settings.pivot, settings.orientation);
+  placement = settings.elements
+                  ? computeElementPlacement(ctx, settings.domain, settings.orientation)
+                  : computePlacement(ctx, settings.pivot, settings.orientation);
 }
 
 GizmoHit TransformGizmo::hitTest(const ViewMath &view, double x, double y) const
@@ -347,13 +354,19 @@ Status TransformGizmo::beginDrag(
     Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e, int32_t p)
 {
   CommandExecutor *ex = ctx.executor();
-  const CommandDef *def = ctx.runtime().ext<CommandRegistry>().find(kDragDeltaCommand);
+  const CommandDef *def = ctx.runtime().ext<CommandRegistry>().find(
+      settings.elements ? kElementsDragDeltaCommand : kDragDeltaCommand);
   if (!ex || !def) {
     return Status::error(
         StatusCode::FailedPrecondition,
         "the transform gizmo needs an executor and the scene's commands");
   }
-  CDCC_TRY(ex->beginInteractive(ctx, *def, def->newInputs()));
+  PropertyBag inputs = def->newInputs();
+  if (settings.elements) {
+    CDCC_TRY(inputs.set("domain", PropValue::ofEnum(settings.domain)));
+    CDCC_TRY(inputs.set("symmetry", PropValue::ofBool(settings.symmetry)));
+  }
+  CDCC_TRY(ex->beginInteractive(ctx, *def, std::move(inputs)));
   TransformModal *m =
       litestl::alloc::New<TransformModal>("coredcc::gizmo::TransformModal");
   m->settings = settings;

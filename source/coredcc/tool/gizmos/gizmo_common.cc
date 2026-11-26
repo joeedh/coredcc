@@ -3,6 +3,7 @@
 #include "coredcc/scene/capabilities.h"
 #include "coredcc/scene/evaluated.h"
 #include "coredcc/scene/scene.h"
+#include "coredcc/tool/elements.h"
 
 #include "litestl/math/transform.h"
 #include "litestl/util/map.h"
@@ -95,6 +96,59 @@ Placement computePlacement(Context &ctx, PivotMode pivot, Orientation orientatio
   if (orientation == Orientation::Local) {
     out.basis = evals[activeAt >= 0 ? activeAt : roots[0]].state.rotation;
   }
+  return out;
+}
+
+Placement computeElementPlacement(Context &ctx, int32_t domain, Orientation orientation)
+{
+  Placement out;
+  Library *lib = ctx.library();
+  Scene *scene = lib ? Scene::of(*lib, ctx.scene()) : nullptr;
+  if (!scene) {
+    return out;
+  }
+  litestl::util::Map<uint64_t, bool>
+      seen; /* a data block shared by objects counts once */
+  double3 sum(0.0, 0.0, 0.0);
+  int64_t n = 0;
+  const BlockHandle active = scene->active(*lib);
+  bool haveBasis = false;
+  ElementSet set;
+  for (BlockHandle h : scene->selected(*lib)) {
+    ObjectEval ev;
+    if (!scene->evaluated(h, ev) || !ev.member || !usable(ev)) {
+      continue;
+    }
+    const BlockHandle data = detail::elementsBlock(*lib, h);
+    if (!data || seen.lookup_ptr(data.computeHash())) {
+      continue;
+    }
+    seen.add(data.computeHash(), true);
+    set.clear();
+    const TransformableElements te = lib->query<TransformableElements>(data);
+    if (!te.gather(domain, set).ok() || ctx.runtime().hasStickyError()) {
+      ctx.runtime().takeStickyError().ignore(); /* drawn without it */
+      continue;
+    }
+    for (int i = 0; i < set.size(); i++) {
+      const double3 p(
+          set.positions[3 * i], set.positions[3 * i + 1], set.positions[3 * i + 2]);
+      sum = sum + litestl::math::transformPoint(ev.dataWorld(), p);
+      n++;
+    }
+    if (set.size() > 0 && orientation == Orientation::Local &&
+        (!haveBasis || h == active))
+    {
+      out.basis = ev.state.rotation;
+      haveBasis = true;
+    }
+  }
+  if (n == 0) {
+    return Placement();
+  }
+  out.visible = true;
+  out.count = int32_t(n);
+  out.pivot = sum * (1.0 / double(n));
   return out;
 }
 

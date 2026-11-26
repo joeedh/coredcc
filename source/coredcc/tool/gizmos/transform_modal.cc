@@ -2,6 +2,7 @@
  * pivot or the orientation is the objects' own, and the status text. */
 #include "coredcc/command/executor.h"
 #include "coredcc/scene/commands.h"
+#include "coredcc/tool/elements.h"
 #include "coredcc/tool/gizmos/transform_gizmo.h"
 #include "coredcc/tool/manager.h"
 
@@ -217,6 +218,9 @@ int32_t TransformModal::onEvent(Context &ctx,
     const bool each = settings.pivot == PivotMode::Individual ||
                       settings.orientation == Orientation::Local;
     Status s = ex->updateInteractive(ctx, [&](Context &c, Command &cmd) {
+      if (ElementsDelta *el = cmd.as<ElementsDelta>()) {
+        return el->update(c, d); /* elements have no pivots or bases of their own */
+      }
       ApplyDelta *a = cmd.as<ApplyDelta>();
       if (!a) {
         return Status::error(StatusCode::Internal, "the open command isn't a drag delta");
@@ -264,8 +268,10 @@ int32_t TransformModal::onEvent(Context &ctx,
   }
   Command *cmd = ex->interactiveCommand();
   const ApplyDelta *a = cmd ? cmd->as<ApplyDelta>() : nullptr;
+  const ElementsDelta *el = cmd ? cmd->as<ElementsDelta>() : nullptr;
   /* A click that moved nothing makes no step. */
-  return a && a->changed() ? modalresult::kFinish : modalresult::kCancel;
+  const bool changed = (a && a->changed()) || (el && el->changed());
+  return changed ? modalresult::kFinish : modalresult::kCancel;
 }
 
 void TransformModal::drawOverlay(const ViewMath &view, DrawList &out) const

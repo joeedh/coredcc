@@ -126,6 +126,7 @@
 #include "coredcc/scene/solve.h"
 #include "coredcc/scene/transform_registry.h"
 #include "coredcc/tool/builtins.h"
+#include "coredcc/tool/elements.h"
 #include "coredcc/tool/event_script.h"
 #include "coredcc/tool/gizmos/drag_math.h"
 #include "coredcc/tool/gizmos/gizmo_common.h"

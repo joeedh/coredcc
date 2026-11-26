@@ -2,6 +2,7 @@
 #include "coredcc/tool/builtins.h"
 
 #include "coredcc/base/iface/registry.h"
+#include "coredcc/tool/elements.h"
 #include "coredcc/tool/gizmos/transform_gizmo.h"
 
 #include <numbers>
@@ -14,6 +15,9 @@ constexpr const char *kTransformLayout = "<layout>"
                                          "<prop path='mode'/>"
                                          "<prop path='orientation'/>"
                                          "<prop path='pivot'/>"
+                                         "<prop path='target'/>"
+                                         "<prop path='domain'/>"
+                                         "<prop path='symmetry'/>"
                                          "<prop path='moveStep'/>"
                                          "<prop path='angleStep'/>"
                                          "<prop path='scaleStep'/>"
@@ -38,6 +42,12 @@ ToolDef transformDef()
                    .item("MEDIAN", int64_t(gizmo::PivotMode::Median))
                    .item("ACTIVE", int64_t(gizmo::PivotMode::Active))
                    .item("INDIVIDUAL", int64_t(gizmo::PivotMode::Individual)))
+      .setting(PropertyDef::enumProp("target").item("OBJECTS", 0).item("ELEMENTS", 1))
+      .setting(PropertyDef::enumProp("domain")
+                   .item("POINT", int64_t(ElementDomain::Point))
+                   .item("EDGE", int64_t(ElementDomain::Edge))
+                   .item("FACE", int64_t(ElementDomain::Face)))
+      .setting(PropertyDef::boolProp("symmetry"))
       .setting(PropertyDef::floatProp("moveStep")
                    .defaultValue(PropValue::ofFloat(1.0))
                    .range(0.0, 1e6))
@@ -62,6 +72,7 @@ Status registerToolBuiltins(Runtime &rt)
   if (reg.find(kSelectTool) && reg.find(kTransformTool)) {
     return Status(); /* registered already */
   }
+  CDCC_TRY(registerElementCommands(rt));
   CDCC_TRY((registerImpl<Gizmo, gizmo::TransformGizmo>(rt, gizmo::kTransformGizmoImpl)));
   CDCC_TRY((registerImpl<Modal, gizmo::TransformModal>(rt, gizmo::kTransformModalImpl)));
   CDCC_TRY((registerImpl<Modal, tools::SelectModal>(rt, tools::kSelectModalImpl)));

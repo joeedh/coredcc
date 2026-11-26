@@ -2,6 +2,7 @@ coredcc_library(coredcc_tool
   SOURCES
     bindings.cc
     builtins.cc
+    elements.cc
     event_script.cc
     gizmos/drag_math.cc
     gizmos/gizmo_common.cc
