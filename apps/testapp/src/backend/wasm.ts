@@ -9,6 +9,7 @@
  */
 import * as cdcc from 'coredcc-script'
 import {isPoisoned} from '@litestl/typescript-runtime'
+import type {GpuHooks} from '../overlay/renderer.ts'
 import {installMethods, type BackendState, type LoadedBackend, type Register} from './methods.ts'
 
 /**
@@ -41,7 +42,8 @@ export interface BackendInfo extends BackendState {
 export async function install(
   register: Register,
   modulePath: string,
-  report: (info: BackendInfo) => void
+  report: (info: BackendInfo) => void,
+  gpu?: GpuHooks
 ): Promise<BackendInfo> {
   if (/_node\.mjs$/.test(modulePath)) {
     throw new Error(`${modulePath} is the node variant; the page needs coredcc_testapp.mjs (the web one)`)
@@ -67,6 +69,6 @@ export async function install(
       isPoisoned(module),
     recentStderr: () => [...stderr],
   }
-  installMethods(register, loaded, (s) => report({...info, ...s}))
+  installMethods(register, loaded, (s) => report({...info, ...s}), gpu)
   return info
 }

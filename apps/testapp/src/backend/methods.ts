@@ -11,7 +11,9 @@ import * as cd from 'coredcc-gen/coredcc/functions'
 import type {Host} from 'coredcc-gen/testapp/Host'
 import * as ta from 'coredcc-gen/testapp/functions'
 import type {IBindingBackend} from '@litestl/typescript-runtime'
+import type {GpuHooks} from '../overlay/renderer.ts'
 import {installPanelMethods} from './panel_methods.ts'
+import {installToolMethods} from './tool_methods.ts'
 
 export type Register = (name: string, fn: (...args: any[]) => unknown) => void
 
@@ -104,7 +106,12 @@ function specValues(values: Record<string, unknown> | undefined): Record<string,
  * Registers the testbus methods over `loaded`. `report` updates what `info()` says about
  * the backend; it is called when the module dies.
  */
-export function installMethods(register: Register, loaded: LoadedBackend, report: (s: BackendState) => void) {
+export function installMethods(
+  register: Register,
+  loaded: LoadedBackend,
+  report: (s: BackendState) => void,
+  gpu?: GpuHooks
+) {
   let doc: Doc | undefined = openDoc()
   let docError = ''
   let dead: string | undefined
@@ -174,6 +181,7 @@ export function installMethods(register: Register, loaded: LoadedBackend, report
    * script command leaked one. */
   method('reset', () => {
     closePanel()
+    closeTools()
     if (doc) {
       doc.session[Symbol.dispose]()
       doc = undefined
@@ -220,6 +228,7 @@ export function installMethods(register: Register, loaded: LoadedBackend, report
   })
   method('watched', () => ta.watched(current().host))
   const closePanel = installPanelMethods(method, ctx)
+  const closeTools = installToolMethods(method, ctx, gpu)
   /* Kills the module, for tests of how a dead backend is reported. */
   method('abortForTest', () => {
     ta.abortForTest()

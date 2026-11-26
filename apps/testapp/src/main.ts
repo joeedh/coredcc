@@ -1,4 +1,4 @@
-import {initGpu} from './gpu.ts'
+import {gpuState, initGpu, readPixel, renderNow, setRenderer} from './gpu.ts'
 import {installLogMirror} from './log.ts'
 import {argValue, hasArg, isNw} from './node.ts'
 import {installTestbus, registerMethod, setBackendInfo} from './testbus.ts'
@@ -27,7 +27,7 @@ async function loadBackend(): Promise<void> {
     if (!modulePath) throw new Error('no --apptest-module given (launch through nwjs/launcher.mjs)')
     const url = new URL('./backend-wasm.js', import.meta.url).href
     const backend = await import(url)
-    setBackendInfo(await backend.install(registerMethod, modulePath, setBackendInfo))
+    setBackendInfo(await backend.install(registerMethod, modulePath, setBackendInfo, {gpuState, setRenderer, renderNow, readPixel}))
   } catch (err) {
     console.error('[testapp] the coredcc backend failed to load:', err)
     setBackendInfo({backend: 'none', backendError: String(err)})

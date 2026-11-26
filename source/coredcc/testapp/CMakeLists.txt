@@ -7,7 +7,7 @@ if(NOT (EMSCRIPTEN AND COREDCC_BUILD_TESTS AND NOT COREDCC_WASM_THREADS))
   return()
 endif()
 
-add_library(coredcc_testapp_host OBJECT host.cc items.cc)
+add_library(coredcc_testapp_host OBJECT boxes.cc host.cc items.cc)
 target_link_libraries(coredcc_testapp_host PUBLIC coredcc_bind binding_generators)
 coredcc_target_flags(coredcc_testapp_host)
 

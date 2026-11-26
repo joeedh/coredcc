@@ -16,9 +16,11 @@
 #include "coredcc/graph/provider.h"
 #include "coredcc/lib/library.h"
 #include "coredcc/scene/commands.h"
+#include "coredcc/testapp/boxes.h"
 #include "coredcc/testapp/items.h"
 #include "coredcc/tool/builtins.h"
 #include "coredcc/tool/manager.h"
+#include "coredcc/tool/settings.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/binding/manager.h"
@@ -188,10 +190,12 @@ private:
           addItemKeys(d, ctx);
         });
     rt_.ext<LastUsedStore>().addCollectionTo(s);
+    rt_.ext<ToolSettingsStore>().addCollectionTo(s);
     CDCC_CHECK(registerSceneCommands(rt_).ok(), "testapp: registering scenes");
     CDCC_CHECK(registerDriveTypes(rt_).ok(), "testapp: registering drivers");
     addDriverGraphsMember(s);
     CDCC_CHECK(registerToolBuiltins(rt_).ok(), "testapp: registering tools");
+    registerBoxes(rt_);
     PointerAccessor scene;
     scene.target = StructId::of(kSceneType);
     scene.get = [](const PointerRef &, Context &ctx) {
@@ -266,6 +270,12 @@ Status validate(Host &h)
   return h.history().validate();
 }
 
+/** A new box data block (TA3), as pointer text for core.object.add's `data`. */
+litestl::util::string addBox(Host &h, double half)
+{
+  return litestl::util::string(createBox(h.context(), half).c_str());
+}
+
 /** Aborts the module, for tests of how the page reports a dead backend. */
 void abortForTest()
 {
@@ -292,6 +302,7 @@ litestl::binding::BindingManager *manager()
     BIND_FUNCTION(mgr, "testapp::liveBytes", testapp::liveBytes, MARGS());
     BIND_FUNCTION(mgr, "testapp::validate", testapp::validate, MARGS("h"));
     BIND_FUNCTION(mgr, "testapp::abortForTest", testapp::abortForTest, MARGS());
+    BIND_FUNCTION(mgr, "testapp::addBox", testapp::addBox, MARGS("h", "half"));
     mgr->validate();
   }
   return mgr;
