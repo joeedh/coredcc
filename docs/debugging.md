@@ -93,6 +93,8 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   that clang-cl accepts. With `/WX` it is an error.
 - **Fix:** cast the index (`v[int(i)]`). The pre-commit gate builds with clang only, so
   MSVC's errors show in CI. `node tools/gate.mjs ci --only native-msvc-debug` shows them sooner.
+- **The same for C4458** ("declaration of 'lib' hides class member"): a member function's parameter has
+  the name of a member. clang-cl doesn't warn. Rename the member (drive/'s `State::library`).
 
 ### The test app has no backend, or TA1's tests all skip
 - **Symptom:** `info().backend` is `'none'`, and TA1's tests are skipped (outside ctest)
@@ -168,6 +170,33 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   the cache.
 - **An inner provider's change isn't seen:** it must notify its objects (`kDrivenAspect` is enough); graphs
   that read them are evaluated again then.
+
+### A TS test's scene doesn't change after a script's model changed
+- **Symptom:** after a transform model written in TS starts answering otherwise (it throws now, say),
+  `evaluateScene` still gives the old result and doesn't fail.
+- **Cause:** the scene's pass is incremental (P5c, part B). It evaluates only objects that were notified,
+  whose parent moved, or that failed last time. A model whose answer changes without a change to the
+  document isn't pure, and nothing tells the scene.
+- **Fix:** call `notifyChanged(ctx, object)` after the change (`tests/wasm/scene.test.ts`), or set
+  `SceneSettings::incremental = false` natively.
+- **How to spot it next time:** `computeState` (TS `worldMatrix`) gives the new answer while the evaluated
+  scene keeps the old one.
+
+### `TypeMismatch: the pointer's target is of another struct type` from a Ref
+- **Symptom:** `set(ctx, '<graph>.nodes[#n].params.object', ref)` fails in TS with a Ref from
+  `core.object.add`, while native tests pass.
+- **Cause:** TS Refs carry the block's own struct (`coredcc.Object`); native tests' pointers often have no
+  struct. `coerce` compares struct ids exactly, so a param whose target is the base `coredcc.SceneObject`
+  refused them.
+- **Fix:** `GraphDef::setParamRef` makes a pointer to a struct that inherits from the target one to the
+  target (`ApiRegistry::isA`) before it coerces.
+- **How to spot it next time:** a native test that sets a pointer param with a typed `StableRef`
+  (`testDerivedPointer` in `test_drive_review`).
+
+### A TS test sees an object where it shouldn't be
+- **Symptom:** an object made with `core.object.add(name="b")` is where the object made before it is.
+- **Cause:** commands remember their last inputs (`LastUsedStore`): `location` came from the call before.
+- **Fix:** give the inputs that matter each time.
 
 ### A benchmark's numbers don't fit the code
 - **Symptom:** `bench_scene` gave 15 ms, and the same commit gave 21 ms elsewhere. Targets seemed met for hours.

@@ -733,11 +733,15 @@ Kept as the work goes; each item says what changed from the design above and why
     blocks whose data it swaps; `test_scene_overrides` notifies when its provider's answers change.
   - The box-by-box BVH refit is tested in `test_scene_incremental`'s growth case: the random documents are
     too small for it (it needs fewer than 1% of the boxes).
-- **The document's list (2026-11-26, `eea0f18`)** replaces `Scene::graphs`, as designed in "The document's list", with
+- **After the merge, CI (2026-11-26):** a graph param that points to `coredcc.SceneObject` accepts a pointer
+  to a struct that inherits from it (TS Refs to objects are `coredcc.Object`), in `GraphDef::setParamRef`.
+  Scripts get `notifyChanged(ctx, block)`, since the incremental pass evaluates only what was notified; P3's
+  TS test of throwing models uses it.
+- **The document's list (2026-11-26, `a9604a5`)** replaces `Scene::graphs`, as designed in "The document's list", with
   the pressure test's changes. `scene/` is back to what it was before P5c, apart from part B. P3's
   `test_scene_graphs` keeps only its `prepare` cases, as `test_scene_prepare`; the list's tests are in
   `test_drive_list`. The commands' `scene` input added after the review is gone again.
-- **After the review** ([feature report](../reports/feature-report-scene-evaluator-2026-11-25.md), `6cb92ff`):
+- **After the review** ([feature report](../reports/feature-report-scene-evaluator-2026-11-25.md), `46a09ee`):
   - The commands take an optional `scene` input (the Context's scene when unset), as planned; the first build
     lacked it. Undo of `removeGraph` brings back every cell it removed, at its place.
   - Notifications come when the graphs are evaluated, not when they are edited (documented in `drive.h`).

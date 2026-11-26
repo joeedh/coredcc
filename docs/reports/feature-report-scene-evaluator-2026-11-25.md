@@ -1,13 +1,13 @@
 # Feature report: the scene evaluator (`drive/` and part B, P5c), 2026-11-25
 
-- **Reviewed:** `drive/`, the incremental direct pass, the commands and the script facades at `82c8e4c`
+- **Reviewed:** `drive/`, the incremental direct pass, the commands and the script facades at `de20fe9`
   (P5c steps 1-9), against the [P5c plan](../plans/2026-11-25-p5c-scene-evaluator.md).
 - **Reviewer:** a fresh agent given the code and the plan, not the author's reasoning. It wrote probes
   linked against the branch's RelWithDebInfo libraries, and says which findings it proved by running them
   and which it only reasoned out.
 - **This file:** a rewrite of its review. Each finding ends with its resolution. The bugs come first, then
   the design findings.
-- **The fixes** are in `6cb92ff`. The probes that fit are regressions in `tests/drive/test_drive_review.cc`.
+- **The fixes** are in `46a09ee`. The probes that fit are regressions in `tests/drive/test_drive_review.cc`.
   The facade fixes are tested in `test_drive_facades` and `tests/wasm`.
 
 ## Summary
@@ -70,7 +70,7 @@
 - **A. Every scene's list drives the whole document** (duplicates make objects "driven twice", and it is in
   the file format). The reviewer's probes: duplicating a scene with its graph drives the original object
   twice, and a graph listed only by an unrelated scene still drives. *Fixed* (the user's decision of
-  2026-11-26), in `eea0f18`:
+  2026-11-26), in `a9604a5`:
   - one document-wide list of driver graphs, a block of drive/'s (`coredcc.DriverList`), replaces
     `Scene::graphs`; scenes don't list graphs;
   - the commands are `core.drivers.addGraph` and `core.drivers.removeGraph`, without a `scene` input;
@@ -90,7 +90,7 @@
   - *Tested:* `testNotifiedOnEvaluation` (no notification from the edit, one from `update`).
 - **C. The commands lacked the promised `scene` input,** and undo of `removeGraph` restored one cell where
   it had removed several.
-  - *Fixed in `6cb92ff`:* an optional `scene` input, and undo that brings back every removed cell at its
+  - *Fixed in `46a09ee`:* an optional `scene` input, and undo that brings back every removed cell at its
     place.
   - *Then superseded by A:* the commands are `core.drivers.addGraph` and `core.drivers.removeGraph`, and take
     no scene. Undo still brings back every cell, in every list. This also settles the naming question.
