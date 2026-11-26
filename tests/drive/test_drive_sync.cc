@@ -101,7 +101,7 @@ void testHierarchy()
   d.follow(g, e, h);
   d.evaluate();
   test_assert(d.evaluatedAt(e, 1));
-  d.host(h).info.parent = d.idOf(q);
+  d.hostRaw(h).info.parent = d.idOf(q); /* without a notification */
   const int rebuilds = d.drivers->rebuilds();
   must(d.drivers->update(d.sc().time() + 1)); /* another time, so it evaluates */
   test_assert(d.drivers->rebuilds() > rebuilds);

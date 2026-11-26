@@ -698,6 +698,36 @@ Kept as the work goes; each item says what changed from the design above and why
 
 - `test_drive_random` passes 1,000 seeds in clang Release (`COREDCC_TEST_SCALE=25`, 5 s).
 
+### Measured with part B (busy machine, provisional)
+`node tools/bench.mjs scene -- --reps 15` and `node tools/bench.mjs drive -- --reps 15`, best ms at 100,000
+objects:
+
+| Case | Before part B | With part B | Target |
+|---|---|---|---|
+| bench_scene: unchanged | 16.4 | 2.7 | 2 |
+| One object moved | (new) | 2.6 | 2 |
+| A root with 1,000 below moved | (new) | 2.7 (median 5.7) | 3 |
+| Every root moved (notified) | 17.1 | 7.6 (median 21.7) | 20 |
+| Epoch moved (selection) | 23.9 | 21.5 | 40 |
+| Structural: a parent; unlink and link | 64.8; 62.4 | 65.1; 65.7 | 80 |
+| bench_drive, drivers: unchanged | 15.8 | 2.7 | P3's + 1 |
+| A read object moved | 16.8 | 3.6 | P3's + 1 |
+| The time changed (a full pass) | 19.6 | 21.3 | P3's unchanged + 3 (19.4) |
+| Epoch moved | 22.1 | 24.6 | P3's epoch moved + 3 (26.9) |
+| `computeState` of a driven object | 0.0004 | 0.0004 | 0.005 |
+
+- The time change is a full pass by design, so it is measured against P3's full pass; it misses its target
+  by 2 ms on this machine. Medians spread widely because the machine is busy.
+
+### Mutation checks (step 9)
+Each was applied alone, built and run; each made a test fail.
+- Part B: children not evaluated after their parent moved; bounds never compared (always "same"); the back
+  store not brought up to date; the box-by-box BVH refit skipped (caught only once the growth case asked the
+  BVH; the random documents are too small for that path).
+- drive/: no `Driven` notification; linked channel inputs ignored by the kernel; the `error` param ignored;
+  no second evaluation after a stale node (caught once its test wrote the host without a notification); a
+  channel driven twice not detected.
+
 ## Risks
 - **`G` can be all objects,** if a graph reads every object (a constraint on all of them). Then the graph's
   costs above apply: about 70 ms per epoch move at 100,000. Readers of many objects need M7 and a cheaper
