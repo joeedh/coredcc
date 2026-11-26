@@ -183,13 +183,15 @@ static Status
 registerWith(Runtime &rt, const NodeTypeDef &def, lf::Handle kernel, const string &slots)
 {
   const std::string name = def.name().c_str();
-  if (name.rfind("core.", 0) == 0 || name.rfind("graph.", 0) == 0 ||
-      name.rfind("scene.", 0) == 0)
-  {
-    return error(StatusCode::InvalidArgument,
-                 "node type '" + name +
-                     "': the 'core.', 'graph.' and 'scene.' namespaces are reserved "
-                     "for coredcc");
+  static constexpr const char *kReserved[] = {
+      "core.", "graph.", "scene.", "math.", "vec.", "mat4.", "value.", "elements."};
+  for (const char *prefix : kReserved) {
+    if (name.rfind(prefix, 0) == 0) {
+      return error(StatusCode::InvalidArgument,
+                   "node type '" + name + "': the '" + prefix +
+                       "' namespace is reserved for coredcc (as are 'core.', 'graph.', "
+                       "'scene.', 'math.', 'vec.', 'mat4.', 'value.' and 'elements.')");
+    }
   }
   NodeTypeRegistry &types = rt.ext<NodeTypeRegistry>();
   CDCC_TRY(types.checkDef(def));

@@ -119,7 +119,14 @@ void testRegistration()
         {"x y", "evaluate", StatusCode::InvalidArgument},
         {"js.a", "", StatusCode::TypeMismatch},
         {"js.a", "evaluate bogus", StatusCode::TypeMismatch},
-        {"math.float", "evaluate", StatusCode::AlreadyExists},
+        {"scene.x", "evaluate", StatusCode::InvalidArgument},
+        {"math.x", "evaluate", StatusCode::InvalidArgument},
+        {"vec.x", "evaluate", StatusCode::InvalidArgument},
+        {"mat4.x", "evaluate", StatusCode::InvalidArgument},
+        {"value.x", "evaluate", StatusCode::InvalidArgument},
+        {"elements.x", "evaluate", StatusCode::InvalidArgument},
+        {"math.float", "evaluate", StatusCode::InvalidArgument},
+        {"mathx.float", "", StatusCode::TypeMismatch}, /* only the namespace is reserved */
     };
     for (const Case &c : cases) {
       fakehost::lf::Handle h = 0;

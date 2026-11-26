@@ -189,7 +189,7 @@ export const pointerParam = (target: string, opts: {weak?: boolean} = {}) =>
   new PointerParam(target, opts.weak ?? false)
 
 export interface NodeTypeSpec {
-  /** Dotted, e.g. "my.scale". The `core.` and `graph.` namespaces are reserved. */
+  /** Dotted, e.g. "my.scale". coredcc reserves `core.`, `graph.`, `scene.`, `math.`, `vec.`, `mat4.`, `value.` and `elements.`. */
   id: string
   uiName?: string
   /** Inputs by name, typed by their defaults (Bool, Int, Float, String, Vec2-4, Quat, Mat4). A
