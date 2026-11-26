@@ -194,3 +194,47 @@ test('decodeDrawList refuses what is not a list', () => {
   dv.setUint32(8, 0, true)
   assert.deepEqual(cdcc.decodeDrawList(bad), {origin: [0, 0, 0], records: []})
 })
+
+test('a TS stroke brush through core.tool.stroke: samples, one undo step, and a replay', () => {
+  const a = add('name="a"')
+  select(a)
+  const calls: string[] = []
+  const samples: cdcc.StrokeSample[] = []
+  let target: cdcc.StrokeTarget | undefined
+  cdcc.defineStrokeBrush(ctx, 'ts.brush', () => ({
+    begin(_ctx, t) {
+      calls.push('begin')
+      target = t
+    },
+    apply(ctx, s) {
+      calls.push('apply')
+      samples.push(s)
+      assert.throws(() => cdcc.invoke(ctx, 'core.scene.new'), fails(StatusCode.Busy, /StrokeBrush.apply/))
+    },
+    undo() {
+      calls.push('undo')
+    },
+  }))
+  assert.throws(() => cdcc.defineStrokeBrush(ctx, 'ts.brush', () => ({apply() {}, undo() {}})),
+    fails(StatusCode.AlreadyExists, /ts.brush/))
+  cdcc.set(ctx, 'toolSettings["core.tool.stroke"].brush', 'ts.brush')
+  cdcc.setActiveTool(ctx, 'core.tool.stroke')
+  send({type: 'pointerdown', x: 20, y: 50, buttons: 1})
+  for (let x = 30; x <= 80; x += 10) send({type: 'pointermove', x, y: 50, buttons: 1})
+  send({type: 'pointerup', x: 80, y: 50})
+  assert.equal(calls[0], 'begin')
+  assert.equal(String(target?.object), String(a))
+  // 60 pixels at the default spacing: a sample every 0.1 × 2 × 25 = 5 pixels.
+  assert.equal(samples.length, 13)
+  assert.deepEqual([samples[0].x, samples[0].interpolated], [20, false])
+  for (let i = 1; i < samples.length; i++) assert.ok(Math.abs(samples[i].x - samples[i - 1].x - 5) < 1e-9)
+  assert.ok(samples.every((s) => s.y === 50 && !s.hit && s.mirror === 0))
+  calls.length = 0
+  cdcc.undo(ctx)
+  assert.deepEqual(calls, ['undo'])
+  calls.length = 0
+  const before = samples.length
+  cdcc.redo(ctx)
+  assert.equal(calls.length, 1 + before)
+  near(samples.slice(before).map((s) => s.x), samples.slice(0, before).map((s) => s.x))
+})

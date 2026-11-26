@@ -2,7 +2,7 @@
 
 /** \file
  * The built-in tools: core.tool.select and core.tool.transform, and what they share:
- * selecting with a click or a box.
+ * selecting with a click or a box. core.tool.stroke is in tool/stroke.h.
  */
 
 #include "coredcc/tool/gizmos/drag_math.h"
@@ -13,8 +13,8 @@ namespace coredcc {
 inline constexpr const char *kSelectTool = "core.tool.select";
 inline constexpr const char *kTransformTool = "core.tool.transform";
 
-/** Registers the built-in tools, the transform gizmo and the modals (idempotent). Needs
- * the scene's commands (registerSceneCommands). */
+/** Registers the built-in tools (core.tool.stroke too), the transform gizmo and the modals
+ * (idempotent). Needs the scene's commands (registerSceneCommands). */
 Status registerToolBuiltins(Runtime &rt);
 
 namespace tools {

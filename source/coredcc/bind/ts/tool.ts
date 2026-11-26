@@ -14,12 +14,14 @@ import * as cd from 'coredcc-gen/coredcc/functions'
 import type {GizmoHit as BoundHit} from 'coredcc-gen/coredcc/GizmoHit'
 import type {InputEvent as BoundEvent} from 'coredcc-gen/coredcc/InputEvent'
 import type {Status} from 'coredcc-gen/coredcc/Status'
+import type {StrokeSample as BoundSample} from 'coredcc-gen/coredcc/StrokeSample'
+import type {StrokeTarget as BoundTarget} from 'coredcc-gen/coredcc/StrokeTarget'
 import {StatusCode} from 'coredcc-gen/coredcc/StatusCode'
 import type {TransformDelta as BoundDelta} from 'coredcc-gen/coredcc/TransformDelta'
 import type {View as BoundView} from 'coredcc-gen/coredcc/View'
 import type {ViewMath} from 'coredcc-gen/coredcc/ViewMath'
 
-import {check, checkCtx, inSlot, statusOf, sync, take, withValue, type Writable} from './core.ts'
+import {check, checkCtx, inSlot, isFatal, Ref, statusOf, sync, take, withValue, type Writable} from './core.ts'
 import {decodeDrawList, Drawer, readDrawList, type DecodedDrawList} from './drawlist.ts'
 import type {TransformDelta, ViewSpec} from './scene.ts'
 
@@ -395,6 +397,124 @@ export function addGizmo(ctx: Context, gizmo: 'transform' | GizmoSpec): number {
 }
 export function removeGizmo(ctx: Context, id: number) {
   check(cd.toolRemoveGizmo(ctx, id))
+}
+
+/* ---- stroke brushes ---- */
+
+/** One sample of a stroke (coredcc/tool/stroke.h's StrokeSample): device pixels, world points. */
+export interface StrokeSample {
+  x: number
+  y: number
+  world: number[]
+  normal: number[]
+  hit: boolean
+  interpolated: boolean
+  pressure: number
+  tiltX: number
+  tiltY: number
+  twist: number
+  time: number
+  radiusPixels: number
+  radiusWorld: number
+  distance: number
+  step: number
+  angle: number
+  /** Anchored strokes: from the anchor to the cursor. */
+  dragX: number
+  dragY: number
+  dragWorld: number[]
+  /** The mirror axes of this copy (bits 1, 2, 4); 0 for the stroke itself. */
+  mirror: number
+}
+
+/** The object a stroke is on, its world matrix (column-major) and its mirror axes. */
+export interface StrokeTarget {
+  object: Ref
+  world: number[]
+  mirrorAxes: number
+}
+
+/**
+ * One stroke's brush. `begin` and `apply` may write values (`write`), not run commands;
+ * `undo` puts back what they wrote. `begin` runs again before a redo replays the samples.
+ */
+export interface StrokeBrush {
+  begin?(ctx: Context, target: StrokeTarget): void
+  apply(ctx: Context, sample: StrokeSample): void
+  undo(ctx: Context): void
+  /** Bytes held for undo. */
+  memSize?(): number
+}
+
+const vec3Of = (v: Parameters<typeof cd.vec3At>[0]) => [0, 1, 2].map((i) => cd.vec3At(v, i))
+
+function strokeSampleOf(s: BoundSample): StrokeSample {
+  return {
+    x: s.x, y: s.y, world: vec3Of(s.world), normal: vec3Of(s.normal), hit: s.hit,
+    interpolated: s.interpolated, pressure: s.pressure, tiltX: s.tiltX, tiltY: s.tiltY, twist: s.twist,
+    time: s.time, radiusPixels: s.radiusPixels, radiusWorld: s.radiusWorld, distance: s.distance,
+    step: s.step, angle: s.angle, dragX: s.dragX, dragY: s.dragY, dragWorld: vec3Of(s.dragWorld),
+    mirror: s.mirror,
+  }
+}
+
+class BrushAdapter {
+  constructor(private name: string, private brush: StrokeBrush) {}
+  begin(ctx: Context, t: BoundTarget): Status | undefined {
+    return this.slot('begin', () =>
+      this.brush.begin?.(ctx, {
+        object: new Ref(String(t.object)),
+        world: Array.from({length: 16}, (_, i) => t.worldAt(i)),
+        mirrorAxes: t.mirrorAxes,
+      })
+    )
+  }
+  apply(ctx: Context, s: BoundSample): Status | undefined {
+    return this.slot('apply', () => this.brush.apply(ctx, strokeSampleOf(s)))
+  }
+  undo(ctx: Context) {
+    inSlot(() => sync('undo', this.brush.undo(ctx)))
+  }
+  memSize(): number {
+    return inSlot(() => {
+      try {
+        const n = Number(sync('memSize', this.brush.memSize?.() ?? 0))
+        return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), Number.MAX_SAFE_INTEGER) : 0
+      } catch (e) {
+        if (isFatal(e)) throw e
+        console.warn(`${this.name}: memSize failed, counted as 0:`, e)
+        return 0
+      }
+    })
+  }
+  private slot(what: string, fn: () => unknown): Status | undefined {
+    return inSlot(() => {
+      try {
+        sync(what, fn())
+        return undefined
+      } catch (e) {
+        return statusOf(StatusCode.Internal, e)
+      }
+    })
+  }
+}
+
+/** Registers a brush for core.stroke and core.tool.stroke's `brush` setting: `create` makes one
+ * for each stroke, which its undo step keeps. */
+export function defineStrokeBrush(ctx: Context, name: string, create: () => StrokeBrush) {
+  checkCtx(ctx)
+  if (typeof create !== 'function') throw new TypeError(`defineStrokeBrush: ${name}: create must be a function`)
+  const backend = getBindingBackend()
+  const factory = {
+    make: () => {
+      const brush = create()
+      if (typeof brush?.apply !== 'function' || typeof brush.undo !== 'function') {
+        throw new TypeError(`${name}: a stroke brush needs apply and undo`)
+      }
+      return backend.foreignHandle(new BrushAdapter(name, brush))
+    },
+  }
+  check(cd.registerForeignStrokeBrush(ctx, name, backend.foreignHandle(factory), 'begin apply undo memSize'))
 }
 
 /* ---- the viewport's side ---- */

@@ -123,7 +123,10 @@ Status detail::slotGate(Context &ctx,
   const ForeignBindings::Frame *frame = fb ? fb->currentFrame() : nullptr;
   if (!frame || kind == Gate::Read || toolEventSlot(*frame) ||
       (allows(allowed, "undo") &&
-       frameIs(*frame, "coredcc::TransformableElements", "setPositions")) ||
+       (frameIs(*frame, "coredcc::TransformableElements", "setPositions") ||
+        frameIs(*frame, "coredcc::StrokeBrush", "begin") ||
+        frameIs(*frame, "coredcc::StrokeBrush", "apply") ||
+        frameIs(*frame, "coredcc::StrokeBrush", "undo"))) ||
       (allowed.size() > 0 &&
        inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<Command>(), allowed)))
   {

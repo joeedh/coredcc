@@ -4,6 +4,7 @@
 #include "coredcc/base/iface/registry.h"
 #include "coredcc/tool/elements.h"
 #include "coredcc/tool/gizmos/transform_gizmo.h"
+#include "coredcc/tool/stroke.h"
 
 #include <numbers>
 
@@ -69,14 +70,14 @@ ToolDef transformDef()
 Status registerToolBuiltins(Runtime &rt)
 {
   ToolRegistry &reg = rt.ext<ToolRegistry>();
-  if (reg.find(kSelectTool) && reg.find(kTransformTool)) {
+  if (reg.find(kSelectTool) && reg.find(kTransformTool) && reg.find(kStrokeTool)) {
     return Status(); /* registered already */
   }
   CDCC_TRY(registerElementCommands(rt));
-  CDCC_TRY((registerImpl<Gizmo, gizmo::TransformGizmo>(rt, gizmo::kTransformGizmoImpl)));
-  CDCC_TRY((registerImpl<Modal, gizmo::TransformModal>(rt, gizmo::kTransformModalImpl)));
-  CDCC_TRY((registerImpl<Modal, tools::SelectModal>(rt, tools::kSelectModalImpl)));
   if (!reg.find(kSelectTool)) {
+    CDCC_TRY((registerImpl<Gizmo, gizmo::TransformGizmo>(rt, gizmo::kTransformGizmoImpl)));
+    CDCC_TRY((registerImpl<Modal, gizmo::TransformModal>(rt, gizmo::kTransformModalImpl)));
+    CDCC_TRY((registerImpl<Modal, tools::SelectModal>(rt, tools::kSelectModalImpl)));
     ToolDef select(kSelectTool);
     select.uiName("Select")
         .description("Select objects with a click or a box")
@@ -86,7 +87,7 @@ Status registerToolBuiltins(Runtime &rt)
   if (!reg.find(kTransformTool)) {
     CDCC_TRY(addNativeTool<tools::TransformTool>(rt, transformDef()).status());
   }
-  return Status();
+  return registerStrokeBuiltins(rt);
 }
 
 } // namespace coredcc

@@ -13,6 +13,9 @@ coredcc_library(coredcc_tool
     scene_overlay.cc
     select_tool.cc
     settings.cc
+    stroke.cc
+    stroke_command.cc
+    stroke_tool.cc
     transform_tool.cc
   DEPS
     coredcc_scene

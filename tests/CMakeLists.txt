@@ -197,3 +197,4 @@ coredcc_test(test_tool_drag_math SOURCES tool/test_tool_drag_math.cc DEPS coredc
 coredcc_test(test_tool_drag SOURCES tool/test_tool_drag.cc DEPS coredcc_tool)
 coredcc_test(test_tool_select SOURCES tool/test_tool_select.cc DEPS coredcc_tool)
 coredcc_test(test_tool_elements SOURCES tool/test_tool_elements.cc DEPS coredcc_tool)
+coredcc_test(test_tool_stroke SOURCES tool/test_tool_stroke.cc DEPS coredcc_tool)

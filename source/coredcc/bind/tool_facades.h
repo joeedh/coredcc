@@ -52,6 +52,15 @@ Status registerForeignTool(Context &ctx,
                            const ToolDef &def,
                            uint32_t factory,
                            const string &slots);
+/**
+ * Registers a script StrokeBrush named `name` for core.stroke's `brush` input: `factory`
+ * makes one instance per stroke, implementing the StrokeBrush slots in `slots`. Takes one
+ * count of `factory` either way. The `core.` namespace is reserved.
+ */
+Status registerForeignStrokeBrush(Context &ctx,
+                                  const string &name,
+                                  uint32_t factory,
+                                  const string &slots);
 
 /* ---- the Context's ToolManager ---- */
 

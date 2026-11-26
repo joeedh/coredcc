@@ -10,6 +10,7 @@
 #include "coredcc/tool/elements.h"
 #include "coredcc/tool/gizmos/transform_gizmo.h"
 #include "coredcc/tool/manager.h"
+#include "coredcc/tool/stroke.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/binding/foreign.h"
@@ -119,24 +120,32 @@ Result<Owned<I>> adopt(Context &ctx, const char *kind, lf::Handle h, const strin
   return ownForeign<I>(rt, ref, h);
 }
 
-Result<Owned<Tool>> makeToolInstance(Runtime &rt, TypeId type, lf::Handle factory)
+/* A script factory's instance of `type`, owned. `what` is "tool" or "stroke brush". */
+template <class I>
+Result<Owned<I>> makeInstance(Runtime &rt, TypeId type, lf::Handle factory, const char *what)
 {
   const lbt::Method *make = ForeignFactory::defineBindings()->findMethod("make");
   lf::Handle h = 0;
   Status s = rt.ext<ForeignBindings>().call(
       factory, ForeignFactory::defineBindings(), make, nullptr, &h);
   if (!s.ok()) {
-    return error(s.code(), std::string("the tool factory failed: ") + s.message());
+    return error(s.code(), std::string("the ") + what + " factory failed: " + s.message());
   }
   if (h == 0) {
-    return error(StatusCode::Internal, "the tool factory's make returned no instance");
+    return error(StatusCode::Internal,
+                 std::string("the ") + what + " factory's make returned no instance");
   }
-  Tool t = query<Tool>(rt, type, selfOf(h));
+  I t = query<I>(rt, type, selfOf(h));
   if (!t) {
     lf::release(h);
-    return error(StatusCode::NotFound, "the script tool's table is gone");
+    return error(StatusCode::NotFound, std::string("the script ") + what + "'s table is gone");
   }
-  return ownForeign<Tool>(rt, t, h);
+  return ownForeign<I>(rt, t, h);
+}
+
+Result<Owned<Tool>> makeToolInstance(Runtime &rt, TypeId type, lf::Handle factory)
+{
+  return makeInstance<Tool>(rt, type, factory, "tool");
 }
 
 } // namespace
@@ -231,6 +240,53 @@ Status registerForeignTool(Context &ctx,
     copy.impl(impl,
               [type, factory](Runtime &r) { return makeToolInstance(r, type, factory); });
     return rt.ext<ToolRegistry>().add(std::move(copy)).status();
+  };
+  Status s = attempt();
+  if (s.ok()) {
+    rt.ext<ForeignBindings>().keepHandle(factory);
+  } else {
+    lf::release(factory);
+  }
+  return s;
+}
+
+Status registerForeignStrokeBrush(Context &ctx,
+                                  const string &name,
+                                  uint32_t factory,
+                                  const string &slots)
+{
+  if (factory == 0) {
+    return error(StatusCode::InvalidArgument,
+                 "registerForeignStrokeBrush: no factory handle");
+  }
+  Runtime &rt = ctx.runtime();
+  auto attempt = [&]() -> Status {
+    CDCC_TRY(slotGate(ctx, "registerForeignStrokeBrush", {}));
+    const std::string id = name.c_str();
+    if (id.rfind("core.", 0) == 0) {
+      return error(StatusCode::InvalidArgument,
+                   "stroke brush '" + id + "': the 'core.' namespace is reserved for coredcc");
+    }
+    if (rt.ext<StrokeBrushRegistry>().has(id)) {
+      return error(StatusCode::AlreadyExists, "stroke brush '" + id + "' exists");
+    }
+    CDCC_TRY(foreignImplementable(coredcc::detail::ifaceDesc<StrokeBrush>()));
+    std::vector<const char *> present;
+    const std::vector<std::string> names = splitSlots(slots);
+    for (const std::string &n : names) {
+      present.push_back(n.c_str());
+    }
+    const std::string impl = id + "#brush";
+    CDCC_TRY(registerForeign<StrokeBrush>(
+        rt,
+        impl,
+        rt.ext<ForeignBindings>().dispatcher(),
+        nullptr,
+        std::span<const char *const>(present.data(), present.size())));
+    const TypeId type = TypeId::of(impl);
+    return rt.ext<StrokeBrushRegistry>().add(id, [type, factory](Runtime &r) {
+      return makeInstance<StrokeBrush>(r, type, factory, "stroke brush");
+    });
   };
   Status s = attempt();
   if (s.ok()) {
@@ -486,6 +542,10 @@ void addToolBindings(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<OverlayDrawable>());
   mgr->add(Bind<TransformableElements>());
   mgr->add(Bind<Symmetry>());
+  mgr->add(Bind<StrokeSettings>());
+  mgr->add(Bind<StrokeSample>());
+  mgr->add(Bind<StrokeTarget>());
+  mgr->add(Bind<StrokeBrush>());
 
   BIND_FUNCTION(mgr, "coredcc::newToolDef", script::newToolDef, MARGS("id"))
       .returnsOwned();
@@ -506,6 +566,12 @@ void addToolBindings(litestl::binding::BindingManager *mgr)
                      script::registerForeignTool,
                      3,
                      MARGS("ctx", "def", "factory", "slots"));
+
+  BIND_OWNING_FACADE(mgr,
+                     "coredcc::registerForeignStrokeBrush",
+                     script::registerForeignStrokeBrush,
+                     3,
+                     MARGS("ctx", "name", "factory", "slots"));
 
   BIND_FACADE(mgr, "coredcc::toolSetActive", script::toolSetActive, MARGS("ctx", "id"));
   BIND_FACADE(mgr, "coredcc::toolEvent", script::toolEvent, MARGS("ctx", "view", "e"));

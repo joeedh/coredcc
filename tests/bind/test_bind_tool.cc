@@ -11,6 +11,7 @@
 #include "coredcc/bind/scene_facades.h"
 #include "coredcc/bind/tool_facades.h"
 #include "coredcc/scene/commands.h"
+#include "coredcc/tool/stroke.h"
 
 #include <cmath>
 #include <cstring>
@@ -330,6 +331,76 @@ void testBuiltinGizmo()
   test_assert(host.allReleasedOnce());
 }
 
+/* A script brush through core.tool.stroke: one instance per stroke, kept by its record for
+ * undo and redo. Its begin, apply and undo may write values but not run commands. */
+void testScriptBrush()
+{
+  FakeHost host;
+  {
+    ToolDoc d;
+    const BlockHandle a = d.box("a", 0, 0, 0, 1.0);
+    d.select({a});
+    int made = 0, begins = 0, applies = 0, undos = 0;
+    std::vector<Status> inApply;
+    Obj factory;
+    factory.methods["make"] = [&](void **, void *ret, string *) {
+      made++;
+      Obj b;
+      b.methods["begin"] = [&](void **, void *r, string *) {
+        begins++;
+        new (r) Status();
+        return true;
+      };
+      b.methods["apply"] = [&](void **args, void *r, string *) {
+        if (applies++ == 0) {
+          Context &ctx = *static_cast<Context *>(args[0]);
+          inApply.push_back(sc::writeValue(ctx, "nothing.here", sc::makeFloat(1.0)));
+          inApply.push_back(sc::invoke(ctx, "core.scene.new").status);
+        }
+        new (r) Status();
+        return true;
+      };
+      b.methods["undo"] = [&](void **, void *, string *) {
+        undos++;
+        return true;
+      };
+      b.methods["memSize"] = [](void **, void *r, string *) {
+        *static_cast<uint64_t *>(r) = 0;
+        return true;
+      };
+      *static_cast<uint32_t *>(ret) = host.add(std::move(b));
+      return true;
+    };
+    must(sc::registerForeignStrokeBrush(
+        *d.ctx, "js.brush", host.add(factory), "begin apply undo memSize"));
+    test_assert(isCode(sc::registerForeignStrokeBrush(*d.ctx, "core.b", host.add(Obj()), "begin"),
+                       StatusCode::InvalidArgument,
+                       "reserved"));
+    test_assert(isCode(sc::registerForeignStrokeBrush(*d.ctx, "js.brush", host.add(Obj()), "begin"),
+                       StatusCode::AlreadyExists));
+    test_assert(isCode(sc::registerForeignStrokeBrush(*d.ctx, "js.none", 0, "begin"),
+                       StatusCode::InvalidArgument));
+    const ToolDef *def = d.rt.ext<ToolRegistry>().find(kStrokeTool);
+    must(d.rt.ext<ToolSettingsStore>().set(*def, "brush", PropValue::ofString("js.brush")));
+    d.useTool(kStrokeTool);
+    const Pixel c = d.pixelOf(double3(0, 0, 0));
+    must(d.send(EventType::PointerDown, c.x - 20, c.y).status());
+    must(d.send(EventType::PointerMove, c.x, c.y).status());
+    must(d.send(EventType::PointerMove, c.x + 20, c.y).status());
+    must(d.send(EventType::PointerUp, c.x + 20, c.y).status());
+    test_assert(made == 1 && begins == 1 && applies > 2 && d.history->size() == 1);
+    test_assert(inApply.size() == 2);
+    test_assert(isCode(inApply[0], StatusCode::NotFound)); /* past the gate: no such path */
+    test_assert(isCode(inApply[1], StatusCode::Busy));
+    const int first = applies;
+    d.undo();
+    test_assert(undos == 1);
+    d.redo();
+    test_assert(made == 1 && begins == 2 && applies == 2 * first);
+  }
+  test_assert(host.allReleasedOnce());
+}
+
 } // namespace
 
 test_init;
@@ -340,5 +411,6 @@ int main()
   testScriptDrag();
   testGates();
   testBuiltinGizmo();
+  testScriptBrush();
   return test_end();
 }
