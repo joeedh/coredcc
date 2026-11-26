@@ -2,7 +2,7 @@
 #include "coredcc/base/json_writer.h"
 #include "coredcc/base/utf8.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <cmath>
 #include <cstdio>

@@ -2,7 +2,7 @@
 #include "coredcc/layout/builder.h"
 #include "coredcc/layout/xml.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <cstdio>
 #include <cstring>

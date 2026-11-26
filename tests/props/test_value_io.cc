@@ -2,7 +2,7 @@
 #include "coredcc/props/value_io.h"
 
 #include "fuzz.h"
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <algorithm>
 #include <bit>

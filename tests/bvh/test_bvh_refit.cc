@@ -1,7 +1,7 @@
 /* Refits, of everything and of a few primitives, and what they do to a tree. */
 #include "bvh_fixture.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <algorithm>
 

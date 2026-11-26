@@ -6,7 +6,7 @@
 #include "coredcc/tool/gizmos/transform_gizmo.h"
 
 #include "fuzz.h"
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 #include "view_cases.h"
 
 #include <cmath>

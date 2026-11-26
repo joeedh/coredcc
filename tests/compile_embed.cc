@@ -137,7 +137,7 @@
 #include "coredcc/tool/settings.h"
 #include "coredcc/tool/tool.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 test_init;
 

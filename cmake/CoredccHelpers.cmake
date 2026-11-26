@@ -38,12 +38,11 @@ function(coredcc_library name)
   coredcc_target_flags(${name})
 endfunction()
 
-# Test support: litestl's harness, plus a stub for the dtl header it includes but
-# doesn't use (dtl only exists when litestl's own tests are on).
+# Test support: tests/support (fuzz.h, and a stub for the dtl header litestl's harness
+# used to include). Tests include the harness itself as "litestl/tests/test_util.h",
+# through the parent of litestl, which litestl's targets put on the include path.
 function(_coredcc_test_support target)
-  target_include_directories(${target} SYSTEM PRIVATE
-    "${PROJECT_SOURCE_DIR}/tests/support"
-    "${PROJECT_SOURCE_DIR}/extern/litestl/tests")
+  target_include_directories(${target} SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/tests/support")
   # A failed assert or abort() exits instead of opening a dialog (tests/support/no_dialogs.cc).
   if(WIN32)
     target_sources(${target} PRIVATE "${PROJECT_SOURCE_DIR}/tests/support/no_dialogs.cc")

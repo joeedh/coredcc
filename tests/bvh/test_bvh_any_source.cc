@@ -7,7 +7,7 @@
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/bvh/any_source.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <algorithm>
 #include <new>

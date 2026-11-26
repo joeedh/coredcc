@@ -1,7 +1,7 @@
 /* The text form of input events (tool/event_script.h). */
 #include "coredcc/tool/event_script.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <cmath>
 #include <string>

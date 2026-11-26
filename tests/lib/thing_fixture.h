@@ -7,7 +7,7 @@
 #include "coredcc/base/iface/registry.h"
 #include "coredcc/lib/library.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <cstdio>
 #include <cstring>

@@ -5,7 +5,7 @@
 #include "coredcc/parse/path.h"
 
 #include "fuzz.h"
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <cstdio>
 #include <string>

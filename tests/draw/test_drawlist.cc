@@ -6,7 +6,7 @@
 #include "litestl/math/matrix_bindings.h"
 
 #include "fuzz.h"
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <cmath>
 #include <cstring>

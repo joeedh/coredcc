@@ -2,7 +2,7 @@
 #include "bvh_fixture.h"
 
 #include "litestl/util/task.h"
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 test_init;
 

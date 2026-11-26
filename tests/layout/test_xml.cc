@@ -4,7 +4,7 @@
 #include "coredcc/layout/xml.h"
 #include "coredcc/props/value.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <cstdio>
 #include <cstring>

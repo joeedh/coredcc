@@ -1,7 +1,7 @@
 /* Every query against a loop over the source, for every source, layout and leaf size. */
 #include "bvh_fixture.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <algorithm>
 

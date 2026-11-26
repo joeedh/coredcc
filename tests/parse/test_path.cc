@@ -1,7 +1,7 @@
 #include "coredcc/parse/path.h"
 #include "coredcc/parse/path_cache.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <cstdio>
 #include <cstring>

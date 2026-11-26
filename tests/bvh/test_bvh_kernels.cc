@@ -1,7 +1,7 @@
 /* The kernels against independent references, and the triangle test's watertightness. */
 #include "bvh_fixture.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 test_init;
 

@@ -1,6 +1,6 @@
 #include "coredcc/parse/invocation.h"
 
-#include "test_util.h"
+#include "litestl/tests/test_util.h"
 
 #include <chrono>
 #include <cstdio>
