@@ -111,7 +111,7 @@ public:
   {
     return activePart_;
   }
-  /** For the host's status bar; tools set it. */
+  /** For the host's status bar; tools set it. Emptied when a gesture ends. */
   const litestl::util::string &status() const
   {
     return status_;

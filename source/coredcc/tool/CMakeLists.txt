@@ -1,11 +1,20 @@
 coredcc_library(coredcc_tool
   SOURCES
     bindings.cc
+    builtins.cc
     event_script.cc
+    gizmos/drag_math.cc
+    gizmos/gizmo_common.cc
+    gizmos/transform_gizmo.cc
+    gizmos/transform_modal.cc
     manager.cc
     registry.cc
+    scene_overlay.cc
+    select_tool.cc
     settings.cc
+    transform_tool.cc
   DEPS
+    coredcc_scene
     coredcc_layout
     coredcc_draw
 )

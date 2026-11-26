@@ -159,8 +159,8 @@ struct GizmoHit {
  * A handle on the screen that starts a drag: one gizmo with numbered parts (the arrows,
  * planes and centre of a translate gizmo, say).
  *
- * - `update` places it from the document, before each hit test and draw. It may only
- *   read.
+ * - `update` places it from the document, before each hit test and draw, but not during
+ *   a gesture: then the gesture's modal draws what moves. It may only read.
  * - `hitTest`: the part nearest to a pixel. The manager takes the best of all gizmos'
  *   within ToolManager::hitRadius, by distance, then depth.
  * - `draw`: `hover` and `active` are parts or -1. Records' ids are `idBase + part`.

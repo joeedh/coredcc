@@ -3,6 +3,7 @@
 #include "coredcc/tool/tool.h"
 
 #include "coredcc/command/executor.h"
+#include "coredcc/tool/scene_overlay.h"
 #include "coredcc/tool/settings.h"
 
 #include "litestl/binding/binding.h"
@@ -164,6 +165,7 @@ Status ToolManager::finish(Context &ctx, int i, bool commit)
   litestl::alloc::Delete(m);
   if (modals_.size() == 0) {
     activeGizmo_ = activePart_ = -1;
+    status_ = litestl::util::string(); /* the gesture's text */
   }
   return s;
 }
@@ -492,9 +494,14 @@ Status ToolManager::draw(Context &ctx, const View &view, DrawList &out)
   CDCC_TRY(vm.set(view));
   Call call(*this);
   Status s = out.begin(eyeOf(view));
+  s = first(s, drawSceneOverlays(ctx, ctx.scene(), vm, out));
   s = first(s, prune(ctx));
   s = first(s, checkSettings(ctx));
-  s = first(s, updateGizmos(ctx));
+  if (!modalOpen()) {
+    /* During a gesture the modal draws what moves: placing a gizmo can be O(selection).
+     */
+    s = first(s, updateGizmos(ctx));
+  }
   if (tool_ && tool_->tool->hasDrawOverlay()) {
     tool_->tool->drawOverlay(vm, out);
     s = first(s, slotError());

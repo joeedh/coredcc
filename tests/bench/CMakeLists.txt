@@ -23,6 +23,14 @@ if(EMSCRIPTEN)
   target_link_options(bench_scene_commands PRIVATE -sENVIRONMENT=node -sEXIT_RUNTIME=1)
 endif()
 
+add_executable(bench_tool_drag EXCLUDE_FROM_ALL bench_tool_drag.cc)
+target_link_libraries(bench_tool_drag PRIVATE coredcc_tool)
+coredcc_target_flags(bench_tool_drag)
+if(EMSCRIPTEN)
+  target_link_options(bench_tool_drag PRIVATE -sENVIRONMENT=node -sEXIT_RUNTIME=1)
+endif()
+
 # All of them, for tools/gate.mjs.
 add_custom_target(benchmarks)
-add_dependencies(benchmarks bench_bvh bench_drive bench_graph bench_scene bench_scene_commands)
+add_dependencies(benchmarks bench_bvh bench_drive bench_graph bench_scene bench_scene_commands
+  bench_tool_drag)
