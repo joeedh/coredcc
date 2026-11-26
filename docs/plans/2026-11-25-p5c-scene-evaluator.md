@@ -21,6 +21,40 @@
   notified, and their descendants. This is what P3's plan left to P5c for drags ("P5c is the answer").
   It can be cut from P5c without changing part A.
 
+## Decisions (user, 2026-11-25)
+The open questions at the end were answered as the plan recommends:
+1. Only the objects that a graph reads, and their ancestors, get a node. The deviation from §8 is accepted.
+2. Driver graphs are listed per scene (`Scene::graphs`) and drive the whole document.
+3. Part B (the incremental direct pass) stays in P5c, separable as planned.
+4. Step 8 adds the missing notifications to P3's tests, and `incremental` is on by default.
+5. A graph that reads an object whose driver failed fails too. There is no silent fallback.
+
+## Cross-check with P4's plan (2026-11-25)
+Checked against `docs/plans/2026-11-25-p4-tools.md` in P4's worktree, section "Ownership between P4 and P5c".
+No conflict was found.
+- **P4's edits in others' files** (`api/context.h`, `command/executor.*`, `slotGate` and `runCommand` in
+  `bind/facades.cc`, the Read kind at five `slotGate` calls in `bind/scene_facades.cc`, `bind/foreign_command.*`,
+  and appends to `bind/manager.cc`, `bind/CMakeLists.txt` and `bind/ts/index.ts`) are not in files that P5c
+  edits. The exception is the appends, which merge trivially. P5c's facades go in `bind/drive_facades.cc`
+  and call `slotGate` as it is. Whichever branch merges second adapts those calls to P4's Read/Write kind
+  (`driverDiagnostics` reads; the others write). P5c doesn't restructure `slotGate` or `runCommand`.
+- **P4 promises not to touch** `scene/`, `graph/` and `bind/graph_*`. That covers every file P5c owns there,
+  including `bind/graph_facades.cc`.
+- **Element edits notify** with `invalidateData(Positions)` in exec, undo and redo, which is what part B needs
+  for kept bounds.
+- **What P4 needs from P5c is kept:**
+  - ApplyDelta and `core.object.dragDelta`/`applyDelta` aren't changed;
+  - `computeState` and `computePivot` answer with overrides outside a pass, for the time given (they call
+    `prepare` at that time);
+  - `evaluateScene` stays callable once a frame while an interactive command is open, because only an
+    `EvaluationScope` makes it Busy. The pressure test ran that a drag update notifies and doesn't move the
+    epoch;
+  - an evaluation after a drag update gets cheaper with part B.
+- **One note for P4:** its tests have a stub `OverrideProvider`. The new optional `prepare` has a default, so
+  the stub still compiles and is asked for every object. With part B, a stub whose answers change between
+  evaluations must notify the objects, as P3's contract already says.
+- `bind/ts/index.ts` is added to P5c's shared, append-only files, for the exports of `drive` functions.
+
 ## Ownership between the parallel phases
 P4 (tools, gizmos, drags, DrawList, ToolManager) runs at the same time in `C:\dev\coredcc-p4-tools`.
 
