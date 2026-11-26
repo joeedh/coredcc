@@ -334,7 +334,7 @@ ValueResult nodeParam(NodeExecContext &node, const string &name)
   return v ? ok<ValueResult>(*v) : failed<ValueResult>(noParam(node, name));
 }
 
-Status nodeOutput(NodeExecContext &node, const string &name, const PropValue &value)
+Status nodeSetOutput(NodeExecContext &node, const string &name, const PropValue &value)
 {
   const int i = node.type().outputIndex(view(name));
   if (i < 0) {
@@ -400,7 +400,7 @@ TableResult nodeInputTable(NodeExecContext &node, const string &name)
 }
 
 Status
-nodeOutputTable(NodeExecContext &node, const string &name, const ScriptTable &table)
+nodeSetOutputTable(NodeExecContext &node, const string &name, const ScriptTable &table)
 {
   const int i = node.type().outputIndex(view(name));
   if (i < 0) {
@@ -462,10 +462,10 @@ static IntResult intOutput(const Result<PropertyBag> &out, const char *name)
                   : failed<IntResult>(out.status());
 }
 
-ValueResult graphCreate(Context &ctx, const string &name)
+ValueResult newGraph(Context &ctx, const string &name)
 {
   Result<PropertyBag> out = runGraph(ctx,
-                                     "graphCreate",
+                                     "newGraph",
                                      kGraphCreateCommand,
                                      nullptr,
                                      {{"name", PropValue::ofString(view(name))}});

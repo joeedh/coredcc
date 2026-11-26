@@ -117,7 +117,7 @@ void testCycles()
 {
   World w;
   /* Kernels: 1 -> 2 -> 3 -> 1, with 4 feeding in and 5 hanging off. */
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   GraphDef &d = *g.def;
   const NodeId n3 = insert(d, "t.sum", 3), n1 = insert(d, "t.sum", 1),
                n2 = insert(d, "t.sum", 2);
@@ -193,7 +193,7 @@ void testSameVersion()
 void testInnerCycles()
 {
   World w;
-  const Graph inner = newGraph(w.lib, "inner"), outer = newGraph(w.lib, "outer");
+  const Graph inner = makeGraph(w.lib, "inner"), outer = makeGraph(w.lib, "outer");
   GraphDef &in = *inner.def, &o = *outer.def;
   int64_t i[2], u[2];
   for (int k = 0; k < 2; k++) {
@@ -244,7 +244,7 @@ void testInnerCycles()
               inst.evaluate(out(s)).ok());
 
   /* A def whose output node feeds itself through an inner group. */
-  const Graph top = newGraph(w.lib, "top");
+  const Graph top = makeGraph(w.lib, "top");
   const NodeId tg = insert(*top.def, "graph.group", 7);
   test_assert(top.def->setGroup(tg, inner.id).ok());
   force(*top.def, tg, key(u[0]), tg, key(i[0]));
@@ -278,7 +278,7 @@ void redirect(Library &lib, GraphDef &def, BlockId to)
 void testRecursion()
 {
   World w;
-  const Graph a = newGraph(w.lib, "a"), b = newGraph(w.lib, "b");
+  const Graph a = makeGraph(w.lib, "a"), b = makeGraph(w.lib, "b");
   const int64_t ao = addSocket(*a.def, SocketSide::Output, "o", "float");
   const int64_t bo = addSocket(*b.def, SocketSide::Output, "o", "float");
   const NodeId aOut = add(*a.def, "graph.output"), bOut = add(*b.def, "graph.output");
@@ -312,7 +312,7 @@ std::vector<Graph> nest(World &w, int n, int width, std::vector<int64_t> &outs)
 {
   std::vector<Graph> g;
   for (int i = 0; i <= n; i++) {
-    g.push_back(newGraph(w.lib, "n"));
+    g.push_back(makeGraph(w.lib, "n"));
     outs.push_back(addSocket(*g[i].def, SocketSide::Output, "o", "float"));
   }
   for (int i = n; i >= 0; i--) {
@@ -407,7 +407,7 @@ void testBudget()
 void testLong()
 {
   World w;
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   GraphDef &d = *g.def;
   const int n = 100000;
   const NodeId first = add(d, "t.sum");
@@ -447,7 +447,7 @@ void testLong()
 void testReentrancy()
 {
   World w;
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   w.lib.setFlag(g.h, BlockFlags::Root, true);
   GraphDef &d = *g.def;
   const int64_t in = addSocket(d, SocketSide::Input, "in", "float");

@@ -27,7 +27,7 @@ PropValue toThing(BlockId id)
 void testOrder()
 {
   Doc d;
-  const Graph g = newGraph(d.lib, "g"), inner = newGraph(d.lib, "in");
+  const Graph g = makeGraph(d.lib, "g"), inner = makeGraph(d.lib, "in");
   GraphDef &def = *g.def;
   const int64_t x = addSocket(*inner.def, SocketSide::Output, "x", "float");
   litestl::util::Vector<NodeId> nodes;
@@ -88,7 +88,7 @@ void testOrder()
   test_assert(def.unlink(a).ok() && def.diagnostics().size() == 1 && !def.diagnostic(a));
   test_assert(def.unlink(b).ok() && def.diagnostics().size() == 0);
   /* Interior links say so, at either end. */
-  const Graph in2 = newGraph(d.lib, "in2");
+  const Graph in2 = makeGraph(d.lib, "in2");
   const NodeId leaf = add(*in2.def, "math.float");
   const std::string leafKey = "@" + std::to_string(leaf.value);
   test_assert(def.setGroup(group, in2.id).ok());
@@ -114,7 +114,7 @@ void testOrder()
 void testVersions()
 {
   Doc d;
-  const Graph g = newGraph(d.lib, "g"), inner = newGraph(d.lib, "in");
+  const Graph g = makeGraph(d.lib, "g"), inner = makeGraph(d.lib, "in");
   GraphDef &def = *g.def;
   NodeTypeDef out("t.out");
   out.param(PropertyDef::pointerProp("thing", kThingStruct)).output("x", "float");

@@ -112,9 +112,9 @@ struct Graph {
   GraphDef *def = nullptr;
 };
 
-inline Graph newGraph(Library &lib, const char *name)
+inline Graph makeGraph(Library &lib, const char *name)
 {
-  Result<BlockHandle> h = createGraph(lib, name);
+  Result<BlockHandle> h = newGraph(lib, name);
   test_assert(h.ok());
   return Graph{*h, idOf(lib, *h), graphDefOf(lib, *h)};
 }

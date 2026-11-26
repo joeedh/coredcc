@@ -364,7 +364,7 @@ void testUserGraphs()
   const BlockId a = s.object(1), b = s.object(10), c = s.object(100);
   test_assert(e.setParent(b, a).ok());
   /* A user's graph: c's offset is twice b's place. */
-  const Graph user = newGraph(s.lib, "user");
+  const Graph user = makeGraph(s.lib, "user");
   s.lib.setFlag(user.h, BlockFlags::Root, true);
   const NodeId get = add(*user.def, kGetPlace), set = add(*user.def, kSetOffset);
   const NodeId twice = add(*user.def, "math.float");
@@ -385,14 +385,14 @@ void testUserGraphs()
   test_assert(user.def->unlink(user.def->node(twice)->linkInto("a")->id).ok());
   test_assert(e.apply() == 1 && s.x(c) == 113 && s.x(a) == 2);
   /* The same graph for other objects: a second group, with its own values. */
-  const Graph other = newGraph(s.lib, "other");
+  const Graph other = makeGraph(s.lib, "other");
   s.lib.setFlag(other.h, BlockFlags::Root, true);
   const NodeId inner = add(*other.def, "graph.group");
   test_assert(other.def->setGroup(inner, user.id).ok());
   test_assert(e.apply() == 0);
 
   /* One that would make a cycle: c moves a, and c is moved by b, a's child. */
-  const Graph bad = newGraph(s.lib, "bad");
+  const Graph bad = makeGraph(s.lib, "bad");
   s.lib.setFlag(bad.h, BlockFlags::Root, true);
   const NodeId get2 = add(*bad.def, kGetPlace), set2 = add(*bad.def, kSetOffset);
   test_assert(bad.def->setParam(get2, "object", pointerTo(c, kThingStruct)).ok());

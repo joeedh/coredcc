@@ -101,7 +101,7 @@ void testErrors()
       l.fails(StatusCode::FailedPrecondition, {1}, "element 1: a cycle through "));
   test_assert(l.inner.def->unlink(loop.id).ok() && l.evaluate().ok());
   /* The sockets of a lost group in it, as last known, moved while nothing was pulled. */
-  const Graph lost = newGraph(w.lib, "lost");
+  const Graph lost = makeGraph(w.lib, "lost");
   const int64_t lo = addSocket(*lost.def, SocketSide::Output, "lo", "float");
   const NodeId group = add(*l.inner.def, "graph.group");
   const GraphNode &groupNode = *l.inner.def->node(group);
@@ -169,7 +169,7 @@ struct Nested {
   NodeId range, inner, total;
   explicit Nested(World &w) : l(w)
   {
-    const Graph leaf = newGraph(w.lib, "leaf");
+    const Graph leaf = makeGraph(w.lib, "leaf");
     const int64_t i = addSocket(*leaf.def, SocketSide::Input, "i", "float");
     const int64_t b = addSocket(*leaf.def, SocketSide::Input, "b", "float");
     const int64_t o = addSocket(*leaf.def, SocketSide::Output, "o", "float");
@@ -315,7 +315,7 @@ void testGroups()
   test_assert(w.lib.restoreFromHistory(l.inner.h).ok());
   test_assert(l.is({1}, {{"sum", {4}}, {"c2", {0}}}, 0));
   /* Another def: new states. */
-  const Graph other = newGraph(w.lib, "other");
+  const Graph other = makeGraph(w.lib, "other");
   const int64_t oo = addSocket(*other.def, SocketSide::Output, "o", "float");
   test_assert(r.setGroup(l.node, other.id).ok());
   test_assert(l.is({1}, {{"o", {0}}}, 0) && l.inst.elementCount() == 1);
@@ -398,7 +398,7 @@ void testLimits()
     Graph g = l.root;
     int64_t socket = g.def->interfaceSockets(SocketSide::Output)[0].id;
     for (int depth = 1; depth <= 64; depth++) {
-      const Graph up = newGraph(w.lib, "up");
+      const Graph up = makeGraph(w.lib, "up");
       const int64_t o = addSocket(*up.def, SocketSide::Output, "out", "elements");
       const NodeId out = add(*up.def, "graph.output");
       const NodeId group = add(*up.def, "graph.group");
@@ -427,7 +427,7 @@ void testLimits()
   {
     World w;
     Loop l(w);
-    const Graph leaf = newGraph(w.lib, "leaf");
+    const Graph leaf = makeGraph(w.lib, "leaf");
     const int64_t o = addSocket(*leaf.def, SocketSide::Output, "o", "float");
     const NodeId g1 = add(*l.inner.def, "graph.group"),
                  g2 = add(*l.inner.def, "graph.group");
@@ -466,7 +466,7 @@ void testLimits()
   {
     World w;
     Nested n(w);
-    const Graph leaf = newGraph(w.lib, "deep");
+    const Graph leaf = makeGraph(w.lib, "deep");
     const int64_t o = addSocket(*leaf.def, SocketSide::Output, "o", "float");
     const NodeId g = add(*n.leafDef, "graph.group");
     test_assert(n.leafDef->setGroup(g, leaf.id).ok());
@@ -504,7 +504,7 @@ void testDocument()
 {
   Doc d;
   addForeachTypes(d.rt);
-  const Graph g = newGraph(d.lib, "g"), inner = newGraph(d.lib, "inner");
+  const Graph g = makeGraph(d.lib, "g"), inner = makeGraph(d.lib, "inner");
   const int64_t a = addSocket(*inner.def, SocketSide::Input, "a", "float");
   StableRef ref;
   ref.owner = OwnerKey::ofBlock(g.id);

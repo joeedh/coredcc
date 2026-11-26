@@ -10,15 +10,15 @@ namespace coredcc::script {
 
 /** The layout in `xml` as JSON (layoutToJson). An error has the position: "layout 3:14:
  * ...". */
-StringResult layoutJson(const string &xml);
+StringResult parseLayout(const string &xml);
 
 /**
  * validateLayout's issues about the layout in `xml`, for `ctx`'s root, as a JSON array of
  * objects: `severity` ("Error" or "Warning"), `line` and `column` (from 1), `node` (its
  * index in preorder, the root's being 0), `code` (a StatusCode's name), `message`, and
- * `suggestions` if any. Text that isn't a layout is an error result, as layoutJson's.
+ * `suggestions` if any. Text that isn't a layout is an error result, as parseLayout's.
  */
-StringResult validateLayoutXml(Context &ctx, const string &xml);
+StringResult validateLayout(Context &ctx, const string &xml);
 
 /**
  * As `invoke`, with `prefix` as the path prefix ("" for none): the arguments that are

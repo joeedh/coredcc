@@ -85,7 +85,7 @@ Status registerGraphBlocks(Runtime &rt)
   return types.add(std::move(info), std::move(provider).value()).status();
 }
 
-Result<BlockHandle> createGraph(Library &lib, std::string_view name)
+Result<BlockHandle> newGraph(Library &lib, std::string_view name)
 {
   Runtime &rt = lib.runtime();
   const BlockId id{ClientId::of(kCoredccClient), rt.newLocalId()};

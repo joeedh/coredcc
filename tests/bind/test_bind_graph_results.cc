@@ -169,7 +169,7 @@ void testDefs()
       test_assert(sc::nodeParam(n, "mode").value == PropValue::ofEnum(1));
       test_assert(sc::nodeParam(n, "flags").value == PropValue::ofFlags(4));
       test_assert(sc::nodeInput(n, "m").value.component(6) == 6);
-      return sc::nodeOutput(
+      return sc::nodeSetOutput(
           n, "value", sc::makeFloat(sc::nodeParam(n, "q").value.component(2)));
     };
     test_assert(finish(d, host, def, kernel).ok());
@@ -182,7 +182,7 @@ void testDefs()
     test_assert(strcmp(t->params[1].def.enumMeta()->findKey("A")->uiName.c_str(), "Ay") ==
                 0);
 
-    test_assert(sc::graphCreate(d.ctx, "g").status.ok());
+    test_assert(sc::newGraph(d.ctx, "g").status.ok());
     const int64_t n = addNode(d, "js.full"), other = addNode(d, "math.float");
     const std::string node = "graphs[\"g\"].nodes[#" + id(n) + "].";
     test_assert(
@@ -197,7 +197,7 @@ void testDefs()
     test_assert(
         sc::setValue(d.ctx, (node + "params.thing").c_str(), PropValue::ofPointer(ref))
             .ok());
-    sc::GraphResult g = sc::graphInstance(d.ctx, kG);
+    sc::GraphResult g = sc::newGraphInstance(d.ctx, kG);
     test_assert(g.status.ok());
     const int64_t w = sc::graphWatch(g.value, id(n).c_str(), "value").value;
     auto update = [&]() {
@@ -239,7 +239,7 @@ void testDefs()
       found = strcmp(k.name().c_str(), "g") == 0 ? x : found;
     });
     GraphDef &gd = *graphDefOf(d.lib, found);
-    const Graph inner = newGraph(d.lib, "inner");
+    const Graph inner = makeGraph(d.lib, "inner");
     const int64_t x = addSocket(*inner.def, SocketSide::Output, "x", "float");
     const NodeId group = add(gd, kGraphGroupType);
     test_assert(gd.setGroup(group, inner.id).ok());
@@ -260,16 +260,16 @@ void testReplace()
   Host host;
   {
     Doc d;
-    test_assert(sc::graphCreate(d.ctx, "g").status.ok());
+    test_assert(sc::newGraph(d.ctx, "g").status.ok());
     auto gives = [&](double v) {
       return [v](NodeExecContext &n) {
-        return sc::nodeOutput(n, "value", sc::makeFloat(v));
+        return sc::nodeSetOutput(n, "value", sc::makeFloat(v));
       };
     };
     fakehost::lf::Handle first = 0, second = 0, bad = 0;
     test_assert(finish(d, host, newDef("js.v"), gives(1), false, &first).ok());
     const int64_t n = addNode(d, "js.v");
-    sc::GraphResult g = sc::graphInstance(d.ctx, kG);
+    sc::GraphResult g = sc::newGraphInstance(d.ctx, kG);
     const int64_t w = sc::graphWatch(g.value, id(n).c_str(), "value").value;
     auto is = [&](double v) {
       return sc::graphUpdate(g.value).status.ok() &&
@@ -307,7 +307,7 @@ void testReplace()
     Status inside;
     auto replacing = [&](NodeExecContext &c) {
       inside = finish(d, host, newDef("js.v"), gives(4), true, &bad);
-      return sc::nodeOutput(c, "value", sc::makeFloat(5));
+      return sc::nodeSetOutput(c, "value", sc::makeFloat(5));
     };
     test_assert(finish(d, host, newDef("js.v"), replacing, true).ok() && is(5));
     test_assert(hasCode(inside, StatusCode::Busy) && host.releasesOf(bad) == 1);
@@ -337,7 +337,8 @@ void testTables()
   {
     Doc d;
     sc::ScriptTable t = makeTable({4, 7}, "c", {1, 2});
-    test_assert(sc::tableRows(t) == 2 && sc::tableColumns(t) == 1 && t.check().ok());
+    test_assert(sc::tableRowCount(t) == 2 && sc::tableColumnCount(t) == 1 &&
+                t.check().ok());
     test_assert(sc::tableKey(t, 1).value == 7 &&
                 sc::tableGet(t, "c", 1).value == sc::makeFloat(2));
     test_assert(strcmp(sc::tableColumnName(t, 0).value.c_str(), "c") == 0);
@@ -356,8 +357,8 @@ void testTables()
     test_assert(hasCode(sc::tableAddColumn(t, "c"), StatusCode::AlreadyExists));
     /* Copies are apart once one is edited. */
     sc::ScriptTable copy = t;
-    test_assert(sc::tableAddRow(copy, 9).ok() && sc::tableRows(t) == 2 &&
-                sc::tableRows(copy) == 3);
+    test_assert(sc::tableAddRow(copy, 9).ok() && sc::tableRowCount(t) == 2 &&
+                sc::tableRowCount(copy) == 3);
     test_assert(hasCode(copy.check(), StatusCode::InvalidArgument));
     test_assert(sc::tableGet(copy, "c", 2).value.isNone());
     test_assert(sc::tableSet(copy, "c", 2, sc::makeInt(3)).ok() && copy.check().ok());
@@ -365,11 +366,11 @@ void testTables()
     sc::ScriptTable twice = makeTable({4, 4}, "c", {1, 2});
     test_assert(hasCode(twice.check(), StatusCode::InvalidArgument));
     sc::ScriptTable empty;
-    test_assert(sc::tableRows(empty) == 0 && sc::tableColumns(empty) == 0 &&
+    test_assert(sc::tableRowCount(empty) == 0 && sc::tableColumnCount(empty) == 0 &&
                 empty.check().ok());
     test_assert(!sc::tableKey(empty, 0).status.ok() &&
                 !sc::tableGet(empty, "c", 0).status.ok());
-    test_assert(sc::tableAddRow(empty, 1).ok() && sc::tableRows(empty) == 1);
+    test_assert(sc::tableAddRow(empty, 1).ok() && sc::tableRowCount(empty) == 1);
 
     /* Through a script kernel: the column doubled, on new keys. */
     NodeTypeDef *def = sc::newNodeType("js.double");
@@ -381,12 +382,12 @@ void testTables()
     Kernel twiceAll = [&](NodeExecContext &n) {
       notThere = sc::nodeInputTable(n, "u").status;
       notTable = sc::nodeInputTable(n, "a").status;
-      noOut = sc::nodeOutputTable(n, "u", sc::ScriptTable());
-      unset = sc::nodeOutputTable(n, "t", makeTable({1, 2}, "c", {1}));
+      noOut = sc::nodeSetOutputTable(n, "u", sc::ScriptTable());
+      unset = sc::nodeSetOutputTable(n, "t", makeTable({1, 2}, "c", {1}));
       sc::TableResult in = sc::nodeInputTable(n, "t");
       test_assert(in.status.ok());
       sc::ScriptTable out = in.value;
-      for (int i = 0; i < sc::tableRows(out); i++) {
+      for (int i = 0; i < sc::tableRowCount(out); i++) {
         test_assert(sc::tableSet(
                         out,
                         "c",
@@ -394,11 +395,11 @@ void testTables()
                         sc::makeFloat(sc::tableGet(in.value, "c", i).value.asFloat() * 2))
                         .ok());
       }
-      CDCC_TRY(sc::nodeOutput(n, "value", sc::makeFloat(sc::tableRows(in.value))));
-      return sc::nodeOutputTable(n, "t", out);
+      CDCC_TRY(sc::nodeSetOutput(n, "value", sc::makeFloat(sc::tableRowCount(in.value))));
+      return sc::nodeSetOutputTable(n, "t", out);
     };
     test_assert(finish(d, host, def, twiceAll).ok());
-    test_assert(sc::graphCreate(d.ctx, "g").status.ok());
+    test_assert(sc::newGraph(d.ctx, "g").status.ok());
     const int64_t in = addSocketTo(d, false, "in", "elements");
     const int64_t out = addSocketTo(d, true, "out", "elements");
     const int64_t size = addSocketTo(d, true, "size", "float");
@@ -407,7 +408,7 @@ void testTables()
     test_assert(sc::graphLink(d.ctx, kG, i, key(in).c_str(), n, "t").status.ok());
     test_assert(sc::graphLink(d.ctx, kG, n, "t", o, key(out).c_str()).status.ok());
     test_assert(sc::graphLink(d.ctx, kG, n, "value", o, key(size).c_str()).status.ok());
-    sc::GraphResult g = sc::graphInstance(d.ctx, kG);
+    sc::GraphResult g = sc::newGraphInstance(d.ctx, kG);
     test_assert(sc::graphEvaluate(g.value, "size").value == sc::makeFloat(0));
     test_assert(sc::graphSetInputTable(g.value, "in", t).ok());
     test_assert(sc::graphEvaluate(g.value, "size").value == sc::makeFloat(2));
@@ -432,15 +433,17 @@ void testTables()
                         StatusCode::InvalidArgument));
     test_assert(hasCode(sc::graphSetInputTable(g.value, "no", t), StatusCode::NotFound));
     const string node = id(n).c_str();
-    test_assert(sc::tableRows(sc::graphPeekTable(g.value, node, "t", false).value) == 2);
-    test_assert(sc::tableRows(sc::graphPeekTable(g.value, node, "t", true).value) == 2);
+    test_assert(sc::tableRowCount(sc::graphPeekTable(g.value, node, "t", false).value) ==
+                2);
+    test_assert(sc::tableRowCount(sc::graphPeekTable(g.value, node, "t", true).value) ==
+                2);
     test_assert(hasCode(sc::graphPeekTable(g.value, node, "value", false).status,
                         StatusCode::TypeMismatch));
     const int64_t w = sc::graphWatch(g.value, "", "out").value;
     test_assert(
         hasCode(sc::graphWatchTable(g.value, w).status, StatusCode::FailedPrecondition));
     test_assert(sc::graphUpdate(g.value).status.ok());
-    test_assert(sc::tableRows(sc::graphWatchTable(g.value, w).value) == 2);
+    test_assert(sc::tableRowCount(sc::graphWatchTable(g.value, w).value) == 2);
     test_assert(hasCode(sc::graphWatchValue(g.value, w).status, StatusCode::Unsupported));
     /* A payload that is no table. */
     test_assert(d.rt.ext<SocketTypeRegistry>().addPayloadType<Mesh>().ok());
@@ -475,7 +478,7 @@ void testResults()
   Host host;
   {
     Doc d;
-    test_assert(sc::graphCreate(d.ctx, "g").status.ok());
+    test_assert(sc::newGraph(d.ctx, "g").status.ok());
     Status fail;
     bool asked = false;
     std::function<void()> inside = []() {};
@@ -486,7 +489,7 @@ void testResults()
         return Status::error(StatusCode::Cancelled, "enough");
       }
       CDCC_TRY(Status(fail));
-      return sc::nodeOutput(n, "value", sc::nodeInput(n, "a").value);
+      return sc::nodeSetOutput(n, "value", sc::nodeInput(n, "a").value);
     };
     test_assert(finish(d, host, newDef("js.f"), kernel).ok());
     const int64_t in = addSocketTo(d, false, "in", "float"),
@@ -496,7 +499,7 @@ void testResults()
     test_assert(sc::graphLink(d.ctx, kG, i, key(in).c_str(), n, "a").status.ok());
     test_assert(sc::graphLink(d.ctx, kG, n, "value", m, "a").status.ok());
     test_assert(sc::graphLink(d.ctx, kG, m, "value", o, key(out).c_str()).status.ok());
-    sc::GraphResult g = sc::graphInstance(d.ctx, kG);
+    sc::GraphResult g = sc::newGraphInstance(d.ctx, kG);
     const string node = id(n).c_str(), sum = id(m).c_str();
     const int64_t wn = sc::graphWatch(g.value, node, "value").value;
     const int64_t wo = sc::graphWatch(g.value, "", "out").value;
@@ -675,17 +678,17 @@ void testDroppedInside()
   Host host;
   {
     Doc d;
-    test_assert(sc::graphCreate(d.ctx, "g").status.ok());
+    test_assert(sc::newGraph(d.ctx, "g").status.ok());
     sc::GraphResult g;
     Kernel kernel = [&](NodeExecContext &n) {
       g = sc::GraphResult();
       test_assert(!sc::nodeCancelled(n));
-      return sc::nodeOutput(n, "value", sc::makeFloat(1));
+      return sc::nodeSetOutput(n, "value", sc::makeFloat(1));
     };
     test_assert(finish(d, host, newDef("js.f"), kernel).ok());
     const int64_t n = addNode(d, "js.f"), m = addNode(d, "math.float");
     test_assert(sc::graphLink(d.ctx, kG, n, "value", m, "a").status.ok());
-    g = sc::graphInstance(d.ctx, kG);
+    g = sc::newGraphInstance(d.ctx, kG);
     test_assert(sc::graphSetTimeLimit(g.value, 1e9).ok());
     test_assert(sc::graphWatch(g.value, id(m).c_str(), "value").status.ok());
     test_assert(sc::graphUpdate(g.value).status.ok());

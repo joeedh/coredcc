@@ -30,14 +30,14 @@ export function graphTests(env: Env) {
   /* graphs["g"] with a node of `type`, its `value` the output `out`, its `a` the input `in`. */
   const makeGraph = (type: string) => {
     const path = 'graphs["g"]'
-    cdcc.graphCreate(ctx, 'g')[Symbol.dispose]()
-    const out = cdcc.graphAddInterface(ctx, path, 'output', 'out', 'float')
-    const in_ = cdcc.graphAddInterface(ctx, path, 'input', 'in', 'float')
-    const node = cdcc.graphAddNode(ctx, path, type, 10, 20)
-    const output = cdcc.graphAddNode(ctx, path, 'graph.output')
-    const input = cdcc.graphAddNode(ctx, path, 'graph.input')
-    const link = cdcc.graphLink(ctx, path, node, 'value', output, `#${out}`)
-    cdcc.graphLink(ctx, path, input, `#${in_}`, node, 'a')
+    cdcc.newGraph(ctx, 'g')[Symbol.dispose]()
+    const out = cdcc.addGraphInterface(ctx, path, 'output', 'out', 'float')
+    const in_ = cdcc.addGraphInterface(ctx, path, 'input', 'in', 'float')
+    const node = cdcc.addGraphNode(ctx, path, type, 10, 20)
+    const output = cdcc.addGraphNode(ctx, path, 'graph.output')
+    const input = cdcc.addGraphNode(ctx, path, 'graph.input')
+    const link = cdcc.addGraphLink(ctx, path, node, 'value', output, `#${out}`)
+    cdcc.addGraphLink(ctx, path, input, `#${in_}`, node, 'a')
     return {path, node, link, at: `${path}.nodes[#${node}]`}
   }
 
@@ -74,15 +74,15 @@ export function graphTests(env: Env) {
     graph.setInput('in', undefined)
     assert.equal(graph.evaluate('out'), 0.5)
     const steps = spike.historySize(hostOf(ctx))
-    cdcc.graphRemoveNode(ctx, path, node)
+    cdcc.removeGraphNode(ctx, path, node)
     assert.equal(graph.evaluate('out'), 0)
     cdcc.undo(ctx)
     assert.equal(graph.evaluate('out'), 0.5)
     assert.equal(spike.historySize(hostOf(ctx)), steps) /* instead of the one undone */
-    cdcc.graphUnlink(ctx, path, link) /* back with its id */
+    cdcc.removeGraphLink(ctx, path, link) /* back with its id */
     assert.equal(graph.evaluate('out'), 0)
     assert.throws(() => graph.evaluate('no'), fails(StatusCode.NotFound, /no/))
-    assert.throws(() => cdcc.graphAddNode(ctx, path, 'ts.sclae'), fails(StatusCode.NotFound, /ts\.scale/))
+    assert.throws(() => cdcc.addGraphNode(ctx, path, 'ts.sclae'), fails(StatusCode.NotFound, /ts\.scale/))
   })
 
   test('a TS kernel that throws, or misuses what it has', () => {
@@ -121,7 +121,7 @@ export function graphTests(env: Env) {
     /* The document is out of reach, and it can't be closed. */
     assert.throws(() => run(() => cdcc.get(ctx, 'count')), fails(StatusCode.Busy, /kernel/))
     assert.throws(() => run(() => cdcc.set(ctx, 'count', 1)), fails(StatusCode.Busy, /kernel/))
-    assert.throws(() => run(() => cdcc.graphCreate(ctx, 'x')), fails(StatusCode.Busy, /kernel/))
+    assert.throws(() => run(() => cdcc.newGraph(ctx, 'x')), fails(StatusCode.Busy, /kernel/))
     assert.throws(() => run(() => session[Symbol.dispose]()), fails(StatusCode.Internal, /from inside/))
     assert.equal(cdcc.get(ctx, 'count'), 0)
     /* And it works again. */
@@ -234,14 +234,14 @@ export function graphTests(env: Env) {
       },
     })
     const path = 'graphs["g"]'
-    cdcc.graphCreate(ctx, 'g')[Symbol.dispose]()
-    const in_ = cdcc.graphAddInterface(ctx, path, 'input', 'in', 'elements')
-    const out = cdcc.graphAddInterface(ctx, path, 'output', 'out', 'elements')
-    const node = cdcc.graphAddNode(ctx, path, 'ts.rows')
-    const input = cdcc.graphAddNode(ctx, path, 'graph.input')
-    const output = cdcc.graphAddNode(ctx, path, 'graph.output')
-    cdcc.graphLink(ctx, path, input, `#${in_}`, node, 't')
-    cdcc.graphLink(ctx, path, node, 't', output, `#${out}`)
+    cdcc.newGraph(ctx, 'g')[Symbol.dispose]()
+    const in_ = cdcc.addGraphInterface(ctx, path, 'input', 'in', 'elements')
+    const out = cdcc.addGraphInterface(ctx, path, 'output', 'out', 'elements')
+    const node = cdcc.addGraphNode(ctx, path, 'ts.rows')
+    const input = cdcc.addGraphNode(ctx, path, 'graph.input')
+    const output = cdcc.addGraphNode(ctx, path, 'graph.output')
+    cdcc.addGraphLink(ctx, path, input, `#${in_}`, node, 't')
+    cdcc.addGraphLink(ctx, path, node, 't', output, `#${out}`)
     using graph = new cdcc.GraphInstance(ctx, path)
     assert.deepEqual(graph.evaluateTable('out'), new cdcc.Table([], {c: [], label: []}))
     graph.setInput('in', new cdcc.Table([7, 3], {c: [1.5, 2]}))
@@ -260,12 +260,12 @@ export function graphTests(env: Env) {
   test('keys of 64 bits, through a foreach', () => {
     const path = 'graphs["g"]'
     const inner = 'graphs["inner"]'
-    const each = cdcc.graphCreate(ctx, 'inner')
-    const c = cdcc.graphAddInterface(ctx, inner, 'input', 'c', 'float')
-    const d = cdcc.graphAddInterface(ctx, inner, 'output', 'd', 'float')
-    const innerIn = cdcc.graphAddNode(ctx, inner, 'graph.input')
-    const innerOut = cdcc.graphAddNode(ctx, inner, 'graph.output')
-    cdcc.graphLink(ctx, inner, innerIn, `#${c}`, innerOut, `#${d}`)
+    const each = cdcc.newGraph(ctx, 'inner')
+    const c = cdcc.addGraphInterface(ctx, inner, 'input', 'c', 'float')
+    const d = cdcc.addGraphInterface(ctx, inner, 'output', 'd', 'float')
+    const innerIn = cdcc.addGraphNode(ctx, inner, 'graph.input')
+    const innerOut = cdcc.addGraphNode(ctx, inner, 'graph.output')
+    cdcc.addGraphLink(ctx, inner, innerIn, `#${c}`, innerOut, `#${d}`)
     cdcc.defineNodeType(ctx, {
       id: 'ts.keys',
       inputs: {t: cdcc.payload('elements')},
@@ -275,18 +275,18 @@ export function graphTests(env: Env) {
         node.output('t', new cdcc.Table(t.keys, t.columns))
       },
     })
-    cdcc.graphCreate(ctx, 'g')[Symbol.dispose]()
-    const in_ = cdcc.graphAddInterface(ctx, path, 'input', 'in', 'elements')
-    const out = cdcc.graphAddInterface(ctx, path, 'output', 'out', 'elements')
-    const input = cdcc.graphAddNode(ctx, path, 'graph.input')
-    const output = cdcc.graphAddNode(ctx, path, 'graph.output')
-    const node = cdcc.graphAddNode(ctx, path, 'ts.keys')
-    const foreach = cdcc.graphAddNode(ctx, path, 'graph.foreach')
+    cdcc.newGraph(ctx, 'g')[Symbol.dispose]()
+    const in_ = cdcc.addGraphInterface(ctx, path, 'input', 'in', 'elements')
+    const out = cdcc.addGraphInterface(ctx, path, 'output', 'out', 'elements')
+    const input = cdcc.addGraphNode(ctx, path, 'graph.input')
+    const output = cdcc.addGraphNode(ctx, path, 'graph.output')
+    const node = cdcc.addGraphNode(ctx, path, 'ts.keys')
+    const foreach = cdcc.addGraphNode(ctx, path, 'graph.foreach')
     cdcc.set(ctx, `${path}.nodes[#${foreach}].group`, each)
     each[Symbol.dispose]()
-    cdcc.graphLink(ctx, path, input, `#${in_}`, node, 't')
-    cdcc.graphLink(ctx, path, node, 't', foreach, 'elements')
-    cdcc.graphLink(ctx, path, foreach, 'elements', output, `#${out}`)
+    cdcc.addGraphLink(ctx, path, input, `#${in_}`, node, 't')
+    cdcc.addGraphLink(ctx, path, node, 't', foreach, 'elements')
+    cdcc.addGraphLink(ctx, path, foreach, 'elements', output, `#${out}`)
     using graph = new cdcc.GraphInstance(ctx, path)
     const keys = [2n ** 53n + 1n, 2 ** 53, 2n ** 63n - 1n, -(2n ** 63n), -(2n ** 53n) - 1n, 5]
     graph.setInput('in', new cdcc.Table(keys, {c: [1, 2, 3, 4, 5, 6]}))
@@ -341,7 +341,7 @@ export function graphTests(env: Env) {
     assert.throws(() => new cdcc.GraphInstance(ctx, 'count'), fails(StatusCode.InvalidArgument, /graph/))
 
     const other = open()
-    cdcc.graphCreate(other.ctx, 'g')[Symbol.dispose]()
+    cdcc.newGraph(other.ctx, 'g')[Symbol.dispose]()
     using late = new cdcc.GraphInstance(other.ctx, 'graphs["g"]')
     other[Symbol.dispose]()
     assert.throws(() => late.evaluate('out'), fails(StatusCode.FailedPrecondition, /closed/))

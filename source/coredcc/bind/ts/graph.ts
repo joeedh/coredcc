@@ -46,10 +46,10 @@ export class Table {
 }
 
 function tableToJs(t: ScriptTable): Table {
-  const rows = cd.tableRows(t)
+  const rows = cd.tableRowCount(t)
   const out = new Table()
   for (let i = 0; i < rows; i++) out.keys.push(take(cd.tableKey(t, i), (k) => toNumber(BigInt(k))))
-  const columns = cd.tableColumns(t)
+  const columns = cd.tableColumnCount(t)
   for (let c = 0; c < columns; c++) {
     const name = take(cd.tableColumnName(t, c), (s) => s)
     const value = out.keys.map((_, i) => take(cd.tableGet(t, name, i), (v) => toJs(undefined, v)))
@@ -140,8 +140,8 @@ export class NodeContext {
   /** Converted to the output's type, as `set` converts to a member's. */
   output(name: string, value: Writable | Table) {
     const raw = this.raw
-    if (value instanceof Table) withTable(value, (t) => check(cd.nodeOutputTable(raw, name, t)))
-    else withValue(undefined, value, (v) => check(cd.nodeOutput(raw, name, v)))
+    if (value instanceof Table) withTable(value, (t) => check(cd.nodeSetOutputTable(raw, name, t)))
+    else withValue(undefined, value, (v) => check(cd.nodeSetOutput(raw, name, v)))
   }
   /** Sets an output to an input of the same type. */
   pass(input: string, output: string) {
@@ -281,19 +281,19 @@ export function replaceNodeType(ctx: Context, spec: NodeTypeSpec) {
 
 /** Makes a graph block; a pointer to it, for a pointer member. Undoable, as are the other
  * edits, which take a path to a graph or to a pointer to one. */
-export function graphCreate(ctx: Context, name: string): PropValue {
-  return take(cd.graphCreate(ctx, name), copyValue)
+export function newGraph(ctx: Context, name: string): PropValue {
+  return take(cd.newGraph(ctx, name), copyValue)
 }
 /** The new node's id. */
-export function graphAddNode(ctx: Context, path: string, type: string, x = 0, y = 0): number {
+export function addGraphNode(ctx: Context, path: string, type: string, x = 0, y = 0): number {
   return take(cd.graphAddNode(ctx, path, type, x, y), Number)
 }
-export function graphRemoveNode(ctx: Context, path: string, node: number) {
+export function removeGraphNode(ctx: Context, path: string, node: number) {
   check(cd.graphRemoveNode(ctx, path, BigInt(node)))
 }
 /** The new link's id. Sockets are named by key: an input's or output's name, or `#<id>` for
  * one of a graph's interface (on group, input and output nodes). */
-export function graphLink(
+export function addGraphLink(
   ctx: Context,
   path: string,
   from: number,
@@ -303,11 +303,11 @@ export function graphLink(
 ): number {
   return take(cd.graphLink(ctx, path, BigInt(from), fromSocket, BigInt(to), toSocket), Number)
 }
-export function graphUnlink(ctx: Context, path: string, link: number) {
+export function removeGraphLink(ctx: Context, path: string, link: number) {
   check(cd.graphUnlink(ctx, path, BigInt(link)))
 }
 /** The new interface socket's id. */
-export function graphAddInterface(
+export function addGraphInterface(
   ctx: Context,
   path: string,
   side: 'input' | 'output',
@@ -393,7 +393,7 @@ export class GraphInstance implements Disposable {
   constructor(ctx: Context, path: string) {
     checkCtx(ctx)
     this.raw = take(
-      cd.graphInstance(ctx, path),
+      cd.newGraphInstance(ctx, path),
       (v) => getBindingBackend().constructWith('coredcc::ScriptGraph', 'copy', v) as ScriptGraph
     )
   }

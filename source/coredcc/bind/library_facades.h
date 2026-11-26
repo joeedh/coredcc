@@ -3,7 +3,7 @@
 /** \file
  * Saving and loading for scripts (api/library_io.h, command/library_commands.h). The
  * rules of facades.h hold here too. None of it runs in a script's slot, but
- * `libraryAppend` in `exec`.
+ * `appendLibrary` in `exec`.
  *
  * Reports are JSON objects. A block in them is `{block, name}`, where `block` is its id's
  * text (api/ref_text.h's formatBlockId). A list is `{total, first}`, with the first
@@ -48,33 +48,33 @@ struct SaveResult {
 };
 
 /** saveLibrary. */
-SaveResult librarySave(Context &ctx);
+SaveResult saveLibrary(Context &ctx);
 
 /**
  * loadLibrary: `ctx`'s library must have no blocks. `sourceName` and the limits are
  * LoadOptions'; a limit of 0 is the default one. The report has `records`, `missingType`
  * and `missingBlock` (LoadReport's counts), and the list `blocks`.
  */
-StringResult libraryLoad(Context &ctx,
+StringResult loadLibrary(Context &ctx,
                          std::span<const uint8_t> bytes,
                          const string &sourceName,
                          int64_t maxBytes,
                          int64_t maxBlocks);
 
 /**
- * appendUndo, with options as libraryLoad's. The report is libraryLoad's, with the list
+ * appendUndo, with options as loadLibrary's. The report is loadLibrary's, with the list
  * `ids` of
  * `{from, to}`, the texts of the file's ids and of the new ones.
  */
-StringResult libraryAppend(Context &ctx,
+StringResult appendLibrary(Context &ctx,
                            std::span<const uint8_t> bytes,
                            const string &sourceName,
                            int64_t maxBytes,
                            int64_t maxBlocks);
 
 /** resolvePlaceholders. FailedPrecondition while there is something to undo or redo. The
- * report is libraryLoad's. */
-StringResult libraryResolve(Context &ctx);
+ * report is loadLibrary's. */
+StringResult resolvePlaceholders(Context &ctx);
 
 /** Forgets what could be undone and redone. */
 Status clearHistory(Context &ctx);

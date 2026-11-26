@@ -72,7 +72,7 @@ struct DriveDoc : IoDoc {
   /** A graph block, in the document's list unless `listed` is false. */
   BlockHandle graph(const char *name, bool listed = true)
   {
-    Result<BlockHandle> g = createGraph(*lib, name);
+    Result<BlockHandle> g = newGraph(*lib, name);
     must(g.status());
     if (listed) {
       must(list().insert(*lib, idOf(*g)));

@@ -214,7 +214,7 @@ int main(int argc, char **argv)
    * roots far from them. */
   std::vector<int> read;
   for (int g = 0; g < 10; g++) {
-    Result<BlockHandle> gb = createGraph(lib, ("g" + std::to_string(g)).c_str());
+    Result<BlockHandle> gb = newGraph(lib, ("g" + std::to_string(g)).c_str());
     must(gb.status());
     GraphDef &def = *graphDefOf(lib, *gb);
     const NodeId time = add(def, drive::kTimeNode);

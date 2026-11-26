@@ -11,7 +11,7 @@ namespace {
 void testRefs()
 {
   World w;
-  const Graph g = newGraph(w.lib, "G");
+  const Graph g = makeGraph(w.lib, "G");
   w.lib.setFlag(g.h, BlockFlags::Root, true);
   const BlockHandle t1 = newThing(w.lib, "t1", 1);
   const BlockHandle t2 = newThing(w.lib, "t2", 2);
@@ -73,9 +73,9 @@ void testRefs()
 void testGroups()
 {
   World w;
-  const Graph outer = newGraph(w.lib, "outer");
-  const Graph mid = newGraph(w.lib, "mid");
-  const Graph inner = newGraph(w.lib, "inner");
+  const Graph outer = makeGraph(w.lib, "outer");
+  const Graph mid = makeGraph(w.lib, "mid");
+  const Graph inner = makeGraph(w.lib, "inner");
   const BlockHandle thing = newThing(w.lib, "t", 0);
   for (const Graph &g : {outer, mid, inner}) {
     w.lib.setFlag(g.h, BlockFlags::Root, g.h == outer.h);
@@ -225,7 +225,7 @@ void testDoubling()
   litestl::util::Vector<int64_t> in, out;
   const auto start = std::chrono::steady_clock::now();
   for (int i = 0; i < n; i++) {
-    g.append(newGraph(w.lib, "g"));
+    g.append(makeGraph(w.lib, "g"));
     in.append(addSocket(*g[i].def, SocketSide::Input, "i", "float"));
     out.append(addSocket(*g[i].def, SocketSide::Output, "o", "float"));
   }

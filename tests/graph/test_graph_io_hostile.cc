@@ -505,7 +505,7 @@ struct RandomDoc : HostileDoc {
   {
     const char *names[] = {"a", "b", "c"};
     for (int i = 0; i < 3; i++) {
-      g[i] = newGraph(lib, names[i]);
+      g[i] = makeGraph(lib, names[i]);
       lib.setFlag(g[i].h, BlockFlags::Root, true);
     }
     const char *types[] = {"t.sum",
@@ -589,7 +589,7 @@ void testLarge()
    * an input inside and from an output inside. */
   auto interior = [&](int links) {
     const int n = links / 2;
-    const Graph inner = newGraph(d.lib, "inner");
+    const Graph inner = makeGraph(d.lib, "inner");
     for (int i = 0; i < n; i++) {
       NodeState s;
       s.id = NodeId{i + 1};

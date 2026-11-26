@@ -118,7 +118,7 @@ describe('coredcc wasm-st spike', () => {
 
   test('pointers pass through a command', () => {
     const seen: unknown[] = []
-    cdcc.registerCommand(
+    cdcc.defineCommand(
       ctx,
       {id: 'ts.pick', outputs: {label: ''}},
       class implements cdcc.ScriptCommand {
@@ -211,7 +211,7 @@ describe('coredcc wasm-st spike', () => {
     }
     const defineNul = (more: Partial<cdcc.NodeTypeSpec>) =>
       cdcc.defineNodeType(ctx, {id: 'ts.n', outputs: {}, evaluate() {}, ...more})
-    cdcc.graphCreate(ctx, 'nul')[Symbol.dispose]()
+    cdcc.newGraph(ctx, 'nul')[Symbol.dispose]()
     using graph = new cdcc.GraphInstance(ctx, 'graphs["nul"]')
     const calls: [string, () => unknown][] = [
       ['set', () => cdcc.set(ctx, 'label', nul)],
@@ -229,13 +229,13 @@ describe('coredcc wasm-st spike', () => {
       ['a layout', () => cdcc.parseLayout(nul)],
       ['a layout to check', () => cdcc.validateLayout(ctx, nul)],
       ['a reader', () => new cdcc.PathReader(ctx, [nul])],
-      ['uiName', () => cdcc.registerCommand(ctx, {id: 'ts.nul', uiName: nul}, Nothing)],
-      ['description', () => cdcc.registerCommand(ctx, {id: 'ts.nul', description: nul}, Nothing)],
-      ['icon', () => cdcc.registerCommand(ctx, {id: 'ts.nul', icon: nul}, Nothing)],
-      ['an input', () => cdcc.registerCommand(ctx, {id: 'ts.nul', inputs: {[nul]: 1}}, Nothing)],
-      ['a default', () => cdcc.registerCommand(ctx, {id: 'ts.nul', inputs: {a: nul}}, Nothing)],
-      ['an output', () => cdcc.registerCommand(ctx, {id: 'ts.nul', outputs: {[nul]: 1}}, Nothing)],
-      ['a graph', () => cdcc.graphCreate(ctx, nul)],
+      ['uiName', () => cdcc.defineCommand(ctx, {id: 'ts.nul', uiName: nul}, Nothing)],
+      ['description', () => cdcc.defineCommand(ctx, {id: 'ts.nul', description: nul}, Nothing)],
+      ['icon', () => cdcc.defineCommand(ctx, {id: 'ts.nul', icon: nul}, Nothing)],
+      ['an input', () => cdcc.defineCommand(ctx, {id: 'ts.nul', inputs: {[nul]: 1}}, Nothing)],
+      ['a default', () => cdcc.defineCommand(ctx, {id: 'ts.nul', inputs: {a: nul}}, Nothing)],
+      ['an output', () => cdcc.defineCommand(ctx, {id: 'ts.nul', outputs: {[nul]: 1}}, Nothing)],
+      ['a graph', () => cdcc.newGraph(ctx, nul)],
       ['a node type', () => cdcc.defineNodeType(ctx, {id: 'ts.n', uiName: nul, outputs: {}, evaluate() {}})],
       ['a socket', () => cdcc.defineNodeType(ctx, {id: 'ts.n', outputs: {a: nul}, evaluate() {}})],
       ['a param', () => cdcc.defineNodeType(ctx, {id: 'ts.n', params: {[nul]: 1}, outputs: {}, evaluate() {}})],
@@ -278,11 +278,11 @@ describe('coredcc wasm-st spike', () => {
     command[Symbol.dispose]()
     node[Symbol.dispose]()
     /* An id is refused as one that isn't an identifier. */
-    assert.throws(() => cdcc.registerCommand(ctx, {id: 'ts.' + nul}, Nothing), ScriptError)
+    assert.throws(() => cdcc.defineCommand(ctx, {id: 'ts.' + nul}, Nothing), ScriptError)
     assert.equal(cdcc.get(ctx, 'label'), '')
     assert.equal(cdcc.get(ctx, 'items["Cube"].name'), 'Cube')
     /* The id wasn't taken by those. */
-    cdcc.registerCommand(ctx, {id: 'ts.nul'}, Nothing)
+    cdcc.defineCommand(ctx, {id: 'ts.nul'}, Nothing)
   })
 
   test('saves, loads, appends, with reports', () => {
@@ -335,7 +335,7 @@ describe('coredcc wasm-st spike', () => {
 
   test('4. a TS command runs through the executor, with undo and redo', () => {
     AddCount.made = 0
-    cdcc.registerCommand(ctx, addSpec, AddCount)
+    cdcc.defineCommand(ctx, addSpec, AddCount)
     const out = cdcc.invoke(ctx, 'ts.add(amount=5)')
     assert.deepEqual(out, {result: 5})
     assert.equal(cdcc.get(ctx, 'count'), 5)
@@ -351,7 +351,7 @@ describe('coredcc wasm-st spike', () => {
 
   test('a class with its own redo: redo calls it', () => {
     let redos = 0
-    cdcc.registerCommand(
+    cdcc.defineCommand(
       ctx,
       addSpec,
       class extends AddCount {
@@ -369,8 +369,8 @@ describe('coredcc wasm-st spike', () => {
   })
 
   test('a TS command composes: set and invoke in exec are sub-commands', () => {
-    cdcc.registerCommand(ctx, addSpec, AddCount)
-    cdcc.registerCommand(
+    cdcc.defineCommand(ctx, addSpec, AddCount)
+    cdcc.defineCommand(
       ctx,
       {id: 'ts.macro'},
       class implements ScriptCommand {
@@ -398,7 +398,7 @@ describe('coredcc wasm-st spike', () => {
         undo() {}
       }
       Object.assign(C.prototype, body)
-      cdcc.registerCommand(ctx, {id}, C)
+      cdcc.defineCommand(ctx, {id}, C)
     }
     cmd('ts.fail', {
       exec: () => {
@@ -431,7 +431,7 @@ describe('coredcc wasm-st spike', () => {
   })
 
   test('T2: a slot returning a Promise fails instead of passing', () => {
-    cdcc.registerCommand(
+    cdcc.defineCommand(
       ctx,
       {id: 'ts.async'},
       class implements ScriptCommand {
@@ -448,7 +448,7 @@ describe('coredcc wasm-st spike', () => {
       exec() {}
       undo() {}
     }
-    cdcc.registerCommand(ctx, {id: 'ts.asyncCanRun'}, AsyncCanRun as unknown as new () => ScriptCommand)
+    cdcc.defineCommand(ctx, {id: 'ts.asyncCanRun'}, AsyncCanRun as unknown as new () => ScriptCommand)
     assert.throws(() => cdcc.invoke(ctx, 'ts.async'), fails(StatusCode.Internal, /exec returned a Promise/))
     assert.throws(() => cdcc.invoke(ctx, 'ts.asyncCanRun'), fails(StatusCode.FailedPrecondition, /Promise/))
     assert.equal(spike.historySize(hostOf(ctx)), 0)
@@ -456,7 +456,7 @@ describe('coredcc wasm-st spike', () => {
 
   test('T3: a throwing memSize or discard is ignored, with a warning', (t) => {
     const warn = t.mock.method(console, 'warn', () => {})
-    cdcc.registerCommand(
+    cdcc.defineCommand(
       ctx,
       addSpec,
       class extends AddCount {
@@ -478,7 +478,7 @@ describe('coredcc wasm-st spike', () => {
   })
 
   test('T5, T6: Float defaults, and numbers past int64 and 2^53', () => {
-    cdcc.registerCommand(
+    cdcc.defineCommand(
       ctx,
       {id: 'ts.scale', inputs: {factor: cdcc.float(1)}},
       class implements ScriptCommand {
@@ -493,11 +493,11 @@ describe('coredcc wasm-st spike', () => {
     cdcc.set(ctx, 'strength', 1e19) /* a Float, clamped; not wrapped to int64 */
     assert.equal(cdcc.get(ctx, 'strength'), 1)
     assert.throws(() => cdcc.fromJs(ctx, 2n ** 64n), RangeError)
-    assert.throws(() => cdcc.registerCommand(ctx, {id: 'ts.flags', flags: 2 ** 40}, AddCount), TypeError)
+    assert.throws(() => cdcc.defineCommand(ctx, {id: 'ts.flags', flags: 2 ** 40}, AddCount), TypeError)
   })
 
   test('T7: redo as an arrow-function field is refused', () => {
-    cdcc.registerCommand(
+    cdcc.defineCommand(
       ctx,
       {id: 'ts.arrow'},
       class implements ScriptCommand {
@@ -512,7 +512,7 @@ describe('coredcc wasm-st spike', () => {
   test('T12: an output named __proto__ is data', () => {
     const outputs: Record<string, number> = {}
     Object.defineProperty(outputs, '__proto__', {value: 0, enumerable: true})
-    cdcc.registerCommand(
+    cdcc.defineCommand(
       ctx,
       {id: 'ts.proto', outputs},
       class implements ScriptCommand {
@@ -527,7 +527,7 @@ describe('coredcc wasm-st spike', () => {
   })
 
   test('T15: CommandFlags', () => {
-    cdcc.registerCommand(ctx, {...addSpec, flags: CommandFlags.NoUndo}, AddCount)
+    cdcc.defineCommand(ctx, {...addSpec, flags: CommandFlags.NoUndo}, AddCount)
     cdcc.invoke(ctx, 'ts.add(amount=4)')
     assert.equal(cdcc.get(ctx, 'count'), 4)
     assert.equal(spike.historySize(hostOf(ctx)), 0)
@@ -553,12 +553,12 @@ describe('coredcc wasm-st spike', () => {
 
   test('registration errors are ScriptErrors', () => {
     assert.throws(
-      () => cdcc.registerCommand(ctx, {id: 'core.mine'}, AddCount),
+      () => cdcc.defineCommand(ctx, {id: 'core.mine'}, AddCount),
       fails(StatusCode.InvalidArgument, /reserved/)
     )
-    assert.throws(() => cdcc.registerCommand(ctx, {id: 'not an id'}, AddCount), ScriptError)
-    cdcc.registerCommand(ctx, {id: 'ts.once'}, AddCount)
-    assert.throws(() => cdcc.registerCommand(ctx, {id: 'ts.once'}, AddCount), fails(StatusCode.AlreadyExists, /once/))
+    assert.throws(() => cdcc.defineCommand(ctx, {id: 'not an id'}, AddCount), ScriptError)
+    cdcc.defineCommand(ctx, {id: 'ts.once'}, AddCount)
+    assert.throws(() => cdcc.defineCommand(ctx, {id: 'ts.once'}, AddCount), fails(StatusCode.AlreadyExists, /once/))
   })
 
   test('T1, T8, T11: a disposed or stale context throws; a document closes only outside slots', () => {
@@ -566,11 +566,11 @@ describe('coredcc wasm-st spike', () => {
     other[Symbol.dispose]()
     assert.ok(other.disposed)
     assert.throws(() => cdcc.get(other.ctx, 'count'), /disposed/)
-    assert.throws(() => cdcc.registerCommand(other.ctx, addSpec, AddCount), /disposed/)
+    assert.throws(() => cdcc.defineCommand(other.ctx, addSpec, AddCount), /disposed/)
 
     const inner = open()
     let kept: Context | undefined
-    cdcc.registerCommand(
+    cdcc.defineCommand(
       ctx,
       {id: 'ts.close'},
       class implements ScriptCommand {

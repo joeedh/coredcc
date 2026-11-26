@@ -78,12 +78,13 @@ struct Doubler {
   }
   Status exec(Context &ctx)
   {
-    sc::ValueResult in = sc::inputGet(ctx, "amount");
+    sc::ValueResult in = sc::commandInput(ctx, "amount");
     test_assert(in.status.ok());
-    test_assert(sc::inputGet(ctx, "nope").status.code() == StatusCode::NotFound);
-    test_assert(sc::outputSet(ctx, "nope", in.value).code() == StatusCode::NotFound);
-    CDCC_TRY(sc::outputSet(ctx, "result", sc::makeInt(2 * *in.value.tryInt())));
-    test_assert(sc::outputGet(ctx, "result").value ==
+    test_assert(sc::commandInput(ctx, "nope").status.code() == StatusCode::NotFound);
+    test_assert(sc::commandSetOutput(ctx, "nope", in.value).code() ==
+                StatusCode::NotFound);
+    CDCC_TRY(sc::commandSetOutput(ctx, "result", sc::makeInt(2 * *in.value.tryInt())));
+    test_assert(sc::commandOutput(ctx, "result").value ==
                 sc::makeInt(2 * *in.value.tryInt()));
     return Status();
   }
@@ -114,11 +115,11 @@ static void test_command_bags()
                                             .output(PropertyDef::intProp("result")))
                   .ok());
   /* Outside a slot there are no bags. */
-  test_assert(sc::inputGet(s.ctx, "amount").status.code() ==
+  test_assert(sc::commandInput(s.ctx, "amount").status.code() ==
               StatusCode::FailedPrecondition);
-  test_assert(sc::outputSet(s.ctx, "result", sc::makeInt(1)).code() ==
+  test_assert(sc::commandSetOutput(s.ctx, "result", sc::makeInt(1)).code() ==
               StatusCode::FailedPrecondition);
-  test_assert(sc::outputGet(s.ctx, "result").status.code() ==
+  test_assert(sc::commandOutput(s.ctx, "result").status.code() ==
               StatusCode::FailedPrecondition);
   sc::BagResult out = sc::invoke(s.ctx, "test.double(amount=21)");
   test_assert(out.status.ok() &&

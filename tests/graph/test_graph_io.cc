@@ -71,7 +71,7 @@ struct Content {
   int64_t i = 0, o = 0, a = 0, innerOut = 0;
 
   explicit Content(Library &lib)
-      : root(newGraph(lib, "root")), inner(newGraph(lib, "inner"))
+      : root(makeGraph(lib, "root")), inner(makeGraph(lib, "inner"))
   {
     lib.setFlag(root.h, BlockFlags::Root, true);
     GraphDef &d = *inner.def;
@@ -324,7 +324,7 @@ void testStrength()
     /* A state says the opposite of the type: known at once, or later. */
     for (int late = 0; late < 3; late++) {
       IoDoc a;
-      const Graph root = newGraph(a.lib, "root"), target = newGraph(a.lib, "target");
+      const Graph root = makeGraph(a.lib, "root"), target = makeGraph(a.lib, "target");
       a.lib.setFlag(root.h, BlockFlags::Root, true);
       if (late == 0) {
         addKeeper(a.rt, weak);
@@ -360,7 +360,7 @@ void testStrength()
     }
     /* A file says the opposite. */
     IoDoc a, b;
-    const Graph root = newGraph(a.lib, "root"), target = newGraph(a.lib, "target");
+    const Graph root = makeGraph(a.lib, "root"), target = makeGraph(a.lib, "target");
     a.lib.setFlag(root.h, BlockFlags::Root, true);
     addKeeper(a.rt, !weak);
     addKeeper(b.rt, weak);
@@ -401,7 +401,7 @@ void testVersions()
   IoDoc a, b, c;
   addVersion(a.rt, 2);
   addVersion(b.rt, 3);
-  const Graph g = newGraph(a.lib, "root");
+  const Graph g = makeGraph(a.lib, "root");
   a.lib.setFlag(g.h, BlockFlags::Root, true);
   const NodeId n = add(*g.def, "io.versioned"), sum = add(*g.def, "t.sum");
   test_assert(g.def->node(n)->typeVersion() == 2 && g.def->node(sum)->typeVersion() == 1);
@@ -435,7 +435,7 @@ void testExtraRefs()
 {
   IoDoc d;
   Content c(d.lib);
-  const Graph kept = newGraph(d.lib, "kept"), alone = newGraph(d.lib, "alone");
+  const Graph kept = makeGraph(d.lib, "kept"), alone = makeGraph(d.lib, "alone");
   NodeState s;
   s.id = NodeId{77};
   s.typeName = "t.sum";
@@ -488,7 +488,7 @@ void testTargets()
 {
   IoDoc a, b;
   Content c(a.lib);
-  const Graph lost = newGraph(a.lib, "lost");
+  const Graph lost = makeGraph(a.lib, "lost");
   GraphDef &r = *c.root.def;
   const NodeId m = add(r, "io.mode"), g = add(r, "graph.group");
   test_assert(r.setParam(m, "strong", graphPointer(lost)).ok());
@@ -517,7 +517,7 @@ void testTargets()
 void testCycles()
 {
   IoDoc a, b;
-  const Graph g = newGraph(a.lib, "root"), h = newGraph(a.lib, "other");
+  const Graph g = makeGraph(a.lib, "root"), h = makeGraph(a.lib, "other");
   a.lib.setFlag(g.h, BlockFlags::Root, true);
   const int64_t o = addSocket(*g.def, SocketSide::Output, "out", "float");
   const int64_t ho = addSocket(*h.def, SocketSide::Output, "out", "float");
@@ -607,7 +607,7 @@ void testLimits()
 {
   for (int kind = 0; kind < 4; kind++) {
     Doc a;
-    const Graph g = newGraph(a.lib, "g"), empty = newGraph(a.lib, "empty");
+    const Graph g = makeGraph(a.lib, "g"), empty = makeGraph(a.lib, "empty");
     a.lib.setFlag(g.h, BlockFlags::Root, true);
     a.lib.setFlag(empty.h, BlockFlags::Root, true);
     NodeState s;
@@ -665,7 +665,7 @@ void testNames()
   addType<modeKernel>(d.rt, t, one);
   test_assert(d.rt.ext<NodeTypeRegistry>().find(one) &&
               !d.rt.ext<NodeTypeRegistry>().find(other));
-  test_assert(hasCode(newGraph(d.lib, "g").def->addNode(other), StatusCode::NotFound));
+  test_assert(hasCode(makeGraph(d.lib, "g").def->addNode(other), StatusCode::NotFound));
   SocketTypeRegistry &sockets = d.rt.ext<SocketTypeRegistry>();
   test_assert(sockets.addPayloadType<Twin>().ok());
   test_assert(sockets.find(kTwinSockets[0]) && !sockets.find(kTwinSockets[1]));
@@ -681,7 +681,7 @@ bool is(const litestl::util::string &s, const char *text)
 void testAliases()
 {
   Doc a;
-  Graph g = newGraph(a.lib, "g");
+  Graph g = makeGraph(a.lib, "g");
   a.lib.setFlag(g.h, BlockFlags::Root, true);
   NodeState old;
   old.id = NodeId{5};

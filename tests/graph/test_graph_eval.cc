@@ -470,7 +470,7 @@ void testErrors()
 void testGroups()
 {
   World w;
-  const Graph inner = newGraph(w.lib, "inner"), outer = newGraph(w.lib, "outer");
+  const Graph inner = makeGraph(w.lib, "inner"), outer = makeGraph(w.lib, "outer");
   GraphDef &in = *inner.def, &o = *outer.def;
   const int64_t ia = addSocket(in, SocketSide::Input, "a", "float");
   const int64_t ib = addSocket(in, SocketSide::Input, "b", "float");
@@ -607,7 +607,7 @@ void testGroups()
   test_assert(num(alone, SocketPath::output("sum")) == 6); /* 0 + 6, set above */
 
   /* Another def, and none. */
-  const Graph copy = newGraph(w.lib, "copy");
+  const Graph copy = makeGraph(w.lib, "copy");
   const int64_t ia2 = *copy.def->addInterface(SocketSide::Input, "a", "float", -1, ia);
   test_assert(
       copy.def->addInterface(SocketSide::Output, "sum", "float", -1, sumOut).ok());
@@ -650,7 +650,7 @@ Status meshToFloat(const GraphValue &in, GraphValue &out)
 void testConversions()
 {
   World w;
-  const Graph inner = newGraph(w.lib, "inner"), outer = newGraph(w.lib, "outer");
+  const Graph inner = makeGraph(w.lib, "inner"), outer = makeGraph(w.lib, "outer");
   GraphDef &in = *inner.def, &o = *outer.def;
   const int64_t a = addSocket(in, SocketSide::Input, "a", "float");
   const int64_t b = addSocket(in, SocketSide::Output, "b", "float");

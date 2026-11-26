@@ -13,7 +13,7 @@ const create = (await import(pathToFileURL(modulePath).href)).default
 cdcc.load(await create(), 'TESTAPP_GetManager')
 const host = ta.create() as Host
 const session = new cdcc.Session(host, ta.context(host) as cdcc.Context)
-cdcc.registerCommand(
+cdcc.defineCommand(
   session.ctx,
   {id: 'ts.add', description: 'Adds */ to count', inputs: {amount: 1, default: ''}, outputs: {result: 0}},
   class {

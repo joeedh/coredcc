@@ -1,5 +1,5 @@
 /* The tool facades (bind/tool_facades.h) with script tools, modals and gizmos played by
- * fakehost::Host: registration and handle counts, a script drag through dragUpdate, the
+ * fakehost::Host: registration and handle counts, a script drag through updateDrag, the
  * gate table of tool slots, and the reads allowed in read-only slots. */
 
 #include "../tool/tool_fixture.h"
@@ -164,17 +164,17 @@ void testRegister()
     const ToolDef *def = d.rt.ext<ToolRegistry>().find("js.nudge");
     test_assert(def && def->findSetting("step") && def->findSetting("mode"));
 
-    must(sc::toolSetActive(*d.ctx, "js.nudge"));
+    must(sc::setActiveTool(*d.ctx, "js.nudge"));
     test_assert(s.activates == 1 &&
-                std::string(sc::toolActive(*d.ctx).value.c_str()) == "js.nudge");
-    must(sc::toolSetActive(*d.ctx, kSelectTool));
+                std::string(sc::activeTool(*d.ctx).value.c_str()) == "js.nudge");
+    must(sc::setActiveTool(*d.ctx, kSelectTool));
     test_assert(s.deactivates == 1);
   }
   test_assert(host.allReleasedOnce());
 }
 
 /* A script drag: a press begins core.object.dragDelta and pushes a script modal, moves
- * call dragUpdate, the release finishes. One undo step. */
+ * call updateDrag, the release finishes. One undo step. */
 void testScriptDrag()
 {
   FakeHost host;
@@ -189,7 +189,7 @@ void testScriptDrag()
         return EventResult::Unhandled;
       }
       must(sc::beginInteractiveAt(ctx, "", kDragDeltaCommand, sc::newRunInputs(), false));
-      must(sc::toolPushModal(ctx, host.add(modalObj(&s)), "onEvent end", true));
+      must(sc::pushModal(ctx, host.add(modalObj(&s)), "onEvent end", true));
       return EventResult::Handled;
     };
     s.modalEvent = [&](Context &ctx, const InputEvent &e) {
@@ -197,7 +197,7 @@ void testScriptDrag()
         return ModalResult::Finish;
       }
       test_assert(sc::dragCount(ctx).value == 2);
-      must(sc::dragUpdate(ctx, moveBy(e.x / 100.0)));
+      must(sc::updateDrag(ctx, moveBy(e.x / 100.0)));
       return ModalResult::Continue;
     };
     d.useTool("js.nudge");
@@ -210,9 +210,9 @@ void testScriptDrag()
     must(d.send(EventType::PointerUp, 250, 0).status());
     test_assert(s.ends == 1 && s.committed && !d.ctx->executor()->interactiveOpen());
 
-    /* dragUpdate without a drag, and dragUpdateEach with the wrong count. */
+    /* updateDrag without a drag, and updateDragEach with the wrong count. */
     test_assert(
-        isCode(sc::dragUpdate(*d.ctx, moveBy(1)), StatusCode::FailedPrecondition));
+        isCode(sc::updateDrag(*d.ctx, moveBy(1)), StatusCode::FailedPrecondition));
     must(
         sc::beginInteractiveAt(*d.ctx, "", kDragDeltaCommand, sc::newRunInputs(), false));
     litestl::util::Vector<double> numbers;
@@ -220,7 +220,7 @@ void testScriptDrag()
       numbers.append(0.0);
     }
     test_assert(
-        isCode(sc::dragUpdateEach(*d.ctx, numbers), StatusCode::InvalidArgument, "16"));
+        isCode(sc::updateDragEach(*d.ctx, numbers), StatusCode::InvalidArgument, "16"));
     for (int i = 0; i < 16; i++) {
       numbers.append(0.0);
     }
@@ -229,15 +229,15 @@ void testScriptDrag()
     /* A kind that isn't 0, 1 or 2 (casting NaN or 7 to DeltaKind was undefined). */
     for (double kind : {7.0, 0.5, -1.0, std::nan("")}) {
       numbers[16] = kind;
-      test_assert(
-          isCode(sc::dragUpdateEach(*d.ctx, numbers), StatusCode::InvalidArgument, "kind"));
+      test_assert(isCode(
+          sc::updateDragEach(*d.ctx, numbers), StatusCode::InvalidArgument, "kind"));
     }
     numbers[16] = 0.0;
-    must(sc::dragUpdateEach(*d.ctx, numbers));
+    must(sc::updateDragEach(*d.ctx, numbers));
     d.evaluate();
     test_assert(std::abs(d.position(a)[0] - 3.5) < 1e-9 &&
                 std::abs(d.position(b)[0] - 5.5) < 1e-9);
-    test_assert(isCode(sc::elementsDragUpdate(*d.ctx, moveBy(1)),
+    test_assert(isCode(sc::updateElementsDrag(*d.ctx, moveBy(1)),
                        StatusCode::FailedPrecondition,
                        "another"));
     must(sc::cancelInteractive(*d.ctx));
@@ -264,7 +264,7 @@ void testGates()
       if (e.type == EventType::PointerDown) {
         inEvent.push_back(sc::invoke(ctx, "core.scene.new").status);
         inEvent.push_back(sc::worldMatrix(ctx, string(name.c_str())).status);
-        const sc::IntResult g = sc::toolAddForeignGizmo(
+        const sc::IntResult g = sc::addForeignGizmo(
             ctx, host.add(gizmoObj(&s)), "update hitTest draw beginDrag");
         inEvent.push_back(g.status);
       }
@@ -273,7 +273,7 @@ void testGates()
     s.gizmoUpdate = [&](Context &ctx) {
       inUpdate.push_back(sc::worldMatrix(ctx, string(name.c_str())).status);
       inUpdate.push_back(sc::invoke(ctx, "core.scene.new").status);
-      inUpdate.push_back(sc::toolSetActive(ctx, kSelectTool));
+      inUpdate.push_back(sc::setActiveTool(ctx, kSelectTool));
     };
     d.useTool("js.nudge");
     const int steps = d.history->size();
@@ -289,14 +289,14 @@ void testGates()
     must(inUpdate[0]);
     test_assert(isCode(inUpdate[1], StatusCode::Busy, "Gizmo.update"));
     test_assert(isCode(inUpdate[2], StatusCode::Busy));
-    test_assert(std::string(sc::toolActive(*d.ctx).value.c_str()) == "js.nudge");
+    test_assert(std::string(sc::activeTool(*d.ctx).value.c_str()) == "js.nudge");
 
     /* Not from outside a tool's ToolManager. */
     d.ctx->setTools(nullptr);
     test_assert(
-        isCode(sc::toolSetActive(*d.ctx, kSelectTool), StatusCode::FailedPrecondition));
+        isCode(sc::setActiveTool(*d.ctx, kSelectTool), StatusCode::FailedPrecondition));
     const fakehost::lf::Handle m = host.add(modalObj(&s));
-    test_assert(isCode(sc::toolPushModal(*d.ctx, m, "onEvent", false),
+    test_assert(isCode(sc::pushModal(*d.ctx, m, "onEvent", false),
                        StatusCode::FailedPrecondition));
     test_assert(host.releasesOf(m) == 1);
     d.ctx->setTools(&d.tm);
@@ -317,12 +317,11 @@ void testBuiltinGizmo()
     int32_t id = -1;
     s.onEvent = [&](Context &ctx, ToolManager &, const InputEvent &e) {
       if (e.type == EventType::KeyDown) {
-        test_assert(
-            isCode(sc::toolAddGizmo(ctx, "lasso", "").status, StatusCode::NotFound));
+        test_assert(isCode(sc::addGizmo(ctx, "lasso", "").status, StatusCode::NotFound));
         /* Another tool's settings: one that isn't registered. */
-        test_assert(isCode(sc::toolAddGizmo(ctx, "transform", "js.gone").status,
+        test_assert(isCode(sc::addGizmo(ctx, "transform", "js.gone").status,
                            StatusCode::NotFound));
-        const sc::IntResult g = sc::toolAddGizmo(ctx, "transform", "js.nudge");
+        const sc::IntResult g = sc::addGizmo(ctx, "transform", "js.nudge");
         must(g.status);
         id = int32_t(g.value);
       }
@@ -335,9 +334,9 @@ void testBuiltinGizmo()
     must(d.send(key).status());
     test_assert(id >= 0);
     DrawList list;
-    must(sc::toolDraw(*d.ctx, d.view, list));
+    must(sc::drawTools(*d.ctx, d.view, list));
     test_assert(list.recordCount() > 0);
-    must(sc::toolRemoveGizmo(*d.ctx, id));
+    must(sc::removeGizmo(*d.ctx, id));
   }
   test_assert(host.allReleasedOnce());
 }

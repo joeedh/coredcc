@@ -374,7 +374,7 @@ export function evaluateScene(ctx: Context) {
 /** The last evaluation's results, one row for each place: an object that was evaluated. */
 export interface SceneResults {
   /** How many places there are, also when only some were asked for. */
-  places: number
+  placeCount: number
   /** 16 numbers for each. */
   matrices: number[]
   /** 6 numbers for each: the minimum, then the maximum. An empty box has a minimum above its maximum. */
@@ -397,7 +397,7 @@ export interface SceneResults {
 export function sceneResults(ctx: Context, places?: ArrayLike<number>): SceneResults {
   const at = places === undefined ? [] : Array.from(places)
   return take(cd.sceneResults(ctx, at, places === undefined), (t) => ({
-    places: t.places(),
+    placeCount: t.placeCount(),
     matrices: t.matrices(),
     bounds: t.bounds(),
     status: t.status(),
@@ -414,11 +414,11 @@ const refsOf = (list: RefList) =>
 /** The objects at these places, or at all. null for one that is gone. */
 export function sceneObjects(ctx: Context, places?: ArrayLike<number>): (Ref | null)[] {
   const at = places === undefined ? [] : Array.from(places)
-  return take(cd.sceneRefs(ctx, at, places === undefined), refsOf)
+  return take(cd.sceneObjects(ctx, at, places === undefined), refsOf)
 }
 /** The children of an object in the last evaluation, in the scene's order; for null the objects without a
  * parent. */
-export function children(ctx: Context, object: Ref | null): Ref[] {
+export function sceneChildren(ctx: Context, object: Ref | null): Ref[] {
   return take(cd.sceneChildren(ctx, object?.text ?? ''), refsOf).filter((r) => r !== null)
 }
 /** Puts objects at matrices, 16 numbers for each, undoably. `exact` leaves out those whose transform can't

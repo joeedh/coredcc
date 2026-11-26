@@ -18,7 +18,7 @@ inline constexpr const char *kGraphDefType = "coredcc.GraphDef";
 Status registerGraphBlocks(Runtime &rt);
 
 /** A new graph block, with an empty GraphDef. */
-Result<BlockHandle> createGraph(Library &lib, std::string_view name);
+Result<BlockHandle> newGraph(Library &lib, std::string_view name);
 
 /** The GraphDef of a graph block; null for another type, or while it isn't Live. */
 GraphDef *graphDefOf(const Library &lib, BlockHandle h);

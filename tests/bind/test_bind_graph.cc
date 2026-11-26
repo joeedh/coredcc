@@ -81,13 +81,13 @@ Status scale(NodeExecContext &n)
   test_assert(!sc::nodeParam(n, "a").status.ok() && !sc::nodeInput(n, "k").status.ok());
   const double a = *sc::nodeInput(n, "a").value.tryFloat();
   const double k = *sc::nodeParam(n, "k").value.tryFloat();
-  return sc::nodeOutput(n, "value", sc::makeFloat(a * k));
+  return sc::nodeSetOutput(n, "value", sc::makeFloat(a * k));
 }
 
 /* graphs["g"] with a node of `type` whose `value` is the output `out`. */
 int64_t makeGraph(Doc &d, const char *type)
 {
-  test_assert(sc::graphCreate(d.ctx, "g").status.ok());
+  test_assert(sc::newGraph(d.ctx, "g").status.ok());
   const int64_t out =
       sc::graphAddInterface(d.ctx, "graphs[\"g\"]", true, "out", "float").value;
   const int64_t in =
@@ -187,7 +187,7 @@ void testKernel()
     test_assert(strcmp(d.rt.ext<NodeTypeRegistry>().find("js.scale")->uiName.c_str(),
                        "Scale") == 0);
     const int64_t n = makeGraph(d, "js.scale");
-    sc::GraphResult g = sc::graphInstance(d.ctx, "graphs[\"g\"]");
+    sc::GraphResult g = sc::newGraphInstance(d.ctx, "graphs[\"g\"]");
     test_assert(g.status.ok());
     sc::ValueResult r = sc::graphEvaluate(g.value, "out");
     test_assert(r.status.ok() && r.value == sc::makeFloat(6));
@@ -213,22 +213,22 @@ void testKernel()
     Kernel odd = [&](NodeExecContext &c) {
       in = sc::nodeInput(c, "txet").status;
       param = sc::nodeParam(c, "p").status;
-      out = sc::nodeOutput(c, "vaule", sc::makeInt(1));
+      out = sc::nodeSetOutput(c, "vaule", sc::makeInt(1));
       passIn = sc::nodePass(c, "no", "mesh");
       passOut = sc::nodePass(c, "mesh", "no");
       payload = sc::nodeInput(c, "mesh").status;
-      make = sc::nodeOutput(c, "mesh", sc::makeInt(1));
-      wrong = sc::nodeOutput(c, "value", sc::makeString("x").value);
+      make = sc::nodeSetOutput(c, "mesh", sc::makeInt(1));
+      wrong = sc::nodeSetOutput(c, "value", sc::makeString("x").value);
       pass = sc::nodePass(c, "text", "copy");
       CDCC_TRY(sc::nodePass(c, "mesh", "mesh"));
       /* An Int, converted. */
-      return sc::nodeOutput(c, "value", sc::nodeInput(c, "i").value);
+      return sc::nodeSetOutput(c, "value", sc::nodeInput(c, "i").value);
     };
     test_assert(
         sc::registerForeignNodeType(d.ctx, *def, host.add(kernelObj(odd)), "evaluate")
             .ok());
     litestl::alloc::Delete(def);
-    const Graph other = newGraph(d.lib, "other");
+    const Graph other = fixture::makeGraph(d.lib, "other");
     const NodeId m = add(*other.def, "js.odd");
     GraphInstance inst(&d.rt, &d.lib, other.id);
     test_assert(inst.evaluate(SocketPath::of(m, "value")).ok());
@@ -258,7 +258,7 @@ void testKernel()
     test_assert(sc::undo(d.ctx).ok() && sc::undo(d.ctx).ok());
     const int64_t f = sc::graphAddNode(d.ctx, "graphs[\"g\"]", "js.fail", 0, 0).value;
     test_assert(f);
-    sc::GraphResult bad = sc::graphInstance(d.ctx, "graphs[\"g\"]");
+    sc::GraphResult bad = sc::newGraphInstance(d.ctx, "graphs[\"g\"]");
     GraphDef *gd = nullptr;
     d.lib.forEach([&](BlockHandle h, const Datablock &b) {
       if (strcmp(b.name().c_str(), "g") == 0) {
@@ -337,7 +337,7 @@ void testGates()
                   return scale(n);
                 }).ok());
     const int64_t n = makeGraph(d, "js.scale");
-    sc::GraphResult g = sc::graphInstance(d.ctx, "graphs[\"g\"]");
+    sc::GraphResult g = sc::newGraphInstance(d.ctx, "graphs[\"g\"]");
     auto evaluate = [&](double want) {
       test_assert(
           sc::setValue(
@@ -356,9 +356,9 @@ void testGates()
              sc::getValue(d.ctx, name).status,
              sc::formatValue(d.ctx, name).status,
              sc::parseValue(d.ctx, name, "x").status,
-             sc::inputGet(d.ctx, "x").status,
-             sc::outputSet(d.ctx, "x", sc::makeInt(1)),
-             sc::outputGet(d.ctx, "x").status,
+             sc::commandInput(d.ctx, "x").status,
+             sc::commandSetOutput(d.ctx, "x", sc::makeInt(1)),
+             sc::commandOutput(d.ctx, "x").status,
              sc::setValue(d.ctx, name, sc::makeString("x").value),
              sc::writeValue(d.ctx, name, sc::makeString("x").value),
              sc::invoke(d.ctx, "core.block.purge").status,
@@ -366,13 +366,13 @@ void testGates()
              sc::redo(d.ctx),
              sc::canUndo(d.ctx).status,
              sc::canRedo(d.ctx).status,
-             sc::graphCreate(d.ctx, "x").status,
+             sc::newGraph(d.ctx, "x").status,
              sc::graphAddNode(d.ctx, gp, "js.scale", 0, 0).status,
              sc::graphRemoveNode(d.ctx, gp, n),
              sc::graphLink(d.ctx, gp, n, "value", n, "a").status,
              sc::graphUnlink(d.ctx, gp, 1),
              sc::graphAddInterface(d.ctx, gp, true, "x", "float").status,
-             sc::graphInstance(d.ctx, gp).status,
+             sc::newGraphInstance(d.ctx, gp).status,
              sc::graphSetInput(g.value, "in", sc::makeFloat(1)),
              sc::graphClearInput(g.value, "in"),
              sc::graphEvaluate(g.value, "out").status,
@@ -417,7 +417,7 @@ void testGates()
       get = sc::getValue(ctx, name).status;
       set = sc::setValue(ctx, name, sc::makeString("x").value);
       write = sc::writeValue(ctx, name, sc::makeString("x").value);
-      create = sc::graphCreate(ctx, "x").status;
+      create = sc::newGraph(ctx, "x").status;
       new (ret) Status();
       return true;
     };
@@ -438,7 +438,7 @@ void testGates()
                 d.is(name.c_str(), PropValue::ofString("g")));
     /* Called from a native kernel, or from a script one, it is the innermost frame: it
      * may read. */
-    const Graph other = newGraph(d.lib, "other");
+    const Graph other = fixture::makeGraph(d.lib, "other");
     NodeTypeDef native("t.native");
     native.output("value", "float");
     addType<NativeKernel::run>(d.rt, native, "t.native");
@@ -526,11 +526,11 @@ void testEditing()
         hasCode(sc::graphRemoveNode(d.ctx, "graphs[\"no\"]", n), StatusCode::NotFound));
     for (const char *no : {"graphs[\"g\"].name", "graphs[\"g\"].nodes[0]", "graphs"}) {
       test_assert(!sc::graphRemoveNode(d.ctx, no, n).ok());
-      test_assert(!sc::graphInstance(d.ctx, no).status.ok());
+      test_assert(!sc::newGraphInstance(d.ctx, no).status.ok());
     }
     test_assert(hasCode(sc::graphRemoveNode(d.ctx, "graphs[\"g\"].nodes[0]", n),
                         StatusCode::InvalidArgument));
-    sc::ValueResult made = sc::graphCreate(d.ctx, "h");
+    sc::ValueResult made = sc::newGraph(d.ctx, "h");
     test_assert(made.status.ok() && made.value.tryPointer());
     const int64_t group = sc::graphAddNode(d.ctx, gp, "graph.group", 0, 0).value;
     const std::string member =
@@ -541,7 +541,7 @@ void testEditing()
     test_assert(sc::setValue(d.ctx, member.c_str(), made.value).ok());
     test_assert(sc::graphAddNode(d.ctx, member.c_str(), "math.float", 0, 0).status.ok());
     test_assert(d.is("graphs[\"h\"].nodes.length", PropValue::ofInt(1)));
-    test_assert(sc::graphInstance(d.ctx, member.c_str()).status.ok());
+    test_assert(sc::newGraphInstance(d.ctx, member.c_str()).status.ok());
 
     /* From a command's exec: sub-commands of it. Not from its other slots. */
     registerHooks(d, host, &hooks);
@@ -549,7 +549,7 @@ void testEditing()
     hooks.exec = [&](Context &ctx) {
       test_assert(strstr(sc::undo(ctx).message(), "only outside script slots"));
       CDCC_TRY(sc::graphAddNode(ctx, gp, "math.float", 0, 0).status);
-      return sc::graphCreate(ctx, "inner").status;
+      return sc::newGraph(ctx, "inner").status;
     };
     hooks.undo = [&](Context &ctx) {
       inUndo = sc::graphAddNode(ctx, gp, "math.float", 0, 0).status;
@@ -563,8 +563,7 @@ void testEditing()
 
     /* Without an executor, or the commands. */
     Context bare(&d.rt, &d.lib, d.rt.ext<ApiRegistry>().runtimeOwner("doc"));
-    test_assert(
-        hasCode(sc::graphCreate(bare, "x").status, StatusCode::FailedPrecondition));
+    test_assert(hasCode(sc::newGraph(bare, "x").status, StatusCode::FailedPrecondition));
     test_assert(
         hasCode(sc::graphRemoveNode(bare, gp, n), StatusCode::FailedPrecondition));
     Runtime empty;
@@ -573,7 +572,7 @@ void testEditing()
     CommandExecutor ex(&empty, &history);
     Context ctx(&empty, &lib, PointerRef());
     ctx.setExecutor(&ex);
-    test_assert(hasCode(sc::graphCreate(ctx, "x").status, StatusCode::NotFound));
+    test_assert(hasCode(sc::newGraph(ctx, "x").status, StatusCode::NotFound));
   }
   test_assert(host.live() == 0 && host.allReleasedOnce());
 }
@@ -604,7 +603,7 @@ void testInstances()
     connect(*def, input, key(in), NodeId{n}, "a");
 
     test_assert(sc::graphInstanceCount(d.ctx) == 0);
-    std::optional<sc::ScriptGraph> g = sc::graphInstance(d.ctx, "graphs[\"g\"]").value;
+    std::optional<sc::ScriptGraph> g = sc::newGraphInstance(d.ctx, "graphs[\"g\"]").value;
     auto is = [&](double want) {
       sc::ValueResult r = sc::graphEvaluate(*g, "out");
       return r.status.ok() && r.value == sc::makeFloat(want);
@@ -643,7 +642,7 @@ void testInstances()
     inside = [&]() { g.reset(); };
     test_assert(sc::graphSetInput(*g, "in", sc::makeFloat(2)).ok() && is(6));
     test_assert(!g && sc::graphInstanceCount(d.ctx) == 0);
-    g = sc::graphInstance(d.ctx, "graphs[\"g\"]").value;
+    g = sc::newGraphInstance(d.ctx, "graphs[\"g\"]").value;
     copy = *g;
     inside = [&]() { sc::graphClose(copy); };
     test_assert(is(0));
@@ -662,7 +661,7 @@ void testInstances()
     d.rt.touch();
 
     /* One that outlives the Runtime is closed by it. */
-    late = sc::graphInstance(d.ctx, "graphs[\"g\"]").value;
+    late = sc::newGraphInstance(d.ctx, "graphs[\"g\"]").value;
     test_assert(sc::graphEvaluate(late, "out").status.ok());
     g.reset();
   }

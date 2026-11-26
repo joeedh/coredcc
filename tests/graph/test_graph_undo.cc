@@ -43,7 +43,7 @@ struct UndoDoc : Doc {
         .param(PropertyDef::stringProp("text"))
         .output("value", "float");
     addType<paramKernel>(rt, t, "t.params");
-    g = newGraph(lib, "g");
+    g = makeGraph(lib, "g");
     lib.setFlag(g.h, BlockFlags::Root, true);
     n = add(*g.def, "t.params");
     out = SocketPath::of(n, "value");
@@ -153,7 +153,7 @@ void testParams()
 void testSockets()
 {
   UndoDoc d;
-  const Graph inner = newGraph(d.lib, "inner");
+  const Graph inner = makeGraph(d.lib, "inner");
   const int64_t a = addSocket(*inner.def, SocketSide::Input, "a", "float");
   const NodeId group = add(*d.g.def, "graph.group");
   test_assert(d.g.def->setGroup(group, inner.id).ok());
@@ -326,7 +326,7 @@ void testBytes()
 void testLiteralBytes()
 {
   UndoDoc d;
-  const Graph inner = newGraph(d.lib, "inner");
+  const Graph inner = makeGraph(d.lib, "inner");
   const int64_t a = addSocket(*inner.def, SocketSide::Input, "a", "float");
   const NodeId group = add(*d.g.def, "graph.group");
   test_assert(d.g.def->setGroup(group, inner.id).ok());
@@ -430,7 +430,7 @@ struct Two {
       test_assert(executor.run(in1, *def, def->newInputs()).ok());
       return;
     }
-    const Graph g = newGraph(*one, "g");
+    const Graph g = makeGraph(*one, "g");
     /* The same graph in the other document. */
     GraphDef *twin = litestl::alloc::New<GraphDef>("coredcc::GraphDef", &rt, &two, g.id);
     test_assert(two.reviveAs(TypeId::of(kGraphDefType), g.id, "g", twin).ok());
@@ -503,7 +503,7 @@ void testMemory()
 void testValueMemory()
 {
   UndoDoc d;
-  const Graph inner = newGraph(d.lib, "inner");
+  const Graph inner = makeGraph(d.lib, "inner");
   const int64_t a = addSocket(*inner.def, SocketSide::Input, "a", "string");
   const NodeId group = add(*d.g.def, "graph.group");
   test_assert(d.g.def->setGroup(group, inner.id).ok());

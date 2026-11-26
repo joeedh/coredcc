@@ -60,11 +60,11 @@ bool is(const sc::StringResult &r, const char *want)
 static void test_json()
 {
   test_assert(
-      is(sc::layoutJson("<layout path='a'><prop path='b' id='x'/></layout>"),
+      is(sc::parseLayout("<layout path='a'><prop path='b' id='x'/></layout>"),
          "{\"kind\":\"layout\",\"version\":1,\"path\":\"a\",\"effectivePath\":\"/"
          "a\",\"children\":[{"
          "\"kind\":\"prop\",\"path\":\"b\",\"effectivePath\":\"/a.b\",\"id\":\"x\"}]}"));
-  sc::StringResult r = sc::layoutJson("<layout>\n  <prp/>\n</layout>");
+  sc::StringResult r = sc::parseLayout("<layout>\n  <prp/>\n</layout>");
   test_assert(r.status.code() == StatusCode::InvalidArgument && r.value.size() == 0 &&
               strstr(r.status.message(), "layout 2:3: ") &&
               r.status.suggestions().size() > 0);
@@ -73,29 +73,27 @@ static void test_json()
 static void test_issues()
 {
   Setup s;
-  test_assert(
-      is(sc::validateLayoutXml(s.ctx, "<layout><prop path='tool.strength'/></layout>"),
-         "[]"));
+  test_assert(is(
+      sc::validateLayout(s.ctx, "<layout><prop path='tool.strength'/></layout>"), "[]"));
   /* Lines and columns, in the issues' order. */
   test_assert(is(
-      sc::validateLayoutXml(s.ctx,
-                            "<layout>\n <prop path='tool.strenth'/>\n"
-                            "<tool label='\xC3\xA9' invocation='test.ad'/></layout>"),
+      sc::validateLayout(s.ctx,
+                         "<layout>\n <prop path='tool.strenth'/>\n"
+                         "<tool label='\xC3\xA9' invocation='test.ad'/></layout>"),
       "[{\"severity\":\"Error\",\"line\":2,\"column\":8,\"node\":1,\"code\":\"NotFound\","
       "\"message\":\"<prop> path: no member 'strenth' in Tool (at offset 4)\","
       "\"suggestions\":[\"strength\"]},"
       "{\"severity\":\"Error\",\"line\":3,\"column\":17,\"node\":2,\"code\":\"NotFound\","
       "\"message\":\"<tool> invocation: no command 'test.ad'\","
       "\"suggestions\":[\"test.add\"]}]"));
-  test_assert(!sc::validateLayoutXml(s.ctx, "<layout>").status.ok());
+  test_assert(!sc::validateLayout(s.ctx, "<layout>").status.ok());
   /* The root is the Context's, whatever its prefix. */
   s.ctx.setPrefix(*parsePath("tool"));
-  test_assert(
-      is(sc::validateLayoutXml(s.ctx, "<layout><prop path='tool.strength'/></layout>"),
-         "[]"));
+  test_assert(is(
+      sc::validateLayout(s.ctx, "<layout><prop path='tool.strength'/></layout>"), "[]"));
   s.ctx.clearPrefix();
   Context none(&s.w.rt, &s.w.lib, PointerRef());
-  sc::StringResult r = sc::validateLayoutXml(none, "<layout/>");
+  sc::StringResult r = sc::validateLayout(none, "<layout/>");
   test_assert(r.status.ok() && strstr(r.value.c_str(), "isn't registered"));
 }
 
@@ -110,7 +108,7 @@ static void test_issues_late()
   }
   xml += "</layout>";
   const auto start = std::chrono::steady_clock::now();
-  sc::StringResult r = sc::validateLayoutXml(s.ctx, xml.c_str());
+  sc::StringResult r = sc::validateLayout(s.ctx, xml.c_str());
   const auto took = std::chrono::steady_clock::now() - start;
   test_assert(r.status.ok() && took < std::chrono::seconds(3));
   test_assert(strstr(r.value.c_str(), "\"line\":1000,\"column\":7,\"node\":1001,"));

@@ -325,31 +325,31 @@ StringResult bagName(const PropertyBag &bag, int32_t i)
 
 /* ---- the running command's bags ---- */
 
-ValueResult inputGet(Context &ctx, const string &name)
+ValueResult commandInput(Context &ctx, const string &name)
 {
-  if (Status s = detail::kernelGate(ctx, "inputGet"); !s.ok()) {
+  if (Status s = detail::kernelGate(ctx, "commandInput"); !s.ok()) {
     return failed<ValueResult>(std::move(s));
   }
   if (!ctx.inputs()) {
-    return failed<ValueResult>(notInSlot("inputGet"));
+    return failed<ValueResult>(notInSlot("commandInput"));
   }
   return lookup(*ctx.inputs(), name);
 }
-Status outputSet(Context &ctx, const string &name, const PropValue &value)
+Status commandSetOutput(Context &ctx, const string &name, const PropValue &value)
 {
-  CDCC_TRY(detail::kernelGate(ctx, "outputSet"));
+  CDCC_TRY(detail::kernelGate(ctx, "commandSetOutput"));
   if (!ctx.outputs()) {
-    return notInSlot("outputSet");
+    return notInSlot("commandSetOutput");
   }
   return ctx.outputs()->set(view(name), value);
 }
-ValueResult outputGet(Context &ctx, const string &name)
+ValueResult commandOutput(Context &ctx, const string &name)
 {
-  if (Status s = detail::kernelGate(ctx, "outputGet"); !s.ok()) {
+  if (Status s = detail::kernelGate(ctx, "commandOutput"); !s.ok()) {
     return failed<ValueResult>(std::move(s));
   }
   if (!ctx.outputs()) {
-    return failed<ValueResult>(notInSlot("outputGet"));
+    return failed<ValueResult>(notInSlot("commandOutput"));
   }
   return lookup(*ctx.outputs(), name);
 }

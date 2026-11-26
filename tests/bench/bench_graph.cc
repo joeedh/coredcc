@@ -183,7 +183,7 @@ struct Def {
 
 Def newDef(World &w, const char *name)
 {
-  Result<BlockHandle> h = createGraph(w.lib, name);
+  Result<BlockHandle> h = newGraph(w.lib, name);
   check(h.ok(), name);
   return Def{graphDefOf(w.lib, *h), w.lib.get(*h)->id()};
 }

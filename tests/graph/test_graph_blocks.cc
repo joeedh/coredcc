@@ -435,7 +435,7 @@ void testQueryAspects(bool incremental)
 void testLifetimes()
 {
   World w;
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   const int64_t o = addSocket(*g.def, SocketSide::Output, "o", "float");
   const NodeId n = add(*g.def, "graph.output");
   test_assert(g.def->setLiteral(n, key(o), PropValue::ofFloat(3)).ok());

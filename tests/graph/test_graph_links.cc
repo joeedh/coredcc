@@ -36,7 +36,7 @@ std::set<std::string> linksOf(const GraphDef &d)
 void testLinkAll()
 {
   World w;
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   GraphDef &d = *g.def;
   std::vector<NodeId> n;
   for (int i = 0; i < 6; i++) {
@@ -115,7 +115,7 @@ void testLinkAll()
 void testLinkAllGroups()
 {
   World w;
-  const Graph in = newGraph(w.lib, "in"), g = newGraph(w.lib, "g");
+  const Graph in = makeGraph(w.lib, "in"), g = makeGraph(w.lib, "g");
   const int64_t i0 = addSocket(*in.def, SocketSide::Input, "i0", "float");
   const int64_t i1 = addSocket(*in.def, SocketSide::Input, "i1", "float");
   const int64_t o0 = addSocket(*in.def, SocketSide::Output, "o0", "float");
@@ -144,7 +144,7 @@ void testLinkAllGroups()
 void testWide()
 {
   World w;
-  const Graph in = newGraph(w.lib, "in"), g = newGraph(w.lib, "g");
+  const Graph in = makeGraph(w.lib, "in"), g = makeGraph(w.lib, "g");
   GraphDef &d = *g.def;
   const NodeId group = add(d, "graph.group");
   test_assert(d.setGroup(group, in.id).ok());
@@ -206,7 +206,7 @@ void testWide()
 void testInterfaceLimit()
 {
   World w;
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   for (SocketSide side : {SocketSide::Input, SocketSide::Output}) {
     for (int i = 0; i < GraphDef::kMaxInterface; i++) {
       addSocket(*g.def, side, ("s" + std::to_string(i)).c_str(), "float");
@@ -223,7 +223,7 @@ void testInterfaceLimit()
 void testInteriorLimit()
 {
   World w;
-  const Graph in = newGraph(w.lib, "in"), g = newGraph(w.lib, "g");
+  const Graph in = makeGraph(w.lib, "in"), g = makeGraph(w.lib, "g");
   const int n = GraphDef::kMaxInteriorLinks;
   std::vector<NodeId> nodes;
   for (int i = 0; i < n; i++) {

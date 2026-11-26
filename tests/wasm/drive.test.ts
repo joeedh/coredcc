@@ -39,14 +39,14 @@ const suite = () => {
 
   /* graphs["g"]: `follower`'s location is `leader`'s. */
   const follow = (leader: Ref, follower: Ref) => {
-    cdcc.graphCreate(ctx, 'g')[Symbol.dispose]()
+    cdcc.newGraph(ctx, 'g')[Symbol.dispose]()
     const path = 'graphs["g"]'
-    const reader = cdcc.graphAddNode(ctx, path, 'scene.object.state')
+    const reader = cdcc.addGraphNode(ctx, path, 'scene.object.state')
     cdcc.set(ctx, `${path}.nodes[#${reader}].params.object`, leader)
-    const driver = cdcc.graphAddNode(ctx, path, 'scene.drive.vec3')
+    const driver = cdcc.addGraphNode(ctx, path, 'scene.drive.vec3')
     cdcc.set(ctx, `${path}.nodes[#${driver}].params.object`, follower)
     cdcc.set(ctx, `${path}.nodes[#${driver}].params.channel`, 'location')
-    cdcc.graphLink(ctx, path, reader, 'location', driver, 'value')
+    cdcc.addGraphLink(ctx, path, reader, 'location', driver, 'value')
     return {path, graph: cdcc.get(ctx, path) as Ref, reader, driver}
   }
 

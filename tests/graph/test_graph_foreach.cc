@@ -204,7 +204,7 @@ void testRuns()
   test_assert(l.is({1, 2, 3}, {{"sum", {11, 12, 15}}, {"c2", {0, 0, 0}}}, 4));
 
   /* A group inside: its def, deleting it, and restoring it. */
-  const Graph g = newGraph(w.lib, "deep");
+  const Graph g = makeGraph(w.lib, "deep");
   const int64_t gi = addSocket(*g.def, SocketSide::Input, "i", "float");
   const int64_t go = addSocket(*g.def, SocketSide::Output, "o", "float");
   const NodeId gin = add(*g.def, "graph.input"), gout = add(*g.def, "graph.output");
@@ -343,7 +343,7 @@ void testGroupRefs()
   Graph g[2];
   int64_t o[2];
   for (int i = 0; i < 2; i++) {
-    g[i] = newGraph(w.lib, "g");
+    g[i] = makeGraph(w.lib, "g");
     o[i] = addSocket(*g[i].def, SocketSide::Output, "o", "float");
     const NodeId out = add(*g[i].def, "graph.output"), v = add(*g[i].def, "value.float");
     test_assert(g[i].def->setParam(v, "value", PropValue::ofFloat(i + 1)).ok());

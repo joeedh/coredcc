@@ -355,10 +355,10 @@ const suite = () => {
   test('results, and what changed', () => {
     const a = add('name="a" location=(1, 0, 0)')
     const b = add(`name="b" parent="${a.text}" location=(3, 0, 0)`)
-    assert.equal(cdcc.sceneResults(ctx).places, 0)
+    assert.equal(cdcc.sceneResults(ctx).placeCount, 0)
     cdcc.evaluateScene(ctx)
     const all = cdcc.sceneResults(ctx)
-    assert.equal(all.places, 2)
+    assert.equal(all.placeCount, 2)
     assert.deepEqual(all.status, [0, 0])
     assert.deepEqual(all.members, [1, 1])
     const objects = cdcc.sceneObjects(ctx).map((o) => o!.text)
@@ -368,9 +368,9 @@ const suite = () => {
     assert.deepEqual([all.parents[i], all.parents[1 - i]], [1 - i, -1])
     assert.equal(all.bounds.length, 12)
     assert.ok(all.bounds[0] > all.bounds[3]) /* nothing to bound */
-    assert.deepEqual(cdcc.children(ctx, a).map((o) => o.text), [b.text])
-    assert.deepEqual(cdcc.children(ctx, null).map((o) => o.text), [a.text])
-    assert.deepEqual(cdcc.children(ctx, b), [])
+    assert.deepEqual(cdcc.sceneChildren(ctx, a).map((o) => o.text), [b.text])
+    assert.deepEqual(cdcc.sceneChildren(ctx, null).map((o) => o.text), [a.text])
+    assert.deepEqual(cdcc.sceneChildren(ctx, b), [])
 
     /* Placed, undoably. */
     assert.deepEqual(cdcc.setWorld(ctx, [b], at(5, 6, 7)), {approximate: 0, skipped: 0})
@@ -378,7 +378,7 @@ const suite = () => {
     cdcc.evaluateScene(ctx)
     const next = cdcc.sceneResults(ctx, [i])
     assert.equal(next.version, all.version + 1)
-    assert.deepEqual([next.changed, next.allChanged, next.places], [[i], false, 2])
+    assert.deepEqual([next.changed, next.allChanged, next.placeCount], [[i], false, 2])
     near(next.matrices, at(5, 6, 7))
     assert.deepEqual(cdcc.sceneObjects(ctx, [i]).map((o) => o!.text), [b.text])
     assert.throws(() => cdcc.sceneResults(ctx, [2]), fails(StatusCode.OutOfRange, /no such place/))

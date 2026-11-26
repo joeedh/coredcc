@@ -47,7 +47,7 @@ const where = (o: Ref) => cdcc.worldMatrix(ctx, o).slice(12, 15)
 const select = (...objects: Ref[]) => cdcc.invoke(ctx, `core.scene.select(objects="${cdcc.blockIds(ctx, objects)}")`)
 /** As a host's frame: the event, then an evaluation. */
 const send = (event: Partial<cdcc.ToolEvent> & {type: cdcc.ToolEventType}) => {
-  const used = cdcc.sendEvent(ctx, view, event)
+  const used = cdcc.sendToolEvent(ctx, view, event)
   cdcc.evaluateScene(ctx)
   return used
 }
@@ -65,7 +65,7 @@ const nudge: cdcc.ToolSpec = {
       onEvent(ctx, e) {
         if (e.type === 'pointerup') return 'finish'
         if (e.type === 'keydown' && e.key === cdcc.Keys.escape) return 'cancel'
-        cdcc.dragUpdate(ctx, {vector: [(e.x - x0) * 0.2, 0, 0]})
+        cdcc.updateDrag(ctx, {vector: [(e.x - x0) * 0.2, 0, 0]})
         cdcc.setToolStatus(ctx, `moving ${cdcc.dragCount(ctx)}`)
         return 'continue'
       },
@@ -108,7 +108,7 @@ test('a script tool drags through a modal: one undo step, and a cancel', () => {
   send({type: 'keydown', key: cdcc.Keys.escape})
   assert.deepEqual(ended, [true, false])
   near(where(a), [1, 2, 0])
-  assert.throws(() => cdcc.dragUpdate(ctx, {vector: [1, 0, 0]}), fails(StatusCode.FailedPrecondition, /no open drag/))
+  assert.throws(() => cdcc.updateDrag(ctx, {vector: [1, 0, 0]}), fails(StatusCode.FailedPrecondition, /no open drag/))
 })
 
 test('a script gizmo: reads in update, a drag from beginDrag, its draw in the list', () => {
@@ -133,7 +133,7 @@ test('a script gizmo: reads in update, a drag from beginDrag, its draw in the li
       cdcc.pushModal(ctx, {
         onEvent: (ctx, e) => {
           if (e.type === 'pointerup') return 'finish'
-          cdcc.dragUpdateEach(ctx, [{vector: [0, (50 - e.y) * 0.2, 0]}])
+          cdcc.updateDragEach(ctx, [{vector: [0, (50 - e.y) * 0.2, 0]}])
           return 'continue'
         },
       })
@@ -294,7 +294,7 @@ test('a slot that fails: the rest of the frame, its error alongside, and a Drawe
   assert.throws(() => kept!.points([0, 0, 0]), /during the slot/)
 })
 
-test('sendEvent: a failed gizmo update after the event was used; an outcome text; a gizmo with its own settings', () => {
+test('sendToolEvent: a failed gizmo update after the event was used; an outcome text; a gizmo with its own settings', () => {
   const a = add('name="a"')
   select(a)
   let outcome = false
@@ -327,7 +327,7 @@ test('sendEvent: a failed gizmo update after the event was used; an outcome text
   })
   cdcc.setActiveTool(ctx, 'ts.late')
   cdcc.evaluateScene(ctx)
-  assert.throws(() => cdcc.sendEvent(ctx, view, {type: 'pointermove', x: 1, y: 1}),
+  assert.throws(() => cdcc.sendToolEvent(ctx, view, {type: 'pointermove', x: 1, y: 1}),
     (e: unknown) => e instanceof ScriptError && /stale/.test(e.message) && (e as cdcc.ToolEventError).used === true)
   outcome = true
   send({type: 'keydown', key: 'g'.codePointAt(0)})

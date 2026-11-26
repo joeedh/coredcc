@@ -322,7 +322,7 @@ struct Counter {
 void testHome()
 {
   World w;
-  const Graph g = newGraph(w.lib, "G");
+  const Graph g = makeGraph(w.lib, "G");
   test_assert(g.def && g.def->self() == g.id && g.def->library() == &w.lib);
   Counter count(w.rt, g.id);
   GraphDef &def = *g.def;

@@ -38,7 +38,7 @@ struct Nest {
   NodeId y, zNode;
   GraphInstance inst;
   Nest()
-      : root(newGraph(w.lib, "root")), inner(newGraph(w.lib, "inner")),
+      : root(makeGraph(w.lib, "root")), inner(makeGraph(w.lib, "inner")),
         inst(&w.rt, &w.lib, root.id)
   {
     GraphDef &d = *inner.def;
@@ -165,7 +165,7 @@ void testPeekOverBudget()
   /* In an element, that has a group: the second one's is too much. */
   World w;
   Loop l(w);
-  const Graph leaf = newGraph(w.lib, "leaf");
+  const Graph leaf = makeGraph(w.lib, "leaf");
   const int64_t out = addSocket(*leaf.def, SocketSide::Output, "o", "float");
   const NodeId output = add(*leaf.def, "graph.output"), one = add(*leaf.def, "t.sum");
   connect(*leaf.def, one, "value", output, key(out));
@@ -267,7 +267,7 @@ void testNestedElements()
 {
   World w;
   Loop l(w);
-  const Graph leaf = newGraph(w.lib, "leaf");
+  const Graph leaf = makeGraph(w.lib, "leaf");
   const int64_t x = addSocket(*leaf.def, SocketSide::Input, "index", "float");
   const int64_t y = addSocket(*leaf.def, SocketSide::Output, "y", "float");
   const NodeId in = add(*leaf.def, "graph.input"), out = add(*leaf.def, "graph.output");
@@ -333,7 +333,7 @@ void testPeekSelf(bool nested)
   GraphDef &r = *n.root.def;
   const NodeState y = n.inner.def->stateOf(*n.inner.def->node(n.y));
   test_assert(r.insertNode(y).ok());
-  Graph mid = newGraph(n.w.lib, "mid");
+  Graph mid = makeGraph(n.w.lib, "mid");
   const NodeId leaf = add(*mid.def, kGraphGroupType);
   test_assert(mid.def->setGroup(leaf, n.inner.id).ok());
   NodeId group = n.group;
@@ -414,7 +414,7 @@ void testReports()
   /* A group inside that can't be evaluated. */
   const NodeId lost = add(*n.inner.def, kGraphGroupType);
   const int64_t extra = addSocket(*n.inner.def, SocketSide::Output, "extra", "float");
-  const Graph gone = newGraph(n.w.lib, "gone");
+  const Graph gone = makeGraph(n.w.lib, "gone");
   const int64_t o = addSocket(*gone.def, SocketSide::Output, "o", "float");
   test_assert(n.inner.def->setGroup(lost, gone.id).ok());
   connect(*n.inner.def, lost, key(o), n.out, key(extra));

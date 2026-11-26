@@ -71,13 +71,13 @@ TableResult newTable()
   return ok<TableResult>(ScriptTable(makePayload(Elements())));
 }
 
-int32_t tableRows(const ScriptTable &table)
+int32_t tableRowCount(const ScriptTable &table)
 {
   const Elements *t = table.get();
   return t ? t->size() : 0;
 }
 
-int32_t tableColumns(const ScriptTable &table)
+int32_t tableColumnCount(const ScriptTable &table)
 {
   const Elements *t = table.get();
   return t ? int32_t(t->columns.size()) : 0;
@@ -85,11 +85,11 @@ int32_t tableColumns(const ScriptTable &table)
 
 StringResult tableColumnName(const ScriptTable &table, int32_t column)
 {
-  if (column < 0 || column >= tableColumns(table)) {
+  if (column < 0 || column >= tableColumnCount(table)) {
     return failed<StringResult>(error(StatusCode::NotFound,
                                       "column " + std::to_string(column) +
                                           " of a table that has " +
-                                          std::to_string(tableColumns(table))));
+                                          std::to_string(tableColumnCount(table))));
   }
   return ok<StringResult>(table.get()->columns[column].name);
 }

@@ -51,7 +51,7 @@ void testNodes()
 {
   Doc d;
   addTypes(d.rt);
-  const Graph g = newGraph(d.lib, "g");
+  const Graph g = makeGraph(d.lib, "g");
   GraphDef &def = *g.def;
   const NodeId a = add(def, "t.scale"), b = add(def, "t.scale"),
                v = add(def, "value.float");
@@ -157,7 +157,7 @@ void testInterface()
 {
   Doc d;
   addTypes(d.rt);
-  const Graph inner = newGraph(d.lib, "in"), outer = newGraph(d.lib, "out");
+  const Graph inner = makeGraph(d.lib, "in"), outer = makeGraph(d.lib, "out");
   GraphDef &in = *inner.def, &o = *outer.def;
   const int64_t ia = addSocket(in, SocketSide::Input, "a", "float");
   const int64_t ob = addSocket(in, SocketSide::Output, "b", "float");
@@ -256,7 +256,7 @@ void testInterface()
 void testSocketKeys()
 {
   Doc d;
-  const Graph inner = newGraph(d.lib, "in"), outer = newGraph(d.lib, "out");
+  const Graph inner = makeGraph(d.lib, "in"), outer = makeGraph(d.lib, "out");
   const int64_t e = addSocket(*inner.def, SocketSide::Input, "elements", "float");
   auto checkAll = [&](NodeId node, std::initializer_list<std::string> keys) {
     const std::string list = path("out", node, ".sockets");
@@ -319,7 +319,7 @@ void testPointers()
 {
   Doc d;
   addTypes(d.rt);
-  const Graph g = newGraph(d.lib, "g"), h = newGraph(d.lib, "h");
+  const Graph g = makeGraph(d.lib, "g"), h = makeGraph(d.lib, "h");
   const BlockHandle t1 = newThing(d.lib, "t1", 10), t2 = newThing(d.lib, "t2", 20);
   const BlockId id1 = idOf(d.lib, t1), id2 = idOf(d.lib, t2);
   for (BlockHandle x : {g.h, h.h}) {

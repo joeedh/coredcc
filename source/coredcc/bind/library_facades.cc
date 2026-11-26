@@ -201,15 +201,15 @@ options(const char *what, const string &sourceName, int64_t maxBytes, int64_t ma
 
 } // namespace
 
-SaveResult librarySave(Context &ctx)
+SaveResult saveLibrary(Context &ctx)
 {
   SaveResult out;
-  out.status = canRun(ctx, "librarySave");
+  out.status = canRun(ctx, "saveLibrary");
   if (!out.status.ok()) {
     return out;
   }
   SaveReport report;
-  Result<Vector<uint8_t>> bytes = saveLibrary(*ctx.library(), &report);
+  Result<Vector<uint8_t>> bytes = coredcc::saveLibrary(*ctx.library(), &report);
   if (!bytes.ok()) {
     out.status = bytes.status();
     return out;
@@ -228,21 +228,21 @@ SaveResult librarySave(Context &ctx)
   return out;
 }
 
-StringResult libraryLoad(Context &ctx,
+StringResult loadLibrary(Context &ctx,
                          std::span<const uint8_t> bytes,
                          const string &sourceName,
                          int64_t maxBytes,
                          int64_t maxBlocks)
 {
-  if (Status s = canRun(ctx, "libraryLoad"); !s.ok()) {
+  if (Status s = canRun(ctx, "loadLibrary"); !s.ok()) {
     return failed<StringResult>(std::move(s));
   }
   Result<LoadOptions> opts =
-      options<LoadOptions>("libraryLoad", sourceName, maxBytes, maxBlocks);
+      options<LoadOptions>("loadLibrary", sourceName, maxBytes, maxBlocks);
   if (!opts.ok()) {
     return failed<StringResult>(opts.status());
   }
-  Result<LoadReport> r = loadLibrary(ctx, bytes, *opts);
+  Result<LoadReport> r = coredcc::loadLibrary(ctx, bytes, *opts);
   if (!r.ok()) {
     return failed<StringResult>(r.status());
   }
@@ -251,17 +251,17 @@ StringResult libraryLoad(Context &ctx,
   return ok<StringResult>(out.take());
 }
 
-StringResult libraryAppend(Context &ctx,
+StringResult appendLibrary(Context &ctx,
                            std::span<const uint8_t> bytes,
                            const string &sourceName,
                            int64_t maxBytes,
                            int64_t maxBlocks)
 {
-  if (Status s = canRun(ctx, "libraryAppend", {"exec"}); !s.ok()) {
+  if (Status s = canRun(ctx, "appendLibrary", {"exec"}); !s.ok()) {
     return failed<StringResult>(std::move(s));
   }
   Result<AppendOptions> opts =
-      options<AppendOptions>("libraryAppend", sourceName, maxBytes, maxBlocks);
+      options<AppendOptions>("appendLibrary", sourceName, maxBytes, maxBlocks);
   if (!opts.ok()) {
     return failed<StringResult>(opts.status());
   }
@@ -275,17 +275,17 @@ StringResult libraryAppend(Context &ctx,
   return ok<StringResult>(out.take());
 }
 
-StringResult libraryResolve(Context &ctx)
+StringResult resolvePlaceholders(Context &ctx)
 {
-  if (Status s = canRun(ctx, "libraryResolve"); !s.ok()) {
+  if (Status s = canRun(ctx, "resolvePlaceholders"); !s.ok()) {
     return failed<StringResult>(std::move(s));
   }
   const UndoHistory *history = ctx.executor() ? ctx.executor()->history() : nullptr;
   if (history && (history->canUndo() || history->canRedo())) {
-    return failed<StringResult>(
-        error(StatusCode::FailedPrecondition, "libraryResolve: clear the history first"));
+    return failed<StringResult>(error(StatusCode::FailedPrecondition,
+                                      "resolvePlaceholders: clear the history first"));
   }
-  Result<LoadReport> r = resolvePlaceholders(ctx);
+  Result<LoadReport> r = coredcc::resolvePlaceholders(ctx);
   if (!r.ok()) {
     return failed<StringResult>(r.status());
   }

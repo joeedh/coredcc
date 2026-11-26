@@ -182,11 +182,11 @@ export function canRedo(ctx: Context): boolean {
 }
 /** The running command's input `name` (inside a slot). */
 export function input(ctx: Context, name: string): Value {
-  return take(cd.inputGet(ctx, name), (v) => toJs(ctx, v))
+  return take(cd.commandInput(ctx, name), (v) => toJs(ctx, v))
 }
 /** Sets the running command's output `name` (inside a slot). */
 export function output(ctx: Context, name: string, value: Writable) {
-  withValue(ctx, value, (v) => check(cd.outputSet(ctx, name, v)))
+  withValue(ctx, value, (v) => check(cd.commandSetOutput(ctx, name, v)))
 }
 
 /* ---- script commands ---- */
@@ -301,18 +301,18 @@ class Adapter {
 }
 
 /** Registers `Cls` as command `spec.id`. Each run makes a new instance. */
-export function registerCommand(ctx: Context, spec: CommandSpec, Cls: new () => ScriptCommand) {
+export function defineCommand(ctx: Context, spec: CommandSpec, Cls: new () => ScriptCommand) {
   checkCtx(ctx)
   if (typeof Cls !== 'function' || typeof Cls.prototype !== 'object') {
-    throw new TypeError(`registerCommand: ${spec.id}: expected a class, not ${typeof Cls}`)
+    throw new TypeError(`defineCommand: ${spec.id}: expected a class, not ${typeof Cls}`)
   }
   const flags = spec.flags ?? 0
   if (!Number.isInteger(flags) || flags < 0 || flags > 0xffffffff) {
-    throw new TypeError(`registerCommand: flags must be CommandFlags bits, not ${flags}`)
+    throw new TypeError(`defineCommand: flags must be CommandFlags bits, not ${flags}`)
   }
   const backend = getBindingBackend()
   const def = cd.newCommandDef(spec.id)
-  if (!def) throw new Error(`registerCommand: no def for ${spec.id}`)
+  if (!def) throw new Error(`defineCommand: no def for ${spec.id}`)
   try {
     if (spec.uiName !== undefined) check(cd.defUiName(def, spec.uiName))
     if (spec.description !== undefined) check(cd.defDescription(def, spec.description))

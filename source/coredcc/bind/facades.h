@@ -130,9 +130,9 @@ StringResult bagName(const PropertyBag &bag, int32_t i);
 
 /* ---- the running command's bags: FailedPrecondition outside a command slot ---- */
 
-ValueResult inputGet(Context &ctx, const string &name);
-Status outputSet(Context &ctx, const string &name, const PropValue &value);
-ValueResult outputGet(Context &ctx, const string &name);
+ValueResult commandInput(Context &ctx, const string &name);
+Status commandSetOutput(Context &ctx, const string &name, const PropValue &value);
+ValueResult commandOutput(Context &ctx, const string &name);
 
 /* ---- datapaths and commands ---- */
 

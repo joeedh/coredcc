@@ -261,9 +261,9 @@ const char *stateName(NodeReport::State s)
 
 } // namespace
 
-GraphResult graphInstance(Context &ctx, const string &graphPath)
+GraphResult newGraphInstance(Context &ctx, const string &graphPath)
 {
-  if (Status s = detail::kernelGate(ctx, "graphInstance"); !s.ok()) {
+  if (Status s = detail::kernelGate(ctx, "newGraphInstance"); !s.ok()) {
     return failed<GraphResult>(std::move(s));
   }
   Result<BlockId> graph = detail::graphAt(ctx, graphPath);

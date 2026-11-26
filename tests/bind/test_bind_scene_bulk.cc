@@ -43,7 +43,7 @@ void testResults()
   CommandDoc d;
   Context &ctx = *d.ctx;
   sc::SceneTableResult t = sc::sceneResults(ctx, {}, true);
-  test_assert(t.status.ok() && t.value.places() == 0 && t.value.version() == 0.0);
+  test_assert(t.status.ok() && t.value.placeCount() == 0 && t.value.version() == 0.0);
   const BlockHandle a = d.object("a", 1), b = d.object("b", 2), out = d.loose("out", 3),
                     s = d.shapeBlock("s", 1.0);
   d.setParent(b, out);
@@ -51,8 +51,8 @@ void testResults()
   d.obj(a).flags = ObjectFlags::Hidden;
   d.evaluate();
   t = sc::sceneResults(ctx, {}, true);
-  const sc::RefListResult refs = sc::sceneRefs(ctx, {}, true);
-  test_assert(t.status.ok() && t.value.places() == 3 && refs.value.size() == 3);
+  const sc::RefListResult refs = sc::sceneObjects(ctx, {}, true);
+  test_assert(t.status.ok() && t.value.placeCount() == 3 && refs.value.size() == 3);
   test_assert(t.value.allChanged() && t.value.version() == 1.0);
   const Vector<double> matrices = t.value.matrices(), bounds = t.value.bounds();
   test_assert(matrices.size() == 48 && bounds.size() == 18);
@@ -78,7 +78,7 @@ void testResults()
   d.obj(b).channels.set(0, 7.0);
   d.evaluate();
   t = sc::sceneResults(ctx, {}, false);
-  test_assert(t.value.places() == 3 && t.value.matrices().size() == 0 &&
+  test_assert(t.value.placeCount() == 3 && t.value.matrices().size() == 0 &&
               !t.value.allChanged());
   test_assert(t.value.version() == 2.0 && t.value.changed().size() == 1);
   t = sc::sceneResults(ctx, t.value.changed(), false);
@@ -86,7 +86,7 @@ void testResults()
   test_assert(sc::sceneResults(ctx, {0, 3}, false).status.code() ==
               StatusCode::OutOfRange);
   test_assert(sc::sceneResults(ctx, {-1}, false).status.code() == StatusCode::OutOfRange);
-  test_assert(sc::sceneRefs(ctx, {3}, false).status.code() == StatusCode::OutOfRange);
+  test_assert(sc::sceneObjects(ctx, {3}, false).status.code() == StatusCode::OutOfRange);
   test_assert(sc::sceneResults(ctx, {0}, true).status.code() ==
               StatusCode::InvalidArgument);
 
@@ -101,12 +101,12 @@ void testResults()
   /* One that has no record any more. */
   must(d.sc().remove(*d.lib, d.idOf(a)).status());
   must(d.lib->collect().status());
-  test_assert(sc::sceneRefs(ctx, {0}, false).value.at(0).size() == 0);
+  test_assert(sc::sceneObjects(ctx, {0}, false).value.at(0).size() == 0);
 
   ctx.setScene(BlockHandle());
   test_assert(sc::sceneResults(ctx, {}, true).status.code() ==
               StatusCode::FailedPrecondition);
-  test_assert(sc::sceneRefs(ctx, {}, true).status.code() ==
+  test_assert(sc::sceneObjects(ctx, {}, true).status.code() ==
               StatusCode::FailedPrecondition);
   test_assert(sc::sceneChildren(ctx, "").status.code() == StatusCode::FailedPrecondition);
   ctx.setScene(d.scene);

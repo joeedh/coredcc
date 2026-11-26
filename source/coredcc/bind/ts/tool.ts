@@ -213,11 +213,11 @@ function withDelta<R>(delta: Partial<TransformDelta>, fn: (d: BoundDelta) => R):
 }
 
 /** The open core.object.dragDelta's objects move by `delta`, the total since the drag began. */
-export function dragUpdate(ctx: Context, delta: Partial<TransformDelta>) {
-  withDelta(delta, (d) => check(cd.dragUpdate(ctx, d)))
+export function updateDrag(ctx: Context, delta: Partial<TransformDelta>) {
+  withDelta(delta, (d) => check(cd.updateDrag(ctx, d)))
 }
 /** The same, with one delta for each of the drag's objects (`dragCount`), in its order. */
-export function dragUpdateEach(ctx: Context, deltas: readonly Partial<TransformDelta>[]) {
+export function updateDragEach(ctx: Context, deltas: readonly Partial<TransformDelta>[]) {
   const numbers: number[] = []
   for (const delta of deltas) {
     const kind = keyOf(deltaKinds, delta.kind ?? 'translate')
@@ -226,11 +226,11 @@ export function dragUpdateEach(ctx: Context, deltas: readonly Partial<TransformD
     numbers.push(kind, ...(delta.basis ?? [0, 0, 0, 1]), ...(delta.pivot ?? [0, 0, 0]), ...vector,
       ...(delta.axis ?? [0, 0, 1]), delta.angle ?? 0, 0)
   }
-  check(cd.dragUpdateEach(ctx, numbers))
+  check(cd.updateDragEach(ctx, numbers))
 }
 /** The open core.elements.dragDelta's points move by `delta`. */
-export function elementsDragUpdate(ctx: Context, delta: Partial<TransformDelta>) {
-  withDelta(delta, (d) => check(cd.elementsDragUpdate(ctx, d)))
+export function updateElementsDrag(ctx: Context, delta: Partial<TransformDelta>) {
+  withDelta(delta, (d) => check(cd.updateElementsDrag(ctx, d)))
 }
 /** How many objects the open drag moves. */
 export function dragCount(ctx: Context): number {
@@ -369,7 +369,7 @@ export function pushModal(ctx: Context, modal: ModalSpec, opts: {ownsInteractive
   if (modal.drawOverlay) slots.push('drawOverlay')
   if (modal.end) slots.push('end')
   const handle = getBindingBackend().foreignHandle(new ModalAdapter(modal))
-  check(cd.toolPushModal(ctx, handle, slots.join(' '), opts.ownsInteractive ?? true))
+  check(cd.pushModal(ctx, handle, slots.join(' '), opts.ownsInteractive ?? true))
 }
 
 /* ---- gizmos ---- */
@@ -433,13 +433,13 @@ export interface BuiltinGizmo {
 /** From a tool's slot: a gizmo. `'transform'` is the built-in one with core.tool.transform's
  * settings. Its id. */
 export function addGizmo(ctx: Context, gizmo: 'transform' | BuiltinGizmo | GizmoSpec): number {
-  if (typeof gizmo === 'string') return take(cd.toolAddGizmo(ctx, gizmo, ''), Number)
-  if ('kind' in gizmo) return take(cd.toolAddGizmo(ctx, gizmo.kind, gizmo.settingsOf ?? ''), Number)
+  if (typeof gizmo === 'string') return take(cd.addGizmo(ctx, gizmo, ''), Number)
+  if ('kind' in gizmo) return take(cd.addGizmo(ctx, gizmo.kind, gizmo.settingsOf ?? ''), Number)
   const handle = getBindingBackend().foreignHandle(new GizmoAdapter(gizmo))
-  return take(cd.toolAddForeignGizmo(ctx, handle, 'update hitTest draw beginDrag'), Number)
+  return take(cd.addForeignGizmo(ctx, handle, 'update hitTest draw beginDrag'), Number)
 }
 export function removeGizmo(ctx: Context, id: number) {
-  check(cd.toolRemoveGizmo(ctx, id))
+  check(cd.removeGizmo(ctx, id))
 }
 
 /* ---- stroke brushes ---- */
@@ -565,21 +565,21 @@ export function defineStrokeBrush(ctx: Context, name: string, create: () => Stro
 /* ---- the viewport's side ---- */
 
 export function setActiveTool(ctx: Context, id: string) {
-  check(cd.toolSetActive(ctx, id))
+  check(cd.setActiveTool(ctx, id))
 }
 /** The active tool's id; undefined for none. */
 export function activeTool(ctx: Context): string | undefined {
-  return take(cd.toolActive(ctx), (s) => s) || undefined
+  return take(cd.activeTool(ctx), (s) => s) || undefined
 }
-/** A ScriptError of `sendEvent` that came after the event was dispatched: `used` says whether it was. */
+/** A ScriptError of `sendToolEvent` that came after the event was dispatched: `used` says whether it was. */
 export type ToolEventError = ScriptError & {used?: boolean}
 
 /** Hands the context's ToolManager an event in `view`. Whether it was used. A gizmo's update or
  * hit test that failed throws after the event went on: the error's `used` is then set. */
-export function sendEvent(ctx: Context, view: ViewSpec, event: Partial<ToolEvent> & {type: ToolEventType}): boolean {
+export function sendToolEvent(ctx: Context, view: ViewSpec, event: Partial<ToolEvent> & {type: ToolEventType}): boolean {
   return withView(view, (v) =>
     withEvent(event, (e) => {
-      const r = cd.toolEvent(ctx, v, e)
+      const r = cd.sendToolEvent(ctx, v, e)
       try {
         const used = Number(r.value) === EventResult.Handled
         if (!r.status.ok()) throw Object.assign(ScriptError.from(r.status), {used}) as ToolEventError
@@ -597,7 +597,7 @@ export function drawTools(ctx: Context, view: ViewSpec): {bytes: Uint8Array; dec
   try {
     let error: ScriptError | undefined
     withView(view, (v) => {
-      const s = cd.toolDraw(ctx, v, list)
+      const s = cd.drawTools(ctx, v, list)
       try {
         if (!s.ok()) error = ScriptError.from(s)
       } finally {
@@ -612,15 +612,15 @@ export function drawTools(ctx: Context, view: ViewSpec): {bytes: Uint8Array; dec
 }
 /** Ends the gesture in progress with a cancel. */
 export function cancelTool(ctx: Context) {
-  check(cd.toolCancel(ctx))
+  check(cd.cancelTool(ctx))
 }
 export function toolStatus(ctx: Context): string {
   return take(cd.toolStatus(ctx), (s) => s)
 }
 export function setToolStatus(ctx: Context, text: string) {
-  check(cd.toolSetStatus(ctx, text))
+  check(cd.setToolStatus(ctx, text))
 }
 /** The status once the gesture in progress is over (why it did nothing, say), instead of empty. */
 export function setToolOutcome(ctx: Context, text: string) {
-  check(cd.toolSetOutcome(ctx, text))
+  check(cd.setToolOutcome(ctx, text))
 }

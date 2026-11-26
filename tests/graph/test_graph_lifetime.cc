@@ -287,7 +287,7 @@ void testInstances()
   /* An instance and a standalone def after their Library. */
   {
     World w;
-    const Graph g = newGraph(*w.lib, "g");
+    const Graph g = makeGraph(*w.lib, "g");
     const int64_t o = addSocket(*g.def, SocketSide::Output, "o", "float");
     const NodeId n = add(*g.def, "graph.output");
     test_assert(g.def->setLiteral(n, key(o), PropValue::ofFloat(3)).ok());
@@ -353,7 +353,7 @@ void testDestroyedMidWalk()
 {
   World w;
   Library &lib = *w.lib;
-  const Graph inner = newGraph(lib, "inner"), outer = newGraph(lib, "outer");
+  const Graph inner = makeGraph(lib, "inner"), outer = makeGraph(lib, "outer");
   const int64_t o = addSocket(*inner.def, SocketSide::Output, "o", "float");
   const NodeId r = add(*inner.def, "t.read"), iout = add(*inner.def, "graph.output");
   connect(*inner.def, r, "value", iout, key(o));
@@ -382,7 +382,7 @@ void testDestroyedMidWalk()
 
   /* A memoized group is pinned by a later call too, which walks on inside it. */
   calls = 1;
-  const Graph in2 = newGraph(lib, "in2"), out2 = newGraph(lib, "out2");
+  const Graph in2 = makeGraph(lib, "in2"), out2 = makeGraph(lib, "out2");
   const int64_t o1 = addSocket(*in2.def, SocketSide::Output, "o1", "float");
   const int64_t o2 = addSocket(*in2.def, SocketSide::Output, "o2", "float");
   const NodeId a = add(*in2.def, "t.read"), b = add(*in2.def, "t.read");
@@ -461,7 +461,7 @@ void testCollect()
   World w;
   Library &lib = *w.lib;
   lib.setAuditRelations(true);
-  const Graph outer = newGraph(lib, "outer"), inner = newGraph(lib, "inner");
+  const Graph outer = makeGraph(lib, "outer"), inner = makeGraph(lib, "inner");
   const BlockHandle h = newThing(lib, "a", 3);
   lib.setFlag(outer.h, BlockFlags::Root, true);
   const NodeId g = add(*outer.def, "graph.group"), v = add(*outer.def, "t.view");
@@ -488,7 +488,7 @@ void testOwnPinReplaced()
     World w;
     Library &lib = *w.lib;
     const BlockHandle h = newThing(lib, "a", 3), o = w.newOwner();
-    const Graph g = newGraph(lib, "g");
+    const Graph g = makeGraph(lib, "g");
     const NodeId s = add(*g.def, "t.shared"), r = add(*g.def, "t.read");
     connect(*g.def, s, "view", r, "view");
     GraphInstance *inst = new GraphInstance(&w.rt, &lib, g.id);

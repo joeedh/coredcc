@@ -40,8 +40,8 @@ struct Scene {
   {
     thing = newThing(w.lib, "thing", 1);
     elsewhere = newThing(w.lib, "elsewhere", 1);
-    g = newGraph(w.lib, "g");
-    in = newGraph(w.lib, "in");
+    g = makeGraph(w.lib, "g");
+    in = makeGraph(w.lib, "in");
     gi = addSocket(*in.def, SocketSide::Input, "i", "float");
     go = addSocket(*in.def, SocketSide::Output, "o", "float");
     chain(*in.def, inside, 10);
@@ -110,7 +110,7 @@ void testElsewhere()
   Scene s;
   World &w = s.w;
   test_assert(s.free());
-  const Graph other = newGraph(w.lib, "other");
+  const Graph other = makeGraph(w.lib, "other");
   test_assert(s.pull().ok()); /* a new block may be one that was missing */
   const NodeId n = add(*other.def, "t.sum");
   test_assert(s.free());
@@ -202,7 +202,7 @@ void testDirtyCone()
 void testOwnInputs()
 {
   World w;
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   GraphDef &d = *g.def;
   const int64_t a = addSocket(d, SocketSide::Input, "a", "float");
   const int64_t b = addSocket(d, SocketSide::Input, "b", "float");
@@ -246,8 +246,8 @@ void testForeachs()
 {
   World w;
   const BlockHandle thing = newThing(w.lib, "thing", 1);
-  const Graph in = newGraph(w.lib, "in"), g = newGraph(w.lib, "g"),
-              deep = newGraph(w.lib, "deep");
+  const Graph in = makeGraph(w.lib, "in"), g = makeGraph(w.lib, "g"),
+              deep = makeGraph(w.lib, "deep");
   const int64_t dout = addSocket(*deep.def, SocketSide::Output, "o", "float");
   const NodeId read = add(*deep.def, "t.read");
   test_assert(deep.def->setParam(read, "thing", toThing(idOf(w.lib, thing))).ok());
@@ -340,7 +340,7 @@ void testJournal()
 {
   for (int edits : {4095, 4096, 4097}) {
     Scene s;
-    const Graph other = newGraph(s.w.lib, "other");
+    const Graph other = makeGraph(s.w.lib, "other");
     const NodeId n = add(*other.def, "t.sum");
     test_assert(s.pull().ok());
     test_assert(s.literal(*s.g.def, s.row[99], "b", 1).ok());
@@ -494,7 +494,7 @@ void testHandles()
 void testHandlesOfOutputs()
 {
   World w;
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   GraphDef &d = *g.def;
   const int64_t x = addSocket(d, SocketSide::Output, "x", "float");
   const int64_t y = addSocket(d, SocketSide::Output, "y", "float");
@@ -552,7 +552,7 @@ void testHandlesOverBudget()
               i.frameCount() == 2);
 
   /* A failure after an edit that it had said was no concern: that isn't so any more. */
-  const Graph other = newGraph(s.w.lib, "other");
+  const Graph other = makeGraph(s.w.lib, "other");
   const NodeId n = add(*other.def, "t.sum");
   const NodeId user = add(*s.g.def, "t.sum");
   connect(*s.g.def, second, key(s.go), user, "a");
@@ -577,7 +577,7 @@ void testRemembered()
   std::vector<int64_t> outs;
   std::vector<NodeId> groups;
   for (int k = 0; k < 14; k++) {
-    g.push_back(newGraph(w.lib, "g"));
+    g.push_back(makeGraph(w.lib, "g"));
     outs.push_back(addSocket(*g.back().def, SocketSide::Output, "o", "float"));
     const NodeId s = add(*g.back().def, "t.sum");
     connect(

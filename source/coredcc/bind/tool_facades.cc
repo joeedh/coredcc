@@ -299,20 +299,20 @@ Status registerForeignStrokeBrush(Context &ctx,
 
 /* ---- the Context's ToolManager ---- */
 
-Status toolSetActive(Context &ctx, const string &id)
+Status setActiveTool(Context &ctx, const string &id)
 {
-  CDCC_TRY(slotGate(ctx, "toolSetActive", {}));
-  Result<ToolManager *> tm = managerOf(ctx, "toolSetActive");
+  CDCC_TRY(slotGate(ctx, "setActiveTool", {}));
+  Result<ToolManager *> tm = managerOf(ctx, "setActiveTool");
   CDCC_TRY(tm.status());
   return (*tm)->setActive(ctx, view(id));
 }
 
-IntResult toolEvent(Context &ctx, const View &v, const InputEvent &e)
+IntResult sendToolEvent(Context &ctx, const View &v, const InputEvent &e)
 {
-  if (Status s = slotGate(ctx, "toolEvent", {}); !s.ok()) {
+  if (Status s = slotGate(ctx, "sendToolEvent", {}); !s.ok()) {
     return failed<IntResult>(std::move(s));
   }
-  Result<ToolManager *> tm = managerOf(ctx, "toolEvent");
+  Result<ToolManager *> tm = managerOf(ctx, "sendToolEvent");
   if (!tm.ok()) {
     return failed<IntResult>(tm.status());
   }
@@ -326,18 +326,18 @@ IntResult toolEvent(Context &ctx, const View &v, const InputEvent &e)
   return out;
 }
 
-Status toolDraw(Context &ctx, const View &v, DrawList &out)
+Status drawTools(Context &ctx, const View &v, DrawList &out)
 {
-  CDCC_TRY(slotGate(ctx, "toolDraw", {}));
-  Result<ToolManager *> tm = managerOf(ctx, "toolDraw");
+  CDCC_TRY(slotGate(ctx, "drawTools", {}));
+  Result<ToolManager *> tm = managerOf(ctx, "drawTools");
   CDCC_TRY(tm.status());
   return (*tm)->draw(ctx, v, out);
 }
 
-Status toolCancel(Context &ctx)
+Status cancelTool(Context &ctx)
 {
-  CDCC_TRY(slotGate(ctx, "toolCancel", {}));
-  Result<ToolManager *> tm = managerOf(ctx, "toolCancel");
+  CDCC_TRY(slotGate(ctx, "cancelTool", {}));
+  Result<ToolManager *> tm = managerOf(ctx, "cancelTool");
   CDCC_TRY(tm.status());
   return (*tm)->cancel(ctx);
 }
@@ -351,30 +351,30 @@ StringResult toolStatus(Context &ctx)
   return tm.ok() ? ok<StringResult>((*tm)->status()) : failed<StringResult>(tm.status());
 }
 
-Status toolSetStatus(Context &ctx, const string &text)
+Status setToolStatus(Context &ctx, const string &text)
 {
-  CDCC_TRY(slotGate(ctx, "toolSetStatus", {}));
-  Result<ToolManager *> tm = managerOf(ctx, "toolSetStatus");
+  CDCC_TRY(slotGate(ctx, "setToolStatus", {}));
+  Result<ToolManager *> tm = managerOf(ctx, "setToolStatus");
   CDCC_TRY(tm.status());
   (*tm)->setStatus(view(text));
   return Status();
 }
 
-Status toolSetOutcome(Context &ctx, const string &text)
+Status setToolOutcome(Context &ctx, const string &text)
 {
-  CDCC_TRY(slotGate(ctx, "toolSetOutcome", {}));
-  Result<ToolManager *> tm = managerOf(ctx, "toolSetOutcome");
+  CDCC_TRY(slotGate(ctx, "setToolOutcome", {}));
+  Result<ToolManager *> tm = managerOf(ctx, "setToolOutcome");
   CDCC_TRY(tm.status());
   (*tm)->setOutcome(view(text));
   return Status();
 }
 
-StringResult toolActive(Context &ctx)
+StringResult activeTool(Context &ctx)
 {
-  if (Status s = slotGate(ctx, "toolActive", {}, Gate::Read); !s.ok()) {
+  if (Status s = slotGate(ctx, "activeTool", {}, Gate::Read); !s.ok()) {
     return failed<StringResult>(std::move(s));
   }
-  Result<ToolManager *> tm = managerOf(ctx, "toolActive");
+  Result<ToolManager *> tm = managerOf(ctx, "activeTool");
   if (!tm.ok()) {
     return failed<StringResult>(tm.status());
   }
@@ -384,11 +384,10 @@ StringResult toolActive(Context &ctx)
 
 /* ---- from a tool's slots ---- */
 
-Status
-toolPushModal(Context &ctx, uint32_t modal, const string &slots, bool ownsInteractive)
+Status pushModal(Context &ctx, uint32_t modal, const string &slots, bool ownsInteractive)
 {
-  Status gate = slotGate(ctx, "toolPushModal", {});
-  Result<ToolManager *> tm = managerOf(ctx, "toolPushModal");
+  Status gate = slotGate(ctx, "pushModal", {});
+  Result<ToolManager *> tm = managerOf(ctx, "pushModal");
   if (!gate.ok() || !tm.ok()) {
     if (modal != 0) {
       lf::release(modal);
@@ -400,18 +399,18 @@ toolPushModal(Context &ctx, uint32_t modal, const string &slots, bool ownsIntera
   return (*tm)->pushModal(ctx, std::move(m).value(), ownsInteractive);
 }
 
-IntResult toolAddGizmo(Context &ctx, const string &kind, const string &settingsOf)
+IntResult addGizmo(Context &ctx, const string &kind, const string &settingsOf)
 {
-  if (Status s = slotGate(ctx, "toolAddGizmo", {}); !s.ok()) {
+  if (Status s = slotGate(ctx, "addGizmo", {}); !s.ok()) {
     return failed<IntResult>(std::move(s));
   }
-  Result<ToolManager *> tm = managerOf(ctx, "toolAddGizmo");
+  Result<ToolManager *> tm = managerOf(ctx, "addGizmo");
   if (!tm.ok()) {
     return failed<IntResult>(tm.status());
   }
   if (view(kind) != "transform") {
     return failed<IntResult>(error(StatusCode::NotFound,
-                                   "toolAddGizmo: no built-in gizmo '" +
+                                   "addGizmo: no built-in gizmo '" +
                                        std::string(view(kind)) +
                                        "' (there is 'transform')"));
   }
@@ -422,7 +421,7 @@ IntResult toolAddGizmo(Context &ctx, const string &kind, const string &settingsO
   if (!def) {
     Status s = view(settingsOf).empty()
                    ? error(StatusCode::FailedPrecondition,
-                           "toolAddGizmo: the built-in tools aren't registered")
+                           "addGizmo: the built-in tools aren't registered")
                    : reg.unknown(of);
     return failed<IntResult>(std::move(s));
   }
@@ -435,10 +434,10 @@ IntResult toolAddGizmo(Context &ctx, const string &kind, const string &settingsO
   return ok<IntResult>(int64_t((*tm)->addGizmo(std::move(owned).value())));
 }
 
-IntResult toolAddForeignGizmo(Context &ctx, uint32_t gizmo, const string &slots)
+IntResult addForeignGizmo(Context &ctx, uint32_t gizmo, const string &slots)
 {
-  Status gate = slotGate(ctx, "toolAddForeignGizmo", {});
-  Result<ToolManager *> tm = managerOf(ctx, "toolAddForeignGizmo");
+  Status gate = slotGate(ctx, "addForeignGizmo", {});
+  Result<ToolManager *> tm = managerOf(ctx, "addForeignGizmo");
   if (!gate.ok() || !tm.ok()) {
     if (gizmo != 0) {
       lf::release(gizmo);
@@ -452,11 +451,11 @@ IntResult toolAddForeignGizmo(Context &ctx, uint32_t gizmo, const string &slots)
   return ok<IntResult>(int64_t((*tm)->addGizmo(std::move(g).value())));
 }
 
-Status toolRemoveGizmo(Context &ctx, int32_t id)
+Status removeGizmo(Context &ctx, int32_t id)
 {
   /* A read: deactivate and end may remove gizmos. */
-  CDCC_TRY(slotGate(ctx, "toolRemoveGizmo", {}, Gate::Read));
-  Result<ToolManager *> tm = managerOf(ctx, "toolRemoveGizmo");
+  CDCC_TRY(slotGate(ctx, "removeGizmo", {}, Gate::Read));
+  Result<ToolManager *> tm = managerOf(ctx, "removeGizmo");
   CDCC_TRY(tm.status());
   (*tm)->removeGizmo(id);
   return Status();
@@ -486,19 +485,19 @@ template <class Cmd, class Fn> Status updateOpen(Context &ctx, const char *what,
 
 } // namespace
 
-Status dragUpdate(Context &ctx, const TransformDelta &delta)
+Status updateDrag(Context &ctx, const TransformDelta &delta)
 {
   return updateOpen<ApplyDelta>(
-      ctx, "dragUpdate", [&](Context &c, ApplyDelta &d) { return d.update(c, delta); });
+      ctx, "updateDrag", [&](Context &c, ApplyDelta &d) { return d.update(c, delta); });
 }
 
-Status dragUpdateEach(Context &ctx, const Vector<double> &numbers)
+Status updateDragEach(Context &ctx, const Vector<double> &numbers)
 {
-  return updateOpen<ApplyDelta>(ctx, "dragUpdateEach", [&](Context &c, ApplyDelta &d) {
+  return updateOpen<ApplyDelta>(ctx, "updateDragEach", [&](Context &c, ApplyDelta &d) {
     constexpr int kEach = 16;
     if (int(numbers.size()) != kEach * d.count()) {
       return error(StatusCode::InvalidArgument,
-                   "dragUpdateEach: " + std::to_string(kEach) + " numbers for each of " +
+                   "updateDragEach: " + std::to_string(kEach) + " numbers for each of " +
                        std::to_string(d.count()) + " objects, not " +
                        std::to_string(numbers.size()));
     }
@@ -507,7 +506,7 @@ Status dragUpdateEach(Context &ctx, const Vector<double> &numbers)
       const double *n = numbers.data() + kEach * i;
       if (!(n[0] == 0.0 || n[0] == 1.0 || n[0] == 2.0)) {
         return error(StatusCode::InvalidArgument,
-                     "dragUpdateEach: delta " + std::to_string(i) +
+                     "updateDragEach: delta " + std::to_string(i) +
                          ": a kind of 0 (translate), 1 (rotate) or 2 (scale), not " +
                          std::to_string(n[0]));
       }
@@ -525,10 +524,10 @@ Status dragUpdateEach(Context &ctx, const Vector<double> &numbers)
   });
 }
 
-Status elementsDragUpdate(Context &ctx, const TransformDelta &delta)
+Status updateElementsDrag(Context &ctx, const TransformDelta &delta)
 {
   return updateOpen<ElementsDelta>(
-      ctx, "elementsDragUpdate", [&](Context &c, ElementsDelta &d) {
+      ctx, "updateElementsDrag", [&](Context &c, ElementsDelta &d) {
         return d.update(c, delta);
       });
 }
@@ -608,35 +607,36 @@ void addToolBindings(litestl::binding::BindingManager *mgr)
                      3,
                      MARGS("ctx", "name", "factory", "slots"));
 
-  BIND_FACADE(mgr, "coredcc::toolSetActive", script::toolSetActive, MARGS("ctx", "id"));
-  BIND_FACADE(mgr, "coredcc::toolEvent", script::toolEvent, MARGS("ctx", "view", "e"));
-  BIND_FACADE(mgr, "coredcc::toolDraw", script::toolDraw, MARGS("ctx", "view", "out"));
-  BIND_FACADE(mgr, "coredcc::toolCancel", script::toolCancel, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::setActiveTool", script::setActiveTool, MARGS("ctx", "id"));
+  BIND_FACADE(
+      mgr, "coredcc::sendToolEvent", script::sendToolEvent, MARGS("ctx", "view", "e"));
+  BIND_FACADE(mgr, "coredcc::drawTools", script::drawTools, MARGS("ctx", "view", "out"));
+  BIND_FACADE(mgr, "coredcc::cancelTool", script::cancelTool, MARGS("ctx"));
   BIND_FACADE(mgr, "coredcc::toolStatus", script::toolStatus, MARGS("ctx"));
-  BIND_FACADE(mgr, "coredcc::toolSetStatus", script::toolSetStatus, MARGS("ctx", "text"));
-  BIND_FACADE(mgr, "coredcc::toolSetOutcome", script::toolSetOutcome, MARGS("ctx", "text"));
-  BIND_FACADE(mgr, "coredcc::toolActive", script::toolActive, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::setToolStatus", script::setToolStatus, MARGS("ctx", "text"));
+  BIND_FACADE(
+      mgr, "coredcc::setToolOutcome", script::setToolOutcome, MARGS("ctx", "text"));
+  BIND_FACADE(mgr, "coredcc::activeTool", script::activeTool, MARGS("ctx"));
   BIND_OWNING_FACADE(mgr,
-                     "coredcc::toolPushModal",
-                     script::toolPushModal,
+                     "coredcc::pushModal",
+                     script::pushModal,
                      2,
                      MARGS("ctx", "modal", "slots", "ownsInteractive"));
   BIND_FACADE(
-      mgr, "coredcc::toolAddGizmo", script::toolAddGizmo, MARGS("ctx", "kind", "settingsOf"));
+      mgr, "coredcc::addGizmo", script::addGizmo, MARGS("ctx", "kind", "settingsOf"));
   BIND_OWNING_FACADE(mgr,
-                     "coredcc::toolAddForeignGizmo",
-                     script::toolAddForeignGizmo,
+                     "coredcc::addForeignGizmo",
+                     script::addForeignGizmo,
                      2,
                      MARGS("ctx", "gizmo", "slots"));
-  BIND_FACADE(
-      mgr, "coredcc::toolRemoveGizmo", script::toolRemoveGizmo, MARGS("ctx", "id"));
+  BIND_FACADE(mgr, "coredcc::removeGizmo", script::removeGizmo, MARGS("ctx", "id"));
 
-  BIND_FACADE(mgr, "coredcc::dragUpdate", script::dragUpdate, MARGS("ctx", "delta"));
+  BIND_FACADE(mgr, "coredcc::updateDrag", script::updateDrag, MARGS("ctx", "delta"));
   BIND_FACADE(
-      mgr, "coredcc::dragUpdateEach", script::dragUpdateEach, MARGS("ctx", "numbers"));
+      mgr, "coredcc::updateDragEach", script::updateDragEach, MARGS("ctx", "numbers"));
   BIND_FACADE(mgr,
-              "coredcc::elementsDragUpdate",
-              script::elementsDragUpdate,
+              "coredcc::updateElementsDrag",
+              script::updateElementsDrag,
               MARGS("ctx", "delta"));
   BIND_FACADE(mgr, "coredcc::dragCount", script::dragCount, MARGS("ctx"));
   BIND_FACADE(

@@ -84,7 +84,7 @@ bool known(const GraphInstance &inst, const SocketPath &p)
 void testRemovedNodes()
 {
   World w;
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   GraphInstance inst(&w.rt, &w.lib, g.id);
   const NodeId stays = add(*g.def, "t.make");
   test_assert(inst.evaluate(out(stays)).ok() && g_alive == 1);
@@ -135,8 +135,8 @@ void testRemovedNodes()
 void testRemovedInGroups()
 {
   World w;
-  const Graph inner = newGraph(w.lib, "inner"), outer = newGraph(w.lib, "outer");
-  const Graph other = newGraph(w.lib, "other");
+  const Graph inner = makeGraph(w.lib, "inner"), outer = makeGraph(w.lib, "outer");
+  const Graph other = makeGraph(w.lib, "other");
   const NodeId group = add(*outer.def, "graph.group"), top = add(*outer.def, "t.make");
   const NodeId n = add(*inner.def, "t.make"), m = add(*inner.def, "t.make");
   test_assert(outer.def->setGroup(group, inner.id).ok());
@@ -176,7 +176,7 @@ void testRemovedInGroups()
 void testInterior()
 {
   World w;
-  const Graph inner = newGraph(w.lib, "inner"), outer = newGraph(w.lib, "outer");
+  const Graph inner = makeGraph(w.lib, "inner"), outer = makeGraph(w.lib, "outer");
   const NodeId n = add(*inner.def, "t.make"), group = add(*outer.def, "graph.group");
   test_assert(outer.def->setGroup(group, inner.id).ok());
   const std::string interior = "@" + std::to_string(n.value) + ".a";
@@ -192,7 +192,7 @@ void testInterior()
 void testForget()
 {
   World w;
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   GraphInstance inst(&w.rt, &w.lib, g.id);
   const NodeId n = add(*g.def, "t.make"), m = add(*g.def, "t.make");
   test_assert(inst.evaluate(out(n)).ok() && inst.evaluate(out(m)).ok());
@@ -206,7 +206,7 @@ void testForget()
 void testInputs()
 {
   World w;
-  const Graph g = newGraph(w.lib, "g");
+  const Graph g = makeGraph(w.lib, "g");
   const int64_t a = addSocket(*g.def, SocketSide::Input, "a", "test.Counted");
   const int64_t b = addSocket(*g.def, SocketSide::Input, "b", "float");
   const NodeId in = add(*g.def, "graph.input");
@@ -259,7 +259,7 @@ void testLibraries()
 {
   World w;
   Library other(&w.rt);
-  const Graph inner = newGraph(w.lib, "inner");
+  const Graph inner = makeGraph(w.lib, "inner");
   const int64_t o = addSocket(*inner.def, SocketSide::Output, "o", "float");
   GraphDef def(&w.rt, &w.lib);
   const NodeId group = add(def, "graph.group");

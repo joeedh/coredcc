@@ -217,7 +217,7 @@ void testInterface()
 {
   Doc d;
   addTypes(d.rt);
-  const Graph g = newGraph(d.lib, "g"), o = newGraph(d.lib, "o");
+  const Graph g = makeGraph(d.lib, "g"), o = makeGraph(d.lib, "o");
   GraphDef &def = *g.def;
   const PropValue gp = pointerTo(g);
   auto add = [&](int side, const char *name, int index) {
@@ -387,7 +387,7 @@ void testRunGraphEdit()
 {
   Doc d;
   addTypes(d.rt);
-  const Graph g = newGraph(d.lib, "g"), o = newGraph(d.lib, "o");
+  const Graph g = makeGraph(d.lib, "g"), o = makeGraph(d.lib, "o");
   for (BlockHandle h : {g.h, o.h}) {
     d.lib.setFlag(h, BlockFlags::Root, true);
   }
@@ -502,7 +502,7 @@ void testGone()
 {
   Doc d;
   addTypes(d.rt);
-  const Graph g = newGraph(d.lib, "g");
+  const Graph g = makeGraph(d.lib, "g");
   const PropValue gp = pointerTo(g);
   auto addOne = [&]() {
     return d.run(kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.add")}}).ok();
@@ -544,7 +544,7 @@ void testGone()
 void testSave()
 {
   Doc d;
-  const Graph g = newGraph(d.lib, "g");
+  const Graph g = makeGraph(d.lib, "g");
   test_assert(saveLibrary(d.lib).ok()); /* nothing keeps it */
   d.lib.setFlag(g.h, BlockFlags::Root, true);
   SaveReport report;
@@ -556,7 +556,7 @@ void testRecursive()
 {
   Doc d;
   addTypes(d.rt);
-  const Graph g = newGraph(d.lib, "g"), o = newGraph(d.lib, "o");
+  const Graph g = makeGraph(d.lib, "g"), o = makeGraph(d.lib, "o");
   const NodeId n = add(*g.def, "graph.group");
   test_assert(g.def->setGroup(n, o.id).ok());
   struct Redirect {
@@ -584,7 +584,7 @@ void testStamps()
 {
   Doc d;
   addTypes(d.rt);
-  const Graph g = newGraph(d.lib, "g"), o = newGraph(d.lib, "o");
+  const Graph g = makeGraph(d.lib, "g"), o = makeGraph(d.lib, "o");
   const BlockHandle t = newThing(d.lib, "t", 1);
   GraphDef &def = *g.def;
   const NodeId n = add(def, "t.add"), v = add(def, "value.float"),
@@ -631,7 +631,7 @@ void testCollect()
 {
   Doc d;
   addTypes(d.rt);
-  const Graph g = newGraph(d.lib, "g");
+  const Graph g = makeGraph(d.lib, "g");
   d.lib.setFlag(g.h, BlockFlags::Root, true);
   const BlockHandle t = newThing(d.lib, "t", 5), u = newThing(d.lib, "u", 6);
   const NodeId n = add(*g.def, "t.add");
@@ -666,7 +666,7 @@ void testCollect()
 
   /* A group param the edit replaced, and the graph itself while only the history has it.
    */
-  const Graph a = newGraph(d.lib, "a"), b = newGraph(d.lib, "b");
+  const Graph a = makeGraph(d.lib, "a"), b = makeGraph(d.lib, "b");
   const NodeId group = add(*g.def, "graph.group");
   test_assert(g.def->setGroup(group, a.id).ok());
   test_assert(runGraphEdit(d.ctx, g.id, "x", [&](GraphEdit &e) {
@@ -676,7 +676,7 @@ void testCollect()
   test_assert(d.lib.collect().ok() && d.lib.get(b.h) &&
               g.def->node(group)->group().target == a.id);
   /* A removed group node's. */
-  const Graph c = newGraph(d.lib, "c");
+  const Graph c = makeGraph(d.lib, "c");
   const NodeId other = add(*g.def, "graph.group");
   test_assert(g.def->setGroup(other, c.id).ok());
   test_assert(

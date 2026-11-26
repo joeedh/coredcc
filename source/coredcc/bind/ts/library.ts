@@ -73,7 +73,7 @@ const CHUNK = 1 << 16
 
 /** The document's blocks as bytes, and what the save did. */
 export function saveLibrary(ctx: Context): {bytes: Uint8Array; report: SaveReport} {
-  const r = cd.librarySave(ctx)
+  const r = cd.saveLibrary(ctx)
   try {
     if (!r.status.ok()) throw ScriptError.from(r.status)
     const bytes = new Uint8Array(Number(cd.bytesSize(r.value)))
@@ -88,19 +88,19 @@ export function saveLibrary(ctx: Context): {bytes: Uint8Array; report: SaveRepor
 /** Loads into a document without blocks. Not undoable. */
 export function loadLibrary(ctx: Context, bytes: Uint8Array, opts: LoadOptions = {}): LoadReport {
   return withOptions(opts, (name, maxBytes, maxBlocks) =>
-    JSON.parse(take(cd.libraryLoad(ctx, bytes, name, maxBytes, maxBlocks), (json) => json))
+    JSON.parse(take(cd.loadLibrary(ctx, bytes, name, maxBytes, maxBlocks), (json) => json))
   )
 }
 /** Adds a file's blocks to the document, under new ids, as one undo step. */
 export function appendLibrary(ctx: Context, bytes: Uint8Array, opts: LoadOptions = {}): AppendReport {
   return withOptions(opts, (name, maxBytes, maxBlocks) =>
-    JSON.parse(take(cd.libraryAppend(ctx, bytes, name, maxBytes, maxBlocks), (json) => json))
+    JSON.parse(take(cd.appendLibrary(ctx, bytes, name, maxBytes, maxBlocks), (json) => json))
   )
 }
 /** Reads the blocks that were loaded before their types were registered. The history must be
  * empty (`clearHistory`). */
 export function resolvePlaceholders(ctx: Context): LoadReport {
-  return JSON.parse(take(cd.libraryResolve(ctx), (json) => json))
+  return JSON.parse(take(cd.resolvePlaceholders(ctx), (json) => json))
 }
 /** Forgets what could be undone and redone. */
 export function clearHistory(ctx: Context) {

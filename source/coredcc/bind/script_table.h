@@ -44,8 +44,8 @@ struct TableResult {
 
 /** An empty table. */
 TableResult newTable();
-int32_t tableRows(const ScriptTable &table);
-int32_t tableColumns(const ScriptTable &table);
+int32_t tableRowCount(const ScriptTable &table);
+int32_t tableColumnCount(const ScriptTable &table);
 StringResult tableColumnName(const ScriptTable &table, int32_t column);
 /** The key of a row, which identifies an element when the table changes. */
 IntResult tableKey(const ScriptTable &table, int32_t row);

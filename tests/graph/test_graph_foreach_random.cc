@@ -84,10 +84,10 @@ struct Fuzz {
   };
   std::unique_ptr<Side> sides[2];
 
-  Fuzz(Random &random, Totals &t) : r(random), totals(t), root(newGraph(w.lib, "root"))
+  Fuzz(Random &random, Totals &t) : r(random), totals(t), root(makeGraph(w.lib, "root"))
   {
     for (Graph &g : defs) {
-      g = newGraph(w.lib, "def");
+      g = makeGraph(w.lib, "def");
       for (const char *name : {"a", "b", "c"}) {
         addSocket(*g.def, SocketSide::Input, name, r.oneIn(4) ? "int" : "float");
       }

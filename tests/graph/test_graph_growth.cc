@@ -47,7 +47,7 @@ bool grows(const char *name, int n, const std::function<double(int)> &run)
 
 struct Fan {
   World w;
-  Graph g = newGraph(w.lib, "g");
+  Graph g = makeGraph(w.lib, "g");
   NodeId root = add(*g.def, "t.sum");
   std::vector<NodeId> nodes;
   std::vector<LinkSpec> specs;
@@ -124,7 +124,7 @@ void testLinks()
 /* A group of a def with `n` inputs, or sums inside. */
 struct Wide {
   World w;
-  Graph in = newGraph(w.lib, "in"), g = newGraph(w.lib, "g");
+  Graph in = makeGraph(w.lib, "in"), g = makeGraph(w.lib, "g");
   NodeId group = add(*g.def, "graph.group"), from = add(*g.def, "t.sum");
   std::vector<int64_t> sockets;
   std::vector<std::string> keys;
@@ -240,7 +240,7 @@ void testPins()
 {
   test_assert(grows("undo of a node with many references", 500, [](int n) {
     Doc d;
-    const Graph g = newGraph(d.lib, "g");
+    const Graph g = makeGraph(d.lib, "g");
     NodeState s;
     s.id = NodeId{1};
     s.typeName = "t.unknown";
@@ -265,7 +265,7 @@ void testPins()
 /* A tree of sums, or one with a wide root. */
 struct Tree {
   World w;
-  Graph g = newGraph(w.lib, "g");
+  Graph g = makeGraph(w.lib, "g");
   std::vector<NodeId> nodes;
   std::unique_ptr<GraphInstance> inst;
   std::vector<SocketHandle> handles;

@@ -47,8 +47,8 @@ struct GraphResult {
 };
 
 /** A new instance of the graph block at `graphPath`. */
-GraphResult graphInstance(Context &ctx, const string &graphPath);
-/** Sets an interface input by name, converting `value` as nodeOutput does. */
+GraphResult newGraphInstance(Context &ctx, const string &graphPath);
+/** Sets an interface input by name, converting `value` as nodeSetOutput does. */
 Status
 graphSetInput(const ScriptGraph &graph, const string &name, const PropValue &value);
 /** Back to the interface's default. */

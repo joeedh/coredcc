@@ -287,7 +287,7 @@ struct World {
     };
 
     for (int i = 0; i < kDefs; i++) {
-      defs.push_back(newGraph(lib, ("def" + std::to_string(i)).c_str()));
+      defs.push_back(makeGraph(lib, ("def" + std::to_string(i)).c_str()));
       lib.setFlag(defs.back().h, BlockFlags::Root, true);
     }
     for (int i = 0; i < kThings; i++) {

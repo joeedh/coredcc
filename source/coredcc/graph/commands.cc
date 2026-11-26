@@ -103,7 +103,7 @@ struct CreateGraph {
   {
     Library &l = *ctx.library();
     lib = l.ref();
-    Result<BlockHandle> h = createGraph(l, stringInput(ctx, "name"));
+    Result<BlockHandle> h = newGraph(l, stringInput(ctx, "name"));
     if (!h.ok()) {
       return h.status();
     }

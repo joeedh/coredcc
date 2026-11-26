@@ -92,7 +92,7 @@ static void test_save()
   fill(c.w);
   const BlockHandle pinned = c.w.doc(3, "pinned");
   const LibraryPin pin(c.w.lib, pinned);
-  sc::SaveResult r = sc::librarySave(c.ctx);
+  sc::SaveResult r = sc::saveLibrary(c.ctx);
   test_assert(r.status.ok() && sc::bytesSize(r.value) == int64_t(c.w.save().size()));
   SaveReport report;
   c.w.save(&report);
@@ -109,11 +109,11 @@ static void test_save()
         r.report, ("\"" + std::string(key) + "\":{\"total\":0,\"first\":[]}").c_str()));
   }
   c.w.docs.fault = DocFault::Error;
-  r = sc::librarySave(c.ctx);
+  r = sc::saveLibrary(c.ctx);
   test_assert(!r.status.ok() && sc::bytesSize(r.value) == 0 && r.report.size() == 0);
   c.w.docs.fault = DocFault::None;
   Context none(&c.w.rt, nullptr, PointerRef());
-  test_assert(sc::librarySave(none).status.code() == StatusCode::FailedPrecondition);
+  test_assert(sc::saveLibrary(none).status.code() == StatusCode::FailedPrecondition);
 }
 
 static void test_load()
@@ -121,7 +121,7 @@ static void test_load()
   const Bytes bytes = sample();
   {
     BindWorld c;
-    sc::StringResult r = sc::libraryLoad(c.ctx, view(bytes), "file", 0, 0);
+    sc::StringResult r = sc::loadLibrary(c.ctx, view(bytes), "file", 0, 0);
     test_assert(r.status.ok());
     test_assert(shows(r.value,
                       "{\"records\":2,\"missingType\":0,\"missingBlock\":1,"
@@ -133,16 +133,16 @@ static void test_load()
     test_assert(strcmp(c.w.lib.get(c.w.at(50, kAcme))->sourceName().c_str(), "file") ==
                 0);
     /* Not empty any more. */
-    r = sc::libraryLoad(c.ctx, view(bytes), "", 0, 0);
+    r = sc::loadLibrary(c.ctx, view(bytes), "", 0, 0);
     test_assert(r.status.code() == StatusCode::FailedPrecondition);
-    sc::SaveResult saved = sc::librarySave(c.ctx);
+    sc::SaveResult saved = sc::saveLibrary(c.ctx);
     test_assert(saved.value.bytes().size() == bytes.size() &&
                 memcmp(saved.value.bytes().data(), bytes.data(), bytes.size()) == 0);
   }
   /* Limits. */
   BindWorld c;
   const auto load = [&](int64_t maxBytes, int64_t maxBlocks) {
-    return sc::libraryLoad(c.ctx, view(bytes), "", maxBytes, maxBlocks).status.code();
+    return sc::loadLibrary(c.ctx, view(bytes), "", maxBytes, maxBlocks).status.code();
   };
   test_assert(load(10, 0) == StatusCode::OutOfRange &&
               load(0, 2) == StatusCode::OutOfRange);
@@ -154,11 +154,11 @@ static void test_load()
   test_assert(c.w.lib.size() == 0);
   /* Damaged bytes, of any length. */
   for (size_t n = 0; n < size_t(bytes.size()); n++) {
-    test_assert(!sc::libraryLoad(c.ctx, view(bytes).first(n), "", 0, 0).status.ok());
+    test_assert(!sc::loadLibrary(c.ctx, view(bytes).first(n), "", 0, 0).status.ok());
   }
   test_assert(c.w.lib.size() == 0 && load(int64_t(1) << 40, 3) == StatusCode::Ok);
   Context none(&c.w.rt, nullptr, PointerRef());
-  test_assert(sc::libraryLoad(none, view(bytes), "", 0, 0).status.code() ==
+  test_assert(sc::loadLibrary(none, view(bytes), "", 0, 0).status.code() ==
               StatusCode::FailedPrecondition);
 }
 
@@ -166,7 +166,7 @@ static void test_append()
 {
   const Bytes bytes = sample();
   BindWorld c;
-  sc::StringResult r = sc::libraryAppend(c.ctx, view(bytes), "file", 0, 0);
+  sc::StringResult r = sc::appendLibrary(c.ctx, view(bytes), "file", 0, 0);
   test_assert(r.status.ok() && c.history.size() == 1 && c.w.lib.size() == 3);
   test_assert(shows(r.value,
                     ("{\"ids\":{\"total\":2,\"first\":[{\"from\":\"" + std::string(kA) +
@@ -176,16 +176,16 @@ static void test_append()
   test_assert(!c.w.at(1)); /* a fresh id */
   test_assert(c.ex.undo(c.ctx).ok() && c.ex.redo(c.ctx).ok());
   for (const sc::StringResult &bad :
-       {sc::libraryAppend(c.ctx, view(bytes), "", 10, 0),
-        sc::libraryAppend(c.ctx, view(bytes), "", 0, 1),
-        sc::libraryAppend(c.ctx, view(bytes), "", -1, 0),
-        sc::libraryAppend(c.ctx, view(bytes).first(20), "", 0, 0)})
+       {sc::appendLibrary(c.ctx, view(bytes), "", 10, 0),
+        sc::appendLibrary(c.ctx, view(bytes), "", 0, 1),
+        sc::appendLibrary(c.ctx, view(bytes), "", -1, 0),
+        sc::appendLibrary(c.ctx, view(bytes).first(20), "", 0, 0)})
   {
     test_assert(!bad.status.ok() && bad.value.size() == 0);
   }
   test_assert(c.history.size() == 1);
   Context none(&c.w.rt, nullptr, PointerRef());
-  test_assert(sc::libraryAppend(none, view(bytes), "", 0, 0).status.code() ==
+  test_assert(sc::appendLibrary(none, view(bytes), "", 0, 0).status.code() ==
               StatusCode::FailedPrecondition);
 }
 
@@ -195,7 +195,7 @@ static void test_resolve()
   Knows k;
   k.doc = false;
   BindWorld c(k);
-  sc::StringResult r = sc::libraryLoad(c.ctx, view(bytes), "", 0, 0);
+  sc::StringResult r = sc::loadLibrary(c.ctx, view(bytes), "", 0, 0);
   test_assert(r.status.ok() && shows(r.value, "\"records\":2,\"missingType\":2,"));
   test_assert(shows(r.value, "\"issues\":{\"total\":") &&
               shows(r.value,
@@ -204,18 +204,20 @@ static void test_resolve()
               shows(r.value, "\"message\":\"") && shows(r.value, "\"suggestions\":["));
   registerDoc(c.w.rt, c.w.docs);
   /* Not while there is something to undo, or to redo. */
-  test_assert(sc::libraryAppend(c.ctx, view(bytes), "", 0, 0).status.ok());
+  test_assert(sc::appendLibrary(c.ctx, view(bytes), "", 0, 0).status.ok());
   test_assert(c.history.canUndo());
-  test_assert(sc::libraryResolve(c.ctx).status.code() == StatusCode::FailedPrecondition);
+  test_assert(sc::resolvePlaceholders(c.ctx).status.code() ==
+              StatusCode::FailedPrecondition);
   test_assert(c.ex.undo(c.ctx).ok() && !c.history.canUndo() && c.history.canRedo());
-  test_assert(sc::libraryResolve(c.ctx).status.code() == StatusCode::FailedPrecondition);
+  test_assert(sc::resolvePlaceholders(c.ctx).status.code() ==
+              StatusCode::FailedPrecondition);
   test_assert(sc::clearHistory(c.ctx).ok() && c.history.size() == 0);
-  r = sc::libraryResolve(c.ctx);
+  r = sc::resolvePlaceholders(c.ctx);
   test_assert(r.status.ok() && shows(r.value, "{\"records\":0,\"missingType\":0,") &&
               shows(r.value, "\"blocks\":{\"total\":2,"));
   test_assert(c.w.lib.get(c.w.at(1))->state() == BlockState::Live);
   Context bare(&c.w.rt, &c.w.lib, PointerRef());
-  test_assert(sc::libraryResolve(bare).status.ok()); /* no history */
+  test_assert(sc::resolvePlaceholders(bare).status.ok()); /* no history */
   test_assert(sc::clearHistory(bare).code() == StatusCode::FailedPrecondition);
 }
 
@@ -226,9 +228,9 @@ static void test_large()
   for (uint64_t i = 1; i <= 10005; i++) {
     c.w.root(c.w.doc(i, "n"));
   }
-  sc::SaveResult saved = sc::librarySave(c.ctx);
+  sc::SaveResult saved = sc::saveLibrary(c.ctx);
   BindWorld to;
-  sc::StringResult r = sc::libraryAppend(to.ctx, saved.value.bytes(), "", 0, 0);
+  sc::StringResult r = sc::appendLibrary(to.ctx, saved.value.bytes(), "", 0, 0);
   test_assert(r.status.ok() && shows(r.value, "\"ids\":{\"total\":10005,"));
   int ids = 0, blocks = 0;
   for (const char *p = r.value.c_str(); (p = strstr(p, "{\"from\":")); p++) {
@@ -249,9 +251,9 @@ static void test_slots()
   std::string log;
   const auto probe = [&](Context &ctx) {
     for (const StatusCode code :
-         {sc::librarySave(ctx).status.code(),
-          sc::libraryLoad(ctx, view(bytes), "", 0, 0).status.code(),
-          sc::libraryResolve(ctx).status.code(),
+         {sc::saveLibrary(ctx).status.code(),
+          sc::loadLibrary(ctx, view(bytes), "", 0, 0).status.code(),
+          sc::resolvePlaceholders(ctx).status.code(),
           sc::clearHistory(ctx).code()})
     {
       log += code == StatusCode::Busy ? "busy;" : "no;";
@@ -260,7 +262,7 @@ static void test_slots()
   fakehost::Obj cmd;
   cmd.methods["canRun"] = [&](void **args, void *ret, litestl::util::string *) {
     Context &ctx = *static_cast<Context *>(args[0]);
-    log += sc::libraryAppend(ctx, view(bytes), "", 0, 0).status.code() == StatusCode::Busy
+    log += sc::appendLibrary(ctx, view(bytes), "", 0, 0).status.code() == StatusCode::Busy
                ? "busy;"
                : "no;";
     new (ret) Status();
@@ -270,7 +272,7 @@ static void test_slots()
     Context &ctx = *static_cast<Context *>(args[0]);
     probe(ctx);
     log +=
-        sc::libraryAppend(ctx, view(bytes), "", 0, 0).status.ok() ? "appended;" : "no;";
+        sc::appendLibrary(ctx, view(bytes), "", 0, 0).status.ok() ? "appended;" : "no;";
     new (ret) Status();
     return true;
   };

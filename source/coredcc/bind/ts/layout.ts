@@ -83,11 +83,11 @@ export function containerIsThere(path: PathChange): boolean {
 
 /** The layout in `xml`. Throws a ScriptError with the position if it isn't one. */
 export function parseLayout(xml: string): LayoutNode {
-  return JSON.parse(take(cd.layoutJson(xml), (json) => json)) as LayoutNode
+  return JSON.parse(take(cd.parseLayout(xml), (json) => json)) as LayoutNode
 }
 
 /** What is wrong with the layout in `xml`, for `ctx`'s root: what it names that doesn't exist or
  * doesn't fit. Warnings are about what can't be checked. */
 export function validateLayout(ctx: Context, xml: string): LayoutIssue[] {
-  return JSON.parse(take(cd.validateLayoutXml(ctx, xml), (json) => json)) as LayoutIssue[]
+  return JSON.parse(take(cd.validateLayout(ctx, xml), (json) => json)) as LayoutIssue[]
 }

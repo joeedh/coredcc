@@ -331,7 +331,7 @@ struct Fuzz {
   {
     gen.seed(seed);
     for (Graph &g : defs) {
-      g = newGraph(w.lib, "d");
+      g = makeGraph(w.lib, "d");
       for (int i = 0; i < 2; i++) {
         addSocket(*g.def, SocketSide::Input, i ? "i" : "j", below(4) ? "float" : "int");
         addSocket(*g.def, SocketSide::Output, i ? "x" : "y", below(4) ? "float" : "int");

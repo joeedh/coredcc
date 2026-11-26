@@ -90,7 +90,7 @@ ValueResult nodeInput(NodeExecContext &node, const string &name);
 ValueResult nodeParam(NodeExecContext &node, const string &name);
 /** Sets an output, converting `value` as a datapath write would (an Int to a Float, say).
  */
-Status nodeOutput(NodeExecContext &node, const string &name, const PropValue &value);
+Status nodeSetOutput(NodeExecContext &node, const string &name, const PropValue &value);
 /** Sets an output to an input's value, which may be a payload. */
 Status nodePass(NodeExecContext &node, const string &input, const string &output);
 
@@ -107,12 +107,12 @@ Status nodeProgress(NodeExecContext &node, double fraction, const string &text);
 TableResult nodeInputTable(NodeExecContext &node, const string &name);
 /** Sets an output to a table, which has to pass ScriptTable::check. */
 Status
-nodeOutputTable(NodeExecContext &node, const string &name, const ScriptTable &table);
+nodeSetOutputTable(NodeExecContext &node, const string &name, const ScriptTable &table);
 
 /* ---- editing: undoable commands, allowed where `invoke` is ---- */
 
 /** Makes a graph. Its value is a pointer to it, for a Pointer member or input. */
-ValueResult graphCreate(Context &ctx, const string &name);
+ValueResult newGraph(Context &ctx, const string &name);
 /** Adds a node to the graph at `graphPath`; its id. */
 IntResult graphAddNode(
     Context &ctx, const string &graphPath, const string &type, double x, double y);

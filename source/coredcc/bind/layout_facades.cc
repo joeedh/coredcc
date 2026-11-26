@@ -34,24 +34,24 @@ positions(std::string_view xml, const litestl::util::Vector<LayoutIssue> &issues
   return out;
 }
 
-StringResult layoutJson(const string &xml)
+StringResult parseLayout(const string &xml)
 {
-  Result<Layout> layout = parseLayout(view(xml));
+  Result<Layout> layout = coredcc::parseLayout(view(xml));
   return layout.ok() ? ok<StringResult>(string(layoutToJson(*layout).c_str()))
                      : failed<StringResult>(layout.status());
 }
 
-StringResult validateLayoutXml(Context &ctx, const string &xml)
+StringResult validateLayout(Context &ctx, const string &xml)
 {
-  if (Status s = detail::kernelGate(ctx, "validateLayoutXml"); !s.ok()) {
+  if (Status s = detail::kernelGate(ctx, "validateLayout"); !s.ok()) {
     return failed<StringResult>(std::move(s));
   }
-  Result<Layout> layout = parseLayout(view(xml));
+  Result<Layout> layout = coredcc::parseLayout(view(xml));
   if (!layout.ok()) {
     return failed<StringResult>(layout.status());
   }
   const litestl::util::Vector<LayoutIssue> issues =
-      validateLayout(ctx.runtime(), ctx.root().type, *layout);
+      coredcc::validateLayout(ctx.runtime(), ctx.root().type, *layout);
   const std::vector<LayoutPosition> at = positions(view(xml), issues);
   JsonWriter out;
   out.beginArray();

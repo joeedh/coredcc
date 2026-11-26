@@ -53,7 +53,7 @@ struct SceneTable {
   double changeVersion = 0.0;
   bool changedAll = false;
   /* How many places there are. */
-  int32_t placeCount = 0;
+  int32_t placeTotal = 0;
 
   Doubles matrices() const
   {
@@ -91,9 +91,9 @@ struct SceneTable {
   {
     return changedAll;
   }
-  int32_t places() const
+  int32_t placeCount() const
   {
-    return placeCount;
+    return placeTotal;
   }
   static const litestl::binding::types::Struct<SceneTable> *defineBindings();
 };
@@ -133,7 +133,7 @@ struct RefListResult {
 
 /** The objects at these places, or at `all`. "" for one whose record is gone. */
 RefListResult
-sceneRefs(Context &ctx, const litestl::util::Vector<int32_t> &places, bool all);
+sceneObjects(Context &ctx, const litestl::util::Vector<int32_t> &places, bool all);
 /** Scene::children; `object` "" for the roots. */
 RefListResult sceneChildren(Context &ctx, const string &object);
 

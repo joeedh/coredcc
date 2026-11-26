@@ -382,7 +382,7 @@ void testGates()
           sc::evaluateScene(ctx),
           sc::worldMatrix(ctx, name).status,
           sc::sceneResults(ctx, {}, true).status,
-          sc::sceneRefs(ctx, {}, true).status,
+          sc::sceneObjects(ctx, {}, true).status,
           sc::sceneChildren(ctx, "").status,
           sc::pick(ctx, viewOfXy(), 50, 50, near(5)).status,
           sc::getValue(ctx, "scene.time").status,
@@ -393,8 +393,8 @@ void testGates()
           sc::invoke(ctx, "core.scene.new").status,
           sc::undo(ctx),
           sc::redo(ctx),
-          sc::graphCreate(ctx, "g").status,
-          sc::graphInstance(ctx, "g").status,
+          sc::newGraph(ctx, "g").status,
+          sc::newGraphInstance(ctx, "g").status,
       };
       for (const Status &s : seen) {
         if (s.code() != StatusCode::Busy) {

@@ -109,7 +109,7 @@ Unreal, coredcc is exactly one module, so they exist once.
   whose items have structs of their own.
 - **A node's own paths are relative to its parent's prefix;** a leading `/` is the Context's root.
   The paths that a Layout and its JSON give start with `/`, so a Context's own prefix doesn't change them.
-- **The JSON** (`layoutJson`, `parseLayout` in TS) has `version`, 1, at its root: fields are only added
+- **The JSON** (`parseLayout`, `parseLayout` in TS) has `version`, 1, at its root: fields are only added
   under it. Each node has its `kind` and what was written, and the joined `effectivePath`, `prefix` (a
   tool's, with its own `path`), `optionsPath` and condition paths, so a frontend joins nothing. `attrs` has the
   host's `data-` attributes, and all of a `custom` node's.
@@ -145,7 +145,7 @@ Unreal, coredcc is exactly one module, so they exist once.
   that never flushes holds no more than that.
 - **Types.** `generatePaths(apiCatalog(ctx))` is a file of types, for `typed<Root, Commands>(ctx)`. Make
   it again when structs or commands change. It describes what is registered at that time.
-- **`libraryResolve` needs an empty history;** `clearHistory` first.
+- **`resolvePlaceholders` needs an empty history;** `clearHistory` first.
 
 ## Threading
 - The public API is single-threaded, on the host's main thread.

@@ -58,7 +58,7 @@ describe('coredcc wasm-st UI', () => {
         cdcc.write(c, 'weight', this.before)
       }
     }
-    cdcc.registerCommand(ctx, {id: 'ts.weigh', inputs: {by: 1}}, Weigh)
+    cdcc.defineCommand(ctx, {id: 'ts.weigh', inputs: {by: 1}}, Weigh)
     assert.deepEqual(cdcc.validateLayout(ctx, xml), [])
     cdcc.invokeAt(ctx, tool.prefix!, tool.invocation!)
     assert.equal(cdcc.get(ctx, 'items["Cube"].weight'), 3)
@@ -188,7 +188,7 @@ describe('coredcc wasm-st UI', () => {
       }
       undo() {}
     }
-    cdcc.registerCommand(ctx, {id: 'ts.slot'}, Slot)
+    cdcc.defineCommand(ctx, {id: 'ts.slot'}, Slot)
     cdcc.invoke(ctx, 'ts.slot()')
     assert.deepEqual(inSlot, [undefined, StatusCode.Busy, StatusCode.Busy, "expected a session's context"])
 
@@ -224,7 +224,7 @@ describe('coredcc wasm-st UI', () => {
     }
   }
   const weigh = () =>
-    cdcc.registerCommand(
+    cdcc.defineCommand(
       ctx,
       {id: 'ts.weigh', inputs: {by: cdcc.float(1), note: ''}, outputs: {weight: cdcc.float(0)}},
       Weigh
@@ -357,7 +357,7 @@ describe('coredcc wasm-st UI', () => {
       }
       undo() {}
     }
-    cdcc.registerCommand(ctx, {id: 'ts.both'}, Both)
+    cdcc.defineCommand(ctx, {id: 'ts.both'}, Both)
     const before = spike.historySize(hostOf(ctx))
     cdcc.run(ctx, 'ts.both')
     assert.deepEqual([cdcc.get(ctx, cube), cdcc.get(ctx, ball)], [2, 8])
@@ -466,7 +466,7 @@ describe('coredcc wasm-st UI', () => {
   })
 
   test('interactive commands', () => {
-    cdcc.registerCommand(ctx, {id: 'ts.drag', inputs: {note: ''}, flags: CommandFlags.Interactive}, Drag)
+    cdcc.defineCommand(ctx, {id: 'ts.drag', inputs: {note: ''}, flags: CommandFlags.Interactive}, Drag)
     weigh()
     assert.equal(cdcc.interactive(ctx), undefined)
     assert.throws(() => cdcc.run(ctx, 'ts.drag'), ScriptError)

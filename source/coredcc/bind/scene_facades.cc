@@ -177,7 +177,7 @@ SceneTableResult sceneResults(Context &ctx, const Vector<int32_t> &places, bool 
   t.changedList = changes.places;
   t.changeVersion = double(changes.version);
   t.changedAll = changes.all;
-  t.placeCount = int32_t((*scene)->results().size());
+  t.placeTotal = int32_t((*scene)->results().size());
   return r;
 }
 
@@ -191,13 +191,13 @@ static string refText(const Context &ctx, BlockHandle h)
   return string(formatRef(ctx.runtime(), *pointer.tryPointer()).c_str());
 }
 
-RefListResult sceneRefs(Context &ctx, const Vector<int32_t> &places, bool all)
+RefListResult sceneObjects(Context &ctx, const Vector<int32_t> &places, bool all)
 {
-  if (Status s = slotGate(ctx, "sceneRefs", {"exec"}, detail::Gate::Read); !s.ok()) {
+  if (Status s = slotGate(ctx, "sceneObjects", {"exec"}, detail::Gate::Read); !s.ok()) {
     return failed<RefListResult>(std::move(s));
   }
   Vector<int32_t> at;
-  Result<const Scene *> scene = placesOf(ctx, "sceneRefs", places, all, at);
+  Result<const Scene *> scene = placesOf(ctx, "sceneObjects", places, all, at);
   if (!scene.ok()) {
     return failed<RefListResult>(scene.status());
   }
@@ -356,7 +356,7 @@ const lbt::Struct<SceneTable> *SceneTable::defineBindings()
     BIND_STRUCT_METHOD(st, changed, MARGS());
     BIND_STRUCT_METHOD(st, version, MARGS());
     BIND_STRUCT_METHOD(st, allChanged, MARGS());
-    BIND_STRUCT_METHOD(st, places, MARGS());
+    BIND_STRUCT_METHOD(st, placeCount, MARGS());
   }
   return st;
 }

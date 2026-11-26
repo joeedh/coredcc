@@ -98,7 +98,7 @@ export function installToolMethods(method: DefineMethod, ctx: () => Context, gpu
   method('input', (events: (Partial<ToolEvent> & {type: ToolEventType})[]) => {
     const c = ctx()
     return events.map((e) => {
-      const used = cdcc.sendEvent(c, view(), e)
+      const used = cdcc.sendToolEvent(c, view(), e)
       cdcc.evaluateScene(c)
       return used
     })

@@ -71,12 +71,12 @@ inline Obj commandObj(Script *s)
     if (s->onExec) {
       s->onExec(ctx);
     }
-    const int64_t amount = *sc::inputGet(ctx, "amount").value.tryInt();
+    const int64_t amount = *sc::commandInput(ctx, "amount").value.tryInt();
     *before = count(ctx);
     const PropValue v = sc::makeInt(*before + amount);
     Status st = s->useSetValue ? sc::setValue(ctx, "tool.count", v)
                                : sc::writeValue(ctx, "tool.count", v);
-    test_assert(sc::outputSet(ctx, "result", v).ok());
+    test_assert(sc::commandSetOutput(ctx, "result", v).ok());
     return ok(ret, std::move(st));
   };
   o.methods["undo"] = [s, before](void **args, void *, string *err) {
@@ -101,7 +101,7 @@ inline Obj commandObj(Script *s)
       *err = "redo: Error: no redo";
       return false;
     }
-    const int64_t amount = *sc::inputGet(ctx, "amount").value.tryInt();
+    const int64_t amount = *sc::commandInput(ctx, "amount").value.tryInt();
     return ok(ret, sc::writeValue(ctx, "tool.count", sc::makeInt(*before + amount)));
   };
   o.methods["memSize"] = [s](void **, void *ret, string *err) {

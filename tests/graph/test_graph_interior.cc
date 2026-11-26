@@ -72,7 +72,7 @@ struct Doc2 {
   GraphInstance inst;
 
   Doc2()
-      : root(newGraph(w.lib, "root")), inner(newGraph(w.lib, "inner")),
+      : root(makeGraph(w.lib, "root")), inner(makeGraph(w.lib, "inner")),
         inst(&w.rt, &w.lib, root.id)
   {
     GraphDef &d = *inner.def;
@@ -143,7 +143,7 @@ void testOutputs()
   /* Other outputs: an interface input, and a group's in the group. */
   connect(r, d.g1, interior({d.in}, key(d.a)), d.sink, "b");
   test_assert(d.isSink(12, 1));
-  const Graph deep = newGraph(d.w.lib, "deep");
+  const Graph deep = makeGraph(d.w.lib, "deep");
   const int64_t x = addSocket(*deep.def, SocketSide::Output, "x", "float");
   const NodeId dout = add(*deep.def, "graph.output"), dk = add(*deep.def, "value.float");
   test_assert(deep.def->setParam(dk, "value", PropValue::ofFloat(3)).ok());
@@ -289,7 +289,7 @@ void testDeep()
   Doc2 d;
   GraphDef &r = *d.root.def;
   /* mid has a group of inner, and replaces last.b in it with 1000. */
-  const Graph mid = newGraph(d.w.lib, "mid");
+  const Graph mid = makeGraph(d.w.lib, "mid");
   const int64_t mo = addSocket(*mid.def, SocketSide::Output, "mo", "float");
   const NodeId mout = add(*mid.def, "graph.output"), q = add(*mid.def, "graph.group");
   const NodeId k = add(*mid.def, "value.float");
@@ -463,7 +463,7 @@ void testCycles()
 
   /* Deep: the tables of the groups on the way take part. */
   Doc2 e;
-  const Graph mid = newGraph(e.w.lib, "mid");
+  const Graph mid = makeGraph(e.w.lib, "mid");
   const int64_t mi = addSocket(*mid.def, SocketSide::Input, "mi", "float");
   const NodeId min = add(*mid.def, "graph.input"), q = add(*mid.def, "graph.group");
   test_assert(mid.def->setGroup(q, e.inner.id).ok());
@@ -534,7 +534,7 @@ void testAlike()
   test_assert(d.isSink(100, 3));
 
   /* The same def twice in a group: only one is meant. */
-  const Graph mid = newGraph(d.w.lib, "mid");
+  const Graph mid = makeGraph(d.w.lib, "mid");
   GraphDef &m = *mid.def;
   const int64_t m1 = addSocket(m, SocketSide::Output, "m1", "float");
   const int64_t m2 = addSocket(m, SocketSide::Output, "m2", "float");
@@ -576,7 +576,7 @@ void testAlike()
   ins.add(SocketSide::Input, *InteriorKey::parse(x));
   test_assert(graphReach(*d.inner.def, outs)->inputs.size() == 2);
   test_assert(graphReach(*d.inner.def, ins)->inputs.size() == 1);
-  const Graph top = newGraph(d.w.lib, "top");
+  const Graph top = makeGraph(d.w.lib, "top");
   GraphDef &p = *top.def;
   const int64_t p1 = addSocket(p, SocketSide::Input, "p1", "float");
   const int64_t p2 = addSocket(p, SocketSide::Input, "p2", "float");
@@ -600,7 +600,7 @@ void testAlike()
   reach = graphReach(m, one);
   test_assert(reach->inputs[0].size() == 2 && reach->inputs[1].size() == 0);
   /* A recursion is left out where the walk meets it, and tables with it aren't kept. */
-  const Graph ra = newGraph(d.w.lib, "ra"), rb = newGraph(d.w.lib, "rb");
+  const Graph ra = makeGraph(d.w.lib, "ra"), rb = makeGraph(d.w.lib, "rb");
   NodeId group[2];
   for (const Graph &v : {ra, rb}) {
     const int64_t vi = addSocket(*v.def, SocketSide::Input, "i", "float");
@@ -643,7 +643,7 @@ void testPlaces()
   const NodeId rin = add(r, "graph.input"), rout = add(r, "graph.output");
   connect(r, rin, key(ri), d.g1, interior({d.last}, "b"));
   connect(r, d.g1, key(d.o), rout, key(ro));
-  const Graph top = newGraph(d.w.lib, "top");
+  const Graph top = makeGraph(d.w.lib, "top");
   const NodeId each = add(*top.def, kGraphForeachType);
   test_assert(top.def->setGroup(each, d.root.id).ok());
   GraphInstance inst(&d.w.rt, &d.w.lib, top.id);
@@ -660,7 +660,7 @@ void testPlaces()
   test_assert(inst.value(p)->asFloat() == 9);
 
   Doc doc;
-  const Graph g = newGraph(doc.lib, "g"), in = newGraph(doc.lib, "in");
+  const Graph g = makeGraph(doc.lib, "g"), in = makeGraph(doc.lib, "in");
   const NodeId m = add(*in.def, "math.float");
   const NodeId group = add(*g.def, "graph.group"), n = add(*g.def, "math.float");
   test_assert(g.def->setGroup(group, in.id).ok());

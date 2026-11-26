@@ -128,10 +128,12 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::bagGet", script::bagGet, MARGS("bag", "name"));
   BIND_FACADE(mgr, "coredcc::bagSize", script::bagSize, MARGS("bag"));
   BIND_FACADE(mgr, "coredcc::bagName", script::bagName, MARGS("bag", "i"));
-  BIND_FACADE(mgr, "coredcc::inputGet", script::inputGet, MARGS("ctx", "name"));
-  BIND_FACADE(
-      mgr, "coredcc::outputSet", script::outputSet, MARGS("ctx", "name", "value"));
-  BIND_FACADE(mgr, "coredcc::outputGet", script::outputGet, MARGS("ctx", "name"));
+  BIND_FACADE(mgr, "coredcc::commandInput", script::commandInput, MARGS("ctx", "name"));
+  BIND_FACADE(mgr,
+              "coredcc::commandSetOutput",
+              script::commandSetOutput,
+              MARGS("ctx", "name", "value"));
+  BIND_FACADE(mgr, "coredcc::commandOutput", script::commandOutput, MARGS("ctx", "name"));
 
   BIND_FACADE(mgr, "coredcc::resolvePath", script::resolvePath, MARGS("ctx", "path"));
   BIND_FACADE(mgr, "coredcc::pathMeta", script::pathMeta, MARGS("ctx", "path"));
@@ -176,9 +178,9 @@ void addFacades(litestl::binding::BindingManager *mgr)
 
 void addLayoutFacades(litestl::binding::BindingManager *mgr)
 {
-  BIND_FACADE(mgr, "coredcc::layoutJson", script::layoutJson, MARGS("xml"));
+  BIND_FACADE(mgr, "coredcc::parseLayout", script::parseLayout, MARGS("xml"));
   BIND_FACADE(
-      mgr, "coredcc::validateLayoutXml", script::validateLayoutXml, MARGS("ctx", "xml"));
+      mgr, "coredcc::validateLayout", script::validateLayout, MARGS("ctx", "xml"));
   BIND_FACADE(mgr, "coredcc::newRunInputs", script::newRunInputs, MARGS());
   BIND_FACADE(mgr,
               "coredcc::runInputsSet",
@@ -244,16 +246,17 @@ void addLibraryFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::bytesSize", script::bytesSize, MARGS("bytes"));
   BIND_FACADE(
       mgr, "coredcc::bytesRead", script::bytesRead, MARGS("bytes", "offset", "out"));
-  BIND_FACADE(mgr, "coredcc::librarySave", script::librarySave, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::saveLibrary", script::saveLibrary, MARGS("ctx"));
   BIND_FACADE(mgr,
-              "coredcc::libraryLoad",
-              script::libraryLoad,
+              "coredcc::loadLibrary",
+              script::loadLibrary,
               MARGS("ctx", "bytes", "sourceName", "maxBytes", "maxBlocks"));
   BIND_FACADE(mgr,
-              "coredcc::libraryAppend",
-              script::libraryAppend,
+              "coredcc::appendLibrary",
+              script::appendLibrary,
               MARGS("ctx", "bytes", "sourceName", "maxBytes", "maxBlocks"));
-  BIND_FACADE(mgr, "coredcc::libraryResolve", script::libraryResolve, MARGS("ctx"));
+  BIND_FACADE(
+      mgr, "coredcc::resolvePlaceholders", script::resolvePlaceholders, MARGS("ctx"));
   BIND_FACADE(mgr, "coredcc::clearHistory", script::clearHistory, MARGS("ctx"));
 }
 
@@ -313,8 +316,10 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
 
   BIND_FACADE(mgr, "coredcc::nodeInput", script::nodeInput, MARGS("node", "name"));
   BIND_FACADE(mgr, "coredcc::nodeParam", script::nodeParam, MARGS("node", "name"));
-  BIND_FACADE(
-      mgr, "coredcc::nodeOutput", script::nodeOutput, MARGS("node", "name", "value"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeSetOutput",
+              script::nodeSetOutput,
+              MARGS("node", "name", "value"));
   BIND_FACADE(
       mgr, "coredcc::nodePass", script::nodePass, MARGS("node", "input", "output"));
 
@@ -331,13 +336,13 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(
       mgr, "coredcc::nodeInputTable", script::nodeInputTable, MARGS("node", "name"));
   BIND_FACADE(mgr,
-              "coredcc::nodeOutputTable",
-              script::nodeOutputTable,
+              "coredcc::nodeSetOutputTable",
+              script::nodeSetOutputTable,
               MARGS("node", "name", "table"));
 
   BIND_FACADE(mgr, "coredcc::newTable", script::newTable, MARGS());
-  BIND_FACADE(mgr, "coredcc::tableRows", script::tableRows, MARGS("table"));
-  BIND_FACADE(mgr, "coredcc::tableColumns", script::tableColumns, MARGS("table"));
+  BIND_FACADE(mgr, "coredcc::tableRowCount", script::tableRowCount, MARGS("table"));
+  BIND_FACADE(mgr, "coredcc::tableColumnCount", script::tableColumnCount, MARGS("table"));
   BIND_FACADE(
       mgr, "coredcc::tableColumnName", script::tableColumnName, MARGS("table", "column"));
   BIND_FACADE(mgr, "coredcc::tableKey", script::tableKey, MARGS("table", "row"));
@@ -351,7 +356,7 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(
       mgr, "coredcc::tableGet", script::tableGet, MARGS("table", "column", "row"));
 
-  BIND_FACADE(mgr, "coredcc::graphCreate", script::graphCreate, MARGS("ctx", "name"));
+  BIND_FACADE(mgr, "coredcc::newGraph", script::newGraph, MARGS("ctx", "name"));
   BIND_FACADE(mgr,
               "coredcc::graphAddNode",
               script::graphAddNode,
@@ -379,8 +384,10 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
               script::graphDiagnostics,
               MARGS("ctx", "graphPath"));
 
-  BIND_FACADE(
-      mgr, "coredcc::graphInstance", script::graphInstance, MARGS("ctx", "graphPath"));
+  BIND_FACADE(mgr,
+              "coredcc::newGraphInstance",
+              script::newGraphInstance,
+              MARGS("ctx", "graphPath"));
   BIND_FACADE(mgr,
               "coredcc::graphSetInput",
               script::graphSetInput,
@@ -498,7 +505,7 @@ void addSceneFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(
       mgr, "coredcc::sceneResults", script::sceneResults, MARGS("ctx", "places", "all"));
   BIND_FACADE(
-      mgr, "coredcc::sceneRefs", script::sceneRefs, MARGS("ctx", "places", "all"));
+      mgr, "coredcc::sceneObjects", script::sceneObjects, MARGS("ctx", "places", "all"));
   BIND_FACADE(
       mgr, "coredcc::sceneChildren", script::sceneChildren, MARGS("ctx", "object"));
   BIND_FACADE(mgr, "coredcc::worldMatrix", script::worldMatrix, MARGS("ctx", "object"));

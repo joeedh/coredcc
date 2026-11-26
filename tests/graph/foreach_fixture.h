@@ -275,7 +275,7 @@ struct Loop {
   uint64_t lastRuns = 0;
 
   explicit Loop(World &world)
-      : w(world), root(newGraph(w.lib, "root")), inner(newGraph(w.lib, "inner")),
+      : w(world), root(makeGraph(w.lib, "root")), inner(makeGraph(w.lib, "inner")),
         inst(&w.rt, &w.lib, root.id)
   {
     inst.setUserData(&w.notifyDuring);

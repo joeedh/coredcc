@@ -73,8 +73,8 @@ function openDoc(): Doc {
   const host = ta.create() as Host
   const session = new Session(host, ta.context(host) as Context)
   try {
-    cdcc.registerCommand(session.ctx, {id: 'testapp.addCount', inputs: {amount: 1}, outputs: {result: 0}}, AddCount)
-    cdcc.registerCommand(session.ctx, {id: 'testapp.weigh', inputs: {by: cdcc.float(1)}}, Weigh)
+    cdcc.defineCommand(session.ctx, {id: 'testapp.addCount', inputs: {amount: 1}, outputs: {result: 0}}, AddCount)
+    cdcc.defineCommand(session.ctx, {id: 'testapp.weigh', inputs: {by: cdcc.float(1)}}, Weigh)
   } catch (e) {
     session[Symbol.dispose]()
     throw e
@@ -214,7 +214,7 @@ export function installMethods(
    * `cdcc` (coredcc's TS layer) in scope. `{$float: n}` in inputs or outputs is a Float. */
   method('defineCommand', (id: string, spec: Omit<cdcc.CommandSpec, 'id'>, classSource: string) => {
     const Cls = new Function('cdcc', `return (${classSource})`)(cdcc) as new () => ScriptCommand
-    cdcc.registerCommand(
+    cdcc.defineCommand(
       ctx(),
       {...spec, id, inputs: specValues(spec.inputs), outputs: specValues(spec.outputs)},
       Cls
