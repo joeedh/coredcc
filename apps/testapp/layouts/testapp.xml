@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<!-- The test app's property panel: each kind of widget, conditions, and tools. -->
+<!-- The test app's property panel: each kind of widget, conditions, and commands. -->
 <layout>
   <panel label="Document" id="document">
     <prop path="label" id="label" label="Title"/>
@@ -28,7 +28,7 @@
       <prop path="other" id="other"/>
       <command invocation="testapp.weigh(by=2)" id="weigh" enabledIf="/enabled">Weigh</command>
     </tab>
-    <tab label="Tools" id="toolTab">
+    <tab label="Commands" id="commandTab">
       <command invocation="testapp.addCount(amount=3)" id="addThree"/>
       <commandOptions target="testapp.addCount" id="addOptions"/>
     </tab>

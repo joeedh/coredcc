@@ -84,7 +84,7 @@ BagResult invokeAt(Context &ctx, const string &prefix, const string &invocation)
   }
   if (prefix.size() == 0) {
     PrefixScope root(ctx, nullptr);
-    return invoke(ctx, invocation);
+    return script::invoke(ctx, invocation);
   }
   Result<Path> path = parsePath(view(prefix));
   if (!path.ok()) {
@@ -94,7 +94,7 @@ BagResult invokeAt(Context &ctx, const string &prefix, const string &invocation)
   if (Status s = resolve(ctx, Path()).status(); !s.ok()) {
     return failed<BagResult>(std::move(s));
   }
-  return invoke(ctx, invocation);
+  return script::invoke(ctx, invocation);
 }
 
 } // namespace coredcc::script

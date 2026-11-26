@@ -107,7 +107,7 @@ export function installPanelMethods(method: DefineMethod, ctx: () => Context): (
     current().rethrow()
     return true
   })
-  /* A tool's button, or a tab's. */
+  /* A command element's button, or a tab's. */
   method('panelClick', (id: string) => {
     const button = current().entry(id).button
     if (!button) throw new Error(`'${id}' has no button`)

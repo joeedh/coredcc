@@ -243,7 +243,7 @@ describe('TA2: the panel of a layout', () => {
     assert.match(html, /<input class="field" type="number" min="0" max="100"/)
   })
 
-  step('a tool runs under its prefix, and is undone under it', async () => {
+  step('a command runs under its prefix, and is undone under it', async () => {
     await value('set', 'activeItem', await value('get', 'items["Ball"]'))
     assert.equal((await node('weigh')).reason, undefined)
     await value('panelClick', 'weigh')
@@ -302,7 +302,7 @@ describe('TA2: the panel of a layout', () => {
     assert.deepEqual(await visible(), ['zero', 'wrong', 'custom', 'some', 'has', 'lots'])
   })
 
-  step("a tool's options are its last-used inputs", async () => {
+  step("a command's options are its last-used inputs", async () => {
     await value('panelClick', 'addThree')
     assert.equal(await value('get', 'count'), 3)
     await shows('count', 3)
@@ -426,9 +426,9 @@ describe('TA2: the panel of a layout', () => {
   })
 
   step('tabs, labels, separators and custom elements', async () => {
-    await value('panelClick', 'toolTab')
+    await value('panelClick', 'commandTab')
     const html = (await app!.client.evaluate(`document.getElementById('panel').innerHTML`)).value
-    assert.match(html, /class="node tab chosen" data-id="toolTab"/)
+    assert.match(html, /class="node tab chosen" data-id="commandTab"/)
     assert.match(html, /class="node tab" data-id="itemTab"/)
     assert.match(html, /<hr>/)
     assert.match(html, /<input class="slider" type="range" min="0" max="1"/)

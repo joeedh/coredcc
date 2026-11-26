@@ -50,7 +50,7 @@ class AddCount implements ScriptCommand {
   }
 }
 
-/** `testapp.weigh(by=1)`: adds `by` to the `weight` under the path prefix, as a panel's tool. */
+/** `testapp.weigh(by=1)`: adds `by` to the `weight` under the path prefix, as a panel's command element. */
 class Weigh implements ScriptCommand {
   before = 0
   exec(ctx: Context) {

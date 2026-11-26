@@ -437,7 +437,7 @@ void testSink()
   /* Behind it. */
   s.element(2, 9);
   s.triangle(at + double3(-1, -1, -2), at + double3(1, -1, -2), at + double3(0, 1, -2));
-  test_assert(s.best().element == 8 && s.occluder().depth > 11.0);
+  test_assert(s.best().element == 8 && s.occluder().viewDistance > 11.0);
   s.element(0, 10);
   s.sphere(at, pixel);
   test_assert(s.best().element == 10 && s.best().covers());

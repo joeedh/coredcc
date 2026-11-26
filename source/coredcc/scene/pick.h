@@ -304,15 +304,15 @@ struct PickCandidate {
   int32_t dimension = 2;
 };
 
-/** The frontmost surface that covers the cursor, and the depth from which on things are
- * behind it. */
+/** The frontmost surface that covers the cursor (its viewDistance), and the view distance
+ * from which on things are behind it. */
 struct Occluder {
-  double depth = (std::numeric_limits<double>::infinity)();
+  double viewDistance = (std::numeric_limits<double>::infinity)();
   double behind = (std::numeric_limits<double>::infinity)();
 
   void include(const Occluder &b)
   {
-    if (b.depth < depth) {
+    if (b.viewDistance < viewDistance) {
       *this = b;
     }
   }
@@ -323,9 +323,9 @@ struct Occluder {
  * maxHits:
  *
  * 1. Thin shapes that aren't behind the occluder: by distance, then the dimension, then
- * the depth.
- * 2. What covers the cursor, by depth.
- * 3. The rest, by distance, then the depth.
+ * the view distance.
+ * 2. What covers the cursor, by view distance.
+ * 3. The rest, by distance, then the view distance.
  *
  * Then by place; equals stay in their order.
  */

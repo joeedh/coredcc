@@ -71,7 +71,7 @@ void testRoundTrip()
   DrawListReader r;
   test_assert(r.read(d.bytes()).ok());
   test_assert(r.origin()[0] == 10 && r.origin()[2] == 30);
-  const auto &it = r.items();
+  const auto &it = r.records();
   test_assert(it.size() == 9);
   const DrawRecordKind kinds[9] = {DrawRecordKind::Lines,
                                    DrawRecordKind::Points,
@@ -128,7 +128,8 @@ void testPrecision()
     test_assert(r.read(d.bytes()).ok());
     for (int i = 0; i < 64; i++) {
       for (int a = 0; a < 3; a++) {
-        test_assert(r.items()[0].vertex(uint32_t(i), a) == float(pts[i][a] - origin[a]));
+        test_assert(r.records()[0].vertex(uint32_t(i), a) ==
+                    float(pts[i][a] - origin[a]));
       }
     }
     /* A shape far away keeps its translation exactly. */
@@ -136,7 +137,7 @@ void testPrecision()
     test_assert(d.shape(style(), ShapeKind::Cube, translation(offset + 0.25, 0, 0)).ok());
     test_assert(d.end().ok());
     test_assert(r.read(d.bytes()).ok());
-    test_assert(r.items()[0].matrix()[3][0] == (offset + 0.25) - origin[0]);
+    test_assert(r.records()[0].matrix()[3][0] == (offset + 0.25) - origin[0]);
   }
 }
 
@@ -236,7 +237,7 @@ void testFuzz()
     if (r.read(b).ok()) {
       accepted++;
       /* Whatever it accepted is consistent: items inside the bytes. */
-      for (const DrawRecord &item : r.items()) {
+      for (const DrawRecord &item : r.records()) {
         test_assert(item.offset + DrawList::kRecordHeaderBytes + item.payloadBytes <=
                     b.size());
       }
@@ -254,10 +255,10 @@ void testRules()
   fill(d, double3(1, 2, 3));
   const std::vector<uint8_t> good(d.bytes().begin(), d.bytes().end());
   DrawListReader r;
-  test_assert(r.read(good).ok() && r.items().size() == 9);
+  test_assert(r.read(good).ok() && r.records().size() == 9);
   uint32_t at[9];
   for (int i = 0; i < 9; i++) {
-    at[i] = r.items()[i].offset + uint32_t(DrawList::kRecordHeaderBytes); /* payloads */
+    at[i] = r.records()[i].offset + uint32_t(DrawList::kRecordHeaderBytes); /* payloads */
   }
   const auto refused = [&](uint64_t offset, const void *value, size_t n, const char *why) {
     std::vector<uint8_t> b = good;

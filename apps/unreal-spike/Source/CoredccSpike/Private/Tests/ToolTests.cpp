@@ -211,7 +211,7 @@ bool FCoredccS8::RunTest(const FString&)
 	int32 Shapes = 0, LineSegments = 0, Points = 0;
 	double3 Base, Tip;
 	bool bFound = false;
-	for (const DrawRecord& It : Reader.items())
+	for (const DrawRecord& It : Reader.records())
 	{
 		Shapes += It.kind == DrawRecordKind::Shape || It.kind == DrawRecordKind::Triangles;
 		LineSegments += It.kind == DrawRecordKind::Lines ? int32(It.aux / 2) : 0;

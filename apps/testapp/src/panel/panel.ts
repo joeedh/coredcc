@@ -20,7 +20,7 @@ export interface NodeState {
   value?: unknown
   /** Why a prop has no value, or why the last write or run failed. */
   error?: string
-  /** Why a tool can't run now. */
+  /** Why a command element can't run now. */
   reason?: string
   children?: NodeState[]
 }
@@ -38,7 +38,7 @@ interface Entry {
   /** Its visibleIf, and whether what its path names is there. */
   wanted: boolean
   there: boolean
-  /** Why a tool can't run now. */
+  /** Why a command element can't run now. */
   reason?: string
   /** Its button's title otherwise. */
   title?: string
@@ -128,7 +128,7 @@ export class Panel {
     this.checkCommands()
   }
 
-  /* What a tool's canRun looks at isn't known, so each is asked. */
+  /* What a command's canRun looks at isn't known, so each is asked. */
   private checkCommands() {
     for (const {index, reason} of this.checks.changed()) {
       const e = this.commandEntries[index]

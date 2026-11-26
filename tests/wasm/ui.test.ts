@@ -28,19 +28,19 @@ describe('coredcc wasm-st UI', () => {
     assert.equal(backend.foreignCount(), handlesBefore)
   })
 
-  test('layouts: nodes, issues, and a tool under a prefix', () => {
+  test('layouts: nodes, issues, and a command under a prefix', () => {
     const xml = `<layout path="items['Cube']">
   <prop path="weight" enabledIf="!/enabled"/>
   <command invocation="ts.weigh(by=2)">Weigh</command>
 </layout>`
     const root = cdcc.parseLayout(xml)
     assert.equal(root.kind, 'layout')
-    const [prop, tool] = root.children!
+    const [prop, command] = root.children!
     assert.equal(prop.effectivePath, '/items["Cube"].weight')
     assert.equal(cdcc.get(ctx, prop.effectivePath), 1)
     assert.deepEqual(prop.enabledIf, {path: '/enabled', not: true})
-    assert.equal(tool.label, 'Weigh')
-    assert.equal(tool.prefix, '/items["Cube"]')
+    assert.equal(command.label, 'Weigh')
+    assert.equal(command.prefix, '/items["Cube"]')
     assert.throws(() => cdcc.parseLayout(`<layout>
 <x/></layout>`), fails(StatusCode.InvalidArgument, /layout 2:1/))
 
@@ -60,7 +60,7 @@ describe('coredcc wasm-st UI', () => {
     }
     cdcc.defineCommand(ctx, {id: 'ts.weigh', inputs: {by: 1}}, Weigh)
     assert.deepEqual(cdcc.validateLayout(ctx, xml), [])
-    cdcc.invokeAt(ctx, tool.prefix!, tool.invocation!)
+    cdcc.invokeAt(ctx, command.prefix!, command.invocation!)
     assert.equal(cdcc.get(ctx, 'items["Cube"].weight'), 3)
     cdcc.undo(ctx)
     assert.equal(cdcc.get(ctx, 'items["Cube"].weight'), 1)
@@ -77,8 +77,8 @@ describe('coredcc wasm-st UI', () => {
     assert.equal(cdcc.get(ctx, 'items["Sphere"].weight'), 1)
     assert.equal(cdcc.get(ctx, 'items["Cube"].weight'), 50)
     cdcc.write(ctx, 'items["Sphere"].name', 'Ball')
-    assert.throws(() => cdcc.invokeAt(ctx, 'items["Cone"]', tool.invocation!), ScriptError)
-    assert.throws(() => cdcc.invokeAt(ctx, '', tool.invocation!), fails(StatusCode.NotFound, /weight/))
+    assert.throws(() => cdcc.invokeAt(ctx, 'items["Cone"]', command.invocation!), ScriptError)
+    assert.throws(() => cdcc.invokeAt(ctx, '', command.invocation!), fails(StatusCode.NotFound, /weight/))
   })
 
   test('a dynamic def: its keys, and watching what meta gives', () => {
@@ -399,30 +399,30 @@ describe('coredcc wasm-st UI', () => {
     assert.deepEqual(plain.run('ts.weigh', {}, at), {weight: 5})
   })
 
-  test('canInvoke, and of many tools at once', () => {
+  test('canInvoke, and of many invocations at once', () => {
     weigh()
     assert.equal(cdcc.canInvoke(ctx, '/items["Cube"]', 'ts.weigh(by=9)'), undefined)
     assert.equal(cdcc.canInvoke(ctx, '/items["Cube"]', 'ts.weigh(by=10)'), '11 is too heavy')
     assert.match(cdcc.canInvoke(ctx, '', 'ts.weigh(')!, /./)
     assert.equal(cdcc.get(ctx, cube), 1)
 
-    const tools = new cdcc.InvocationChecks(ctx)
-    assert.equal(tools.add('/items["Cube"]', 'ts.weigh(by=5)'), 0)
-    assert.equal(tools.add('/items["Ball"]', 'ts.weigh(by=50)'), 1)
-    assert.throws(() => tools.add('a..b', 'ts.weigh'), ScriptError)
-    assert.throws(() => tools.add('', 'ts weigh'), ScriptError)
-    assert.equal(tools.add('', 'ts.nope'), 2)
-    const first = tools.changed()
+    const checks = new cdcc.InvocationChecks(ctx)
+    assert.equal(checks.add('/items["Cube"]', 'ts.weigh(by=5)'), 0)
+    assert.equal(checks.add('/items["Ball"]', 'ts.weigh(by=50)'), 1)
+    assert.throws(() => checks.add('a..b', 'ts.weigh'), ScriptError)
+    assert.throws(() => checks.add('', 'ts weigh'), ScriptError)
+    assert.equal(checks.add('', 'ts.nope'), 2)
+    const first = checks.changed()
     assert.deepEqual(first.slice(0, 2), [{index: 0}, {index: 1, reason: '51 is too heavy'}])
     assert.match(first[2].reason!, /no command/)
-    assert.deepEqual(tools.changed(), [])
+    assert.deepEqual(checks.changed(), [])
     cdcc.set(ctx, cube, 6)
-    assert.deepEqual(tools.changed(), [{index: 0, reason: '11 is too heavy'}])
+    assert.deepEqual(checks.changed(), [{index: 0, reason: '11 is too heavy'}])
     cdcc.undo(ctx)
-    assert.deepEqual(tools.changed(), [{index: 0}])
-    tools[Symbol.dispose]()
-    tools[Symbol.dispose]()
-    assert.throws(() => tools.changed(), /disposed/)
+    assert.deepEqual(checks.changed(), [{index: 0}])
+    checks[Symbol.dispose]()
+    checks[Symbol.dispose]()
+    assert.throws(() => checks.changed(), /disposed/)
     const other = open()
     const late = new cdcc.InvocationChecks(other.ctx)
     other[Symbol.dispose]()

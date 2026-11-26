@@ -264,14 +264,14 @@ public:
   {
     return origin_;
   }
-  const litestl::util::Vector<DrawRecord> &items() const
+  const litestl::util::Vector<DrawRecord> &records() const
   {
-    return items_;
+    return records_;
   }
 
 private:
   double3 origin_;
-  litestl::util::Vector<DrawRecord> items_;
+  litestl::util::Vector<DrawRecord> records_;
 };
 
 } // namespace coredcc

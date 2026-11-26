@@ -7,7 +7,7 @@
  *   so duplicating a scene doesn't make a second driver.
  * - The commands edit the document's list (`DriverList::find`), and make one when there
  *   is none. An append can bring a second: every list is read, a graph that two lists
- *   name counts once, and removeGraph takes it out of every list.
+ *   name counts once, and core.driver.remove takes it out of every list.
  * - A duplicate of a list is empty, so copying a list with its graphs drives nothing
  * twice.
  * - The cells are OptStrong: a listed graph is kept and saved. The block is a GC root.

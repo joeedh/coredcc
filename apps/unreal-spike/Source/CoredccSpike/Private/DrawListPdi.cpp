@@ -150,7 +150,7 @@ FDrawListStats DrawDrawListPdi(const coredcc::DrawList& List, FPrimitiveDrawInte
 	const coredcc::double3& O = Reader.origin();
 	const FVector Origin(O[0], O[1], O[2]);
 	std::vector<M4> Stack{Translation(O[0], O[1], O[2])};
-	for (const DrawRecord& It : Reader.items())
+	for (const DrawRecord& It : Reader.records())
 	{
 		const M4& Cur = Stack.back();
 		const uint8 Group = GroupOf(It.style.depthMode);
@@ -218,7 +218,7 @@ int32 DrawDrawListHud(const coredcc::DrawList& List, FCanvas* Canvas)
 	DrawListReader Reader;
 	if (!Canvas || !Reader.read(List.bytes()).ok()) return 0;
 	int32 Drawn = 0;
-	for (const DrawRecord& It : Reader.items())
+	for (const DrawRecord& It : Reader.records())
 	{
 		const FLinearColor Color = ColorOf(It.style.color);
 		auto Line = [&](double X0, double Y0, double X1, double Y1) {

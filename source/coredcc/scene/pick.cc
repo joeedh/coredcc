@@ -265,7 +265,7 @@ void PickSink::take(const Found &f)
   hit.backFacing = hit.normal.dot(query_.worldDir_) > 0.0;
   if (query_.options_.occlusion && !hit.thin && hit.covers()) {
     detail::Occluder o;
-    o.depth = hit.viewDistance;
+    o.viewDistance = hit.viewDistance;
     o.behind =
         hit.viewDistance + query_.options_.slope * query_.cursor_->reachAt(hit.point);
     occluder_.include(o);

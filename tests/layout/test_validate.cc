@@ -261,40 +261,40 @@ static void test_conditions()
                     LayoutSeverity::Warning));
 }
 
-static void test_tools()
+static void test_commands()
 {
   LayoutWorld w;
-  const auto tool = [](const std::string &args) {
+  const auto command = [](const std::string &args) {
     return "<command invocation=\"test.take(" + args + ")\"/>";
   };
   test_assert(
       w.fine("<command invocation='test.add'/><commandOptions target='test.add'/>"));
-  test_assert(w.fine(tool("amount=3 offset=(1,2,3) mode=FAST")));
+  test_assert(w.fine(command("amount=3 offset=(1,2,3) mode=FAST")));
   test_assert(w.one("<command invocation='test.ad'/>",
                     "<command> invocation: no command 'test.ad'",
                     "invocation="));
   test_assert(w.suggestion("<command invocation='test.ad'/>") == "test.add");
   /* A pointer's path from the root, whatever is around it. */
-  test_assert(w.fine(tool("any='/objects[0]'"), "tool"));
-  test_assert(w.one(tool("brush='/tool.brushes[0]'"),
+  test_assert(w.fine(command("any='/objects[0]'"), "tool"));
+  test_assert(w.one(command("brush='/tool.brushes[0]'"),
                     std::string("<layout> path: ") + kUnknown,
                     "path=",
                     LayoutSeverity::Warning,
                     "gone"));
-  test_assert(w.one(tool("base='/objcts[0]'"),
+  test_assert(w.one(command("base='/objcts[0]'"),
                     std::string("<command> invocation: ") +
                         "no member 'objcts' in LayoutRoot (at offset 1)",
                     "invocation=",
                     LayoutSeverity::Error,
                     "tool"));
   /* Also where what is around it names nothing, which is another issue. */
-  test_assert(
-      w.issues("<layout><row path='nope'>" + tool("any='/objcts[0]'") + "</row></layout>")
-          .size() == 2);
-  test_assert(
-      w.issues("<layout><row path='nope'>" + tool("any='objcts[0]'") + "</row></layout>")
-          .size() == 1);
-  /* A tool's own path is the prefix of its arguments. */
+  test_assert(w.issues("<layout><row path='nope'>" + command("any='/objcts[0]'") +
+                       "</row></layout>")
+                  .size() == 2);
+  test_assert(w.issues("<layout><row path='nope'>" + command("any='objcts[0]'") +
+                       "</row></layout>")
+                  .size() == 1);
+  /* A command's own path is the prefix of its arguments. */
   test_assert(
       w.fine("<command path='tool' invocation=\"test.take(brush='brushes[0]')\"/>"));
   test_assert(w.one("<command path='tool' invocation=\"test.take(brush='objects[0]')\"/>",
@@ -370,36 +370,36 @@ static void test_tools()
   test_assert(w.one("<commandOptions target='test.ad'/>",
                     "<commandOptions> target: no command 'test.ad'",
                     "target="));
-  test_assert(w.one(tool("amout=3"),
+  test_assert(w.one(command("amout=3"),
                     "<command> invocation: test.take has no input 'amout' (at offset "
                     "10)",
                     "invocation="));
-  test_assert(w.suggestion(tool("amout=3")) == "amount");
-  test_assert(w.one(tool("offset=(1,2)"),
+  test_assert(w.suggestion(command("amout=3")) == "amount");
+  test_assert(w.one(command("offset=(1,2)"),
                     "<command> invocation: offset: expected a tuple of 3 numbers",
                     "invocation="));
-  test_assert(w.issues("<layout>" + tool("mode=OTHER") + "</layout>").size() == 1);
-  test_assert(
-      w.issues("<layout>" + tool("amount='x' mode=OTHER zzz=1") + "</layout>").size() ==
-      3);
+  test_assert(w.issues("<layout>" + command("mode=OTHER") + "</layout>").size() == 1);
+  test_assert(w.issues("<layout>" + command("amount='x' mode=OTHER zzz=1") + "</layout>")
+                  .size() == 3);
   /* Pointers: under the prefix, and of the input's struct. */
-  test_assert(w.fine(tool("any='tool' brush='tool.activeBrush' base='objects[0].data'")));
-  test_assert(w.fine(tool("brush='tool.brushes[0]' any='' base=' '")));
-  test_assert(w.fine(tool("base='data' any='mod'"), "objects.active"));
-  test_assert(w.one(tool("any='tool.strength'"),
+  test_assert(
+      w.fine(command("any='tool' brush='tool.activeBrush' base='objects[0].data'")));
+  test_assert(w.fine(command("brush='tool.brushes[0]' any='' base=' '")));
+  test_assert(w.fine(command("base='data' any='mod'"), "objects.active"));
+  test_assert(w.one(command("any='tool.strength'"),
                     "<command> invocation: 'tool.strength' isn't a struct",
                     "invocation="));
-  test_assert(w.one(tool("brush='tool'"),
+  test_assert(w.one(command("brush='tool'"),
                     "<command> invocation: brush: 'tool' isn't a Brush",
                     "invocation="));
-  test_assert(w.one(tool("any='data'"),
+  test_assert(w.one(command("any='data'"),
                     "<command> invocation: no member 'data' in LayoutRoot (at offset 0)",
                     "invocation="));
-  test_assert(w.one(tool("brush='gone'"),
+  test_assert(w.one(command("brush='gone'"),
                     std::string("<command> invocation: ") + kUnknown,
                     "invocation=",
                     LayoutSeverity::Warning));
-  test_assert(w.fine(tool("any='gone'")));
+  test_assert(w.fine(command("any='gone'")));
   StableRef ref;
   ref.owner = OwnerKey::ofBlock(w.s.w.objectId(0));
   ref.type = kMesh;
@@ -408,18 +408,20 @@ static void test_tools()
     text += c == '"' ? "&quot;" : std::string(1, c);
   }
   const std::string quoted = "'" + text + "'";
-  test_assert(w.fine(tool("any=" + quoted + " base=" + quoted)));
-  test_assert(w.issues("<layout>" + tool("brush=" + quoted) + "</layout>").size() == 1);
-  test_assert(w.issues("<layout>" + tool("any='\nnonsense'") + "</layout>").size() == 1);
+  test_assert(w.fine(command("any=" + quoted + " base=" + quoted)));
+  test_assert(w.issues("<layout>" + command("brush=" + quoted) + "</layout>").size() ==
+              1);
+  test_assert(w.issues("<layout>" + command("any='\nnonsense'") + "</layout>").size() ==
+              1);
   for (const char *value : {"3", "tool", "('tool','tool')", "('tool')", "true"}) {
     Vector<LayoutIssue> found =
-        w.issues("<layout>" + tool(std::string("any=") + value) + "</layout>");
+        w.issues("<layout>" + command(std::string("any=") + value) + "</layout>");
     test_assert(found.size() == 1 &&
                 strstr(found[0].status.message(),
                        value[0] == '(' ? "any: expected a single value, not a tuple"
                                        : "any: expected a quoted reference or path"));
   }
-  test_assert(w.issues("<layout>" + tool("any='a..b'") + "</layout>").size() == 1);
+  test_assert(w.issues("<layout>" + command("any='a..b'") + "</layout>").size() == 1);
 }
 
 /* What the validator accepts runs. */
@@ -539,7 +541,7 @@ int main()
   test_props();
   test_prefixes();
   test_conditions();
-  test_tools();
+  test_commands();
   test_runs();
   test_root();
   test_many();

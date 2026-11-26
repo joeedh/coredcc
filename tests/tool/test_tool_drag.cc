@@ -287,8 +287,8 @@ void testDraw()
   DrawListReader rd;
   must(rd.read(out.bytes()));
   /* Three arrows, three planes and the centre; ids of gizmo 1. */
-  test_assert(rd.items().size() == 7);
-  for (const DrawRecord &it : rd.items()) {
+  test_assert(rd.records().size() == 7);
+  for (const DrawRecord &it : rd.records()) {
     test_assert(it.style.id / ToolManager::kIdStride == 1);
   }
   /* During a drag only the dragged part is drawn, by the modal, where it is now. */
@@ -296,8 +296,8 @@ void testDraw()
   must(d.send(EventType::PointerDown, press.x, press.y).status());
   must(d.tm.draw(*d.ctx, d.view, out));
   must(rd.read(out.bytes()));
-  test_assert(rd.items().size() == 1 &&
-              rd.items()[0].style.id == ToolManager::kIdStride + 2);
+  test_assert(rd.records().size() == 1 &&
+              rd.records()[0].style.id == ToolManager::kIdStride + 2);
   must(d.tm.cancel(*d.ctx));
 }
 

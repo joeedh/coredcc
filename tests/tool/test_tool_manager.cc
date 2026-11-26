@@ -474,9 +474,9 @@ static void test_gizmo()
   test_assert(s.tm.draw(s.ctx, s.view, out).ok());
   DrawListReader rd;
   test_assert(rd.read(out.bytes()).ok());
-  test_assert(rd.items().size() == 2); /* the gizmo's disc, the modal's line */
-  test_assert(rd.items()[0].style.id == ToolManager::kIdStride + 3);
-  test_assert(rd.items()[0].style.color == 0xff00ffffu); /* active */
+  test_assert(rd.records().size() == 2); /* the gizmo's disc, the modal's line */
+  test_assert(rd.records()[0].style.id == ToolManager::kIdStride + 3);
+  test_assert(rd.records()[0].style.color == 0xff00ffffu); /* active */
   /* The camera's position, from the view matrix's inverse. */
   test_assert(std::abs(rd.origin()[0] - 1.0) < 1e-12 &&
               std::abs(rd.origin()[1] - 2.0) < 1e-12 &&

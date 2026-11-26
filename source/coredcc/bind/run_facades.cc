@@ -152,10 +152,10 @@ BagResult runAt(Context &ctx,
                 const RunInputs &inputs,
                 bool lastUsed)
 {
-  if (Status s = slotGate(ctx, "run", {"exec"}); !s.ok()) {
+  if (Status s = slotGate(ctx, "runAt", {"exec"}); !s.ok()) {
     return failed<BagResult>(std::move(s));
   }
-  if (Status s = executorOf(ctx, "run").status(); !s.ok()) {
+  if (Status s = executorOf(ctx, "runAt").status(); !s.ok()) {
     return failed<BagResult>(std::move(s));
   }
   Result<PropertyBag> r = under(ctx, prefix, [&]() -> Result<PropertyBag> {
@@ -171,8 +171,8 @@ Status canRunAt(Context &ctx,
                 const RunInputs &inputs,
                 bool lastUsed)
 {
-  CDCC_TRY(slotGate(ctx, "canRun", {}));
-  CDCC_TRY(executorOf(ctx, "canRun").status());
+  CDCC_TRY(slotGate(ctx, "canRunAt", {}));
+  CDCC_TRY(executorOf(ctx, "canRunAt").status());
   return under(ctx, prefix, [&]() -> Status {
     Result<Prepared> p = prepare(ctx, id, inputs, lastUsed);
     return p.ok() ? ctx.executor()->canRun(ctx, *p->def, std::move(p->inputs))
@@ -182,7 +182,7 @@ Status canRunAt(Context &ctx,
 
 Status canInvokeAt(Context &ctx, const string &prefix, const string &invocation)
 {
-  CDCC_TRY(slotGate(ctx, "canInvoke", {}));
+  CDCC_TRY(slotGate(ctx, "canInvokeAt", {}));
   return under(ctx, prefix, [&]() -> Status { return canInvoke(ctx, view(invocation)); });
 }
 
@@ -214,7 +214,7 @@ IntResult invocationChecksAdd(const InvocationChecks &checks,
 
 StringResult invocationChecksRun(Context &ctx, const InvocationChecks &checks)
 {
-  if (Status s = slotGate(ctx, "canInvoke", {}); !s.ok()) {
+  if (Status s = slotGate(ctx, "invocationChecksRun", {}); !s.ok()) {
     return failed<StringResult>(std::move(s));
   }
   JsonWriter out;
@@ -250,8 +250,8 @@ Status beginInteractiveAt(Context &ctx,
                           const RunInputs &inputs,
                           bool lastUsed)
 {
-  CDCC_TRY(slotGate(ctx, "beginInteractive", {}));
-  CDCC_TRY(executorOf(ctx, "beginInteractive").status());
+  CDCC_TRY(slotGate(ctx, "beginInteractiveAt", {}));
+  CDCC_TRY(executorOf(ctx, "beginInteractiveAt").status());
   return under(ctx, prefix, [&]() -> Status {
     Result<Prepared> p = prepare(ctx, id, inputs, lastUsed);
     return p.ok() ? ctx.executor()->beginInteractive(ctx, *p->def, std::move(p->inputs))

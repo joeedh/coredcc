@@ -115,7 +115,7 @@ Status payloadOf(const DrawRecord &item, uint64_t at, uint64_t &need)
 
 Status DrawListReader::read(std::span<const uint8_t> bytes)
 {
-  items_.clear();
+  records_.clear();
   const uint8_t *b = bytes.data();
   const uint64_t size = bytes.size();
   if (size < uint64_t(DrawList::kHeaderBytes)) {
@@ -206,13 +206,13 @@ Status DrawListReader::read(std::span<const uint8_t> bytes)
     } else if (item.kind == DrawRecordKind::PopMatrix && --depth < 0) {
       return bad(at, "a pop without a push");
     }
-    items_.append(item);
+    records_.append(item);
     at += recordBytes;
   }
-  if (items_.size() != count) {
+  if (records_.size() != count) {
     return bad(8,
                "a record count of " + std::to_string(count) + " for " +
-                   std::to_string(items_.size()) + " records");
+                   std::to_string(records_.size()) + " records");
   }
   if (depth != 0) {
     return bad(size, std::to_string(depth) + " pushes without a pop");

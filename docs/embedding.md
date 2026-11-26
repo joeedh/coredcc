@@ -103,30 +103,35 @@ Unreal, coredcc is exactly one module, so they exist once.
   it accepts can still fail in a given document.
 - **`commandOptions` needs the last-used inputs at the root:** `LastUsedStore::addCollectionTo`, with its
   default name. Its members are at the JSON's `optionsPath`.
-- **A tool of an Interactive command** is a warning: the frontend begins it with `beginInteractive` under
-  the tool's prefix, and changes it with `updateInteractive`.
+- **A `command` element of an Interactive command** is a warning: the frontend begins the command with
+  `beginInteractive` under the element's prefix, and changes it with `updateInteractive`.
 - **`CollectionAccessor::staticItem`** lets it see the struct of one item by its key, for collections
   whose items have structs of their own.
 - **A node's own paths are relative to its parent's prefix;** a leading `/` is the Context's root.
   The paths that a Layout and its JSON give start with `/`, so a Context's own prefix doesn't change them.
-- **The JSON** (`parseLayout`, `parseLayout` in TS) has `version`, 1, at its root: fields are only added
-  under it. Each node has its `kind` and what was written, and the joined `effectivePath`, `prefix` (a
-  tool's, with its own `path`), `optionsPath` and condition paths, so a frontend joins nothing. `attrs` has the
-  host's `data-` attributes, and all of a `custom` node's.
+- **The JSON** (`layoutToJson` in C++, the `parseLayout` facade, and `parseLayout` in TS) has `version`, 1,
+  at its root: fields are only added under it. Each node has its `kind` and what was written, and the joined
+  `effectivePath`, `prefix` (a `command` element's, with its own `path`), `optionsPath` and condition paths,
+  so a frontend joins nothing. `attrs` has the host's `data-` attributes, and all of a `custom` node's.
+- **The kinds `command` and `commandOptions` were `tool` and `toolOptions`** until the naming pass
+  (2026-11-26). The version stayed 1, because no frontend outside the tree read them.
 - **Versions.** `<layout version="2">` in a coredcc that knows 1: elements and attributes that it doesn't
   know are skipped, and `validateLayout` warns of each. Without a version, or with 1, they are errors.
   `list`, `menu`, `include` and `slot` are reserved, also inside a `custom` node.
+- **`<tool>` and `<toolOptions>` are errors** that name `<command>` and `<commandOptions>`, in a file of
+  any version and also inside a `custom` node, where another unknown name would be the custom node's own
+  child.
 - **Conditions** are of a Bool, an enum's key, a pointer (it points to something), a collection's
   length (it isn't 0) or a String (it isn't empty). One without a value is false, also if it is
   negated. `conditionHolds` is the rule, in C++ and in TS.
 - **What isn't there.** A container whose own `path` names nothing now is hidden (`containerIsThere`),
-  unless `validateLayout` has an Error about it. A prop shows why it has no value, and a tool is
-  disabled when `canInvoke` gives a reason.
+  unless `validateLayout` has an Error about it. A prop shows why it has no value, and a `command` element
+  is disabled when `canInvoke` gives a reason.
 - **`canInvoke` and `InvocationChecks`** ask each command's `canRun`, so keep those cheap. An open
-  interactive command, or a stray error, is a reason for every tool.
+  interactive command, or a stray error, is a reason for every `command` element.
 - **The active item as a prop** is the collection's own pointer member (`activeItem`), not
   `items.active`, which can't be null.
-- **`invokeAt` runs a tool under its prefix,** which is resolved when it starts: undo and redo run where
+- **`invokeAt` runs a `command` element's invocation under its prefix,** which is resolved when it starts: undo and redo run where
   it ran, also if the prefix's path leads elsewhere by then. The command's own paths are under the prefix
   too, unless they start with `/`.
 - **One `beginGesture` for each drag,** and `cancelGesture` for Escape. It takes back the gesture's sets

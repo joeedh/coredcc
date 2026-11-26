@@ -17,7 +17,7 @@ namespace coredcc {
  * The objects within a radius of a device pixel: the best hit of each, in the order that
  * detail::rankPicks describes. Thin shapes (points, segments and solids that are narrow
  * on the screen) come first, unless they are behind a surface under the pixel; then what
- * covers the pixel, by depth; then the rest.
+ * covers the pixel, by view distance; then the rest.
  *
  * - The answer is for the last evaluateScene, which is what was drawn: its matrices and
  * bounds, and no object that came later. FailedPrecondition before the first one.

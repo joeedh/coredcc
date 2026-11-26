@@ -22,7 +22,7 @@ import {
 } from './core.ts'
 
 export interface RunOptions {
-  /** A path prefix, as a layout's tool has (see invokeAt). Without one, none. */
+  /** A path prefix, as a layout's `command` element has (see invokeAt). Without one, none. */
   prefix?: string
   /** Inputs that aren't given have their last-used values: by default. */
   lastUsed?: boolean

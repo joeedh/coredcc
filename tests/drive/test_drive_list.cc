@@ -44,8 +44,8 @@ void testList()
   must(d.lib->validate());
 }
 
-/* addGraph makes the list, and undo removes it again; removeGraph takes the graph out of
- * every list, and undo brings back each cell at its place. */
+/* core.driver.add makes the list, and undo removes it again; core.driver.remove takes the
+ * graph out of every list, and undo brings back each cell at its place. */
 void testCommands()
 {
   DriveDoc d;
