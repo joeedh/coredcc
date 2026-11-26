@@ -149,14 +149,15 @@ Status pickScene(Context &ctx,
 Status pickRegion(Context &ctx,
                   BlockHandle h,
                   const ViewRegion &region,
-                  int32_t domain,
+                  ElementDomain domain,
                   const PickFilter &filter,
                   Vector<RegionHit> &hits)
 {
   hits.clear();
   detail::SceneQuery scope(ctx, h, "pickRegion");
   CDCC_TRY(scope.status());
-  if (domain > 31) {
+  const int32_t d = int32_t(domain);
+  if (d > 31) {
     return Status::error(StatusCode::InvalidArgument, "pickRegion: no such domain");
   }
   const Scene &scene = scope.scene();
@@ -174,22 +175,23 @@ Status pickRegion(Context &ctx,
     if (!s || !scene.evaluated(hit.object, e)) {
       continue;
     }
-    bool take = domain < 0 && !s.hasElementsInRegion();
+    bool take = d < 0 && !s.hasElementsInRegion();
     if (s.hasElementsInRegion()) {
       const RegionQuery query(region, e.dataWorld());
       uint32_t domains = s.domains();
       if (scope.thrown()) {
         continue;
       }
-      domains &= domain < 0 ? ~0u : 1u << domain;
+      domains &= d < 0 ? ~0u : 1u << d;
       /* One is enough if objects are asked for. */
       for (; domains != 0 && !take; domains &= domains - 1) {
-        Vector<int32_t> elements = s.elementsInRegion(query, std::countr_zero(domains));
+        Vector<int32_t> elements =
+            s.elementsInRegion(query, ElementDomain(std::countr_zero(domains)));
         if (scope.thrown()) {
           break;
         }
         take = elements.size() > 0;
-        if (domain >= 0) {
+        if (d >= 0) {
           hit.elements = std::move(elements);
         }
       }

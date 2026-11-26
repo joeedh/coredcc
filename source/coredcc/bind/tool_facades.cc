@@ -214,7 +214,7 @@ Status registerForeignTool(Context &ctx,
   auto attempt = [&]() -> Status {
     CDCC_TRY(slotGate(ctx, "registerForeignTool", {}));
     const std::string id = def.name().c_str();
-    if (id.rfind("core.", 0) == 0) {
+    if (!detail::reservedNamespace(id, {"core"}).empty()) {
       return error(StatusCode::InvalidArgument,
                    "tool '" + id + "': the 'core.' namespace is reserved for coredcc");
     }
@@ -263,7 +263,7 @@ Status registerForeignStrokeBrush(Context &ctx,
   auto attempt = [&]() -> Status {
     CDCC_TRY(slotGate(ctx, "registerForeignStrokeBrush", {}));
     const std::string id = name.c_str();
-    if (id.rfind("core.", 0) == 0) {
+    if (!detail::reservedNamespace(id, {"core"}).empty()) {
       return error(StatusCode::InvalidArgument,
                    "stroke brush '" + id + "': the 'core.' namespace is reserved for coredcc");
     }

@@ -99,7 +99,8 @@ Placement computePlacement(Context &ctx, PivotMode pivot, Orientation orientatio
   return out;
 }
 
-Placement computeElementPlacement(Context &ctx, int32_t domain, Orientation orientation)
+Placement
+computeElementPlacement(Context &ctx, ElementDomain domain, Orientation orientation)
 {
   Placement out;
   Library *lib = ctx.library();

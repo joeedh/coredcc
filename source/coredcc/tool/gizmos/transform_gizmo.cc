@@ -110,7 +110,7 @@ TransformSettings TransformSettings::read(Runtime &rt, const ToolDef &def)
   s.scaleStep = settingFloat(st, def, "scaleStep", s.scaleStep);
   s.size = settingFloat(st, def, "size", s.size);
   s.elements = settingEnum(st, def, "target") == 1;
-  s.domain = int32_t(settingEnum(st, def, "domain"));
+  s.domain = ElementDomain(settingEnum(st, def, "domain"));
   const PropValue *sym = st.get(def, "symmetry");
   s.symmetry = sym && sym->tryBool().value_or(false);
   return s;
@@ -403,7 +403,7 @@ Status TransformGizmo::beginDrag(
   }
   PropertyBag inputs = def->newInputs();
   if (settings.elements) {
-    CDCC_TRY(inputs.set("domain", PropValue::ofEnum(settings.domain)));
+    CDCC_TRY(inputs.set("domain", PropValue::ofEnum(int64_t(settings.domain))));
     CDCC_TRY(inputs.set("symmetry", PropValue::ofBool(settings.symmetry)));
   }
   CDCC_TRY(ex->beginInteractive(ctx, *def, std::move(inputs)));

@@ -7,6 +7,7 @@
 #include "coredcc/base/status.h"
 #include "coredcc/bvh/box.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/scene/element_domain.h"
 #include "coredcc/scene/pick_filter.h"
 
 #include "litestl/math/matrix.h"
@@ -23,8 +24,8 @@ namespace coredcc {
 using litestl::math::mat4d;
 
 struct NearestOptions {
-  /** An ElementDomain. Objects that don't have it aren't asked. */
-  int32_t domain = 0;
+  /** Objects that don't have it aren't asked. */
+  ElementDomain domain = ElementDomain::Point;
   /** The most hits, of all objects together, at least 1. */
   int32_t maxCount = 1;
 };
@@ -51,7 +52,7 @@ public:
   {
     return radius_;
   }
-  int32_t domain() const
+  ElementDomain domain() const
   {
     return options_.domain;
   }
@@ -82,7 +83,7 @@ private:
 
 struct NearHit {
   BlockHandle object;
-  int32_t domain = -1;
+  ElementDomain domain = ElementDomain::None;
   int32_t element = -1;
   /** In the world. */
   double distance = 0.0;

@@ -223,7 +223,7 @@ void testBounds()
                   edge = view.project(double3(1, 0, 1));
   Vector<PickHit> hits = d.picks(view, mid.x, mid.y, within(0.0));
   test_assert(hits.size() == 1 && hits[0].object == a && hits[0].covers());
-  test_assert(hits[0].element == -1 && hits[0].domain == -1);
+  test_assert(hits[0].element == -1 && hits[0].domain == ElementDomain::None);
   test_assert(std::fabs(hits[0].viewDistance - 8.5) < 1e-9 &&
               std::fabs(hits[0].point[2] - 1.0) < 1e-9);
   /* In the object's space. */
@@ -362,7 +362,7 @@ void testOrder()
   test_assert(best[0].object == many && best[0].element == 2);
   best = d.picks(view, p.x, p.y, within(10.0, false));
   test_assert(best[0].object == many && best[0].element == 1);
-  test_assert(best[0].domain == int32_t(ElementDomain::Edge));
+  test_assert(best[0].domain == ElementDomain::Edge);
   test_assert(std::fabs(best[0].point[2] - 3.1) < 1e-6);
 }
 
@@ -426,26 +426,26 @@ void testSink()
   }
   PickSink s(q);
   const double pixel = view.pixelSizeAt(at);
-  s.element(0, 7);
+  s.element(ElementDomain(0), 7);
   s.point(at + double3(0.0, 3.0 * pixel, 0.0));
   test_assert(s.any() && std::fabs(s.best().distance - 3.0) < 0.01 &&
               s.best().element == 7);
-  s.element(1, 8);
+  s.element(ElementDomain(1), 8);
   s.segment(at + double3(-1.0, 2.0 * pixel, 0.0), at + double3(1.0, 2.0 * pixel, 0.0));
   test_assert(std::fabs(s.best().distance - 2.0) < 0.01 && s.best().element == 8);
   test_assert(std::fabs(s.best().u - 0.5) < 1e-3);
   /* Behind it. */
-  s.element(2, 9);
+  s.element(ElementDomain(2), 9);
   s.triangle(at + double3(-1, -1, -2), at + double3(1, -1, -2), at + double3(0, 1, -2));
   test_assert(s.best().element == 8 && s.occluder().viewDistance > 11.0);
-  s.element(0, 10);
+  s.element(ElementDomain(0), 10);
   s.sphere(at, pixel);
   test_assert(s.best().element == 10 && s.best().covers());
-  s.element(1, 11);
+  s.element(ElementDomain(1), 11);
   s.capsule(at + double3(0, 0, -1), at + double3(0, 0, 2), pixel);
   test_assert(s.best().element == 10);
   /* In front of everything. */
-  s.element(2, 12);
+  s.element(ElementDomain(2), 12);
   Box3d box;
   box.include(0.0, -1.0, 3.0);
   box.include(1.0, 1.0, 4.0);
@@ -455,7 +455,7 @@ void testSink()
   test_assert(s.best().instance == 5 && s.best().normal[2] == 1.0 &&
               !s.best().backFacing);
   /* The first of equals, and no empty box. */
-  s.element(2, 13);
+  s.element(ElementDomain(2), 13);
   s.instance(-1);
   s.box(box);
   std::swap(box.min[2], box.max[2]);
@@ -467,7 +467,8 @@ void testSink()
   test_assert(q.planeCount() == 6 && q.hasRay() && q.radiusDevicePixels() == 4.0);
   test_assert(q.surfaceRadiusDevicePixels() == 4.0 && q.maxViewDistance() == inf &&
               q.occlusion());
-  test_assert(q.domains() == ~0u && q.wants(-1) && q.wants(31) && q.wants(40));
+  test_assert(q.domains() == ~0u && q.wants(ElementDomain::None) &&
+              q.wants(ElementDomain(31)) && q.wants(ElementDomain(40)));
   const Vector<double> values = q.planeValues();
   test_assert(values.size() == 24);
   for (int i = 0; i < 6; i++) {
@@ -508,7 +509,7 @@ void testBulk()
         }
         elements.append(int32_t(r.below(100)));
         const auto at = [&](int k) { return double3(v[k], v[k + 1], v[k + 2]); };
-        one.element(kind, elements[i]);
+        one.element(ElementDomain(kind), elements[i]);
         if (kind == 0) {
           one.point(at(0), 3.0);
         } else if (kind == 1) {
@@ -520,10 +521,10 @@ void testBulk()
         }
       }
       const auto give = [&](const Vector<double> &v) {
-        return kind == 0   ? many.points(kind, elements, v, 3.0)
-               : kind == 1 ? many.segments(kind, elements, v, 2.0)
-               : kind == 2 ? many.triangles(kind, elements, v)
-                           : many.capsules(kind, elements, v);
+        return kind == 0   ? many.points(ElementDomain(kind), elements, v, 3.0)
+               : kind == 1 ? many.segments(ElementDomain(kind), elements, v, 2.0)
+               : kind == 2 ? many.triangles(ElementDomain(kind), elements, v)
+                           : many.capsules(ElementDomain(kind), elements, v);
       };
       Vector<double> fewer = values;
       fewer.pop_back();

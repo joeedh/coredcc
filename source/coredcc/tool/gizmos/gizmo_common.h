@@ -10,6 +10,7 @@
 #include "coredcc/draw/drawlist.h"
 #include "coredcc/draw/view.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/scene/element_domain.h"
 #include "coredcc/tool/gizmos/drag_math.h"
 
 #include "litestl/math/quat.h"
@@ -74,7 +75,8 @@ Placement computePlacement(Context &ctx, PivotMode pivot, Orientation orientatio
 
 /** The same for the elements of `domain` that core.element.dragDelta moves: their mean
  * position in the world. The basis is as for objects. */
-Placement computeElementPlacement(Context &ctx, int32_t domain, Orientation orientation);
+Placement
+computeElementPlacement(Context &ctx, ElementDomain domain, Orientation orientation);
 
 /** The rotation whose columns are the gizmo's axes in the world. */
 quatd basisFor(const Placement &p, Orientation o, const ViewMath &view);

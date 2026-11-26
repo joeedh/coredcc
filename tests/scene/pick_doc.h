@@ -78,7 +78,7 @@ struct Geo {
   {
     const Prim &p = prims[size_t(i)];
     given++;
-    sink.element(int32_t(p.domain()), i);
+    sink.element(p.domain(), i);
     switch (p.kind) {
     case Kind::Triangle:
       sink.triangle(p.q[0], p.q[1], p.q[2]);
@@ -114,7 +114,7 @@ struct Geo {
     }
     const auto near = [&](int i) {
       const Prim &p = prims[size_t(i)];
-      if (int32_t(p.domain()) != query.domain()) {
+      if (p.domain() != query.domain()) {
         return true;
       }
       const double3 &a = p.q[0];
@@ -139,14 +139,14 @@ struct Geo {
     must(triangles.sphereOverlap(query.point(), query.radius(), near));
     must(capsules.sphereOverlap(query.point(), query.radius(), near));
   }
-  Vector<int32_t> elementsInRegion(const RegionQuery &query, int32_t domain) const
+  Vector<int32_t> elementsInRegion(const RegionQuery &query, ElementDomain domain) const
   {
     if (onNear) {
       onNear();
     }
     Vector<int32_t> out;
     const auto in = [&](int i) {
-      if (int32_t(prims[size_t(i)].domain()) == domain) {
+      if (prims[size_t(i)].domain() == domain) {
         out.append(i);
       }
       return true;

@@ -13,6 +13,8 @@
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
+#include <algorithm>
+#include <cctype>
 #include <initializer_list>
 #include <string>
 #include <string_view>
@@ -33,6 +35,25 @@ inline std::string withoutNul(const string &s)
     c = c == '\0' ? '?' : c;
   }
   return out;
+}
+
+/** Of `reserved`, the namespace that `name` is in, or empty. The namespace is what comes
+ * before the first '.', or all of a name without one, and is compared without case: so
+ * `Core.x` and a bare `core` are refused as `core.x` is. */
+inline std::string_view
+reservedNamespace(std::string_view name, std::initializer_list<std::string_view> reserved)
+{
+  const std::string_view ns = name.substr(0, name.find('.'));
+  const auto same = [](char a, char b) {
+    return std::tolower(static_cast<unsigned char>(a)) ==
+           std::tolower(static_cast<unsigned char>(b));
+  };
+  for (std::string_view r : reserved) {
+    if (ns.size() == r.size() && std::equal(ns.begin(), ns.end(), r.begin(), same)) {
+      return r;
+    }
+  }
+  return {};
 }
 
 inline Status error(StatusCode code, const std::string &message)

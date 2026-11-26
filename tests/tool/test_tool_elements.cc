@@ -65,11 +65,11 @@ struct Points {
   {
     return stamp;
   }
-  int32_t elementCount(int32_t) const
+  int32_t elementCount(ElementDomain) const
   {
     return int32_t(pos.size());
   }
-  Vector<double> positions(const Vector<int32_t> &handles, int32_t) const
+  Vector<double> positions(const Vector<int32_t> &handles, ElementDomain) const
   {
     Vector<double> out;
     for (int32_t h : handles) {
@@ -79,9 +79,9 @@ struct Points {
     }
     return out;
   }
-  Status gather(int32_t domain, ElementSet &out) const
+  Status gather(ElementDomain domain, ElementSet &out) const
   {
-    if (domain != int32_t(ElementDomain::Point)) {
+    if (domain != ElementDomain::Point) {
       return Status();
     }
     for (size_t i = 0; i < pos.size(); i++) {

@@ -460,7 +460,7 @@ double3 pointAt(const Vector<double> &values, int i)
 
 } // namespace
 
-Status PickSink::points(int32_t domain,
+Status PickSink::points(ElementDomain domain,
                         const Vector<int32_t> &elements,
                         const Vector<double> &values,
                         double pixels)
@@ -473,7 +473,7 @@ Status PickSink::points(int32_t domain,
   return Status();
 }
 
-Status PickSink::segments(int32_t domain,
+Status PickSink::segments(ElementDomain domain,
                           const Vector<int32_t> &elements,
                           const Vector<double> &values,
                           double pixels)
@@ -486,7 +486,7 @@ Status PickSink::segments(int32_t domain,
   return Status();
 }
 
-Status PickSink::triangles(int32_t domain,
+Status PickSink::triangles(ElementDomain domain,
                            const Vector<int32_t> &elements,
                            const Vector<double> &values)
 {
@@ -499,7 +499,7 @@ Status PickSink::triangles(int32_t domain,
   return Status();
 }
 
-Status PickSink::capsules(int32_t domain,
+Status PickSink::capsules(ElementDomain domain,
                           const Vector<int32_t> &elements,
                           const Vector<double> &values)
 {

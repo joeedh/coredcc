@@ -83,7 +83,7 @@ struct Mesh {
         }
       }
       given += int(near.size());
-      lastBulk = sink.triangles(int32_t(ElementDomain::Face), near, values);
+      lastBulk = sink.triangles(ElementDomain::Face, near, values);
       return true;
     };
     o.methods["closestElements"] = [this](void **args, void *, string *err) {
@@ -191,7 +191,7 @@ void testSame()
         hits++;
       }
       NearestOptions n;
-      n.domain = int32_t(ElementDomain::Face);
+      n.domain = ElementDomain::Face;
       n.maxCount = 5;
       Vector<NearHit> na, nb;
       const double3 p = r.vec(2.0);
@@ -206,10 +206,8 @@ void testSame()
        * triangles. */
       const ViewRegion region = view.regionFromRect(x, y, x + 200.0, y + 100.0);
       Vector<RegionHit> ra, rb;
-      must(pickRegion(
-          *foreign.ctx, foreign.scene, region, int32_t(ElementDomain::Face), {}, ra));
-      must(pickRegion(
-          *native.ctx, native.scene, region, int32_t(ElementDomain::Face), {}, rb));
+      must(pickRegion(*foreign.ctx, foreign.scene, region, ElementDomain::Face, {}, ra));
+      must(pickRegion(*native.ctx, native.scene, region, ElementDomain::Face, {}, rb));
       size_t found[2] = {};
       for (const RegionHit &h : ra) {
         found[0] += h.elements.size();
@@ -251,18 +249,21 @@ void testErrors()
     bad.throwPick = false;
     bad.throwNear = bad.throwRegion = true;
     NearestOptions n;
-    n.domain = int32_t(ElementDomain::Face);
+    n.domain = ElementDomain::Face;
     Vector<NearHit> near;
     test_assert(isError(nearestInScene(*d.ctx, d.scene, double3(), 5.0, n, {}, near),
                         StatusCode::Internal,
                         "nothing"));
     test_assert(near.size() == 1 && near[0].object == b);
     Vector<RegionHit> region;
-    test_assert(isError(
-        pickRegion(
-            *d.ctx, d.scene, view.regionFromRect(0, 0, 2000, 1100), -1, {}, region),
-        StatusCode::Internal,
-        "none"));
+    test_assert(isError(pickRegion(*d.ctx,
+                                   d.scene,
+                                   view.regionFromRect(0, 0, 2000, 1100),
+                                   ElementDomain::None,
+                                   {},
+                                   region),
+                        StatusCode::Internal,
+                        "none"));
     test_assert(region.size() == 1 && region[0].object == b);
     /* Vectors of the wrong length: nothing is taken, and the script is told. */
     bad.throwNear = bad.throwRegion = false;

@@ -67,6 +67,7 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<EvalContext>());
   mgr->add(Bind<TransformState>());
   mgr->add(Bind<DeltaKind>());
+  mgr->add(Bind<ElementDomain>());
   mgr->add(Bind<TransformDelta>());
   mgr->add(Bind<SetWorldMode>());
   mgr->add(Bind<TransformModel>());

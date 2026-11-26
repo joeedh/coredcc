@@ -26,10 +26,10 @@ struct TransformSettings {
   double scaleStep = 0.1;
   /** Logical pixels. */
   double size = look::kSize;
-  /** Elements instead of objects: of `domain` (an ElementDomain), mirrored with
+  /** Elements instead of objects: of `domain`, mirrored with
    * `symmetry`. */
   bool elements = false;
-  int32_t domain = 0;
+  ElementDomain domain = ElementDomain::Point;
   bool symmetry = false;
 
   static TransformSettings read(Runtime &rt, const ToolDef &def);

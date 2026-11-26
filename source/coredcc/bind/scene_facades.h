@@ -162,7 +162,7 @@ Status notifyChanged(Context &ctx, const string &block);
 struct PickedObject {
   /** A pointer to it, as text. */
   string object;
-  int32_t domain = -1;
+  ElementDomain domain = ElementDomain::None;
   int32_t element = -1;
   double distance = 0.0;
   double viewDistance = 0.0;

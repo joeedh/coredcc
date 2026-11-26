@@ -69,6 +69,11 @@ static void test_core_ids_are_reserved()
     fakehost::lf::Handle f = 0;
     Status st = registerScript(s, host, &k, "core.property.set", kCore, 0, &f);
     test_assert(st.code() == StatusCode::InvalidArgument && host.releasesOf(f) == 1);
+    for (const char *id : {"Core.Property.set", "core"}) {
+      fakehost::lf::Handle g = 0;
+      test_assert(registerScript(s, host, &k, id, kCore, 0, &g).code() ==
+                  StatusCode::InvalidArgument);
+    }
     test_assert(sc::setValue(s.ctx, "tool.strength", sc::makeFloat(0.75)).ok());
   }
   {

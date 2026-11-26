@@ -50,6 +50,20 @@ const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::DeltaKind
   return e;
 }
 
+const litestl::binding::BindingBase *
+litestl::binding::Binder<coredcc::ElementDomain>::bind()
+{
+  using coredcc::ElementDomain;
+  static const BindingBase *e =
+      coredcc::detail::bindEnum("coredcc::ElementDomain",
+                                sizeof(ElementDomain),
+                                {{"None", int(ElementDomain::None)},
+                                 {"Point", int(ElementDomain::Point)},
+                                 {"Edge", int(ElementDomain::Edge)},
+                                 {"Face", int(ElementDomain::Face)}});
+  return e;
+}
+
 namespace coredcc {
 
 namespace lbt = litestl::binding::types;

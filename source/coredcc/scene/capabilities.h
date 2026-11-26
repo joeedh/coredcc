@@ -10,6 +10,7 @@
 #include "coredcc/base/invalidate.h"
 #include "coredcc/bvh/box.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/scene/element_domain.h"
 #include "coredcc/scene/nearest.h"
 #include "coredcc/scene/pick.h"
 #include "coredcc/scene/transform.h"
@@ -114,9 +115,6 @@ struct Transformable : IfaceRef {
   }
 };
 
-/** Kinds of elements, as numbers in Spatial and ElementAccess. */
-enum class ElementDomain : int32_t { Point = 0, Edge = 1, Face = 2 };
-
 /**
  * Geometry that can be found by position. All coordinates are the block's own.
  *
@@ -158,7 +156,7 @@ struct Spatial : IfaceRef {
     return CDCC_HAS(elementsInRegion);
   }
   litestl::util::Vector<int32_t> elementsInRegion(const RegionQuery &query,
-                                                  int32_t domain) const
+                                                  ElementDomain domain) const
   {
     return CDCC_CALL(elementsInRegion, query, domain);
   }
@@ -200,12 +198,12 @@ struct ElementAccess : IfaceRef {
   {
     return CDCC_CALL(topoStamp);
   }
-  int32_t elementCount(int32_t domain) const
+  int32_t elementCount(ElementDomain domain) const
   {
     return CDCC_CALL(elementCount, domain);
   }
   litestl::util::Vector<double> positions(const litestl::util::Vector<int32_t> &handles,
-                                          int32_t domain) const
+                                          ElementDomain domain) const
   {
     return CDCC_CALL(positions, handles, domain);
   }

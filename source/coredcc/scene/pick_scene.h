@@ -53,7 +53,7 @@ struct RegionHit {
  * view's (ViewMath::regionFromRect), or any other planes. In the scene's order. The rules
  * of pickScene hold here too.
  *
- * - With a negative `domain`: objects. Those whose Spatial has `elementsInRegion`, if it
+ * - With `domain` None: objects. Those whose Spatial has `elementsInRegion`, if it
  * finds an element of any of its domains; the others, if their bounds may be there.
  * - With a domain: elements, of the objects whose Spatial has `elementsInRegion` and that
  * domain.
@@ -63,7 +63,7 @@ struct RegionHit {
 Status pickRegion(Context &ctx,
                   BlockHandle scene,
                   const ViewRegion &region,
-                  int32_t domain,
+                  ElementDomain domain,
                   const PickFilter &filter,
                   litestl::util::Vector<RegionHit> &hits);
 

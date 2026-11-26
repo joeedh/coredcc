@@ -436,7 +436,7 @@ registerWith(Runtime &rt, const CommandDef &def, lf::Handle factory, const strin
       CommandRegistry::checkSlots(def, has("redo"), has("foldKey"), has("foldFrom")));
   const std::string cmd = def.name().c_str();
   /* A script taking core.property.set would break setValue for the whole Runtime. */
-  if (cmd.rfind("core.", 0) == 0) {
+  if (!detail::reservedNamespace(cmd, {"core"}).empty()) {
     return error(StatusCode::InvalidArgument,
                  "command '" + cmd + "': the 'core.' namespace is reserved for coredcc");
   }

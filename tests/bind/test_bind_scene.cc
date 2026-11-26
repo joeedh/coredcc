@@ -136,7 +136,9 @@ void testRegistration()
     const int types = reg.size();
     const auto nothingNew = [&] {
       return d.rt.ifaces().tableCount() == tables && reg.size() == types &&
-             !d.rt.ext<ApiRegistry>().find(StructId::of("js.a")) && !reg.find("js.a");
+             !d.rt.ext<ApiRegistry>().find(
+                 StructId::of("coredcc.TransformChannels:js.a")) &&
+             !reg.find("js.a");
     };
     struct Case {
       const char *id;
@@ -146,6 +148,7 @@ void testRegistration()
     };
     const Case cases[] = {
         {"core.x", "evaluate setWorld", StatusCode::InvalidArgument, "reserved"},
+        {"Core.x", "evaluate setWorld", StatusCode::InvalidArgument, "reserved"},
         {"core.transform.trs",
          "evaluate setWorld",
          StatusCode::InvalidArgument,
@@ -228,7 +231,8 @@ void testRegistration()
     for (int i = 0; i < 7; i++) {
       test_assert(t->defaults().get(i) == want[i] && t->isDistance(i) == distance[i]);
     }
-    const ApiStruct *st = d.rt.ext<ApiRegistry>().find(StructId::of("js.a"));
+    const ApiStruct *st =
+        d.rt.ext<ApiRegistry>().find(StructId::of("coredcc.TransformChannels:js.a"));
     test_assert(st && st->memberCount() == 5);
 
     fakehost::lf::Handle again = 0;
@@ -590,7 +594,8 @@ void testPick()
     test_assert(r.value.at(0).distance == 0 &&
                 r.value.at(0).viewDistance < r.value.at(1).viewDistance);
     test_assert(std::abs(sc::vec3At(r.value.at(0).point, 0) - 3) < 1e-9);
-    test_assert(r.value.at(2).object.size() == 0 && r.value.at(-1).domain == -1);
+    test_assert(r.value.at(2).object.size() == 0 &&
+                r.value.at(-1).domain == ElementDomain::None);
     /* It evaluates. */
     put(d.obj(high).channels, trs::kLocation, double3(-5, 0, 0));
     r = sc::pick(ctx, viewOfXy(), 65, 50, near(2));

@@ -47,7 +47,7 @@ public:
  *   block's properties; the commands call `invalidateData(Positions)` after it.
  */
 struct TransformableElements : IfaceRef {
-  Status gather(int32_t domain, ElementSet &out) const
+  Status gather(ElementDomain domain, ElementSet &out) const
   {
     return CDCC_CALL(gather, domain, out);
   }

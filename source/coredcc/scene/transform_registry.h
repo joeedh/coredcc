@@ -98,7 +98,7 @@ private:
 /**
  * Transform types by name. A Runtime extension.
  *
- * Adding one registers an ApiStruct with the type's name, whose parent is
+ * Adding one registers the ApiStruct `coredcc.TransformChannels:<type>`, whose parent is
  * `kChannelsStruct`. Its data is a ChannelBlock. Setting an Int outside +-2^53 is
  * OutOfRange (a double can't hold it); reads round like EvalContext, and give an Enum's
  * first item for a value that isn't one.

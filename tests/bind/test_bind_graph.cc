@@ -126,7 +126,13 @@ void testRegistration()
         {"value.x", "evaluate", StatusCode::InvalidArgument},
         {"elements.x", "evaluate", StatusCode::InvalidArgument},
         {"math.float", "evaluate", StatusCode::InvalidArgument},
-        {"mathx.float", "", StatusCode::TypeMismatch}, /* only the namespace is reserved */
+        {"Core.x", "evaluate", StatusCode::InvalidArgument}, /* in any case */
+        {"SCENE.x", "evaluate", StatusCode::InvalidArgument},
+        {"graph", "evaluate", StatusCode::InvalidArgument}, /* a bare namespace */
+        {"core", "evaluate", StatusCode::InvalidArgument},
+        {"mathx.float",
+         "",
+         StatusCode::TypeMismatch}, /* only the namespace is reserved */
     };
     for (const Case &c : cases) {
       fakehost::lf::Handle h = 0;

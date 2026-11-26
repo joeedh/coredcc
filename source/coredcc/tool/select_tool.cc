@@ -67,7 +67,7 @@ Status boxSelect(
 {
   const ViewRegion region = view.regionFromRect(a.x, a.y, b.x, b.y);
   Vector<RegionHit> hits;
-  CDCC_TRY(pickRegion(ctx, ctx.scene(), region, -1, PickFilter(), hits));
+  CDCC_TRY(pickRegion(ctx, ctx.scene(), region, ElementDomain::None, PickFilter(), hits));
   Vector<BlockId> ids;
   for (const RegionHit &h : hits) {
     ids.append(ctx.library()->get(h.object)->id());

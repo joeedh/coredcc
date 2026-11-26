@@ -222,7 +222,7 @@ Status ElementsDelta::exec(Context &ctx)
   const detail::SceneOf s = *detail::sceneOf(ctx);
   Result<Vector<BlockHandle>> objects = detail::targetObjects(ctx);
   CDCC_TRY(objects.status());
-  const int32_t domain = int32_t(ctx.inputs()->get("domain")->asEnum());
+  const ElementDomain domain = ElementDomain(ctx.inputs()->get("domain")->asEnum());
   const bool symmetry = ctx.inputs()->get("symmetry")->asBool();
   const double time = s.scene->time();
   litestl::util::Map<uint64_t, bool>
@@ -275,8 +275,7 @@ Status ElementsDelta::exec(Context &ctx)
     }
     b.before = b.start;
     if (b.partners.size() > 0) {
-      const Vector<double> p =
-          access.positions(b.partners, int32_t(ElementDomain::Point));
+      const Vector<double> p = access.positions(b.partners, ElementDomain::Point);
       if (int(p.size()) != 3 * int(b.partners.size())) {
         return Status::error(StatusCode::InvalidArgument,
                              "ElementAccess::positions gave another number of positions");

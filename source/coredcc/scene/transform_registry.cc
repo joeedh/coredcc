@@ -133,7 +133,7 @@ Result<const TransformType *> TransformRegistry::add(TransformTypeInfo info,
   if (Status s = checkInfo(info); !s.ok()) {
     return s;
   }
-  ApiStruct st(info.name.c_str());
+  ApiStruct st((std::string(kChannelsStruct) + ":" + info.name.c_str()).c_str());
   st.uiName(info.uiName.c_str()).description(info.description.c_str());
   st.parent(StructId::of(kChannelsStruct));
   ChannelBlock defaults;

@@ -83,7 +83,7 @@ void testNearest()
                             : r.below(5) == 0 ? 0.0
                                               : r.range(0.1, 3.0);
       NearestOptions o;
-      o.domain = any ? int32_t(ElementDomain::Point) : int32_t(r.below(3));
+      o.domain = any ? ElementDomain::Point : ElementDomain(r.below(3));
       o.maxCount = 1 + int32_t(r.below(r.coin() ? 3 : 600));
       struct Want {
         double distance;
@@ -96,7 +96,7 @@ void testNearest()
         mat4d inverse;
         singular += !litestl::math::tryInverse(world, inverse);
         for (int i = 0; i < int(g.prims.size()); i++) {
-          if (int32_t(g.prims[size_t(i)].domain()) == o.domain) {
+          if (g.prims[size_t(i)].domain() == o.domain) {
             const double at = lengthOf(p - closestOn(g.prims[size_t(i)], world, p));
             if (at <= radius) {
               want.push_back({at, place, i});
@@ -177,7 +177,8 @@ void testNearestCases()
   must(nearestInScene(*d.ctx, d.scene, zero, 1.0, o, {}, hits));
   test_assert(hits.size() == 3 && hits[0].object == a && hits[0].element == 0);
   test_assert(hits[1].object == a && hits[1].element == 1 && hits[2].object == b);
-  test_assert(hits[0].distance == 1.0 && hits[0].point[0] == 1.0 && hits[0].domain == 0);
+  test_assert(hits[0].distance == 1.0 && hits[0].point[0] == 1.0 &&
+              hits[0].domain == ElementDomain::Point);
   must(nearestInScene(*d.ctx, d.scene, zero, 0.999, o, {}, hits));
   test_assert(hits.size() == 0);
   PickFilter f;
@@ -187,7 +188,7 @@ void testNearestCases()
   must(nearestInScene(*d.ctx, d.scene, zero, infinity, o, f, hits));
   test_assert(hits.size() == 4 && hits[0].object == b && hits[2].object == hidden);
   /* Not asked for a domain it doesn't have. */
-  o.domain = 5;
+  o.domain = ElementDomain(5);
   int others = 0;
   d.geo(data).onNear = [&] { others++; };
   must(nearestInScene(*d.ctx, d.scene, zero, infinity, o, {}, hits));
@@ -195,7 +196,7 @@ void testNearestCases()
   /* Bad input. */
   for (int i = 0; i < 6; i++) {
     NearestOptions bad;
-    bad.domain = i == 2 ? -1 : i == 3 ? 32 : 0;
+    bad.domain = ElementDomain(i == 2 ? -1 : i == 3 ? 32 : 0);
     bad.maxCount = i == 4 ? 0 : 1;
     test_assert(isError(nearestInScene(*d.ctx,
                                        d.scene,
@@ -266,12 +267,13 @@ void testNearestCases()
   for (BvhPlane &plane : everywhere.planes) {
     plane.w = 1.0;
   }
-  test_assert(isError(pickRegion(*d.ctx, d.scene, everywhere, -1, {}, region),
-                      StatusCode::Internal,
-                      "domains"));
+  test_assert(
+      isError(pickRegion(*d.ctx, d.scene, everywhere, ElementDomain::None, {}, region),
+              StatusCode::Internal,
+              "domains"));
   test_assert(region.size() == 0 && asked == 0 && !d.rt.hasStickyError());
   d.geo(data).onDomains = nullptr;
-  must(pickRegion(*d.ctx, d.scene, everywhere, -1, {}, region));
+  must(pickRegion(*d.ctx, d.scene, everywhere, ElementDomain::None, {}, region));
   test_assert(region.size() == 2 && asked > 0);
 }
 
@@ -362,7 +364,7 @@ void testRegion()
       const double top = std::fmin(y0, y1), bottom = std::fmax(y0, y1);
       const int32_t domain = int32_t(r.below(4)) - 1;
       Vector<RegionHit> hits;
-      must(pickRegion(*d.ctx, d.scene, region, domain, {}, hits));
+      must(pickRegion(*d.ctx, d.scene, region, ElementDomain(domain), {}, hits));
       int last = -1;
       for (const RegionHit &h : hits) {
         const int place =
@@ -456,25 +458,25 @@ void testRegion()
   const ViewMath view = viewOf(ViewCase());
   const ViewRegion all = view.regionFromRect(0.0, 0.0, 2000.0, 1100.0);
   Vector<RegionHit> hits;
-  test_assert(isError(pickRegion(*d.ctx, d.scene, all, -1, {}, hits),
+  test_assert(isError(pickRegion(*d.ctx, d.scene, all, ElementDomain::None, {}, hits),
                       StatusCode::FailedPrecondition,
                       "pickRegion"));
   d.evaluate();
-  test_assert(isError(pickRegion(*d.ctx, d.scene, all, 32, {}, hits),
+  test_assert(isError(pickRegion(*d.ctx, d.scene, all, ElementDomain(32), {}, hits),
                       StatusCode::InvalidArgument));
   ViewRegion bad = all;
   bad.planes[2].w = std::numeric_limits<double>::quiet_NaN();
-  test_assert(isError(pickRegion(*d.ctx, d.scene, bad, -1, {}, hits),
+  test_assert(isError(pickRegion(*d.ctx, d.scene, bad, ElementDomain::None, {}, hits),
                       StatusCode::InvalidArgument));
-  must(pickRegion(*d.ctx, d.scene, all, -1, {}, hits));
+  must(pickRegion(*d.ctx, d.scene, all, ElementDomain::None, {}, hits));
   test_assert(hits.size() == 1 && hits[0].object == a);
   PickFilter none;
   none.accept = [](BlockHandle) { return false; };
-  must(pickRegion(*d.ctx, d.scene, all, -1, none, hits));
+  must(pickRegion(*d.ctx, d.scene, all, ElementDomain::None, none, hits));
   test_assert(hits.size() == 0);
   d.geo(data).onNear = [&] { d.rt.setStickyError(boom("region")); };
   for (int32_t domain : {-1, 0}) {
-    test_assert(isError(pickRegion(*d.ctx, d.scene, all, domain, {}, hits),
+    test_assert(isError(pickRegion(*d.ctx, d.scene, all, ElementDomain(domain), {}, hits),
                         StatusCode::Internal,
                         "region"));
     test_assert(hits.size() == 0 && !d.rt.hasStickyError());

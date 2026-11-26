@@ -266,7 +266,8 @@ void testChannels()
     for (int i = 0; t && i < 6; i++) {
       test_assert(t->defaults().get(i) == want[i] && t->isDistance(i) == (i == 4));
     }
-    const ApiStruct *st = d.rt.ext<ApiRegistry>().find(StructId::of("js.full"));
+    const ApiStruct *st =
+        d.rt.ext<ApiRegistry>().find(StructId::of("coredcc.TransformChannels:js.full"));
     const ApiMember *len = st ? st->findOwn("len") : nullptr;
     const ApiMember *mode = st ? st->findOwn("mode") : nullptr;
     test_assert(len && mode);

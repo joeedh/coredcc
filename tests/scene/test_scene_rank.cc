@@ -80,7 +80,7 @@ ranked(std::vector<Shape1> all, const ViewMath &view, const PickOptions &o)
   }
   std::vector<Shape1> left, out;
   for (Shape1 s : all) {
-    if ((o.domains >> s.hit.domain & 1) != 0) {
+    if ((o.domains >> int32_t(s.hit.domain) & 1) != 0) {
       s.group = s.hit.thin && s.hit.viewDistance <= behind ? 0
                 : s.hit.distance == 0.0                    ? 1
                                                            : 2;

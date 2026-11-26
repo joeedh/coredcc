@@ -9,6 +9,7 @@
 #include "coredcc/bvh/ray.h"
 #include "coredcc/draw/view.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/scene/element_domain.h"
 #include "coredcc/scene/outline.h"
 
 #include "litestl/util/vector.h"
@@ -174,10 +175,10 @@ public:
     return options_.domains;
   }
   /** Whether elements of a domain are wanted. */
-  bool wants(int32_t domain) const
+  bool wants(ElementDomain domain) const
   {
-    return domain < 0 || (domain < 32 ? (options_.domains >> domain & 1) != 0
-                                      : options_.domains == ~0u);
+    const int32_t d = int32_t(domain);
+    return d < 0 || (d < 32 ? (options_.domains >> d & 1) != 0 : options_.domains == ~0u);
   }
   /** Whether surfaces are wanted, of whatever domain, since they hide thin shapes behind
    * them. */
@@ -260,8 +261,9 @@ private:
 
 struct PickHit {
   BlockHandle object;
-  /** An ElementDomain, and the element as the object reported it. -1 for its bounds. */
-  int32_t domain = -1;
+  /** The domain, and the element as the object reported it. None and -1 for its bounds.
+   */
+  ElementDomain domain = ElementDomain::None;
   int32_t element = -1;
   /** The instance, as the object reported it, or -1. */
   int32_t instance = -1;
@@ -355,8 +357,8 @@ public:
   PickSink(const PickSink &) = delete;
   PickSink &operator=(const PickSink &) = delete;
 
-  /** What the shapes after this belong to: an ElementDomain, and an element. */
-  void element(int32_t domain, int32_t element)
+  /** What the shapes after this belong to: a domain, and an element. */
+  void element(ElementDomain domain, int32_t element)
   {
     domain_ = domain;
     element_ = element;
@@ -380,18 +382,18 @@ public:
   /* Many at once, for scripts: the numbers of one shape after those of another (a point
    * has 3, a segment 6, a triangle 9, a capsule 7: its ends and its radius), and the
    * element of each. InvalidArgument, and nothing taken, if the sizes don't match. */
-  Status points(int32_t domain,
+  Status points(ElementDomain domain,
                 const litestl::util::Vector<int32_t> &elements,
                 const litestl::util::Vector<double> &values,
                 double pixels);
-  Status segments(int32_t domain,
+  Status segments(ElementDomain domain,
                   const litestl::util::Vector<int32_t> &elements,
                   const litestl::util::Vector<double> &values,
                   double pixels);
-  Status triangles(int32_t domain,
+  Status triangles(ElementDomain domain,
                    const litestl::util::Vector<int32_t> &elements,
                    const litestl::util::Vector<double> &values);
-  Status capsules(int32_t domain,
+  Status capsules(ElementDomain domain,
                   const litestl::util::Vector<int32_t> &elements,
                   const litestl::util::Vector<double> &values);
 
@@ -428,7 +430,7 @@ private:
   void keep(const detail::PickCandidate &c);
 
   const PickQuery &query_;
-  int32_t domain_ = -1;
+  ElementDomain domain_ = ElementDomain::None;
   int32_t element_ = -1;
   int32_t instance_ = -1;
   litestl::util::Vector<detail::PickCandidate> kept_;

@@ -214,7 +214,7 @@ static Status registerWith(Runtime &rt,
 {
   const std::string name = type.name.c_str();
   const std::string where = "transform type '" + name + "': ";
-  if (name.rfind("core.", 0) == 0) {
+  if (!detail::reservedNamespace(name, {"core"}).empty()) {
     return error(StatusCode::InvalidArgument,
                  where + "the 'core.' namespace is reserved for coredcc");
   }

@@ -131,7 +131,7 @@ Status nearestInScene(Context &ctx,
   hits.clear();
   detail::SceneQuery scope(ctx, h, "nearestInScene");
   CDCC_TRY(scope.status());
-  if (options.domain < 0 || options.domain > 31 || options.maxCount < 1) {
+  if (domainBit(options.domain) == 0 || options.maxCount < 1) {
     return Status::error(StatusCode::InvalidArgument,
                          "nearestInScene: the options aren't valid");
   }
@@ -163,7 +163,7 @@ Status nearestInScene(Context &ctx,
       continue;
     }
     const uint32_t domains = s.domains();
-    if (scope.thrown() || (domains >> options.domain & 1) == 0) {
+    if (scope.thrown() || (domains & domainBit(options.domain)) == 0) {
       continue;
     }
     const NearQuery query(point, radius, options, e.dataWorld());

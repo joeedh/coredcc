@@ -158,6 +158,8 @@ void testRegister()
     test_assert(isCode(registerTool(d, host, &s, "js.nudge"), StatusCode::AlreadyExists));
     test_assert(isCode(
         registerTool(d, host, &s, "core.mine"), StatusCode::InvalidArgument, "core."));
+    test_assert(
+        isCode(registerTool(d, host, &s, "CORE"), StatusCode::InvalidArgument, "core."));
     test_assert(isCode(sc::registerForeignTool(*d.ctx, ToolDef("js.x"), 0, "onEvent"),
                        StatusCode::InvalidArgument,
                        "factory"));
