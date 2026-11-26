@@ -157,3 +157,41 @@ A fresh agent tried to falsify the first version, with the plan, the audit and t
     reserved.
   - Layouts do name command ids (step 7's wording); none in the tree names a renamed one.
   - The Unreal spike uses names from steps 3, 4, 6 and 10, so it runs after each of them.
+## Outcome (2026-11-26)
+Steps 1-11 are done, one commit each. Each commit passed the pre-commit gate. Each commit that touched TS or
+bindings also passed the wasm tests and the test app's typecheck. The Unreal spike passed 11 of 11 after steps 3,
+4, 6 and 10. These things changed from the plan while it was implemented:
+- **`DepthRange` isn't bound yet (step 3).** The litestl PR that binds `math::ClipDepth` is
+  https://github.com/joeedh/litestl/pull/17. Until it merges and the gitlink is bumped, View keeps
+  `setConventions(int)`, which now takes only the depth range. Step 4's rename of the member `View::depth` to
+  `depthRange` collided with the script accessor `depthRange()`, so the accessor is `depthRangeValue()` for now.
+  - **The follow-up:** bind `View::depthRange` as a member, drop `setConventions` and `depthRangeValue`, and have
+    TS set `v.depthRange` directly.
+- **`sendToolEvent` still returns an `IntResult` (step 3).** The value is the `EventResult` as a number. A result
+  type for one enum wasn't worth adding.
+- **Enum binders share a helper (step 3):** `base/detail/enum_binding.h` (`detail::bindEnum`). A member whose type
+  became an enum needs its own `BIND_STRUCT_MEMBER`. Removing `InputEvent`'s accessors without one broke the wasm
+  tests (see debugging.md).
+- **Where aliases are applied (step 1).** `TypeAliases` rewrites a parsed file's type names once, after parsing, in
+  `loadLibrary` and `appendLibrary` (`ParsedSlot` gained `nsName` for this). `object_io` and `def_io` also
+  canonicalize their names before the registry lookup, as planned.
+- **More `ViewPoint::distance` readers than the audit listed (step 4).** They are in the scene and draw tests.
+  The pick tests' own oracle fields were renamed to `viewDistance` too.
+- **A member collided with its accessor (step 5):** `SceneTable`'s field `placeCount` is `placeTotal`, because the
+  bound method is `placeCount()`.
+- **An engine name kept (step 6):** a word rename also hit Unreal's `FCanvas::DrawItem` in the spike. The call
+  keeps the engine's name.
+- **Constant names (step 7).** The driver constants are `kAddDriverGraphCommand` and `kRemoveDriverGraphCommand`, as
+  the audit's D4 has them. The file-local `kEditCommand` is `kEditGraphCommand`, and `kSetPropertyCommand` already
+  had the form.
+- **Old element names are their own error (step 8).** `tool` and `toolOptions` don't join the list of reserved
+  names. That list's message says "reserved for a later version", which would be wrong here. Instead they fail
+  with "`<tool>` is now `<command>`", in the text of any version and inside a custom element.
+  - `ToolChecks`'s internals and the test app's panel use "command" and "checks" too.
+  - `tests/layout/test_xml.cc` would have grown past 35 KB, so its version tests moved to `test_xml_versions.cc`
+    (one more native test, 168), with shared helpers in `xml_check.h`.
+- **A header renamed (step 10):** `scene/eval_ctx.h` is `scene/eval_context.h`, like the type.
+- **Facades left subject first:** `graphAddNode`, `graphLink` and the other graph edit facades take a graph path,
+  so only their TS names changed (step 5), as planned.
+- **The final old-name grep** finds the renamed names only in `docs/plans/`, `docs/reports/`, the TS-only renames'
+  C++ facades, and Unreal's `FCanvas::DrawItem`.

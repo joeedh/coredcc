@@ -5,6 +5,7 @@
 - [Modules](modules.md): what is where, what depends on what, and where to start reading.
 - [Embedding](embedding.md): the rules for a host: files, graphs, layouts, threads, objects, scenes, picking.
 - [Debugging](debugging.md): problems that took effort to find, techniques, the build cache.
+- [Naming](naming.md): how to name facades, TS functions, enums, command ids, counts and registry names.
 - [DrawList format](drawlist-format.md): the bytes of what tools and overlays draw, for a host's renderer.
 
 ## State

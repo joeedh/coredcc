@@ -52,6 +52,8 @@ A module uses those above it, and no others.
 - `library.h`: `Library`. `block.h`: block records and their states.
 - `provider.h`: `BlockProvider`, which a block type implements: its data, references and serialization.
 - `attachment.h`: data that other modules hang on blocks.
+- `type_names.h`: `TypeAliases`, so that a renamed block, attachment, slot, transform, node or socket type
+  loads from files that have its old name.
 - Saving and loading: `api/library_io.h`, and "Files" in [embedding.md](embedding.md#files).
 
 ### `api/`
@@ -109,6 +111,7 @@ A module uses those above it, and no others.
 
 ### `bind/`
 - `facades.h` and the other `*_facades.h`: the functions that scripts call. `manager.h` registers all of it.
+  Their names follow [naming.md](naming.md).
 - `ts/`: the TypeScript layer, with plain values in and out and errors as exceptions. `ts/index.ts` has its
   rules.
 

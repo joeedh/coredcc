@@ -290,6 +290,57 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 - **Fix:** `ComputeProjectionNoAAMatrix()`, which takes the jitter out of the live projection.
 - **How to spot it next time:** log the matrix. An identity projection is the sign.
 
+### A facade renamed like a library function calls itself, or fails to compile
+- **Symptom:** after a facade was renamed to match its C++ function (`libraryResolve` → `resolvePlaceholders`,
+  `layoutJson` → `parseLayout`), its body failed with "call to 'resolvePlaceholders' is ambiguous" or "no
+  matching function for call to 'parseLayout'".
+- **Cause:** facades are declared in `coredcc::script`. Unqualified lookup inside a facade finds the facade's
+  name in `script` first, so the library function in `coredcc` is hidden. When both are visible, a call that
+  converts its arguments can also be ambiguous. If the signatures happen to match, the facade calls itself and
+  recurses, with no compile error at all.
+- **Fix:** qualify the call with `coredcc::` (naming pass, step 5). A test helper named like the renamed
+  function (`fixture::newGraph` after `createGraph` → `newGraph`) needs the same care: it was renamed to
+  `makeGraph` before the rename.
+- **How to spot it next time:** before renaming a facade, grep for the new name in `source/coredcc/<module>/`
+  as well as in `bind/`. Any hit is a call that has to be qualified.
+
+### An enum bound in place of its accessors is missing in scripts
+- **Symptom:** after `typeValue`/`setType` and `pointerValue`/`setPointer` were removed in favor of typed
+  `InputEvent` members, the wasm tests (`spike_ts` and the test app) failed. Native tests passed.
+- **Cause:** binding the enum type (`Binder<EventType>`) does not bind the struct member that has that type.
+  The member needs its own `BIND_STRUCT_MEMBER`.
+- **Fix:** `BIND_STRUCT_MEMBER(st, type)` and `(st, pointer)` in `tool/bindings.cc` (naming pass, step 3).
+- **How to spot it next time:** when an accessor is removed, grep the struct's `defineBindings` for the member.
+  No native bind test read these members, so only the wasm gate caught it.
+
+### The gate fails with "the code changed while the gate ran"
+- **Symptom:** `node tools/gate.mjs` built and tested everything, then failed at the end.
+- **Cause:** the gate takes a digest of the tree when it starts and when it ends. Any edit in between fails it,
+  even an edit in a submodule or in a file the build doesn't use, because the results no longer match the tree.
+- **Fix:** don't edit the worktree while a gate or `tools/unreal-spike.mjs` runs. Prepare edits elsewhere (the
+  naming pass kept edit scripts in a scratch folder) and apply them afterwards.
+- **How to spot it next time:** the message names the digest. Check `git status` against what you changed
+  during the run.
+
+### clang-format on a whole file rewrites lines the change didn't touch
+- **Symptom:** after `clang-format -i` on the files a rename touched, the diff had dozens of hunks that only
+  re-wrapped code or comments.
+- **Cause:** not every file in the tree is formatted to the current `.clang-format`, so formatting a whole
+  file reformats lines that are unrelated to the change.
+- **Fix:** run clang-format, then reverse the hunks that only change whitespace or comment markers
+  (`git diff -U0`, keep the reformat-only hunks, and `git apply -R --unidiff-zero` them). The lines the change
+  touched keep their new format.
+- **How to spot it next time:** `git diff -w --stat` against `git diff --stat`. A large gap means reformatting.
+
+### A tree-wide rename changes a name the engine owns
+- **Symptom:** the Unreal spike failed with "'DrawRecord': is not a member of 'FCanvas'" after `DrawItem` was
+  renamed to `DrawRecord`.
+- **Cause:** a word rename over `apps/` also matched Unreal's own `FCanvas::DrawItem`.
+- **Fix:** keep the engine's name (`Canvas->DrawItem(L)`). The spike report also needs care: when the build
+  fails, `build/unreal-spike/report.txt` is the previous run's and still says "11 of 11 passed".
+- **How to spot it next time:** check the exit status of `tools/unreal-spike.mjs`, not only the report.
+  Before renaming, grep the spike for `->Name(` and `::Name` on engine types.
+
 ## Techniques
 
 ### Checking that a regression test can fail
