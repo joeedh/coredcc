@@ -186,3 +186,9 @@ coredcc_compile_fail(iface_wrong_arg_type
 if(EMSCRIPTEN)
   add_subdirectory(wasm)
 endif()
+
+# P4: tools and overlay.
+coredcc_test(test_draw_drawlist SOURCES draw/test_drawlist.cc DEPS coredcc_draw)
+coredcc_test(test_tool_manager SOURCES tool/test_tool_manager.cc DEPS coredcc_tool)
+coredcc_test(test_tool_settings SOURCES tool/test_tool_settings.cc DEPS coredcc_tool)
+coredcc_test(test_tool_event_script SOURCES tool/test_tool_event_script.cc DEPS coredcc_tool)

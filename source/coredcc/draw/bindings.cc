@@ -1,4 +1,5 @@
 /* Binding descriptors for the view types. */
+#include "coredcc/draw/drawlist.h"
 #include "coredcc/draw/view.h"
 
 #include "litestl/binding/binding.h"
@@ -87,6 +88,47 @@ lbt::Struct<ViewMath> *ViewMath::defineBindings()
     BIND_STRUCT_METHOD(st, farPlaneAt, MARGS("i"));
     BIND_STRUCT_METHOD(st, pixelSizeAt, MARGS("p"));
     BIND_STRUCT_METHOD(st, viewDistance, MARGS("p"));
+  }
+  return st;
+}
+
+lbt::Struct<DrawStyle> *DrawStyle::defineBindings()
+{
+  static lbt::Struct<DrawStyle> *st = nullptr;
+  if (!st) {
+    litestl::alloc::PermanentGuard guard;
+    st = new lbt::Struct<DrawStyle>("coredcc::DrawStyle", sizeof(DrawStyle));
+    BIND_STRUCT_DEFAULT_CONSTRUCTOR(st);
+    BIND_STRUCT_COPY_CONSTRUCTOR(st);
+    BIND_STRUCT_MEMBER(st, color);
+    BIND_STRUCT_MEMBER(st, width);
+    BIND_STRUCT_MEMBER(st, depth);
+    BIND_STRUCT_MEMBER(st, id);
+  }
+  return st;
+}
+
+/* begin and end aren't bound: whoever hands a script the list owns its frame. */
+lbt::Struct<DrawList> *DrawList::defineBindings()
+{
+  static lbt::Struct<DrawList> *st = nullptr;
+  if (!st) {
+    litestl::alloc::PermanentGuard guard;
+    st = new lbt::Struct<DrawList>("coredcc::DrawList", sizeof(DrawList));
+    BIND_STRUCT_DEFAULT_CONSTRUCTOR(st);
+    BIND_STRUCT_METHOD(st, linesXyz, MARGS("style", "xyz"));
+    BIND_STRUCT_METHOD(st, pointsXyz, MARGS("style", "xyz"));
+    BIND_STRUCT_METHOD(st, trianglesXyz, MARGS("style", "xyz", "colors"));
+    BIND_STRUCT_METHOD(st, shapeOf, MARGS("style", "kind", "matrix"));
+    BIND_STRUCT_METHOD(st, pushMatrix, MARGS("m"));
+    BIND_STRUCT_METHOD(st, popMatrix, MARGS());
+    BIND_STRUCT_METHOD(st, circle2d, MARGS("style", "x", "y", "radius", "filled"));
+    BIND_STRUCT_METHOD(st, line2dXy, MARGS("style", "xy"));
+    BIND_STRUCT_METHOD(st, recordCount, MARGS());
+    BIND_STRUCT_METHOD(st, depth, MARGS());
+    BIND_STRUCT_METHOD(st, frozen, MARGS());
+    BIND_STRUCT_METHOD(st, address, MARGS());
+    BIND_STRUCT_METHOD(st, size, MARGS());
   }
   return st;
 }

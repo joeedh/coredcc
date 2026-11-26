@@ -286,6 +286,13 @@ public:
   Command *interactiveCommand();
   /** Its def. */
   const CommandDef *interactiveDef() const;
+  /** Moves whenever an interactive command begins, is committed or is cancelled, so a
+   * tool can tell whether the one it began is still the open one. Never 0 for an open
+   * command. */
+  uint64_t interactiveSerial() const
+  {
+    return interactiveSerial_;
+  }
   /** Runs `fn` on the open command with its bags and its path prefix in `ctx`, as in its
    * slots, and returns what it returns. For live edits; commands can't be run from it. A
    * sticky error that it leaves stays for commit. */
@@ -336,6 +343,7 @@ private:
   /** Slot calls other than exec in progress (exec frames reset it to 0). */
   int slotDepth_ = 0;
   RecordPtr open_;
+  uint64_t interactiveSerial_ = 0;
   Context *openCtx_ = nullptr;
   class Library *openLib_ = nullptr;
 };

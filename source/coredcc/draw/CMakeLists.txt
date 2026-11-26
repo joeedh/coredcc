@@ -1,6 +1,8 @@
 coredcc_library(coredcc_draw
   SOURCES
     bindings.cc
+    drawlist.cc
+    drawlist_reader.cc
     view.cc
   DEPS
     coredcc_bvh

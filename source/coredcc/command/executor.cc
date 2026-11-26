@@ -910,6 +910,7 @@ CommandExecutor::beginInteractive(Context &ctx, const CommandDef &def, PropertyB
   }
   CDCC_TRY(execRecord(ctx, **rec));
   open_ = std::move(rec).value();
+  interactiveSerial_++;
   openCtx_ = &ctx;
   openLib_ = ctx.library();
   if (openLib_) {
@@ -976,6 +977,7 @@ Status CommandExecutor::commit(Context &ctx)
   openLib_ = nullptr;
   openCtx_ = nullptr;
   RecordPtr rec = std::move(open_);
+  interactiveSerial_++;
   Result<PropertyBag> out = finish(ctx, std::move(rec));
   return out.ok() ? Status() : out.status();
 }
@@ -993,6 +995,7 @@ Status CommandExecutor::cancel(Context &ctx)
   Binding bind(ctx, this);
   CDCC_TRY(bind.status());
   RecordPtr rec = std::move(open_);
+  interactiveSerial_++;
   {
     SlotScope slot(slotDepth_);
     rec->undo(ctx);

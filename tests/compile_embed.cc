@@ -49,6 +49,8 @@
 #include "coredcc/command/set_property.h"
 #include "coredcc/command/snapshot_undo.h"
 #include "coredcc/command/undo_strategies.h"
+#include "coredcc/draw/drawlist.h"
+#include "coredcc/draw/overlay.h"
 #include "coredcc/draw/view.h"
 #include "coredcc/graph/api.h"
 #include "coredcc/graph/array.h"
@@ -123,6 +125,10 @@
 #include "coredcc/scene/scene_bvh.h"
 #include "coredcc/scene/solve.h"
 #include "coredcc/scene/transform_registry.h"
+#include "coredcc/tool/input.h"
+#include "coredcc/tool/manager.h"
+#include "coredcc/tool/settings.h"
+#include "coredcc/tool/tool.h"
 
 #include "test_util.h"
 

@@ -1,0 +1,11 @@
+coredcc_library(coredcc_tool
+  SOURCES
+    bindings.cc
+    event_script.cc
+    manager.cc
+    registry.cc
+    settings.cc
+  DEPS
+    coredcc_layout
+    coredcc_draw
+)

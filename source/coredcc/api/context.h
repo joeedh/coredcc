@@ -24,6 +24,7 @@ namespace coredcc {
 class Library;
 class PropertyBag;
 class CommandExecutor;
+class ToolManager;
 
 /**
  * A struct instance during one call: its data, its ApiStruct, and the owner (block or
@@ -80,6 +81,15 @@ public:
   void setExecutor(CommandExecutor *executor)
   {
     executor_ = executor;
+  }
+  /** The viewport's tools (tool/manager.h), set by the host; null for none. */
+  ToolManager *tools() const
+  {
+    return tools_;
+  }
+  void setTools(ToolManager *tools)
+  {
+    tools_ = tools;
   }
 
   /**
@@ -165,6 +175,7 @@ private:
   Library *lib_;
   PointerRef root_;
   CommandExecutor *executor_ = nullptr;
+  ToolManager *tools_ = nullptr;
   BlockHandle scene_;
   Prefix prefix_;
   const PropertyBag *inputs_ = nullptr;
