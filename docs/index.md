@@ -5,6 +5,7 @@
 - [Modules](modules.md): what is where, what depends on what, and where to start reading.
 - [Embedding](embedding.md): the rules for a host: files, graphs, layouts, threads, objects, scenes, picking.
 - [Debugging](debugging.md): problems that took effort to find, techniques, the build cache.
+- [DrawList format](drawlist-format.md): the bytes of what tools and overlays draw, for a host's renderer.
 
 ## State
 - [Task list](implementation-tasklist.md): the phases, what is done and reviewed, what is open.

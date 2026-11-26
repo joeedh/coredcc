@@ -1010,6 +1010,22 @@ produces so that a stroke command can override `redo` by replaying them.
   `UnrealHistory`. Feasibility is verified in a spike before P4 is finalised.
 - **Maya:** an `MPxContext` adapter, deferred.
 
+### What P4 built differently (2026-11-26)
+The reasons are in the P4 plan's notes (`docs/plans/2026-11-25-p4-tools.md`).
+- **Gizmos are a list, not a tree.** Each gizmo has numbered parts. `beginDrag` begins the command, pushes
+  the modal, and returns a Status.
+- **Tools have no `hover` slot.** Moves without a button come to `onEvent` like any other event.
+- **`UndoHistory` has no interactive hooks.** The executor holds the open command; Unreal's adapter opens its
+  own transaction for a gesture.
+- **§2 for Unreal:** Unreal's editor builds have exceptions on. coredcc's library for Unreal is built with
+  Unreal's flags (`/EHsc /GR- /MD`, release CRT), and C4668 is a warning in the module that includes it.
+- **TransformableElements and Symmetry are in `tool/`,** not `scene/`.
+- **Strokes:** a `StrokeBrush` is begun with its target (the object, its world matrix and the mirror axes).
+  Brushes are named through a registry. A stroke's record keeps the samples as applied, mirrored copies
+  included, and redo replays them.
+- **The Unreal host mapping is verified** by the spike (`apps/unreal-spike`, 11 checks), including the View
+  from an `FSceneView` and an ITF adapter in a tools context.
+
 ## 12. UI layout description (`layout/`)
 
 ### LayoutNode

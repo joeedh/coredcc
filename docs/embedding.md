@@ -253,6 +253,81 @@ Unreal, coredcc is exactly one module, so they exist once.
 - `pickScene` answers for the last `evaluateScene`. A `pick` slot is called while nothing may change.
 - To find the first hit only, as a hover does, set `maxHits` to 1: objects behind it aren't asked.
 
+## Tools and the viewport
+- **One `ToolManager` per viewport**, given to the Context with `Context::setTools`. Call `shutdown` with a
+  Context before destroying it, then destroy it before the Runtime.
+- **Events:** `dispatch(ctx, view, event)` for each one, with the View of the viewport the pointer is in.
+  - Positions are device pixels, y down, as for picking.
+  - A move carries the positions the host coalesced into it (`addSample`), oldest first. Strokes use them.
+  - It returns `eventresult::kHandled` when coredcc used the event. Otherwise the host's own navigation may
+    have it.
+  - A modal grabs every event until its gesture ends. Send `Cancel` when the host wants a gesture stopped,
+    and `FocusLost` when the window loses the focus.
+- **Evaluate the scene after each event, as a frame would** (`evaluateScene`). Gizmos and `pickScene` see
+  the last evaluation, so without one they place themselves and pick against old matrices.
+- **Draw:** `draw(ctx, view, list)` gives a DrawList of the tool's, the gizmos' and the modals' overlays.
+  The host renders it after its own scene, with its depth buffer. [drawlist-format.md](drawlist-format.md)
+  is the format, and `DrawListReader` reads it in C++.
+  - Positions are relative to the list's origin, and the origin is the camera's position. Compute them in
+    double, then convert to float for the GPU.
+  - `DepthMode::Test` is drawn with the scene's depth, `Always` over it, and `XRay` twice: tested, and then
+    with the hidden part at a third of the alpha.
+  - Screen-space records (`Line2D`, `Circle2D`) are in device pixels. Their radii and widths are in logical
+    pixels.
+- **Undo during a gesture** cancels it (`CommandExecutor::undo`). A host with its own undo stack should
+  refuse its own undo while `interactiveOpen()` is true, or cancel the gesture first. Unreal's adapter holds a
+  transaction open for that.
+- **The test app** (`apps/testapp/src/overlay/`) is a WebGPU renderer of DrawLists, and
+  `apps/unreal-spike/Source/CoredccSpike/Private/DrawListPdi.cpp` draws one through Unreal's PDI and canvas.
+
+## Keys
+A printable key is the code point it gives without Shift: 'g' for both g and G, '1' for 1 and !. The others
+are `keys::*` in `tool/input.h` (`Keys` in TS):
+
+| coredcc | DOM `KeyboardEvent.key` | Unreal `EKeys` |
+|---|---|---|
+| `kEscape`, `kEnter`, `kTab` | `Escape`, `Enter`, `Tab` | `Escape`, `Enter`, `Tab` |
+| `kBackspace`, `kDelete` | `Backspace`, `Delete` | `BackSpace`, `Delete` |
+| `kLeft`, `kRight`, `kUp`, `kDown` | `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown` | `Left`, `Right`, `Up`, `Down` |
+| `kHome`, `kEnd`, `kPageUp`, `kPageDown` | `Home`, `End`, `PageUp`, `PageDown` | `Home`, `End`, `PageUp`, `PageDown` |
+| `kShift`, `kCtrl`, `kAlt`, `kMeta` | `Shift`, `Control`, `Alt`, `Meta` | `LeftShift`/`RightShift`, `LeftControl`/`RightControl`, `LeftAlt`/`RightAlt`, `LeftCommand`/`RightCommand` |
+| `kF1` + n | `F1` to `F12` | `F1` to `F12` |
+
+- DOM's `key` is the shifted character. For a printable key, take the lower case of a letter, and the digit
+  or symbol from `KeyboardEvent.code` (`Digit1` is '1').
+- Modifiers go in `InputEvent::modifiers` as well as in key events of their own.
+
+## Strokes
+- **A brush is the client's:** a `StrokeBrush`, registered by name (`addNativeStrokeBrush`, or
+  `registerForeignStrokeBrush` and TS `defineStrokeBrush`). `core.tool.stroke`'s `brush` setting names it.
+- **One brush instance per stroke**, and the stroke's undo step owns it. Its `undo` puts back what its
+  `begin` and `apply` wrote. On redo, `begin` runs again and the recorded samples are applied again, so a
+  brush must give the same result from the same samples.
+- **`apply` may only write values.** It runs inside the open gesture, where commands can't run.
+- **Rays hit the stroke's object only**, through `pickScene`, so the scene must have been evaluated, as for
+  any pick. Off the object, samples lie on the plane through the last hit.
+- **Symmetry** of the object's data block (or of the object) mirrors the samples when the `symmetry` setting
+  is on. Each copy has `mirror` set.
+
+## Unreal
+`apps/unreal-spike/` is an Editor module that hosts coredcc's history and tools (`node tools/unreal-spike.mjs`;
+the plan's U-A and U-B notes have the findings). What a real integration takes from it:
+- **Build coredcc as Unreal builds:** `/EHsc /GR- /MD`, release CRT, `_ITERATOR_DEBUG_LEVEL=0`
+  (`apps/unreal-spike/coredcc/CMakeLists.txt`). The include roots are `source/`, `extern/`, `extern/litestl/`
+  and `extern/litestl/extern/`.
+- **Two warnings must not be errors around coredcc's headers:** C4458 (litestl's binding headers) and C4668
+  (Eigen). Unreal's engine headers can reach litestl's `math/` headers by name, because Windows' file system
+  ignores case and litestl's root answers `"Math/Vector.h"`. So C4668 has to be a warning for the whole module
+  (`CppCompileWarningSettings.UndefinedIdentifierWarningLevel`), not only inside a push.
+- **History:** each coredcc command is one Unreal transaction holding an `FCommandChange` on a transactional
+  UObject (`UnrealHistory.cpp`). Expire the changes before the Runtime goes, and root the document object.
+- **Tools:** one `UInteractiveTool` adapter forwards ITF's click-drag and hover behaviors as InputEvents, holds
+  one transaction open while a coredcc gesture is open, and draws the DrawList in `Render` and `DrawHUD`.
+- **The View from an `FSceneView`:** `UnscaledViewRect`, the view matrix, and
+  `ComputeProjectionNoAAMatrix()`, with depth 0 to 1, reversed Z, an infinite far plane, left-handed and z
+  up. `GetProjectionNoAAMatrix()` is the identity until the renderer adds jitter.
+  `ViewFromSceneView.cpp` is the conversion.
+
 ## Interfaces across binary images
 Interface identity is per binary image. These are all statics or addresses inside the
 image that compiled them:

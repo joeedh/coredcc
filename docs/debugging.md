@@ -238,6 +238,57 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 - **How to spot it next time:** a test with `steady_clock` that fails only in CI. `grep -rln steady_clock tests`
   lists them.
 
+### The test app's screenshot shows only the background
+- **Symptom:** in TA3, `shot()` gave a canvas of the background colour, although `frame()` had drawn the
+  gizmo without a WebGPU error.
+- **Cause:** the test app runs in a hidden NW.js window. A hidden window doesn't composite frames that were
+  drawn outside `requestAnimationFrame`, and rAF doesn't run there, so `capturePage` returns an old frame.
+- **Fix:** the testbus method `pixel(x, y)` reads the canvas texture back from the GPU
+  (`copyTextureToBuffer`; the canvas is configured with `COPY_SRC`). `ta3.test.ts` asserts on that.
+- **How to spot it next time:** a screenshot that doesn't change after a draw, in a window that isn't
+  shown. Read the pixel from the GPU before suspecting the renderer.
+
+### A rotate gizmo's turn has the wrong sign, or none, in some views
+- **Symptom:** a drag-math test failed for views where the eye is close to the gizmo: a turn came out with
+  the wrong sign, or as no turn at all.
+- **Cause:** the ring passed behind the eye. Such a ring projects to no closed curve on the screen, so it
+  has no orientation there, and the sign of a turn can't be taken from it.
+- **Fix:** the turn's sign comes from the screen's handedness at the pivot (`screenHandedness`). The test
+  checks the sign only where the whole ring is in front of the eye (step 3's notes).
+- **How to spot it next time:** check whether every point of the ring has `ViewPoint::behind == false`
+  before blaming the turn's math.
+
+### MSVC refuses a `std::span` of a struct (C2233) only in Unreal
+- **Symptom:** the Unreal spike's module failed with C2233 ("arrays of objects containing zero-size
+  arrays are illegal") at a `std::span<const InputEvent>`. Native builds were fine.
+- **Cause:** `InputEvent` had a `litestl::util::Vector<PointerSample, 0>`. litestl keeps the inline storage
+  in an array, and a zero-size array is an MSVC extension, which Unreal's flags turn into an error.
+- **Fix:** `Vector<PointerSample, 1>` (`tool/input.h`). Don't give a litestl Vector 0 inline elements in
+  a type that a host may see.
+- **How to spot it next time:** C2233 pointing at a litestl Vector member. `tools/unreal-spike.mjs` builds
+  the headers with Unreal's flags (S11).
+
+### Eigen's C4668 in an Unreal module, although coredcc's includes are wrapped
+- **Symptom:** C4668 in Eigen (`__LDBL_MANT_DIG__`, `__BYTE_ORDER__`) in translation units that include
+  ITF headers, and in the module's generated file. The coredcc includes were all inside the warning push.
+- **Cause:** the module put `extern/litestl/` on the include path, so engine headers that include
+  `"Math/Vector.h"` (CoreUObject's `Misc/WorldCompositionUtility.h`) found litestl's `math/vector.h`,
+  because Windows' file system ignores case. litestl's math, and Eigen with it, came in outside the push.
+  Moving litestl's root to the system path broke litestl instead: its own `"math/matrix.h"` then found
+  Unreal's.
+- **Fix:** C4668 is a warning for the whole module (`CoredccSpike.Build.cs`). The real fix belongs in
+  litestl: it should include its own headers by a prefixed path.
+- **How to spot it next time:** compile the failing file with `/showIncludes` from `Engine\Source` (where
+  UBT runs the compiler) and look for an `extern\litestl` path under an engine header.
+
+### A View from an `FSceneView` validates as "not a perspective"
+- **Symptom:** `ViewFromSceneView` failed with "the projection isn't a perspective one: ortho is missing"
+  for a view that a test built.
+- **Cause:** `FViewMatrices::GetProjectionNoAAMatrix()` is only filled when the renderer adds TAA's jitter
+  (`SaveProjectionNoAAMatrix`). Before that it is the identity.
+- **Fix:** `ComputeProjectionNoAAMatrix()`, which takes the jitter out of the live projection.
+- **How to spot it next time:** log the matrix. An identity projection is the sign.
+
 ## Techniques
 
 ### Checking that a regression test can fail

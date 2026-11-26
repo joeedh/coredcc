@@ -14,17 +14,18 @@ A module uses those above it, and no others.
 | `parse/` | `coredcc_parse` | `base` | the parsers of datapaths and of command invocations | 5, 6 |
 | `bvh/` | `coredcc_bvh` | `base` | BVHs: building, refitting, queries | 9 |
 | `lib/` | `coredcc_lib` | `props` | the document: blocks, references, garbage collection, files | 8a |
-| `draw/` | `coredcc_draw` | `bvh` | `View`: cameras and projections | 10 |
+| `draw/` | `coredcc_draw` | `bvh` | `View`: cameras and projections; the DrawList; `OverlayDrawable` | 10, 11 |
 | `api/` | `coredcc_api` | `lib`, `props`, `parse` | datapaths: structs, resolving, change notifications | 5 |
 | `command/` | `coredcc_command` | `api` | commands, the executor, undo | 6 |
 | `layout/` | `coredcc_layout` | `command` | descriptions of UIs | 12 |
 | `graph/` | `coredcc_graph` | `command` | the dependency graph | 7 |
 | `scene/` | `coredcc_scene` | `command`, `bvh`, `draw` | objects, transforms, scenes, picking | 8, 9 |
 | `drive/` | `coredcc_drive` | `graph`, `scene` | graphs that drive objects: `SceneDrivers` | 7, 8 |
-| `bind/` | `coredcc_bind` | `graph`, `layout`, `scene` | bindings for scripts | 13 |
+| `tool/` | `coredcc_tool` | `scene`, `layout`, `draw` | input events, tools, gizmos, element transforms, strokes | 11 |
+| `bind/` | `coredcc_bind` | `drive`, `graph`, `layout`, `scene`, `tool` | bindings for scripts | 13 |
 | `testapp/` | `coredcc_testapp` | `bind` | the test app's backend. Not part of the library | — |
 
-`scene/` and `graph/` don't know each other. P5c connects them. `tool/`, and the rest of `draw/`, come with P4.
+`scene/` and `graph/` don't know each other. P5c connects them.
 
 ## Terms
 - **Runtime:** one instance of coredcc, with all of its registries. Several may be in one process.
@@ -81,6 +82,18 @@ A module uses those above it, and no others.
 - `overrides.h`: `OverrideProvider`, for channels that something else drives.
 - `pick.h`: picking. `commands.h`: `core.object.*` and `core.scene.*`.
 
+### `draw/`
+- `view.h`: `View`, what a host says of a viewport, and `ViewMath`, conversions between the world and pixels.
+- `drawlist.h`: the DrawList, what tools and overlays draw, as bytes a renderer reads.
+  [drawlist-format.md](drawlist-format.md) is the format. `overlay.h`: `OverlayDrawable`.
+
+### `tool/`
+- `input.h`: `InputEvent`. `manager.h`: `ToolManager`, which a host gives events and asks for a DrawList.
+- `tool.h`: `Tool`, `Modal` and `Gizmo`, and `ToolDef`. `builtins.h`: `core.tool.select` and
+  `core.tool.transform`; `gizmos/` has the transform gizmo.
+- `elements.h`: `TransformableElements` and `Symmetry`, and the element commands.
+- `stroke.h`: `StrokeSampler`, `StrokeBrush`, `core.stroke` and `core.tool.stroke`.
+
 ### `graph/`
 - `node_type.h`: node types and `GraphKernel`. `def.h`: `GraphDef`, a graph's nodes and links.
 - `instance.h`: `GraphInstance`, evaluation. Only what a change reaches is evaluated again.
@@ -104,5 +117,6 @@ There is no tutorial yet. These tests are small and complete:
 - `tests/command/`: commands and undo.
 - `tests/scene/scene_fixture.h` and `pick_doc.h`: a document with a scene.
 - `tests/graph/test_graph_scene.cc`: a graph that drives transforms.
-- `tests/wasm/spike.test.ts`, `scene.test.ts` and `ui.test.ts`: all of it from TypeScript.
-- `source/coredcc/testapp/`: a host.
+- `tests/tool/tool_fixture.h`: a headless host of tools, driven by events.
+- `tests/wasm/spike.test.ts`, `scene.test.ts`, `ui.test.ts` and `tool.test.ts`: all of it from TypeScript.
+- `source/coredcc/testapp/`: a host. `apps/unreal-spike/`: an Unreal Editor host of the history and the tools.
