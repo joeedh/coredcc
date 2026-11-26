@@ -20,7 +20,7 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 7 | [P3 objects, transforms and BVH](plans/2026-11-24-p3-objects-bvh.md) | P3 | 5 | reviewed; timings to be confirmed on an idle machine | [objects and transforms](reports/feature-report-scene-2026-11-25.md); [BVH, View and picking](reports/feature-report-bvh-2026-11-25.md) |
 | 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | planning (worktree `p4-tools`) | tools and overlay |
 | 9 | [P5 graph and instancing](plans/2026-11-24-p5-graph.md) | P5 | 5 | reviewed | [graph](reports/feature-report-graph-2026-11-25.md) |
-| 10 | [P5c scene evaluator](plans/2026-11-25-p5c-scene-evaluator.md) | P5c | 7, 9 | built; review pending | scene evaluator |
+| 10 | [P5c scene evaluator](plans/2026-11-25-p5c-scene-evaluator.md) | P5c | 7, 9 | reviewed; finding A waits for the user | [scene evaluator](reports/feature-report-scene-evaluator-2026-11-25.md) |
 | 11 | P6 integration: N-API addon, faberforge and ubertopo spikes | P6 | 8, 10, litestl N-API PR | todo | integration |
 
 Each plan file is created in `docs/plans/` when its phase starts, and its row is linked

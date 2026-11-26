@@ -682,8 +682,18 @@ Kept as the work goes; each item says what changed from the design above and why
     blocks whose data it swaps; `test_scene_overrides` notifies when its provider's answers change.
   - The box-by-box BVH refit is tested in `test_scene_incremental`'s growth case: the random documents are
     too small for it (it needs fewer than 1% of the boxes).
+- **After the review** ([feature report](../reports/feature-report-scene-evaluator-2026-11-25.md), `6cb92ff`):
+  - The commands take an optional `scene` input (the Context's scene when unset), as planned; the first build
+    lacked it. Undo of `removeGraph` brings back every cell it removed, at its place.
+  - Notifications come when the graphs are evaluated, not when they are edited (documented in `drive.h`).
+  - The missing type's node type is `scene.missingTransform`. A transform node type that drive/ didn't
+    register isn't used, and `scene.` is reserved for script node types.
+  - `generated()` and `instance()` return pointers; `diagnostics()` syncs and returns a copy;
+    `SceneDrivers::of(lib)` finds the Library's drivers, whoever made them.
+  - `kDrivenAspect` is in `api/change_bus.h`.
 - **Not done yet:** a Scene made from a placeholder (B5) has code but no test; the foreach diagnostic has no
-  test; the wasm suites haven't run with part B.
+  test; the wasm suites haven't run with part B or with the review's fixes; scripts can't set an inner
+  provider; finding A of the review (which scenes' lists drive) waits for the user.
 
 ### Measured, part A (`node tools/bench.mjs drive -- --reps 15`, busy machine, provisional)
 | Case, 100,000 objects | Best ms | Target |

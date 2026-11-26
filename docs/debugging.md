@@ -161,6 +161,11 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   drivers: ..."). A graph that reads an object whose driver failed fails too.
 - **It moves only after another edit:** the host changed something that a graph reads without a notification
   or an epoch move. `SceneDrivers` re-reads the document when the edit counter, the epoch or the time moves.
+- **A cache of driven objects is stale after a graph edit:** driven objects are notified when the graphs are
+  evaluated, not when they are edited. Call `SceneDrivers::update(time)` (evaluateScene does) before reading
+  the cache.
+- **An inner provider's change isn't seen:** it must notify its objects (`kDrivenAspect` is enough); graphs
+  that read them are evaluated again then.
 
 ### A benchmark's numbers don't fit the code
 - **Symptom:** `bench_scene` gave 15 ms, and the same commit gave 21 ms elsewhere. Targets seemed met for hours.
