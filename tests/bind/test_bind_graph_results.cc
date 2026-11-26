@@ -63,9 +63,9 @@ const string kG = "graphs[\"g\"]";
 /* Output `value` (float) and input `a` (Float 2). */
 NodeTypeDef *newDef(const char *id)
 {
-  NodeTypeDef *def = sc::newNodeType(id);
-  test_assert(sc::nodeTypeInput(*def, "a", sc::makeFloat(2)).ok());
-  test_assert(sc::nodeTypeOutput(*def, "value", "float").ok());
+  NodeTypeDef *def = sc::newNodeTypeDef(id);
+  test_assert(sc::nodeTypeDefInput(*def, "a", sc::makeFloat(2)).ok());
+  test_assert(sc::nodeTypeDefOutput(*def, "value", "float").ok());
   return def;
 }
 
@@ -124,35 +124,37 @@ void testDefs()
         StatusCode::InvalidArgument));
     const PropValue quat = sc::makeQuat(0, 0, 1, 0);
     test_assert(quat == PropValue::ofQuat(0, 0, 1, 0));
-    test_assert(sc::nodeTypeInput(*def, "m", mat.value).ok());
-    test_assert(sc::nodeTypeParam(*def, "q", quat).ok());
-    test_assert(
-        hasCode(sc::nodeTypeParam(*def, "no name", quat), StatusCode::InvalidArgument));
-    test_assert(sc::nodeTypeItemParam(*def, "mode", false, 2).ok());
-    test_assert(sc::nodeTypeItem(*def, "mode", "A", 1, "Ay").ok());
-    test_assert(sc::nodeTypeItem(*def, "mode", "B", 2, "").ok());
-    test_assert(sc::nodeTypeItemParam(*def, "flags", true, 4).ok());
-    test_assert(sc::nodeTypeItem(*def, "flags", "F", 4, "").ok());
-    test_assert(
-        hasCode(sc::nodeTypeItem(*def, "q", "F", 4, ""), StatusCode::TypeMismatch));
-    test_assert(hasCode(sc::nodeTypeItem(*def, "no", "F", 4, ""), StatusCode::NotFound));
-    test_assert(hasCode(sc::nodeTypeItemParam(*def, "a b", true, 4),
+    test_assert(sc::nodeTypeDefInput(*def, "m", mat.value).ok());
+    test_assert(sc::nodeTypeDefParam(*def, "q", quat).ok());
+    test_assert(hasCode(sc::nodeTypeDefParam(*def, "no name", quat),
                         StatusCode::InvalidArgument));
-    test_assert(sc::nodeTypePointerParam(*def, "thing", "Thing", true).ok());
-    test_assert(hasCode(sc::nodeTypePointerParam(*def, "t", "", true),
-                        StatusCode::InvalidArgument));
-    test_assert(hasCode(sc::nodeTypePointerParam(*def, "", "Thing", true),
-                        StatusCode::InvalidArgument));
-    test_assert(sc::nodeTypeParam(*def, "n", sc::makeInt(1)).ok());
-    test_assert(sc::nodeTypeRange(*def, "n", 0, 5).ok() &&
-                sc::nodeTypeRange(*def, "a", 0, 6).ok());
-    test_assert(hasCode(sc::nodeTypeRange(*def, "mode", 0, 5), StatusCode::TypeMismatch));
-    test_assert(hasCode(sc::nodeTypeRange(*def, "no", 0, 5), StatusCode::NotFound));
-    test_assert(sc::nodeTypeSocketName(*def, false, "a", "Amount").ok());
-    test_assert(sc::nodeTypeSocketName(*def, true, "value", "Result").ok());
+    test_assert(sc::nodeTypeDefItemParam(*def, "mode", false, 2).ok());
+    test_assert(sc::nodeTypeDefItem(*def, "mode", "A", 1, "Ay").ok());
+    test_assert(sc::nodeTypeDefItem(*def, "mode", "B", 2, "").ok());
+    test_assert(sc::nodeTypeDefItemParam(*def, "flags", true, 4).ok());
+    test_assert(sc::nodeTypeDefItem(*def, "flags", "F", 4, "").ok());
     test_assert(
-        hasCode(sc::nodeTypeSocketName(*def, true, "a", "x"), StatusCode::NotFound));
-    test_assert(sc::nodeTypeOutputAdapter(*def).ok());
+        hasCode(sc::nodeTypeDefItem(*def, "q", "F", 4, ""), StatusCode::TypeMismatch));
+    test_assert(
+        hasCode(sc::nodeTypeDefItem(*def, "no", "F", 4, ""), StatusCode::NotFound));
+    test_assert(hasCode(sc::nodeTypeDefItemParam(*def, "a b", true, 4),
+                        StatusCode::InvalidArgument));
+    test_assert(sc::nodeTypeDefPointerParam(*def, "thing", "Thing", true).ok());
+    test_assert(hasCode(sc::nodeTypeDefPointerParam(*def, "t", "", true),
+                        StatusCode::InvalidArgument));
+    test_assert(hasCode(sc::nodeTypeDefPointerParam(*def, "", "Thing", true),
+                        StatusCode::InvalidArgument));
+    test_assert(sc::nodeTypeDefParam(*def, "n", sc::makeInt(1)).ok());
+    test_assert(sc::nodeTypeDefRange(*def, "n", 0, 5).ok() &&
+                sc::nodeTypeDefRange(*def, "a", 0, 6).ok());
+    test_assert(
+        hasCode(sc::nodeTypeDefRange(*def, "mode", 0, 5), StatusCode::TypeMismatch));
+    test_assert(hasCode(sc::nodeTypeDefRange(*def, "no", 0, 5), StatusCode::NotFound));
+    test_assert(sc::nodeTypeDefSocketName(*def, false, "a", "Amount").ok());
+    test_assert(sc::nodeTypeDefSocketName(*def, true, "value", "Result").ok());
+    test_assert(
+        hasCode(sc::nodeTypeDefSocketName(*def, true, "a", "x"), StatusCode::NotFound));
+    test_assert(sc::nodeTypeDefOutputAdapter(*def).ok());
     string used, linked;
     bool cancelled = true;
     Status noParam, noInput, progress;
@@ -289,7 +291,7 @@ void testReplace()
     test_assert(refused("js.no", StatusCode::NotFound));
     test_assert(refused("value.float", StatusCode::FailedPrecondition));
     NodeTypeDef *more = newDef("js.v");
-    test_assert(sc::nodeTypeParam(*more, "k", sc::makeInt(1)).ok());
+    test_assert(sc::nodeTypeDefParam(*more, "k", sc::makeInt(1)).ok());
     test_assert(
         hasCode(finish(d, host, more, gives(3), true), StatusCode::FailedPrecondition));
     /* A native one with the same sockets. */
@@ -373,11 +375,11 @@ void testTables()
     test_assert(sc::tableAddRow(empty, 1).ok() && sc::tableRowCount(empty) == 1);
 
     /* Through a script kernel: the column doubled, on new keys. */
-    NodeTypeDef *def = sc::newNodeType("js.double");
-    test_assert(sc::nodeTypePayloadInput(*def, "t", "elements").ok());
-    test_assert(sc::nodeTypeInput(*def, "a", sc::makeFloat(2)).ok());
-    test_assert(sc::nodeTypeOutput(*def, "t", "elements").ok());
-    test_assert(sc::nodeTypeOutput(*def, "value", "float").ok());
+    NodeTypeDef *def = sc::newNodeTypeDef("js.double");
+    test_assert(sc::nodeTypeDefPayloadInput(*def, "t", "elements").ok());
+    test_assert(sc::nodeTypeDefInput(*def, "a", sc::makeFloat(2)).ok());
+    test_assert(sc::nodeTypeDefOutput(*def, "t", "elements").ok());
+    test_assert(sc::nodeTypeDefOutput(*def, "value", "float").ok());
     Status notThere, notTable, noOut, notOut, unset;
     Kernel twiceAll = [&](NodeExecContext &n) {
       notThere = sc::nodeInputTable(n, "u").status;

@@ -20,42 +20,46 @@ namespace coredcc::script {
 
 /** A new def for node type `id` (dotted). Owned by the caller, who disposes of it:
  * registration copies it. Names and types are checked when it is registered. */
-NodeTypeDef *newNodeType(const string &id);
-Status nodeTypeUiName(NodeTypeDef &def, const string &s);
+NodeTypeDef *newNodeTypeDef(const string &id);
+Status nodeTypeDefUiName(NodeTypeDef &def, const string &s);
 /** An input whose socket type and default come from `defaultValue`: Bool, Int, Float,
  * String, Vec2-4, Quat or Mat4. */
-Status nodeTypeInput(NodeTypeDef &def, const string &name, const PropValue &defaultValue);
+Status
+nodeTypeDefInput(NodeTypeDef &def, const string &name, const PropValue &defaultValue);
 /** An input of a payload type: a table (`elements`), or one that scripts can only pass
  * on. */
 Status
-nodeTypePayloadInput(NodeTypeDef &def, const string &name, const string &socketType);
-Status nodeTypeOutput(NodeTypeDef &def, const string &name, const string &socketType);
-/** A param, typed as for nodeTypeInput. */
-Status nodeTypeParam(NodeTypeDef &def, const string &name, const PropValue &defaultValue);
-
-/** An Enum param, or a Flags one; its items come with nodeTypeItem. */
+nodeTypeDefPayloadInput(NodeTypeDef &def, const string &name, const string &socketType);
+Status nodeTypeDefOutput(NodeTypeDef &def, const string &name, const string &socketType);
+/** A param, typed as for nodeTypeDefInput. */
 Status
-nodeTypeItemParam(NodeTypeDef &def, const string &name, bool flags, int64_t defaultValue);
-Status nodeTypeItem(NodeTypeDef &def,
-                    const string &param,
-                    const string &key,
-                    int64_t value,
-                    const string &uiName);
-/** A Pointer param to blocks of the api struct `target`. `weak` ones don't keep them. */
-Status nodeTypePointerParam(NodeTypeDef &def,
+nodeTypeDefParam(NodeTypeDef &def, const string &name, const PropValue &defaultValue);
+
+/** An Enum param, or a Flags one; its items come with nodeTypeDefItem. */
+Status nodeTypeDefItemParam(NodeTypeDef &def,
                             const string &name,
-                            const string &target,
-                            bool weak);
+                            bool flags,
+                            int64_t defaultValue);
+Status nodeTypeDefItem(NodeTypeDef &def,
+                       const string &param,
+                       const string &key,
+                       int64_t value,
+                       const string &uiName);
+/** A Pointer param to blocks of the api struct `target`. `weak` ones don't keep them. */
+Status nodeTypeDefPointerParam(NodeTypeDef &def,
+                               const string &name,
+                               const string &target,
+                               bool weak);
 /** What an input or output is shown as. NotFound for one that wasn't added. */
-Status nodeTypeSocketName(NodeTypeDef &def,
-                          bool output,
-                          const string &name,
-                          const string &uiName);
+Status nodeTypeDefSocketName(NodeTypeDef &def,
+                             bool output,
+                             const string &name,
+                             const string &uiName);
 /** The range of a number: of a param, else of an input. NotFound, or TypeMismatch for
  * others. */
-Status nodeTypeRange(NodeTypeDef &def, const string &name, double min, double max);
+Status nodeTypeDefRange(NodeTypeDef &def, const string &name, double min, double max);
 /** NodeTypeFlags::OutputAdapter. The other flag, ThreadSafe, isn't for scripts. */
-Status nodeTypeOutputAdapter(NodeTypeDef &def);
+Status nodeTypeDefOutputAdapter(NodeTypeDef &def);
 
 /**
  * Registers a copy of `def` with the script object `kernel`, which implements the

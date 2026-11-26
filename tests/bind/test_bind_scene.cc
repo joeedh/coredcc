@@ -101,10 +101,10 @@ struct Polar {
 
 TransformTypeInfo *polarType(const char *id)
 {
-  TransformTypeInfo *type = sc::newTransformType(id);
-  must(sc::transformTypeUiName(*type, "Polar"));
-  must(sc::transformChannel(*type, "radius", sc::makeFloat(2), true));
-  must(sc::transformChannel(*type, "angle", sc::makeFloat(0), false));
+  TransformTypeInfo *type = sc::newTransformTypeDef(id);
+  must(sc::transformTypeDefUiName(*type, "Polar"));
+  must(sc::transformTypeDefChannel(*type, "radius", sc::makeFloat(2), true));
+  must(sc::transformTypeDefChannel(*type, "angle", sc::makeFloat(0), false));
   return type;
 }
 
@@ -186,7 +186,7 @@ void testRegistration()
     };
     const auto channel = [&](const char *name, const PropValue &v, bool distance) {
       return [=](TransformTypeInfo &type) {
-        return sc::transformChannel(type, name, v, distance);
+        return sc::transformTypeDefChannel(type, name, v, distance);
       };
     };
     const StatusCode invalid = StatusCode::InvalidArgument;
@@ -214,9 +214,9 @@ void testRegistration()
     }
 
     /* A type with every kind, after all that. */
-    must(sc::transformChannel(*type, "b", sc::makeBool(true), false));
-    must(sc::transformChannel(*type, "i", sc::makeInt(-3), false));
-    must(sc::transformChannel(*type, "v", sc::makeVec3(4, 5, 6), true));
+    must(sc::transformTypeDefChannel(*type, "b", sc::makeBool(true), false));
+    must(sc::transformTypeDefChannel(*type, "i", sc::makeInt(-3), false));
+    must(sc::transformTypeDefChannel(*type, "v", sc::makeVec3(4, 5, 6), true));
     const fakehost::lf::Handle h = host.add(model.make());
     must(sc::registerForeignTransformType(*d.ctx, *type, h, " setWorld  evaluate "));
     litestl::alloc::Delete(type);
@@ -653,13 +653,13 @@ void testNul()
   test_assert(isError(
       Checked<&sc::parseValue>::call(ctx, "scene", nul).status, bad, "argument 3"));
   test_assert(d.lib->size() == scenes);
-  TransformTypeInfo *info = sc::newTransformType("js.nul");
+  TransformTypeInfo *info = sc::newTransformTypeDef("js.nul");
   test_assert(
-      isError(Checked<&sc::transformTypeUiName>::call(*info, nul), bad, "argument 2"));
-  test_assert(
-      isError(Checked<&sc::transformChannel>::call(*info, nul, sc::makeFloat(1), false),
-              bad,
-              "argument 2"));
+      isError(Checked<&sc::transformTypeDefUiName>::call(*info, nul), bad, "argument 2"));
+  test_assert(isError(
+      Checked<&sc::transformTypeDefChannel>::call(*info, nul, sc::makeFloat(1), false),
+      bad,
+      "argument 2"));
   test_assert(info->channels.size() == 0);
   {
     fakehost::Host host;
@@ -670,7 +670,7 @@ void testNul()
   }
   litestl::alloc::Delete(info);
   /* A def's id is refused later. */
-  info = sc::newTransformType(nul);
+  info = sc::newTransformTypeDef(nul);
   test_assert(isError(d.rt.ext<TransformRegistry>().canAdd(*info), bad, "NUL"));
   litestl::alloc::Delete(info);
 }

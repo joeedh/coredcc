@@ -263,7 +263,7 @@ describe('coredcc wasm-st spike', () => {
     /* So are slots, and the handle goes with them. */
     const handles = backend.foreignCount()
     const command = cd.newCommandDef('ts.nul') as CommandDef
-    const node = cd.newNodeType('ts.n') as NodeTypeDef
+    const node = cd.newNodeTypeDef('ts.n') as NodeTypeDef
     const entries: ((handle: number) => Status)[] = [
       (handle) => cd.registerForeignCommand(ctx, command, handle, nul),
       (handle) => cd.registerForeignNodeType(ctx, node, handle, nul),

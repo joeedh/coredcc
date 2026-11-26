@@ -152,9 +152,9 @@ inline Status registerScript(Setup &s,
                              fakehost::lf::Handle *factory = nullptr)
 {
   CommandDef *def = sc::newCommandDef(id);
-  test_assert(sc::defInput(*def, "amount", sc::makeInt(5)).ok());
-  test_assert(sc::defOutput(*def, "result", sc::makeInt(0)).ok());
-  test_assert(sc::defFlags(*def, flags).ok());
+  test_assert(sc::commandDefInput(*def, "amount", sc::makeInt(5)).ok());
+  test_assert(sc::commandDefOutput(*def, "result", sc::makeInt(0)).ok());
+  test_assert(sc::commandDefFlags(*def, flags).ok());
   const fakehost::lf::Handle f = host.add(factoryObj(host, sc_));
   if (factory) {
     *factory = f;

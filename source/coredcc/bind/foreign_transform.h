@@ -14,34 +14,34 @@ namespace coredcc::script {
 
 /** A new transform type `id` (dotted) without channels. Owned by the caller, who disposes
  * of it: registration copies it. Names and channels are checked when it is registered. */
-TransformTypeInfo *newTransformType(const string &id);
-Status transformTypeUiName(TransformTypeInfo &type, const string &s);
+TransformTypeInfo *newTransformTypeDef(const string &id);
+Status transformTypeDefUiName(TransformTypeInfo &type, const string &s);
 /** What TransformTypeInfo::version says. A type that raises it has an `upgrade` slot. */
-Status transformTypeVersion(TransformTypeInfo &type, int32_t version);
+Status transformTypeDefVersion(TransformTypeInfo &type, int32_t version);
 /** A channel def whose kind and default come from `defaultValue`: Bool, Int, Float,
  * Vec2-4 or Quat. A vector is as many channels as it has components. `distance` is for
  * lengths that move the object: a Float or a vector. */
-Status transformChannel(TransformTypeInfo &type,
-                        const string &name,
-                        const PropValue &defaultValue,
-                        bool distance);
+Status transformTypeDefChannel(TransformTypeInfo &type,
+                               const string &name,
+                               const PropValue &defaultValue,
+                               bool distance);
 /** An Enum channel without items. */
 Status transformEnumChannel(TransformTypeInfo &type, const string &name);
 /** An item of one. `value` is a whole number within +-2^53. */
-Status transformChannelItem(TransformTypeInfo &type,
-                            const string &name,
-                            const string &key,
-                            double value,
-                            const string &uiName,
-                            const string &description);
+Status transformTypeDefChannelItem(TransformTypeInfo &type,
+                                   const string &name,
+                                   const string &key,
+                                   double value,
+                                   const string &uiName,
+                                   const string &description);
 /** `what`, as pathMeta names it: `uiName`, `description`, `icon`, `subtype`, `unit`,
  * `displayUnit` (after `unit`), or `default`, an Enum's key (after its items). */
-Status transformChannelText(TransformTypeInfo &type,
-                            const string &name,
-                            const string &what,
-                            const string &text);
+Status transformTypeDefChannelText(TransformTypeInfo &type,
+                                   const string &name,
+                                   const string &what,
+                                   const string &text);
 /** `what`: `range`, `softRange` (a to b), `step` or `precision` (a). */
-Status transformChannelNumbers(
+Status transformTypeDefChannelNumbers(
     TransformTypeInfo &type, const string &name, const string &what, double a, double b);
 
 /**

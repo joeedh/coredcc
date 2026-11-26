@@ -161,14 +161,23 @@ void addFacades(litestl::binding::BindingManager *mgr)
 
   BIND_FUNCTION(mgr, "coredcc::newCommandDef", script::newCommandDef, MARGS("id"))
       .returnsOwned();
-  BIND_FACADE(mgr, "coredcc::defUiName", script::defUiName, MARGS("def", "s"));
-  BIND_FACADE(mgr, "coredcc::defDescription", script::defDescription, MARGS("def", "s"));
-  BIND_FACADE(mgr, "coredcc::defIcon", script::defIcon, MARGS("def", "s"));
-  BIND_FACADE(mgr, "coredcc::defFlags", script::defFlags, MARGS("def", "flags"));
   BIND_FACADE(
-      mgr, "coredcc::defInput", script::defInput, MARGS("def", "name", "defaultValue"));
+      mgr, "coredcc::commandDefUiName", script::commandDefUiName, MARGS("def", "s"));
+  BIND_FACADE(mgr,
+              "coredcc::commandDefDescription",
+              script::commandDefDescription,
+              MARGS("def", "s"));
+  BIND_FACADE(mgr, "coredcc::commandDefIcon", script::commandDefIcon, MARGS("def", "s"));
   BIND_FACADE(
-      mgr, "coredcc::defOutput", script::defOutput, MARGS("def", "name", "defaultValue"));
+      mgr, "coredcc::commandDefFlags", script::commandDefFlags, MARGS("def", "flags"));
+  BIND_FACADE(mgr,
+              "coredcc::commandDefInput",
+              script::commandDefInput,
+              MARGS("def", "name", "defaultValue"));
+  BIND_FACADE(mgr,
+              "coredcc::commandDefOutput",
+              script::commandDefOutput,
+              MARGS("def", "name", "defaultValue"));
   BIND_OWNING_FACADE(mgr,
                      "coredcc::registerForeignCommand",
                      script::registerForeignCommand,
@@ -264,24 +273,25 @@ void addLibraryFacades(litestl::binding::BindingManager *mgr)
 
 void addGraphFacades(litestl::binding::BindingManager *mgr)
 {
-  BIND_FUNCTION(mgr, "coredcc::newNodeType", script::newNodeType, MARGS("id"))
+  BIND_FUNCTION(mgr, "coredcc::newNodeTypeDef", script::newNodeTypeDef, MARGS("id"))
       .returnsOwned();
-  BIND_FACADE(mgr, "coredcc::nodeTypeUiName", script::nodeTypeUiName, MARGS("def", "s"));
+  BIND_FACADE(
+      mgr, "coredcc::nodeTypeDefUiName", script::nodeTypeDefUiName, MARGS("def", "s"));
   BIND_FACADE(mgr,
-              "coredcc::nodeTypeInput",
-              script::nodeTypeInput,
+              "coredcc::nodeTypeDefInput",
+              script::nodeTypeDefInput,
               MARGS("def", "name", "defaultValue"));
   BIND_FACADE(mgr,
-              "coredcc::nodeTypePayloadInput",
-              script::nodeTypePayloadInput,
+              "coredcc::nodeTypeDefPayloadInput",
+              script::nodeTypeDefPayloadInput,
               MARGS("def", "name", "socketType"));
   BIND_FACADE(mgr,
-              "coredcc::nodeTypeOutput",
-              script::nodeTypeOutput,
+              "coredcc::nodeTypeDefOutput",
+              script::nodeTypeDefOutput,
               MARGS("def", "name", "socketType"));
   BIND_FACADE(mgr,
-              "coredcc::nodeTypeParam",
-              script::nodeTypeParam,
+              "coredcc::nodeTypeDefParam",
+              script::nodeTypeDefParam,
               MARGS("def", "name", "defaultValue"));
   BIND_OWNING_FACADE(mgr,
                      "coredcc::registerForeignNodeType",
@@ -294,27 +304,29 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
                      3,
                      MARGS("ctx", "def", "kernel", "slots"));
   BIND_FACADE(mgr,
-              "coredcc::nodeTypeSocketName",
-              script::nodeTypeSocketName,
+              "coredcc::nodeTypeDefSocketName",
+              script::nodeTypeDefSocketName,
               MARGS("def", "output", "name", "uiName"));
   BIND_FACADE(mgr,
-              "coredcc::nodeTypeRange",
-              script::nodeTypeRange,
+              "coredcc::nodeTypeDefRange",
+              script::nodeTypeDefRange,
               MARGS("def", "name", "min", "max"));
   BIND_FACADE(mgr,
-              "coredcc::nodeTypeItemParam",
-              script::nodeTypeItemParam,
+              "coredcc::nodeTypeDefItemParam",
+              script::nodeTypeDefItemParam,
               MARGS("def", "name", "flags", "defaultValue"));
   BIND_FACADE(mgr,
-              "coredcc::nodeTypeItem",
-              script::nodeTypeItem,
+              "coredcc::nodeTypeDefItem",
+              script::nodeTypeDefItem,
               MARGS("def", "param", "key", "value", "uiName"));
   BIND_FACADE(mgr,
-              "coredcc::nodeTypePointerParam",
-              script::nodeTypePointerParam,
+              "coredcc::nodeTypeDefPointerParam",
+              script::nodeTypeDefPointerParam,
               MARGS("def", "name", "target", "weak"));
-  BIND_FACADE(
-      mgr, "coredcc::nodeTypeOutputAdapter", script::nodeTypeOutputAdapter, MARGS("def"));
+  BIND_FACADE(mgr,
+              "coredcc::nodeTypeDefOutputAdapter",
+              script::nodeTypeDefOutputAdapter,
+              MARGS("def"));
 
   BIND_FACADE(mgr, "coredcc::nodeInput", script::nodeInput, MARGS("node", "name"));
   BIND_FACADE(mgr, "coredcc::nodeParam", script::nodeParam, MARGS("node", "name"));
@@ -464,35 +476,36 @@ void addSceneFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::vec3At", script::vec3At, MARGS("v", "i"));
   BIND_FACADE(mgr, "coredcc::vec3Put", script::vec3Put, MARGS("v", "i", "x"));
 
-  BIND_FUNCTION(mgr, "coredcc::newTransformType", script::newTransformType, MARGS("id"))
+  BIND_FUNCTION(
+      mgr, "coredcc::newTransformTypeDef", script::newTransformTypeDef, MARGS("id"))
       .returnsOwned();
   BIND_FACADE(mgr,
-              "coredcc::transformTypeUiName",
-              script::transformTypeUiName,
+              "coredcc::transformTypeDefUiName",
+              script::transformTypeDefUiName,
               MARGS("type", "s"));
   BIND_FACADE(mgr,
-              "coredcc::transformChannel",
-              script::transformChannel,
+              "coredcc::transformTypeDefChannel",
+              script::transformTypeDefChannel,
               MARGS("type", "name", "defaultValue", "distance"));
   BIND_FACADE(mgr,
-              "coredcc::transformTypeVersion",
-              script::transformTypeVersion,
+              "coredcc::transformTypeDefVersion",
+              script::transformTypeDefVersion,
               MARGS("type", "version"));
   BIND_FACADE(mgr,
               "coredcc::transformEnumChannel",
               script::transformEnumChannel,
               MARGS("type", "name"));
   BIND_FACADE(mgr,
-              "coredcc::transformChannelItem",
-              script::transformChannelItem,
+              "coredcc::transformTypeDefChannelItem",
+              script::transformTypeDefChannelItem,
               MARGS("type", "name", "key", "value", "uiName", "description"));
   BIND_FACADE(mgr,
-              "coredcc::transformChannelText",
-              script::transformChannelText,
+              "coredcc::transformTypeDefChannelText",
+              script::transformTypeDefChannelText,
               MARGS("type", "name", "what", "text"));
   BIND_FACADE(mgr,
-              "coredcc::transformChannelNumbers",
-              script::transformChannelNumbers,
+              "coredcc::transformTypeDefChannelNumbers",
+              script::transformTypeDefChannelNumbers,
               MARGS("type", "name", "what", "a", "b"));
   BIND_OWNING_FACADE(mgr,
                      "coredcc::registerForeignTransformType",

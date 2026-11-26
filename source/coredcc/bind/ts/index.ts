@@ -314,15 +314,15 @@ export function defineCommand(ctx: Context, spec: CommandSpec, Cls: new () => Sc
   const def = cd.newCommandDef(spec.id)
   if (!def) throw new Error(`defineCommand: no def for ${spec.id}`)
   try {
-    if (spec.uiName !== undefined) check(cd.defUiName(def, spec.uiName))
-    if (spec.description !== undefined) check(cd.defDescription(def, spec.description))
-    if (spec.icon !== undefined) check(cd.defIcon(def, spec.icon))
-    check(cd.defFlags(def, flags))
+    if (spec.uiName !== undefined) check(cd.commandDefUiName(def, spec.uiName))
+    if (spec.description !== undefined) check(cd.commandDefDescription(def, spec.description))
+    if (spec.icon !== undefined) check(cd.commandDefIcon(def, spec.icon))
+    check(cd.commandDefFlags(def, flags))
     for (const [name, v] of Object.entries(spec.inputs ?? {})) {
-      withValue(ctx, v, (pv) => check(cd.defInput(def, name, pv)))
+      withValue(ctx, v, (pv) => check(cd.commandDefInput(def, name, pv)))
     }
     for (const [name, v] of Object.entries(spec.outputs ?? {})) {
-      withValue(ctx, v, (pv) => check(cd.defOutput(def, name, pv)))
+      withValue(ctx, v, (pv) => check(cd.commandDefOutput(def, name, pv)))
     }
     /* The adapter supplies every required slot; redo only when the class has one, so
      * a class without it keeps redo-by-exec. */

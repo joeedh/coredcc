@@ -26,12 +26,12 @@ namespace lf = litestl::binding::foreign;
 
 /* ---- node types ---- */
 
-NodeTypeDef *newNodeType(const string &id)
+NodeTypeDef *newNodeTypeDef(const string &id)
 {
   return litestl::alloc::New<NodeTypeDef>("coredcc::NodeTypeDef", detail::withoutNul(id));
 }
 
-Status nodeTypeUiName(NodeTypeDef &def, const string &s)
+Status nodeTypeDefUiName(NodeTypeDef &def, const string &s)
 {
   def.uiName(view(s));
   return Status();
@@ -57,9 +57,10 @@ graphProp(const char *what, const string &name, const PropValue &defaultValue)
   return p;
 }
 
-Status nodeTypeInput(NodeTypeDef &def, const string &name, const PropValue &defaultValue)
+Status
+nodeTypeDefInput(NodeTypeDef &def, const string &name, const PropValue &defaultValue)
 {
-  Result<PropertyDef> p = graphProp("nodeTypeInput", name, defaultValue);
+  Result<PropertyDef> p = graphProp("nodeTypeDefInput", name, defaultValue);
   if (!p.ok()) {
     return p.status();
   }
@@ -68,21 +69,22 @@ Status nodeTypeInput(NodeTypeDef &def, const string &name, const PropValue &defa
 }
 
 Status
-nodeTypePayloadInput(NodeTypeDef &def, const string &name, const string &socketType)
+nodeTypeDefPayloadInput(NodeTypeDef &def, const string &name, const string &socketType)
 {
   def.payloadInput(view(name), view(socketType));
   return Status();
 }
 
-Status nodeTypeOutput(NodeTypeDef &def, const string &name, const string &socketType)
+Status nodeTypeDefOutput(NodeTypeDef &def, const string &name, const string &socketType)
 {
   def.output(view(name), view(socketType));
   return Status();
 }
 
-Status nodeTypeParam(NodeTypeDef &def, const string &name, const PropValue &defaultValue)
+Status
+nodeTypeDefParam(NodeTypeDef &def, const string &name, const PropValue &defaultValue)
 {
-  Result<PropertyDef> p = graphProp("nodeTypeParam", name, defaultValue);
+  Result<PropertyDef> p = graphProp("nodeTypeDefParam", name, defaultValue);
   if (!p.ok()) {
     return p.status();
   }
@@ -96,11 +98,13 @@ static Status notThere(const char *what, const string &name)
                std::string(what) + ": the def has no '" + name.c_str() + "'");
 }
 
-Status
-nodeTypeItemParam(NodeTypeDef &def, const string &name, bool flags, int64_t defaultValue)
+Status nodeTypeDefItemParam(NodeTypeDef &def,
+                            const string &name,
+                            bool flags,
+                            int64_t defaultValue)
 {
   Result<PropertyDef> named =
-      detail::scriptProp("nodeTypeItemParam", name, PropValue::ofBool(false), false);
+      detail::scriptProp("nodeTypeDefItemParam", name, PropValue::ofBool(false), false);
   if (!named.ok()) {
     return named.status();
   }
@@ -112,68 +116,68 @@ nodeTypeItemParam(NodeTypeDef &def, const string &name, bool flags, int64_t defa
   return Status();
 }
 
-Status nodeTypeItem(NodeTypeDef &def,
-                    const string &param,
-                    const string &key,
-                    int64_t value,
-                    const string &uiName)
+Status nodeTypeDefItem(NodeTypeDef &def,
+                       const string &param,
+                       const string &key,
+                       int64_t value,
+                       const string &uiName)
 {
   PropertyDef *p = def.paramDef(view(param));
   if (!p) {
-    return notThere("nodeTypeItem", param);
+    return notThere("nodeTypeDefItem", param);
   }
   if (!p->enumMeta()) {
     return error(StatusCode::TypeMismatch,
-                 std::string("nodeTypeItem: '") + param.c_str() + "' has no items");
+                 std::string("nodeTypeDefItem: '") + param.c_str() + "' has no items");
   }
   p->item(view(key), value, view(uiName));
   return Status();
 }
 
-Status nodeTypePointerParam(NodeTypeDef &def,
-                            const string &name,
-                            const string &target,
-                            bool weak)
+Status nodeTypeDefPointerParam(NodeTypeDef &def,
+                               const string &name,
+                               const string &target,
+                               bool weak)
 {
-  Result<PropertyDef> named =
-      detail::scriptProp("nodeTypePointerParam", name, PropValue::ofBool(false), false);
+  Result<PropertyDef> named = detail::scriptProp(
+      "nodeTypeDefPointerParam", name, PropValue::ofBool(false), false);
   if (!named.ok()) {
     return named.status();
   }
   if (target.size() == 0) {
     return error(StatusCode::InvalidArgument,
-                 "nodeTypePointerParam: there is no struct ''");
+                 "nodeTypeDefPointerParam: there is no struct ''");
   }
   def.param(PropertyDef::pointerProp(view(name), StructId::of(view(target))), weak);
   return Status();
 }
 
-Status nodeTypeSocketName(NodeTypeDef &def,
-                          bool output,
-                          const string &name,
-                          const string &uiName)
+Status nodeTypeDefSocketName(NodeTypeDef &def,
+                             bool output,
+                             const string &name,
+                             const string &uiName)
 {
   return def.setSocketUiName(output, view(name), view(uiName))
              ? Status()
-             : notThere("nodeTypeSocketName", name);
+             : notThere("nodeTypeDefSocketName", name);
 }
 
-Status nodeTypeRange(NodeTypeDef &def, const string &name, double min, double max)
+Status nodeTypeDefRange(NodeTypeDef &def, const string &name, double min, double max)
 {
   PropertyDef *p = def.paramDef(view(name));
   p = p ? p : def.inputDef(view(name));
   if (!p) {
-    return notThere("nodeTypeRange", name);
+    return notThere("nodeTypeDefRange", name);
   }
   if (!p->numeric()) {
     return error(StatusCode::TypeMismatch,
-                 std::string("nodeTypeRange: '") + name.c_str() + "' is no number");
+                 std::string("nodeTypeDefRange: '") + name.c_str() + "' is no number");
   }
   p->range(min, max);
   return Status();
 }
 
-Status nodeTypeOutputAdapter(NodeTypeDef &def)
+Status nodeTypeDefOutputAdapter(NodeTypeDef &def)
 {
   def.flags(NodeTypeFlags::OutputAdapter);
   return Status();

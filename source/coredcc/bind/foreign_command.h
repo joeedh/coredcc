@@ -134,16 +134,18 @@ Status foreignImplementable(const lbt::_StructBase *iface);
 /** A new def for command `id` (dotted). Owned by the caller, who disposes of it:
  * registration copies it. */
 CommandDef *newCommandDef(const string &id);
-Status defUiName(CommandDef &def, const string &s);
-Status defDescription(CommandDef &def, const string &s);
-Status defIcon(CommandDef &def, const string &s);
-Status defFlags(CommandDef &def, uint32_t flags);
+Status commandDefUiName(CommandDef &def, const string &s);
+Status commandDefDescription(CommandDef &def, const string &s);
+Status commandDefIcon(CommandDef &def, const string &s);
+Status commandDefFlags(CommandDef &def, uint32_t flags);
 /** An input whose kind and default come from `defaultValue`: Bool, Int, Float, String
  * or Vec2-4. Other types are InvalidArgument, and so is a name that isn't an
  * identifier. A name the def's inputs already have is AlreadyExists. */
-Status defInput(CommandDef &def, const string &name, const PropValue &defaultValue);
-/** An output, typed and checked as for defInput. */
-Status defOutput(CommandDef &def, const string &name, const PropValue &defaultValue);
+Status
+commandDefInput(CommandDef &def, const string &name, const PropValue &defaultValue);
+/** An output, typed and checked as for commandDefInput. */
+Status
+commandDefOutput(CommandDef &def, const string &name, const PropValue &defaultValue);
 
 /**
  * Registers a copy of `def` as a script command, made by the factory `factory`, whose

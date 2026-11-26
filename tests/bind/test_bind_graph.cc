@@ -62,11 +62,11 @@ Status registerScale(Doc &d,
                      fakehost::lf::Handle *handle = nullptr,
                      const char *slots = "evaluate")
 {
-  NodeTypeDef *def = sc::newNodeType(id);
-  test_assert(sc::nodeTypeUiName(*def, "Scale").ok());
-  test_assert(sc::nodeTypeInput(*def, "a", sc::makeFloat(2)).ok());
-  test_assert(sc::nodeTypeParam(*def, "k", sc::makeFloat(3)).ok());
-  test_assert(sc::nodeTypeOutput(*def, "value", "float").ok());
+  NodeTypeDef *def = sc::newNodeTypeDef(id);
+  test_assert(sc::nodeTypeDefUiName(*def, "Scale").ok());
+  test_assert(sc::nodeTypeDefInput(*def, "a", sc::makeFloat(2)).ok());
+  test_assert(sc::nodeTypeDefParam(*def, "k", sc::makeFloat(3)).ok());
+  test_assert(sc::nodeTypeDefOutput(*def, "value", "float").ok());
   const fakehost::lf::Handle h = host.add(kernelObj(std::move(fn)));
   if (handle) {
     *handle = h;
@@ -134,7 +134,7 @@ void testRegistration()
       test_assert(host.releasesOf(h) == 1 && d.rt.ifaces().tableCount() == tables);
       test_assert(d.rt.ext<NodeTypeRegistry>().size() == types);
     }
-    NodeTypeDef *def = sc::newNodeType("js.b");
+    NodeTypeDef *def = sc::newNodeTypeDef("js.b");
     test_assert(hasCode(sc::registerForeignNodeType(d.ctx, *def, 0, "evaluate"),
                         StatusCode::InvalidArgument));
     /* What the def says is checked before anything is registered. */
@@ -144,17 +144,17 @@ void testRegistration()
       test_assert(host.releasesOf(h) == 1 && d.rt.ifaces().tableCount() == tables);
     };
     refused(StatusCode::InvalidArgument); /* no output */
-    test_assert(sc::nodeTypeOutput(*def, "o", "nope").ok());
+    test_assert(sc::nodeTypeDefOutput(*def, "o", "nope").ok());
     refused(StatusCode::NotFound);
     litestl::alloc::Delete(def);
-    def = sc::newNodeType("js.b");
-    test_assert(sc::nodeTypeOutput(*def, "o", "float").ok());
-    test_assert(hasCode(sc::nodeTypeInput(*def, "no name", sc::makeInt(1)),
+    def = sc::newNodeTypeDef("js.b");
+    test_assert(sc::nodeTypeDefOutput(*def, "o", "float").ok());
+    test_assert(hasCode(sc::nodeTypeDefInput(*def, "no name", sc::makeInt(1)),
                         StatusCode::InvalidArgument));
-    test_assert(hasCode(sc::nodeTypeParam(*def, "m", PropValue::ofEnum(1)),
+    test_assert(hasCode(sc::nodeTypeDefParam(*def, "m", PropValue::ofEnum(1)),
                         StatusCode::InvalidArgument));
-    test_assert(sc::nodeTypeInput(*def, "x", sc::makeInt(1)).ok());
-    test_assert(sc::nodeTypeInput(*def, "x", sc::makeInt(1)).ok());
+    test_assert(sc::nodeTypeDefInput(*def, "x", sc::makeInt(1)).ok());
+    test_assert(sc::nodeTypeDefInput(*def, "x", sc::makeInt(1)).ok());
     refused(StatusCode::InvalidArgument); /* two inputs */
     litestl::alloc::Delete(def);
 
@@ -165,8 +165,8 @@ void testRegistration()
     test_assert(hasCode(registerScale(d, host, "js.a", scale, &again),
                         StatusCode::AlreadyExists));
     test_assert(host.releasesOf(again) == 1);
-    def = sc::newNodeType("js.c");
-    test_assert(sc::nodeTypeOutput(*def, "o", "float").ok());
+    def = sc::newNodeTypeDef("js.c");
+    test_assert(sc::nodeTypeDefOutput(*def, "o", "float").ok());
     const fakehost::lf::Handle c = host.add(kernelObj(scale));
     test_assert(sc::registerForeignNodeType(d.ctx, *def, c, "evaluate").ok());
     test_assert(strcmp(def->name().c_str(), "js.c") == 0);
@@ -203,13 +203,13 @@ void testKernel()
 
     /* What a kernel is told of its mistakes. */
     Status in, out, param, wrong, passIn, passOut, payload, make, pass;
-    NodeTypeDef *def = sc::newNodeType("js.odd");
-    test_assert(sc::nodeTypePayloadInput(*def, "mesh", "t.Mesh").ok());
-    test_assert(sc::nodeTypeInput(*def, "text", sc::makeString("x").value).ok());
-    test_assert(sc::nodeTypeInput(*def, "i", sc::makeInt(7)).ok());
-    test_assert(sc::nodeTypeOutput(*def, "value", "float").ok());
-    test_assert(sc::nodeTypeOutput(*def, "mesh", "t.Mesh").ok());
-    test_assert(sc::nodeTypeOutput(*def, "copy", "string").ok());
+    NodeTypeDef *def = sc::newNodeTypeDef("js.odd");
+    test_assert(sc::nodeTypeDefPayloadInput(*def, "mesh", "t.Mesh").ok());
+    test_assert(sc::nodeTypeDefInput(*def, "text", sc::makeString("x").value).ok());
+    test_assert(sc::nodeTypeDefInput(*def, "i", sc::makeInt(7)).ok());
+    test_assert(sc::nodeTypeDefOutput(*def, "value", "float").ok());
+    test_assert(sc::nodeTypeDefOutput(*def, "mesh", "t.Mesh").ok());
+    test_assert(sc::nodeTypeDefOutput(*def, "copy", "string").ok());
     Kernel odd = [&](NodeExecContext &c) {
       in = sc::nodeInput(c, "txet").status;
       param = sc::nodeParam(c, "p").status;

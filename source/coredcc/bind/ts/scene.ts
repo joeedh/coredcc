@@ -302,18 +302,18 @@ function addChannel(type: TransformTypeInfo, name: string, spec: ChannelSpec, di
     if (typeof spec.default !== 'string') throw new TypeError(`channel ${name}: an enum's default is a key`)
     check(cd.transformEnumChannel(type, name))
     for (const i of spec.items) {
-      check(cd.transformChannelItem(type, name, i.key, i.value, i.uiName ?? '', i.description ?? ''))
+      check(cd.transformTypeDefChannelItem(type, name, i.key, i.value, i.uiName ?? '', i.description ?? ''))
     }
-    check(cd.transformChannelText(type, name, 'default', spec.default))
+    check(cd.transformTypeDefChannelText(type, name, 'default', spec.default))
   } else {
-    withValue(undefined, spec.default, (pv) => check(cd.transformChannel(type, name, pv, distance)))
+    withValue(undefined, spec.default, (pv) => check(cd.transformTypeDefChannel(type, name, pv, distance)))
   }
   for (const what of channelTexts) {
     const text = spec[what]
-    if (text !== undefined) check(cd.transformChannelText(type, name, what, text))
+    if (text !== undefined) check(cd.transformTypeDefChannelText(type, name, what, text))
   }
   const numbers = (what: string, a?: number, b = 0) => {
-    if (a !== undefined) check(cd.transformChannelNumbers(type, name, what, a, b))
+    if (a !== undefined) check(cd.transformTypeDefChannelNumbers(type, name, what, a, b))
   }
   const range = (what: string, min?: number, max?: number) => {
     if (min !== undefined || max !== undefined) numbers(what, min ?? -Infinity, max ?? Infinity)
@@ -336,11 +336,11 @@ export function defineTransformType(ctx: Context, spec: TransformTypeSpec) {
   }
   const odd = (spec.distances ?? []).find((name) => !Object.hasOwn(spec.channels, name))
   if (odd !== undefined) throw new TypeError(`defineTransformType: ${spec.id}: no channel is named '${odd}'`)
-  const type = cd.newTransformType(spec.id)
+  const type = cd.newTransformTypeDef(spec.id)
   if (!type) throw new Error(`defineTransformType: no type for ${spec.id}`)
   try {
-    if (spec.uiName !== undefined) check(cd.transformTypeUiName(type, spec.uiName))
-    if (spec.version !== undefined) check(cd.transformTypeVersion(type, spec.version))
+    if (spec.uiName !== undefined) check(cd.transformTypeDefUiName(type, spec.uiName))
+    if (spec.version !== undefined) check(cd.transformTypeDefVersion(type, spec.version))
     for (const [name, v] of Object.entries(spec.channels)) {
       const distance = spec.distances?.includes(name) ?? false
       addChannel(type, name, isChannelSpec(v) ? v : {default: v}, distance)

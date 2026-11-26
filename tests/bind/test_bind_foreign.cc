@@ -76,19 +76,19 @@ static void test_registration_refusals()
 static void test_def_facades()
 {
   CommandDef *def = sc::newCommandDef("js.def");
-  test_assert(sc::defUiName(*def, "Script Def").ok());
+  test_assert(sc::commandDefUiName(*def, "Script Def").ok());
   test_assert(strcmp(def->uiNameText().c_str(), "Script Def") == 0);
-  test_assert(sc::defFlags(*def, 1u << 10).code() == StatusCode::InvalidArgument);
-  test_assert(sc::defFlags(*def, uint32_t(CommandFlags::NoUndo)).ok());
+  test_assert(sc::commandDefFlags(*def, 1u << 10).code() == StatusCode::InvalidArgument);
+  test_assert(sc::commandDefFlags(*def, uint32_t(CommandFlags::NoUndo)).ok());
   test_assert(def->has(CommandFlags::NoUndo));
-  test_assert(sc::defInput(*def, "m", PropValue::identityMat4()).code() ==
+  test_assert(sc::commandDefInput(*def, "m", PropValue::identityMat4()).code() ==
               StatusCode::InvalidArgument);
-  test_assert(sc::defOutput(*def, "e", PropValue::ofEnum(1)).code() ==
+  test_assert(sc::commandDefOutput(*def, "e", PropValue::ofEnum(1)).code() ==
               StatusCode::InvalidArgument);
-  test_assert(sc::defInput(*def, "b", sc::makeBool(true)).ok());
-  test_assert(sc::defInput(*def, "f", sc::makeFloat(0.5)).ok());
-  test_assert(sc::defInput(*def, "s", sc::makeString("x").value).ok());
-  test_assert(sc::defInput(*def, "v", sc::makeVec3(1, 2, 3)).ok());
+  test_assert(sc::commandDefInput(*def, "b", sc::makeBool(true)).ok());
+  test_assert(sc::commandDefInput(*def, "f", sc::makeFloat(0.5)).ok());
+  test_assert(sc::commandDefInput(*def, "s", sc::makeString("x").value).ok());
+  test_assert(sc::commandDefInput(*def, "v", sc::makeVec3(1, 2, 3)).ok());
   test_assert(def->inputCount() == 4 && def->inputDef(3).kind() == PropKind::Vec3);
   test_assert(def->inputDef(3).defaultValue() == sc::makeVec3(1, 2, 3));
   litestl::alloc::Delete(def);

@@ -263,31 +263,31 @@ CommandDef *newCommandDef(const string &id)
   return litestl::alloc::New<CommandDef>("coredcc::CommandDef", detail::withoutNul(id));
 }
 
-Status defUiName(CommandDef &def, const string &s)
+Status commandDefUiName(CommandDef &def, const string &s)
 {
   def.uiName(view(s));
   return Status();
 }
 
-Status defDescription(CommandDef &def, const string &s)
+Status commandDefDescription(CommandDef &def, const string &s)
 {
   def.description(view(s));
   return Status();
 }
 
-Status defIcon(CommandDef &def, const string &s)
+Status commandDefIcon(CommandDef &def, const string &s)
 {
   def.icon(view(s));
   return Status();
 }
 
-Status defFlags(CommandDef &def, uint32_t flags)
+Status commandDefFlags(CommandDef &def, uint32_t flags)
 {
   const uint32_t known = uint32_t(CommandFlags::Private | CommandFlags::NoUndo |
                                   CommandFlags::UndoBarrier | CommandFlags::Interactive);
   if ((flags & ~known) != 0) {
     return error(StatusCode::InvalidArgument,
-                 "defFlags: unknown flag bits " + std::to_string(flags & ~known));
+                 "commandDefFlags: unknown flag bits " + std::to_string(flags & ~known));
   }
   def.flags(CommandFlags(flags));
   return Status();
@@ -336,10 +336,10 @@ Result<PropertyDef> detail::scriptProp(const char *what,
   return pd;
 }
 
-Status defInput(CommandDef &def, const string &name, const PropValue &defaultValue)
+Status commandDefInput(CommandDef &def, const string &name, const PropValue &defaultValue)
 {
   const bool taken = def.findInput(view(name)) != nullptr;
-  Result<PropertyDef> pd = scriptProp("defInput", name, defaultValue, taken);
+  Result<PropertyDef> pd = scriptProp("commandDefInput", name, defaultValue, taken);
   if (!pd.ok()) {
     return pd.status();
   }
@@ -347,13 +347,14 @@ Status defInput(CommandDef &def, const string &name, const PropValue &defaultVal
   return Status();
 }
 
-Status defOutput(CommandDef &def, const string &name, const PropValue &defaultValue)
+Status
+commandDefOutput(CommandDef &def, const string &name, const PropValue &defaultValue)
 {
   bool taken = false;
   for (int i = 0; i < def.outputCount(); i++) {
     taken = taken || def.outputDef(i).apiName() == name;
   }
-  Result<PropertyDef> pd = scriptProp("defOutput", name, defaultValue, taken);
+  Result<PropertyDef> pd = scriptProp("commandDefOutput", name, defaultValue, taken);
   if (!pd.ok()) {
     return pd.status();
   }

@@ -194,63 +194,69 @@ void testChannels()
   {
     Plane plane;
     Doc d;
-    TransformTypeInfo *type = sc::newTransformType("js.full");
-    must(sc::transformTypeVersion(*type, 3));
+    TransformTypeInfo *type = sc::newTransformTypeDef("js.full");
+    must(sc::transformTypeDefVersion(*type, 3));
     test_assert(isError(
-        sc::transformTypeVersion(*type, -1), StatusCode::InvalidArgument, "negative"));
-    must(sc::transformChannel(*type, "q", PropValue::ofQuat(0, 0, 1, 0), false));
-    test_assert(
-        isError(sc::transformChannel(*type, "r", PropValue::ofQuat(0, 0, 0, 1), true),
-                StatusCode::InvalidArgument,
-                "distance"));
-    must(sc::transformChannel(*type, "len", sc::makeFloat(2), true));
+        sc::transformTypeDefVersion(*type, -1), StatusCode::InvalidArgument, "negative"));
+    must(sc::transformTypeDefChannel(*type, "q", PropValue::ofQuat(0, 0, 1, 0), false));
+    test_assert(isError(
+        sc::transformTypeDefChannel(*type, "r", PropValue::ofQuat(0, 0, 0, 1), true),
+        StatusCode::InvalidArgument,
+        "distance"));
+    must(sc::transformTypeDefChannel(*type, "len", sc::makeFloat(2), true));
     must(sc::transformEnumChannel(*type, "mode"));
-    must(sc::transformChannelItem(*type, "mode", "SLOW", 1, "Slow", "Less"));
-    must(sc::transformChannelItem(*type, "mode", "FAST", -5, "Fast", ""));
-    must(sc::transformChannelText(*type, "mode", "default", "FAST"));
-    must(sc::transformChannelText(*type, "len", "uiName", "Length"));
-    must(sc::transformChannelText(*type, "len", "description", "How long"));
-    must(sc::transformChannelText(*type, "len", "icon", "ruler"));
-    must(sc::transformChannelText(*type, "len", "subtype", "Distance"));
-    must(sc::transformChannelText(*type, "len", "unit", "Length"));
-    must(sc::transformChannelText(*type, "len", "displayUnit", "cm"));
+    must(sc::transformTypeDefChannelItem(*type, "mode", "SLOW", 1, "Slow", "Less"));
+    must(sc::transformTypeDefChannelItem(*type, "mode", "FAST", -5, "Fast", ""));
+    must(sc::transformTypeDefChannelText(*type, "mode", "default", "FAST"));
+    must(sc::transformTypeDefChannelText(*type, "len", "uiName", "Length"));
+    must(sc::transformTypeDefChannelText(*type, "len", "description", "How long"));
+    must(sc::transformTypeDefChannelText(*type, "len", "icon", "ruler"));
+    must(sc::transformTypeDefChannelText(*type, "len", "subtype", "Distance"));
+    must(sc::transformTypeDefChannelText(*type, "len", "unit", "Length"));
+    must(sc::transformTypeDefChannelText(*type, "len", "displayUnit", "cm"));
     const double inf = std::numeric_limits<double>::infinity();
-    must(sc::transformChannelNumbers(*type, "len", "range", 0, inf));
-    must(sc::transformChannelNumbers(*type, "len", "softRange", 1, 4));
-    must(sc::transformChannelNumbers(*type, "len", "step", 0.5, 0));
-    must(sc::transformChannelNumbers(*type, "len", "precision", 3, 0));
+    must(sc::transformTypeDefChannelNumbers(*type, "len", "range", 0, inf));
+    must(sc::transformTypeDefChannelNumbers(*type, "len", "softRange", 1, 4));
+    must(sc::transformTypeDefChannelNumbers(*type, "len", "step", 0.5, 0));
+    must(sc::transformTypeDefChannelNumbers(*type, "len", "precision", 3, 0));
 
     const StatusCode bad = StatusCode::InvalidArgument;
     const double nan = std::numeric_limits<double>::quiet_NaN();
-    test_assert(
-        isError(sc::transformChannelItem(*type, "len", "X", 1, "", ""), bad, "Enum"));
-    test_assert(
-        isError(sc::transformChannelItem(*type, "none", "X", 1, "", ""), bad, "Enum"));
+    test_assert(isError(
+        sc::transformTypeDefChannelItem(*type, "len", "X", 1, "", ""), bad, "Enum"));
+    test_assert(isError(
+        sc::transformTypeDefChannelItem(*type, "none", "X", 1, "", ""), bad, "Enum"));
     for (double v : {0.5, nan, 1e17}) {
-      test_assert(
-          isError(sc::transformChannelItem(*type, "mode", "X", v, "", ""), bad, "whole"));
-    }
-    test_assert(isError(
-        sc::transformChannelText(*type, "none", "uiName", "x"), bad, "no such channel"));
-    test_assert(
-        isError(sc::transformChannelText(*type, "len", "bogus", "x"), bad, "bogus"));
-    test_assert(isError(
-        sc::transformChannelText(*type, "len", "subtype", "x"), bad, "subtype 'x'"));
-    test_assert(isError(
-        sc::transformChannelText(*type, "len", "unit", "x"), bad, "unit family 'x'"));
-    test_assert(isError(
-        sc::transformChannelText(*type, "q", "displayUnit", "cm"), bad, "needs a unit"));
-    test_assert(isError(
-        sc::transformChannelText(*type, "mode", "default", "x"), bad, "item 'x'"));
-    test_assert(
-        isError(sc::transformChannelText(*type, "len", "default", "x"), bad, "item 'x'"));
-    test_assert(isError(
-        sc::transformChannelNumbers(*type, "none", "step", 1, 0), bad, "no such"));
-    test_assert(
-        isError(sc::transformChannelNumbers(*type, "len", "bogus", 1, 0), bad, "bogus"));
-    for (double v : {-1.0, nan, 1e9}) {
       test_assert(isError(
-          sc::transformChannelNumbers(*type, "len", "precision", v, 0), bad, "digits"));
+          sc::transformTypeDefChannelItem(*type, "mode", "X", v, "", ""), bad, "whole"));
+    }
+    test_assert(isError(sc::transformTypeDefChannelText(*type, "none", "uiName", "x"),
+                        bad,
+                        "no such channel"));
+    test_assert(isError(
+        sc::transformTypeDefChannelText(*type, "len", "bogus", "x"), bad, "bogus"));
+    test_assert(isError(sc::transformTypeDefChannelText(*type, "len", "subtype", "x"),
+                        bad,
+                        "subtype 'x'"));
+    test_assert(isError(sc::transformTypeDefChannelText(*type, "len", "unit", "x"),
+                        bad,
+                        "unit family 'x'"));
+    test_assert(isError(sc::transformTypeDefChannelText(*type, "q", "displayUnit", "cm"),
+                        bad,
+                        "needs a unit"));
+    test_assert(isError(
+        sc::transformTypeDefChannelText(*type, "mode", "default", "x"), bad, "item 'x'"));
+    test_assert(isError(
+        sc::transformTypeDefChannelText(*type, "len", "default", "x"), bad, "item 'x'"));
+    test_assert(isError(
+        sc::transformTypeDefChannelNumbers(*type, "none", "step", 1, 0), bad, "no such"));
+    test_assert(isError(
+        sc::transformTypeDefChannelNumbers(*type, "len", "bogus", 1, 0), bad, "bogus"));
+    for (double v : {-1.0, nan, 1e9}) {
+      test_assert(
+          isError(sc::transformTypeDefChannelNumbers(*type, "len", "precision", v, 0),
+                  bad,
+                  "digits"));
     }
     must(sc::registerForeignTransformType(
         *d.ctx, *type, host.add(plane.make()), "evaluate setWorld upgrade"));
@@ -282,8 +288,8 @@ void testChannels()
 
     /* What a def may not be is found at the end. */
     const auto refused = [&](auto &&fill) {
-      TransformTypeInfo *info = sc::newTransformType("js.bad");
-      must(sc::transformChannel(*info, "x", sc::makeFloat(1), false));
+      TransformTypeInfo *info = sc::newTransformTypeDef("js.bad");
+      must(sc::transformTypeDefChannel(*info, "x", sc::makeFloat(1), false));
       fill(*info);
       const fakehost::lf::Handle h = host.add(plane.make());
       test_assert(
@@ -294,11 +300,11 @@ void testChannels()
     refused(
         [](TransformTypeInfo &info) { must(sc::transformEnumChannel(info, "mode")); });
     refused([](TransformTypeInfo &info) {
-      must(sc::transformChannelNumbers(info, "x", "range", 2, 1));
+      must(sc::transformTypeDefChannelNumbers(info, "x", "range", 2, 1));
     });
     refused([](TransformTypeInfo &info) {
-      must(sc::transformChannelText(info, "x", "unit", "Length"));
-      must(sc::transformChannelText(info, "x", "displayUnit", "parsec"));
+      must(sc::transformTypeDefChannelText(info, "x", "unit", "Length"));
+      must(sc::transformTypeDefChannelText(info, "x", "displayUnit", "parsec"));
     });
   }
   test_assert(host.live() == 0 && host.allReleasedOnce());
@@ -313,10 +319,10 @@ void registerPlane(Doc &d,
                    const char *first = "x",
                    int version = 0)
 {
-  TransformTypeInfo *type = sc::newTransformType("js.plane");
-  must(sc::transformTypeVersion(*type, version));
-  must(sc::transformChannel(*type, first, sc::makeFloat(0), false));
-  must(sc::transformChannel(*type, "y", sc::makeFloat(0), false));
+  TransformTypeInfo *type = sc::newTransformTypeDef("js.plane");
+  must(sc::transformTypeDefVersion(*type, version));
+  must(sc::transformTypeDefChannel(*type, first, sc::makeFloat(0), false));
+  must(sc::transformTypeDefChannel(*type, "y", sc::makeFloat(0), false));
   must(sc::registerForeignTransformType(*d.ctx, *type, host.add(plane.make()), slots));
   litestl::alloc::Delete(type);
 }

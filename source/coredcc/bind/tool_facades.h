@@ -37,7 +37,7 @@ using litestl::util::string;
 ToolDef *newToolDef(const string &id);
 Status toolDefUiName(ToolDef &def, const string &s);
 Status toolDefDescription(ToolDef &def, const string &s);
-/** A setting whose kind and default come from `defaultValue`, as defInput's. */
+/** A setting whose kind and default come from `defaultValue`, as commandDefInput's. */
 Status toolDefSetting(ToolDef &def, const string &name, const PropValue &defaultValue);
 /** An enum setting of the space-separated `keys`, valued 0, 1, ...; the first is the
  * default. */

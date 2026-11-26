@@ -210,24 +210,24 @@ static void test_registration_checks()
     Setup s;
     /* B7: the def is copied, so registering it again is a clear AlreadyExists. */
     CommandDef *def = sc::newCommandDef("js.twice");
-    test_assert(sc::defInput(*def, "amount", sc::makeInt(5)).ok());
+    test_assert(sc::commandDefInput(*def, "amount", sc::makeInt(5)).ok());
     test_assert(
         sc::registerForeignCommand(s.ctx, *def, host.add(factoryObj(host, &k)), kCore)
             .ok());
     test_assert(
         sc::registerForeignCommand(s.ctx, *def, host.add(factoryObj(host, &k)), kCore)
             .code() == StatusCode::AlreadyExists);
-    test_assert(sc::defInput(*def, "extra", sc::makeInt(1)).ok());
+    test_assert(sc::commandDefInput(*def, "extra", sc::makeInt(1)).ok());
     test_assert(s.w.rt.ext<CommandRegistry>().find("js.twice")->inputCount() == 1);
     /* B9: names are checked when they are added. */
-    test_assert(sc::defInput(*def, "", sc::makeInt(1)).code() ==
+    test_assert(sc::commandDefInput(*def, "", sc::makeInt(1)).code() ==
                 StatusCode::InvalidArgument);
-    test_assert(sc::defInput(*def, "a b", sc::makeInt(1)).code() ==
+    test_assert(sc::commandDefInput(*def, "a b", sc::makeInt(1)).code() ==
                 StatusCode::InvalidArgument);
-    test_assert(sc::defInput(*def, "amount", sc::makeInt(1)).code() ==
+    test_assert(sc::commandDefInput(*def, "amount", sc::makeInt(1)).code() ==
                 StatusCode::AlreadyExists);
-    test_assert(sc::defOutput(*def, "r", sc::makeInt(1)).ok());
-    test_assert(sc::defOutput(*def, "r", sc::makeInt(1)).code() ==
+    test_assert(sc::commandDefOutput(*def, "r", sc::makeInt(1)).ok());
+    test_assert(sc::commandDefOutput(*def, "r", sc::makeInt(1)).code() ==
                 StatusCode::AlreadyExists);
     litestl::alloc::Delete(def);
 

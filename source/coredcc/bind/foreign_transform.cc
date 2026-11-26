@@ -15,7 +15,7 @@ using detail::error;
 using detail::view;
 namespace lf = litestl::binding::foreign;
 
-TransformTypeInfo *newTransformType(const string &id)
+TransformTypeInfo *newTransformTypeDef(const string &id)
 {
   TransformTypeInfo *type =
       litestl::alloc::New<TransformTypeInfo>("coredcc::TransformTypeInfo");
@@ -23,20 +23,23 @@ TransformTypeInfo *newTransformType(const string &id)
   return type;
 }
 
-Status transformTypeUiName(TransformTypeInfo &type, const string &s)
+Status transformTypeDefUiName(TransformTypeInfo &type, const string &s)
 {
   type.uiName = s;
   return Status();
 }
 
-Status transformChannel(TransformTypeInfo &type,
-                        const string &name,
-                        const PropValue &defaultValue,
-                        bool distance)
+Status transformTypeDefChannel(TransformTypeInfo &type,
+                               const string &name,
+                               const PropValue &defaultValue,
+                               bool distance)
 {
   const bool quat = defaultValue.type() == PropValue::Type::Quat;
-  Result<PropertyDef> p = detail::scriptProp(
-      "transformChannel", name, quat ? PropValue::ofBool(false) : defaultValue, false);
+  Result<PropertyDef> p =
+      detail::scriptProp("transformTypeDefChannel",
+                         name,
+                         quat ? PropValue::ofBool(false) : defaultValue,
+                         false);
   if (!p.ok()) {
     return p.status();
   }
@@ -47,7 +50,7 @@ Status transformChannel(TransformTypeInfo &type,
   if (distance) {
     if (quat || def.kind() == PropKind::Bool || def.kind() == PropKind::Int) {
       return error(StatusCode::InvalidArgument,
-                   std::string("transformChannel: '") + name.c_str() +
+                   std::string("transformTypeDefChannel: '") + name.c_str() +
                        "' isn't a Float or a vector, so it can't be a distance");
     }
     def.subtype(PropSubtype::Distance).unit(UnitFamily::Length);
@@ -56,10 +59,10 @@ Status transformChannel(TransformTypeInfo &type,
   return Status();
 }
 
-Status transformTypeVersion(TransformTypeInfo &type, int32_t version)
+Status transformTypeDefVersion(TransformTypeInfo &type, int32_t version)
 {
   if (version < 0) {
-    return error(StatusCode::InvalidArgument, "transformTypeVersion: it is negative");
+    return error(StatusCode::InvalidArgument, "transformTypeDefVersion: it is negative");
   }
   type.version = uint32_t(version);
   return Status();
@@ -67,8 +70,8 @@ Status transformTypeVersion(TransformTypeInfo &type, int32_t version)
 
 Status transformEnumChannel(TransformTypeInfo &type, const string &name)
 {
-  Result<PropertyDef> p =
-      detail::scriptProp("transformChannel", name, PropValue::ofBool(false), false);
+  Result<PropertyDef> p = detail::scriptProp(
+      "transformTypeDefChannel", name, PropValue::ofBool(false), false);
   if (!p.ok()) {
     return p.status();
   }
@@ -93,12 +96,12 @@ static Status invalid(const string &channel, const std::string &why)
                std::string("transform channel '") + channel.c_str() + "': " + why);
 }
 
-Status transformChannelItem(TransformTypeInfo &type,
-                            const string &name,
-                            const string &key,
-                            double value,
-                            const string &uiName,
-                            const string &description)
+Status transformTypeDefChannelItem(TransformTypeInfo &type,
+                                   const string &name,
+                                   const string &key,
+                                   double value,
+                                   const string &uiName,
+                                   const string &description)
 {
   PropertyDef *def = channelOf(type, name);
   if (!def || def->kind() != PropKind::Enum) {
@@ -113,10 +116,10 @@ Status transformChannelItem(TransformTypeInfo &type,
   return Status();
 }
 
-Status transformChannelText(TransformTypeInfo &type,
-                            const string &name,
-                            const string &what,
-                            const string &text)
+Status transformTypeDefChannelText(TransformTypeInfo &type,
+                                   const string &name,
+                                   const string &what,
+                                   const string &text)
 {
   PropertyDef *def = channelOf(type, name);
   if (!def) {
@@ -162,7 +165,7 @@ Status transformChannelText(TransformTypeInfo &type,
   return Status();
 }
 
-Status transformChannelNumbers(
+Status transformTypeDefChannelNumbers(
     TransformTypeInfo &type, const string &name, const string &what, double a, double b)
 {
   PropertyDef *def = channelOf(type, name);

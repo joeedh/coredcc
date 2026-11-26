@@ -211,25 +211,25 @@ export interface NodeTypeSpec {
 }
 
 function fill(def: NodeTypeDef, spec: NodeTypeSpec) {
-  if (spec.uiName !== undefined) check(cd.nodeTypeUiName(def, spec.uiName))
-  if (spec.outputAdapter) check(cd.nodeTypeOutputAdapter(def))
+  if (spec.uiName !== undefined) check(cd.nodeTypeDefUiName(def, spec.uiName))
+  if (spec.outputAdapter) check(cd.nodeTypeDefOutputAdapter(def))
   for (const [name, v] of Object.entries(spec.inputs ?? {})) {
-    if (v instanceof PayloadInput) check(cd.nodeTypePayloadInput(def, name, v.socketType))
-    else withValue(undefined, v, (pv) => check(cd.nodeTypeInput(def, name, pv)))
+    if (v instanceof PayloadInput) check(cd.nodeTypeDefPayloadInput(def, name, v.socketType))
+    else withValue(undefined, v, (pv) => check(cd.nodeTypeDefInput(def, name, pv)))
   }
   for (const [name, v] of Object.entries(spec.params ?? {})) {
-    if (v instanceof PointerParam) check(cd.nodeTypePointerParam(def, name, v.target, v.weak))
+    if (v instanceof PointerParam) check(cd.nodeTypeDefPointerParam(def, name, v.target, v.weak))
     else if (v instanceof ItemParam) {
-      check(cd.nodeTypeItemParam(def, name, v.flags, v.value))
+      check(cd.nodeTypeDefItemParam(def, name, v.flags, v.value))
       for (const [key, value] of Object.entries(v.items)) {
-        check(cd.nodeTypeItem(def, name, key, BigInt(value), ''))
+        check(cd.nodeTypeDefItem(def, name, key, BigInt(value), ''))
       }
-    } else withValue(undefined, v, (pv) => check(cd.nodeTypeParam(def, name, pv)))
+    } else withValue(undefined, v, (pv) => check(cd.nodeTypeDefParam(def, name, pv)))
   }
-  for (const [name, type] of Object.entries(spec.outputs)) check(cd.nodeTypeOutput(def, name, type))
-  for (const [name, ui] of Object.entries(spec.inputNames ?? {})) check(cd.nodeTypeSocketName(def, false, name, ui))
-  for (const [name, ui] of Object.entries(spec.outputNames ?? {})) check(cd.nodeTypeSocketName(def, true, name, ui))
-  for (const [name, [min, max]] of Object.entries(spec.ranges ?? {})) check(cd.nodeTypeRange(def, name, min, max))
+  for (const [name, type] of Object.entries(spec.outputs)) check(cd.nodeTypeDefOutput(def, name, type))
+  for (const [name, ui] of Object.entries(spec.inputNames ?? {})) check(cd.nodeTypeDefSocketName(def, false, name, ui))
+  for (const [name, ui] of Object.entries(spec.outputNames ?? {})) check(cd.nodeTypeDefSocketName(def, true, name, ui))
+  for (const [name, [min, max]] of Object.entries(spec.ranges ?? {})) check(cd.nodeTypeDefRange(def, name, min, max))
 }
 
 type Register = (ctx: Context, def: NodeTypeDef, kernel: number, slots: string) => Status
@@ -240,7 +240,7 @@ function register(what: string, ctx: Context, spec: NodeTypeSpec, enter: Registe
     throw new TypeError(`${what}: ${spec.id}: evaluate must be a function`)
   }
   const backend = getBindingBackend()
-  const def = cd.newNodeType(spec.id)
+  const def = cd.newNodeTypeDef(spec.id)
   if (!def) throw new Error(`${what}: no def for ${spec.id}`)
   try {
     fill(def, spec)
