@@ -288,7 +288,7 @@ void testDraw()
   must(rd.read(out.bytes()));
   /* Three arrows, three planes and the centre; ids of gizmo 1. */
   test_assert(rd.items().size() == 7);
-  for (const DrawItem &it : rd.items()) {
+  for (const DrawRecord &it : rd.items()) {
     test_assert(it.style.id / ToolManager::kIdStride == 1);
   }
   /* During a drag only the dragged part is drawn, by the modal, where it is now. */

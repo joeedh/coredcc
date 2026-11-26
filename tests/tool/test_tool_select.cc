@@ -90,7 +90,7 @@ void testBoxes()
   must(d.tm.draw(*d.ctx, d.view, out));
   DrawListReader rd;
   must(rd.read(out.bytes()));
-  test_assert(rd.items().size() == 1 && rd.items()[0].kind == DrawKind::Line2D);
+  test_assert(rd.items().size() == 1 && rd.items()[0].kind == DrawRecordKind::Line2D);
   /* Shift adds. */
   must(d.send(EventType::PointerUp, pc.x + 20, pc.y + 20, modifiers::kShift).status());
   test_assert(selectedAre(d, {a, b, c}) && d.history->size() == 2);

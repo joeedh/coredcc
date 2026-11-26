@@ -67,21 +67,21 @@ void testRoundTrip()
 {
   DrawList d;
   fill(d, double3(10, 20, 30));
-  test_assert(d.frozen() && d.recordCount() == 9 && d.size() % 8 == 0);
+  test_assert(d.frozen() && d.recordCount() == 9 && d.byteSize() % 8 == 0);
   DrawListReader r;
   test_assert(r.read(d.bytes()).ok());
   test_assert(r.origin()[0] == 10 && r.origin()[2] == 30);
   const auto &it = r.items();
   test_assert(it.size() == 9);
-  const DrawKind kinds[9] = {DrawKind::Lines,
-                             DrawKind::Points,
-                             DrawKind::Triangles,
-                             DrawKind::Shape,
-                             DrawKind::PushMatrix,
-                             DrawKind::Lines,
-                             DrawKind::PopMatrix,
-                             DrawKind::Circle2D,
-                             DrawKind::Line2D};
+  const DrawRecordKind kinds[9] = {DrawRecordKind::Lines,
+                                   DrawRecordKind::Points,
+                                   DrawRecordKind::Triangles,
+                                   DrawRecordKind::Shape,
+                                   DrawRecordKind::PushMatrix,
+                                   DrawRecordKind::Lines,
+                                   DrawRecordKind::PopMatrix,
+                                   DrawRecordKind::Circle2D,
+                                   DrawRecordKind::Line2D};
   for (int i = 0; i < 9; i++) {
     test_assert(it[i].kind == kinds[i] && it[i].offset % 8 == 0);
   }
@@ -105,7 +105,8 @@ void testRoundTrip()
 
   /* begin empties it again. */
   test_assert(d.begin(double3(0, 0, 0)).ok());
-  test_assert(!d.frozen() && d.recordCount() == 0 && d.size() == DrawList::kHeaderBytes);
+  test_assert(!d.frozen() && d.recordCount() == 0 &&
+              d.byteSize() == DrawList::kHeaderBytes);
 }
 
 /* What is stored is the float of p - origin, computed in double. */
@@ -200,10 +201,10 @@ void testScripts()
   litestl::util::Vector<double> xy = {0, 0, 4, 4};
   test_assert(d.line2dXy(style(), xy).ok());
   test_assert(d.end().ok() && d.recordCount() == 5);
-  std::vector<uint8_t> copy(size_t(d.size()));
+  std::vector<uint8_t> copy(size_t(d.byteSize()));
   test_assert(d.read(0, copy).ok());
   test_assert(std::memcmp(copy.data(), d.bytes().data(), copy.size()) == 0);
-  test_assert(d.read(d.size(), std::span<uint8_t>()).ok());
+  test_assert(d.read(d.byteSize(), std::span<uint8_t>()).ok());
   test_assert(d.read(1, copy).code() == StatusCode::OutOfRange);
   test_assert(d.read(-1, std::span<uint8_t>()).code() == StatusCode::OutOfRange);
   test_assert(d.address() == int64_t(reinterpret_cast<intptr_t>(d.bytes().data())));
@@ -235,7 +236,7 @@ void testFuzz()
     if (r.read(b).ok()) {
       accepted++;
       /* Whatever it accepted is consistent: items inside the bytes. */
-      for (const DrawItem &item : r.items()) {
+      for (const DrawRecord &item : r.items()) {
         test_assert(item.offset + DrawList::kRecordHeaderBytes + item.payloadBytes <=
                     b.size());
       }

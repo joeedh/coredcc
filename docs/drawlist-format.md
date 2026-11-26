@@ -5,7 +5,7 @@ renders it once a frame. It is plain bytes, so a host reads it without a call pe
 or one copy. `DrawListReader` (C++) and `bind/ts/drawlist.ts` (TS) read it and check it.
 
 ## Rules for hosts
-- Take the bytes again every frame: `bytes()` in C++; `address()` and `size()`, or `read()`, in scripts. Never keep a
+- Take the bytes again every frame: `bytes()` in C++; `address()` and `byteSize()`, or `read()`, in scripts. Never keep a
   typed-array view: the list's storage moves when it grows, and so does WASM memory.
 - The list is frozen between `end()` and the next `begin()`. It is read in that time only.
 - Check it before rendering it if it came from somewhere you don't trust (`DrawListReader::read`).

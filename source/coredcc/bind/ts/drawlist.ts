@@ -18,14 +18,17 @@ export const kDrawListMagic = 0x4c444443
 export const kDrawListVersion = 1
 
 export type DepthMode = 'test' | 'always' | 'xray'
-export type RecordKind = 'lines' | 'points' | 'triangles' | 'shape' | 'circle2d' | 'line2d' | 'push' | 'pop'
+export type RecordKind =
+  | 'lines' | 'points' | 'triangles' | 'shape' | 'circle2d' | 'line2d' | 'pushMatrix' | 'popMatrix'
 export type ShapeKind = 'arrow' | 'cone' | 'cube' | 'sphere' | 'disc' | 'ring' | 'quad'
 
 /* The names differ from the C++ items, and decode the list's bytes. */
 const depthModes = new Map<BoundDepthMode, DepthMode>([
   [BoundDepthMode.Test, 'test'], [BoundDepthMode.Always, 'always'], [BoundDepthMode.XRay, 'xray'],
 ])
-const recordKinds: readonly RecordKind[] = ['lines', 'points', 'triangles', 'shape', 'circle2d', 'line2d', 'push', 'pop']
+const recordKinds: readonly RecordKind[] = [
+  'lines', 'points', 'triangles', 'shape', 'circle2d', 'line2d', 'pushMatrix', 'popMatrix',
+]
 const shapeKinds = new Map<BoundShapeKind, ShapeKind>([
   [BoundShapeKind.Arrow, 'arrow'], [BoundShapeKind.Cone, 'cone'], [BoundShapeKind.Cube, 'cube'],
   [BoundShapeKind.Sphere, 'sphere'], [BoundShapeKind.Disc, 'disc'], [BoundShapeKind.Ring, 'ring'],
@@ -57,7 +60,7 @@ export interface DrawRecord {
   /** Circle2D. */
   filled?: boolean
   shape?: ShapeKind
-  /** Shape and push: 16 numbers, column by column. */
+  /** Shape and pushMatrix: 16 numbers, column by column. */
   matrix?: number[]
 }
 
@@ -152,7 +155,7 @@ const CHUNK = 1 << 16
  * until the next call into coredcc, so read it at once. Otherwise a copy.
  */
 export function readDrawList(list: DrawList, opts: {view?: boolean} = {}): Uint8Array {
-  const size = Number(list.size())
+  const size = Number(list.byteSize())
   const heap = opts.view ? moduleHeap() : undefined
   if (heap) {
     const at = Number(list.address())
@@ -212,15 +215,15 @@ export function decodeDrawList(bytes: Uint8Array): DecodedDrawList {
     if (kind === 'shape' && !shapeKinds.has(aux)) fail(at, `no such shape ${aux}`)
     const need =
       kind === 'lines' || kind === 'points' || kind === 'triangles' ? 12 * aux + (flags & 1 ? 4 * aux : 0)
-      : kind === 'shape' || kind === 'push' ? 128
+      : kind === 'shape' || kind === 'pushMatrix' ? 128
       : kind === 'circle2d' ? 12
       : kind === 'line2d' ? 8 * aux
       : 0
     if (pad8(need) !== size - 24) fail(at, "a record size that doesn't fit its count")
     const p = at + 24
     for (let i = p + need; i < at + size; i++) if (bytes[i] !== 0) fail(at, "padding that isn't zeros")
-    const matrix = kind === 'shape' || kind === 'push'
-    const numbers = matrix ? f64(p, 16) : f32(p, kind === 'line2d' ? 2 * aux : kind === 'circle2d' ? 3 : kind === 'pop' ? 0 : 3 * aux)
+    const matrix = kind === 'shape' || kind === 'pushMatrix'
+    const numbers = matrix ? f64(p, 16) : f32(p, kind === 'line2d' ? 2 * aux : kind === 'circle2d' ? 3 : kind === 'popMatrix' ? 0 : 3 * aux)
     if (!numbers.every(Number.isFinite)) fail(at, "a number that isn't finite")
     if (matrix && (numbers[3] !== 0 || numbers[7] !== 0 || numbers[11] !== 0 || numbers[15] !== 1)) {
       fail(at, "a matrix that isn't affine")
@@ -236,11 +239,11 @@ export function decodeDrawList(bytes: Uint8Array): DecodedDrawList {
         rec.shape = shapeKinds.get(aux)
         rec.matrix = numbers
         break
-      case 'push':
+      case 'pushMatrix':
         rec.matrix = numbers
         matrixDepth++
         break
-      case 'pop':
+      case 'popMatrix':
         if (--matrixDepth < 0) fail(at, 'a pop without a push')
         break
       case 'circle2d':

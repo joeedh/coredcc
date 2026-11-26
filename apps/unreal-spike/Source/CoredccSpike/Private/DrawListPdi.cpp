@@ -11,8 +11,8 @@
 #include <cstring>
 #include <vector>
 
-using coredcc::DrawItem;
-using coredcc::DrawKind;
+using coredcc::DrawRecord;
+using coredcc::DrawRecordKind;
 using coredcc::DrawListReader;
 
 namespace
@@ -150,7 +150,7 @@ FDrawListStats DrawDrawListPdi(const coredcc::DrawList& List, FPrimitiveDrawInte
 	const coredcc::double3& O = Reader.origin();
 	const FVector Origin(O[0], O[1], O[2]);
 	std::vector<M4> Stack{Translation(O[0], O[1], O[2])};
-	for (const DrawItem& It : Reader.items())
+	for (const DrawRecord& It : Reader.items())
 	{
 		const M4& Cur = Stack.back();
 		const uint8 Group = GroupOf(It.style.depthMode);
@@ -158,27 +158,27 @@ FDrawListStats DrawDrawListPdi(const coredcc::DrawList& List, FPrimitiveDrawInte
 		auto V = [&](uint32 I) { return Apply(Cur, It.vertex(I, 0), It.vertex(I, 1), It.vertex(I, 2)); };
 		switch (It.kind)
 		{
-		case DrawKind::PushMatrix:
+		case DrawRecordKind::PushMatrix:
 			Stack.push_back(Mul(Cur, FromMat(It.matrix())));
 			break;
-		case DrawKind::PopMatrix:
+		case DrawRecordKind::PopMatrix:
 			if (Stack.size() > 1) Stack.pop_back();
 			break;
-		case DrawKind::Lines:
+		case DrawRecordKind::Lines:
 			for (uint32 I = 0; I + 1 < It.aux; I += 2)
 			{
 				PDI->DrawTranslucentLine(V(I), V(I + 1), Color, Group, It.style.width);
 				Stats.Lines++;
 			}
 			break;
-		case DrawKind::Points:
+		case DrawRecordKind::Points:
 			for (uint32 I = 0; I < It.aux; I++)
 			{
 				PDI->DrawPoint(V(I), Color, It.style.width, Group);
 				Stats.Points++;
 			}
 			break;
-		case DrawKind::Triangles:
+		case DrawRecordKind::Triangles:
 		{
 			std::vector<FVector> Corners;
 			std::vector<FColor> Colors;
@@ -191,7 +191,7 @@ FDrawListStats DrawDrawListPdi(const coredcc::DrawList& List, FPrimitiveDrawInte
 			Stats.Meshes++;
 			break;
 		}
-		case DrawKind::Shape:
+		case DrawRecordKind::Shape:
 		{
 			const M4 M = Mul(Cur, FromMat(It.matrix()));
 			std::vector<FVector> Corners;
@@ -204,8 +204,8 @@ FDrawListStats DrawDrawListPdi(const coredcc::DrawList& List, FPrimitiveDrawInte
 			Stats.Meshes++;
 			break;
 		}
-		case DrawKind::Circle2D:
-		case DrawKind::Line2D:
+		case DrawRecordKind::Circle2D:
+		case DrawRecordKind::Line2D:
 			Stats.Skipped2D++;
 			break;
 		}
@@ -218,7 +218,7 @@ int32 DrawDrawListHud(const coredcc::DrawList& List, FCanvas* Canvas)
 	DrawListReader Reader;
 	if (!Canvas || !Reader.read(List.bytes()).ok()) return 0;
 	int32 Drawn = 0;
-	for (const DrawItem& It : Reader.items())
+	for (const DrawRecord& It : Reader.items())
 	{
 		const FLinearColor Color = ColorOf(It.style.color);
 		auto Line = [&](double X0, double Y0, double X1, double Y1) {
@@ -227,12 +227,12 @@ int32 DrawDrawListHud(const coredcc::DrawList& List, FCanvas* Canvas)
 			L.LineThickness = It.style.width;
 			Canvas->DrawItem(L);
 		};
-		if (It.kind == DrawKind::Line2D)
+		if (It.kind == DrawRecordKind::Line2D)
 		{
 			for (uint32 I = 0; I + 1 < It.aux; I++) Line(It.vertex(I, 0), It.vertex(I, 1), It.vertex(I + 1, 0), It.vertex(I + 1, 1));
 			Drawn++;
 		}
-		else if (It.kind == DrawKind::Circle2D)
+		else if (It.kind == DrawRecordKind::Circle2D)
 		{
 			float C[3];
 			std::memcpy(C, It.payload, sizeof(C)); /* x, y, radius */

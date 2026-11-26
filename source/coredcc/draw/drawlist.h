@@ -24,7 +24,7 @@ using litestl::math::double3;
 using litestl::math::mat4d;
 
 /** The kinds of records. The numbers are the format's. */
-enum class DrawKind : uint16_t {
+enum class DrawRecordKind : uint16_t {
   Lines = 1,
   Points = 2,
   Triangles = 3,
@@ -169,7 +169,7 @@ public:
   /** The bytes' address in the module's memory: for a view of WASM memory, taken again
    * each frame. Meaningless outside WASM. */
   int64_t address() const;
-  int64_t size() const
+  int64_t byteSize() const
   {
     return int64_t(size_);
   }
@@ -180,12 +180,12 @@ public:
 private:
   /* Checks that n more bytes fit, and that the list isn't frozen. */
   Status room(uint64_t recordBytes, const char *what) const;
-  uint8_t *append(DrawKind kind,
+  uint8_t *append(DrawRecordKind kind,
                   const DrawStyle &style,
                   uint8_t flags,
                   uint32_t aux,
                   uint32_t payloadBytes);
-  Status vertices(DrawKind kind,
+  Status vertices(DrawRecordKind kind,
                   const DrawStyle &style,
                   std::span<const double3> pts,
                   int multiple,
@@ -231,8 +231,8 @@ private:
 };
 
 /** One record, as DrawListReader found it. Pointers are into the bytes it read. */
-struct DrawItem {
-  DrawKind kind = DrawKind::Lines;
+struct DrawRecord {
+  DrawRecordKind kind = DrawRecordKind::Lines;
   DrawStyle style;
   uint8_t flags = 0;
   /** Lines, Points, Triangles, Line2D: the vertex count. Shape: its ShapeKind. */
@@ -264,14 +264,14 @@ public:
   {
     return origin_;
   }
-  const litestl::util::Vector<DrawItem> &items() const
+  const litestl::util::Vector<DrawRecord> &items() const
   {
     return items_;
   }
 
 private:
   double3 origin_;
-  litestl::util::Vector<DrawItem> items_;
+  litestl::util::Vector<DrawRecord> items_;
 };
 
 } // namespace coredcc

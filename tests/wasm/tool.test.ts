@@ -176,7 +176,7 @@ test('the built-in transform tool draws its gizmo, and decodes', () => {
   cdcc.setActiveTool(ctx, 'core.tool.transform')
   cdcc.evaluateScene(ctx)
   const {decoded} = cdcc.drawTools(ctx, view)
-  const shapes = decoded.records.filter((r) => r.kind === 'shape' || r.kind === 'push')
+  const shapes = decoded.records.filter((r) => r.kind === 'shape' || r.kind === 'pushMatrix')
   assert.ok(shapes.length > 0, 'no gizmo')
   assert.ok(decoded.records.every((r) => r.id === 0 || r.id >= 65536))
 })

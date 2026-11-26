@@ -176,7 +176,7 @@ lbt::Struct<DrawList> *DrawList::defineBindings()
     BIND_STRUCT_METHOD(st, matrixDepth, MARGS());
     BIND_STRUCT_METHOD(st, frozen, MARGS());
     BIND_STRUCT_METHOD(st, address, MARGS());
-    BIND_STRUCT_METHOD(st, size, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
   }
   return st;
 }

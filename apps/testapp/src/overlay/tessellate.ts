@@ -100,10 +100,10 @@ export function tessellate(list: DecodedDrawList, viewProj: ArrayLike<number>, v
     const half = (Math.max(r.width, 1) * vp.dpiScale) / 2
     const p = r.positions ?? []
     switch (r.kind) {
-      case 'push':
+      case 'pushMatrix':
         stack.push(mul(cur, r.matrix!))
         break
-      case 'pop':
+      case 'popMatrix':
         stack.pop()
         break
       case 'triangles':

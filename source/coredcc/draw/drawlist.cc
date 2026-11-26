@@ -123,7 +123,7 @@ Status DrawList::room(uint64_t recordBytes, const char *what) const
   return Status();
 }
 
-uint8_t *DrawList::append(DrawKind kind,
+uint8_t *DrawList::append(DrawRecordKind kind,
                           const DrawStyle &style,
                           uint8_t flags,
                           uint32_t aux,
@@ -148,7 +148,7 @@ uint8_t *DrawList::append(DrawKind kind,
   return p + kRecordHeaderBytes;
 }
 
-Status DrawList::vertices(DrawKind kind,
+Status DrawList::vertices(DrawRecordKind kind,
                           const DrawStyle &style,
                           std::span<const double3> pts,
                           int multiple,
@@ -194,19 +194,19 @@ Status DrawList::vertices(DrawKind kind,
 
 Status DrawList::lines(const DrawStyle &style, std::span<const double3> pairs)
 {
-  return vertices(DrawKind::Lines, style, pairs, 2, {}, "lines");
+  return vertices(DrawRecordKind::Lines, style, pairs, 2, {}, "lines");
 }
 
 Status DrawList::points(const DrawStyle &style, std::span<const double3> pts)
 {
-  return vertices(DrawKind::Points, style, pts, 1, {}, "points");
+  return vertices(DrawRecordKind::Points, style, pts, 1, {}, "points");
 }
 
 Status DrawList::triangles(const DrawStyle &style,
                            std::span<const double3> corners,
                            std::span<const uint32_t> colors)
 {
-  return vertices(DrawKind::Triangles, style, corners, 3, colors, "triangles");
+  return vertices(DrawRecordKind::Triangles, style, corners, 3, colors, "triangles");
 }
 
 namespace {
@@ -249,7 +249,7 @@ Status DrawList::shape(const DrawStyle &style, ShapeKind kind, const mat4d &matr
   double m[16];
   CDCC_TRY(storedMatrix(matrix, depth_ == 0, origin_, m, "shape"));
   CDCC_TRY(room(kRecordHeaderBytes + 128, "shape"));
-  std::memcpy(append(DrawKind::Shape, style, 0, uint32_t(kind), 128), m, 128);
+  std::memcpy(append(DrawRecordKind::Shape, style, 0, uint32_t(kind), 128), m, 128);
   return Status();
 }
 
@@ -258,7 +258,7 @@ Status DrawList::pushMatrix(const mat4d &matrix)
   double m[16];
   CDCC_TRY(storedMatrix(matrix, depth_ == 0, origin_, m, "pushMatrix"));
   CDCC_TRY(room(kRecordHeaderBytes + 128, "pushMatrix"));
-  std::memcpy(append(DrawKind::PushMatrix, DrawStyle(), 0, 0, 128), m, 128);
+  std::memcpy(append(DrawRecordKind::PushMatrix, DrawStyle(), 0, 0, 128), m, 128);
   depth_++;
   return Status();
 }
@@ -272,7 +272,7 @@ Status DrawList::popMatrix()
     return bad("popMatrix", "the push to pop was made before this slot was called");
   }
   CDCC_TRY(room(kRecordHeaderBytes, "popMatrix"));
-  append(DrawKind::PopMatrix, DrawStyle(), 0, 0, 0);
+  append(DrawRecordKind::PopMatrix, DrawStyle(), 0, 0, 0);
   depth_--;
   return Status();
 }
@@ -307,8 +307,8 @@ DrawList::circle2d(const DrawStyle &style, double x, double y, double radius, bo
     return bad("circle2d", "the centre or the radius isn't a finite float (radius >= 0)");
   }
   CDCC_TRY(room(kRecordHeaderBytes + 16, "circle2d"));
-  uint8_t *p =
-      append(DrawKind::Circle2D, style, filled ? drawflags::kFilled : uint8_t(0), 0, 12);
+  uint8_t *p = append(
+      DrawRecordKind::Circle2D, style, filled ? drawflags::kFilled : uint8_t(0), 0, 12);
   put<float>(p, float(x));
   put<float>(p + 4, float(y));
   put<float>(p + 8, float(radius));
@@ -328,8 +328,8 @@ Status DrawList::line2d(const DrawStyle &style, std::span<const double> xy)
   }
   const uint64_t payload = uint64_t(xy.size()) * 4;
   CDCC_TRY(room(kRecordHeaderBytes + pad8(payload), "line2d"));
-  uint8_t *p =
-      append(DrawKind::Line2D, style, 0, uint32_t(xy.size() / 2), uint32_t(payload));
+  uint8_t *p = append(
+      DrawRecordKind::Line2D, style, 0, uint32_t(xy.size() / 2), uint32_t(payload));
   for (double v : xy) {
     put<float>(p, float(v));
     p += 4;
@@ -419,20 +419,20 @@ Status DrawList::read(int64_t offset, std::span<uint8_t> out) const
   return Status();
 }
 
-/* ---- DrawItem ---- */
+/* ---- DrawRecord ---- */
 
-float DrawItem::vertex(uint32_t i, int axis) const
+float DrawRecord::vertex(uint32_t i, int axis) const
 {
-  const uint32_t n = kind == DrawKind::Line2D ? 2 : 3;
+  const uint32_t n = kind == DrawRecordKind::Line2D ? 2 : 3;
   return get<float>(payload + 4 * (n * i + uint32_t(axis)));
 }
 
-uint32_t DrawItem::cornerColor(uint32_t i) const
+uint32_t DrawRecord::cornerColor(uint32_t i) const
 {
   return get<uint32_t>(payload + 12 * aux + 4 * i);
 }
 
-mat4d DrawItem::matrix() const
+mat4d DrawRecord::matrix() const
 {
   mat4d m;
   double *d = m;

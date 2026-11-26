@@ -65,22 +65,23 @@ bool zeros(const uint8_t *p, uint64_t count)
 }
 
 /* The payload's size that `item` needs, or an error. */
-Status payloadOf(const DrawItem &item, uint64_t at, uint64_t &need)
+Status payloadOf(const DrawRecord &item, uint64_t at, uint64_t &need)
 {
-  const uint8_t allowed = item.kind == DrawKind::Triangles  ? drawflags::kCornerColors
-                          : item.kind == DrawKind::Circle2D ? drawflags::kFilled
-                                                            : uint8_t(0);
+  const uint8_t allowed = item.kind == DrawRecordKind::Triangles
+                              ? drawflags::kCornerColors
+                          : item.kind == DrawRecordKind::Circle2D ? drawflags::kFilled
+                                                                  : uint8_t(0);
   if ((item.flags & ~allowed) != 0) {
     return bad(at, "flags that this kind doesn't have");
   }
   const uint64_t n = item.aux;
   switch (item.kind) {
-  case DrawKind::Lines:
-  case DrawKind::Points:
-  case DrawKind::Triangles: {
-    const uint64_t multiple = item.kind == DrawKind::Lines       ? 2
-                              : item.kind == DrawKind::Triangles ? 3
-                                                                 : 1;
+  case DrawRecordKind::Lines:
+  case DrawRecordKind::Points:
+  case DrawRecordKind::Triangles: {
+    const uint64_t multiple = item.kind == DrawRecordKind::Lines       ? 2
+                              : item.kind == DrawRecordKind::Triangles ? 3
+                                                                       : 1;
     if (n % multiple != 0) {
       return bad(at,
                  "a vertex count that isn't a multiple of " + std::to_string(multiple));
@@ -88,22 +89,22 @@ Status payloadOf(const DrawItem &item, uint64_t at, uint64_t &need)
     need = 12 * n + ((item.flags & drawflags::kCornerColors) ? 4 * n : 0);
     return Status();
   }
-  case DrawKind::Shape:
+  case DrawRecordKind::Shape:
     if (n < uint64_t(ShapeKind::Arrow) || n > uint64_t(ShapeKind::Quad)) {
       return bad(at, "no such shape " + std::to_string(n));
     }
     need = 128;
     return Status();
-  case DrawKind::PushMatrix:
+  case DrawRecordKind::PushMatrix:
     need = 128;
     return Status();
-  case DrawKind::PopMatrix:
+  case DrawRecordKind::PopMatrix:
     need = 0;
     return Status();
-  case DrawKind::Circle2D:
+  case DrawRecordKind::Circle2D:
     need = 12;
     return Status();
-  case DrawKind::Line2D:
+  case DrawRecordKind::Line2D:
     need = 8 * n;
     return Status();
   }
@@ -150,8 +151,8 @@ Status DrawListReader::read(std::span<const uint8_t> bytes)
       return bad(at, "a record header past the end");
     }
     const uint8_t *r = b + at;
-    DrawItem item;
-    item.kind = DrawKind(get<uint16_t>(r));
+    DrawRecord item;
+    item.kind = DrawRecordKind(get<uint16_t>(r));
     const uint8_t depthMode = get<uint8_t>(r + 2);
     item.flags = get<uint8_t>(r + 3);
     const uint64_t recordBytes = get<uint32_t>(r + 4);
@@ -183,12 +184,13 @@ Status DrawListReader::read(std::span<const uint8_t> bytes)
       return bad(at, "padding that isn't zeros");
     }
     const bool isMatrix =
-        item.kind == DrawKind::Shape || item.kind == DrawKind::PushMatrix;
-    const uint64_t floats = isMatrix                           ? 0
-                            : item.kind == DrawKind::Line2D    ? 2 * uint64_t(item.aux)
-                            : item.kind == DrawKind::Circle2D  ? 3
-                            : item.kind == DrawKind::PopMatrix ? 0
-                                                               : 3 * uint64_t(item.aux);
+        item.kind == DrawRecordKind::Shape || item.kind == DrawRecordKind::PushMatrix;
+    const uint64_t floats = isMatrix                              ? 0
+                            : item.kind == DrawRecordKind::Line2D ? 2 * uint64_t(item.aux)
+                            : item.kind == DrawRecordKind::Circle2D ? 3
+                            : item.kind == DrawRecordKind::PopMatrix
+                                ? 0
+                                : 3 * uint64_t(item.aux);
     if (isMatrix ? !finiteDoubles(item.payload, 16) : !finiteFloats(item.payload, floats))
     {
       return bad(at, "a number that isn't finite");
@@ -196,12 +198,12 @@ Status DrawListReader::read(std::span<const uint8_t> bytes)
     if (isMatrix && !affineAt(item.payload)) {
       return bad(at, "a matrix that isn't affine");
     }
-    if (item.kind == DrawKind::Circle2D && get<float>(item.payload + 8) < 0.0f) {
+    if (item.kind == DrawRecordKind::Circle2D && get<float>(item.payload + 8) < 0.0f) {
       return bad(at, "a negative radius");
     }
-    if (item.kind == DrawKind::PushMatrix) {
+    if (item.kind == DrawRecordKind::PushMatrix) {
       depth++;
-    } else if (item.kind == DrawKind::PopMatrix && --depth < 0) {
+    } else if (item.kind == DrawRecordKind::PopMatrix && --depth < 0) {
       return bad(at, "a pop without a push");
     }
     items_.append(item);

@@ -211,12 +211,12 @@ bool FCoredccS8::RunTest(const FString&)
 	int32 Shapes = 0, LineSegments = 0, Points = 0;
 	double3 Base, Tip;
 	bool bFound = false;
-	for (const DrawItem& It : Reader.items())
+	for (const DrawRecord& It : Reader.items())
 	{
-		Shapes += It.kind == DrawKind::Shape || It.kind == DrawKind::Triangles;
-		LineSegments += It.kind == DrawKind::Lines ? int32(It.aux / 2) : 0;
-		Points += It.kind == DrawKind::Points ? int32(It.aux) : 0;
-		if (It.kind == DrawKind::Shape && It.style.id >= 65536 && It.style.id % 65536 == 0 && !bFound)
+		Shapes += It.kind == DrawRecordKind::Shape || It.kind == DrawRecordKind::Triangles;
+		LineSegments += It.kind == DrawRecordKind::Lines ? int32(It.aux / 2) : 0;
+		Points += It.kind == DrawRecordKind::Points ? int32(It.aux) : 0;
+		if (It.kind == DrawRecordKind::Shape && It.style.id >= 65536 && It.style.id % 65536 == 0 && !bFound)
 		{
 			const double* M = It.matrix();
 			const double3 O = Reader.origin();
