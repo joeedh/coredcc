@@ -22,7 +22,7 @@ using litestl::util::Vector;
 namespace detail {
 
 Result<ChannelBlock> solveKeeping(const TransformType &type,
-                                  const EvalCtx &current,
+                                  const EvalContext &current,
                                   const mat4d &world,
                                   const TransformState &parent,
                                   int &approximate)
@@ -107,7 +107,7 @@ void setApproximate(Context &ctx, int n)
 /* Channels that keep an object at `state`; `otherwise` is set if what is below it may
  * move. */
 Result<ChannelBlock> solveKeeping(const TransformType &type,
-                                  const EvalCtx &current,
+                                  const EvalContext &current,
                                   const TransformState &state,
                                   const TransformState &parent,
                                   int &approximate,
@@ -329,8 +329,12 @@ struct SetTransformType : ChangesCommand {
     if (!world.ok()) {
       return world.status();
     }
-    return solveKeeping(
-        type, EvalCtx(type.defaults(), time), *world, *parent, approximate, otherwise);
+    return solveKeeping(type,
+                        EvalContext(type.defaults(), time),
+                        *world,
+                        *parent,
+                        approximate,
+                        otherwise);
   }
   static lbt::Struct<SetTransformType> *defineBindings()
   {

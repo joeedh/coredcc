@@ -126,7 +126,7 @@ void testWholeCallFailure()
 void testTypeNamedMissing()
 {
   DriveDoc d;
-  d.addFnModel("missing", [](const EvalCtx &, const TransformState &p) { return p; });
+  d.addFnModel("missing", [](const EvalContext &, const TransformState &p) { return p; });
   const BlockHandle leader = d.object("leader", 1);
   d.obj(leader).setTransformType("missing");
   d.obj(leader).channels = ChannelBlock(1);

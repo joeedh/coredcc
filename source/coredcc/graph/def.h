@@ -593,7 +593,7 @@ public:
   /* ---- references and evaluation ---- */
 
   /** Every block reference: group defs and Pointer params. */
-  void foreachRef(RefVisitor &visitor);
+  void forEachRef(RefVisitor &visitor);
   /** The compiled form, rebuilt when it is out of date. */
   std::shared_ptr<const GraphTopology> topology() const;
 

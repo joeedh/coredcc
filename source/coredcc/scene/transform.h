@@ -3,7 +3,7 @@
 #include "coredcc/base/iface/iface.h"
 #include "coredcc/base/status.h"
 #include "coredcc/scene/channel_entries.h"
-#include "coredcc/scene/eval_ctx.h"
+#include "coredcc/scene/eval_context.h"
 
 #include "litestl/math/matrix_bindings.h"
 #include "litestl/math/quat.h"
@@ -87,7 +87,7 @@ public:
       : channelCount_(channelCount), time_(time)
   {
   }
-  void add(const EvalCtx &object, const TransformState &parent)
+  void add(const EvalContext &object, const TransformState &parent)
   {
     for (int32_t i = 0; i < channelCount_; i++) {
       channels_.append(object.channel(i));
@@ -143,8 +143,8 @@ private:
  * - `setWorld` finds channels that put the object at `target`. `out` starts as a copy of
  *   `current`; channels that don't matter are left as they are. The caller checks the
  * result (solveWorld), so a model may return its nearest solution without measuring it.
- * It also puts back the channels that are fixed (EvalCtx::isFixed), so a model needn't
- * look at that; one that does can find a better solution with the others.
+ * It also puts back the channels that are fixed (EvalContext::isFixed), so a model
+ * needn't look at that; one that does can find a better solution with the others.
  * - `applyDelta` (optional) applies `delta` to `base`. `nearTo` is the previous result of
  * the same interaction (or `base`): where several channel values mean the same, such as
  * Euler angles, the ones nearest to it are wanted. `out` starts as a copy of `nearTo`.
@@ -160,11 +160,11 @@ private:
  * file's channels unread, and its status is Invalid.
  */
 struct TransformModel : IfaceRef {
-  TransformState evaluate(const EvalCtx &ctx, const TransformState &parent) const
+  TransformState evaluate(const EvalContext &ctx, const TransformState &parent) const
   {
     return CDCC_CALL(evaluate, ctx, parent);
   }
-  Status setWorld(const EvalCtx &current,
+  Status setWorld(const EvalContext &current,
                   const mat4d &target,
                   const TransformState &parent,
                   SetWorldMode mode,
@@ -176,7 +176,7 @@ struct TransformModel : IfaceRef {
   {
     return CDCC_HAS(applyDelta);
   }
-  Status applyDelta(const EvalCtx &base,
+  Status applyDelta(const EvalContext &base,
                     const ChannelBlock &nearTo,
                     const TransformDelta &delta,
                     const TransformState &parent,
@@ -197,7 +197,7 @@ struct TransformModel : IfaceRef {
   {
     return CDCC_HAS(pivot);
   }
-  litestl::math::double3 pivot(const EvalCtx &ctx, const TransformState &parent) const
+  litestl::math::double3 pivot(const EvalContext &ctx, const TransformState &parent) const
   {
     return CDCC_CALL(pivot, ctx, parent);
   }

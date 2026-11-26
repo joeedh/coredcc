@@ -134,15 +134,15 @@ public:
              : std::span<const BlockEntry>();
   }
   /** Every reference, for the provider. */
-  template <class Fn> void foreachCell(Fn &&fn)
+  template <class Fn> void forEachCell(Fn &&fn)
   {
     fn(parent.cell());
     fn(data.cell());
     if (file_) {
-      foreachCellOf(file_->fields, fn);
+      forEachCellOf(file_->fields, fn);
     }
     if (fileOfType()) {
-      foreachCellOf(file_->unread, fn);
+      forEachCellOf(file_->unread, fn);
     }
   }
   uint64_t memSize() const;
@@ -154,7 +154,7 @@ public:
 
 private:
   template <class Fn>
-  static void foreachCellOf(litestl::util::Vector<BlockEntry> &entries, Fn &&fn)
+  static void forEachCellOf(litestl::util::Vector<BlockEntry> &entries, Fn &&fn)
   {
     for (BlockEntry &e : entries) {
       for (RefCell &c : e.refs) {
@@ -216,7 +216,7 @@ enum class EvalStatus : int32_t {
  */
 EvalStatus evaluateObject(Runtime &rt,
                           const TransformType *type,
-                          const EvalCtx &ctx,
+                          const EvalContext &ctx,
                           const TransformState &parent,
                           TransformState &out,
                           Status &error);
@@ -256,13 +256,13 @@ struct ObjectRead {
   double time = 0.0;
 
   /** What its model is given. */
-  EvalCtx ctx() const
+  EvalContext ctx() const
   {
-    return overrides.any() ? EvalCtx(channels, time, overrides.values, overrides.mask)
-                           : EvalCtx(channels, time);
+    return overrides.any() ? EvalContext(channels, time, overrides.values, overrides.mask)
+                           : EvalContext(channels, time);
   }
   /** What a tool that moves it gives to a solver: the same, with its locks. */
-  EvalCtx solveCtx() const
+  EvalContext solveCtx() const
   {
     return ctx().withLocks(info.locks);
   }

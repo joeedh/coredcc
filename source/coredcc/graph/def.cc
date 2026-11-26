@@ -642,7 +642,7 @@ void GraphDef::detachLink(GraphLink *link)
   litestl::alloc::Delete(link);
 }
 
-void GraphDef::foreachRef(RefVisitor &visitor)
+void GraphDef::forEachRef(RefVisitor &visitor)
 {
   for (GraphNode *n = first_; n; n = n->next_) {
     if (isType(*n, kGraphGroupType) || isType(*n, kGraphForeachType)) {

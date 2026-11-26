@@ -101,7 +101,7 @@ const Datablock *Library::strongUserOf(BlockId id) const
     if (found || u.state_ == BlockState::InHistory) {
       return;
     }
-    foreachRef(h, [&](RefCell &cell) {
+    forEachRef(h, [&](RefCell &cell) {
       if (cell.kind == RefKind::Strong && !cell.target.isNull() &&
           clients_.canonical(cell.target) == id)
       {
@@ -125,7 +125,7 @@ Library::strongUsersOf(std::span<const BlockHandle> blocks) const
     if (u.state_ == BlockState::InHistory) {
       return;
     }
-    foreachRef(h, [&](RefCell &cell) {
+    forEachRef(h, [&](RefCell &cell) {
       if (cell.kind == RefKind::Strong && !cell.target.isNull()) {
         const Datablock **user = users.lookup_ptr(keyOf(clients_.canonical(cell.target)));
         if (user && !*user) {

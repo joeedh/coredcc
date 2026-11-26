@@ -56,11 +56,11 @@ struct NoteProvider {
     in.setData(n);
     return Status();
   }
-  void foreachRef(const Datablock &, const void *data, RefVisitor &v) const
+  void forEachRef(const Datablock &, const void *data, RefVisitor &v) const
   {
     if (host->failForeach) {
       host->rt->setStickyError(
-          Status::error(StatusCode::Internal, "note foreachRef threw"));
+          Status::error(StatusCode::Internal, "note forEachRef threw"));
       return;
     }
     v.visit(const_cast<Note *>(static_cast<const Note *>(data))->about);
@@ -73,7 +73,7 @@ struct NoteProvider {
     BIND_STRUCT_METHOD(st, copy, MARGS("from", "data", "to"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "data", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "data", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "data", "visitor"));
     return st;
   }
 };
@@ -224,22 +224,22 @@ static void test_attach()
   test_assert(listed == 1);
   test_assert(w.lib.attach(a, kNote, n).code() == StatusCode::AlreadyExists);
 
-  /* Its references count: relations, marking, remapping through foreachRef. */
+  /* Its references count: relations, marking, remapping through forEachRef. */
   test_assert(w.lib.writeRef(n->about, w.lib.get(target)->id()).ok());
   test_assert(w.lib.usersOf(target).size() == 1);
   int visited = 0, data = 0;
   test_assert(
-      w.lib.foreachRef(a, [&](RefCell &c) { visited += &c == &n->about ? 1 : 0; }).ok());
-  test_assert(w.lib.foreachDataRef(a, [&](RefCell &) { data++; }).ok());
+      w.lib.forEachRef(a, [&](RefCell &c) { visited += &c == &n->about ? 1 : 0; }).ok());
+  test_assert(w.lib.forEachDataRef(a, [&](RefCell &) { data++; }).ok());
   test_assert(visited == 1 && data == 3);
   w.lib.setFlag(a, BlockFlags::Root, true);
   test_assert(*w.lib.collect() == 0 && w.lib.get(target));
 
-  /* A failing foreachRef aborts the collection. */
+  /* A failing forEachRef aborts the collection. */
   w.notes.failForeach = true;
   w.lib.noteRefsChanged();
-  test_assert(hasMsg(w.lib.collect().status(), "note foreachRef threw"));
-  test_assert(!w.lib.foreachRef(a, [](RefCell &) {}).ok());
+  test_assert(hasMsg(w.lib.collect().status(), "note forEachRef threw"));
+  test_assert(!w.lib.forEachRef(a, [](RefCell &) {}).ok());
   w.rt.takeStickyError().ignore();
   w.notes.failForeach = false;
 
@@ -320,7 +320,7 @@ struct FakeHost : ForeignDispatcher {
       test_assert(pointer(1)->about.target ==
                   static_cast<const Datablock *>(args[2])->id());
       log += static_cast<const Datablock *>(args[0])->name().c_str();
-    } else if (strcmp(name, "foreachRef") == 0) {
+    } else if (strcmp(name, "forEachRef") == 0) {
       static_cast<RefVisitor *>(args[2])->visit(pointer(1)->about);
     }
     return Status();
@@ -338,7 +338,7 @@ static void test_foreign()
                          "copy",
                          "serialize",
                          "deserialize",
-                         "foreachRef",
+                         "forEachRef",
                          "onWeakTargetLost"};
   test_assert(
       registerForeign<AttachmentProvider>(rt, "test.Js#provider", &host, nullptr, slots)

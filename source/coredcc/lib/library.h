@@ -227,9 +227,9 @@ public:
 
   /** Every reference out of `h`: the provider's, the slots', then the attachments'
    * (opaque ones included). */
-  Status foreachRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const;
+  Status forEachRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const;
   /** The references in the block's data alone, as its provider reports them. */
-  Status foreachDataRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const;
+  Status forEachDataRef(BlockHandle h, litestl::util::function<void(RefCell &)> fn) const;
   /** Blocks with a reference (of any kind) to `target`. Cached by epoch. */
   litestl::util::Vector<BlockHandle> usersOf(BlockHandle target) const;
 
@@ -315,7 +315,7 @@ public:
    * were destroyed.
    *
    * Busy while a no-collect scope is open, or during a sweep. A sticky Runtime error
-   * after a provider call (a foreign foreachRef that threw) aborts before anything is
+   * after a provider call (a foreign forEachRef that threw) aborts before anything is
    * destroyed, and is returned. With the relations audit on, a stale relations cache (a
    * reference written without the library seeing it) is an Internal error.
    *

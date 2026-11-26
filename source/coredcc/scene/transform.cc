@@ -28,12 +28,12 @@ int64_t channels::toInt(double v)
   return v >= kMaxInt ? int64_t(kMaxInt) : int64_t(std::round(v));
 }
 
-int64_t EvalCtx::intChannel(int32_t i) const
+int64_t EvalContext::intChannel(int32_t i) const
 {
   return channels::toInt(channel(i));
 }
 
-ChannelBlock EvalCtx::snapshot() const
+ChannelBlock EvalContext::snapshot() const
 {
   ChannelBlock out(channelCount());
   for (int32_t i = 0; i < out.size(); i++) {
@@ -133,7 +133,7 @@ mat4d TransformDelta::matrix() const
 namespace {
 
 /* Before calling into a model. */
-Status ready(const TransformType &type, const EvalCtx &ctx)
+Status ready(const TransformType &type, const EvalContext &ctx)
 {
   if (type.runtime().hasStickyError()) {
     return failed("a transform model can't be called while an error is pending");
@@ -169,7 +169,7 @@ Status checkParent(const TransformState &parent)
 
 /* Within a few roundings of the numbers that were added up. */
 bool sameTranslation(const TransformType &type,
-                     const EvalCtx &ctx,
+                     const EvalContext &ctx,
                      const TransformState &state,
                      const TransformState &parent,
                      const mat4d &target)
@@ -190,7 +190,7 @@ bool sameTranslation(const TransformType &type,
 
 /* The state of a model's answer. */
 Status checkResult(const TransformType &type,
-                   const EvalCtx &out,
+                   const EvalContext &out,
                    const TransformState &parent,
                    TransformState &state)
 {
@@ -204,7 +204,7 @@ Status checkResult(const TransformType &type,
 }
 
 /* Fixed channels as they are stored. Which of them were to change. */
-FixedChannels putBackFixed(const EvalCtx &ctx, ChannelBlock &out)
+FixedChannels putBackFixed(const EvalContext &ctx, ChannelBlock &out)
 {
   FixedChannels f;
   for (int32_t i = 0; ctx.hasFixed() && i < out.size(); i++) {
@@ -225,7 +225,7 @@ FixedChannels putBackFixed(const EvalCtx &ctx, ChannelBlock &out)
 } // namespace
 
 Result<TransformState> evaluateTransform(const TransformType &type,
-                                         const EvalCtx &ctx,
+                                         const EvalContext &ctx,
                                          const TransformState &parent)
 {
   if (Status s = ready(type, ctx); !s.ok()) {
@@ -239,7 +239,7 @@ Result<TransformState> evaluateTransform(const TransformType &type,
 }
 
 Result<double3> transformPivot(const TransformType &type,
-                               const EvalCtx &ctx,
+                               const EvalContext &ctx,
                                const TransformState &parent)
 {
   if (!type.model().hasPivot()) {
@@ -258,7 +258,7 @@ Result<double3> transformPivot(const TransformType &type,
 }
 
 Result<ChannelBlock> solveWorld(const TransformType &type,
-                                const EvalCtx &current,
+                                const EvalContext &current,
                                 const mat4d &target,
                                 const TransformState &parent,
                                 SetWorldMode mode,
@@ -298,7 +298,7 @@ Result<ChannelBlock> solveWorld(const TransformType &type,
   if (mode == SetWorldMode::Exact && inTheWay.any()) {
     return failed("the target isn't representable: channels are locked or driven");
   }
-  const EvalCtx result = current.withChannels(out);
+  const EvalContext result = current.withChannels(out);
   TransformState state;
   if (s = checkResult(type, result, parent, state); !s.ok()) {
     return s;
@@ -313,7 +313,7 @@ Result<ChannelBlock> solveWorld(const TransformType &type,
 }
 
 Result<ChannelBlock> solveDelta(const TransformType &type,
-                                const EvalCtx &base,
+                                const EvalContext &base,
                                 const ChannelBlock &nearTo,
                                 const TransformDelta &delta,
                                 const TransformState &parent,
@@ -328,7 +328,7 @@ Result<ChannelBlock> solveDelta(const TransformType &type,
   if (Status s = ready(type, base); !s.ok()) {
     return s;
   }
-  if (Status s = ready(type, EvalCtx(nearTo)); !s.ok()) {
+  if (Status s = ready(type, EvalContext(nearTo)); !s.ok()) {
     return s;
   }
   if (!type.model().hasApplyDelta()) {

@@ -132,10 +132,10 @@ struct ObjectProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &b, RefVisitor &v) const
+  void forEachRef(const Datablock &b, RefVisitor &v) const
   {
     if (Object *o = static_cast<Object *>(b.clientData())) {
-      o->foreachCell([&v](RefCell &cell) { v.visit(cell); });
+      o->forEachCell([&v](RefCell &cell) { v.visit(cell); });
     }
   }
   void destroy(const Datablock &b)
@@ -176,7 +176,7 @@ struct ObjectProvider {
     auto *st = new lbt::Struct<ObjectProvider>("coredcc::ObjectProvider",
                                                sizeof(ObjectProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
@@ -212,7 +212,7 @@ newObject(Library &lib, std::string_view name, std::string_view transformType)
 
 EvalStatus evaluateObject(Runtime &rt,
                           const TransformType *type,
-                          const EvalCtx &ctx,
+                          const EvalContext &ctx,
                           const TransformState &parent,
                           TransformState &out,
                           Status &error)

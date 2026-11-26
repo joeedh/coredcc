@@ -374,7 +374,7 @@ void testPointers()
         }
       },
       &redirect);
-  def.foreachRef(v);
+  def.forEachRef(v);
   test_assert(d.is(own, PropValue::nullPointer()) &&
               def.node(m)->blockTarget("graph") == g.id);
   test_assert(d.set(own, pointerTo(h)).ok() && d.undo().ok());

@@ -112,11 +112,11 @@ struct NoteProvider {
     }
     return Status();
   }
-  void foreachRef(const Datablock &, const void *data, RefVisitor &v) const
+  void forEachRef(const Datablock &, const void *data, RefVisitor &v) const
   {
     if (host->failForeach) {
       host->rt->setStickyError(
-          Status::error(StatusCode::Internal, "note foreachRef threw"));
+          Status::error(StatusCode::Internal, "note forEachRef threw"));
       return;
     }
     v.visit(const_cast<Note *>(static_cast<const Note *>(data))->about);
@@ -128,7 +128,7 @@ struct NoteProvider {
     BIND_STRUCT_METHOD(st, copy, MARGS("from", "data", "to"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "data", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "data", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "data", "visitor"));
     return st;
   }
 };
@@ -413,7 +413,7 @@ sameRecord(const Library &la, BlockHandle ha, const Library &lb, BlockHandle hb)
   }
   if (a.state() == BlockState::Detached) {
     Vector<RefCell> refs;
-    la.foreachDataRef(ha, [&](RefCell &c) { refs.append(c); }).ignore();
+    la.forEachDataRef(ha, [&](RefCell &c) { refs.append(c); }).ignore();
     if (b.state() != BlockState::Placeholder ||
         b.placeholderReason() != PlaceholderReason::MissingBlock ||
         !sameCells(refs, b.placeholderData().refs))

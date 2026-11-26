@@ -100,7 +100,7 @@ StructId scratchStruct(Runtime &rt, const ToolDef &def)
   char hash[17];
   snprintf(hash, sizeof hash, "%016llx", (unsigned long long)TypeId::of(shape).value);
   const std::string name =
-      std::string("ToolSettingsCheck:") + def.name().c_str() + "#" + hash;
+      std::string("coredcc.ToolSettingsCheck:") + def.name().c_str() + "#" + hash;
   if (reg.find(StructId::of(name))) {
     return StructId::of(name);
   }
@@ -116,7 +116,7 @@ StructId scratchStruct(Runtime &rt, const ToolDef &def)
 
 } // namespace
 
-Status ToolRegistry::validateDef(const ToolDef &def) const
+Status ToolRegistry::checkDef(const ToolDef &def) const
 {
   const std::string name = def.name().c_str();
   for (size_t start = 0;;) {
@@ -166,7 +166,7 @@ Status ToolRegistry::validateDef(const ToolDef &def) const
 Result<const ToolDef *> ToolRegistry::add(ToolDef def)
 {
   CDCC_TRY(rt_.busyIfEvaluating("ToolRegistry::add"));
-  CDCC_TRY(validateDef(def));
+  CDCC_TRY(checkDef(def));
   ToolDef *d = litestl::alloc::New<ToolDef>("coredcc::ToolDef", std::move(def));
   defs_.append(d);
   byId_.add(d->key(), d);

@@ -130,7 +130,7 @@ struct Plane {
     Obj o;
     o.methods["evaluate"] = [this](void **args, void *ret, string *) {
       singles++;
-      const EvalCtx &c = *static_cast<const EvalCtx *>(args[0]);
+      const EvalContext &c = *static_cast<const EvalContext *>(args[0]);
       put(*new (ret) TransformState(),
           *static_cast<const TransformState *>(args[1]),
           c.channel(0),

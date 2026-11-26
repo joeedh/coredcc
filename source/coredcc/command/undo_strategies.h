@@ -98,7 +98,7 @@ private:
  * - `ctx` says which document. When a failed command is rolled back it has only the
  * Runtime, the Library and the root.
  * - `capture` appends the state's bytes to `blob`, which is empty.
- * - `foreachRef` (optional): visits a cell for each block that `blob` references, so undo
+ * - `forEachRef` (optional): visits a cell for each block that `blob` references, so undo
  *   keeps those blocks. The cells are the provider's own; writes to them are ignored.
  */
 struct SnapshotProvider : IfaceRef {
@@ -112,20 +112,20 @@ struct SnapshotProvider : IfaceRef {
   }
   bool hasForeachRef() const
   {
-    return CDCC_HAS(foreachRef);
+    return CDCC_HAS(forEachRef);
   }
-  void foreachRef(Context &ctx,
+  void forEachRef(Context &ctx,
                   const litestl::util::Vector<uint8_t> &blob,
                   RefVisitor &v) const
   {
-    CDCC_CALL(foreachRef, ctx, blob, v);
+    CDCC_CALL(forEachRef, ctx, blob, v);
   }
 
   CDCC_INTERFACE(SnapshotProvider, "coredcc::SnapshotProvider")
   {
     BIND_STRUCT_METHOD(st, capture, MARGS("ctx", "blob"));
     BIND_STRUCT_METHOD(st, restore, MARGS("ctx", "blob"));
-    BIND_OPTIONAL_METHOD(st, foreachRef, MARGS("ctx", "blob", "v"));
+    BIND_OPTIONAL_METHOD(st, forEachRef, MARGS("ctx", "blob", "v"));
   }
 };
 

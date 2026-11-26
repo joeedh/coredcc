@@ -646,7 +646,7 @@ private:
             }
           },
           &args);
-      return g.def->foreachRef(v);
+      return g.def->forEachRef(v);
     }
     case 3: {
       Client &c = clients_[rng_.below(uint32_t(clients_.size()))];

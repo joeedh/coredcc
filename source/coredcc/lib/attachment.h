@@ -27,9 +27,9 @@ namespace coredcc {
  * References are copied as they are; the library remaps them.
  * - `serialize` and `deserialize` come together, and work as BlockProvider's do. A type
  * without them says in its info that it is Transient.
- * - `foreachRef` reports the data's references, as BlockProvider::foreachRef does. A save
+ * - `forEachRef` reports the data's references, as BlockProvider::forEachRef does. A save
  * checks them against what `serialize` wrote.
- * - `onWeakTargetLost` is told when a block that the data weakly references (`foreachRef`
+ * - `onWeakTargetLost` is told when a block that the data weakly references (`forEachRef`
  * says) is about to be destroyed. The block may be in any state.
  */
 struct AttachmentProvider : IfaceRef {
@@ -71,11 +71,11 @@ struct AttachmentProvider : IfaceRef {
   }
   bool hasForeachRef() const
   {
-    return CDCC_HAS(foreachRef);
+    return CDCC_HAS(forEachRef);
   }
-  void foreachRef(const Datablock &block, const void *data, RefVisitor &visitor) const
+  void forEachRef(const Datablock &block, const void *data, RefVisitor &visitor) const
   {
-    CDCC_CALL(foreachRef, block, data, visitor);
+    CDCC_CALL(forEachRef, block, data, visitor);
   }
   bool hasOnWeakTargetLost() const
   {
@@ -93,7 +93,7 @@ struct AttachmentProvider : IfaceRef {
     BIND_OPTIONAL_METHOD(st, copy, MARGS("from", "data", "to"));
     BIND_OPTIONAL_METHOD(st, serialize, MARGS("block", "data", "out"));
     BIND_OPTIONAL_METHOD(st, deserialize, MARGS("block", "in"));
-    BIND_OPTIONAL_METHOD(st, foreachRef, MARGS("block", "data", "visitor"));
+    BIND_OPTIONAL_METHOD(st, forEachRef, MARGS("block", "data", "visitor"));
     BIND_OPTIONAL_METHOD(st, onWeakTargetLost, MARGS("block", "data", "lost"));
   }
 };

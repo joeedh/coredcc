@@ -298,7 +298,7 @@ struct RigProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &b, RefVisitor &v) const
+  void forEachRef(const Datablock &b, RefVisitor &v) const
   {
     v.visit(static_cast<Rig *>(b.clientData())->target);
   }
@@ -310,7 +310,7 @@ struct RigProvider {
   {
     auto *st = new lbt::Struct<RigProvider>("test::RigProvider", sizeof(RigProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     return st;
   }

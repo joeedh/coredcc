@@ -70,12 +70,12 @@ lbt::Struct<ChannelBlock> *ChannelBlock::defineBindings()
   return st;
 }
 
-lbt::Struct<EvalCtx> *EvalCtx::defineBindings()
+lbt::Struct<EvalContext> *EvalContext::defineBindings()
 {
-  static lbt::Struct<EvalCtx> *st = nullptr;
+  static lbt::Struct<EvalContext> *st = nullptr;
   if (!st) {
     litestl::alloc::PermanentGuard guard;
-    st = new lbt::Struct<EvalCtx>("coredcc::EvalCtx", sizeof(EvalCtx));
+    st = new lbt::Struct<EvalContext>("coredcc::EvalContext", sizeof(EvalContext));
     BIND_STRUCT_METHOD(st, channelCount, MARGS());
     BIND_STRUCT_METHOD(st, channel, MARGS("i"));
     BIND_STRUCT_METHOD(st, boolChannel, MARGS("i"));

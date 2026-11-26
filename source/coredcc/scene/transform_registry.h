@@ -100,8 +100,8 @@ private:
  *
  * Adding one registers an ApiStruct with the type's name, whose parent is
  * `kChannelsStruct`. Its data is a ChannelBlock. Setting an Int outside +-2^53 is
- * OutOfRange (a double can't hold it); reads round like EvalCtx, and give an Enum's first
- * item for a value that isn't one.
+ * OutOfRange (a double can't hold it); reads round like EvalContext, and give an Enum's
+ * first item for a value that isn't one.
  */
 class TransformRegistry {
 public:
@@ -115,9 +115,10 @@ public:
 
   /** Why a type can't be added: a channel def, or a name that is taken (AlreadyExists).
    * Busy while a scene or a graph evaluates. */
-  Status canAdd(const TransformTypeInfo &info) const;
-  /** Registers a type and takes its model. Fails as canAdd does, leaving nothing behind.
-   * Posts that anything may have changed: there may be objects of the type already. */
+  Status checkInfo(const TransformTypeInfo &info) const;
+  /** Registers a type and takes its model. Fails as checkInfo does, leaving nothing
+   * behind. Posts that anything may have changed: there may be objects of the type
+   * already. */
   Result<const TransformType *> add(TransformTypeInfo info, Owned<TransformModel> model);
   const TransformType *find(TypeId id) const;
   const TransformType *find(std::string_view name) const
@@ -148,7 +149,7 @@ private:
 
 /** The point that an object turns about, in world space (TransformModel's `pivot`). */
 Result<double3> transformPivot(const TransformType &type,
-                               const EvalCtx &ctx,
+                               const EvalContext &ctx,
                                const TransformState &parent);
 
 /** Whether a solution would have changed channels that are fixed. */
@@ -168,7 +169,7 @@ struct FixedChannels {
 
 /** The model's state, which needn't be finite. */
 Result<TransformState> evaluateTransform(const TransformType &type,
-                                         const EvalCtx &ctx,
+                                         const EvalContext &ctx,
                                          const TransformState &parent);
 
 /**
@@ -184,12 +185,12 @@ Result<TransformState> evaluateTransform(const TransformType &type,
  * - Closest: only the translation is compared; shear is lost.
  * - A parent without an inverse is FailedPrecondition in both modes, and so is a result
  * that isn't finite. A target with a scale of 0 is fine.
- * - Fixed channels (EvalCtx::isFixed) come back as they are stored, and the rest is what
- * it would be without them. When one was in the way, Exact fails, and Closest doesn't
- * compare the translation.
+ * - Fixed channels (EvalContext::isFixed) come back as they are stored, and the rest is
+ * what it would be without them. When one was in the way, Exact fails, and Closest
+ * doesn't compare the translation.
  */
 Result<ChannelBlock> solveWorld(const TransformType &type,
-                                const EvalCtx &current,
+                                const EvalContext &current,
                                 const mat4d &target,
                                 const TransformState &parent,
                                 SetWorldMode mode,
@@ -207,7 +208,7 @@ Result<ChannelBlock> solveWorld(const TransformType &type,
  * without them: an object whose x is locked follows a translation along y. That isn't an
  * error, also when nothing is left to change. */
 Result<ChannelBlock> solveDelta(const TransformType &type,
-                                const EvalCtx &base,
+                                const EvalContext &base,
                                 const ChannelBlock &nearTo,
                                 const TransformDelta &delta,
                                 const TransformState &parent,

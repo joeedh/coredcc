@@ -229,7 +229,7 @@ Status registerForeignTool(Context &ctx,
     copy.impl(impl, [](Runtime &) -> Result<Owned<Tool>> {
       return Status::error(StatusCode::Internal, "unset");
     });
-    CDCC_TRY(rt.ext<ToolRegistry>().validateDef(copy));
+    CDCC_TRY(rt.ext<ToolRegistry>().checkDef(copy));
     CDCC_TRY(registerForeign<Tool>(
         rt,
         impl,

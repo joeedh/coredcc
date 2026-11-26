@@ -40,7 +40,7 @@ private:
  *
  * - `data` resolves the block's data on every use; it may return null (a Detached
  *   block, a host object that went away).
- * - `foreachRef` is the single source of truth for the block's references. It is called
+ * - `forEachRef` is the single source of truth for the block's references. It is called
  * for Live, InHistory, Detached and Doomed blocks (a Detached block's targets must
  * survive GC until the host restores it, and a Doomed one's while something pins its
  * data); report nothing if the data is gone. Report every RefCell in the block's data,
@@ -59,7 +59,7 @@ private:
  * to `in.setData`; on an error it has freed what it made. The record exists then (id,
  * name, slots), but other blocks may not have their data yet.
  * - `duplicate` (optional) copies the data, references as they are; the library then
- * remaps them through foreachRef.
+ * remaps them through forEachRef.
  * - `rekey` (optional) gives an imported block an id the client can resolve (a UUID in
  * host data), one that `context.isFree`. A null id refuses the import. `imported` isn't a
  * record yet; it has the id the file has, the type and the name. The id of a MissingBlock
@@ -72,9 +72,9 @@ struct BlockProvider : IfaceRef {
   {
     return CDCC_CALL(data, block);
   }
-  void foreachRef(const Datablock &block, RefVisitor &visitor) const
+  void forEachRef(const Datablock &block, RefVisitor &visitor) const
   {
-    CDCC_CALL(foreachRef, block, visitor);
+    CDCC_CALL(forEachRef, block, visitor);
   }
   void destroy(const Datablock &block)
   {
@@ -140,7 +140,7 @@ struct BlockProvider : IfaceRef {
   CDCC_INTERFACE(BlockProvider, "coredcc::BlockProvider")
   {
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_OPTIONAL_METHOD(st, queryInterface, MARGS("block", "iface"));
     BIND_OPTIONAL_METHOD(st, onWeakTargetLost, MARGS("user", "lost"));

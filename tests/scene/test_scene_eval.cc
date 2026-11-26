@@ -149,7 +149,7 @@ void testHierarchy()
   test_assert(n.evaluations == 2 && n.revalidations == 1 && n.rebuilds == 1);
 
   /* Time. */
-  d.addFnModel("test.time", [](const EvalCtx &ctx, const TransformState &p) {
+  d.addFnModel("test.time", [](const EvalContext &ctx, const TransformState &p) {
     TransformState s = p;
     double *m = s.world;
     m[12] += ctx.time();
@@ -249,7 +249,7 @@ void testFailures()
   Doc d;
   const double nan = std::numeric_limits<double>::quiet_NaN();
   int throws = 0;
-  d.addFnModel("test.throws", [&](const EvalCtx &, const TransformState &) {
+  d.addFnModel("test.throws", [&](const EvalContext &, const TransformState &) {
     throws++;
     d.rt.setStickyError(boom(throws == 1 ? "first" : "later"));
     return TransformState();
@@ -591,7 +591,7 @@ struct Oracle {
       return parent;
     }
     Result<TransformState> s = evaluateTransform(
-        *t, EvalCtx(own ? d.obj(h).channels : d.host(h).channels), parent);
+        *t, EvalContext(own ? d.obj(h).channels : d.host(h).channels), parent);
     if (!s.ok() || !s->finite()) {
       status = EvalStatus::Invalid;
       return parent;

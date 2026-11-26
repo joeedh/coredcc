@@ -572,7 +572,7 @@ static void test_save_fails()
       hasMsg(saveLibrary(w.lib).status(), "attachment 'test.Note': no notes today"));
   w.notes.fault = DocFault::None;
   w.notes.failForeach = true;
-  test_assert(hasMsg(saveLibrary(w.lib).status(), "saving 'a': note foreachRef threw"));
+  test_assert(hasMsg(saveLibrary(w.lib).status(), "saving 'a': note forEachRef threw"));
   w.notes.failForeach = false;
   test_assert(!w.rt.hasStickyError());
 
@@ -585,7 +585,7 @@ static void test_save_fails()
   SaveReport report;
   w.save(&report);
   test_assert(report.issues.total == 1 && report.issues.first[0].block == w.id(a));
-  test_assert(has(issueText(report.issues), "a: 'a': foreachRef reports"));
+  test_assert(has(issueText(report.issues), "a: 'a': forEachRef reports"));
   w.docs.fault = DocFault::None;
   w.save(&report);
   test_assert(report.issues.total == 0);

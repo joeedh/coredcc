@@ -38,10 +38,10 @@ template <bool Create> struct NotesProvider {
     host->alive++;
     return litestl::alloc::New<Notes>("Notes");
   }
-  void foreachRef(const Datablock &, const void *data, RefVisitor &v) const
+  void forEachRef(const Datablock &, const void *data, RefVisitor &v) const
   {
     if (host->throws) {
-      host->rt->setStickyError(Status::error(StatusCode::Internal, "foreachRef threw"));
+      host->rt->setStickyError(Status::error(StatusCode::Internal, "forEachRef threw"));
       return;
     }
     v.visit(const_cast<Notes *>(static_cast<const Notes *>(data))->about);
@@ -53,7 +53,7 @@ template <bool Create> struct NotesProvider {
     BIND_STRUCT_METHOD(st, destroy, MARGS("data"));
     if constexpr (Create) {
       BIND_STRUCT_METHOD(st, create, MARGS("block"));
-      BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "data", "visitor"));
+      BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "data", "visitor"));
     }
     return st;
   }
@@ -163,7 +163,7 @@ static void test_detach_command()
     t.lib().setFlag(ob, BlockFlags::FakeUser, true);
   }
   t.host.throws = true;
-  test_assert(hasMsg(t.run(kDetachCommand), "foreachRef threw") && t.notes() == n);
+  test_assert(hasMsg(t.run(kDetachCommand), "forEachRef threw") && t.notes() == n);
   t.host.throws = false;
   test_assert(t.run(kDetachCommand).ok() && !t.notes() && t.host.alive == 1);
   test_assert(t.lib().get(*only)->pins(PinKind::History) == 1);

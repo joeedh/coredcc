@@ -184,10 +184,10 @@ static void test_props()
                     "path="));
   test_assert(w.suggestion("<prop path='commandDefaults[\"test.ad\"].amount'/>") ==
               "test.add");
-  test_assert(
-      w.one("<prop path='commandDefaults[\"test.add\"].other'/>",
-            "<prop> path: no member 'other' in CommandDefaults:test.add (at offset 27)",
-            "path="));
+  test_assert(w.one(
+      "<prop path='commandDefaults[\"test.add\"].other'/>",
+      "<prop> path: no member 'other' in coredcc.CommandDefaults:test.add (at offset 27)",
+      "path="));
 }
 
 static void test_prefixes()

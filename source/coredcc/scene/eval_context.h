@@ -63,16 +63,16 @@ private:
  * the time. It has no Library, Runtime or Context, so an evaluation is a pure function
  * and the graph can cache it.
  */
-class EvalCtx {
+class EvalContext {
 public:
-  /** `channels` must outlive the EvalCtx. `time` is in seconds. */
-  explicit EvalCtx(const ChannelBlock &channels, double time = 0.0)
+  /** `channels` must outlive the EvalContext. `time` is in seconds. */
+  explicit EvalContext(const ChannelBlock &channels, double time = 0.0)
       : channels_(&channels), time_(time)
   {
   }
   /** The same with overrides: channel i is `overrides[i]` where `overridden[i]` isn't 0.
-   * Both have an entry for each channel and must outlive the EvalCtx. */
-  EvalCtx(const ChannelBlock &channels,
+   * Both have an entry for each channel and must outlive the EvalContext. */
+  EvalContext(const ChannelBlock &channels,
           double time,
           const ChannelBlock &overrides,
           const litestl::util::Vector<uint8_t> &overridden)
@@ -115,16 +115,16 @@ public:
   }
   /** The same with locks: bit i is channel i's. Those after the first 64 can't be locked.
    */
-  EvalCtx withLocks(uint64_t locks) const
+  EvalContext withLocks(uint64_t locks) const
   {
-    EvalCtx c = *this;
+    EvalContext c = *this;
     c.locks_ = locks;
     return c;
   }
   /** The same with other stored channels, which must outlive it. */
-  EvalCtx withChannels(const ChannelBlock &channels) const
+  EvalContext withChannels(const ChannelBlock &channels) const
   {
-    EvalCtx c = *this;
+    EvalContext c = *this;
     c.channels_ = &channels;
     return c;
   }
@@ -150,7 +150,7 @@ public:
   /** A copy of the channels, with the overrides applied. */
   ChannelBlock snapshot() const;
 
-  static litestl::binding::types::Struct<EvalCtx> *defineBindings();
+  static litestl::binding::types::Struct<EvalContext> *defineBindings();
 
 private:
   const ChannelBlock *channels_;

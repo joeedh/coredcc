@@ -37,7 +37,7 @@ Unreal, coredcc is exactly one module, so they exist once.
   and FakeUser blocks, blocks with Host pins, Detached blocks, and placeholders that were records in
   a file. A block that nothing leads to isn't saved, and neither are deleted ones.
 - **A host checks `SaveReport` after each save.** It lists what a load won't give back:
-  - issues: references that a provider's `serialize` and `foreachRef` disagree about;
+  - issues: references that a provider's `serialize` and `forEachRef` disagree about;
   - blocks that only Host pins keep. Pins aren't saved, so set FakeUser on what must last;
   - Transient and Detached blocks, and what only Transient blocks lead to;
   - what loading it takes, to compare with `LoadLimits`: the limits of a 32-bit process are lower.

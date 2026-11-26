@@ -71,13 +71,13 @@ struct FActorObject
 struct FActorProvider
 {
 	void* data(const Datablock& B) const { return B.clientData(); }
-	void foreachRef(const Datablock&, RefVisitor&) const {}
+	void forEachRef(const Datablock&, RefVisitor&) const {}
 	void destroy(const Datablock& B) { delete static_cast<FActorObject*>(B.clientData()); }
 	static lbt::Struct<FActorProvider>* defineBindings()
 	{
 		auto* St = new lbt::Struct<FActorProvider>("spike::ActorProvider", sizeof(FActorProvider));
 		BIND_STRUCT_METHOD(St, data, MARGS("block"));
-		BIND_STRUCT_METHOD(St, foreachRef, MARGS("block", "visitor"));
+		BIND_STRUCT_METHOD(St, forEachRef, MARGS("block", "visitor"));
 		BIND_STRUCT_METHOD(St, destroy, MARGS("block"));
 		return St;
 	}

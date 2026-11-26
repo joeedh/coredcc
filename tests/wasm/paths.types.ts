@@ -44,7 +44,7 @@ void id
 // @ts-expect-error: no such command
 const none: CommandId = 'ts.nope'
 void none
-type Defaults = Structs['CommandDefaults:ts.add']
+type Defaults = Structs['coredcc.CommandDefaults:ts.add']
 check<Equal<keyof Defaults, '$struct' | 'amount' | 'default'>>(true)
 
 /* The odd catalog's (gen_paths.ts): `string` is a struct there, as `string_2`. */

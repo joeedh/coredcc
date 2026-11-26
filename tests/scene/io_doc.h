@@ -83,7 +83,7 @@ struct IoDoc : CommandDoc {
     const char *impl = implName.c_str();
     must(registerImpl<TransformModel, FnModel>(rt, impl));
     FnModel *m = litestl::alloc::New<FnModel>("FnModel");
-    m->fn = [](const EvalCtx &, const TransformState &p) { return p; };
+    m->fn = [](const EvalContext &, const TransformState &p) { return p; };
     Result<Owned<TransformModel>> owned = own<TransformModel>(rt, impl, m);
     must(owned.status());
     TransformTypeInfo info = everyKind(version);

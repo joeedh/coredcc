@@ -437,10 +437,10 @@ struct SceneProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &b, RefVisitor &v) const
+  void forEachRef(const Datablock &b, RefVisitor &v) const
   {
     if (Scene *s = static_cast<Scene *>(b.clientData())) {
-      s->foreachCell([&v](RefCell &cell) { v.visit(cell); });
+      s->forEachCell([&v](RefCell &cell) { v.visit(cell); });
     }
   }
   void destroy(const Datablock &b)
@@ -480,7 +480,7 @@ struct SceneProvider {
     auto *st =
         new lbt::Struct<SceneProvider>("coredcc::SceneProvider", sizeof(SceneProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));

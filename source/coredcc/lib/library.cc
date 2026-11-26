@@ -455,19 +455,19 @@ Status Library::visitRefs(const Datablock &b,
   visit(visitor);
   if (!stickyBefore && rt_.hasStickyError()) {
     return Status::error(StatusCode::Internal,
-                         ("foreachRef: a provider of '" + std::string(b.name_.c_str()) +
+                         ("forEachRef: a provider of '" + std::string(b.name_.c_str()) +
                           "' failed; see the Runtime's sticky error")
                              .c_str());
   }
   return Status();
 }
 
-Status Library::foreachDataRef(BlockHandle h,
+Status Library::forEachDataRef(BlockHandle h,
                                litestl::util::function<void(RefCell &)> fn) const
 {
   const Datablock *b = rec(h);
   if (!b) {
-    return noBlock("foreachDataRef");
+    return noBlock("forEachDataRef");
   }
   /* The provider can enumerate while its data or wrapper exists: Live, held by the
    * history, Detached (whose targets must survive until the host restores it), or Doomed
@@ -482,13 +482,13 @@ Status Library::foreachDataRef(BlockHandle h,
   if (!p) {
     return Status();
   }
-  return visitRefs(*b, fn, [&](RefVisitor &v) { p.foreachRef(*b, v); });
+  return visitRefs(*b, fn, [&](RefVisitor &v) { p.forEachRef(*b, v); });
 }
 
-Status Library::foreachRef(BlockHandle h,
+Status Library::forEachRef(BlockHandle h,
                            litestl::util::function<void(RefCell &)> fn) const
 {
-  CDCC_TRY(foreachDataRef(h, fn));
+  CDCC_TRY(forEachDataRef(h, fn));
   Datablock *b = const_cast<Library *>(this)->rec(h);
   for (Datablock::Slot &s : b->slots_) {
     fn(s.cell);
@@ -496,7 +496,7 @@ Status Library::foreachRef(BlockHandle h,
   for (const Datablock::Attachment &a : b->attachments_) {
     const AttachmentProvider p = attachmentTypes_.find(a.type)->provider.get();
     if (p.hasForeachRef()) {
-      CDCC_TRY(visitRefs(*b, fn, [&](RefVisitor &v) { p.foreachRef(*b, a.data, v); }));
+      CDCC_TRY(visitRefs(*b, fn, [&](RefVisitor &v) { p.forEachRef(*b, a.data, v); }));
     }
   }
   if (b->opaque_) {
@@ -711,7 +711,7 @@ void Library::adoptData(BlockHandle h, void *data, bool keep)
     return;
   }
   /* Sever and destroy, as a sweep does. */
-  foreachDataRef(h, [](RefCell &cell) {
+  forEachDataRef(h, [](RefCell &cell) {
     cell.target = BlockId();
     cell.cache = BlockHandle();
   }).ignore();

@@ -97,7 +97,7 @@ struct SetLocks : MaskCommand {
       uint64_t mask = detail::lockMask(*r.type, names.c_str(), &unknown);
       if (names.size() == 0) {
         const int32_t n = r.type->channelCount();
-        mask = n < EvalCtx::kMaxLocks ? (uint64_t(1) << n) - 1 : ~uint64_t(0);
+        mask = n < EvalContext::kMaxLocks ? (uint64_t(1) << n) - 1 : ~uint64_t(0);
       }
       if (!unknown.empty()) {
         return Status::error(StatusCode::FailedPrecondition,

@@ -65,7 +65,7 @@ template <class T> struct Provider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &b, RefVisitor &v) const
+  void forEachRef(const Datablock &b, RefVisitor &v) const
   {
     if constexpr (std::is_same_v<T, Object>) {
       if (Object *o = static_cast<Object *>(b.clientData())) {
@@ -83,7 +83,7 @@ template <class T> struct Provider {
         std::is_same_v<T, Object> ? "test::ObjectProvider" : "test::MeshProvider",
         sizeof(Provider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     return st;
   }

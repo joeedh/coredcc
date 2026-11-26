@@ -226,7 +226,8 @@ void testMirrors(const Types &t)
     TransformDelta d =
         scaleDelta(r.rotation(), signs(int(r.below(8))) * r.range(0.2, 4.0));
     d.pivot = r.vec(10.0);
-    const Result<ChannelBlock> out = solveDelta(*c.type, EvalCtx(c.base), c.base, d, p);
+    const Result<ChannelBlock> out =
+        solveDelta(*c.type, EvalContext(c.base), c.base, d, p);
     expectExact(c, out, d, p, 1e-12);
     if (out.ok()) {
       /* The sizes of the scales are the base's, times the factor's. */
@@ -242,7 +243,7 @@ void testMirrors(const Types &t)
           signs(int((d.vector[0] < 0) + 2 * (d.vector[1] < 0) + 4 * (d.vector[2] < 0))) /
           k;
       const Result<ChannelBlock> again =
-          solveDelta(*c.type, EvalCtx(*out), *out, back, p);
+          solveDelta(*c.type, EvalContext(*out), *out, back, p);
       test_assert(again.ok() && difference(eval(*c.type, *again, p).world,
                                            eval(*c.type, c.base, p).world) < 1e-10);
     }
@@ -252,7 +253,7 @@ void testMirrors(const Types &t)
     Case c = caseOf(r, t, 0, r.scale(3.0, true));
     const TransformDelta d = scaleDelta(r.rotation(), signs(int(r.below(8))));
     const ChannelBlock out =
-        *solveDelta(*c.type, EvalCtx(c.base), c.base, d, TransformState());
+        *solveDelta(*c.type, EvalContext(c.base), c.base, d, TransformState());
     for (int a = 0; a < 3; a++) {
       const double was = std::fabs(c.base.get(c.scale + a)),
                    is = std::fabs(out.get(c.scale + a));
@@ -271,7 +272,8 @@ void testOwnAxes(const Types &t)
     const double3 factors = r.scale(3.0, true);
     const quatd own = eval(*c.type, c.base, p).rotation;
     const TransformDelta d = scaleDelta(own, factors);
-    const Result<ChannelBlock> out = solveDelta(*c.type, EvalCtx(c.base), c.base, d, p);
+    const Result<ChannelBlock> out =
+        solveDelta(*c.type, EvalContext(c.base), c.base, d, p);
     expectExact(c, out, d, p, 1e-11);
     for (int a = 0; out.ok() && a < 3; a++) {
       const double want = c.base.get(c.scale + a) * factors[a];
@@ -293,7 +295,7 @@ void testDrag(const Types &t)
       const double f = step / 40.0;
       const TransformDelta d = scaleDelta(quatd(), double3(f, 1, 1));
       const Result<ChannelBlock> out =
-          solveDelta(*t.trs, EvalCtx(c.base), last, d, TransformState());
+          solveDelta(*t.trs, EvalContext(c.base), last, d, TransformState());
       test_assert(out.ok());
       if (step == -40) {
         expectExact(c, out, d, TransformState(), 1e-15);
@@ -333,7 +335,8 @@ void testOtherAxes(const Types &t)
     Case c = caseOf(r, t, int(r.below(4)), r.scale(2.0, true));
     TransformDelta d = scaleDelta(r.rotation(), r.scale(3.0, true));
     d.pivot = r.vec(5.0);
-    const Result<ChannelBlock> out = solveDelta(*c.type, EvalCtx(c.base), c.base, d, p);
+    const Result<ChannelBlock> out =
+        solveDelta(*c.type, EvalContext(c.base), c.base, d, p);
     test_assert(out.ok());
     if (!out.ok()) {
       continue;
@@ -367,8 +370,8 @@ void testSameAnswer(const Types &t)
     put(b.base, fbx::kScaling, scale);
     b.base.set(fbx::kInheritType, inherit);
     const TransformDelta d = scaleDelta(r.rotation(), r.scale(3.0, true));
-    const Result<ChannelBlock> x = solveDelta(*a.type, EvalCtx(a.base), a.base, d, p),
-                               y = solveDelta(*b.type, EvalCtx(b.base), b.base, d, p);
+    const Result<ChannelBlock> x = solveDelta(*a.type, EvalContext(a.base), a.base, d, p),
+                               y = solveDelta(*b.type, EvalContext(b.base), b.base, d, p);
     test_assert(x.ok() && y.ok() &&
                 difference(eval(*a.type, *x, p).world, eval(*b.type, *y, p).world) <
                     1e-9);
@@ -386,14 +389,14 @@ void testTie(const Types &t)
         scaleDelta(quatd(0, 0, std::sin(turn), std::cos(turn)), double3(-1, 1, 1));
     const ChannelBlock base = t.trs->defaults();
     const Result<ChannelBlock> out =
-        solveDelta(*t.trs, EvalCtx(base), base, d, TransformState());
+        solveDelta(*t.trs, EvalContext(base), base, d, TransformState());
     must(out.status());
     const double angle = out->get(trs::kRotationEuler + 2);
     test_assert(std::fabs(std::fabs(angle) - 2 * half) < 1e-9);
     want = i == -20 ? angle : want;
     test_assert(std::fabs(angle - want) < 1e-9);
     const Result<ChannelBlock> solved = solveWorld(
-        *t.trs, EvalCtx(base), d.matrix(), TransformState(), SetWorldMode::Exact);
+        *t.trs, EvalContext(base), d.matrix(), TransformState(), SetWorldMode::Exact);
     must(solved.status());
     solvedAngle = i == -20 ? solved->get(trs::kRotationEuler + 2) : solvedAngle;
     test_assert(std::fabs(solved->get(trs::kRotationEuler + 2) - solvedAngle) < 1e-9);
@@ -407,13 +410,13 @@ struct OneAxis {
   bool throws = false;
   Runtime *rt = nullptr;
 
-  TransformState evaluate(const EvalCtx &c, const TransformState &p) const
+  TransformState evaluate(const EvalContext &c, const TransformState &p) const
   {
     TransformState s = p;
     s.world[0][0] *= c.channel(0);
     return s;
   }
-  Status applyDelta(const EvalCtx &base,
+  Status applyDelta(const EvalContext &base,
                     const ChannelBlock &,
                     const TransformDelta &d,
                     const TransformState &,
@@ -422,7 +425,7 @@ struct OneAxis {
     out.set(0, base.channel(0) * d.vector[0]);
     return Status();
   }
-  Status setWorld(const EvalCtx &,
+  Status setWorld(const EvalContext &,
                   const mat4d &,
                   const TransformState &,
                   SetWorldMode,
@@ -464,7 +467,7 @@ void testSecondAttempt()
   base.set(0, 3.0);
   const auto solve = [&] {
     return solveDelta(
-        **type, EvalCtx(base), base, scaleDelta(quatd(), double3(2, 2, 1)), {});
+        **type, EvalContext(base), base, scaleDelta(quatd(), double3(2, 2, 1)), {});
   };
   for (StatusCode code : {StatusCode::FailedPrecondition, StatusCode::Unsupported}) {
     m->answer = Status::error(code, "no");
@@ -488,7 +491,7 @@ void testMatrix(const Types &t)
     }
     TransformDelta d = scaleDelta(r.rotation(), r.scale(3.0, true));
     d.pivot = r.vec(5.0);
-    expectExact(c, solveDelta(*c.type, EvalCtx(c.base), c.base, d, p), d, p, 1e-9);
+    expectExact(c, solveDelta(*c.type, EvalContext(c.base), c.base, d, p), d, p, 1e-9);
   }
 }
 
@@ -520,14 +523,14 @@ void testExactByRotation(const Types &t)
     }
     Case c{t.trs, int(trs::kScale), t.trs->defaults()};
     Result<ChannelBlock> base =
-        solveWorld(*t.trs, EvalCtx(c.base), world, p, SetWorldMode::Exact);
+        solveWorld(*t.trs, EvalContext(c.base), world, p, SetWorldMode::Exact);
     test_assert(base.ok());
     if (!base.ok()) {
       continue;
     }
     c.base = *base;
     d.pivot = solve::translationOf(world);
-    expectExact(c, solveDelta(*c.type, EvalCtx(c.base), c.base, d, p), d, p, 1e-8);
+    expectExact(c, solveDelta(*c.type, EvalContext(c.base), c.base, d, p), d, p, 1e-8);
   }
 }
 
@@ -544,10 +547,10 @@ void testParents(const Types &t)
       const ChannelBlock c = type->defaults();
       const mat4d world = eval(*type, c, TransformState()).world;
       const Result<ChannelBlock> a =
-          solveWorld(*type, EvalCtx(c), world, p, SetWorldMode::Closest);
+          solveWorld(*type, EvalContext(c), world, p, SetWorldMode::Closest);
       TransformDelta d;
       d.vector = double3(1, 0, 0);
-      const Result<ChannelBlock> b = solveDelta(*type, EvalCtx(c), c, d, p);
+      const Result<ChannelBlock> b = solveDelta(*type, EvalContext(c), c, d, p);
       test_assert(a.ok() || a.status().code() == StatusCode::FailedPrecondition);
       test_assert(a.ok() || strstr(a.status().message(), "nearly 0"));
       test_assert(b.ok() || b.status().code() == StatusCode::FailedPrecondition);

@@ -177,7 +177,7 @@ void testGone()
   must(evaluateScene(l.ctx));
   /* Cells that are null. */
   int cell = 0;
-  d.sc().foreachCell([&](RefCell &r) {
+  d.sc().forEachCell([&](RefCell &r) {
     r.target = cell++ == 0 || r.kind == RefKind::Weak ? BlockId() : r.target;
   });
   Loaded nulls(d, save(*d.lib));

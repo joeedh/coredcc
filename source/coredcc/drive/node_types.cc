@@ -163,7 +163,7 @@ Status transformKernel(NodeExecContext &ctx)
   Status error;
   EvalStatus status;
   if (missing) {
-    status = evaluateObject(rt, nullptr, EvalCtx(channels, time), parent, out, error);
+    status = evaluateObject(rt, nullptr, EvalContext(channels, time), parent, out, error);
   } else {
     ChannelOverrides overrides;
     overrides.reset(type->channelCount());
@@ -191,9 +191,9 @@ Status transformKernel(NodeExecContext &ctx)
       at += kindChannels(k);
       input++;
     }
-    const EvalCtx ectx = overrides.any()
-                             ? EvalCtx(channels, time, overrides.values, overrides.mask)
-                             : EvalCtx(channels, time);
+    const EvalContext ectx =
+        overrides.any() ? EvalContext(channels, time, overrides.values, overrides.mask)
+                        : EvalContext(channels, time);
     status = evaluateObject(rt, type, ectx, parent, out, error);
   }
   const PropValue *cycle = ctx.param("cycle");

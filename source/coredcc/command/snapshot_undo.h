@@ -60,7 +60,7 @@ private:
  *   also when it failed: an opaque blob can't say what it changed.
  *
  * Blocks that a blob references are kept (History pins) while this does, if the provider
- * has `foreachRef`.
+ * has `forEachRef`.
  */
 class SnapshotUndo {
 public:

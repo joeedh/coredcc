@@ -92,7 +92,7 @@ inline double3 get(const ChannelBlock &b, int first)
 inline TransformState
 eval(const TransformType &t, const ChannelBlock &c, const TransformState &p)
 {
-  return *evaluateTransform(t, EvalCtx(c), p);
+  return *evaluateTransform(t, EvalContext(c), p);
 }
 
 /** The larger; NaN counts as huge. */

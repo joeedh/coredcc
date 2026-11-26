@@ -175,12 +175,13 @@ std::string lockNames(const TransformType &type, uint64_t locks)
   for (const PropertyDef &def : type.channelDefs()) {
     const int32_t count = channelsOf(def.kind());
     int32_t locked = 0;
-    for (int32_t i = first; i < first + count && i < EvalCtx::kMaxLocks; i++) {
+    for (int32_t i = first; i < first + count && i < EvalContext::kMaxLocks; i++) {
       locked += int32_t((locks >> i) & 1);
     }
     for (int32_t i = 0; i < count; i++) {
       const int32_t bit = first + i;
-      if (locked == count ? i == 0 : bit < EvalCtx::kMaxLocks && ((locks >> bit) & 1)) {
+      if (locked == count ? i == 0 : bit < EvalContext::kMaxLocks && ((locks >> bit) & 1))
+      {
         out += out.empty() ? "" : " ";
         out += def.apiName().c_str();
         out += locked == count ? "" : "." + std::to_string(i);
@@ -206,7 +207,7 @@ uint64_t lockMask(const TransformType &type, std::string_view names, std::string
     int32_t first = 0;
     for (const PropertyDef &def : type.channelDefs()) {
       const int32_t count = channelsOf(def.kind());
-      for (int32_t i = 0; i < count && first + i < EvalCtx::kMaxLocks; i++) {
+      for (int32_t i = 0; i < count && first + i < EvalContext::kMaxLocks; i++) {
         const std::string whole = def.apiName().c_str();
         if (name == whole || (count > 1 && name == whole + "." + std::to_string(i))) {
           found |= uint64_t(1) << (first + i);

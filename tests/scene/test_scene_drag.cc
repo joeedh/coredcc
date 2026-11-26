@@ -165,16 +165,16 @@ void testPivot()
   for (int k = 0; k < 500 * coredcc_test::testScale(); k++) {
     const TransformState parent = chain(r, t, int(r.below(3)), 2.0, true);
     const ChannelBlock c = trsChannels(r, *t.trs, r.scale(2, true), 3.0);
-    const Result<double3> p = transformPivot(*t.trs, EvalCtx(c), parent);
+    const Result<double3> p = transformPivot(*t.trs, EvalContext(c), parent);
     test_assert(p.ok() && lengthOf(*p - solve::translationOf(
                                             eval(*t.trs, c, parent).world)) == 0.0);
 
     /* The point of an FBX node that stays where it is, whatever its rotation. */
     ChannelBlock f = fbxChannels(r, *t.fbx, fbx::kRSrs, r.scale(2, true), 1.0);
-    const Result<double3> q = transformPivot(*t.fbx, EvalCtx(f), parent);
+    const Result<double3> q = transformPivot(*t.fbx, EvalContext(f), parent);
     const mat4d first = eval(*t.fbx, f, parent).world;
     put(f, fbx::kRotation, r.vec(3.0));
-    const Result<double3> same = transformPivot(*t.fbx, EvalCtx(f), parent);
+    const Result<double3> same = transformPivot(*t.fbx, EvalContext(f), parent);
     test_assert(q.ok() && same.ok() && lengthOf(*q - *same) == 0.0);
     const mat4d second = eval(*t.fbx, f, parent).world;
     /* A point x of the object with first * x = pivot; then second * x is it too. */
@@ -204,11 +204,11 @@ void testPivot()
 
   /* A model's own, and its error. */
   struct Pivoted {
-    TransformState evaluate(const EvalCtx &, const TransformState &p) const
+    TransformState evaluate(const EvalContext &, const TransformState &p) const
     {
       return p;
     }
-    Status setWorld(const EvalCtx &,
+    Status setWorld(const EvalContext &,
                     const mat4d &,
                     const TransformState &,
                     SetWorldMode,
@@ -216,7 +216,7 @@ void testPivot()
     {
       return Status();
     }
-    double3 pivot(const EvalCtx &ctx, const TransformState &p) const
+    double3 pivot(const EvalContext &ctx, const TransformState &p) const
     {
       if (ctx.channel(0) < 0.0 && rt) {
         rt->setStickyError(boom("pivot"));

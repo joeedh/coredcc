@@ -17,7 +17,7 @@ void Library::buildRelations(Relations &out, Status &status) const
     if (!status.ok()) {
       return;
     }
-    status = foreachRef(user, [&](RefCell &cell) {
+    status = forEachRef(user, [&](RefCell &cell) {
       if (cell.target.isNull()) {
         return;
       }
@@ -88,7 +88,7 @@ Result<int> Library::collect()
                          "collect: a sticky error is pending; take it first");
   }
   renormalizeIds();
-  /* Providers' foreachRef runs during mark: library calls from it are Busy too. */
+  /* Providers' forEachRef runs during mark: library calls from it are Busy too. */
   collecting_ = true;
   struct ClearOnExit {
     bool &flag;
@@ -137,7 +137,7 @@ Result<int> Library::collect()
   });
   while (stack.size() > 0) {
     const BlockHandle h = stack.pop_back();
-    Status s = foreachRef(h, [&](RefCell &cell) {
+    Status s = forEachRef(h, [&](RefCell &cell) {
       if (!isStrong(cell.kind) || cell.target.isNull()) {
         return;
       }
@@ -197,7 +197,7 @@ void Library::noticeWeakLost(const Vector<BlockHandle> &lost)
     /* Only a block that has its data: not a placeholder, and not a Detached one. */
     BlockProvider p = types_.provider(u.type_);
     if (p && p.hasOnWeakTargetLost() && u.dataState() == BlockState::Live) {
-      foreachDataRef(user, note).ignore();
+      forEachDataRef(user, note).ignore();
       for (BlockHandle l : hit) {
         p.onWeakTargetLost(u, *rec(l));
       }
@@ -208,7 +208,7 @@ void Library::noticeWeakLost(const Vector<BlockHandle> &lost)
         continue;
       }
       hit.clear();
-      visitRefs(u, note, [&](RefVisitor &v) { ap.foreachRef(u, a.data, v); }).ignore();
+      visitRefs(u, note, [&](RefVisitor &v) { ap.forEachRef(u, a.data, v); }).ignore();
       for (BlockHandle l : hit) {
         ap.onWeakTargetLost(u, a.data, *rec(l));
       }
@@ -227,7 +227,7 @@ void Library::destroyBlocks(const Vector<BlockHandle> &garbage)
   /* Phase 1b: sever every reference out of the garbage, so no destroy reaches another
    * dying block through one. */
   for (BlockHandle h : garbage) {
-    foreachRef(h, [](RefCell &cell) {
+    forEachRef(h, [](RefCell &cell) {
       cell.target = BlockId();
       cell.cache = BlockHandle();
     }).ignore();

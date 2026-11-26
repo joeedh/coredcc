@@ -608,7 +608,7 @@ void testDelete()
   for (int by = 0; by < 2; by++) {
     CommandDoc k;
     bool throws = false;
-    k.addFnModel("test.fn", [&](const EvalCtx &, const TransformState &p) {
+    k.addFnModel("test.fn", [&](const EvalContext &, const TransformState &p) {
       if (throws) {
         k.rt.setStickyError(boom("model"));
       }

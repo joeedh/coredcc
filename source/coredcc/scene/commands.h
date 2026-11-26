@@ -263,11 +263,11 @@ private:
     ChannelBlock solved; /* for exec's delta, until it is written */
     FixedChannels fixed;
 
-    EvalCtx ctx(const ChannelBlock &channels, double time) const
+    EvalContext ctx(const ChannelBlock &channels, double time) const
     {
-      const EvalCtx c = overrides.any()
-                            ? EvalCtx(channels, time, overrides.values, overrides.mask)
-                            : EvalCtx(channels, time);
+      const EvalContext c =
+          overrides.any() ? EvalContext(channels, time, overrides.values, overrides.mask)
+                          : EvalContext(channels, time);
       return c.withLocks(locks);
     }
   };
@@ -345,7 +345,7 @@ Status registerTransformCommands(Runtime &rt);
 /** Channels of `type` at `world`: exactly, or as well as they can (which adds to
  * `approximate`). */
 Result<ChannelBlock> solveKeeping(const TransformType &type,
-                                  const EvalCtx &current,
+                                  const EvalContext &current,
                                   const mat4d &world,
                                   const TransformState &parent,
                                   int &approximate);

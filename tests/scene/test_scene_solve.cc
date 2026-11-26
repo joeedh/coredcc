@@ -15,7 +15,7 @@ Result<ChannelBlock> solved(const TransformType &t,
                             const TransformState &parent,
                             SetWorldMode mode = SetWorldMode::Exact)
 {
-  return solveWorld(t, EvalCtx(from), target, parent, mode);
+  return solveWorld(t, EvalContext(from), target, parent, mode);
 }
 
 /* The largest relative column error of two matrices' linear parts. */
@@ -441,13 +441,13 @@ void testBadInput(const Types &t)
     const ChannelBlock few(k->channelCount() - 1);
     TransformDelta d;
     test_assert(!solved(*k, few, root.world, root).ok());
-    test_assert(!evaluateTransform(*k, EvalCtx(few), root).ok());
-    test_assert(!solveDelta(*k, EvalCtx(c), few, d, root).ok());
-    test_assert(!solveDelta(*k, EvalCtx(few), c, d, root).ok());
+    test_assert(!evaluateTransform(*k, EvalContext(few), root).ok());
+    test_assert(!solveDelta(*k, EvalContext(c), few, d, root).ok());
+    test_assert(!solveDelta(*k, EvalContext(few), c, d, root).ok());
     TransformState flat;
     flat.world[2][2] = 0.0;
     d.vector = double3(1, 0, 0);
-    test_assert(solveDelta(*k, EvalCtx(c), c, d, flat).status().code() ==
+    test_assert(solveDelta(*k, EvalContext(c), c, d, flat).status().code() ==
                 StatusCode::FailedPrecondition);
     for (int bad = 0; bad < 6; bad++) {
       TransformDelta b;
@@ -457,7 +457,7 @@ void testBadInput(const Types &t)
       b.vector[0] = bad == 3 ? nan : 0.0;
       b.pivot[1] = bad == 4 ? nan : 0.0;
       b.basis[2] = bad == 5 ? nan : 0.0;
-      test_assert(solveDelta(*k, EvalCtx(c), c, b, root).status().code() ==
+      test_assert(solveDelta(*k, EvalContext(c), c, b, root).status().code() ==
                   StatusCode::InvalidArgument);
     }
   }
@@ -569,7 +569,7 @@ void testDeltas(const Types &t)
           d.basis = quatd::fromMatrix(solve::affine(axes, double3()));
         }
       }
-      const Result<ChannelBlock> out = solveDelta(k, EvalCtx(c), c, d, p);
+      const Result<ChannelBlock> out = solveDelta(k, EvalContext(c), c, d, p);
       test_assert(out.ok());
       test_assert(out.ok() &&
                   difference(eval(k, *out, p).world, d.matrix() * base.world) < 1e-10);
@@ -597,7 +597,7 @@ void testFbxTurns(const Types &t)
     d.angle = r.range(-3, 3);
     d.basis = r.rotation();
     d.pivot = r.vec(5);
-    const Result<ChannelBlock> out = solveDelta(*t.fbx, EvalCtx(c), c, d, p);
+    const Result<ChannelBlock> out = solveDelta(*t.fbx, EvalContext(c), c, d, p);
     const mat4d want = d.matrix() * eval(*t.fbx, c, p).world;
     test_assert(out.ok());
     test_assert(out.ok() && difference(eval(*t.fbx, *out, p).world, want) < 1e-9 * 30);
@@ -617,7 +617,7 @@ void testShearedParents(const Types &t)
     d.axis = r.vec(1);
     d.angle = r.range(-6, 6);
     d.pivot = r.vec(5);
-    const Result<ChannelBlock> out = solveDelta(*t.trs, EvalCtx(c), c, d, p);
+    const Result<ChannelBlock> out = solveDelta(*t.trs, EvalContext(c), c, d, p);
     test_assert(out.ok());
     if (!out.ok()) {
       continue;
@@ -650,7 +650,7 @@ void testShearedParents(const Types &t)
       d.axis = r.vec(1);
       d.angle = 1.0;
       d.vector = r.vec(2);
-      const Result<ChannelBlock> out = solveDelta(k, EvalCtx(c), c, d, p);
+      const Result<ChannelBlock> out = solveDelta(k, EvalContext(c), c, d, p);
       test_assert(out.ok() && lengthOf(get(*out, 0) - get(c, 0)) == 0.0);
     }
   }
@@ -673,7 +673,7 @@ void testDrags(const Types &t)
         for (int step = 1; step <= 48; step++) {
           d.angle = step * pi / 12.0; /* to 720 degrees */
           const Result<ChannelBlock> out =
-              solveDelta(k, EvalCtx(base), last, d, TransformState());
+              solveDelta(k, EvalContext(base), last, d, TransformState());
           test_assert(out.ok());
           double jump = 0.0;
           for (int i = 0; i < 3; i++) {
@@ -703,7 +703,7 @@ void testDrags(const Types &t)
     for (int step = 1; step <= 20; step++) {
       d.angle = step * 0.05;
       const Result<ChannelBlock> out =
-          solveDelta(*t.trs, EvalCtx(base), last, d, TransformState());
+          solveDelta(*t.trs, EvalContext(base), last, d, TransformState());
       test_assert(out.ok());
       const mat4d want = d.matrix() * eval(*t.trs, base, TransformState()).world;
       test_assert(difference(eval(*t.trs, *out, TransformState()).world, want) < 1e-7);
@@ -720,7 +720,7 @@ void testDrags(const Types &t)
   for (int step = 1; step <= 96; step++) {
     d.angle = step * pi / 24.0;
     const Result<ChannelBlock> out =
-        solveDelta(*t.trs, EvalCtx(base), last, d, TransformState());
+        solveDelta(*t.trs, EvalContext(base), last, d, TransformState());
     double dot = 0.0;
     for (int i = 0; i < 4; i++) {
       dot +=
@@ -737,7 +737,7 @@ void testDrags(const Types &t)
   for (double v : {0.5, 0.0, -1.0, 1.0}) {
     d.vector = double3(v, 1.0, 1.0);
     const Result<ChannelBlock> out =
-        solveDelta(*t.trs, EvalCtx(base), last, d, TransformState());
+        solveDelta(*t.trs, EvalContext(base), last, d, TransformState());
     test_assert(out.ok() &&
                 lengthOf(get(*out, trs::kScale) - double3(2 * v, 3, 4)) < 1e-14);
     last = *out;
@@ -752,7 +752,7 @@ void testDrags(const Types &t)
     d = deltaOf(DeltaKind::Translate);
     d.vector = double3(1, 2, 3);
     const Result<ChannelBlock> moved =
-        solveDelta(*k, EvalCtx(k->defaults()), other, d, TransformState());
+        solveDelta(*k, EvalContext(k->defaults()), other, d, TransformState());
     test_assert(moved.ok() && lengthOf(get(*moved, 0) - d.vector) == 0.0);
     for (int i = 3; moved.ok() && i < moved->size(); i++) {
       test_assert(moved->get(i) == k->defaults().get(i));
@@ -769,15 +769,15 @@ void testDrags(const Types &t)
   d.vector = double3(1, 2, 3);
   FixedChannels fixed;
   Result<ChannelBlock> out = solveDelta(
-      *t.trs, EvalCtx(base, 0.0, over, set), base, d, TransformState(), &fixed);
+      *t.trs, EvalContext(base, 0.0, over, set), base, d, TransformState(), &fixed);
   test_assert(out.ok() && fixed.driven && !fixed.locked &&
               lengthOf(get(*out, trs::kLocation) -
                        double3(base.get(trs::kLocation), 2, 3)) == 0.0);
   /* What is stored under them isn't looked at: it may be anything. */
   ChannelBlock odd = t.trs->defaults();
   odd.set(trs::kLocation, std::numeric_limits<double>::infinity());
-  out =
-      solveDelta(*t.trs, EvalCtx(odd, 0.0, over, set), odd, d, TransformState(), &fixed);
+  out = solveDelta(
+      *t.trs, EvalContext(odd, 0.0, over, set), odd, d, TransformState(), &fixed);
   test_assert(out.ok() && fixed.driven && out->get(trs::kLocation) > 1e300 &&
               out->get(trs::kLocation + 1) == 2.0);
   odd = t.trs->defaults();
@@ -789,8 +789,8 @@ void testDrags(const Types &t)
   d = deltaOf(DeltaKind::Rotate);
   d.axis = double3(0, 1, 0);
   d.angle = 0.01;
-  out =
-      solveDelta(*t.trs, EvalCtx(odd, 0.0, over, set), odd, d, TransformState(), &fixed);
+  out = solveDelta(
+      *t.trs, EvalContext(odd, 0.0, over, set), odd, d, TransformState(), &fixed);
   test_assert(out.ok() && std::fabs(out->get(trs::kRotationEuler + 1) - 0.21) < 0.01);
 }
 

@@ -47,7 +47,7 @@ void testSolvers()
     const TransformState parent = chain(r, t, int(r.below(3)), 2.0, true);
     const uint64_t locks =
         r.next() & r.next() & ((uint64_t(1) << type.channelCount()) - 1);
-    const EvalCtx free(c), locked = EvalCtx(c).withLocks(locks);
+    const EvalContext free(c), locked = EvalContext(c).withLocks(locks);
     TransformDelta d;
     d.kind = DeltaKind(int(r.below(3)));
     d.vector = d.kind == DeltaKind::Scale ? r.scale(2, true) : r.vec(3.0);
@@ -95,10 +95,10 @@ void testSolvers()
 
   /* Channels after the first 64 can't be locked. */
   ChannelBlock many(70);
-  const EvalCtx all = EvalCtx(many).withLocks(~uint64_t(0));
+  const EvalContext all = EvalContext(many).withLocks(~uint64_t(0));
   test_assert(all.isLocked(0) && all.isLocked(63) && !all.isLocked(64) &&
               !all.isLocked(-1));
-  test_assert(all.isFixed(63) && !all.isFixed(64) && !EvalCtx(many).hasFixed());
+  test_assert(all.isFixed(63) && !all.isFixed(64) && !EvalContext(many).hasFixed());
 }
 
 /* ---- names ---- */

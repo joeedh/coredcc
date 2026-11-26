@@ -385,12 +385,12 @@ struct Many {
     s.localScale = double3(1, 2, z);
     return s;
   }
-  TransformState evaluate(const EvalCtx &c, const TransformState &p) const
+  TransformState evaluate(const EvalContext &c, const TransformState &p) const
   {
     const_cast<Many *>(this)->single++;
     return one(factor * c.channel(0), c.channel(1), c.channel(2), c.time(), p);
   }
-  Status setWorld(const EvalCtx &,
+  Status setWorld(const EvalContext &,
                   const mat4d &,
                   const TransformState &,
                   SetWorldMode,
@@ -462,11 +462,11 @@ struct Many {
 struct Single {
   double factor = 1.0;
 
-  TransformState evaluate(const EvalCtx &c, const TransformState &p) const
+  TransformState evaluate(const EvalContext &c, const TransformState &p) const
   {
     return Many::one(factor * c.channel(0), c.channel(1), c.channel(2), c.time(), p);
   }
-  Status setWorld(const EvalCtx &,
+  Status setWorld(const EvalContext &,
                   const mat4d &,
                   const TransformState &,
                   SetWorldMode,
@@ -535,7 +535,8 @@ void testBatches()
     addModel<Single>(o, "test.m");
     Many *other = addModel<Many>(d, "test.n");
     other->factor = addModel<Single>(o, "test.n")->factor = 2.0;
-    d.addFnModel("test.last", [](const EvalCtx &, const TransformState &p) { return p; });
+    d.addFnModel("test.last",
+                 [](const EvalContext &, const TransformState &p) { return p; });
     many->rt = &d.rt;
     Vector<BlockHandle> all, others;
     Driver driver, otherDriver;

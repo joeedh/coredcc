@@ -416,14 +416,14 @@ Status compareRefs(const Library &lib,
   if (differs(refs, rows)) {
     return Status::error(
         StatusCode::Internal,
-        (what + ": foreachRef reports a reference that serialize didn't write to "
+        (what + ": forEachRef reports a reference that serialize didn't write to "
                 "the ref table (or of another strength)")
             .c_str());
   }
   if (differs(rows, refs)) {
     return Status::error(StatusCode::Internal,
                          (what +
-                          ": serialize wrote a reference that foreachRef doesn't report "
+                          ": serialize wrote a reference that forEachRef doesn't report "
                           "(or of another strength)")
                              .c_str());
   }
@@ -443,7 +443,7 @@ Status detail::PayloadAccess::checkRefs(const Library &lib,
 {
   const Datablock *b = lib.get(h);
   return compareRefs(lib, b ? quoted(b->name()) : "'?'", payload, [&](ForeachCell fn) {
-    return lib.foreachDataRef(h, std::move(fn));
+    return lib.forEachDataRef(h, std::move(fn));
   });
 }
 
@@ -464,7 +464,7 @@ Status detail::PayloadAccess::checkRefs(const Library &lib,
           RefVisitor v(
               [](void *to, RefCell &cell) { (*static_cast<ForeachCell *>(to))(cell); },
               &fn);
-          p.foreachRef(b, data, v);
+          p.forEachRef(b, data, v);
         }
         return Status();
       });

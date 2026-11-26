@@ -69,7 +69,7 @@ struct Random : CommandDoc {
   explicit Random(uint64_t seed)
   {
     Rand r(seed);
-    addFnModel("test.slide", [](const EvalCtx &c, const TransformState &p) {
+    addFnModel("test.slide", [](const EvalContext &c, const TransformState &p) {
       TransformState s = p;
       double *m = s.world;
       m[12] += c.channel(0) * c.time();
@@ -524,7 +524,7 @@ void testKeepWorld()
 void testTime()
 {
   CommandDoc d;
-  d.addFnModel("test.spin", [](const EvalCtx &ctx, const TransformState &p) {
+  d.addFnModel("test.spin", [](const EvalContext &ctx, const TransformState &p) {
     /* A quarter turn each second about z, and a step along x. */
     TransformState s = p;
     const double angle = ctx.time() * 1.5707963267948966;
@@ -576,14 +576,14 @@ void testTime()
   /* The object's own model is asked at that time too: one that has solvers of its own. */
   const std::string impl = "test.timed#impl";
   struct Timed {
-    TransformState evaluate(const EvalCtx &ctx, const TransformState &p) const
+    TransformState evaluate(const EvalContext &ctx, const TransformState &p) const
     {
       TransformState s = p;
       double *m = s.world;
       m[12] += ctx.channel(0) * ctx.time();
       return s;
     }
-    Status setWorld(const EvalCtx &ctx,
+    Status setWorld(const EvalContext &ctx,
                     const mat4d &target,
                     const TransformState &p,
                     SetWorldMode,

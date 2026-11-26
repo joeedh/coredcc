@@ -29,7 +29,7 @@ quatd eulerOf(const double3 &v, EulerOrder order)
   return v[0] == 0.0 && v[1] == 0.0 && v[2] == 0.0 ? quatd() : eulerToQuat(v, order);
 }
 
-Node readNode(const EvalCtx &ctx)
+Node readNode(const EvalContext &ctx)
 {
   Node n;
   n.translation = readVec3(ctx, fbx::kTranslation);
@@ -96,7 +96,7 @@ void writeRotation(const Node &n,
 
 } // namespace
 
-TransformState Fbx::evaluate(const EvalCtx &ctx, const TransformState &parent) const
+TransformState Fbx::evaluate(const EvalContext &ctx, const TransformState &parent) const
 {
   const Node n = readNode(ctx);
   return childState(parent,
@@ -108,7 +108,7 @@ TransformState Fbx::evaluate(const EvalCtx &ctx, const TransformState &parent) c
 
 /* The rotation pivot. With the inherit types that don't turn within the parent's scale,
  * its own rotation channels turn the node about another point. */
-double3 Fbx::pivot(const EvalCtx &ctx, const TransformState &parent) const
+double3 Fbx::pivot(const EvalContext &ctx, const TransformState &parent) const
 {
   const double3 local = readVec3(ctx, fbx::kTranslation) +
                         readVec3(ctx, fbx::kRotationOffset) +
@@ -116,7 +116,7 @@ double3 Fbx::pivot(const EvalCtx &ctx, const TransformState &parent) const
   return litestl::math::transformPoint(parent.world, local);
 }
 
-Status Fbx::setWorld(const EvalCtx &current,
+Status Fbx::setWorld(const EvalContext &current,
                      const mat4d &target,
                      const TransformState &parent,
                      SetWorldMode,
@@ -144,7 +144,7 @@ Status Fbx::setWorld(const EvalCtx &current,
   return Status();
 }
 
-Status Fbx::applyDelta(const EvalCtx &base,
+Status Fbx::applyDelta(const EvalContext &base,
                        const ChannelBlock &nearTo,
                        const TransformDelta &delta,
                        const TransformState &parent,
@@ -155,7 +155,7 @@ Status Fbx::applyDelta(const EvalCtx &base,
     return singularParent();
   }
   const Node n = readNode(base);
-  const double3 hint = readVec3(EvalCtx(nearTo), fbx::kRotation);
+  const double3 hint = readVec3(EvalContext(nearTo), fbx::kRotation);
   out = base.snapshot();
   quatd rotation = n.rotation;
   double3 scale = n.scale;

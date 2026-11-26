@@ -110,7 +110,7 @@ struct AttachmentEdit {
             }
           },
           &pinner);
-      p.foreachRef(*lib.get(block.get()), held->data, v);
+      p.forEachRef(*lib.get(block.get()), held->data, v);
     }
     if (!stickyBefore && held->rt->hasStickyError()) {
       /* It threw: what the data references isn't known, so put it back. */

@@ -65,7 +65,7 @@ void Object::write(BlockWriter &out) const
   if (named) {
     add(detail::lockNames(*type, locks_));
   }
-  for (int i = 0; i < EvalCtx::kMaxLocks && !named; i++) {
+  for (int i = 0; i < EvalContext::kMaxLocks && !named; i++) {
     add((locks_ >> i) & 1 ? numberName(i) : "");
   }
   if (!locks.empty()) {
@@ -233,7 +233,7 @@ void Object::takeLocks(const TransformType *type)
     const std::string name = names.substr(at, end - at);
     at = end + 1;
     int bit = -1;
-    for (int i = 0; i < EvalCtx::kMaxLocks; i++) {
+    for (int i = 0; i < EvalContext::kMaxLocks; i++) {
       bit = name == numberName(i) ? i : bit;
     }
     if (bit >= 0) {

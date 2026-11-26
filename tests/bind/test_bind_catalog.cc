@@ -194,11 +194,11 @@ void test_defaults()
   };
   const std::string json = make(false);
   test_assert(json == make(true));
-  const size_t b = json.find("{\"name\":\"CommandDefaults:test.b\"");
-  const size_t a = json.find("{\"name\":\"CommandDefaults:test.a\"");
+  const size_t b = json.find("{\"name\":\"coredcc.CommandDefaults:test.b\"");
+  const size_t a = json.find("{\"name\":\"coredcc.CommandDefaults:test.a\"");
   test_assert(b != json.npos && a != json.npos && b < a && json.find("\"Later\"") < b);
   test_assert(json.find("hidden") == json.npos &&
-              shows(json, "\"name\":\"CommandDefaults\""));
+              shows(json, "\"name\":\"coredcc.CommandDefaults\""));
 }
 
 } // namespace

@@ -1,4 +1,4 @@
-/* The built-in transform models' evaluate, EvalCtx and the registry. */
+/* The built-in transform models' evaluate, EvalContext and the registry. */
 #include "scene_fixture.h"
 
 #include "coredcc/api/resolve.h"
@@ -62,7 +62,7 @@ void testChannels()
   for (const auto &k : cases) {
     ChannelBlock one(1);
     one.set(0, k.value);
-    const EvalCtx ctx(one);
+    const EvalContext ctx(one);
     test_assert(ctx.boolChannel(0) == k.asBool);
     test_assert(ctx.intChannel(0) == k.asInt);
     test_assert(ctx.enumChannel(0, 3) == k.asEnum);
@@ -76,7 +76,7 @@ void testChannels()
     over.set(i, (i + 1) * 10.0);
     set.append(uint8_t(i == 1 ? 1 : 0));
   }
-  const EvalCtx ctx(stored, 2.5, over, set);
+  const EvalContext ctx(stored, 2.5, over, set);
   test_assert(ctx.channel(0) == 1.0 && ctx.channel(1) == 20.0 && ctx.channel(2) == 3.0);
   test_assert(ctx.channel(-1) == 0.0 && ctx.channel(3) == 0.0);
   test_assert(ctx.time() == 2.5 && ctx.channelCount() == 3 && ctx.intChannel(1) == 20);
@@ -301,9 +301,10 @@ void testRobust(const Types &t)
       delta.vector = r.vec(2);
       delta.axis = r.vec(1);
       delta.angle = 1.0;
-      const Result<ChannelBlock> moved = solveDelta(*type, EvalCtx(c), c, delta, parent);
+      const Result<ChannelBlock> moved =
+          solveDelta(*type, EvalContext(c), c, delta, parent);
       const Result<ChannelBlock> solved = solveWorld(
-          *type, EvalCtx(c), TransformState().world, parent, SetWorldMode::Closest);
+          *type, EvalContext(c), TransformState().world, parent, SetWorldMode::Closest);
       for (const Result<ChannelBlock> *res : {&moved, &solved}) {
         test_assert(!res->ok() || eval(*type, **res, parent).finite());
       }
@@ -315,13 +316,13 @@ void testRobust(const Types &t)
 /* ---- the registry ---- */
 
 struct Offset {
-  TransformState evaluate(const EvalCtx &ctx, const TransformState &parent) const
+  TransformState evaluate(const EvalContext &ctx, const TransformState &parent) const
   {
     TransformState s = parent;
     s.world[3][0] += ctx.channel(0);
     return s;
   }
-  Status setWorld(const EvalCtx &,
+  Status setWorld(const EvalContext &,
                   const mat4d &,
                   const TransformState &,
                   SetWorldMode,
@@ -499,7 +500,7 @@ void testForeign()
 {
   test_assert(sc::foreignImplementable(detail::ifaceDesc<TransformModel>()).ok());
   test_assert(ChannelBlock::defineBindings() == ChannelBlock::defineBindings());
-  test_assert(EvalCtx::defineBindings() && TransformDelta::defineBindings());
+  test_assert(EvalContext::defineBindings() && TransformDelta::defineBindings());
 
   fakehost::Host host;
   {
@@ -520,7 +521,7 @@ void testForeign()
         *err = "evaluate: Error: boom";
         return false;
       }
-      const EvalCtx &ctx = *static_cast<const EvalCtx *>(args[0]);
+      const EvalContext &ctx = *static_cast<const EvalContext *>(args[0]);
       TransformState *s =
           new (ret) TransformState(*static_cast<TransformState *>(args[1]));
       s->world[3][0] += ctx.channel(0);
@@ -533,7 +534,7 @@ void testForeign()
         return false;
       }
       mode = *static_cast<int32_t *>(args[3]);
-      startedAt = static_cast<const EvalCtx *>(args[0])->channel(0);
+      startedAt = static_cast<const EvalContext *>(args[0])->channel(0);
       ChannelBlock &out = *static_cast<ChannelBlock *>(args[4]);
       out.set(0, notFinite ? std::numeric_limits<double>::infinity() : at);
       if (wrongSize) {
@@ -557,7 +558,7 @@ void testForeign()
 
     const mat4d target = solve::affine(Linear::identity(), double3(7, 0, 0));
     const auto solved = [&](SetWorldMode m) {
-      return solveWorld(type, EvalCtx(c), target, root, m);
+      return solveWorld(type, EvalContext(c), target, root, m);
     };
     at = 7.0;
     Result<ChannelBlock> r = solved(SetWorldMode::Closest);
@@ -581,14 +582,14 @@ void testForeign()
     delta.vector = double3(5, 0, 0);
     ChannelBlock nearTo = c;
     nearTo.set(0, 6.5);
-    r = solveDelta(type, EvalCtx(c), nearTo, delta, root);
+    r = solveDelta(type, EvalContext(c), nearTo, delta, root);
     test_assert(r.ok() && r->get(0) == 7.0 && startedAt == 6.5);
 
     /* Models aren't asked about parents without an inverse. */
     TransformState flat;
     flat.world[1][1] = 0.0;
     const int32_t before = setCalls;
-    test_assert(solveWorld(type, EvalCtx(c), target, flat, SetWorldMode::Closest)
+    test_assert(solveWorld(type, EvalContext(c), target, flat, SetWorldMode::Closest)
                     .status()
                     .code() == StatusCode::FailedPrecondition);
     test_assert(setCalls == before);
@@ -601,9 +602,9 @@ void testForeign()
     }
     fail = "evaluate";
     test_assert(
-        strstr(evaluateTransform(type, EvalCtx(c), root).status().message(), "boom"));
-    test_assert(
-        strstr(solveDelta(type, EvalCtx(c), c, delta, root).status().message(), "boom"));
+        strstr(evaluateTransform(type, EvalContext(c), root).status().message(), "boom"));
+    test_assert(strstr(
+        solveDelta(type, EvalContext(c), c, delta, root).status().message(), "boom"));
     test_assert(!t.rt.hasStickyError());
     fail.clear();
 
@@ -611,10 +612,11 @@ void testForeign()
     for (const TransformType *any : {&type, t.trs}) {
       const ChannelBlock &d = any->defaults();
       const StatusCode pending = StatusCode::FailedPrecondition;
-      test_assert(evaluateTransform(*any, EvalCtx(d), root).status().code() == pending);
-      test_assert(solveDelta(*any, EvalCtx(d), d, delta, root).status().code() ==
+      test_assert(evaluateTransform(*any, EvalContext(d), root).status().code() ==
                   pending);
-      test_assert(solveWorld(*any, EvalCtx(d), target, root, SetWorldMode::Exact)
+      test_assert(solveDelta(*any, EvalContext(d), d, delta, root).status().code() ==
+                  pending);
+      test_assert(solveWorld(*any, EvalContext(d), target, root, SetWorldMode::Exact)
                       .status()
                       .code() == pending);
     }

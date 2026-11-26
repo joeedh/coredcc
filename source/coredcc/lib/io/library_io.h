@@ -82,9 +82,9 @@ struct SaveReport {
  *
  * - Fails with FailedPrecondition, naming the types, when the type of a written block, or
  * of one of its attachments, neither serializes nor says it is Transient. Fails with the
- * provider's error when a `serialize` or `foreachRef` fails, naming the block. `report`,
+ * provider's error when a `serialize` or `forEachRef` fails, naming the block. `report`,
  * if given, is meaningful only for a save that worked.
- * - A payload whose references aren't those that `foreachRef` reports is an issue, or a
+ * - A payload whose references aren't those that `forEachRef` reports is an issue, or a
  * failure (Internal) when the library audits its relations.
  * - A MissingBlock placeholder that was never a record is written only if it has a name,
  *   flags, slots or attachments; a load makes it again from the references to it.

@@ -76,11 +76,11 @@ template <bool Refs> struct StateProvider {
     test_assert(int(in.remaining()) == s->padding);
     return in.status();
   }
-  void foreachRef(Context &, const Vector<uint8_t> &blob, RefVisitor &v) const
+  void forEachRef(Context &, const Vector<uint8_t> &blob, RefVisitor &v) const
   {
     s->foreachs++;
     if (s->throwForeach) {
-      s->rt->setStickyError(Status::error(StatusCode::Internal, "foreachRef threw"));
+      s->rt->setStickyError(Status::error(StatusCode::Internal, "forEachRef threw"));
       return;
     }
     BytesReader in(std::span<const uint8_t>(blob.data(), size_t(blob.size())));
@@ -99,7 +99,7 @@ template <bool Refs> struct StateProvider {
     BIND_STRUCT_METHOD(st, capture, MARGS("ctx", "blob"));
     BIND_STRUCT_METHOD(st, restore, MARGS("ctx", "blob"));
     if constexpr (Refs) {
-      BIND_STRUCT_METHOD(st, foreachRef, MARGS("ctx", "blob", "visitor"));
+      BIND_STRUCT_METHOD(st, forEachRef, MARGS("ctx", "blob", "visitor"));
     }
     return st;
   }
@@ -481,7 +481,7 @@ static void test_failures()
   test_assert(w.state.foreachs == 0); /* no blob to look at */
   w.state.throwCapture = false;
   w.state.throwForeach = true;
-  test_assert(hasMsg(w.run("test.opaque"), "foreachRef threw") && w.state.value == 4);
+  test_assert(hasMsg(w.run("test.opaque"), "forEachRef threw") && w.state.value == 4);
   w.state.throwForeach = false;
 
   int all = 0;
@@ -682,7 +682,7 @@ static void test_targets()
   test_assert(lib.get(*a)->pins() == 0 && lib.get(*c)->pins() == 0 && s.memSize() < size);
   test_assert(*lib.collect() == 3);
 
-  /* A provider without foreachRef, and a Context without a Library. */
+  /* A provider without forEachRef, and a Context without a Library. */
   test_assert(w.s.w.rt.ext<SnapshotRegistry>()
                   .add("plain", makeProvider<false>(w.s.w.rt, w.state))
                   .ok());

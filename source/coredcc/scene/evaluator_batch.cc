@@ -140,9 +140,9 @@ void SceneEvaluator::evaluateLevel(const Library &lib,
       group->type = type;
       group->batch = std::make_unique<TransformBatch>(type->channelCount(), time);
     }
-    const EvalCtx ctx = asked
-                            ? EvalCtx(scratch_, time, overrides_.values, overrides_.mask)
-                            : EvalCtx(scratch_, time);
+    const EvalContext ctx =
+        asked ? EvalContext(scratch_, time, overrides_.values, overrides_.mask)
+              : EvalContext(scratch_, time);
     group->batch->add(ctx, parentOf(i));
     group->members.append(i);
     batch_[i].info = info;

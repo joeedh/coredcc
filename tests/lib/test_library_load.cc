@@ -233,7 +233,7 @@ static void test_unreadable()
     w.notes.failForeach = true;
     LoadReport report;
     test_assert(w.load(bytes, &report).ok() && report.issues.total == 1);
-    test_assert(has(issueText(report.issues), "a: note foreachRef threw"));
+    test_assert(has(issueText(report.issues), "a: note forEachRef threw"));
     w.notes.failForeach = false;
   }
 }

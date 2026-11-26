@@ -12,7 +12,7 @@ import type {TransformBatch as BoundBatch} from 'coredcc-gen/coredcc/TransformBa
 import type {TransformTypeInfo} from 'coredcc-gen/coredcc/TransformTypeInfo'
 import type {ChannelBlock} from 'coredcc-gen/coredcc/ChannelBlock'
 import type {Context} from 'coredcc-gen/coredcc/Context'
-import type {EvalCtx} from 'coredcc-gen/coredcc/EvalCtx'
+import type {EvalContext} from 'coredcc-gen/coredcc/EvalContext'
 import {DeltaKind} from 'coredcc-gen/coredcc/DeltaKind'
 import * as cd from 'coredcc-gen/coredcc/functions'
 import {Handedness} from 'coredcc-gen/coredcc/Handedness'
@@ -160,7 +160,7 @@ export interface TransformTypeSpec {
   upgrade?(version: number, channels: ChannelEntries): void
 }
 
-const channelsOf = (ctx: EvalCtx): TransformChannels => ({
+const channelsOf = (ctx: EvalContext): TransformChannels => ({
   channels: Array.from({length: ctx.channelCount()}, (_, i) => ctx.channel(i)),
   time: ctx.time(),
 })
@@ -192,7 +192,7 @@ class ModelAdapter {
   private result = getBindingBackend().construct('coredcc::TransformState') as BoundState
   constructor(private spec: TransformTypeSpec) {}
 
-  evaluate(ctx: EvalCtx, parent: BoundState): BoundState {
+  evaluate(ctx: EvalContext, parent: BoundState): BoundState {
     return inSlot(() => {
       const s = sync('evaluate', this.spec.evaluate(channelsOf(ctx), stateOf(parent)))
       if (typeof s !== 'object' || s === null) throw new TypeError('evaluate returned no state')
@@ -205,12 +205,12 @@ class ModelAdapter {
       return this.result
     })
   }
-  setWorld(current: EvalCtx, target: Elements, parent: BoundState, mode: number, out: ChannelBlock) {
+  setWorld(current: EvalContext, target: Elements, parent: BoundState, mode: number, out: ChannelBlock) {
     return this.solve('setWorld', out, () =>
       this.spec.setWorld(channelsOf(current), read(target, 16), stateOf(parent), mode === 1)
     )
   }
-  applyDelta(base: EvalCtx, nearTo: ChannelBlock, delta: BoundDelta, parent: BoundState, out: ChannelBlock) {
+  applyDelta(base: EvalContext, nearTo: ChannelBlock, delta: BoundDelta, parent: BoundState, out: ChannelBlock) {
     const near = Array.from({length: nearTo.size()}, (_, i) => nearTo.get(i))
     return this.solve('applyDelta', out, () =>
       this.spec.applyDelta!(channelsOf(base), near, deltaOf(delta), stateOf(parent))
@@ -233,7 +233,7 @@ class ModelAdapter {
       }
     })
   }
-  pivot(ctx: EvalCtx, parent: BoundState): Vec3 {
+  pivot(ctx: EvalContext, parent: BoundState): Vec3 {
     return inSlot(() => {
       const p = sync('pivot', this.spec.pivot!(channelsOf(ctx), stateOf(parent)))
       checkNumbers('pivot', p, 3)

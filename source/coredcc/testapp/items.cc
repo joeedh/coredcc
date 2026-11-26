@@ -25,7 +25,7 @@ struct ItemProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &b, RefVisitor &v) const
+  void forEachRef(const Datablock &b, RefVisitor &v) const
   {
     if (Item *item = static_cast<Item *>(b.clientData())) {
       v.visit(item->other);
@@ -63,7 +63,7 @@ struct ItemProvider {
     auto *st =
         new lbt::Struct<ItemProvider>("testapp::ItemProvider", sizeof(ItemProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));

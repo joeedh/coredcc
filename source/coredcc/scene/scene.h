@@ -183,7 +183,7 @@ public:
   }
 
   /** Every reference, for the provider. */
-  template <class Fn> void foreachCell(Fn &&fn)
+  template <class Fn> void forEachCell(Fn &&fn)
   {
     for (RefCell &c : cells_) {
       fn(c);

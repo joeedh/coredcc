@@ -200,10 +200,10 @@ struct DriverListProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &b, RefVisitor &v) const
+  void forEachRef(const Datablock &b, RefVisitor &v) const
   {
     if (auto *d = static_cast<DriverList *>(b.clientData())) {
-      d->foreachCell([&v](RefCell &cell) { v.visit(cell); });
+      d->forEachCell([&v](RefCell &cell) { v.visit(cell); });
     }
   }
   void destroy(const Datablock &b)
@@ -245,7 +245,7 @@ struct DriverListProvider {
     auto *st = new lbt::Struct<DriverListProvider>("coredcc::DriverListProvider",
                                                    sizeof(DriverListProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));

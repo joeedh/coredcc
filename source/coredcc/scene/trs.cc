@@ -15,7 +15,7 @@ struct Node {
   quatd rotation;
 };
 
-quatd readRotation(const EvalCtx &ctx)
+quatd readRotation(const EvalContext &ctx)
 {
   const int32_t mode = ctx.enumChannel(trs::kRotationMode, trs::kQuaternionMode + 1);
   if (mode != trs::kQuaternionMode) {
@@ -29,7 +29,7 @@ quatd readRotation(const EvalCtx &ctx)
   return q.normalized();
 }
 
-Node readNode(const EvalCtx &ctx)
+Node readNode(const EvalContext &ctx)
 {
   Node n;
   n.location = readVec3(ctx, trs::kLocation);
@@ -39,8 +39,8 @@ Node readNode(const EvalCtx &ctx)
 }
 
 /* Into the channels of `ctx`'s mode, nearest to what they are in `hint`. */
-void writeRotation(const EvalCtx &ctx,
-                   const EvalCtx &hint,
+void writeRotation(const EvalContext &ctx,
+                   const EvalContext &hint,
                    const quatd &q,
                    ChannelBlock &out)
 {
@@ -66,11 +66,12 @@ ChannelBlock withRotationMode(const ChannelBlock &channels, int32_t mode)
 {
   ChannelBlock out = channels;
   out.set(trs::kRotationMode, mode);
-  writeRotation(EvalCtx(out), EvalCtx(channels), readRotation(EvalCtx(channels)), out);
+  writeRotation(
+      EvalContext(out), EvalContext(channels), readRotation(EvalContext(channels)), out);
   return out;
 }
 
-TransformState Trs::evaluate(const EvalCtx &ctx, const TransformState &parent) const
+TransformState Trs::evaluate(const EvalContext &ctx, const TransformState &parent) const
 {
   const Node n = readNode(ctx);
   const Linear world =
@@ -78,7 +79,7 @@ TransformState Trs::evaluate(const EvalCtx &ctx, const TransformState &parent) c
   return childState(parent, world, n.location, n.rotation, n.scale);
 }
 
-Status Trs::setWorld(const EvalCtx &current,
+Status Trs::setWorld(const EvalContext &current,
                      const mat4d &target,
                      const TransformState &parent,
                      SetWorldMode,
@@ -101,7 +102,7 @@ Status Trs::setWorld(const EvalCtx &current,
   return Status();
 }
 
-Status Trs::applyDelta(const EvalCtx &base,
+Status Trs::applyDelta(const EvalContext &base,
                        const ChannelBlock &nearTo,
                        const TransformDelta &delta,
                        const TransformState &parent,
@@ -119,7 +120,7 @@ Status Trs::applyDelta(const EvalCtx &base,
   writeVec3(out, trs::kLocation, n.location + solver.vector(shiftOf(delta, origin)));
   if (delta.kind == DeltaKind::Rotate) {
     const quatd q = (turnUnder(delta, solver, p) * n.rotation).normalized();
-    writeRotation(base, EvalCtx(hint), q, out);
+    writeRotation(base, EvalContext(hint), q, out);
   } else if (delta.kind == DeltaKind::Scale) {
     quatd rotation = n.rotation;
     double3 scale = n.scale;
@@ -128,7 +129,7 @@ Status Trs::applyDelta(const EvalCtx &base,
       bool turned = false;
       CDCC_TRY(takeMirror(x, rotation, scale, turned));
       if (turned) {
-        writeRotation(base, EvalCtx(hint), rotation, out);
+        writeRotation(base, EvalContext(hint), rotation, out);
       }
     }
     writeVec3(out, trs::kScale, scale * factorsAlong(delta, p * Linear::of(rotation)));

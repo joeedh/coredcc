@@ -314,7 +314,7 @@ Status LibraryFiller::readAttachment(Datablock &b, const OpaqueAttachment &from)
     if (data) {
       if (p.hasForeachRef()) {
         RefVisitor v([](void *, RefCell &cell) { sever(cell); }, nullptr);
-        p.foreachRef(b, data, v);
+        p.forEachRef(b, data, v);
       }
       p.destroy(data);
       lib_.runtime().takeStickyError().ignore(); /* `s` says what went wrong first */
@@ -352,7 +352,7 @@ int LibraryFiller::fillAttachments(BlockHandle h)
 
 void LibraryFiller::noteMissing(BlockHandle h)
 {
-  Status s = lib_.foreachRef(h, [this](RefCell &cell) {
+  Status s = lib_.forEachRef(h, [this](RefCell &cell) {
     if (isStrong(cell.kind) && !cell.isNull() && !lib_.find(cell.target)) {
       missing_.append(cell.target);
     }

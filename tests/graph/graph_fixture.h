@@ -30,7 +30,7 @@ struct ThingProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &, RefVisitor &) const
+  void forEachRef(const Datablock &, RefVisitor &) const
   {
   }
   void destroy(const Datablock &b)
@@ -47,7 +47,7 @@ struct ThingProvider {
     auto *st =
         new lbt::Struct<ThingProvider>("test::ThingProvider", sizeof(ThingProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, queryInterface, MARGS("block", "iface"));
     return st;

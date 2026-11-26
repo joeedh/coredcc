@@ -61,7 +61,7 @@ struct ShapeProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &, RefVisitor &) const
+  void forEachRef(const Datablock &, RefVisitor &) const
   {
   }
   void destroy(const Datablock &b)
@@ -73,7 +73,7 @@ struct ShapeProvider {
     auto *st =
         new lbt::Struct<ShapeProvider>("bench::ShapeProvider", sizeof(ShapeProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     return st;
   }

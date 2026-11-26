@@ -570,7 +570,7 @@ void testRecursive()
         test_assert(r.lib->writeRef(cell, r.to).ok());
       },
       &redirect);
-  g.def->foreachRef(v);
+  g.def->forEachRef(v);
   const PropValue gp = pointerTo(g);
   test_assert(
       d.run(kRemoveGraphNodeCommand, {{"graph", gp}, {"node", in(n.value)}}).ok());

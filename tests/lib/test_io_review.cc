@@ -243,7 +243,7 @@ struct LogProvider {
     in.setData(l);
     return Status();
   }
-  void foreachRef(const Datablock &block, const void *data, RefVisitor &v) const
+  void forEachRef(const Datablock &block, const void *data, RefVisitor &v) const
   {
     test_assert(&block.library() == g_lib);
     v.visit(const_cast<Logged *>(static_cast<const Logged *>(data))->weak);
@@ -262,7 +262,7 @@ struct LogProvider {
     BIND_STRUCT_METHOD(st, copy, MARGS("from", "data", "to"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "data", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "data", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "data", "visitor"));
     BIND_STRUCT_METHOD(st, onWeakTargetLost, MARGS("block", "data", "lost"));
     return st;
   }

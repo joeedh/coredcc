@@ -116,7 +116,7 @@ static void test_unread()
   test_assert(sameBytes(r.placeholderPayload(), w.lib.get(a)->placeholderPayload()));
   int toB = 0;
   test_assert(w.lib
-                  .foreachRef(ca,
+                  .forEachRef(ca,
                               [&](RefCell &c) {
                                 toB += c.target == nb ? 1 : 0;
                                 test_assert(c.target != w.id(b));
@@ -179,7 +179,7 @@ static void test_refused()
   w.notes.fault = DocFault::None;
   w.notes.failForeach = true;
   test_assert(
-      unchanged(duplicate(w, {a}), StatusCode::Internal, "note foreachRef threw"));
+      unchanged(duplicate(w, {a}), StatusCode::Internal, "note forEachRef threw"));
   w.notes.failForeach = false;
   test_assert(n->about.target == w.id(p) && w.notes.alive == 1);
 

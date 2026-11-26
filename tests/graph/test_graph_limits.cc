@@ -272,7 +272,7 @@ void redirect(Library &lib, GraphDef &def, BlockId to)
         test_assert(d.lib->writeRef(cell, d.to).ok());
       },
       &r);
-  def.foreachRef(v);
+  def.forEachRef(v);
 }
 
 void testRecursion()

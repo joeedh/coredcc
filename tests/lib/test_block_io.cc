@@ -498,7 +498,7 @@ template <bool Write> struct HalfProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &, RefVisitor &) const
+  void forEachRef(const Datablock &, RefVisitor &) const
   {
   }
   void destroy(const Datablock &)
@@ -517,7 +517,7 @@ template <bool Write> struct HalfProvider {
     auto *st = new lbt::Struct<HalfProvider>(Write ? "test::W" : "test::R",
                                              sizeof(HalfProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     if constexpr (Write) {
       BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
@@ -590,7 +590,7 @@ struct FakeHost : ForeignDispatcher {
     Doc *d = static_cast<Doc *>(b.clientData());
     if (strcmp(name, "data") == 0) {
       new (ret) void *(d);
-    } else if (strcmp(name, "foreachRef") == 0) {
+    } else if (strcmp(name, "forEachRef") == 0) {
       if (d) {
         static_cast<RefVisitor *>(args[1])->visit(d->mesh);
       }
@@ -630,7 +630,7 @@ static void test_foreign()
   Runtime rt;
   FakeHost host;
   const char *slots[] = {
-      "data", "foreachRef", "destroy", "serialize", "deserialize", "duplicate", "rekey"};
+      "data", "forEachRef", "destroy", "serialize", "deserialize", "duplicate", "rekey"};
   test_assert(
       registerForeign<BlockProvider>(rt, "test.Js#provider", &host, nullptr, slots).ok());
   int jsObject = 1;

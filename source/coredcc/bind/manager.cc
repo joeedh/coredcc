@@ -64,7 +64,7 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<NearestHit>());
   mgr->add(Bind<AnyBvh>());
   mgr->add(Bind<ChannelBlock>());
-  mgr->add(Bind<EvalCtx>());
+  mgr->add(Bind<EvalContext>());
   mgr->add(Bind<TransformState>());
   mgr->add(Bind<DeltaKind>());
   mgr->add(Bind<TransformDelta>());

@@ -469,7 +469,7 @@ EvalStatus SceneEvaluator::evaluateOne(const Library &lib,
 {
   Runtime &rt = lib.runtime();
   if (!provider) {
-    return evaluateObject(rt, type, EvalCtx(scratch_, time), parent, out, foreign);
+    return evaluateObject(rt, type, EvalContext(scratch_, time), parent, out, foreign);
   }
   if (Status s = overridesOf(provider, lib, h, type, time, overrides_); !s.ok()) {
     if (foreign.ok()) {
@@ -478,7 +478,7 @@ EvalStatus SceneEvaluator::evaluateOne(const Library &lib,
     out = parent;
     return EvalStatus::ModelFailed;
   }
-  const EvalCtx ctx(scratch_, time, overrides_.values, overrides_.mask);
+  const EvalContext ctx(scratch_, time, overrides_.values, overrides_.mask);
   return evaluateObject(rt, type, ctx, parent, out, foreign);
 }
 

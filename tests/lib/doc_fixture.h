@@ -27,8 +27,8 @@ enum class DocFault {
   None,
   Error,         /* returns an error, having freed what it made */
   Sticky,        /* a sticky error, as a throwing script leaves */
-  SkipRef,       /* serialize: a reference foreachRef reports isn't written */
-  ExtraRef,      /* serialize: one more than foreachRef reports */
+  SkipRef,       /* serialize: a reference forEachRef reports isn't written */
+  ExtraRef,      /* serialize: one more than forEachRef reports */
   WrongStrength, /* serialize: a strong ref written as weak */
   LeaveBytes,    /* deserialize: stops early */
   NoData,        /* deserialize: forgets setData */
@@ -97,7 +97,7 @@ template <bool Extras> struct DocProviderT {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &b, RefVisitor &v) const
+  void forEachRef(const Datablock &b, RefVisitor &v) const
   {
     Doc *d = static_cast<Doc *>(b.clientData());
     if (!d) {
@@ -241,7 +241,7 @@ template <bool Extras> struct DocProviderT {
     auto *st = new lbt::Struct<DocProviderT>(
         Extras ? "test::DocProvider" : "test::PlainDocProvider", sizeof(DocProviderT));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));

@@ -219,10 +219,10 @@ void testParams()
         test_assert(r.lib->writeRef(cell, r.to).ok());
       },
       &redirect);
-  def.foreachRef(v);
+  def.forEachRef(v);
   test_assert(p.is(3, 1) && q.is(3, 0));
   redirect.to = id1;
-  def.foreachRef(v);
+  def.forEachRef(v);
   test_assert(p.is(9, 1) && q.is(9, 1));
   test_assert(def.setParam(m, "thing", pointerTo(id2)).ok() && q.is(3, 1));
 

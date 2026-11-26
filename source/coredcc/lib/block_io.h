@@ -31,7 +31,7 @@ struct BlockEntry {
   /** None for an entry of a type this build doesn't know. */
   PropValue value;
   /** The blocks the entry references. For a Pointer into a block, the first is the truth
-   * for which block; the value's id is a copy. Report these from foreachRef. */
+   * for which block; the value's id is a copy. Report these from forEachRef. */
   litestl::util::Vector<RefCell, 1> refs;
   /** Not 0: a type tag this build doesn't know, with its bytes in `raw`. */
   uint8_t unknownTag = 0;
@@ -63,7 +63,7 @@ public:
   {
     return bytes_;
   }
-  /** Adds the reference to the ref table and writes its index. Every reference foreachRef
+  /** Adds the reference to the ref table and writes its index. Every reference forEachRef
    * reports must be written, also deleted targets (what a save nulls is the save's job).
    * Writing one twice is fine. */
   void ref(const RefCell &cell);
@@ -77,7 +77,7 @@ public:
   }
   /**
    * The bag's set entries, with `unread` (what BlockReader::bag gave) before them. Which
-   * block a pointer is into comes from `refs`, which foreachRef reports. A pointer into a
+   * block a pointer is into comes from `refs`, which forEachRef reports. A pointer into a
    * block that has no cell there is Internal.
    */
   void bag(const PropertyBag &bag,
@@ -121,7 +121,7 @@ public:
   void entries(litestl::util::function<bool(BlockEntry &)> fn);
   /** Sets the entries into the bag, and the cells of its pointers into blocks. Those no
    * def takes, or whose value it would change (a number out of its range), land in
-   * `unread`: keep them, report their refs from foreachRef, and write them again, so a
+   * `unread`: keep them, report their refs from forEachRef, and write them again, so a
    * file survives a build that doesn't know them. */
   void bag(PropertyBag &bag, BagRefs &refs, litestl::util::Vector<BlockEntry> &unread);
   /** Counts memory that is about to be allocated, so that the load's LoadLimits bound it.
@@ -179,7 +179,7 @@ private:
 Result<BlockPayload> writePayload(const Library &lib, BlockHandle h);
 
 /**
- * Internal unless the payload's ref table and the provider's foreachRef name the same
+ * Internal unless the payload's ref table and the provider's forEachRef name the same
  * blocks with the same strengths. A save without the relations audit reports this as an
  * issue.
  */

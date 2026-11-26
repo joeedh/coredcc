@@ -191,7 +191,7 @@ static void test_preview_random()
       for (BlockHandle user : w.lib.usersOf(want[i])) {
         bool breaks = false;
         test_assert(w.lib
-                        .foreachRef(user,
+                        .forEachRef(user,
                                     [&](RefCell &c) {
                                       breaks |= c.kind == RefKind::Strong &&
                                                 c.target == w.id(want[i]);

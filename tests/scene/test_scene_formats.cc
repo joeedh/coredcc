@@ -273,14 +273,14 @@ struct Upgrader {
   std::function<Status(uint32_t, ChannelEntries &)> fn;
   mutable int calls = 0;
 
-  TransformState evaluate(const EvalCtx &c, const TransformState &p) const
+  TransformState evaluate(const EvalContext &c, const TransformState &p) const
   {
     TransformState s = p;
     double *m = s.world;
     m[12] += c.channel(0);
     return s;
   }
-  Status setWorld(const EvalCtx &,
+  Status setWorld(const EvalContext &,
                   const mat4d &,
                   const TransformState &,
                   SetWorldMode,
@@ -317,7 +317,7 @@ struct VersionDoc : IoDoc {
       const char *impl = "io.versioned#plain";
       must(registerImpl<TransformModel, FnModel>(rt, impl));
       FnModel *m = litestl::alloc::New<FnModel>("FnModel");
-      m->fn = [](const EvalCtx &c, const TransformState &p) {
+      m->fn = [](const EvalContext &c, const TransformState &p) {
         return Upgrader().evaluate(c, p);
       };
       return rt.ext<TransformRegistry>()
@@ -395,7 +395,7 @@ void testLittleOfAFile()
   const char *impl = "io.late#impl";
   must(registerImpl<TransformModel, FnModel>(d.rt, impl));
   FnModel *m = litestl::alloc::New<FnModel>("FnModel");
-  m->fn = [](const EvalCtx &, const TransformState &p) { return p; };
+  m->fn = [](const EvalContext &, const TransformState &p) { return p; };
   must(d.rt.ext<TransformRegistry>()
            .add(std::move(info), own<TransformModel>(d.rt, impl, m).value())
            .status());

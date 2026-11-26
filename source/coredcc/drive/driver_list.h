@@ -60,7 +60,7 @@ public:
   void readFrom(BlockReader &in);
   DriverList *duplicate() const;
   uint64_t memSize() const;
-  template <class Fn> void foreachCell(Fn &&fn)
+  template <class Fn> void forEachCell(Fn &&fn)
   {
     for (RefCell &c : cells_) {
       fn(c);

@@ -312,7 +312,7 @@ static void test_busy()
   w.docs.onSerialize = nullptr;
   w.notes.onSerialize = nullptr;
   test_assert(checkPayloadRefs(w.lib, b, *p).ok() && sameBytes(w.save(), bytes));
-  /* A foreachRef too. */
+  /* A forEachRef too. */
   const BlockHandle t = makeThing(w.lib, "t");
   int seen = 0;
   w.things.onForeach = [&]() {
@@ -338,7 +338,7 @@ static void test_attachment_refs()
     SaveReport report;
     Result<Bytes> r = saveLibrary(w.lib, &report);
     const char *what =
-        "'a', attachment 'test.Note': foreachRef reports a reference that serialize";
+        "'a', attachment 'test.Note': forEachRef reports a reference that serialize";
     if (audit) {
       test_assert(r.status().code() == StatusCode::Internal && hasMsg(r.status(), what));
     } else {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "coredcc/lib/library.h"
-#include "coredcc/scene/eval_ctx.h"
+#include "coredcc/scene/eval_context.h"
 
 #include <cstdint>
 
@@ -38,7 +38,7 @@ public:
     return any_;
   }
 
-  /* What EvalCtx takes. */
+  /* What EvalContext takes. */
   ChannelBlock values;
   litestl::util::Vector<uint8_t> mask;
 

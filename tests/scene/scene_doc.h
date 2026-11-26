@@ -106,7 +106,7 @@ struct PlainProvider {
   {
     return static_cast<Slot *>(b.clientData())->data;
   }
-  void foreachRef(const Datablock &, RefVisitor &) const
+  void forEachRef(const Datablock &, RefVisitor &) const
   {
   }
   void destroy(const Datablock &b)
@@ -120,7 +120,7 @@ struct PlainProvider {
     auto *st =
         new lbt::Struct<PlainProvider>("test::PlainProvider", sizeof(PlainProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     return st;
   }
@@ -133,7 +133,7 @@ struct SlotProvider {
   {
     return static_cast<Slot *>(b.clientData())->data;
   }
-  void foreachRef(const Datablock &, RefVisitor &) const
+  void forEachRef(const Datablock &, RefVisitor &) const
   {
   }
   void destroy(const Datablock &b)
@@ -150,23 +150,24 @@ struct SlotProvider {
   {
     auto *st = new lbt::Struct<SlotProvider>("test::SlotProvider", sizeof(SlotProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, queryInterface, MARGS("block", "iface"));
     return st;
   }
 };
 
-using ModelFn = std::function<TransformState(const EvalCtx &, const TransformState &)>;
+using ModelFn =
+    std::function<TransformState(const EvalContext &, const TransformState &)>;
 
 /* A transform model that does what `fn` does. */
 struct FnModel {
   ModelFn fn;
-  TransformState evaluate(const EvalCtx &c, const TransformState &p) const
+  TransformState evaluate(const EvalContext &c, const TransformState &p) const
   {
     return fn(c, p);
   }
-  Status setWorld(const EvalCtx &,
+  Status setWorld(const EvalContext &,
                   const mat4d &,
                   const TransformState &,
                   SetWorldMode,

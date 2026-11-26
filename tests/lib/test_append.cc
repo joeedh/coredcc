@@ -174,7 +174,7 @@ static void test_placeholders()
   const BlockId b = r->ids.find(cid(2, kAcme)), c = r->ids.find(cid(3));
   int toB = 0, toC = 0;
   test_assert(w.lib
-                  .foreachRef(a,
+                  .forEachRef(a,
                               [&](RefCell &cell) {
                                 toB += cell.target == b ? 1 : 0;
                                 toC += cell.target == c ? 1 : 0;

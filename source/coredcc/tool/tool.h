@@ -297,7 +297,7 @@ public:
   Result<const ToolDef *> add(ToolDef def);
   /** add's checks without registering the def. A def with a layout registers the struct
    * its layout is checked against, once for each set of settings' names and kinds. */
-  Status validateDef(const ToolDef &def) const;
+  Status checkDef(const ToolDef &def) const;
   const ToolDef *find(std::string_view id) const;
   /** NotFound for `id`, with suggestions. */
   Status unknown(std::string_view id) const;
@@ -337,7 +337,7 @@ template <class Impl> Result<const ToolDef *> addNativeTool(Runtime &rt, ToolDef
   def.impl(impl, [impl](Runtime &r) {
     return own<Tool>(r, impl, litestl::alloc::New<Impl>("coredcc::Tool"));
   });
-  CDCC_TRY(reg.validateDef(def));
+  CDCC_TRY(reg.checkDef(def));
   CDCC_TRY((registerImpl<Tool, Impl>(rt, impl)));
   return reg.add(std::move(def));
 }

@@ -47,7 +47,8 @@ bool decomposeOrthogonal(const Linear &m, quatd &rotation, double3 &scale)
 
 } // namespace
 
-TransformState Matrix::evaluate(const EvalCtx &ctx, const TransformState &parent) const
+TransformState Matrix::evaluate(const EvalContext &ctx,
+                                const TransformState &parent) const
 {
   Linear local;
   for (int i = 0; i < 3; i++) {
@@ -62,7 +63,7 @@ TransformState Matrix::evaluate(const EvalCtx &ctx, const TransformState &parent
   return childState(parent, Linear::of(parent.world) * local, t, rotation, scale);
 }
 
-Status Matrix::setWorld(const EvalCtx &,
+Status Matrix::setWorld(const EvalContext &,
                         const mat4d &target,
                         const TransformState &parent,
                         SetWorldMode,

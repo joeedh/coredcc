@@ -91,7 +91,7 @@ TransformRegistry::~TransformRegistry()
   }
 }
 
-Status TransformRegistry::canAdd(const TransformTypeInfo &info) const
+Status TransformRegistry::checkInfo(const TransformTypeInfo &info) const
 {
   CDCC_TRY(rt_.busyIfEvaluating("adding a transform type"));
   if (info.name.size() == 0) {
@@ -130,7 +130,7 @@ Result<const TransformType *> TransformRegistry::add(TransformTypeInfo info,
   if (!model) {
     return bad(info.name, "it has no model");
   }
-  if (Status s = canAdd(info); !s.ok()) {
+  if (Status s = checkInfo(info); !s.ok()) {
     return s;
   }
   ApiStruct st(info.name.c_str());

@@ -90,7 +90,7 @@ constexpr bool isStrong(RefKind k)
 /**
  * One reference: the target's BlockId and a cached handle. Clients keep these inside
  * their data (foreign clients as bound RefCells in WASM memory, never JS copies), and
- * report them through BlockProvider::foreachRef. Write the target through
+ * report them through BlockProvider::forEachRef. Write the target through
  * Library::writeRef so the library's relations stay current.
  */
 struct RefCell {
@@ -183,7 +183,7 @@ template <class T> using OptRef = TypedRef<T, RefKind::OptStrong>;
 template <class T> using WeakRef = TypedRef<T, RefKind::Weak>;
 
 /**
- * Receives a block's references from BlockProvider::foreachRef. A concrete bound
+ * Receives a block's references from BlockProvider::forEachRef. A concrete bound
  * class, so a TS provider calls `visitor.visit(cell)` like any bound method. The cell
  * may be rewritten in place (remap, sweep).
  */

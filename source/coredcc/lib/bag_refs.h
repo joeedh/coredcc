@@ -11,7 +11,7 @@ namespace coredcc {
 
 /**
  * The RefCells of a PropertyBag's pointers into blocks. A provider keeps one beside each
- * bag in its data, and reports its cells from foreachRef.
+ * bag in its data, and reports its cells from forEachRef.
  *
  * The cell is the truth for which block a pointer is into: remapping, unlinking and undo
  * write it, not the bag. The bag's value has the rest of the pointer, and a copy of the

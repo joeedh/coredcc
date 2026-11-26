@@ -12,7 +12,7 @@ namespace models {
 
 using solve::Linear;
 
-double3 readVec3(const EvalCtx &ctx, int32_t first)
+double3 readVec3(const EvalContext &ctx, int32_t first)
 {
   return double3(ctx.channel(first), ctx.channel(first + 1), ctx.channel(first + 2));
 }

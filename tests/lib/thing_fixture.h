@@ -29,13 +29,13 @@ struct Thing {
 struct ThingHost {
   Runtime *rt = nullptr;
   std::string log;
-  /** Set a sticky error from destroy / foreachRef, as a throwing script would. */
+  /** Set a sticky error from destroy / forEachRef, as a throwing script would. */
   bool failDestroy = false;
   bool failForeach = false;
   /** Called from destroy and from onWeakTargetLost. */
   litestl::util::function<void(const Datablock &)> onDestroy;
   litestl::util::function<void()> onLost;
-  /** Called from foreachRef. */
+  /** Called from forEachRef. */
   litestl::util::function<void()> onForeach;
 };
 
@@ -46,13 +46,13 @@ struct ThingProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &b, RefVisitor &v) const
+  void forEachRef(const Datablock &b, RefVisitor &v) const
   {
     if (host->onForeach) {
       host->onForeach();
     }
     if (host->failForeach) {
-      host->rt->setStickyError(Status::error(StatusCode::Internal, "foreachRef threw"));
+      host->rt->setStickyError(Status::error(StatusCode::Internal, "forEachRef threw"));
       return;
     }
     if (Thing *t = static_cast<Thing *>(b.clientData())) {
@@ -87,7 +87,7 @@ struct ThingProvider {
     auto *st =
         new lbt::Struct<ThingProvider>("test::ThingProvider", sizeof(ThingProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, onWeakTargetLost, MARGS("user", "lost"));
     return st;

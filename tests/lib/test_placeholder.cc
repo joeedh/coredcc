@@ -151,7 +151,7 @@ static void test_placeholder_refs()
   test_assert(strcmp(p->sourceName().c_str(), "old.cdcc") == 0);
   test_assert(w.lib.usersOf(a).size() == 1);
   int seen = 0;
-  test_assert(w.lib.foreachDataRef(ph, [&](RefCell &) { seen++; }).ok() && seen == 1);
+  test_assert(w.lib.forEachDataRef(ph, [&](RefCell &) { seen++; }).ok() && seen == 1);
   test_assert(*w.lib.collect() == 1 && w.lib.get(a) &&
               !w.lib.get(b)); /* keeps its target */
 

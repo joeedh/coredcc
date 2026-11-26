@@ -262,7 +262,7 @@ void testDoubling()
       &args);
   const NodeId extra = add(*g[n - 1].def, "graph.group");
   (void)extra;
-  g[n - 1].def->foreachRef(v);
+  g[n - 1].def->forEachRef(v);
   test_assert(g[n - 1].def->groupTarget(*g[n - 1].def->node(extra)) == g[0].def);
   test_assert(graphReach(*g[0].def)->inputs.size() == 1);
   test_assert(graphReach(*g[n - 1].def)->inputs.size() == 1);

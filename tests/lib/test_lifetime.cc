@@ -298,7 +298,7 @@ static void test_deferred_errors()
   w.lib.unpin(b);
   w.host.failForeach = false;
   test_assert(!w.rt.hasStickyError());
-  test_assert(hasMsg(w.lib.collect().status(), "foreachRef threw"));
+  test_assert(hasMsg(w.lib.collect().status(), "forEachRef threw"));
 }
 
 static void test_library_gone()

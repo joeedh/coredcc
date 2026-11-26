@@ -42,7 +42,7 @@ struct ThingProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &b, RefVisitor &v) const
+  void forEachRef(const Datablock &b, RefVisitor &v) const
   {
     if (g_createInMark && g_lib) {
       g_createInMark = false;
@@ -86,7 +86,7 @@ struct ThingProvider {
     auto *st =
         new lbt::Struct<ThingProvider>("test::ThingProvider", sizeof(ThingProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, onWeakTargetLost, MARGS("user", "lost"));
     return st;
@@ -489,9 +489,9 @@ struct FakeHost : ForeignDispatcher {
     const Datablock &b = *static_cast<const Datablock *>(args[0]);
     if (strcmp(name, "data") == 0) {
       new (ret)(void *)(b.clientData());
-    } else if (strcmp(name, "foreachRef") == 0) {
+    } else if (strcmp(name, "forEachRef") == 0) {
       if (failForeach) {
-        return Status::error(StatusCode::Internal, "TypeError: foreachRef threw");
+        return Status::error(StatusCode::Internal, "TypeError: forEachRef threw");
       }
       RefVisitor &v = *static_cast<RefVisitor *>(args[1]);
       if (Thing *t = static_cast<Thing *>(b.clientData())) {
@@ -509,7 +509,7 @@ static void test_foreign_provider()
 {
   Runtime rt;
   FakeHost host;
-  const char *slots[] = {"data", "foreachRef", "destroy"};
+  const char *slots[] = {"data", "forEachRef", "destroy"};
   test_assert(
       registerForeign<BlockProvider>(rt, "test.Js#provider", &host, nullptr, slots).ok());
   int jsObject = 1;
@@ -532,7 +532,7 @@ static void test_foreign_provider()
     test_assert(lib.data(*a) == lib.get(*a)->clientData());
     test_assert(lib.usersOf(*b).size() == 1);
 
-    /* A foreachRef that throws aborts the collection before anything is destroyed. */
+    /* A forEachRef that throws aborts the collection before anything is destroyed. */
     host.failForeach = true;
     lib.noteRefsChanged();
     Result<int> n = lib.collect();

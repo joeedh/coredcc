@@ -198,7 +198,7 @@ private:
   Status remapAll()
   {
     for (BlockHandle h : made_) {
-      Status s = lib_.foreachRef(h, [this](RefCell &cell) {
+      Status s = lib_.forEachRef(h, [this](RefCell &cell) {
         const BlockId to =
             cell.isNull() ? BlockId() : ids_.find(clients().canonical(cell.target));
         if (!to.isNull()) {

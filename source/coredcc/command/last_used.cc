@@ -18,7 +18,7 @@ bool storable(const PropertyDef &def)
          !def.hasAccess(PropAccess::NotRemembered);
 }
 
-constexpr const char *kItemBase = "CommandDefaults";
+constexpr const char *kItemBase = "coredcc.CommandDefaults";
 
 } // namespace
 

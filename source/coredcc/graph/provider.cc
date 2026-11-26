@@ -20,11 +20,11 @@ struct GraphProvider {
   {
     return block.clientData();
   }
-  void foreachRef(const Datablock &block, RefVisitor &visitor) const
+  void forEachRef(const Datablock &block, RefVisitor &visitor) const
   {
     /* None for a block that readPayload didn't fill. */
     if (GraphDef *def = static_cast<GraphDef *>(block.clientData())) {
-      def->foreachRef(visitor);
+      def->forEachRef(visitor);
     }
   }
   void destroy(const Datablock &block)
@@ -53,7 +53,7 @@ struct GraphProvider {
     auto *st =
         new lbt::Struct<GraphProvider>("coredcc::GraphProvider", sizeof(GraphProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));

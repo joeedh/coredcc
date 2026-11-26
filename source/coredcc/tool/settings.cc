@@ -8,7 +8,7 @@ namespace coredcc {
 
 namespace {
 
-constexpr const char *kItemBase = "ToolSettings";
+constexpr const char *kItemBase = "coredcc.ToolSettings";
 
 } // namespace
 

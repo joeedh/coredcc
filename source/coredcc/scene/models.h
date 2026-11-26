@@ -11,13 +11,13 @@
 namespace coredcc::models {
 
 struct Trs {
-  TransformState evaluate(const EvalCtx &ctx, const TransformState &parent) const;
-  Status setWorld(const EvalCtx &current,
+  TransformState evaluate(const EvalContext &ctx, const TransformState &parent) const;
+  Status setWorld(const EvalContext &current,
                   const mat4d &target,
                   const TransformState &parent,
                   SetWorldMode mode,
                   ChannelBlock &out) const;
-  Status applyDelta(const EvalCtx &base,
+  Status applyDelta(const EvalContext &base,
                     const ChannelBlock &nearTo,
                     const TransformDelta &delta,
                     const TransformState &parent,
@@ -26,24 +26,24 @@ struct Trs {
 };
 
 struct Fbx {
-  TransformState evaluate(const EvalCtx &ctx, const TransformState &parent) const;
-  Status setWorld(const EvalCtx &current,
+  TransformState evaluate(const EvalContext &ctx, const TransformState &parent) const;
+  Status setWorld(const EvalContext &current,
                   const mat4d &target,
                   const TransformState &parent,
                   SetWorldMode mode,
                   ChannelBlock &out) const;
-  Status applyDelta(const EvalCtx &base,
+  Status applyDelta(const EvalContext &base,
                     const ChannelBlock &nearTo,
                     const TransformDelta &delta,
                     const TransformState &parent,
                     ChannelBlock &out) const;
-  double3 pivot(const EvalCtx &ctx, const TransformState &parent) const;
+  double3 pivot(const EvalContext &ctx, const TransformState &parent) const;
   static litestl::binding::types::Struct<Fbx> *defineBindings();
 };
 
 struct Matrix {
-  TransformState evaluate(const EvalCtx &ctx, const TransformState &parent) const;
-  Status setWorld(const EvalCtx &current,
+  TransformState evaluate(const EvalContext &ctx, const TransformState &parent) const;
+  Status setWorld(const EvalContext &current,
                   const mat4d &target,
                   const TransformState &parent,
                   SetWorldMode mode,
@@ -55,7 +55,7 @@ TransformTypeInfo trsInfo();
 TransformTypeInfo fbxInfo();
 TransformTypeInfo matrixInfo();
 
-double3 readVec3(const EvalCtx &ctx, int32_t first);
+double3 readVec3(const EvalContext &ctx, int32_t first);
 void writeVec3(ChannelBlock &out, int32_t first, const double3 &v);
 /** The six Euler orders, as the items of an enum. */
 PropertyDef orderEnum(const char *name);

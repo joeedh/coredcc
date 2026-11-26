@@ -55,7 +55,7 @@ Vector<BlockHandle> deletePreview(const Library &lib,
         continue;
       }
       if (scanned.add(user, true)) {
-        lib.foreachRef(user,
+        lib.forEachRef(user,
                        [&](RefCell &cell) {
                          if (cell.kind == RefKind::Strong && !cell.target.isNull()) {
                            const BlockId target = clients.canonical(cell.target);

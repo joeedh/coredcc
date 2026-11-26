@@ -224,7 +224,7 @@ private:
     });
     while (stack.size() > 0) {
       const BlockHandle h = stack.pop_back();
-      Status s = lib_.foreachRef(h, [&](RefCell &cell) {
+      Status s = lib_.forEachRef(h, [&](RefCell &cell) {
         const BlockHandle t = isStrong(cell.kind) && !cell.target.isNull()
                                   ? lib_.find(cell.target)
                                   : BlockHandle();
@@ -478,7 +478,7 @@ private:
       }
     } else { /* Detached or Transient */
       Status s =
-          lib_.foreachDataRef(item.h, [&](RefCell &cell) { own.refs.append(cell); });
+          lib_.forEachDataRef(item.h, [&](RefCell &cell) { own.refs.append(cell); });
       CDCC_TRY(takeSticky(std::move(s)));
     }
     const bool named = b.state() == BlockState::Placeholder;

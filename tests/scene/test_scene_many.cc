@@ -423,7 +423,7 @@ void testCacheErrors()
   test_assert(!d.rt.hasStickyError());
   d.host(h).onRead = nullptr;
   test_assert(states.state(a).ok() && ancestry.place(a)->depth == 1);
-  d.addFnModel("test.fn", [&](const EvalCtx &, const TransformState &p) {
+  d.addFnModel("test.fn", [&](const EvalContext &, const TransformState &p) {
     d.rt.setStickyError(boom("model"));
     return p;
   });

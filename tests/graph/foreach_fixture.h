@@ -238,7 +238,7 @@ inline void redirect(GraphDef &def, Library &lib, BlockId to)
         test_assert(r.lib->writeRef(cell, r.to).ok());
       },
       &data);
-  def.foreachRef(v);
+  def.forEachRef(v);
 }
 
 /* Where an error comes from, whichever element it is in. */

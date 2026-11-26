@@ -126,7 +126,7 @@ Status SnapshotUndo::capture(Context &ctx, Blob &to)
           }
         },
         &pinner);
-    p.foreachRef(ctx, raw, v);
+    p.forEachRef(ctx, raw, v);
   }
   if (rt.hasStickyError()) {
     return rt.takeStickyError();

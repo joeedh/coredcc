@@ -62,7 +62,7 @@ struct NumberProvider {
   {
     return b.clientData();
   }
-  void foreachRef(const Datablock &, RefVisitor &) const
+  void forEachRef(const Datablock &, RefVisitor &) const
   {
   }
   void destroy(const Datablock &b)
@@ -84,7 +84,7 @@ struct NumberProvider {
     auto *st =
         new lbt::Struct<NumberProvider>("test::NumberProvider", sizeof(NumberProvider));
     BIND_STRUCT_METHOD(st, data, MARGS("block"));
-    BIND_STRUCT_METHOD(st, foreachRef, MARGS("block", "visitor"));
+    BIND_STRUCT_METHOD(st, forEachRef, MARGS("block", "visitor"));
     BIND_STRUCT_METHOD(st, destroy, MARGS("block"));
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));

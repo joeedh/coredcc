@@ -389,7 +389,7 @@ void testBelow()
   d.undo();
   d.setParent(p, BlockHandle());
   /* A place that only moves. */
-  d.addFnModel("test.slide", [](const EvalCtx &, const TransformState &above) {
+  d.addFnModel("test.slide", [](const EvalContext &, const TransformState &above) {
     TransformState s;
     s.world[3][0] = above.localScale[0];
     return s;
@@ -451,13 +451,13 @@ void testBelow()
 /* A type that holds only a place: its answer is near, with the rotation and scale that
  * were there. */
 struct PlaceOnly {
-  TransformState evaluate(const EvalCtx &c, const TransformState &) const
+  TransformState evaluate(const EvalContext &c, const TransformState &) const
   {
     TransformState s;
     s.world[3][0] = c.channel(0);
     return s;
   }
-  Status setWorld(const EvalCtx &,
+  Status setWorld(const EvalContext &,
                   const mat4d &target,
                   const TransformState &,
                   SetWorldMode,
@@ -488,7 +488,7 @@ void testBelowNear()
   must(d.rt.ext<TransformRegistry>()
            .add(std::move(info), std::move(owned).value())
            .status());
-  d.addFnModel("test.sheared", [](const EvalCtx &, const TransformState &p) {
+  d.addFnModel("test.sheared", [](const EvalContext &, const TransformState &p) {
     TransformState s = p;
     s.world[1][0] = 0.5;
     return s;
@@ -692,7 +692,8 @@ void testRegister()
   int all = 0;
   const ScopedConnection listening = d.rt.ext<ChangeBus>().addListener(
       [&](const OwnerKey *owner) { all += owner == nullptr; });
-  d.addFnModel("test.late", [](const EvalCtx &, const TransformState &p) { return p; });
+  d.addFnModel("test.late",
+               [](const EvalContext &, const TransformState &p) { return p; });
   test_assert(all == 1);
 }
 

@@ -57,7 +57,7 @@ struct Polar {
         *err = "evaluate: Error: no state";
         return false;
       }
-      const EvalCtx &ctx = *static_cast<const EvalCtx *>(args[0]);
+      const EvalContext &ctx = *static_cast<const EvalContext *>(args[0]);
       const TransformState &parent = *static_cast<const TransformState *>(args[1]);
       const double r = ctx.channel(0), a = ctx.channel(1);
       TransformState *s = new (ret) TransformState();
@@ -86,7 +86,7 @@ struct Polar {
     };
     o.methods["applyDelta"] = [this](void **args, void *ret, string *) {
       deltas++;
-      const EvalCtx &base = *static_cast<const EvalCtx *>(args[0]);
+      const EvalContext &base = *static_cast<const EvalContext *>(args[0]);
       const TransformDelta &d = *static_cast<const TransformDelta *>(args[2]);
       const double r = base.channel(0), a = base.channel(1);
       solve(r * std::cos(a) + d.vector[0],
@@ -408,7 +408,7 @@ void testGates()
     must(sc::evaluateScene(ctx));
     test_assert(asked == 1);
     test_assert(evaluateTransform(*d.rt.ext<TransformRegistry>().find("js.polar"),
-                                  EvalCtx(d.obj(o).channels),
+                                  EvalContext(d.obj(o).channels),
                                   TransformState())
                     .ok());
     test_assert(asked == 2);
@@ -671,7 +671,7 @@ void testNul()
   litestl::alloc::Delete(info);
   /* A def's id is refused later. */
   info = sc::newTransformTypeDef(nul);
-  test_assert(isError(d.rt.ext<TransformRegistry>().canAdd(*info), bad, "NUL"));
+  test_assert(isError(d.rt.ext<TransformRegistry>().checkInfo(*info), bad, "NUL"));
   litestl::alloc::Delete(info);
 }
 

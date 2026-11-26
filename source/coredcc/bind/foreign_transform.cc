@@ -223,7 +223,7 @@ static Status registerWith(Runtime &rt,
                  where + "the name must be dotted identifiers");
   }
   TransformRegistry &types = rt.ext<TransformRegistry>();
-  CDCC_TRY(types.canAdd(type));
+  CDCC_TRY(types.checkInfo(type));
   CDCC_TRY(foreignImplementable(coredcc::detail::ifaceDesc<TransformModel>()));
   const std::vector<std::string> names = detail::splitSlots(slots);
   std::vector<const char *> present;

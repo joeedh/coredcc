@@ -303,7 +303,7 @@ void testUnstable()
   test_assert(d.isAt(h, 7) && d.sc().counters().rebuilds == before + 1);
   /* Errors of the pass that was thrown away aren't returned. */
   bool threw = false;
-  d.addFnModel("test.once", [&](const EvalCtx &, const TransformState &p) {
+  d.addFnModel("test.once", [&](const EvalContext &, const TransformState &p) {
     if (!threw) {
       threw = true;
       d.rt.setStickyError(boom("once"));
