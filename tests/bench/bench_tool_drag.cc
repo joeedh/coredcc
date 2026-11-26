@@ -72,7 +72,7 @@ struct Doc {
       must(h.status());
       must(Scene::of(*lib, *s)->add(*lib, *h));
     }
-    const CommandDef *sel = rt.ext<CommandRegistry>().find(kSelectCommand);
+    const CommandDef *sel = rt.ext<CommandRegistry>().find(kSelectSceneCommand);
     PropertyBag in = sel->newInputs();
     must(in.set("mode", PropValue::ofEnum(4))); /* ALL */
     must(ex->run(*ctx, *sel, std::move(in)).status());

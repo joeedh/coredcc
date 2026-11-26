@@ -158,18 +158,19 @@ void testCommand()
   d.obj(f).channels = d.fbx->defaults();
   d.select({a, f, h});
   /* `location` is none of FBX's; hosts may have no slot. */
-  PropertyBag out = d.cycle(kSetLocksCommand, {{"channels", text("location.0")}});
+  PropertyBag out = d.cycle(kSetObjectLocksCommand, {{"channels", text("location.0")}});
   test_assert(out.get("skipped")->asInt() == 2);
   test_assert(readObject(*d.lib, a)->info.locks == 1);
   d.select({f});
-  test_assert(isError(d.fails(kSetLocksCommand, {{"channels", text("location.0 no")}}),
-                      StatusCode::FailedPrecondition,
-                      "no channel 'location.0 no'"));
+  test_assert(
+      isError(d.fails(kSetObjectLocksCommand, {{"channels", text("location.0 no")}}),
+              StatusCode::FailedPrecondition,
+              "no channel 'location.0 no'"));
   d.select({h});
-  test_assert(d.fails(kSetLocksCommand).code() == StatusCode::Unsupported);
-  test_assert(d.fails(kSetFlagsCommand).code() == StatusCode::Unsupported);
+  test_assert(d.fails(kSetObjectLocksCommand).code() == StatusCode::Unsupported);
+  test_assert(d.fails(kSetObjectFlagsCommand).code() == StatusCode::Unsupported);
   d.select({a});
-  d.ok(kSetLocksCommand, {{"channels", text("location.2")}});
+  d.ok(kSetObjectLocksCommand, {{"channels", text("location.2")}});
   test_assert(readObject(*d.lib, a)->info.locks == 5);
 
   /* A drag. Undo of the lock isn't in its way. */
@@ -191,14 +192,14 @@ void testCommand()
   /* What keeps its place isn't hindered; another transform type has no locks, and undo
    * has them. */
   d.select({a});
-  d.cycle(kSetParentCommand, {{"parent", d.ptr(b)}});
+  d.cycle(kSetObjectParentCommand, {{"parent", d.ptr(b)}});
   test_assert(d.obj(a).channels.get(0) == -14.0 &&
               readObject(*d.lib, a)->info.locks == 5);
-  out = d.cycle(kSetTransformTypeCommand, {{"type", text(kMatrixTransform)}});
+  out = d.cycle(kSetObjectTransformTypeCommand, {{"type", text(kMatrixTransform)}});
   test_assert(readObject(*d.lib, a)->info.locks == 0);
   d.undo();
   test_assert(readObject(*d.lib, a)->info.locks == 5);
-  d.ok(kSetTransformTypeCommand, {{"type", text(kTrsTransform)}}); /* it has it */
+  d.ok(kSetObjectTransformTypeCommand, {{"type", text(kTrsTransform)}}); /* it has it */
   test_assert(readObject(*d.lib, a)->info.locks == 5);
 
   /* Natively too. */
@@ -211,16 +212,16 @@ void testCommand()
   must(writeLocks(*d.ctx, a, 5));
 
   /* All of them, and none. */
-  d.cycle(kSetLocksCommand);
+  d.cycle(kSetObjectLocksCommand);
   test_assert(readObject(*d.lib, a)->info.locks == (uint64_t(1) << trs::kCount) - 1);
-  d.cycle(kSetLocksCommand,
+  d.cycle(kSetObjectLocksCommand,
           {{"on", PropValue::ofBool(false)}, {"channels", text("location")}});
   test_assert(readObject(*d.lib, a)->info.locks == (uint64_t(1) << trs::kCount) - 8);
-  d.cycle(kSetLocksCommand, {{"on", PropValue::ofBool(false)}});
+  d.cycle(kSetObjectLocksCommand, {{"on", PropValue::ofBool(false)}});
   test_assert(readObject(*d.lib, a)->info.locks == 0);
 
   /* setWorldOf is a tool's. */
-  d.ok(kSetLocksCommand, {{"channels", text("location.1")}});
+  d.ok(kSetObjectLocksCommand, {{"channels", text("location.1")}});
   mat4d m = d.stateOf(a).world;
   static_cast<double *>(m)[13] += 1.0;
   test_assert(isError(setWorldOf(*d.lib, a, m, SetWorldMode::Exact, 0.0).status(),
@@ -236,14 +237,16 @@ void testFlags()
   const BlockHandle a = d.object("a"), b = d.object("b");
   d.select({a, b});
   const auto flags = [](ObjectFlags f) { return PropValue::ofFlags(uint32_t(f)); };
-  d.cycle(kSetFlagsCommand, {{"flags", flags(ObjectFlags::Unselectable)}});
+  d.cycle(kSetObjectFlagsCommand, {{"flags", flags(ObjectFlags::Unselectable)}});
   test_assert(d.obj(a).flags == ObjectFlags::Unselectable);
   const PropValue both =
       text(formatBlockId(d.rt, d.idOf(a)) + ";" + formatBlockId(d.rt, d.idOf(b)));
-  test_assert(!d.run(kSetFlagsCommand, {{"flags", flags(ObjectFlags::Hidden)}}).ok());
-  d.cycle(kSetFlagsCommand, {{"flags", flags(ObjectFlags::Hidden)}, {"objects", both}});
+  test_assert(
+      !d.run(kSetObjectFlagsCommand, {{"flags", flags(ObjectFlags::Hidden)}}).ok());
+  d.cycle(kSetObjectFlagsCommand,
+          {{"flags", flags(ObjectFlags::Hidden)}, {"objects", both}});
   test_assert(d.obj(b).flags == (ObjectFlags::Hidden | ObjectFlags::Unselectable));
-  d.cycle(kSetFlagsCommand,
+  d.cycle(kSetObjectFlagsCommand,
           {{"flags", flags(ObjectFlags::Unselectable)},
            {"objects", both},
            {"on", PropValue::ofBool(false)}});
@@ -303,8 +306,8 @@ void testSetWorld()
     if (ids.empty()) {
       continue;
     }
-    PropertyBag out =
-        d.cycle(kSetWorldCommand, {{"objects", text(ids)}, {"matrices", text(matrices)}});
+    PropertyBag out = d.cycle(kSetObjectWorldCommand,
+                              {{"objects", text(ids)}, {"matrices", text(matrices)}});
     test_assert(out.get("approximate")->asInt() == 0 && out.get("skipped")->asInt() == 0);
     for (int i = 0; i < 10; i++) {
       const double *e = want[i];
@@ -326,7 +329,8 @@ void testSetWorld()
   const std::string one = numbers(m);
   const auto run = [&](const std::string &ids, const std::string &matrices) {
     return d
-        .fails(kSetWorldCommand, {{"objects", text(ids)}, {"matrices", text(matrices)}})
+        .fails(kSetObjectWorldCommand,
+               {{"objects", text(ids)}, {"matrices", text(matrices)}})
         .code();
   };
   test_assert(run(ia, "") == StatusCode::InvalidArgument);
@@ -344,14 +348,14 @@ void testSetWorld()
   for (char &c : commas) {
     c = c == ' ' ? ',' : c;
   }
-  d.ok(kSetWorldCommand, {{"objects", text(ia)}, {"matrices", text(commas)}});
+  d.ok(kSetObjectWorldCommand, {{"objects", text(ia)}, {"matrices", text(commas)}});
   test_assert(d.obj(a).channels.get(0) == 4.0);
 
   must(writeLocks(*d.ctx, a, 1));
   static_cast<double *>(m)[12] = 9.0;
   static_cast<double *>(m)[13] = 6.0;
-  PropertyBag held =
-      d.ok(kSetWorldCommand, {{"objects", text(ia)}, {"matrices", text(numbers(m))}});
+  PropertyBag held = d.ok(kSetObjectWorldCommand,
+                          {{"objects", text(ia)}, {"matrices", text(numbers(m))}});
   test_assert(held.get("approximate")->asInt() == 1 &&
               lengthOf(get(d.obj(a).channels, 0) - double3(4, 6, 0)) == 0.0);
   must(writeLocks(*d.ctx, a, 0));
@@ -361,16 +365,16 @@ void testSetWorld()
   /* A shear: EXACT leaves it out, CLOSEST counts it. */
   static_cast<double *>(m)[4] = 0.5;
   const std::string sheared = numbers(m) + one;
-  PropertyBag out = d.ok(kSetWorldCommand,
+  PropertyBag out = d.ok(kSetObjectWorldCommand,
                          {{"objects", text(ia + ";" + ib)},
                           {"matrices", text(sheared)},
                           {"mode", PropValue::ofEnum(int64_t(SetWorldMode::Exact))}});
   test_assert(out.get("skipped")->asInt() == 1 && d.obj(b).channels.get(0) == 4.0);
-  out = d.cycle(kSetWorldCommand,
+  out = d.cycle(kSetObjectWorldCommand,
                 {{"objects", text(ia + ";" + ib)}, {"matrices", text(sheared)}});
   test_assert(out.get("skipped")->asInt() == 0 && out.get("approximate")->asInt() == 1);
   test_assert(
-      isError(d.fails(kSetWorldCommand,
+      isError(d.fails(kSetObjectWorldCommand,
                       {{"objects", text(ia)},
                        {"matrices", text(numbers(m))},
                        {"mode", PropValue::ofEnum(int64_t(SetWorldMode::Exact))}}),
@@ -606,7 +610,7 @@ void testActor()
   test_assert(d.actor(a).channels.get(trs::kLocation) == 5.0);
   d.actor(a).info.flags = 0;
   d.select({a, o, h});
-  PropertyBag out = d.ok(kSetLocksCommand, {{"on", PropValue::ofBool(false)}});
+  PropertyBag out = d.ok(kSetObjectLocksCommand, {{"on", PropValue::ofBool(false)}});
   test_assert(out.get("skipped")->asInt() == 1 && d.actor(a).info.locks == 0 &&
               readObject(*d.lib, o)->info.locks == 0);
   d.undo();

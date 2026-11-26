@@ -14,8 +14,8 @@
 
 namespace coredcc::drive {
 
-inline constexpr const char *kAddDriverGraphCommand = "core.driver.add";
-inline constexpr const char *kRemoveDriverGraphCommand = "core.driver.remove";
+inline constexpr const char *kAddDriverCommand = "core.driver.add";
+inline constexpr const char *kRemoveDriverCommand = "core.driver.remove";
 
 Status registerCommands(Runtime &rt);
 

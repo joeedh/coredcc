@@ -171,12 +171,12 @@ struct DuplicateObjects : Composite {
       newActive = copied.blocks[i] == active ? (*copies)[i] : newActive;
     }
     const PropValue ids = idsOf(*s.lib, objects);
-    CDCC_TRY(run(ctx, kLinkCommand, {{"objects", ids}}).status());
+    CDCC_TRY(run(ctx, kLinkSceneCommand, {{"objects", ids}}).status());
     if (in.get("select")->asBool()) {
-      CDCC_TRY(run(ctx, kSelectCommand, {{"objects", ids}}).status());
+      CDCC_TRY(run(ctx, kSelectSceneCommand, {{"objects", ids}}).status());
       if (newActive) {
         const PropValue p = detail::pointerTo(*s.lib, newActive);
-        CDCC_TRY(run(ctx, kSetActiveCommand, {{"object", p}}).status());
+        CDCC_TRY(run(ctx, kSetSceneActiveCommand, {{"object", p}}).status());
       }
     }
     ctx.outputs()->set("count", PropValue::ofInt(count)).ignore();
@@ -260,7 +260,7 @@ Status detail::registerDuplicateCommands(Runtime &rt)
   const auto flag = [](const char *name, bool value) {
     return PropertyDef::boolProp(name).defaultValue(PropValue::ofBool(value));
   };
-  CommandDef objects(kDuplicateObjectsCommand);
+  CommandDef objects(kDuplicateObjectCommand);
   objects.uiName("Duplicate Objects")
       .input(objectsInput())
       .input(flag("linkData", true))

@@ -70,14 +70,14 @@ struct Random {
       d.moveTo(any(), pick(30));
       break;
     case 1:
-      (void)d.run(kSetParentCommand,
+      (void)d.run(kSetObjectParentCommand,
                   {{"parent", pick(3) ? d.ptr(any()) : d.ptr(BlockHandle())},
                    {"objects", named(any())},
                    {"keepWorld", PropValue::ofBool(pick(2) != 0)}});
       break;
     case 2: {
       const BlockHandle g = graphs[pick(int(graphs.size()))];
-      (void)d.run(pick(2) ? kAddDriverGraphCommand : kRemoveDriverGraphCommand,
+      (void)d.run(pick(2) ? kAddDriverCommand : kRemoveDriverCommand,
                   {{"graph", d.ptr(g)}});
       break;
     }

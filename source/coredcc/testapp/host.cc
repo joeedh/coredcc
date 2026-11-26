@@ -270,7 +270,7 @@ Status validate(Host &h)
   return h.history().validate();
 }
 
-/** A new box data block (TA3), as pointer text for core.object.add's `data`. */
+/** A new box data block (TA3), as pointer text for core.object.new's `data`. */
 litestl::util::string addBox(Host &h, double half)
 {
   return litestl::util::string(createBox(h.context(), half).c_str());

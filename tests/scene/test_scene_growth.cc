@@ -82,7 +82,7 @@ void testMembers()
   test_assert(many("unlink, undo, redo of half", 250, [](Many &d) {
     const PropValue half = d.list(2);
     return secondsOf([&]() {
-      d.ok(kUnlinkCommand, {{"objects", half}});
+      d.ok(kUnlinkSceneCommand, {{"objects", half}});
       d.undo();
       d.redo();
     });
@@ -105,7 +105,7 @@ void testMembers()
   test_assert(many("as many objects added as there are", 100, [](Many &d) {
     return secondsOf([&]() {
       for (int i = int(d.all.size()); i > 0; i--) {
-        d.ok(kAddObjectCommand);
+        d.ok(kNewObjectCommand);
       }
     });
   }));
@@ -114,21 +114,21 @@ void testMembers()
   test_assert(many("a command after as many undone adds", 100, [](Many &d) {
     const int n = int(d.all.size());
     for (int i = 0; i < n; i++) {
-      d.ok(kAddObjectCommand);
+      d.ok(kNewObjectCommand);
     }
     for (int i = 0; i < n; i++) {
       d.undo();
     }
     const int blocks = d.lib->size();
     const double t =
-        secondsOf([&]() { d.ok(kSelectCommand, {{"mode", PropValue::ofEnum(4)}}); });
+        secondsOf([&]() { d.ok(kSelectSceneCommand, {{"mode", PropValue::ofEnum(4)}}); });
     test_assert(d.lib->size() == blocks - n);
     return t;
   }));
   test_assert(many("a budget that drops as many deletions", 100, [](Many &d) {
     for (BlockHandle h : d.all) {
       d.select({h});
-      d.ok(kDeleteObjectsCommand);
+      d.ok(kDeleteObjectCommand);
     }
     const int blocks = d.lib->size();
     const double t = secondsOf([&]() { d.history->setMemoryBudget(1); });
@@ -156,7 +156,7 @@ void testChains()
       60,
       [](Many &d) {
         const PropValue all = d.list();
-        return secondsOf([&]() { d.ok(kSetParentCommand, {{"objects", all}}); });
+        return secondsOf([&]() { d.ok(kSetObjectParentCommand, {{"objects", all}}); });
       },
       true));
   test_assert(many(
@@ -165,7 +165,7 @@ void testChains()
       [](Many &d) {
         const PropValue all = d.list();
         return secondsOf([&]() {
-          d.ok(kSetTransformTypeCommand,
+          d.ok(kSetObjectTransformTypeCommand,
                {{"objects", all}, {"type", PropValue::ofString(kMatrixTransform)}});
         });
       },
@@ -175,13 +175,13 @@ void testChains()
       60,
       [](Many &d) {
         const PropValue half = d.list(2);
-        return secondsOf([&]() { d.ok(kDeleteObjectsCommand, {{"objects", half}}); });
+        return secondsOf([&]() { d.ok(kDeleteObjectCommand, {{"objects", half}}); });
       },
       true));
   test_assert(many("delete, half of them", 250, [](Many &d) {
     const PropValue half = d.list(2);
     return secondsOf([&]() {
-      d.ok(kDeleteObjectsCommand, {{"objects", half}});
+      d.ok(kDeleteObjectCommand, {{"objects", half}});
       d.undo();
       d.redo();
     });

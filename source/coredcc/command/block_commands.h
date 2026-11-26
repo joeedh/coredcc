@@ -79,7 +79,7 @@ private:
 Status registerBlockCommands(Runtime &rt);
 
 inline constexpr const char *kDeleteBlockCommand = "core.block.delete";
-inline constexpr const char *kPurgeCommand = "core.block.purge";
+inline constexpr const char *kPurgeBlockCommand = "core.block.purge";
 
 namespace detail {
 

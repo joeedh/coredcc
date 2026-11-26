@@ -93,7 +93,7 @@ FString FSpikeDoc::Run(const char* Command, FInputs Inputs, PropertyBag* Out)
 BlockHandle FSpikeDoc::AddObject(const char* Name, double X, double Y, double Z, bool Select)
 {
 	PropertyBag Out;
-	const FString E = Run(kAddObjectCommand,
+	const FString E = Run(kNewObjectCommand,
 		{{"name", PropValue::ofString(Name)}, {"location", PropValue::ofVec3(X, Y, Z)}, {"select", PropValue::ofBool(Select)}},
 		&Out);
 	if (!E.IsEmpty())

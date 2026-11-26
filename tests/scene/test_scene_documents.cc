@@ -80,7 +80,7 @@ std::vector<Case> cases()
 {
   return {
       {kNewSceneCommand, [](Documents &d) { d.ok(kNewSceneCommand); }},
-      {kLinkCommand,
+      {kLinkSceneCommand,
        [](Documents &d) {
          Result<BlockHandle> h = newObject(*d.lib, "loose", kTrsTransform);
          must(h.status());
@@ -90,28 +90,29 @@ std::vector<Case> cases()
                                  "other",
                                  litestl::alloc::New<Object>("coredcc::Object", &d.rt))
                   .status());
-         d.ok(kLinkCommand, {{"object", d.ptr(*h)}});
+         d.ok(kLinkSceneCommand, {{"object", d.ptr(*h)}});
        }},
-      {kUnlinkCommand, [](Documents &d) { d.ok(kUnlinkCommand); }},
-      {kSetActiveCommand,
-       [](Documents &d) { d.ok(kSetActiveCommand, {{"object", d.ptr(d.top)}}); }},
-      {kSelectCommand,
+      {kUnlinkSceneCommand, [](Documents &d) { d.ok(kUnlinkSceneCommand); }},
+      {kSetSceneActiveCommand,
+       [](Documents &d) { d.ok(kSetSceneActiveCommand, {{"object", d.ptr(d.top)}}); }},
+      {kSelectSceneCommand,
        [](Documents &d) {
-         d.ok(kSelectCommand, {{"mode", PropValue::ofString("NONE")}});
+         d.ok(kSelectSceneCommand, {{"mode", PropValue::ofString("NONE")}});
        }},
-      {kAddObjectCommand, [](Documents &d) { d.ok(kAddObjectCommand); }},
-      {kSetParentCommand,
+      {kNewObjectCommand, [](Documents &d) { d.ok(kNewObjectCommand); }},
+      {kSetObjectParentCommand,
        [](Documents &d) {
-         d.ok(kSetParentCommand, {{"parent", PropValue::nullPointer()}});
+         d.ok(kSetObjectParentCommand, {{"parent", PropValue::nullPointer()}});
        }},
-      {kSetTransformTypeCommand,
+      {kSetObjectTransformTypeCommand,
        [](Documents &d) {
-         d.ok(kSetTransformTypeCommand,
+         d.ok(kSetObjectTransformTypeCommand,
               {{"type", PropValue::ofString(kMatrixTransform)}});
        }},
-      {kSetRotationModeCommand,
+      {kSetObjectRotationModeCommand,
        [](Documents &d) {
-         d.ok(kSetRotationModeCommand, {{"mode", PropValue::ofString("QUATERNION")}});
+         d.ok(kSetObjectRotationModeCommand,
+              {{"mode", PropValue::ofString("QUATERNION")}});
        }},
       {kApplyObjectDeltaCommand,
        [](Documents &d) {
@@ -122,7 +123,7 @@ std::vector<Case> cases()
                     std::initializer_list<double>{1.0, 2.0, 3.0}.begin())}});
        }},
       {kDragObjectDeltaCommand, [](Documents &d) { d.drag(); }},
-      {kDeleteObjectsCommand, [](Documents &d) { d.ok(kDeleteObjectsCommand); }},
+      {kDeleteObjectCommand, [](Documents &d) { d.ok(kDeleteObjectCommand); }},
   };
 }
 
@@ -222,7 +223,7 @@ void testDrag()
 /* The size that the history counts grows while blocks are undone. */
 void testSize()
 {
-  for (const char *command : {kNewSceneCommand, kAddObjectCommand}) {
+  for (const char *command : {kNewSceneCommand, kNewObjectCommand}) {
     Documents d;
     d.ok(command);
     const uint64_t before = d.history->memoryUsed();

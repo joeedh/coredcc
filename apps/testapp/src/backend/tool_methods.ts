@@ -84,7 +84,7 @@ export function installToolMethods(method: DefineMethod, ctx: () => Context, gpu
     const box = (n: string, x: number) => {
       const data = ta.addBox(host, 0.5)
       if (!data) throw new Error('addBox failed')
-      return cdcc.invoke(c, `core.object.add(name="${n}" data="${data}" location=(${x}, 0, 0))`).object as Ref
+      return cdcc.invoke(c, `core.object.new(name="${n}" data="${data}" location=(${x}, 0, 0))`).object as Ref
     }
     const a = box('a', 0)
     const b = box('b', 3)

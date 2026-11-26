@@ -102,9 +102,9 @@ static void test_unlink_ref()
   const BlockHandle ph = addPlaceholder(s, mesh);
   const auto row = [&]() { return s.w.lib.get(ph)->placeholderData().refs[1].target; };
   const auto unlink = [&](int64_t index, BlockHandle h) {
-    PropertyBag in = blockInputs(s, kUnlinkRefCommand, s.w.lib.get(h)->id());
+    PropertyBag in = blockInputs(s, kUnlinkBlockRefCommand, s.w.lib.get(h)->id());
     test_assert(in.set("index", PropValue::ofInt(index)).ok());
-    return s.ex.run(s.ctx, kUnlinkRefCommand, std::move(in)).status();
+    return s.ex.run(s.ctx, kUnlinkBlockRefCommand, std::move(in)).status();
   };
   test_assert(unlink(2, ph).code() == StatusCode::OutOfRange &&
               unlink(-1, ph).code() == StatusCode::OutOfRange);
@@ -217,10 +217,10 @@ static void test_unlink_opaque()
   test_assert(!lib.refTable(BlockHandle()) && !lib.refTable(BlockHandle(), type));
   test_assert(deletePreview(lib, s.w.meshes[0]).size() == 2);
   const auto unlink = [&](int64_t index, const char *attachment) {
-    PropertyBag in = blockInputs(s, kUnlinkRefCommand, lib.get(owner)->id());
+    PropertyBag in = blockInputs(s, kUnlinkBlockRefCommand, lib.get(owner)->id());
     test_assert(in.set("index", PropValue::ofInt(index)).ok());
     test_assert(in.set("attachment", PropValue::ofString(attachment)).ok());
-    return s.ex.run(s.ctx, kUnlinkRefCommand, std::move(in)).status();
+    return s.ex.run(s.ctx, kUnlinkBlockRefCommand, std::move(in)).status();
   };
   test_assert(unlink(0, "").code() == StatusCode::OutOfRange);
   test_assert(unlink(0, "other").code() == StatusCode::OutOfRange);

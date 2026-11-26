@@ -114,7 +114,7 @@ void testDetached()
   test_assert(waiting(d) == 0 && hostX() == 5.0);
   d.redo();
   /* Gone for good. */
-  d.ok(kUnlinkCommand, {{"objects", PropValue()}});
+  d.ok(kUnlinkSceneCommand, {{"objects", PropValue()}});
   d.undo();
   must(d.lib->onHostDestroyed(id));
   d.undo();
@@ -170,8 +170,8 @@ void testDetachedFields()
   CommandDoc d;
   const BlockHandle p = d.object("p", 100.0), a = d.object("a", 1.0);
   d.select({a});
-  d.ok(kSetParentCommand, {{"parent", d.ptr(p)}});
-  d.ok(kSetTransformTypeCommand, {{"type", PropValue::ofString(kMatrixTransform)}});
+  d.ok(kSetObjectParentCommand, {{"parent", d.ptr(p)}});
+  d.ok(kSetObjectTransformTypeCommand, {{"type", PropValue::ofString(kMatrixTransform)}});
   d.ok(kApplyObjectDeltaCommand, {{"vector", kStep}});
   test_assert(xOf(d, a) == 11.0);
   must(d.lib->markDeleted(a));
@@ -243,16 +243,17 @@ void testSkips()
                 StatusCode::FailedPrecondition);
   }
   d.select({shape});
-  for (const char *command :
-       {kSetTransformTypeCommand, kSetRotationModeCommand, kSetParentCommand})
+  for (const char *command : {kSetObjectTransformTypeCommand,
+                              kSetObjectRotationModeCommand,
+                              kSetObjectParentCommand})
   {
     test_assert(d.fails(command).code() == StatusCode::FailedPrecondition);
   }
   d.select({shape, under, a});
-  out = d.cycle(kSetParentCommand);
+  out = d.cycle(kSetObjectParentCommand);
   test_assert(out.get("skipped")->asInt() == 1 && d.obj(under).parent.target().isNull());
   d.undo();
-  out = d.cycle(kSetRotationModeCommand, {{"mode", PropValue::ofEnum(2)}});
+  out = d.cycle(kSetObjectRotationModeCommand, {{"mode", PropValue::ofEnum(2)}});
   test_assert(out.get("skipped")->asInt() == 1 &&
               d.obj(a).channels.get(trs::kRotationMode) == 2.0);
   /* In a drag: what can't follow stays at its last place. */
@@ -302,14 +303,15 @@ void testSkips()
   };
   test_assert(
       isError(d.run(kApplyObjectDeltaCommand).status(), StatusCode::Internal, "threw"));
-  test_assert(isError(d.run(kSetParentCommand).status(), StatusCode::Internal, "threw"));
-  test_assert(isError(
-      d.run(kSetTransformTypeCommand, {{"type", PropValue::ofString(kFbxTransform)}})
-          .status(),
-      StatusCode::Internal,
-      "threw"));
   test_assert(
-      isError(d.run(kSetRotationModeCommand).status(), StatusCode::Internal, "threw"));
+      isError(d.run(kSetObjectParentCommand).status(), StatusCode::Internal, "threw"));
+  test_assert(isError(d.run(kSetObjectTransformTypeCommand,
+                            {{"type", PropValue::ofString(kFbxTransform)}})
+                          .status(),
+                      StatusCode::Internal,
+                      "threw"));
+  test_assert(isError(
+      d.run(kSetObjectRotationModeCommand).status(), StatusCode::Internal, "threw"));
   d.host(h).onRead = nullptr;
   test_assert(xOf(d, a) == a0);
 }
@@ -338,12 +340,12 @@ void testOutOfReach()
   d.ok(kApplyObjectDeltaCommand, {{"vector", kStep}, {"objects", named}});
   test_assert(xOf(d, a) == 11.0 && xOf(d, b) == 12.0 && xOf(d, c) == 13.0 &&
               xOf(d, h) == 14.0);
-  d.ok(kDeleteObjectsCommand);
+  d.ok(kDeleteObjectCommand);
   test_assert(d.sc().objects(*d.lib).size() == 3 && d.sc().selected(*d.lib).size() == 3);
   test_assert(
-      isError(d.fails(kDeleteObjectsCommand), StatusCode::FailedPrecondition, "hidden"));
+      isError(d.fails(kDeleteObjectCommand), StatusCode::FailedPrecondition, "hidden"));
   d.obj(a).flags = ObjectFlags::None;
-  d.ok(kDeleteObjectsCommand);
+  d.ok(kDeleteObjectCommand);
   test_assert(d.sc().objects(*d.lib).size() == 2);
 }
 
@@ -370,7 +372,7 @@ void testBelow()
   const mat4d wp = d.stateOf(p).world, wr = d.stateOf(rrs).world,
               wu = d.stateOf(under).world, wl = d.stateOf(plain).world;
   d.select({p});
-  PropertyBag out = d.cycle(kSetParentCommand, {{"parent", d.ptr(g)}});
+  PropertyBag out = d.cycle(kSetObjectParentCommand, {{"parent", d.ptr(g)}});
   test_assert(difference(d.stateOf(p).world, wp) < 1e-12);
   test_assert(difference(d.stateOf(plain).world, wl) < 1e-12);
   test_assert(difference(d.stateOf(rrs).world, wr) > 0.1);
@@ -378,13 +380,13 @@ void testBelow()
   test_assert(out.get("approximate")->asInt() == 2); /* rrs and under */
   d.undo();
   /* Without keepWorld they are meant to move. */
-  out = d.ok(kSetParentCommand,
+  out = d.ok(kSetObjectParentCommand,
              {{"parent", d.ptr(g)}, {"keepWorld", PropValue::ofBool(false)}});
   test_assert(out.get("approximate")->asInt() == 0);
   d.undo();
   /* A parent that isn't an object is the origin. */
   d.setParent(p, d.shapeBlock("shape", 1.0));
-  out = d.ok(kSetParentCommand, {{"parent", d.ptr(g)}});
+  out = d.ok(kSetObjectParentCommand, {{"parent", d.ptr(g)}});
   test_assert(out.get("approximate")->asInt() == 2);
   d.undo();
   d.setParent(p, BlockHandle());
@@ -398,7 +400,7 @@ void testBelow()
   d.obj(slide).setTransformType("test.slide");
   d.obj(slide).channels = ChannelBlock(1);
   d.setParent(slide, p);
-  out = d.ok(kSetParentCommand, {{"parent", d.ptr(g)}});
+  out = d.ok(kSetObjectParentCommand, {{"parent", d.ptr(g)}});
   test_assert(out.get("approximate")->asInt() == 3);
   d.undo();
   d.setParent(slide, BlockHandle());
@@ -409,7 +411,7 @@ void testBelow()
   put(d.obj(g).channels, trs::kScale, double3(1, 5, 1));
   d.setParent(rrs, BlockHandle());
   d.select({p, turned});
-  out = d.ok(kSetParentCommand, {{"parent", d.ptr(g)}});
+  out = d.ok(kSetObjectParentCommand, {{"parent", d.ptr(g)}});
   test_assert(out.get("approximate")->asInt() == 1);
   d.undo();
   d.setParent(rrs, p);
@@ -417,7 +419,7 @@ void testBelow()
   put(d.obj(g).channels, trs::kScale, double3(3, 3, 3));
   /* Those that are named with it aren't below it. */
   d.select({p, rrs});
-  out = d.ok(kSetParentCommand, {{"parent", d.ptr(g)}});
+  out = d.ok(kSetObjectParentCommand, {{"parent", d.ptr(g)}});
   test_assert(out.get("approximate")->asInt() == 0 &&
               difference(d.stateOf(rrs).world, wr) < 1e-12);
   d.undo();
@@ -425,12 +427,12 @@ void testBelow()
   /* Another type with the same matrix, but not the same rotation: a mirror is kept in the
    * scale or not. And one that keeps both. */
   d.select({p});
-  out = d.cycle(kSetTransformTypeCommand,
+  out = d.cycle(kSetObjectTransformTypeCommand,
                 {{"type", PropValue::ofString(kMatrixTransform)}});
   test_assert(out.get("approximate")->asInt() == 0);
   d.undo();
   put(d.obj(p).channels, trs::kScale, double3(2, -2, -2));
-  out = d.cycle(kSetTransformTypeCommand,
+  out = d.cycle(kSetObjectTransformTypeCommand,
                 {{"type", PropValue::ofString(kMatrixTransform)}});
   test_assert(out.get("approximate")->asInt() == 2);
   d.undo();
@@ -438,12 +440,12 @@ void testBelow()
   /* A deleted parent's children. */
   d.setParent(p, g);
   d.select({g});
-  out = d.cycle(kDeleteObjectsCommand);
+  out = d.cycle(kDeleteObjectCommand);
   test_assert(out.get("approximate")->asInt() == 2);
   d.undo();
   /* Those that go with it don't count. */
   d.select({g, rrs});
-  out = d.cycle(kDeleteObjectsCommand);
+  out = d.cycle(kDeleteObjectCommand);
   test_assert(out.get("approximate")->asInt() ==
               0); /* `under` is kept: it is a child of `rrs` */
 }
@@ -499,7 +501,7 @@ void testBelowNear()
   d.obj(below).channels.set(trs::kLocation + 1, 2.0);
   d.setParent(below, p);
   d.select({p});
-  PropertyBag out = d.cycle(kSetTransformTypeCommand,
+  PropertyBag out = d.cycle(kSetObjectTransformTypeCommand,
                             {{"type", PropValue::ofString("test.placeOnly")}});
   test_assert(out.get("approximate")->asInt() == 2); /* `below` moved by 1 in x */
   test_assert(d.stateOf(below).world[3][0] == 1.0);
@@ -599,8 +601,8 @@ void testBelowRandom()
     const BlockHandle x = all[r.below(14)], y = all[r.below(14)];
     d.select({x});
     Result<PropertyBag> out =
-        k % 2 ? d.run(kSetParentCommand, {{"parent", d.ptr(y)}})
-              : d.run(kSetTransformTypeCommand,
+        k % 2 ? d.run(kSetObjectParentCommand, {{"parent", d.ptr(y)}})
+              : d.run(kSetObjectTransformTypeCommand,
                       {{"type", PropValue::ofString(kMatrixTransform)}});
     if (!out.ok()) {
       continue;

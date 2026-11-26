@@ -38,26 +38,26 @@ class StateCache;
 /** `name`. A new scene; it doesn't become the Context's. Outputs `scene`. */
 inline constexpr const char *kNewSceneCommand = "core.scene.new";
 /** `object`, or `objects`: adds them at the end. */
-inline constexpr const char *kLinkCommand = "core.scene.link";
+inline constexpr const char *kLinkSceneCommand = "core.scene.link";
 /** Removes `objects`. Undo puts each behind the one it was behind. Outputs `count`. */
-inline constexpr const char *kUnlinkCommand = "core.scene.unlink";
+inline constexpr const char *kUnlinkSceneCommand = "core.scene.unlink";
 /** `object`, or null for none. */
-inline constexpr const char *kSetActiveCommand = "core.scene.setActive";
+inline constexpr const char *kSetSceneActiveCommand = "core.scene.setActive";
 /** `mode` (SET, ADD, REMOVE, TOGGLE, ALL, NONE), and `object` or `objects` for the first
  * four; SET with neither selects nothing. Unselectable objects are left out, and for ALL
  * hidden ones too. Outputs `skipped`: how many of those that were named were left out. */
-inline constexpr const char *kSelectCommand = "core.scene.select";
+inline constexpr const char *kSelectSceneCommand = "core.scene.select";
 /** `type` (a transform type's name), `name`, `location`, `rotation` (a quaternion) and
  * `scale` (in the world, as well as the type can), `parent`, which must be in the scene,
  * and `data`. With `select`, it is what is selected, and active. Outputs `object`. */
-inline constexpr const char *kAddObjectCommand = "core.object.add";
+inline constexpr const char *kNewObjectCommand = "core.object.new";
 /** Copies of `objects` where they are, in the scene, at the end. The copies' parents are
  * copies if those are copied too. `children`: with the members below them. `linkData`:
  * they have the same data blocks; otherwise copies of them. `select`: the copies are
  * selected instead, and the active object's copy is active. Outputs `objects` (the
  * copies, as text, in order) and `count`. To drag them, it is followed by
  * core.object.dragDelta. */
-inline constexpr const char *kDuplicateObjectsCommand = "core.object.duplicate";
+inline constexpr const char *kDuplicateObjectCommand = "core.object.duplicate";
 /** A copy of `scene` (null for the Context's), a GC root, under `name`, or its own if
  * that is empty. `objects`: with copies of its members; otherwise the copy has the same
  * ones. `linkData`: as above. It doesn't become the Context's. Outputs `scene`. */
@@ -71,12 +71,14 @@ inline constexpr const char *kDuplicateSceneCommand = "core.scene.duplicate";
 
 /** `parent` (null for none), in the scene and not below one of the objects, and
  * `keepWorld`. */
-inline constexpr const char *kSetParentCommand = "core.object.setParent";
+inline constexpr const char *kSetObjectParentCommand = "core.object.setParent";
 /** `type` (a name), and `keepWorld`. Objects that have the type stay as they are. */
-inline constexpr const char *kSetTransformTypeCommand = "core.object.setTransformType";
+inline constexpr const char *kSetObjectTransformTypeCommand =
+    "core.object.setTransformType";
 /** `mode`: an item of the TRS type's rotationMode. The rotation stays. Others than TRS
  * objects are skipped. */
-inline constexpr const char *kSetRotationModeCommand = "core.object.setRotationMode";
+inline constexpr const char *kSetObjectRotationModeCommand =
+    "core.object.setRotationMode";
 /** A TransformDelta (`kind`, `basis`, `pivot`, `vector`, `axis`, `angle`). Objects below
  * another of them move with it, and aren't changed themselves. With a `gesture`
  * (beginGesture), one that follows another of the same gesture, on the same objects, is
@@ -87,16 +89,16 @@ inline constexpr const char *kDragObjectDeltaCommand = "core.object.dragDelta";
 /** `matrices`: 16 numbers, column by column, for each of `objects`, which must be given
  * and name none twice: where they are to be, parents first. `mode`: EXACT, or CLOSEST,
  * which the output `approximate` counts. Locked channels stay. */
-inline constexpr const char *kSetWorldCommand = "core.object.setWorld";
+inline constexpr const char *kSetObjectWorldCommand = "core.object.setWorld";
 /** `flags` (HIDDEN, UNSELECTABLE), and whether they are `on`. */
-inline constexpr const char *kSetFlagsCommand = "core.object.setFlags";
+inline constexpr const char *kSetObjectFlagsCommand = "core.object.setFlags";
 /** `channels`: names with spaces between, of channels or of one component ("location.0");
  * all of them if it is empty. `on`: whether they are locked. See ObjectInfo::locks. */
-inline constexpr const char *kSetLocksCommand = "core.object.setLocks";
+inline constexpr const char *kSetObjectLocksCommand = "core.object.setLocks";
 /** `keepChildrenWorld`: first, Live children that stay are given to their nearest
  * ancestor that stays. Then one core.block.delete for all. Outputs `count` and
  * `approximate`. */
-inline constexpr const char *kDeleteObjectsCommand = "core.object.delete";
+inline constexpr const char *kDeleteObjectCommand = "core.object.delete";
 
 /** Registers the scene's types and commands, and the block commands (idempotent). */
 Status registerSceneCommands(Runtime &rt);

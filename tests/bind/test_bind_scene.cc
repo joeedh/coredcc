@@ -274,7 +274,7 @@ void testModel()
     CommandDoc d;
     must(registerPolar(d, host, model, "js.polar"));
     const BlockHandle root = d.object("root", 0, 0, 3);
-    PropertyBag out = d.cycle(kAddObjectCommand,
+    PropertyBag out = d.cycle(kNewObjectCommand,
                               {{"type", PropValue::ofString("js.polar")},
                                {"parent", d.ptr(root)},
                                {"location", PropValue::ofVec3(3, 4, 3)}});
@@ -294,20 +294,20 @@ void testModel()
     test_assert(isNear(d, a, 4, 5, 3) && model.deltas == 0);
 
     /* A place it can't be at: the caller's check, not the model's. */
-    test_assert(isError(d.fails(kAddObjectCommand,
+    test_assert(isError(d.fails(kNewObjectCommand,
                                 {{"type", PropValue::ofString("js.polar")},
                                  {"parent", d.ptr(root)},
                                  {"location", PropValue::ofVec3(3, 4, 9)}}),
                         StatusCode::FailedPrecondition));
     model.refuse = true;
-    test_assert(isError(d.fails(kAddObjectCommand,
+    test_assert(isError(d.fails(kNewObjectCommand,
                                 {{"type", PropValue::ofString("js.polar")},
                                  {"location", PropValue::ofVec3(3, 4, 0)}}),
                         StatusCode::Unsupported,
                         "not there"));
     model.refuse = false;
     model.throwSetWorld = true;
-    test_assert(isError(d.fails(kAddObjectCommand,
+    test_assert(isError(d.fails(kNewObjectCommand,
                                 {{"type", PropValue::ofString("js.polar")},
                                  {"location", PropValue::ofVec3(3, 4, 0)}}),
                         StatusCode::Internal,
@@ -333,7 +333,7 @@ void testModel()
 
     must(registerPolar(d, host, model, "js.delta", "evaluate setWorld applyDelta"));
     d.select({a});
-    d.cycle(kSetTransformTypeCommand, {{"type", PropValue::ofString("js.delta")}});
+    d.cycle(kSetObjectTransformTypeCommand, {{"type", PropValue::ofString("js.delta")}});
     d.cycle(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(-1, 0, 0)}});
     d.evaluate();
     test_assert(isNear(d, a, 3, 5, 3) && model.deltas == 1);

@@ -1,4 +1,4 @@
-/* core.object.duplicate and core.scene.duplicate, core.object.add with data and a place,
+/* core.object.duplicate and core.scene.duplicate, core.object.new with data and a place,
  * and linking several objects. */
 #include "io_doc.h"
 
@@ -92,7 +92,7 @@ void testObjects()
     }
     const int members = int(d.sc().objects(*d.lib).size());
     const std::string named_ = formatBlockIds(d.rt, {ids.data(), size_t(ids.size())});
-    PropertyBag out = d.cycle(kDuplicateObjectsCommand,
+    PropertyBag out = d.cycle(kDuplicateObjectCommand,
                               {{"objects", text(named_)},
                                {"children", PropValue::ofBool(children)},
                                {"select", PropValue::ofBool(select)}});
@@ -132,11 +132,11 @@ void testObjects()
   d.setData(a, dataBlock);
   d.setData(b, dataBlock);
   d.select({a, b});
-  PropertyBag out = d.ok(kDuplicateObjectsCommand);
+  PropertyBag out = d.ok(kDuplicateObjectCommand);
   Vector<BlockHandle> copies = handlesOf(d, out);
   test_assert(d.lib->resolveRef(d.obj(copies[0]).data.cell()) == dataBlock);
   d.undo();
-  out = d.cycle(kDuplicateObjectsCommand, {{"linkData", PropValue::ofBool(false)}});
+  out = d.cycle(kDuplicateObjectCommand, {{"linkData", PropValue::ofBool(false)}});
   copies = handlesOf(d, out);
   const BlockHandle copied = d.lib->resolveRef(d.obj(copies[0]).data.cell());
   test_assert(copied && copied != dataBlock && copies.size() == 2 &&
@@ -145,22 +145,23 @@ void testObjects()
   d.undo();
   const BlockHandle h = d.hostObject("h");
   d.select({a, h});
-  test_assert(d.fails(kDuplicateObjectsCommand).code() == StatusCode::Unsupported);
+  test_assert(d.fails(kDuplicateObjectCommand).code() == StatusCode::Unsupported);
   d.host(h).onRead = [&](ObjectInfo &) { d.rt.setStickyError(boom()); };
-  test_assert(d.fails(kDuplicateObjectsCommand, {{"linkData", PropValue::ofBool(false)}})
-                  .code() == StatusCode::Internal);
+  test_assert(
+      d.fails(kDuplicateObjectCommand, {{"linkData", PropValue::ofBool(false)}}).code() ==
+      StatusCode::Internal);
   d.host(h).onRead = nullptr;
   d.select({});
-  test_assert(d.fails(kDuplicateObjectsCommand).code() == StatusCode::FailedPrecondition);
+  test_assert(d.fails(kDuplicateObjectCommand).code() == StatusCode::FailedPrecondition);
   /* A member that is no object. */
   const BlockHandle odd = d.shapeBlock("odd", 1.0);
   must(d.sc().add(*d.lib, odd));
   d.select({a});
-  d.cycle(kDuplicateObjectsCommand, {{"children", PropValue::ofBool(true)}});
+  d.cycle(kDuplicateObjectCommand, {{"children", PropValue::ofBool(true)}});
 
   /* Then a drag, as two steps. */
   d.select({a});
-  d.ok(kDuplicateObjectsCommand);
+  d.ok(kDuplicateObjectCommand);
   d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(5, 0, 0)}});
   test_assert(d.obj(a).channels.get(0) == 1.0 &&
               d.obj(d.sc().selected(*d.lib)[0]).channels.get(0) == 6.0);
@@ -229,7 +230,7 @@ void testAdd()
   d.select({p});
   must(d.lib->writeRef(d.sc().activeCell(), d.idOf(p)));
   const double half = std::sqrt(0.5);
-  PropertyBag out = d.cycle(kAddObjectCommand,
+  PropertyBag out = d.cycle(kNewObjectCommand,
                             {{"location", PropValue::ofVec3(1, 2, 3)},
                              {"rotation", PropValue::ofQuat(0, 0, 3 * half, 3 * half)},
                              {"scale", PropValue::ofVec3(2, 3, 4)},
@@ -261,18 +262,18 @@ void testAdd()
               d.sc().active(*d.lib) == p);
   d.redo();
   test_assert(heard == 2);
-  d.ok(kSelectCommand, {{"objects", text(idsOf(d, {p}))}});
+  d.ok(kSelectSceneCommand, {{"objects", text(idsOf(d, {p}))}});
   test_assert(heard == 3);
   d.undo();
   test_assert(heard == 4);
   test_assert(d.sc().selected(*d.lib)[0] == h && d.sc().active(*d.lib) == h);
-  out = d.ok(kAddObjectCommand);
+  out = d.ok(kNewObjectCommand);
   test_assert(d.sc().selected(*d.lib)[0] == h && d.sc().active(*d.lib) == h);
-  test_assert(isError(d.fails(kAddObjectCommand, {{"data", d.ptr(p)}}),
+  test_assert(isError(d.fails(kNewObjectCommand, {{"data", d.ptr(p)}}),
                       StatusCode::FailedPrecondition,
                       "can't be an object's data"));
   /* A rotation that isn't one. */
-  out = d.ok(kAddObjectCommand, {{"rotation", PropValue::ofQuat(0, 0, 0, 0)}});
+  out = d.ok(kNewObjectCommand, {{"rotation", PropValue::ofQuat(0, 0, 0, 0)}});
   mat4d one;
   one.identity();
   test_assert(difference(d.stateOf(d.blockOut(out, "object")).world, one) == 0.0);
@@ -286,23 +287,23 @@ void testLink()
   for (BlockHandle h : {a, b}) {
     d.lib->setFlag(h, BlockFlags::FakeUser, true);
   }
-  d.cycle(kLinkCommand, {{"objects", text(idsOf(d, {b, a, b}))}});
+  d.cycle(kLinkSceneCommand, {{"objects", text(idsOf(d, {b, a, b}))}});
   Vector<BlockHandle> now = d.sc().objects(*d.lib);
   test_assert(now.size() == 3 && now[1] == b && now[2] == a);
   d.undo();
   test_assert(d.sc().objects(*d.lib).size() == 1);
-  test_assert(d.fails(kLinkCommand, {{"objects", text(idsOf(d, {a, c}))}}).code() ==
+  test_assert(d.fails(kLinkSceneCommand, {{"objects", text(idsOf(d, {a, c}))}}).code() ==
               StatusCode::AlreadyExists);
-  test_assert(isError(d.fails(kLinkCommand, {{"objects", text(idsOf(d, {a, s}))}}),
+  test_assert(isError(d.fails(kLinkSceneCommand, {{"objects", text(idsOf(d, {a, s}))}}),
                       StatusCode::FailedPrecondition,
                       "'s' isn't Transformable"));
-  test_assert(d.fails(kLinkCommand, {{"objects", text("")}}).code() ==
+  test_assert(d.fails(kLinkSceneCommand, {{"objects", text("")}}).code() ==
               StatusCode::FailedPrecondition);
-  test_assert(d.fails(kLinkCommand).code() == StatusCode::FailedPrecondition);
+  test_assert(d.fails(kLinkSceneCommand).code() == StatusCode::FailedPrecondition);
   test_assert(
-      d.fails(kLinkCommand, {{"objects", text(idsOf(d, {a}))}, {"object", d.ptr(b)}})
+      d.fails(kLinkSceneCommand, {{"objects", text(idsOf(d, {a}))}, {"object", d.ptr(b)}})
           .code() == StatusCode::InvalidArgument);
-  d.cycle(kLinkCommand, {{"object", d.ptr(a)}});
+  d.cycle(kLinkSceneCommand, {{"object", d.ptr(a)}});
   test_assert(d.sc().contains(*d.lib, a));
 }
 

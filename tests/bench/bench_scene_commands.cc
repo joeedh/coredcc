@@ -139,16 +139,16 @@ void members(int count)
 {
   Doc d(count);
   for (int n : {100, 1000, count / 10}) {
-    cycle(d, "unlink " + std::to_string(n), kUnlinkCommand, {{"objects", d.ids(n)}});
+    cycle(d, "unlink " + std::to_string(n), kUnlinkSceneCommand, {{"objects", d.ids(n)}});
   }
   cycle(d,
         "unlink " + std::to_string(count / 10) + ", every 10th",
-        kUnlinkCommand,
+        kUnlinkSceneCommand,
         {{"objects", d.ids(count / 10, 10)}});
   const int adds = 200;
-  timed("core.object.add, " + std::to_string(adds) + " times", [&] {
+  timed("core.object.new, " + std::to_string(adds) + " times", [&] {
     for (int i = 0; i < adds; i++) {
-      d.run(kAddObjectCommand);
+      d.run(kNewObjectCommand);
     }
   });
   timed("  undo of all", [&] {
@@ -162,7 +162,7 @@ void members(int count)
     }
   });
   timed("select all",
-        [&] { d.run(kSelectCommand, {{"mode", PropValue::ofEnum(kAll)}}); });
+        [&] { d.run(kSelectSceneCommand, {{"mode", PropValue::ofEnum(kAll)}}); });
 }
 
 void history(int count)
@@ -170,13 +170,13 @@ void history(int count)
   for (int n : {100, 200}) {
     Doc d(count);
     for (int i = 0; i < n; i++) {
-      d.run(kAddObjectCommand);
+      d.run(kNewObjectCommand);
     }
     for (int i = 0; i < n; i++) {
       d.undo();
     }
     timed("a command after undoing " + std::to_string(n) + " adds",
-          [&] { d.run(kSelectCommand, {{"mode", PropValue::ofEnum(kNone)}}); });
+          [&] { d.run(kSelectSceneCommand, {{"mode", PropValue::ofEnum(kNone)}}); });
   }
 }
 
@@ -190,15 +190,15 @@ void deleting(int count)
   }
   for (int n : {count / 100, count / 10}) {
     const std::string name = "delete " + std::to_string(n);
-    cycle(d, name, kDeleteObjectsCommand, {{"objects", d.ids(n)}});
-    cycle(d, name + " roots of 4", kDeleteObjectsCommand, {{"objects", d.ids(n, 4)}});
+    cycle(d, name, kDeleteObjectCommand, {{"objects", d.ids(n)}});
+    cycle(d, name + " roots of 4", kDeleteObjectCommand, {{"objects", d.ids(n, 4)}});
   }
 }
 
 void transforms(int count)
 {
   Doc d(count);
-  d.run(kSelectCommand, {{"mode", PropValue::ofEnum(kAll)}});
+  d.run(kSelectSceneCommand, {{"mode", PropValue::ofEnum(kAll)}});
   d.evaluate();
   cycle(d, "applyDelta, all", kApplyObjectDeltaCommand, {{"vector", kStep}});
   const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
@@ -220,15 +220,15 @@ void transforms(int count)
   ref.type = StructId::of(kObjectType);
   cycle(d,
         "setParent, a tenth to one",
-        kSetParentCommand,
+        kSetObjectParentCommand,
         {{"parent", PropValue::ofPointer(ref)}, {"objects", d.ids(count / 10)}});
   cycle(d,
         "setTransformType, all",
-        kSetTransformTypeCommand,
+        kSetObjectTransformTypeCommand,
         {{"type", PropValue::ofString(kMatrixTransform)}});
   cycle(d,
         "setRotationMode, all",
-        kSetRotationModeCommand,
+        kSetObjectRotationModeCommand,
         {{"mode", PropValue::ofEnum(2)}});
 }
 
@@ -242,14 +242,14 @@ void chains(int longest)
     }
     printf(" %d\n", n);
     timed("evaluate", [&] { d.evaluate(); });
-    d.run(kSelectCommand, {{"mode", PropValue::ofEnum(kAll)}});
+    d.run(kSelectSceneCommand, {{"mode", PropValue::ofEnum(kAll)}});
     cycle(d, "applyDelta, all", kApplyObjectDeltaCommand, {{"vector", kStep}});
-    cycle(d, "setParent to none, all", kSetParentCommand, {});
+    cycle(d, "setParent to none, all", kSetObjectParentCommand, {});
     cycle(d,
           "setTransformType, all",
-          kSetTransformTypeCommand,
+          kSetObjectTransformTypeCommand,
           {{"type", PropValue::ofString(kMatrixTransform)}});
-    cycle(d, "delete every 2nd", kDeleteObjectsCommand, {{"objects", d.ids(n / 2, 2)}});
+    cycle(d, "delete every 2nd", kDeleteObjectCommand, {{"objects", d.ids(n / 2, 2)}});
     timed("computeState of each", [&] {
       for (BlockHandle h : d.objects) {
         must(computeState(*d.lib, h, 0.0).status());

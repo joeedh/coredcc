@@ -18,7 +18,7 @@ namespace coredcc {
 
 inline constexpr const char *kDuplicateBlockCommand = "core.block.duplicate";
 /** The Private command behind appendUndo. */
-inline constexpr const char *kAppendCommand = "core.library.append";
+inline constexpr const char *kAppendLibraryCommand = "core.library.append";
 
 /**
  * appendLibrary as an undo step, or as a sub-command inside a command's exec. Undo leaves

@@ -75,14 +75,15 @@ struct Five : CommandDoc {
 std::vector<Case> cases()
 {
   return {
-      {kUnlinkCommand, {}},
-      {kSetParentCommand, {}},
-      {kSetParentCommand, {{"keepWorld", PropValue::ofBool(false)}}},
-      {kSetTransformTypeCommand, {{"type", text(kMatrixTransform)}}},
-      {kSetRotationModeCommand, {{"mode", PropValue::ofEnum(trs::kQuaternionMode)}}},
+      {kUnlinkSceneCommand, {}},
+      {kSetObjectParentCommand, {}},
+      {kSetObjectParentCommand, {{"keepWorld", PropValue::ofBool(false)}}},
+      {kSetObjectTransformTypeCommand, {{"type", text(kMatrixTransform)}}},
+      {kSetObjectRotationModeCommand,
+       {{"mode", PropValue::ofEnum(trs::kQuaternionMode)}}},
       {kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(1, 2, 3)}}},
-      {kDeleteObjectsCommand, {}},
-      {kDeleteObjectsCommand, {{"keepChildrenWorld", PropValue::ofBool(false)}}},
+      {kDeleteObjectCommand, {}},
+      {kDeleteObjectCommand, {{"keepChildrenWorld", PropValue::ofBool(false)}}},
   };
 }
 
@@ -150,8 +151,8 @@ void testSameAsSelected()
 void testRefusals()
 {
   std::vector<Case> all = cases();
-  all.push_back({kSelectCommand, {{"mode", PropValue::ofEnum(0)}}});
-  all.push_back({kSelectCommand, {{"mode", PropValue::ofEnum(3)}}});
+  all.push_back({kSelectSceneCommand, {{"mode", PropValue::ofEnum(0)}}});
+  all.push_back({kSelectSceneCommand, {{"mode", PropValue::ofEnum(3)}}});
   for (const Case &k : all) {
     Five d;
     const BlockHandle outside = d.loose("outside"), shape = d.shapeBlock("shape", 1.0),
@@ -190,7 +191,7 @@ void testRefusals()
       test_assert(isError(s, b.code, b.message));
       test_assert(d.describe() == before && d.history->size() == steps);
     }
-    if (strcmp(k.command, kSelectCommand) != 0) {
+    if (strcmp(k.command, kSelectSceneCommand) != 0) {
       const std::string none;
       test_assert(isError(
           d.runCase(k, &none).status(), StatusCode::FailedPrecondition, "objects"));
@@ -203,7 +204,8 @@ void testSelect()
   Five d;
   enum { kSet, kAdd, kRemove, kToggle, kAll, kNone };
   const auto select = [&](int m, const std::string &objects) {
-    d.cycle(kSelectCommand, {{"mode", PropValue::ofEnum(m)}, {"objects", text(objects)}});
+    d.cycle(kSelectSceneCommand,
+            {{"mode", PropValue::ofEnum(m)}, {"objects", text(objects)}});
     return selected(d);
   };
   test_assert(select(kSet, ids(d, {d.e, d.a, d.e})) == "ea");
@@ -216,15 +218,15 @@ void testSelect()
 
   d.obj(d.b).flags = ObjectFlags::Unselectable;
   test_assert(select(kSet, ids(d, {d.a, d.b})) == "a");
-  const PropertyBag selectOut = d.ok(kSelectCommand,
+  const PropertyBag selectOut = d.ok(kSelectSceneCommand,
                                      {{"mode", PropValue::ofEnum(kSet)},
                                       {"objects", text(ids(d, {d.b, d.a, d.b, d.c}))}});
   test_assert(selectOut.get("skipped")->asInt() == 1);
   test_assert(select(kRemove, ids(d, {d.a, d.b, d.c})).empty());
-  test_assert(isError(
-      d.fails(kSelectCommand, {{"object", d.ptr(d.a)}, {"objects", text(ids(d, {d.a}))}}),
-      StatusCode::InvalidArgument,
-      "both"));
+  test_assert(isError(d.fails(kSelectSceneCommand,
+                              {{"object", d.ptr(d.a)}, {"objects", text(ids(d, {d.a}))}}),
+                      StatusCode::InvalidArgument,
+                      "both"));
 }
 
 /* What the gesture command gets at its start, and parents named in the same list. */
@@ -247,11 +249,12 @@ void testOthers()
   test_assert(d.isAt(d.a, 1) && d.isAt(d.e, 4));
 
   test_assert(
-      isError(d.fails(kSetParentCommand,
+      isError(d.fails(kSetObjectParentCommand,
                       {{"parent", d.ptr(d.c)}, {"objects", text(ids(d, {d.e, d.a}))}}),
               StatusCode::FailedPrecondition,
               "'c': is below one of the objects"));
-  d.cycle(kSetParentCommand, {{"parent", d.ptr(d.c)}, {"objects", text(ids(d, {d.e}))}});
+  d.cycle(kSetObjectParentCommand,
+          {{"parent", d.ptr(d.c)}, {"objects", text(ids(d, {d.e}))}});
   test_assert(d.lib->resolveRef(d.obj(d.e).parent.cell()) == d.c && selected(d) == "f");
 
   /* As an invocation's text. */

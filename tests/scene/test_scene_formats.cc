@@ -31,7 +31,7 @@ void testLooseParents()
   d.setParent(c, p);
   d.setParent(p, g);
   d.select({p});
-  d.ok(kUnlinkCommand);
+  d.ok(kUnlinkSceneCommand);
   d.evaluate();
   test_assert(d.isAt(c, 111.0));
   {
@@ -57,7 +57,7 @@ void testLooseParents()
   const BlockHandle copy = d.lib->find(ids->find(d.idOf(c)));
   must(d.sc().add(*d.lib, copy));
   d.select({c});
-  d.ok(kDeleteObjectsCommand);
+  d.ok(kDeleteObjectCommand);
   d.history->clear();
   must(d.lib->collect().status());
   test_assert(!d.lib->get(c) && d.lib->get(p) && xOf(*d.lib, copy) == 111.0);

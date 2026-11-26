@@ -73,15 +73,17 @@ void testLink()
   CommandDoc d;
   d.object("a");
   const BlockHandle b = d.loose("b"), shape = d.shapeBlock("shape", 1.0);
-  d.cycle(kLinkCommand, {{"object", d.ptr(b)}});
+  d.cycle(kLinkSceneCommand, {{"object", d.ptr(b)}});
   test_assert(members(d) == "ab");
-  test_assert(isError(
-      d.fails(kLinkCommand, {{"object", d.ptr(b)}}), StatusCode::AlreadyExists, "'b'"));
-  test_assert(isError(d.fails(kLinkCommand, {{"object", d.ptr(shape)}}),
+  test_assert(isError(d.fails(kLinkSceneCommand, {{"object", d.ptr(b)}}),
+                      StatusCode::AlreadyExists,
+                      "'b'"));
+  test_assert(isError(d.fails(kLinkSceneCommand, {{"object", d.ptr(shape)}}),
                       StatusCode::FailedPrecondition));
-  test_assert(isError(d.fails(kLinkCommand), StatusCode::FailedPrecondition, "object"));
+  test_assert(
+      isError(d.fails(kLinkSceneCommand), StatusCode::FailedPrecondition, "object"));
   must(d.lib->markDeleted(shape));
-  test_assert(isError(d.fails(kLinkCommand, {{"object", d.ptr(shape)}}),
+  test_assert(isError(d.fails(kLinkSceneCommand, {{"object", d.ptr(shape)}}),
                       StatusCode::FailedPrecondition,
                       "no such block"));
   must(d.lib->restoreFromHistory(shape));
@@ -99,16 +101,16 @@ void testLink()
 
   /* Without a scene. */
   d.ctx->setScene(BlockHandle());
-  for (const char *c : {kLinkCommand,
-                        kUnlinkCommand,
-                        kSetActiveCommand,
-                        kSelectCommand,
-                        kAddObjectCommand,
-                        kSetParentCommand,
-                        kSetTransformTypeCommand,
-                        kSetRotationModeCommand,
+  for (const char *c : {kLinkSceneCommand,
+                        kUnlinkSceneCommand,
+                        kSetSceneActiveCommand,
+                        kSelectSceneCommand,
+                        kNewObjectCommand,
+                        kSetObjectParentCommand,
+                        kSetObjectTransformTypeCommand,
+                        kSetObjectRotationModeCommand,
                         kApplyObjectDeltaCommand,
-                        kDeleteObjectsCommand})
+                        kDeleteObjectCommand})
   {
     Result<PropertyBag> r = d.run(c);
     test_assert(isError(r.status(), StatusCode::FailedPrecondition, "no scene"));
@@ -121,7 +123,7 @@ void testUnlink()
   const BlockHandle a = d.object("a"), b = d.object("b"), c = d.object("c"),
                     e = d.object("e"), f = d.object("f");
   test_assert(
-      isError(d.fails(kUnlinkCommand), StatusCode::FailedPrecondition, "selected"));
+      isError(d.fails(kUnlinkSceneCommand), StatusCode::FailedPrecondition, "selected"));
   for (std::initializer_list<BlockHandle> set : {std::initializer_list<BlockHandle>{a},
                                                  {f},
                                                  {c},
@@ -132,7 +134,7 @@ void testUnlink()
                                                  {a, b, c, e, f}})
   {
     d.select(set);
-    PropertyBag out = d.cycle(kUnlinkCommand);
+    PropertyBag out = d.cycle(kUnlinkSceneCommand);
     test_assert(out.get("count")->asInt() == int64_t(set.size()));
     test_assert(d.sc().objects(*d.lib).size() == 5 - set.size() && selected(d).empty());
     d.undo();
@@ -141,27 +143,27 @@ void testUnlink()
 
   /* Others moved meanwhile: behind the one it was behind, else the nearest place. */
   d.select({c});
-  d.ok(kUnlinkCommand);
+  d.ok(kUnlinkSceneCommand);
   must(d.sc().remove(*d.lib, d.idOf(a)).status());
   must(d.sc().add(*d.lib, a));
   test_assert(members(d) == "befa");
   d.undo();
   test_assert(members(d) == "bcefa");
   d.select({c});
-  d.ok(kUnlinkCommand);
+  d.ok(kUnlinkSceneCommand);
   must(d.sc().remove(*d.lib, d.idOf(b)).status());
   d.undo();
   test_assert(members(d) == "ecfa");
 
   /* The history keeps what the scene doesn't. */
   d.select({c});
-  d.ok(kUnlinkCommand);
+  d.ok(kUnlinkSceneCommand);
   must(d.lib->collect().status());
   test_assert(d.lib->get(c) && !d.lib->get(b));
   d.undo();
   test_assert(d.sc().contains(*d.lib, c));
   d.select({c});
-  d.ok(kUnlinkCommand);
+  d.ok(kUnlinkSceneCommand);
   d.history->clear();
   must(d.lib->collect().status());
   test_assert(!d.lib->get(c));
@@ -169,7 +171,7 @@ void testUnlink()
   /* An active object that is unlinked isn't active, and is again when it comes back. */
   must(d.lib->writeRef(d.sc().activeCell(), d.idOf(a)));
   d.select({a});
-  d.ok(kUnlinkCommand);
+  d.ok(kUnlinkSceneCommand);
   test_assert(!d.sc().active(*d.lib));
   d.undo();
   test_assert(d.sc().active(*d.lib) == a && selected(d) == "a");
@@ -188,14 +190,14 @@ void testPrune()
   d.evaluate();
   test_assert(d.sc().cells().size() == 3);
   const BlockHandle e = d.loose("e");
-  d.ok(kLinkCommand, {{"object", d.ptr(e)}});
+  d.ok(kLinkSceneCommand, {{"object", d.ptr(e)}});
   test_assert(d.sc().cells().size() == 3 && members(d) == "bce");
   lose(b);
-  d.ok(kAddObjectCommand, {{"name", text("f")}});
+  d.ok(kNewObjectCommand, {{"name", text("f")}});
   test_assert(d.sc().cells().size() == 3 && members(d) == "cef");
   d.select({c});
   lose(e);
-  d.ok(kUnlinkCommand);
+  d.ok(kUnlinkSceneCommand);
   test_assert(d.sc().cells().size() == 1 && members(d) == "f");
   d.undo();
   test_assert(members(d) == "cf");
@@ -205,12 +207,12 @@ void testActive()
 {
   CommandDoc d;
   const BlockHandle a = d.object("a"), b = d.object("b"), out = d.loose("out");
-  d.cycle(kSetActiveCommand, {{"object", d.ptr(a)}});
+  d.cycle(kSetSceneActiveCommand, {{"object", d.ptr(a)}});
   test_assert(d.sc().active(*d.lib) == a);
-  d.cycle(kSetActiveCommand, {{"object", d.ptr(b)}});
-  d.cycle(kSetActiveCommand);
+  d.cycle(kSetSceneActiveCommand, {{"object", d.ptr(b)}});
+  d.cycle(kSetSceneActiveCommand);
   test_assert(!d.sc().active(*d.lib));
-  test_assert(isError(d.fails(kSetActiveCommand, {{"object", d.ptr(out)}}),
+  test_assert(isError(d.fails(kSetSceneActiveCommand, {{"object", d.ptr(out)}}),
                       StatusCode::FailedPrecondition,
                       "'out'"));
   d.undo();
@@ -224,7 +226,7 @@ void testActive()
     if (path) {
       must(setValueUndo(*d.ctx, "scene.objects.active", d.ptr(a)));
     } else {
-      d.ok(kSetActiveCommand, {{"object", d.ptr(a)}});
+      d.ok(kSetSceneActiveCommand, {{"object", d.ptr(a)}});
     }
     test_assert(d.sc().active(*d.lib) == a);
     d.undo();
@@ -236,7 +238,7 @@ void testActive()
     if (path) {
       must(setValueUndo(*d.ctx, "scene.activeObject", d.ptr(a)));
     } else {
-      d.ok(kSetActiveCommand, {{"object", d.ptr(a)}});
+      d.ok(kSetSceneActiveCommand, {{"object", d.ptr(a)}});
     }
     d.undo();
     must(d.lib->onHostRestored(d.idOf(b)));
@@ -249,7 +251,7 @@ void testActive()
   Result<ScopedConnection> w = bus.watch(
       *d.ctx, "scene.activeObject", [&](const PropValue &, const Status &) { fired++; });
   must(w.status());
-  d.ok(kSetActiveCommand, {{"object", d.ptr(a)}});
+  d.ok(kSetSceneActiveCommand, {{"object", d.ptr(a)}});
   bus.flush();
   test_assert(fired == 1);
   d.undo();
@@ -263,7 +265,7 @@ void testSelect()
   const BlockHandle a = d.object("a"), b = d.object("b"), c = d.object("c"),
                     out = d.loose("out");
   const auto select = [&](int m, BlockHandle h = BlockHandle()) {
-    d.cycle(kSelectCommand, {{"mode", mode(m)}, {"object", d.ptr(h)}});
+    d.cycle(kSelectSceneCommand, {{"mode", mode(m)}, {"object", d.ptr(h)}});
     return selected(d);
   };
   test_assert(select(kSet, b) == "b");
@@ -279,7 +281,7 @@ void testSelect()
   test_assert(select(kAll) == "c" && select(kAdd, a) == "ca");
   for (int m : {int(kSet), int(kAdd), int(kToggle)}) {
     test_assert(
-        isError(d.fails(kSelectCommand, {{"mode", mode(m)}, {"object", d.ptr(out)}}),
+        isError(d.fails(kSelectSceneCommand, {{"mode", mode(m)}, {"object", d.ptr(out)}}),
                 StatusCode::FailedPrecondition,
                 "'out': isn't in the scene"));
   }
@@ -292,7 +294,7 @@ void testSelect()
   test_assert(select(kRemove, a) == "c" && select(kSet, a).empty());
   d.obj(a).flags = ObjectFlags::Hidden;
   test_assert(select(kSet, c) == "c" && select(kAdd, a) == "ca");
-  test_assert(isError(d.fails(kSelectCommand, {{"mode", mode(kAdd)}}),
+  test_assert(isError(d.fails(kSelectSceneCommand, {{"mode", mode(kAdd)}}),
                       StatusCode::FailedPrecondition));
 
   /* What was selected and is deleted comes back with undo, also after another selection.
@@ -310,7 +312,7 @@ void testAdd()
 {
   CommandDoc d;
   PropertyBag out = d.cycle(
-      kAddObjectCommand, {{"name", text("a")}, {"location", PropValue::ofVec3(1, 2, 3)}});
+      kNewObjectCommand, {{"name", text("a")}, {"location", PropValue::ofVec3(1, 2, 3)}});
   const BlockHandle a = d.blockOut(out, "object");
   d.evaluate();
   test_assert(members(d) == "a" && d.isAt(a, 1, 2, 3));
@@ -319,7 +321,7 @@ void testAdd()
   /* In the world, under a parent. */
   put(d.obj(a).channels, trs::kScale, double3(2, 4, 8));
   for (const char *type : {kTrsTransform, kFbxTransform, kMatrixTransform}) {
-    out = d.cycle(kAddObjectCommand,
+    out = d.cycle(kNewObjectCommand,
                   {{"type", text(type)},
                    {"name", text("b")},
                    {"location", PropValue::ofVec3(5, 6, 7)},
@@ -333,14 +335,14 @@ void testAdd()
 
   /* Refusals leave nothing behind. */
   const BlockHandle outside = d.loose("outside");
-  test_assert(isError(d.fails(kAddObjectCommand, {{"type", text("test.unknown")}}),
+  test_assert(isError(d.fails(kNewObjectCommand, {{"type", text("test.unknown")}}),
                       StatusCode::NotFound,
                       "test.unknown"));
-  test_assert(isError(d.fails(kAddObjectCommand, {{"parent", d.ptr(outside)}}),
+  test_assert(isError(d.fails(kNewObjectCommand, {{"parent", d.ptr(outside)}}),
                       StatusCode::FailedPrecondition,
                       "'outside'"));
   put(d.obj(a).channels, trs::kScale, double3(1, 0, 1));
-  test_assert(isError(d.fails(kAddObjectCommand, {{"parent", d.ptr(a)}}),
+  test_assert(isError(d.fails(kNewObjectCommand, {{"parent", d.ptr(a)}}),
                       StatusCode::FailedPrecondition));
   put(d.obj(a).channels, trs::kScale, double3(1, 1, 1));
 
@@ -348,11 +350,11 @@ void testAdd()
   CommandDoc e;
   const BlockHandle child = e.object("child", 4.0);
   const BlockHandle p =
-      e.blockOut(e.ok(kAddObjectCommand,
+      e.blockOut(e.ok(kNewObjectCommand,
                       {{"name", text("p")}, {"location", PropValue::ofVec3(1, 0, 0)}}),
                  "object");
   e.select({child});
-  e.ok(kSetParentCommand, {{"parent", e.ptr(p)}});
+  e.ok(kSetObjectParentCommand, {{"parent", e.ptr(p)}});
   e.evaluate();
   test_assert(e.isAt(child, 4) && e.obj(child).channels.get(trs::kLocation) == 3.0);
   e.undo();

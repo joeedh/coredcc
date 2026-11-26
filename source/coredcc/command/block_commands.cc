@@ -443,8 +443,8 @@ Status registerBlockCommands(Runtime &rt)
       return d.status();
     }
   }
-  if (!reg.find(kPurgeCommand)) {
-    CommandDef purge(kPurgeCommand);
+  if (!reg.find(kPurgeBlockCommand)) {
+    CommandDef purge(kPurgeBlockCommand);
     purge.uiName("Purge Unused")
         .flags(CommandFlags::NoUndo)
         .output(PropertyDef::intProp("count"));

@@ -17,7 +17,7 @@
 namespace coredcc {
 
 inline constexpr const char *kRenameBlockCommand = "core.block.rename";
-inline constexpr const char *kUnlinkRefCommand = "core.block.unlinkRef";
+inline constexpr const char *kUnlinkBlockRefCommand = "core.block.unlinkRef";
 
 namespace detail {
 /** The block a command's `block` input points into. FailedPrecondition when there is no

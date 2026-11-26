@@ -339,10 +339,10 @@ static void test_memory()
   test_assert(w.lib.attachOpaque(*h, o).ok());
   c.history.clear();
   c.history.setMemoryBudget(1 << 30);
-  PropertyBag in = w.rt.ext<CommandRegistry>().find(kDetachCommand)->newInputs();
+  PropertyBag in = w.rt.ext<CommandRegistry>().find(kDetachBlockCommand)->newInputs();
   test_assert(in.set("block", pointer(cid(50))).ok() &&
               in.set("type", PropValue::ofString("x.Other")).ok());
-  test_assert(c.ex.run(c.ctx, kDetachCommand, std::move(in)).ok() && used() == 3);
+  test_assert(c.ex.run(c.ctx, kDetachBlockCommand, std::move(in)).ok() && used() == 3);
   test_assert(c.ex.undo(c.ctx).ok() && used() == 0);
 }
 
@@ -602,10 +602,10 @@ static void test_detach_opaque()
   IoWorld &w = c.w;
   test_assert(w.load(bytes).ok());
   const auto detach = [&](const char *type) {
-    PropertyBag in = w.rt.ext<CommandRegistry>().find(kDetachCommand)->newInputs();
+    PropertyBag in = w.rt.ext<CommandRegistry>().find(kDetachBlockCommand)->newInputs();
     test_assert(in.set("block", pointer(cid(1))).ok() &&
                 in.set("type", PropValue::ofString(type)).ok());
-    return c.ex.run(c.ctx, kDetachCommand, std::move(in)).status();
+    return c.ex.run(c.ctx, kDetachBlockCommand, std::move(in)).status();
   };
   test_assert(detach("test.Other").code() == StatusCode::NotFound);
   test_assert(detach("").code() == StatusCode::NotFound);
@@ -650,14 +650,14 @@ static void test_unlink_after_resolve()
   CommandWorld c(k);
   IoWorld &w = c.w;
   test_assert(w.load(bytes).ok());
-  PropertyBag in = w.rt.ext<CommandRegistry>().find(kUnlinkRefCommand)->newInputs();
+  PropertyBag in = w.rt.ext<CommandRegistry>().find(kUnlinkBlockRefCommand)->newInputs();
   test_assert(in.set("block", pointer(cid(1))).ok() &&
               in.set("index", PropValue::ofInt(1)).ok());
   int heard = 0;
   ScopedConnection l = w.rt.ext<ChangeBus>().addListener([&](const OwnerKey *owner) {
     heard += owner && *owner == OwnerKey::ofBlock(cid(1)) ? 1 : 0;
   });
-  test_assert(c.ex.run(c.ctx, kUnlinkRefCommand, std::move(in)).ok() && heard == 1);
+  test_assert(c.ex.run(c.ctx, kUnlinkBlockRefCommand, std::move(in)).ok() && heard == 1);
   test_assert(c.ex.undo(c.ctx).ok() && heard == 2 && c.ex.redo(c.ctx).ok() && heard == 3);
   registerDoc(w.rt, w.docs);
   test_assert(resolvePlaceholders(c.ctx).ok() &&

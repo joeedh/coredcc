@@ -314,12 +314,12 @@ Status attachUndo(Context &ctx, BlockHandle h, TypeId type, void *data)
                            "attachUndo: the Context has no executor");
     }
     CDCC_TRY(detail::registerAttachmentCommands(rt));
-    const CommandDef *def = rt.ext<CommandRegistry>().find(kAttachDataCommand);
+    const CommandDef *def = rt.ext<CommandRegistry>().find(kAttachBlockDataCommand);
     AttachData *impl = litestl::alloc::New<AttachData>("coredcc::AttachDataCommand");
     impl->edit.held = held;
     impl->target = h;
     Result<Owned<Command>> cmd =
-        own<Command>(rt, std::string(kAttachDataCommand) + "#impl", impl);
+        own<Command>(rt, std::string(kAttachBlockDataCommand) + "#impl", impl);
     if (!cmd.ok()) {
       return cmd.status();
     }
@@ -345,9 +345,11 @@ Status detail::registerAttachmentCommands(Runtime &rt)
         .input(PropertyDef::stringProp("type"));
     return d;
   };
-  CDCC_TRY(addCommandOnce<EditCommand<true>>(rt, def(kAttachCommand, "Attach Data")));
-  CDCC_TRY(addCommandOnce<EditCommand<false>>(rt, def(kDetachCommand, "Detach Data")));
-  CommandDef data(kAttachDataCommand);
+  CDCC_TRY(
+      addCommandOnce<EditCommand<true>>(rt, def(kAttachBlockCommand, "Attach Data")));
+  CDCC_TRY(
+      addCommandOnce<EditCommand<false>>(rt, def(kDetachBlockCommand, "Detach Data")));
+  CommandDef data(kAttachBlockDataCommand);
   data.uiName("Attach Data").flags(CommandFlags::Private);
   return addCommandOnce<AttachData>(rt, std::move(data));
 }

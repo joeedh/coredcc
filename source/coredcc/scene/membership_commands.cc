@@ -852,23 +852,23 @@ Status detail::registerMembershipCommands(Runtime &rt)
       .output(blockInputDef("scene"));
   CDCC_TRY(addCommandOnce<NewScene>(rt, std::move(scene)));
 
-  CommandDef link(kLinkCommand);
+  CommandDef link(kLinkSceneCommand);
   link.uiName("Link to Scene")
       .input(blockInputDef("object"))
       .input(detail::objectsInput());
   CDCC_TRY(addCommandOnce<Link>(rt, std::move(link)));
 
-  CommandDef unlink(kUnlinkCommand);
+  CommandDef unlink(kUnlinkSceneCommand);
   unlink.uiName("Unlink from Scene")
       .input(detail::objectsInput())
       .output(PropertyDef::intProp("count"));
   CDCC_TRY(addCommandOnce<Unlink>(rt, std::move(unlink)));
 
-  CommandDef active(kSetActiveCommand);
+  CommandDef active(kSetSceneActiveCommand);
   active.uiName("Set Active Object").input(blockInputDef("object"));
   CDCC_TRY(addCommandOnce<SetActive>(rt, std::move(active)));
 
-  CommandDef select(kSelectCommand);
+  CommandDef select(kSelectSceneCommand);
   select.uiName("Select")
       .input(PropertyDef::enumProp("mode")
                  .item("SET", int64_t(SelectMode::Set))
@@ -882,7 +882,7 @@ Status detail::registerMembershipCommands(Runtime &rt)
       .output(PropertyDef::intProp("skipped"));
   CDCC_TRY(addCommandOnce<Select>(rt, std::move(select)));
 
-  CommandDef add(kAddObjectCommand);
+  CommandDef add(kNewObjectCommand);
   add.uiName("Add Object")
       .input(stringInput("type", kTrsTransform))
       .input(stringInput("name", "Object"))

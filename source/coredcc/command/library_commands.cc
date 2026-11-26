@@ -193,14 +193,14 @@ appendUndo(Context &ctx, std::span<const uint8_t> bytes, const AppendOptions &op
                          "appendUndo: the Context has no executor");
   }
   CDCC_TRY(detail::registerLibraryCommands(rt));
-  const CommandDef *def = rt.ext<CommandRegistry>().find(kAppendCommand);
+  const CommandDef *def = rt.ext<CommandRegistry>().find(kAppendLibraryCommand);
   AppendBlocks *impl = litestl::alloc::New<AppendBlocks>("coredcc::AppendCommand");
   auto request = std::make_shared<AppendRequest>();
   request->bytes = bytes;
   request->options = &options;
   impl->request = request;
   Result<Owned<Command>> cmd =
-      own<Command>(rt, std::string(kAppendCommand) + "#impl", impl);
+      own<Command>(rt, std::string(kAppendLibraryCommand) + "#impl", impl);
   if (!cmd.ok()) {
     return cmd.status();
   }
@@ -223,7 +223,7 @@ Status detail::registerLibraryCommands(Runtime &rt)
       .output(PropertyDef::pointerProp("block", StructId()))
       .output(PropertyDef::stringProp("blocks"));
   CDCC_TRY(addCommandOnce<DuplicateBlock>(rt, std::move(duplicate)));
-  CommandDef append(kAppendCommand);
+  CommandDef append(kAppendLibraryCommand);
   append.uiName("Append").flags(CommandFlags::Private);
   return addCommandOnce<AppendBlocks>(rt, std::move(append));
 }

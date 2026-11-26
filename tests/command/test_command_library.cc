@@ -150,11 +150,12 @@ static void test_append()
   test_assert(hasMsg(appendUndo(noLib, view(bytes)).status(), "no Library"));
   test_assert(hasMsg(appendLibrary(noLib, view(bytes)).status(), "no Library"));
   /* The bare command has nothing to append. */
-  test_assert(c.ex.run(c.ctx,
-                       kAppendCommand,
-                       w.rt.ext<CommandRegistry>().find(kAppendCommand)->newInputs())
-                  .status()
-                  .code() == StatusCode::FailedPrecondition);
+  test_assert(
+      c.ex.run(c.ctx,
+               kAppendLibraryCommand,
+               w.rt.ext<CommandRegistry>().find(kAppendLibraryCommand)->newInputs())
+          .status()
+          .code() == StatusCode::FailedPrecondition);
   test_assert(!w.rt.hasStickyError());
 }
 

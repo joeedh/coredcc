@@ -272,7 +272,7 @@ Status detail::registerObjectCommands(Runtime &rt)
   const auto on = [] {
     return PropertyDef::boolProp("on").defaultValue(PropValue::ofBool(true));
   };
-  CommandDef flags(kSetFlagsCommand);
+  CommandDef flags(kSetObjectFlagsCommand);
   flags.uiName("Set Object Flags")
       .input(PropertyDef::flagsProp("flags")
                  .item("HIDDEN", int64_t(ObjectFlags::Hidden))
@@ -282,7 +282,7 @@ Status detail::registerObjectCommands(Runtime &rt)
       .output(PropertyDef::intProp("skipped"));
   CDCC_TRY(addCommandOnce<SetFlags>(rt, std::move(flags)));
 
-  CommandDef locks(kSetLocksCommand);
+  CommandDef locks(kSetObjectLocksCommand);
   locks.uiName("Lock Channels")
       .input(PropertyDef::stringProp("channels"))
       .input(on())
@@ -290,7 +290,7 @@ Status detail::registerObjectCommands(Runtime &rt)
       .output(PropertyDef::intProp("skipped"));
   CDCC_TRY(addCommandOnce<SetLocks>(rt, std::move(locks)));
 
-  CommandDef world(kSetWorldCommand);
+  CommandDef world(kSetObjectWorldCommand);
   world.uiName("Set World Matrix")
       .input(PropertyDef::stringProp("objects").access(PropAccess::NotRemembered))
       .input(PropertyDef::stringProp("matrices").access(PropAccess::NotRemembered))

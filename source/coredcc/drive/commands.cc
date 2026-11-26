@@ -310,12 +310,12 @@ struct RemoveGraph {
 
 Status registerCommands(Runtime &rt)
 {
-  CommandDef add(kAddDriverGraphCommand);
+  CommandDef add(kAddDriverCommand);
   add.uiName("Add Driver Graph")
       .description("The graph drives the document's objects.")
       .input(PropertyDef::pointerProp("graph", StructId()));
   CDCC_TRY(detail::addCommandOnce<AddGraph>(rt, std::move(add)));
-  CommandDef remove(kRemoveDriverGraphCommand);
+  CommandDef remove(kRemoveDriverCommand);
   remove.uiName("Remove Driver Graph")
       .input(PropertyDef::pointerProp("graph", StructId()));
   return detail::addCommandOnce<RemoveGraph>(rt, std::move(remove));

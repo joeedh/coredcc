@@ -124,11 +124,12 @@ static void test_attach_command()
   ScopedConnection l = t.s.w.rt.ext<ChangeBus>().addListener([&](const OwnerKey *owner) {
     heard += owner && *owner == OwnerKey::ofBlock(t.s.w.objectId(0)) ? 1 : 0;
   });
-  test_assert(t.run(kAttachCommand).ok() && t.notes() && t.host.alive == 1 && heard == 1);
+  test_assert(t.run(kAttachBlockCommand).ok() && t.notes() && t.host.alive == 1 &&
+              heard == 1);
   Notes *n = t.notes();
   test_assert(t.s.ex.undo(t.s.ctx).ok() && !t.notes() && t.host.alive == 1 && heard == 2);
   test_assert(t.s.ex.redo(t.s.ctx).ok() && t.notes() == n && heard == 3);
-  test_assert(t.run(kAttachCommand).code() == StatusCode::AlreadyExists &&
+  test_assert(t.run(kAttachBlockCommand).code() == StatusCode::AlreadyExists &&
               t.host.alive == 1);
 
   /* Undone and dropped: the command's data goes. */
@@ -137,13 +138,13 @@ static void test_attach_command()
   test_assert(t.host.alive == 0 && t.lib().get(t.block())->pins() == 0);
 
   test_assert(
-      hasMsg(t.run(kAttachCommand, "acme.nope"), "no attachment type 'acme.nope'"));
-  test_assert(t.run(kAttachCommand, "acme.bare").code() == StatusCode::Unsupported);
+      hasMsg(t.run(kAttachBlockCommand, "acme.nope"), "no attachment type 'acme.nope'"));
+  test_assert(t.run(kAttachBlockCommand, "acme.bare").code() == StatusCode::Unsupported);
   t.host.noData = true;
-  test_assert(hasMsg(t.run(kAttachCommand), "gave no data"));
+  test_assert(hasMsg(t.run(kAttachBlockCommand), "gave no data"));
   t.host.noData = false;
   t.host.throws = true;
-  test_assert(hasMsg(t.run(kAttachCommand), "create threw"));
+  test_assert(hasMsg(t.run(kAttachBlockCommand), "create threw"));
   t.host.throws = false;
   test_assert(!t.notes() && t.host.alive == 0 && !t.s.w.rt.hasStickyError());
   test_assert(t.lib().validate().ok());
@@ -152,8 +153,8 @@ static void test_attach_command()
 static void test_detach_command()
 {
   AttSetup t;
-  test_assert(t.run(kDetachCommand).code() == StatusCode::NotFound);
-  test_assert(t.run(kAttachCommand).ok());
+  test_assert(t.run(kDetachBlockCommand).code() == StatusCode::NotFound);
+  test_assert(t.run(kAttachBlockCommand).ok());
   Notes *n = t.notes();
   /* Something only the attachment references. */
   Result<BlockHandle> only =
@@ -163,9 +164,9 @@ static void test_detach_command()
     t.lib().setFlag(ob, BlockFlags::FakeUser, true);
   }
   t.host.throws = true;
-  test_assert(hasMsg(t.run(kDetachCommand), "forEachRef threw") && t.notes() == n);
+  test_assert(hasMsg(t.run(kDetachBlockCommand), "forEachRef threw") && t.notes() == n);
   t.host.throws = false;
-  test_assert(t.run(kDetachCommand).ok() && !t.notes() && t.host.alive == 1);
+  test_assert(t.run(kDetachBlockCommand).ok() && !t.notes() && t.host.alive == 1);
   test_assert(t.lib().get(*only)->pins(PinKind::History) == 1);
   test_assert(*t.lib().collect() == 0);
   test_assert(t.s.ex.undo(t.s.ctx).ok() && t.notes() == n);
@@ -226,7 +227,7 @@ static void test_paths()
   };
   Context &ctx = t.s.ctx;
   test_assert(*getValue(ctx, path(".length")) == PropValue::ofInt(0));
-  test_assert(t.run(kAttachCommand).ok());
+  test_assert(t.run(kAttachBlockCommand).ok());
   Notes *bare = litestl::alloc::New<Notes>("Notes"); /* no data struct: not listed */
   t.host.alive++;
   test_assert(t.lib().attach(t.block(), kBare, bare).ok());

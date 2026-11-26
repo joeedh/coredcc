@@ -567,7 +567,7 @@ Status detail::registerTransformCommands(Runtime &rt)
   const auto approximate = [] { return PropertyDef::intProp("approximate"); };
   const auto skipped = [] { return PropertyDef::intProp("skipped"); };
 
-  CommandDef parent(kSetParentCommand);
+  CommandDef parent(kSetObjectParentCommand);
   parent.uiName("Set Parent")
       .input(PropertyDef::pointerProp("parent", StructId()))
       .input(keepWorld())
@@ -576,7 +576,7 @@ Status detail::registerTransformCommands(Runtime &rt)
       .output(skipped());
   CDCC_TRY(addCommandOnce<SetParent>(rt, std::move(parent)));
 
-  CommandDef type(kSetTransformTypeCommand);
+  CommandDef type(kSetObjectTransformTypeCommand);
   type.uiName("Set Transform Type")
       .input(PropertyDef::stringProp("type").defaultValue(
           PropValue::ofString(kTrsTransform)))
@@ -586,7 +586,7 @@ Status detail::registerTransformCommands(Runtime &rt)
       .output(skipped());
   CDCC_TRY(addCommandOnce<SetTransformType>(rt, std::move(type)));
 
-  CommandDef mode(kSetRotationModeCommand);
+  CommandDef mode(kSetObjectRotationModeCommand);
   mode.uiName("Set Rotation Mode")
       .input(models::orderEnum("mode").item("QUATERNION", trs::kQuaternionMode))
       .input(detail::objectsInput())
@@ -596,7 +596,7 @@ Status detail::registerTransformCommands(Runtime &rt)
   CDCC_TRY(registerDeltaCommands(rt));
   CDCC_TRY(registerObjectCommands(rt));
 
-  CommandDef del(kDeleteObjectsCommand);
+  CommandDef del(kDeleteObjectCommand);
   del.uiName("Delete Objects")
       .input(PropertyDef::boolProp("keepChildrenWorld")
                  .defaultValue(PropValue::ofBool(true)))

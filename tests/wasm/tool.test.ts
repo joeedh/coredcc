@@ -42,7 +42,7 @@ afterEach(() => {
   if (!session.disposed) session[Symbol.dispose]()
 })
 
-const add = (args: string) => cdcc.invoke(ctx, `core.object.add(${args})`).object as Ref
+const add = (args: string) => cdcc.invoke(ctx, `core.object.new(${args})`).object as Ref
 const where = (o: Ref) => cdcc.worldMatrix(ctx, o).slice(12, 15)
 const select = (...objects: Ref[]) => cdcc.invoke(ctx, `core.scene.select(objects="${cdcc.blockIdText(ctx, objects)}")`)
 /** As a host's frame: the event, then an evaluation. */

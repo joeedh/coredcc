@@ -21,7 +21,7 @@ namespace {
 Status
 runSelect(Context &ctx, const char *mode, BlockHandle object, const std::string *objects)
 {
-  const CommandDef *def = ctx.runtime().ext<CommandRegistry>().find(kSelectCommand);
+  const CommandDef *def = ctx.runtime().ext<CommandRegistry>().find(kSelectSceneCommand);
   if (!def || !ctx.executor() || !ctx.library()) {
     return Status::error(
         StatusCode::FailedPrecondition,

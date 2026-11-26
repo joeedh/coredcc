@@ -221,7 +221,7 @@ void testLockedAndChildren()
 
   /* Locked: the status names them; nothing fails. */
   d.select({child});
-  d.ok(kSetLocksCommand,
+  d.ok(kSetObjectLocksCommand,
        {{"channels", PropValue::ofString("location")}, {"on", PropValue::ofBool(true)}});
   d.evaluate();
   const Pixel p2 = onAxis(d, 0);
@@ -241,7 +241,7 @@ void testPivotAndSize()
   const BlockHandle b = d.box("b", 4, 2, 0);
   const BlockHandle hidden = d.box("hidden", 100, 0, 0);
   const BlockId hiddenId = d.idOf(hidden);
-  d.ok(kSetFlagsCommand,
+  d.ok(kSetObjectFlagsCommand,
        {{"objects",
          PropValue::ofString(
              formatBlockIds(d.rt, std::span<const BlockId>(&hiddenId, 1)))},

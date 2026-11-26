@@ -75,7 +75,7 @@ void testTransform()
     const BlockHandle c = d.object("c", 4, 0, 0);
     if (strcmp(typeName, kTrsTransform) != 0) {
       Result<PropertyBag> r =
-          d.run(kSetTransformTypeCommand,
+          d.run(kSetObjectTransformTypeCommand,
                 {{"objects", PropValue::ofString(formatBlockId(d.rt, d.idOf(c)))},
                  {"type", PropValue::ofString(typeName)}});
       must(r.status());

@@ -15,10 +15,10 @@
 
 namespace coredcc {
 
-inline constexpr const char *kAttachCommand = "core.block.attach";
-inline constexpr const char *kDetachCommand = "core.block.detach";
+inline constexpr const char *kAttachBlockCommand = "core.block.attach";
+inline constexpr const char *kDetachBlockCommand = "core.block.detach";
 /** The Private command behind attachUndo. */
-inline constexpr const char *kAttachDataCommand = "core.block.attachData";
+inline constexpr const char *kAttachBlockDataCommand = "core.block.attachData";
 
 /**
  * Attaches `data` to `h` as an undo step, or as a sub-command inside a command's exec.

@@ -290,19 +290,19 @@ std::vector<Case> cases()
       {"unlink",
        [](Documents &d) {
          return d.run(d.in1,
-                      kUnlinkRefCommand,
+                      kUnlinkBlockRefCommand,
                       {{"block", block(3)}, {"index", PropValue::ofInt(0)}});
        }},
       {"attach",
        [](Documents &d) {
          return d.run(d.in1,
-                      kAttachCommand,
+                      kAttachBlockCommand,
                       {{"block", block(1)}, {"type", PropValue::ofString("test.Tag")}});
        }},
       {"detach",
        [](Documents &d) {
          return d.run(d.in1,
-                      kDetachCommand,
+                      kDetachBlockCommand,
                       {{"block", block(2)}, {"type", PropValue::ofString("test.Tag")}});
        }},
       {"delete",

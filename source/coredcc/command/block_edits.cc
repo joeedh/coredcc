@@ -233,7 +233,7 @@ Status detail::registerBlockEdits(Runtime &rt)
       .input(PropertyDef::pointerProp("block", StructId()))
       .input(PropertyDef::stringProp("name"));
   CDCC_TRY(detail::addCommandOnce<RenameBlock>(rt, std::move(rename)));
-  CommandDef unlink(kUnlinkRefCommand);
+  CommandDef unlink(kUnlinkBlockRefCommand);
   unlink.uiName("Unlink Reference")
       .input(PropertyDef::pointerProp("block", StructId()))
       .input(PropertyDef::intProp("index"))

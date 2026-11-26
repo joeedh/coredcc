@@ -464,7 +464,7 @@ void testDeleteCycles()
       }
     }
     d.select({gone, other});
-    d.cycle(kDeleteObjectsCommand);
+    d.cycle(kDeleteObjectCommand);
     for (const auto &[h, world] : was) {
       children++;
       test_assert(difference(d.stateOf(h).world, world) < 1e-9);

@@ -76,7 +76,7 @@ void testHierarchy()
   d.evaluate();
   test_assert(d.evaluatedAt(a, 11));
   /* A reparent within the document, by a command (it notifies). */
-  d.ok(kSetParentCommand,
+  d.ok(kSetObjectParentCommand,
        {{"parent", d.ptr(q)},
         {"objects", PropValue::ofString(formatBlockId(d.rt, d.idOf(b)))},
         {"keepWorld", PropValue::ofBool(false)}});
@@ -87,7 +87,7 @@ void testHierarchy()
   test_assert(d.evaluatedAt(a, 11));
 
   /* Its transform type changed: another node type. */
-  d.ok(kSetTransformTypeCommand,
+  d.ok(kSetObjectTransformTypeCommand,
        {{"type", PropValue::ofString(kFbxTransform)},
         {"objects", PropValue::ofString(formatBlockId(d.rt, d.idOf(b)))}});
   d.evaluate();

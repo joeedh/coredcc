@@ -184,7 +184,7 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 
 ### `TypeMismatch: the pointer's target is of another struct type` from a Ref
 - **Symptom:** `set(ctx, '<graph>.nodes[#n].params.object', ref)` fails in TS with a Ref from
-  `core.object.add`, while native tests pass.
+  `core.object.new`, while native tests pass.
 - **Cause:** TS Refs carry the block's own struct (`coredcc.Object`); native tests' pointers often have no
   struct. `coerce` compares struct ids exactly, so a param whose target is the base `coredcc.SceneObject`
   refused them.
@@ -194,7 +194,7 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   (`testDerivedPointer` in `test_drive_review`).
 
 ### A TS test sees an object where it shouldn't be
-- **Symptom:** an object made with `core.object.add(name="b")` is where the object made before it is.
+- **Symptom:** an object made with `core.object.new(name="b")` is where the object made before it is.
 - **Cause:** commands remember their last inputs (`LastUsedStore`): `location` came from the call before.
 - **Fix:** give the inputs that matter each time.
 

@@ -456,7 +456,7 @@ void testKeepWorld()
     const double time = d.sc().time();
     const Result<TransformState> from = computeState(*d.lib, h, time);
     d.select({h});
-    Result<PropertyBag> out = d.run(kSetParentCommand, {{"parent", d.ptr(p)}});
+    Result<PropertyBag> out = d.run(kSetObjectParentCommand, {{"parent", d.ptr(p)}});
     if (out.ok() && out->get("approximate")->asInt() == 0) {
       const Result<TransformState> to = computeState(*d.lib, h, time);
       test_assert(from.ok() && to.ok() && difference(from->world, to->world) < 1e-6);
@@ -482,7 +482,7 @@ void testKeepWorld()
   curves.curves.append(c);
   must(setOverrideProvider(*d.lib, curves));
   d.select({a});
-  PropertyBag out = d.ok(kSetParentCommand, {{"parent", d.ptr(p)}});
+  PropertyBag out = d.ok(kSetObjectParentCommand, {{"parent", d.ptr(p)}});
   test_assert(out.get("approximate")->asInt() == 2); /* and b */
   d.undo();
   /* Only the rotation would have to change. */
@@ -490,14 +490,14 @@ void testKeepWorld()
   put(d.obj(p).channels, trs::kLocation, double3(0, 0, 0));
   curves.curves[0].base = 0.0;
   curves.curves[0].channel = trs::kRotationEuler + 2;
-  out = d.ok(kSetParentCommand, {{"parent", d.ptr(p)}});
+  out = d.ok(kSetObjectParentCommand, {{"parent", d.ptr(p)}});
   test_assert(out.get("approximate")->asInt() >= 1);
   d.undo();
   curves.curves[0].base = 10;
   curves.curves[0].channel = trs::kLocation;
   d.evaluate();
   const ObjectEval e = d.result(b);
-  d.ok(kDeleteObjectsCommand);
+  d.ok(kDeleteObjectCommand);
   d.evaluate();
   test_assert(difference(d.result(b).state.world, e.state.world) < 1e-12 &&
               d.isAt(b, 12));
@@ -509,13 +509,14 @@ void testKeepWorld()
   curves.curves.append(c);
   d.evaluate();
   test_assert(d.isAt(b, 12, 3));
-  out = d.ok(kDeleteObjectsCommand);
+  out = d.ok(kDeleteObjectCommand);
   d.evaluate();
   test_assert(out.get("approximate")->asInt() == 0 && d.isAt(b, 12, 3) &&
               d.obj(b).channels.get(trs::kLocation + 1) == 0.0);
   d.undo();
   /* A conversion takes the driven values. */
-  out = d.ok(kSetTransformTypeCommand, {{"type", PropValue::ofString(kMatrixTransform)}});
+  out = d.ok(kSetObjectTransformTypeCommand,
+             {{"type", PropValue::ofString(kMatrixTransform)}});
   test_assert(d.obj(a).channels.get(matrix_transform::kTranslation) == 10.0);
   clearOverrideProvider(*d.lib, curves);
 }
