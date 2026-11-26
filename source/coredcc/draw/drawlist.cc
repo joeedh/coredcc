@@ -50,8 +50,8 @@ template <class T> T get(const uint8_t *p)
 
 Status checkStyle(const DrawStyle &s, const char *what)
 {
-  if (s.depth < 0 || s.depth > int32_t(DepthMode::XRay)) {
-    return bad(what, "no such depth mode " + std::to_string(s.depth));
+  if (int32_t(s.depth) < 0 || int32_t(s.depth) > int32_t(DepthMode::XRay)) {
+    return bad(what, "no such depth mode " + std::to_string(int32_t(s.depth)));
   }
   if (!std::isfinite(s.width) || s.width < 0.0f) {
     return bad(what, "the width isn't a number of 0 or more");
@@ -395,11 +395,6 @@ Status DrawList::trianglesXyz(const DrawStyle &style,
   return triangles(style,
                    std::span<const double3>(pts.data(), pts.size()),
                    std::span<const uint32_t>(c.data(), c.size()));
-}
-
-Status DrawList::shapeOf(const DrawStyle &style, int32_t kind, const mat4d &matrix)
-{
-  return shape(style, ShapeKind(kind), matrix);
 }
 
 Status DrawList::line2dXy(const DrawStyle &style, const litestl::util::Vector<double> &xy)

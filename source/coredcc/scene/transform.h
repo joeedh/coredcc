@@ -73,16 +73,6 @@ struct TransformDelta {
   bool identity() const;
   /** The rotation of a Rotate delta, in world space; the identity for the others. */
   quatd rotation() const;
-
-  /* For scripts. */
-  int32_t kindValue() const
-  {
-    return int32_t(kind);
-  }
-  void setKind(int32_t k)
-  {
-    kind = DeltaKind(k);
-  }
   static litestl::binding::types::Struct<TransformDelta> *defineBindings();
 };
 
@@ -236,8 +226,11 @@ struct TransformModel : IfaceRef {
 } // namespace coredcc
 
 namespace litestl::binding {
-/** SetWorldMode, bound as an enum (scene/bindings.cc). */
+/** SetWorldMode and DeltaKind, bound as enums (scene/bindings.cc). */
 template <> struct Binder<coredcc::SetWorldMode> {
+  static const BindingBase *bind();
+};
+template <> struct Binder<coredcc::DeltaKind> {
   static const BindingBase *bind();
 };
 } // namespace litestl::binding

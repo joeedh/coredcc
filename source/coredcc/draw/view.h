@@ -3,6 +3,7 @@
 #include "coredcc/base/status.h"
 #include "coredcc/bvh/ray.h"
 
+#include "litestl/binding/binding_bind.h"
 #include "litestl/math/transform.h"
 
 #include <cstdint>
@@ -60,18 +61,11 @@ struct View {
   /* For scripts. */
   double viewportAt(int32_t i) const;
   void putViewport(int32_t i, double value);
-  void setConventions(int32_t depthRange, int32_t hand, int32_t upAxis);
+  /* The depth range as a number, until litestl binds ClipDepth. */
+  void setConventions(int32_t depthRange);
   int32_t depthRange() const
   {
     return int32_t(depth);
-  }
-  int32_t hand() const
-  {
-    return int32_t(handedness);
-  }
-  int32_t upAxis() const
-  {
-    return int32_t(up);
   }
   static litestl::binding::types::Struct<View> *defineBindings();
 };
@@ -206,3 +200,13 @@ private:
 };
 
 } // namespace coredcc
+
+namespace litestl::binding {
+/** Handedness and UpAxis, bound as enums (draw/bindings.cc). */
+template <> struct Binder<coredcc::Handedness> {
+  static const BindingBase *bind();
+};
+template <> struct Binder<coredcc::UpAxis> {
+  static const BindingBase *bind();
+};
+} // namespace litestl::binding

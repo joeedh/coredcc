@@ -99,6 +99,12 @@ export interface ResultOf<T> extends Disposable {
   value: T
 }
 
+/** The key of `value` in a table of names by bound enum item: the inverse of `get`. */
+export function keyOf<K, V>(table: ReadonlyMap<K, V>, value: V): K | undefined {
+  for (const [k, v] of table) if (v === value) return k
+  return undefined
+}
+
 /** Throws a ScriptError for a failed Status, and disposes of it either way. */
 export function check(s: Status) {
   try {

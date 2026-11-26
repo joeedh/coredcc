@@ -3,11 +3,37 @@
 #include "coredcc/base/text.h"
 #include "coredcc/tool/stroke_curve.h"
 
+#include "coredcc/base/detail/enum_binding.h"
+
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
 #include <algorithm>
 #include <cmath>
+
+const litestl::binding::BindingBase *
+litestl::binding::Binder<coredcc::StrokeSpace>::bind()
+{
+  using coredcc::StrokeSpace;
+  static const BindingBase *e = coredcc::detail::bindEnum(
+      "coredcc::StrokeSpace",
+      sizeof(StrokeSpace),
+      {{"Screen", int(StrokeSpace::Screen)}, {"World", int(StrokeSpace::World)}});
+  return e;
+}
+
+const litestl::binding::BindingBase *
+litestl::binding::Binder<coredcc::StrokeMethod>::bind()
+{
+  using coredcc::StrokeMethod;
+  static const BindingBase *e =
+      coredcc::detail::bindEnum("coredcc::StrokeMethod",
+                                sizeof(StrokeMethod),
+                                {{"Path", int(StrokeMethod::Path)},
+                                 {"Anchored", int(StrokeMethod::Anchored)},
+                                 {"DragDot", int(StrokeMethod::DragDot)}});
+  return e;
+}
 
 namespace coredcc {
 
@@ -38,10 +64,12 @@ double3 normalized(const double3 &v)
 
 Status StrokeSampler::configure(const StrokeSettings &s)
 {
-  if (s.space != int32_t(StrokeSpace::Screen) && s.space != int32_t(StrokeSpace::World)) {
+  if (s.space != StrokeSpace::Screen && s.space != StrokeSpace::World) {
     return Status::error(StatusCode::InvalidArgument, "StrokeSettings: no such space");
   }
-  if (s.method < int32_t(StrokeMethod::Path) || s.method > int32_t(StrokeMethod::DragDot)) {
+  if (int32_t(s.method) < int32_t(StrokeMethod::Path) ||
+      int32_t(s.method) > int32_t(StrokeMethod::DragDot))
+  {
     return Status::error(StatusCode::InvalidArgument, "StrokeSettings: no such method");
   }
   if (!(s.radius >= StrokeSettings::kMinRadius) || !std::isfinite(s.radius) ||
@@ -98,7 +126,7 @@ int32_t StrokeSampler::poll()
   if (ended_) {
     /* Path holds the last segment back; Anchored and DragDot gave one per sample. */
     const int n = int(cps_.size());
-    if (settings_.method == int32_t(StrokeMethod::Path) && n >= 2) {
+    if (settings_.method == StrokeMethod::Path && n >= 2) {
       emitSegment(n - 2, true);
     }
     done_ = true;
@@ -110,7 +138,7 @@ void StrokeSampler::ingest(const PointerSample &in)
 {
   const Ray ray = view_.rayFromPixel(in.x, in.y);
   const double3 viewvec = ray.dir;
-  const StrokeMethod method = StrokeMethod(settings_.method);
+  const StrokeMethod method = settings_.method;
   ControlPoint cp;
   cp.screen = double2(in.x, in.y);
   cp.viewvec = viewvec;
@@ -143,8 +171,7 @@ void StrokeSampler::ingest(const PointerSample &in)
     else if (firstHit_) {
       cp.world = synthesizeMiss(in.x, in.y);
       cp.normal = viewvec;
-    }
-    else if (settings_.space == int32_t(StrokeSpace::Screen)) {
+    } else if (settings_.space == StrokeSpace::Screen) {
       cp.world = ray.origin + viewvec;
       cp.normal = viewvec;
     }
@@ -200,9 +227,9 @@ void StrokeSampler::emitSegment(int i, bool rightClamp)
 
   double step;
   stroke::Walk walk;
-  if (settings_.space == int32_t(StrokeSpace::World)) {
-    const double r =
-        settings_.radiusIsWorld ? settings_.radius : worldRadiusAt(middle, settings_.radius);
+  if (settings_.space == StrokeSpace::World) {
+    const double r = settings_.radiusIsWorld ? settings_.radius
+                                             : worldRadiusAt(middle, settings_.radius);
     /* At least half a device pixel at the segment's middle, as on the screen. */
     const double dpi = view_.view().dpiScale > 0.0 ? view_.view().dpiScale : 1.0;
     const double floor = 0.5 / dpi * view_.pixelSizeAt(middle);

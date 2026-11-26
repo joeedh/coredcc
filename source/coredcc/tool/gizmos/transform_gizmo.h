@@ -115,7 +115,7 @@ struct TransformModal {
   TransformDelta last;
   double amount = 0.0;
 
-  int32_t
+  ModalResult
   onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e);
   void drawOverlay(const ViewMath &view, DrawList &out) const;
   void end(Context &ctx, bool committed);

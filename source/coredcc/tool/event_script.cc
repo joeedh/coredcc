@@ -277,10 +277,10 @@ Status playEvents(ToolManager &tm,
                   Context &ctx,
                   const View &view,
                   std::span<const InputEvent> events,
-                  litestl::util::Vector<int32_t> *handled)
+                  litestl::util::Vector<EventResult> *handled)
 {
   for (size_t i = 0; i < events.size(); i++) {
-    Result<int32_t> r = tm.dispatch(ctx, view, events[i]);
+    Result<EventResult> r = tm.dispatch(ctx, view, events[i]);
     if (!r.ok()) {
       return Status::error(
           r.status().code(),

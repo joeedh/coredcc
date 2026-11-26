@@ -61,9 +61,9 @@ FColor RawColor(uint32 C)
 	return FColor(C & 255, (C >> 8) & 255, (C >> 16) & 255, (C >> 24) & 255);
 }
 
-uint8 GroupOf(int32 Depth)
+uint8 GroupOf(coredcc::DepthMode Depth)
 {
-	return Depth == int32(coredcc::DepthMode::Test) ? SDPG_World : SDPG_Foreground;
+	return Depth == coredcc::DepthMode::Test ? SDPG_World : SDPG_Foreground;
 }
 
 /* The format's shapes (docs/drawlist-format.md), as triangles in their own space. */

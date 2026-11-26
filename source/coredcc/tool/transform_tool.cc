@@ -23,10 +23,10 @@ Status TransformTool::activate(Context &ctx, ToolManager &tm)
   return Status();
 }
 
-int32_t TransformTool::onEvent(Context &ctx,
-                               ToolManager &tm,
-                               const ViewMath &view,
-                               const InputEvent &e)
+EventResult TransformTool::onEvent(Context &ctx,
+                                   ToolManager &tm,
+                                   const ViewMath &view,
+                                   const InputEvent &e)
 {
   return selectOnPress(ctx, tm, view, e);
 }

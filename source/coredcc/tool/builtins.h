@@ -29,7 +29,7 @@ inline constexpr double kBoxThreshold = 4.0;
  * beyond kBoxThreshold is a box: pickRegion, then SET, ADD with Shift, REMOVE with Ctrl.
  * Each selection is one undo step.
  */
-int32_t
+EventResult
 selectOnPress(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e);
 
 /** The press-and-release of a selection. It owns no command. */
@@ -38,7 +38,7 @@ struct SelectModal {
   gizmo::Pixel now;
   bool box = false;
 
-  int32_t
+  ModalResult
   onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e);
   void drawOverlay(const ViewMath &view, DrawList &out) const;
   static litestl::binding::types::Struct<SelectModal> *defineBindings();
@@ -46,7 +46,7 @@ struct SelectModal {
 
 struct SelectTool {
   Status activate(Context &ctx, ToolManager &tm);
-  int32_t
+  EventResult
   onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e);
   static litestl::binding::types::Struct<SelectTool> *defineBindings();
 };
@@ -54,7 +54,7 @@ struct SelectTool {
 /** Adds the transform gizmo; a press that misses it selects. */
 struct TransformTool {
   Status activate(Context &ctx, ToolManager &tm);
-  int32_t
+  EventResult
   onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e);
   static litestl::binding::types::Struct<TransformTool> *defineBindings();
 };

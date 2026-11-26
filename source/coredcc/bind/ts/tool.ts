@@ -14,18 +14,25 @@
 import {getBindingBackend} from '@litestl/typescript-runtime'
 import type {Context} from 'coredcc-gen/coredcc/Context'
 import type {DrawList} from 'coredcc-gen/coredcc/DrawList'
+import {DeltaKind} from 'coredcc-gen/coredcc/DeltaKind'
+import {EventResult} from 'coredcc-gen/coredcc/EventResult'
+import {EventType} from 'coredcc-gen/coredcc/EventType'
 import * as cd from 'coredcc-gen/coredcc/functions'
 import type {GizmoHit as BoundHit} from 'coredcc-gen/coredcc/GizmoHit'
+import {Handedness} from 'coredcc-gen/coredcc/Handedness'
 import type {InputEvent as BoundEvent} from 'coredcc-gen/coredcc/InputEvent'
+import {ModalResult as BoundModalResult} from 'coredcc-gen/coredcc/ModalResult'
+import {PointerType} from 'coredcc-gen/coredcc/PointerType'
 import type {Status} from 'coredcc-gen/coredcc/Status'
 import type {StrokeSample as BoundSample} from 'coredcc-gen/coredcc/StrokeSample'
 import type {StrokeTarget as BoundTarget} from 'coredcc-gen/coredcc/StrokeTarget'
 import {StatusCode} from 'coredcc-gen/coredcc/StatusCode'
 import type {TransformDelta as BoundDelta} from 'coredcc-gen/coredcc/TransformDelta'
+import {UpAxis} from 'coredcc-gen/coredcc/UpAxis'
 import type {View as BoundView} from 'coredcc-gen/coredcc/View'
 import type {ViewMath} from 'coredcc-gen/coredcc/ViewMath'
 
-import {check, checkCtx, inSlot, isFatal, Ref, ScriptError, statusOf, sync, take, withValue, type Writable} from './core.ts'
+import {check, checkCtx, inSlot, keyOf, isFatal, Ref, ScriptError, statusOf, sync, take, withValue, type Writable} from './core.ts'
 import {decodeDrawList, Drawer, readDrawList, type DecodedDrawList} from './drawlist.ts'
 import type {TransformDelta, ViewSpec} from './scene.ts'
 
@@ -35,10 +42,15 @@ export type {ViewMath}
 
 export type ToolEventType =
   | 'pointerdown' | 'pointermove' | 'pointerup' | 'wheel' | 'keydown' | 'keyup' | 'cancel' | 'focuslost'
-const eventTypes: readonly ToolEventType[] = [
-  'pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown', 'keyup', 'cancel', 'focuslost',
-]
-const pointerTypes = ['mouse', 'pen', 'touch'] as const
+/* DOM's names, not the C++ items. */
+const eventTypes = new Map<EventType, ToolEventType>([
+  [EventType.PointerDown, 'pointerdown'], [EventType.PointerMove, 'pointermove'], [EventType.PointerUp, 'pointerup'],
+  [EventType.Wheel, 'wheel'], [EventType.KeyDown, 'keydown'], [EventType.KeyUp, 'keyup'],
+  [EventType.Cancel, 'cancel'], [EventType.FocusLost, 'focuslost'],
+])
+const pointerTypes = new Map<PointerType, 'mouse' | 'pen' | 'touch'>([
+  [PointerType.Mouse, 'mouse'], [PointerType.Pen, 'pen'], [PointerType.Touch, 'touch'],
+])
 
 /** Bits of `ToolEvent.modifiers`. */
 export const Modifiers = {shift: 1, ctrl: 2, alt: 4, meta: 8} as const
@@ -67,7 +79,7 @@ export interface ToolEvent extends PointerSample {
   button: number
   /** Held, as DOM's `buttons`: 1 left, 2 right, 4 middle. */
   buttons: number
-  pointer: (typeof pointerTypes)[number]
+  pointer: 'mouse' | 'pen' | 'touch'
   pointerId: number
   wheelX: number
   wheelY: number
@@ -91,10 +103,10 @@ function eventOf(e: BoundEvent): ToolEvent {
   }
   return {
     ...sampleOf(e),
-    type: eventTypes[e.typeValue()],
+    type: eventTypes.get(e.type)!,
     button: e.button,
     buttons: e.buttons,
-    pointer: pointerTypes[e.pointerValue()],
+    pointer: pointerTypes.get(e.pointer)!,
     pointerId: e.pointerId,
     wheelX: e.wheelX,
     wheelY: e.wheelY,
@@ -109,10 +121,10 @@ function withEvent<R>(event: Partial<ToolEvent> & {type: ToolEventType}, fn: (e:
   const backend = getBindingBackend()
   const e = backend.construct('coredcc::InputEvent') as BoundEvent
   try {
-    const type = eventTypes.indexOf(event.type)
-    if (type < 0) throw new TypeError(`ToolEvent: no type '${event.type}'`)
-    e.setType(type)
-    e.setPointer(Math.max(0, pointerTypes.indexOf(event.pointer ?? 'mouse')))
+    const type = keyOf(eventTypes, event.type)
+    if (type === undefined) throw new TypeError(`ToolEvent: no type '${event.type}'`)
+    e.type = type
+    e.pointer = keyOf(pointerTypes, event.pointer ?? 'mouse') ?? PointerType.Mouse
     e.x = event.x ?? 0
     e.y = event.y ?? 0
     e.button = event.button ?? 0
@@ -156,7 +168,9 @@ function withView<R>(spec: ViewSpec, fn: (v: BoundView) => R): R {
     fill('viewport', {put: (i, x) => v.putViewport(i, x)}, spec.viewport, 4)
     fill('view', v.view, spec.view, 16)
     fill('proj', v.proj, spec.proj, 16)
-    v.setConventions(spec.depth === '-1..1' ? 1 : 0, spec.handedness === 'left' ? 1 : 0, spec.up === 'y' ? 0 : 1)
+    v.setConventions(spec.depth === '-1..1' ? 1 : 0)
+    v.handedness = spec.handedness === 'left' ? Handedness.Left : Handedness.Right
+    v.up = spec.up === 'y' ? UpAxis.Y : UpAxis.Z
     v.reversedZ = spec.reversedZ ?? false
     v.infiniteFar = spec.infiniteFar ?? false
     v.ortho = spec.ortho ?? false
@@ -169,12 +183,14 @@ function withView<R>(spec: ViewSpec, fn: (v: BoundView) => R): R {
 
 /* ---- deltas ---- */
 
-const deltaKinds = ['translate', 'rotate', 'scale'] as const
+const deltaKinds = new Map<DeltaKind, TransformDelta['kind']>([
+  [DeltaKind.Translate, 'translate'], [DeltaKind.Rotate, 'rotate'], [DeltaKind.Scale, 'scale'],
+])
 
 function putDelta(d: BoundDelta, delta: Partial<TransformDelta>) {
-  const kind = deltaKinds.indexOf(delta.kind ?? 'translate')
-  if (kind < 0) throw new TypeError(`TransformDelta: no kind '${delta.kind}'`)
-  d.setKind(kind)
+  const kind = keyOf(deltaKinds, delta.kind ?? 'translate')
+  if (kind === undefined) throw new TypeError(`TransformDelta: no kind '${delta.kind}'`)
+  d.kind = kind
   fill('basis', d.basis, delta.basis ?? [0, 0, 0, 1], 4)
   const vec = (what: string, v: Parameters<typeof cd.vec3Put>[0], values: ArrayLike<number>) => {
     if (values.length !== 3) throw new TypeError(`${what} has 3 numbers, not ${values.length}`)
@@ -204,9 +220,9 @@ export function dragUpdate(ctx: Context, delta: Partial<TransformDelta>) {
 export function dragUpdateEach(ctx: Context, deltas: readonly Partial<TransformDelta>[]) {
   const numbers: number[] = []
   for (const delta of deltas) {
-    const kind = deltaKinds.indexOf(delta.kind ?? 'translate')
-    if (kind < 0) throw new TypeError(`TransformDelta: no kind '${delta.kind}'`)
-    const vector = delta.vector ?? (kind === 2 ? [1, 1, 1] : [0, 0, 0])
+    const kind = keyOf(deltaKinds, delta.kind ?? 'translate')
+    if (kind === undefined) throw new TypeError(`TransformDelta: no kind '${delta.kind}'`)
+    const vector = delta.vector ?? (kind === DeltaKind.Scale ? [1, 1, 1] : [0, 0, 0])
     numbers.push(kind, ...(delta.basis ?? [0, 0, 0, 1]), ...(delta.pivot ?? [0, 0, 0]), ...vector,
       ...(delta.axis ?? [0, 0, 1]), delta.angle ?? 0, 0)
   }
@@ -269,8 +285,10 @@ class ToolAdapter {
   deactivate(ctx: Context) {
     inSlot(() => sync('deactivate', this.spec.deactivate?.(ctx)))
   }
-  onEvent(ctx: Context, _tm: unknown, view: ViewMath, e: BoundEvent): number {
-    return inSlot(() => (sync('onEvent', this.spec.onEvent(ctx, eventOf(e), view)) ? 1 : 0))
+  onEvent(ctx: Context, _tm: unknown, view: ViewMath, e: BoundEvent): EventResult {
+    return inSlot(() =>
+      sync('onEvent', this.spec.onEvent(ctx, eventOf(e), view)) ? EventResult.Handled : EventResult.Unhandled
+    )
   }
   drawOverlay(view: ViewMath, out: DrawList) {
     guarded('drawOverlay', out, (draw) => this.spec.drawOverlay!(draw, view))
@@ -309,11 +327,14 @@ export function defineTool(ctx: Context, spec: ToolSpec) {
 
 /* ---- modals ---- */
 
-export type ModalResult = 'continue' | 'pass' | 'finish' | 'cancel'
-const modalResults: readonly ModalResult[] = ['continue', 'pass', 'finish', 'cancel']
+export type ModalResult = 'continue' | 'passThrough' | 'finish' | 'cancel'
+const modalResults = new Map<BoundModalResult, ModalResult>([
+  [BoundModalResult.Continue, 'continue'], [BoundModalResult.PassThrough, 'passThrough'],
+  [BoundModalResult.Finish, 'finish'], [BoundModalResult.Cancel, 'cancel'],
+])
 
 export interface ModalSpec {
-  /** 'finish' commits the drag it owns, 'cancel' cancels it; 'pass' keeps the grab and lets the host
+  /** 'finish' commits the drag it owns, 'cancel' cancels it; 'passThrough' keeps the grab and lets the host
    * have the event. A throw cancels. */
   onEvent(ctx: Context, event: ToolEvent, view: ViewMath): ModalResult
   drawOverlay?(draw: Drawer, view: ViewMath): void
@@ -323,11 +344,13 @@ export interface ModalSpec {
 
 class ModalAdapter {
   constructor(private spec: ModalSpec) {}
-  onEvent(ctx: Context, _tm: unknown, view: ViewMath, e: BoundEvent): number {
+  onEvent(ctx: Context, _tm: unknown, view: ViewMath, e: BoundEvent): BoundModalResult {
     return inSlot(() => {
       const r = sync('onEvent', this.spec.onEvent(ctx, eventOf(e), view))
-      const n = modalResults.indexOf(r)
-      if (n < 0) throw new TypeError(`a modal's onEvent returned '${String(r)}', not one of ${modalResults.join(', ')}`)
+      const n = keyOf(modalResults, r)
+      if (n === undefined) {
+        throw new TypeError(`a modal's onEvent returned '${String(r)}', not one of ${[...modalResults.values()].join(', ')}`)
+      }
       return n
     })
   }
@@ -557,7 +580,7 @@ export function sendEvent(ctx: Context, view: ViewSpec, event: Partial<ToolEvent
     withEvent(event, (e) => {
       const r = cd.toolEvent(ctx, v, e)
       try {
-        const used = Number(r.value) !== 0
+        const used = Number(r.value) === EventResult.Handled
         if (!r.status.ok()) throw Object.assign(ScriptError.from(r.status), {used}) as ToolEventError
         return used
       } finally {

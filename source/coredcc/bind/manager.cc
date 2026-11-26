@@ -66,12 +66,15 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<ChannelBlock>());
   mgr->add(Bind<EvalCtx>());
   mgr->add(Bind<TransformState>());
+  mgr->add(Bind<DeltaKind>());
   mgr->add(Bind<TransformDelta>());
   mgr->add(Bind<SetWorldMode>());
   mgr->add(Bind<TransformModel>());
   mgr->add(Bind<TransformTypeInfo>());
   mgr->add(Bind<EvalStatus>());
   mgr->add(Bind<ObjectEval>());
+  mgr->add(Bind<Handedness>());
+  mgr->add(Bind<UpAxis>());
   mgr->add(Bind<View>());
   mgr->add(Bind<ViewPoint>());
   mgr->add(Bind<ViewRegion>());

@@ -87,8 +87,8 @@ Status StrokeCommand::exec(Context &ctx)
   }
   const PropertyBag &in = *ctx.inputs();
   StrokeSettings settings;
-  settings.space = int32_t(in.get("space")->asEnum());
-  settings.method = int32_t(in.get("method")->asEnum());
+  settings.space = StrokeSpace(in.get("space")->asEnum());
+  settings.method = StrokeMethod(in.get("method")->asEnum());
   settings.spacing = in.get("spacing")->asFloat();
   settings.radius = in.get("radius")->asFloat();
   settings.radiusIsWorld = in.get("radiusIsWorld")->asBool();

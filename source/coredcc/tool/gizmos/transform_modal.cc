@@ -193,22 +193,22 @@ Status TransformModal::perObject(Context &ctx,
   return Status();
 }
 
-int32_t TransformModal::onEvent(Context &ctx,
-                                ToolManager &tm,
-                                const ViewMath &view,
-                                const InputEvent &e)
+ModalResult TransformModal::onEvent(Context &ctx,
+                                    ToolManager &tm,
+                                    const ViewMath &view,
+                                    const InputEvent &e)
 {
   if ((e.type == EventType::KeyDown && e.key == keys::kEscape) ||
       (e.type == EventType::PointerDown && e.button == 2))
   {
-    return modalresult::kCancel;
+    return ModalResult::Cancel;
   }
   if (e.type == EventType::Wheel) {
-    return modalresult::kPassThrough;
+    return ModalResult::PassThrough;
   }
   const bool release = e.type == EventType::PointerUp && e.button == 0;
   if (e.type != EventType::PointerMove && !release) {
-    return modalresult::kContinue;
+    return ModalResult::Continue;
   }
   CommandExecutor *ex = ctx.executor();
   TransformDelta d;
@@ -264,14 +264,14 @@ int32_t TransformModal::onEvent(Context &ctx,
     tm.setStatus(text);
   }
   if (!release) {
-    return modalresult::kContinue;
+    return ModalResult::Continue;
   }
   Command *cmd = ex->interactiveCommand();
   const ApplyDelta *a = cmd ? cmd->as<ApplyDelta>() : nullptr;
   const ElementsDelta *el = cmd ? cmd->as<ElementsDelta>() : nullptr;
   /* A click that moved nothing makes no step. */
   const bool changed = (a && a->changed()) || (el && el->changed());
-  return changed ? modalresult::kFinish : modalresult::kCancel;
+  return changed ? ModalResult::Finish : ModalResult::Cancel;
 }
 
 void TransformModal::drawOverlay(const ViewMath &view, DrawList &out) const

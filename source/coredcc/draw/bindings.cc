@@ -2,9 +2,57 @@
 #include "coredcc/draw/drawlist.h"
 #include "coredcc/draw/view.h"
 
+#include "coredcc/base/detail/enum_binding.h"
+
 #include "litestl/binding/binding.h"
 #include "litestl/math/matrix_bindings.h"
 #include "litestl/util/alloc.h"
+
+using coredcc::detail::bindEnum;
+
+const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::DepthMode>::bind()
+{
+  using coredcc::DepthMode;
+  static const BindingBase *e = bindEnum("coredcc::DepthMode",
+                                         sizeof(DepthMode),
+                                         {{"Test", int(DepthMode::Test)},
+                                          {"Always", int(DepthMode::Always)},
+                                          {"XRay", int(DepthMode::XRay)}});
+  return e;
+}
+
+const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::ShapeKind>::bind()
+{
+  using coredcc::ShapeKind;
+  static const BindingBase *e = bindEnum("coredcc::ShapeKind",
+                                         sizeof(ShapeKind),
+                                         {{"Arrow", int(ShapeKind::Arrow)},
+                                          {"Cone", int(ShapeKind::Cone)},
+                                          {"Cube", int(ShapeKind::Cube)},
+                                          {"Sphere", int(ShapeKind::Sphere)},
+                                          {"Disc", int(ShapeKind::Disc)},
+                                          {"Ring", int(ShapeKind::Ring)},
+                                          {"Quad", int(ShapeKind::Quad)}});
+  return e;
+}
+
+const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::Handedness>::bind()
+{
+  using coredcc::Handedness;
+  static const BindingBase *e =
+      bindEnum("coredcc::Handedness",
+               sizeof(Handedness),
+               {{"Right", int(Handedness::Right)}, {"Left", int(Handedness::Left)}});
+  return e;
+}
+
+const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::UpAxis>::bind()
+{
+  using coredcc::UpAxis;
+  static const BindingBase *e = bindEnum(
+      "coredcc::UpAxis", sizeof(UpAxis), {{"Y", int(UpAxis::Y)}, {"Z", int(UpAxis::Z)}});
+  return e;
+}
 
 namespace coredcc {
 
@@ -26,10 +74,10 @@ lbt::Struct<View> *View::defineBindings()
     BIND_STRUCT_MEMBER(st, dpiScale);
     BIND_STRUCT_METHOD(st, viewportAt, MARGS("i"));
     BIND_STRUCT_METHOD(st, putViewport, MARGS("i", "value"));
-    BIND_STRUCT_METHOD(st, setConventions, MARGS("depthRange", "hand", "upAxis"));
+    BIND_STRUCT_MEMBER(st, handedness);
+    BIND_STRUCT_MEMBER(st, up);
+    BIND_STRUCT_METHOD(st, setConventions, MARGS("depthRange"));
     BIND_STRUCT_METHOD(st, depthRange, MARGS());
-    BIND_STRUCT_METHOD(st, hand, MARGS());
-    BIND_STRUCT_METHOD(st, upAxis, MARGS());
     BIND_STRUCT_METHOD(st, validate, MARGS());
   }
   return st;
@@ -119,7 +167,7 @@ lbt::Struct<DrawList> *DrawList::defineBindings()
     BIND_STRUCT_METHOD(st, linesXyz, MARGS("style", "xyz"));
     BIND_STRUCT_METHOD(st, pointsXyz, MARGS("style", "xyz"));
     BIND_STRUCT_METHOD(st, trianglesXyz, MARGS("style", "xyz", "colors"));
-    BIND_STRUCT_METHOD(st, shapeOf, MARGS("style", "kind", "matrix"));
+    BIND_STRUCT_METHOD(st, shape, MARGS("style", "kind", "matrix"));
     BIND_STRUCT_METHOD(st, pushMatrix, MARGS("m"));
     BIND_STRUCT_METHOD(st, popMatrix, MARGS());
     BIND_STRUCT_METHOD(st, circle2d, MARGS("style", "x", "y", "radius", "filled"));

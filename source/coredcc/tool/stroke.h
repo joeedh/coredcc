@@ -40,8 +40,8 @@ enum class StrokeSpace : int32_t { Screen = 0, World = 1 };
 enum class StrokeMethod : int32_t { Path = 0, Anchored = 1, DragDot = 2 };
 
 struct StrokeSettings {
-  int32_t space = int32_t(StrokeSpace::Screen);
-  int32_t method = int32_t(StrokeMethod::Path);
+  StrokeSpace space = StrokeSpace::Screen;
+  StrokeMethod method = StrokeMethod::Path;
   /** The distance between samples, as a fraction of the diameter (2 × radius). */
   double spacing = 0.1;
   /** Logical pixels; world units with `radiusIsWorld`. */
@@ -346,3 +346,13 @@ template <class Impl> Status addNativeStrokeBrush(Runtime &rt, std::string_view 
 }
 
 } // namespace coredcc
+
+namespace litestl::binding {
+/** StrokeSpace and StrokeMethod, bound as enums (tool/stroke.cc). */
+template <> struct Binder<coredcc::StrokeSpace> {
+  static const BindingBase *bind();
+};
+template <> struct Binder<coredcc::StrokeMethod> {
+  static const BindingBase *bind();
+};
+} // namespace litestl::binding

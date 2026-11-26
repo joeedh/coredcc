@@ -259,7 +259,7 @@ Unreal, coredcc is exactly one module, so they exist once.
 - **Events:** `dispatch(ctx, view, event)` for each one, with the View of the viewport the pointer is in.
   - Positions are device pixels, y down, as for picking.
   - A move carries the positions the host coalesced into it (`addSample`), oldest first. Strokes use them.
-  - It returns `eventresult::kHandled` when coredcc used the event. Otherwise the host's own navigation may
+  - It returns `EventResult::Handled` when coredcc used the event. Otherwise the host's own navigation may
     have it.
   - A modal grabs every event until its gesture ends. Send `Cancel` when the host wants a gesture stopped,
     and `FocusLost` when the window loses the focus.

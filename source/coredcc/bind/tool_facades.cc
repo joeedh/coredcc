@@ -317,7 +317,7 @@ IntResult toolEvent(Context &ctx, const View &v, const InputEvent &e)
     return failed<IntResult>(tm.status());
   }
   Status late;
-  Result<int32_t> r = (*tm)->dispatch(ctx, v, e, &late);
+  Result<EventResult> r = (*tm)->dispatch(ctx, v, e, &late);
   if (!r.ok()) {
     return failed<IntResult>(r.status());
   }
@@ -556,7 +556,13 @@ void addToolBindings(litestl::binding::BindingManager *mgr)
   using litestl::binding::Bind;
   litestl::alloc::PermanentGuard guard;
   mgr->add(Bind<PointerSample>());
+  mgr->add(Bind<EventType>());
+  mgr->add(Bind<PointerType>());
+  mgr->add(Bind<EventResult>());
+  mgr->add(Bind<ModalResult>());
   mgr->add(Bind<InputEvent>());
+  mgr->add(Bind<DepthMode>());
+  mgr->add(Bind<ShapeKind>());
   mgr->add(Bind<DrawStyle>());
   mgr->add(Bind<DrawList>());
   mgr->add(Bind<GizmoHit>());
@@ -569,6 +575,8 @@ void addToolBindings(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<OverlayDrawable>());
   mgr->add(Bind<TransformableElements>());
   mgr->add(Bind<Symmetry>());
+  mgr->add(Bind<StrokeSpace>());
+  mgr->add(Bind<StrokeMethod>());
   mgr->add(Bind<StrokeSettings>());
   mgr->add(Bind<StrokeSample>());
   mgr->add(Bind<StrokeTarget>());

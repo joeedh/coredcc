@@ -24,23 +24,20 @@
 
 namespace coredcc {
 
-/** What Tool::onEvent returns, as a number. */
-namespace eventresult {
-inline constexpr int32_t kUnhandled = 0;
-inline constexpr int32_t kHandled = 1;
-} // namespace eventresult
+/** What Tool::onEvent and ToolManager::dispatch return. */
+enum class EventResult : int32_t { Unhandled = 0, Handled = 1 };
 
-/** What Modal::onEvent returns, as a number. */
-namespace modalresult {
-/** Keep the grab; the event is used. */
-inline constexpr int32_t kContinue = 0;
-/** Keep the grab; the host gets the event (a wheel zoom during a drag). */
-inline constexpr int32_t kPassThrough = 1;
-/** Done: commit the command it owns. */
-inline constexpr int32_t kFinish = 2;
-/** Done: cancel the command it owns. */
-inline constexpr int32_t kCancel = 3;
-} // namespace modalresult
+/** What Modal::onEvent returns. */
+enum class ModalResult : int32_t {
+  /** Keep the grab; the event is used. */
+  Continue = 0,
+  /** Keep the grab; the host gets the event (a wheel zoom during a drag). */
+  PassThrough = 1,
+  /** Done: commit the command it owns. */
+  Finish = 2,
+  /** Done: cancel the command it owns. */
+  Cancel = 3,
+};
 
 /**
  * The persistent tool that the user picked. An instance lives from `activate` to
@@ -49,7 +46,7 @@ inline constexpr int32_t kCancel = 3;
  * - `activate` adds its gizmos (ToolManager::addGizmo). An error leaves no tool active.
  * - `deactivate` (optional): the manager removes the gizmos itself.
  * - `onEvent`: an event that no modal and no gizmo took, moves too (there is no separate
- *   hover). eventresult::kHandled or kUnhandled. It may run commands, begin an
+ *   hover). EventResult::Handled or Unhandled. It may run commands, begin an
  *   interactive one and push a modal for it.
  * - `drawOverlay` (optional): what it shows besides its gizmos. It may not change
  *   anything.
@@ -69,7 +66,7 @@ struct Tool : IfaceRef {
   {
     CDCC_CALL(deactivate, ctx, tm);
   }
-  int32_t
+  EventResult
   onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e)
   {
     return CDCC_CALL(onEvent, ctx, tm, view, e);
@@ -105,15 +102,15 @@ struct Tool : IfaceRef {
  * A grab of every event for one gesture. A tool or a gizmo pushes it, usually after
  * beginning an interactive command that the modal then owns (ToolManager::pushModal).
  *
- * - `onEvent`: a modalresult. On kFinish the manager commits the command it owns, on
- *   kCancel it cancels it; after either it pops the modal and calls `end`. Cancel and
+ * - `onEvent`: a ModalResult. On Finish the manager commits the command it owns, on
+ *   Cancel it cancels it; after either it pops the modal and calls `end`. Cancel and
  *   FocusLost events always end it with a cancel.
  * - `drawOverlay` (optional), as Tool's.
  * - `end` (optional): the modal is gone; `committed` says whether its command was
  *   committed. Also called when the command ended behind its back (an undo cancelled it).
  */
 struct Modal : IfaceRef {
-  int32_t
+  ModalResult
   onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e)
   {
     return CDCC_CALL(onEvent, ctx, tm, view, e);
@@ -345,3 +342,13 @@ template <class Impl> Result<const ToolDef *> addNativeTool(Runtime &rt, ToolDef
 }
 
 } // namespace coredcc
+
+namespace litestl::binding {
+/** EventResult and ModalResult, bound as enums (tool/bindings.cc). */
+template <> struct Binder<coredcc::EventResult> {
+  static const BindingBase *bind();
+};
+template <> struct Binder<coredcc::ModalResult> {
+  static const BindingBase *bind();
+};
+} // namespace litestl::binding

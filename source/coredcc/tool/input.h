@@ -8,6 +8,7 @@
  * viewport. Wheel deltas are logical pixels. Times are seconds, from any monotonic clock.
  */
 
+#include "litestl/binding/binding_bind.h"
 #include "litestl/util/vector.h"
 
 #include <cstdint>
@@ -107,8 +108,8 @@ struct InputEvent {
     return type == EventType::PointerDown || type == EventType::PointerMove ||
            type == EventType::PointerUp;
   }
-  /** Whether `type` and `pointer` are values of their enums (scripts set them as
-   * numbers). ToolManager::dispatch refuses an event that isn't. */
+  /** Whether `type` and `pointer` are values of their enums (scripts can set any
+   * number). ToolManager::dispatch refuses an event that isn't. */
   bool valid() const
   {
     return int32_t(type) >= 0 && int32_t(type) <= int32_t(EventType::FocusLost) &&
@@ -131,23 +132,6 @@ struct InputEvent {
     samples_.append(s);
   }
 
-  /* For scripts: the enums as numbers. */
-  int32_t typeValue() const
-  {
-    return int32_t(type);
-  }
-  void setType(int32_t t)
-  {
-    type = EventType(t);
-  }
-  int32_t pointerValue() const
-  {
-    return int32_t(pointer);
-  }
-  void setPointer(int32_t p)
-  {
-    pointer = PointerType(p);
-  }
   static litestl::binding::types::Struct<InputEvent> *defineBindings();
 
   /** Public, so that the struct is standard-layout (its members are bound by offset);
@@ -157,3 +141,13 @@ struct InputEvent {
 };
 
 } // namespace coredcc
+
+namespace litestl::binding {
+/** EventType and PointerType, bound as enums (tool/bindings.cc). */
+template <> struct Binder<coredcc::EventType> {
+  static const BindingBase *bind();
+};
+template <> struct Binder<coredcc::PointerType> {
+  static const BindingBase *bind();
+};
+} // namespace litestl::binding

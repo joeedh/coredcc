@@ -451,8 +451,8 @@ void testBadInput(const Types &t)
                 StatusCode::FailedPrecondition);
     for (int bad = 0; bad < 6; bad++) {
       TransformDelta b;
-      b.setKind(bad == 0 ? 3 : 0);
-      b.setKind(bad == 1 ? -1 : b.kindValue());
+      b.kind = DeltaKind(bad == 0 ? 3 : 0);
+      b.kind = bad == 1 ? DeltaKind(-1) : b.kind;
       b.angle = bad == 2 ? nan : 0.0;
       b.vector[0] = bad == 3 ? nan : 0.0;
       b.pivot[1] = bad == 4 ? nan : 0.0;
@@ -508,7 +508,7 @@ void testDeltaMatrix()
     d.axis = r.vec(2);
     d.angle = r.range(-7, 7);
     for (int k = 0; k < 3; k++) {
-      d.setKind(k);
+      d.kind = DeltaKind(k);
       const double3 p = r.vec(4);
       const double3 local = d.basis.conjugated().rotate(p - d.pivot);
       const double3 u = d.axis * (1.0 / lengthOf(d.axis));

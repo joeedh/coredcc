@@ -2,6 +2,8 @@
 #include "coredcc/scene/evaluated.h"
 #include "coredcc/scene/transform_registry.h"
 
+#include "coredcc/base/detail/enum_binding.h"
+
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
@@ -33,6 +35,18 @@ const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::EvalStatu
     e->addItem("Cycle", int(EvalStatus::Cycle));
     e->addItem("NoTransform", int(EvalStatus::NoTransform));
   }
+  return e;
+}
+
+const litestl::binding::BindingBase *litestl::binding::Binder<coredcc::DeltaKind>::bind()
+{
+  using coredcc::DeltaKind;
+  static const BindingBase *e =
+      coredcc::detail::bindEnum("coredcc::DeltaKind",
+                                sizeof(DeltaKind),
+                                {{"Translate", int(DeltaKind::Translate)},
+                                 {"Rotate", int(DeltaKind::Rotate)},
+                                 {"Scale", int(DeltaKind::Scale)}});
   return e;
 }
 
@@ -129,8 +143,7 @@ lbt::Struct<TransformDelta> *TransformDelta::defineBindings()
     BIND_STRUCT_MEMBER(st, vector);
     BIND_STRUCT_MEMBER(st, axis);
     BIND_STRUCT_MEMBER(st, angle);
-    BIND_STRUCT_METHOD(st, kindValue, MARGS());
-    BIND_STRUCT_METHOD(st, setKind, MARGS("k"));
+    BIND_STRUCT_MEMBER(st, kind);
     BIND_STRUCT_METHOD(st, matrix, MARGS());
     BIND_STRUCT_METHOD(st, rotation, MARGS());
   }

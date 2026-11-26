@@ -19,6 +19,7 @@
 
 namespace coredcc {
 
+enum class EventResult : int32_t; /* tool.h */
 struct Tool;
 struct Modal;
 struct Gizmo;
@@ -71,16 +72,14 @@ public:
     return def_;
   }
   /**
-   * An eventresult. InvalidArgument for an event whose type or pointer isn't one
+   * An EventResult. InvalidArgument for an event whose type or pointer isn't one
    * (`InputEvent::valid`). An error of a gizmo's `update` or `hitTest` comes after the
    * event went on to the tool: with `late`, it goes there and the result is still
    * returned; without, it is returned instead of the result. The active tool's
    * `settingsChanged` is called first when its settings changed since the last event.
    */
-  Result<int32_t> dispatch(Context &ctx,
-                           const View &view,
-                           const InputEvent &e,
-                           Status *late = nullptr);
+  Result<EventResult>
+  dispatch(Context &ctx, const View &view, const InputEvent &e, Status *late = nullptr);
   /** Begins `out` at `drawOrigin`, draws the scene's, the tool's, the gizmos' and the
    * modals' overlays, and ends it. Each slot draws above what was pushed before it: it
    * can't pop that, and what it leaves pushed is popped after it. */
@@ -188,7 +187,7 @@ private:
    * `err`, and that gizmo is missed. */
   int bestHit(const ViewMath &view, double x, double y, int32_t &part, Status &err);
   void flushRemoved();
-  Result<int32_t> toModal(Context &ctx, const ViewMath &view, const InputEvent &e);
+  Result<EventResult> toModal(Context &ctx, const ViewMath &view, const InputEvent &e);
   void deactivate(Context &ctx);
 
   Runtime &rt_;

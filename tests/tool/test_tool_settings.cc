@@ -16,9 +16,9 @@ struct NopTool {
   {
     return Status();
   }
-  int32_t onEvent(Context &, ToolManager &, const ViewMath &, const InputEvent &)
+  EventResult onEvent(Context &, ToolManager &, const ViewMath &, const InputEvent &)
   {
-    return eventresult::kUnhandled;
+    return EventResult::Unhandled;
   }
   static lbt::Struct<NopTool> *defineBindings()
   {

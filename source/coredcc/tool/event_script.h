@@ -42,18 +42,19 @@ namespace coredcc {
 
 class Context;
 class ToolManager;
+enum class EventResult : int32_t; /* tool.h */
 struct View;
 
 /** The events of `text`. InvalidArgument names the byte offset of the first mistake. */
 Result<litestl::util::Vector<InputEvent>> parseEventScript(std::string_view text);
 
 /** Dispatches each event to `tm`. Stops at the first error, which names the event's
- * index. `handled`, if given, gets one eventresult per event dispatched. */
+ * index. `handled`, if given, gets one EventResult per event dispatched. */
 Status playEvents(ToolManager &tm,
                   Context &ctx,
                   const View &view,
                   std::span<const InputEvent> events,
-                  litestl::util::Vector<int32_t> *handled = nullptr);
+                  litestl::util::Vector<EventResult> *handled = nullptr);
 
 /** parseEventScript, then playEvents. */
 Status

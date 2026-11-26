@@ -552,9 +552,9 @@ void testValidate()
       {"viewport is empty", [](View &v) { v.viewport[3] = -1; }},
       {"dpiScale", [](View &v) { v.dpiScale = 0; }},
       {"dpiScale", [&](View &v) { v.dpiScale = nan; }},
-      {"no such value", [](View &v) { v.setConventions(2, 0, 0); }},
-      {"no such value", [](View &v) { v.setConventions(0, 7, 0); }},
-      {"no such value", [](View &v) { v.setConventions(0, 0, -1); }},
+      {"no such value", [](View &v) { v.setConventions(2); }},
+      {"no such value", [](View &v) { v.handedness = Handedness(7); }},
+      {"no such value", [](View &v) { v.up = UpAxis(-1); }},
       {"isn't finite", [&](View &v) { v.view[3][0] = nan; }},
       {"isn't finite",
        [](View &v) { v.proj[0][0] = std::numeric_limits<double>::infinity(); }},
@@ -685,9 +685,9 @@ void testScripts()
   v.putViewport(2, 640);
   v.putViewport(4, 1);
   v.putViewport(-1, 1);
-  test_assert(v.depthRange() == 0 && v.hand() == 0 && v.upAxis() == 1);
-  v.setConventions(1, 1, 0);
-  test_assert(v.depthRange() == 1 && v.hand() == 1 && v.upAxis() == 0);
+  test_assert(v.depthRange() == 0);
+  v.setConventions(1);
+  test_assert(v.depthRange() == 1 && v.depth == DepthRange::MinusOneToOne);
   ViewMath m;
   for (int i : {-1, 4}) {
     test_assert(m.nearPlaneAt(i) == 0.0 && m.farPlaneAt(i) == 0.0 &&

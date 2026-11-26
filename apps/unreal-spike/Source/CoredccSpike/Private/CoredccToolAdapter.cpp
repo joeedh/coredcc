@@ -52,7 +52,7 @@ void UCoredccToolAdapter::Send(int32 Type, const FInputDeviceRay& Ray, uint32 Bu
 	E.buttons = Buttons;
 	E.time = FPlatformTime::Seconds();
 	if (!View) return;
-	const coredcc::Result<int32_t> R = Doc->Tools->dispatch(*Doc->Ctx, *View, E);
+	const coredcc::Result<coredcc::EventResult> R = Doc->Tools->dispatch(*Doc->Ctx, *View, E);
 	if (!R.ok()) UE_LOG(LogCoredccTool, Warning, TEXT("dispatch: %hs"), R.status().message());
 	SyncTransaction();
 }

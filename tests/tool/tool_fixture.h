@@ -77,13 +77,13 @@ struct ToolDoc : CommandDoc {
     setting(name, PropValue::ofEnum(item->value));
   }
   /** Dispatches, then evaluates as a frame would. */
-  Result<int32_t> send(const InputEvent &e)
+  Result<EventResult> send(const InputEvent &e)
   {
-    Result<int32_t> r = tm.dispatch(*ctx, view, e);
+    Result<EventResult> r = tm.dispatch(*ctx, view, e);
     must(evaluateScene(*ctx));
     return r;
   }
-  Result<int32_t>
+  Result<EventResult>
   send(EventType type, double x, double y, uint32_t mods = 0, int32_t button = 0)
   {
     InputEvent e;
@@ -100,7 +100,7 @@ struct ToolDoc : CommandDoc {
     Result<Vector<InputEvent>> events = parseEventScript(script);
     CDCC_TRY(events.status());
     for (const InputEvent &e : *events) {
-      Result<int32_t> r = send(e);
+      Result<EventResult> r = send(e);
       CDCC_TRY(r.status());
     }
     return Status();

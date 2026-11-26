@@ -1,7 +1,7 @@
-/* core.tool.stroke: a press begins core.stroke on the active object, moves feed it, a release
- * commits it. */
-#include "coredcc/command/executor.h"
+/* core.tool.stroke: a press begins core.stroke on the active object, moves feed it, a
+ * release commits it. */
 #include "coredcc/command/command.h"
+#include "coredcc/command/executor.h"
 #include "coredcc/scene/commands.h"
 #include "coredcc/scene/scene.h"
 #include "coredcc/tool/manager.h"
@@ -31,7 +31,7 @@ void drawCursor(const ViewMath &view, double x, double y, double radius, DrawLis
 {
   DrawStyle style;
   style.color = 0xe0ffffffu;
-  style.depth = int32_t(DepthMode::Always);
+  style.depth = DepthMode::Always;
   out.circle2d(style, x, y, radius, false).ignore();
   (void)view;
 }
@@ -53,20 +53,21 @@ namespace tools {
 struct StrokeModal {
   double x = 0.0, y = 0.0, radius = 25.0;
 
-  int32_t onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e)
+  ModalResult
+  onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e)
   {
     if ((e.type == EventType::KeyDown && e.key == keys::kEscape) ||
         (e.type == EventType::PointerDown && e.button == 2))
     {
-      return modalresult::kCancel;
+      return ModalResult::Cancel;
     }
     if (e.type == EventType::Wheel) {
-      return modalresult::kPassThrough;
+      return ModalResult::PassThrough;
     }
     CommandExecutor *ex = ctx.executor();
     const bool release = e.type == EventType::PointerUp && e.button == 0;
     if (e.type != EventType::PointerMove && !release) {
-      return modalresult::kContinue;
+      return ModalResult::Continue;
     }
     x = e.x;
     y = e.y;
@@ -89,12 +90,12 @@ struct StrokeModal {
     }
     if (!s.ok()) {
       ctx.runtime().setStickyError(s); /* the manager cancels the stroke and returns it */
-      return modalresult::kCancel;
+      return ModalResult::Cancel;
     }
     if (!release) {
-      return modalresult::kContinue;
+      return ModalResult::Continue;
     }
-    return samples > 0 ? modalresult::kFinish : modalresult::kCancel;
+    return samples > 0 ? ModalResult::Finish : ModalResult::Cancel;
   }
   void drawOverlay(const ViewMath &view, DrawList &out) const
   {
@@ -131,7 +132,8 @@ struct StrokeTool {
                : Status::error(StatusCode::NotFound, "core.tool.stroke isn't registered");
   }
 
-  int32_t onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e)
+  EventResult
+  onEvent(Context &ctx, ToolManager &tm, const ViewMath &view, const InputEvent &e)
   {
     if (e.isPointer()) {
       x = e.x;
@@ -140,7 +142,7 @@ struct StrokeTool {
       radius = radiusOf(ctx.runtime(), *def);
     }
     if (e.type != EventType::PointerDown || e.button != 0) {
-      return eventresult::kUnhandled;
+      return EventResult::Unhandled;
     }
     CommandExecutor *ex = ctx.executor();
     const uint64_t before = ex ? ex->interactiveSerial() : 0;
@@ -152,7 +154,7 @@ struct StrokeTool {
         ex->cancel(ctx).ignore();
       }
     }
-    return eventresult::kHandled;
+    return EventResult::Handled;
   }
 
   void drawOverlay(const ViewMath &view, DrawList &out) const

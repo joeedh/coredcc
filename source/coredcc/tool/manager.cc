@@ -442,17 +442,17 @@ int32_t ToolManager::gizmoCount() const
 
 /* ---- events ---- */
 
-Result<int32_t>
+Result<EventResult>
 ToolManager::toModal(Context &ctx, const ViewMath &view, const InputEvent &e)
 {
   const int top = int(modals_.size()) - 1;
   ModalEntry *m = modals_[top];
   if (e.isPointer() && m->boundPointer && e.pointerId != m->pointerId) {
-    return eventresult::kUnhandled; /* another finger or pen: the host's */
+    return EventResult::Unhandled; /* another finger or pen: the host's */
   }
   const CommandExecutor *ex = ctx.executor();
   const uint64_t before = ex ? ex->interactiveSerial() : 0;
-  int32_t r = m->modal->onEvent(ctx, *this, view, e);
+  ModalResult r = m->modal->onEvent(ctx, *this, view, e);
   if (Status err = slotError(); !err.ok()) {
     return first(err, cancelFrom(ctx, top));
   }
@@ -464,12 +464,12 @@ ToolManager::toModal(Context &ctx, const ViewMath &view, const InputEvent &e)
   }
   if (!stillThere) {
     CDCC_TRY(orphan(ctx, before));
-    return eventresult::kHandled;
+    return EventResult::Handled;
   }
   if (e.type == EventType::Cancel || e.type == EventType::FocusLost) {
-    r = modalresult::kCancel;
+    r = ModalResult::Cancel;
   }
-  if (r == modalresult::kFinish || r == modalresult::kCancel) {
+  if (r == ModalResult::Finish || r == ModalResult::Cancel) {
     if (int(modals_.size()) - 1 > top) {
       const Status c = cancelFrom(ctx, top);
       return first(Status::error(StatusCode::InvalidArgument,
@@ -477,17 +477,17 @@ ToolManager::toModal(Context &ctx, const ViewMath &view, const InputEvent &e)
                                  "were cancelled"),
                    c);
     }
-    CDCC_TRY(finish(ctx, top, r == modalresult::kFinish));
-    return eventresult::kHandled;
+    CDCC_TRY(finish(ctx, top, r == ModalResult::Finish));
+    return EventResult::Handled;
   }
   CDCC_TRY(orphan(ctx, before));
-  return r == modalresult::kPassThrough ? eventresult::kUnhandled : eventresult::kHandled;
+  return r == ModalResult::PassThrough ? EventResult::Unhandled : EventResult::Handled;
 }
 
-Result<int32_t> ToolManager::dispatch(Context &ctx,
-                                      const View &view,
-                                      const InputEvent &e,
-                                      Status *lateOut)
+Result<EventResult> ToolManager::dispatch(Context &ctx,
+                                          const View &view,
+                                          const InputEvent &e,
+                                          Status *lateOut)
 {
   if (lateOut) {
     *lateOut = Status();
@@ -516,7 +516,7 @@ Result<int32_t> ToolManager::dispatch(Context &ctx,
   const bool press = e.type == EventType::PointerDown && e.button == 0;
   /* Errors of update and hitTest are given once the event is dispatched. */
   Status late;
-  const auto deliver = [&](int32_t r) -> Result<int32_t> {
+  const auto deliver = [&](EventResult r) -> Result<EventResult> {
     if (late.ok()) {
       return r;
     }
@@ -544,19 +544,19 @@ Result<int32_t> ToolManager::dispatch(Context &ctx,
         activeGizmo_ = entry->id;
         activePart_ = part;
       }
-      return deliver(eventresult::kHandled);
+      return deliver(EventResult::Handled);
     }
   }
   if (!tool_) {
-    return deliver(eventresult::kUnhandled);
+    return deliver(EventResult::Unhandled);
   }
-  const int32_t r = tool_->tool->onEvent(ctx, *this, vm, e);
+  const EventResult r = tool_->tool->onEvent(ctx, *this, vm, e);
   if (Status err = slotError(); !err.ok()) {
     return first(err, first(cancelFrom(ctx, 0), orphan(ctx, before)));
   }
   CDCC_TRY(orphan(ctx, before));
-  return deliver(r == eventresult::kHandled ? eventresult::kHandled
-                                            : eventresult::kUnhandled);
+  return deliver(r == EventResult::Handled ? EventResult::Handled
+                                           : EventResult::Unhandled);
 }
 
 Status ToolManager::draw(Context &ctx, const View &view, DrawList &out)

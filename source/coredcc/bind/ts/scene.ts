@@ -13,12 +13,15 @@ import type {TransformTypeInfo} from 'coredcc-gen/coredcc/TransformTypeInfo'
 import type {ChannelBlock} from 'coredcc-gen/coredcc/ChannelBlock'
 import type {Context} from 'coredcc-gen/coredcc/Context'
 import type {EvalCtx} from 'coredcc-gen/coredcc/EvalCtx'
+import {DeltaKind} from 'coredcc-gen/coredcc/DeltaKind'
 import * as cd from 'coredcc-gen/coredcc/functions'
+import {Handedness} from 'coredcc-gen/coredcc/Handedness'
 import type {Status} from 'coredcc-gen/coredcc/Status'
 import {StatusCode} from 'coredcc-gen/coredcc/StatusCode'
 import type {TransformDelta as BoundDelta} from 'coredcc-gen/coredcc/TransformDelta'
 import type {TransformState as BoundState} from 'coredcc-gen/coredcc/TransformState'
 import type {PickOptions as BoundPickOptions} from 'coredcc-gen/coredcc/PickOptions'
+import {UpAxis} from 'coredcc-gen/coredcc/UpAxis'
 import type {View as BoundView} from 'coredcc-gen/coredcc/View'
 import type {ViewMath} from 'coredcc-gen/coredcc/ViewMath'
 import {run} from './run.ts'
@@ -166,9 +169,11 @@ const stateOf = (s: BoundState): TransformState => ({
   rotation: read(s.rotation, 4),
   localScale: readVec3(s.localScale),
 })
-const kinds = ['translate', 'rotate', 'scale'] as const
+const kinds = new Map<DeltaKind, TransformDelta['kind']>([
+  [DeltaKind.Translate, 'translate'], [DeltaKind.Rotate, 'rotate'], [DeltaKind.Scale, 'scale'],
+])
 const deltaOf = (d: BoundDelta): TransformDelta => ({
-  kind: kinds[d.kindValue()],
+  kind: kinds.get(d.kind)!,
   basis: read(d.basis, 4),
   pivot: readVec3(d.pivot),
   vector: readVec3(d.vector),
@@ -499,7 +504,9 @@ function withView<R>(spec: ViewSpec, fn: (v: BoundView) => R): R {
     for (let i = 0; i < 4; i++) v.putViewport(i, spec.viewport[i])
     fill('view', v.view, spec.view, 16)
     fill('proj', v.proj, spec.proj, 16)
-    v.setConventions(spec.depth === '-1..1' ? 1 : 0, spec.handedness === 'left' ? 1 : 0, spec.up === 'y' ? 0 : 1)
+    v.setConventions(spec.depth === '-1..1' ? 1 : 0)
+    v.handedness = spec.handedness === 'left' ? Handedness.Left : Handedness.Right
+    v.up = spec.up === 'y' ? UpAxis.Y : UpAxis.Z
     v.reversedZ = spec.reversedZ ?? false
     v.infiniteFar = spec.infiniteFar ?? false
     v.ortho = spec.ortho ?? false

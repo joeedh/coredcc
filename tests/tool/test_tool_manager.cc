@@ -67,7 +67,8 @@ Status pushDragModal(Context &ctx, ToolManager &tm);
 
 /* Sets tool.strength from x while the button is down; up finishes, Escape cancels. */
 struct DragModal {
-  int32_t onEvent(Context &ctx, ToolManager &tm, const ViewMath &, const InputEvent &e)
+  ModalResult
+  onEvent(Context &ctx, ToolManager &tm, const ViewMath &, const InputEvent &e)
   {
     g_log += "modal;";
     if (g_script.handover && e.type == EventType::KeyDown && e.key == 'n') {
@@ -75,7 +76,7 @@ struct DragModal {
       ctx.executor()->commit(ctx).ignore();
       beginDragCommand(ctx).ignore();
       pushDragModal(ctx, tm).ignore();
-      return modalresult::kContinue;
+      return ModalResult::Continue;
     }
     if (g_script.outcome && e.type == EventType::PointerUp) {
       tm.setStatus("dragging");
@@ -83,18 +84,18 @@ struct DragModal {
     }
     if (g_script.stickyInModal) {
       ctx.runtime().setStickyError(Status::error(StatusCode::Internal, "thrown"));
-      return modalresult::kContinue;
+      return ModalResult::Continue;
     }
     if (e.type == EventType::KeyDown && e.key == keys::kEscape) {
-      return modalresult::kCancel;
+      return ModalResult::Cancel;
     }
     if (e.type == EventType::Wheel) {
-      return modalresult::kPassThrough;
+      return ModalResult::PassThrough;
     }
     if (e.type == EventType::PointerMove) {
       setValue(ctx, "tool.strength", PropValue::ofFloat(e.x / 1000.0)).ignore();
     }
-    return e.type == EventType::PointerUp ? modalresult::kFinish : modalresult::kContinue;
+    return e.type == EventType::PointerUp ? ModalResult::Finish : ModalResult::Continue;
   }
   void drawOverlay(const ViewMath &, DrawList &out) const
   {
@@ -192,23 +193,24 @@ struct DragTool {
   {
     g_log += "deactivate;";
   }
-  int32_t onEvent(Context &ctx, ToolManager &tm, const ViewMath &, const InputEvent &e)
+  EventResult
+  onEvent(Context &ctx, ToolManager &tm, const ViewMath &, const InputEvent &e)
   {
     g_script.seen = ctx.tools();
     if (g_script.reenter) {
       g_script.reentered = tm.setActive(ctx, "");
     }
     if (e.type != EventType::PointerDown || e.button != 0) {
-      return eventresult::kUnhandled;
+      return EventResult::Unhandled;
     }
     g_log += "tool-press;";
     if (!beginDragCommand(ctx).ok()) {
-      return eventresult::kUnhandled;
+      return EventResult::Unhandled;
     }
     if (g_script.pushModal) {
       pushDragModal(ctx, tm).ignore();
     }
-    return eventresult::kHandled;
+    return EventResult::Handled;
   }
   void settingsChanged(Context &, ToolManager &)
   {
@@ -231,9 +233,9 @@ struct BadTool {
   {
     return Status::error(StatusCode::Internal, "no");
   }
-  int32_t onEvent(Context &, ToolManager &, const ViewMath &, const InputEvent &)
+  EventResult onEvent(Context &, ToolManager &, const ViewMath &, const InputEvent &)
   {
-    return eventresult::kUnhandled;
+    return EventResult::Unhandled;
   }
   static lbt::Struct<BadTool> *defineBindings()
   {
@@ -268,7 +270,7 @@ struct ToolSetup : Setup {
   {
     tm.shutdown(ctx);
   }
-  Result<int32_t> send(const InputEvent &e)
+  Result<EventResult> send(const InputEvent &e)
   {
     return tm.dispatch(ctx, view, e);
   }
@@ -355,8 +357,8 @@ static void test_drag_is_one_step()
   test_assert(s.tm.setActive(s.ctx, "test.tool.drag").ok() && g_log == "activate;");
   test_assert(s.tm.gizmoCount() == 1);
   /* A press away from the gizmo goes to the tool, which begins a drag. */
-  Result<int32_t> r = s.send(event(EventType::PointerDown, 500, 500));
-  test_assert(r.ok() && *r == eventresult::kHandled && s.tm.modalOpen());
+  Result<EventResult> r = s.send(event(EventType::PointerDown, 500, 500));
+  test_assert(r.ok() && *r == EventResult::Handled && s.tm.modalOpen());
   test_assert(s.ex.interactiveOpen() && s.tm.activeGizmo() == -1);
   for (int i = 1; i <= 5; i++) {
     test_assert(s.send(event(EventType::PointerMove, 100.0 * i, 500)).ok());
@@ -364,7 +366,7 @@ static void test_drag_is_one_step()
   test_assert(strength(s.ctx) == 0.5 && s.history.size() == 0);
   /* A wheel goes to the host. */
   r = s.send(event(EventType::Wheel, 500, 500));
-  test_assert(r.ok() && *r == eventresult::kUnhandled && s.tm.modalOpen());
+  test_assert(r.ok() && *r == EventResult::Unhandled && s.tm.modalOpen());
   /* setActive is Busy during a gesture. */
   test_assert(s.tm.setActive(s.ctx, "").code() == StatusCode::Busy);
   g_log.clear();
@@ -428,7 +430,7 @@ static void test_undo_during_drag()
   test_assert(s.ex.interactiveSerial() != serial && strength(s.ctx) == 0.5);
   test_assert(s.tm.modalOpen()); /* until the next event or draw */
   g_log.clear();
-  Result<int32_t> r = s.send(event(EventType::PointerMove, 300, 500));
+  Result<EventResult> r = s.send(event(EventType::PointerMove, 300, 500));
   test_assert(r.ok() && g_log == "end-cancel;update;" && !s.tm.modalOpen());
   test_assert(strength(s.ctx) == 0.5 && s.history.size() == 0);
   /* A new drag that another tool's command replaced: also popped, without touching it. */
@@ -485,8 +487,8 @@ static void test_gizmo()
   /* Deactivating removes the gizmos. */
   test_assert(s.tm.setActive(s.ctx, "").ok() && s.tm.gizmoCount() == 0);
   test_assert(s.tm.active() == nullptr);
-  Result<int32_t> r = s.send(event(EventType::PointerDown, 100, 100));
-  test_assert(r.ok() && *r == eventresult::kUnhandled);
+  Result<EventResult> r = s.send(event(EventType::PointerDown, 100, 100));
+  test_assert(r.ok() && *r == EventResult::Unhandled);
 }
 
 static void test_errors_and_busy()
@@ -501,7 +503,7 @@ static void test_errors_and_busy()
 
   /* A tool that begins a command and pushes no modal: the command is cancelled. */
   g_script.pushModal = false;
-  Result<int32_t> r = s.send(event(EventType::PointerDown, 500, 500));
+  Result<EventResult> r = s.send(event(EventType::PointerDown, 500, 500));
   test_assert(r.status().code() == StatusCode::FailedPrecondition);
   test_assert(!s.ex.interactiveOpen() && s.history.size() == 0);
   g_script.pushModal = true;
@@ -593,10 +595,10 @@ static void test_review_fixes()
 
   /* An event whose type isn't one. */
   InputEvent junk = event(EventType::PointerMove, 0, 0);
-  junk.setType(42);
+  junk.type = EventType(42);
   test_assert(s.send(junk).status().code() == StatusCode::InvalidArgument);
   junk = event(EventType::PointerMove, 0, 0);
-  junk.setPointer(-1);
+  junk.pointer = PointerType(-1);
   test_assert(s.send(junk).status().code() == StatusCode::InvalidArgument);
 
   /* A modal gets its own pointer's events only. */
@@ -604,8 +606,8 @@ static void test_review_fixes()
   InputEvent finger = event(EventType::PointerMove, 900, 500);
   finger.pointerId = 5;
   g_log.clear();
-  Result<int32_t> r = s.send(finger);
-  test_assert(r.ok() && *r == eventresult::kUnhandled && g_log.empty());
+  Result<EventResult> r = s.send(finger);
+  test_assert(r.ok() && *r == EventResult::Unhandled && g_log.empty());
   test_assert(strength(s.ctx) == 0.5);
 
   /* A modal hands over to a new drag: the new modal stays, with its command. */
@@ -626,7 +628,8 @@ static void test_review_fixes()
   g_script.stickyInUpdate = true;
   Status late;
   r = s.tm.dispatch(s.ctx, s.view, event(EventType::PointerDown, 500, 500), &late);
-  test_assert(r.ok() && *r == eventresult::kHandled && late.code() == StatusCode::Internal);
+  test_assert(r.ok() && *r == EventResult::Handled &&
+              late.code() == StatusCode::Internal);
   test_assert(s.tm.modalOpen());
   g_script.stickyInUpdate = false;
 

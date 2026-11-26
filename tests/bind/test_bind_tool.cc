@@ -54,8 +54,8 @@ std::string nameOf(ToolDoc &d, BlockHandle h)
 
 /* What the script tool, modal and gizmo do and saw. */
 struct Script {
-  std::function<int32_t(Context &, ToolManager &, const InputEvent &)> onEvent;
-  std::function<int32_t(Context &, const InputEvent &)> modalEvent;
+  std::function<EventResult(Context &, ToolManager &, const InputEvent &)> onEvent;
+  std::function<ModalResult(Context &, const InputEvent &)> modalEvent;
   std::function<void(Context &)> gizmoUpdate;
   int activates = 0, deactivates = 0, ends = 0, modalEvents = 0;
   bool committed = false;
@@ -66,8 +66,8 @@ Obj modalObj(Script *s)
   Obj m;
   m.methods["onEvent"] = [s](void **args, void *ret, string *) {
     s->modalEvents++;
-    *static_cast<int32_t *>(ret) = s->modalEvent(*static_cast<Context *>(args[0]),
-                                                 *static_cast<InputEvent *>(args[3]));
+    *static_cast<ModalResult *>(ret) = s->modalEvent(*static_cast<Context *>(args[0]),
+                                                     *static_cast<InputEvent *>(args[3]));
     return true;
   };
   m.methods["end"] = [s](void **args, void *, string *) {
@@ -91,11 +91,11 @@ Obj toolObj(Script *s)
     return true;
   };
   t.methods["onEvent"] = [s](void **args, void *ret, string *) {
-    *static_cast<int32_t *>(ret) = s->onEvent
-                                       ? s->onEvent(*static_cast<Context *>(args[0]),
-                                                    *static_cast<ToolManager *>(args[1]),
-                                                    *static_cast<InputEvent *>(args[3]))
-                                       : eventresult::kUnhandled;
+    *static_cast<EventResult *>(ret) =
+        s->onEvent ? s->onEvent(*static_cast<Context *>(args[0]),
+                                *static_cast<ToolManager *>(args[1]),
+                                *static_cast<InputEvent *>(args[3]))
+                   : EventResult::Unhandled;
     return true;
   };
   return t;
@@ -186,19 +186,19 @@ void testScriptDrag()
     must(registerTool(d, host, &s, "js.nudge"));
     s.onEvent = [&](Context &ctx, ToolManager &, const InputEvent &e) {
       if (e.type != EventType::PointerDown) {
-        return eventresult::kUnhandled;
+        return EventResult::Unhandled;
       }
       must(sc::beginInteractiveAt(ctx, "", kDragDeltaCommand, sc::newRunInputs(), false));
       must(sc::toolPushModal(ctx, host.add(modalObj(&s)), "onEvent end", true));
-      return eventresult::kHandled;
+      return EventResult::Handled;
     };
     s.modalEvent = [&](Context &ctx, const InputEvent &e) {
       if (e.type == EventType::PointerUp) {
-        return modalresult::kFinish;
+        return ModalResult::Finish;
       }
       test_assert(sc::dragCount(ctx).value == 2);
       must(sc::dragUpdate(ctx, moveBy(e.x / 100.0)));
-      return modalresult::kContinue;
+      return ModalResult::Continue;
     };
     d.useTool("js.nudge");
     const std::string before = CommandDoc::liveOnly(d.describe());
@@ -268,7 +268,7 @@ void testGates()
             ctx, host.add(gizmoObj(&s)), "update hitTest draw beginDrag");
         inEvent.push_back(g.status);
       }
-      return eventresult::kHandled;
+      return EventResult::Handled;
     };
     s.gizmoUpdate = [&](Context &ctx) {
       inUpdate.push_back(sc::worldMatrix(ctx, string(name.c_str())).status);
@@ -326,7 +326,7 @@ void testBuiltinGizmo()
         must(g.status);
         id = int32_t(g.value);
       }
-      return eventresult::kHandled;
+      return EventResult::Handled;
     };
     d.useTool("js.nudge");
     InputEvent key;

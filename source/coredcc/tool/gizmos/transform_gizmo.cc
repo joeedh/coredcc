@@ -89,7 +89,7 @@ DrawStyle styleOf(uint32_t color, float width, uint32_t id)
   DrawStyle s;
   s.color = color;
   s.width = width;
-  s.depth = int32_t(DepthMode::Always);
+  s.depth = DepthMode::Always;
   s.id = id;
   return s;
 }

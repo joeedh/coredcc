@@ -167,8 +167,8 @@ StrokeSampler sampler(const ViewMath &vm, double radius, double spacing, int met
   StrokeSettings s;
   s.radius = radius;
   s.spacing = spacing;
-  s.method = method;
-  s.space = space;
+  s.method = StrokeMethod(method);
+  s.space = StrokeSpace(space);
   StrokeSampler out;
   must(out.configure(s));
   out.setView(vm);
@@ -281,7 +281,7 @@ void testLine()
   bad.radius = 0;
   test_assert(sm.configure(bad).code() == StatusCode::InvalidArgument);
   bad = StrokeSettings();
-  bad.method = 7;
+  bad.method = StrokeMethod(7);
   test_assert(sm.configure(bad).code() == StatusCode::InvalidArgument);
 }
 

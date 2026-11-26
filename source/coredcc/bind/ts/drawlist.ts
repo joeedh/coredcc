@@ -3,12 +3,14 @@
  * gizmo's slot, reading one's bytes, and decoding the bytes into plain records, which the
  * test app's renderer and the tests use. Exported by index.ts.
  */
+import {DepthMode as BoundDepthMode} from 'coredcc-gen/coredcc/DepthMode'
 import type {DrawList} from 'coredcc-gen/coredcc/DrawList'
 import type {DrawStyle as BoundStyle} from 'coredcc-gen/coredcc/DrawStyle'
 import * as cd from 'coredcc-gen/coredcc/functions'
+import {ShapeKind as BoundShapeKind} from 'coredcc-gen/coredcc/ShapeKind'
 import {getBindingBackend} from '@litestl/typescript-runtime'
 
-import {check, moduleHeap} from './core.ts'
+import {check, keyOf, moduleHeap} from './core.ts'
 
 export type {DrawList}
 
@@ -19,9 +21,16 @@ export type DepthMode = 'test' | 'always' | 'xray'
 export type RecordKind = 'lines' | 'points' | 'triangles' | 'shape' | 'circle2d' | 'line2d' | 'push' | 'pop'
 export type ShapeKind = 'arrow' | 'cone' | 'cube' | 'sphere' | 'disc' | 'ring' | 'quad'
 
-const depthModes: readonly DepthMode[] = ['test', 'always', 'xray']
+/* The names differ from the C++ items, and decode the list's bytes. */
+const depthModes = new Map<BoundDepthMode, DepthMode>([
+  [BoundDepthMode.Test, 'test'], [BoundDepthMode.Always, 'always'], [BoundDepthMode.XRay, 'xray'],
+])
 const recordKinds: readonly RecordKind[] = ['lines', 'points', 'triangles', 'shape', 'circle2d', 'line2d', 'push', 'pop']
-const shapeKinds: readonly ShapeKind[] = ['arrow', 'cone', 'cube', 'sphere', 'disc', 'ring', 'quad']
+const shapeKinds = new Map<BoundShapeKind, ShapeKind>([
+  [BoundShapeKind.Arrow, 'arrow'], [BoundShapeKind.Cone, 'cone'], [BoundShapeKind.Cube, 'cube'],
+  [BoundShapeKind.Sphere, 'sphere'], [BoundShapeKind.Disc, 'disc'], [BoundShapeKind.Ring, 'ring'],
+  [BoundShapeKind.Quad, 'quad'],
+])
 
 /** How a record looks. `color` is RGBA8 with red in the lowest byte: 0xff0000ff is opaque red. */
 export interface DrawStyle {
@@ -64,8 +73,8 @@ function withStyle<R>(style: DrawStyle, fn: (s: BoundStyle) => R): R {
   try {
     s.color = style.color ?? 0xffffffff
     s.width = style.width ?? 1
-    const depth = depthModes.indexOf(style.depth ?? 'test')
-    if (depth < 0) throw new TypeError(`DrawStyle: no depth mode '${style.depth}'`)
+    const depth = keyOf(depthModes, style.depth ?? 'test')
+    if (depth === undefined) throw new TypeError(`DrawStyle: no depth mode '${style.depth}'`)
     s.depth = depth
     s.id = style.id ?? 0
     return fn(s)
@@ -100,9 +109,9 @@ export class Drawer {
     withStyle(style, (s) => check(this.list.trianglesXyz(s, Array.from(xyz), Array.from(colors))))
   }
   shape(kind: ShapeKind, matrix: ArrayLike<number>, style: DrawStyle = {}) {
-    const k = shapeKinds.indexOf(kind)
-    if (k < 0) throw new TypeError(`shape: no shape '${kind}'`)
-    withMatrix(matrix, (m) => withStyle(style, (s) => check(this.list.shapeOf(s, k + 1, m))))
+    const k = keyOf(shapeKinds, kind)
+    if (k === undefined) throw new TypeError(`shape: no shape '${kind}'`)
+    withMatrix(matrix, (m) => withStyle(style, (s) => check(this.list.shape(s, k, m))))
   }
   pushMatrix(matrix: ArrayLike<number>) {
     withMatrix(matrix, (m) => check(this.list.pushMatrix(m)))
@@ -186,7 +195,7 @@ export function decodeDrawList(bytes: Uint8Array): DecodedDrawList {
     if (total - at < 24) fail(at, 'a record header past the end')
     const kindNo = dv.getUint16(at, true)
     const kind = recordKinds[kindNo - 1] ?? fail(at, `no such kind ${kindNo}`)
-    const mode = depthModes[dv.getUint8(at + 2)] ?? fail(at, `no such depth mode ${dv.getUint8(at + 2)}`)
+    const mode = depthModes.get(dv.getUint8(at + 2)) ?? fail(at, `no such depth mode ${dv.getUint8(at + 2)}`)
     const flags = dv.getUint8(at + 3)
     const allowed = kind === 'triangles' ? 1 : kind === 'circle2d' ? 2 : 0
     if (flags & ~allowed) fail(at, "flags that this kind doesn't have")
@@ -200,7 +209,7 @@ export function decodeDrawList(bytes: Uint8Array): DecodedDrawList {
     if ((kind === 'lines' || kind === 'triangles') && aux % multiple !== 0) {
       fail(at, `a vertex count that isn't a multiple of ${multiple}`)
     }
-    if (kind === 'shape' && (aux < 1 || aux > shapeKinds.length)) fail(at, `no such shape ${aux}`)
+    if (kind === 'shape' && !shapeKinds.has(aux)) fail(at, `no such shape ${aux}`)
     const need =
       kind === 'lines' || kind === 'points' || kind === 'triangles' ? 12 * aux + (flags & 1 ? 4 * aux : 0)
       : kind === 'shape' || kind === 'push' ? 128
@@ -224,7 +233,7 @@ export function decodeDrawList(bytes: Uint8Array): DecodedDrawList {
         if (flags & 1) rec.colors = Array.from({length: aux}, (_, i) => dv.getUint32(p + 12 * aux + 4 * i, true))
         break
       case 'shape':
-        rec.shape = shapeKinds[aux - 1]
+        rec.shape = shapeKinds.get(aux)
         rec.matrix = numbers
         break
       case 'push':

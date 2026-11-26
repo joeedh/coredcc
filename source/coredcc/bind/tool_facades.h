@@ -65,8 +65,8 @@ Status registerForeignStrokeBrush(Context &ctx,
 /* ---- the Context's ToolManager ---- */
 
 Status toolSetActive(Context &ctx, const string &id);
-/** An eventresult. An error of a gizmo's update or hit test (ToolManager::dispatch's
- * `late`) is the status, with the result still the value. */
+/** An EventResult, as a number. An error of a gizmo's update or hit test
+ * (ToolManager::dispatch's `late`) is the status, with the result still the value. */
 IntResult toolEvent(Context &ctx, const View &view, const InputEvent &e);
 /** `out` has what was drawn even when this fails. */
 Status toolDraw(Context &ctx, const View &view, DrawList &out);

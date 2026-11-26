@@ -86,33 +86,33 @@ Status boxSelect(
 
 } // namespace
 
-int32_t
+EventResult
 selectOnPress(Context &ctx, ToolManager &tm, const ViewMath &, const InputEvent &e)
 {
   if (e.type != EventType::PointerDown || e.button != 0) {
-    return eventresult::kUnhandled;
+    return EventResult::Unhandled;
   }
   SelectModal *m = litestl::alloc::New<SelectModal>("coredcc::tools::SelectModal");
   m->press = m->now = gizmo::Pixel{e.x, e.y};
   Result<Owned<Modal>> modal = own<Modal>(ctx.runtime(), kSelectModalImpl, m);
   if (!modal.ok() || !tm.pushModal(ctx, std::move(modal).value(), false).ok()) {
-    return eventresult::kUnhandled;
+    return EventResult::Unhandled;
   }
-  return eventresult::kHandled;
+  return EventResult::Handled;
 }
 
-int32_t SelectModal::onEvent(Context &ctx,
-                             ToolManager &tm,
-                             const ViewMath &view,
-                             const InputEvent &e)
+ModalResult SelectModal::onEvent(Context &ctx,
+                                 ToolManager &tm,
+                                 const ViewMath &view,
+                                 const InputEvent &e)
 {
   if ((e.type == EventType::KeyDown && e.key == keys::kEscape) ||
       (e.type == EventType::PointerDown && e.button == 2))
   {
-    return modalresult::kCancel;
+    return ModalResult::Cancel;
   }
   if (e.type == EventType::Wheel) {
-    return modalresult::kPassThrough;
+    return ModalResult::PassThrough;
   }
   if (e.type == EventType::PointerMove || e.type == EventType::PointerUp) {
     now = gizmo::Pixel{e.x, e.y};
@@ -120,14 +120,14 @@ int32_t SelectModal::onEvent(Context &ctx,
     box = box || std::hypot(now.x - press.x, now.y - press.y) / dpi > kBoxThreshold;
   }
   if (e.type != EventType::PointerUp || e.button != 0) {
-    return modalresult::kContinue;
+    return ModalResult::Continue;
   }
   const Status s =
       box ? boxSelect(ctx, view, press, now, e.modifiers) : clickSelect(ctx, tm, view, e);
   if (!s.ok()) {
     tm.setOutcome(s.message());
   }
-  return modalresult::kFinish;
+  return ModalResult::Finish;
 }
 
 void SelectModal::drawOverlay(const ViewMath &, DrawList &out) const
@@ -138,7 +138,7 @@ void SelectModal::drawOverlay(const ViewMath &, DrawList &out) const
   DrawStyle st;
   st.color = 0xccffffffu;
   st.width = 1.0f;
-  st.depth = int32_t(DepthMode::Always);
+  st.depth = DepthMode::Always;
   const double xy[10] = {
       press.x, press.y, now.x, press.y, now.x, now.y, press.x, now.y, press.x, press.y};
   out.line2d(st, std::span<const double>(xy, 10)).ignore();
@@ -163,10 +163,10 @@ Status SelectTool::activate(Context &, ToolManager &)
   return Status();
 }
 
-int32_t SelectTool::onEvent(Context &ctx,
-                            ToolManager &tm,
-                            const ViewMath &view,
-                            const InputEvent &e)
+EventResult SelectTool::onEvent(Context &ctx,
+                                ToolManager &tm,
+                                const ViewMath &view,
+                                const InputEvent &e)
 {
   return selectOnPress(ctx, tm, view, e);
 }

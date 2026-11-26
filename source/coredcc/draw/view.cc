@@ -257,11 +257,9 @@ void View::putViewport(int32_t i, double value)
   }
 }
 
-void View::setConventions(int32_t depthRange, int32_t hand, int32_t upAxis)
+void View::setConventions(int32_t depthRange)
 {
   depth = DepthRange(depthRange);
-  handedness = Handedness(hand);
-  up = UpAxis(upAxis);
 }
 
 double ViewRegion::planeAt(int32_t plane, int32_t i) const

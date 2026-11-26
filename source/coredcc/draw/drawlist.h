@@ -7,6 +7,7 @@
 
 #include "coredcc/base/status.h"
 
+#include "litestl/binding/binding_bind.h"
 #include "litestl/math/transform.h"
 #include "litestl/util/vector.h"
 
@@ -55,8 +56,7 @@ struct DrawStyle {
   uint32_t color = 0xffffffffu;
   /** Lines and outlines: logical pixels. Points: their diameter. */
   float width = 1.0f;
-  /** A DepthMode. */
-  int32_t depth = int32_t(DepthMode::Test);
+  DepthMode depth = DepthMode::Test;
   /** What the record draws (a gizmo's part, an element), for hosts and tests; 0 for none.
    */
   uint32_t id = 0;
@@ -163,7 +163,7 @@ public:
   Status trianglesXyz(const DrawStyle &style,
                       const litestl::util::Vector<double> &xyz,
                       const litestl::util::Vector<double> &colors);
-  Status shapeOf(const DrawStyle &style, int32_t kind, const mat4d &matrix);
+
   Status line2dXy(const DrawStyle &style, const litestl::util::Vector<double> &xy);
   /** The bytes' address in the module's memory: for a view of WASM memory, taken again
    * each frame. Meaningless outside WASM. */
@@ -273,3 +273,13 @@ private:
 };
 
 } // namespace coredcc
+
+namespace litestl::binding {
+/** DepthMode and ShapeKind, bound as enums (draw/bindings.cc). */
+template <> struct Binder<coredcc::DepthMode> {
+  static const BindingBase *bind();
+};
+template <> struct Binder<coredcc::ShapeKind> {
+  static const BindingBase *bind();
+};
+} // namespace litestl::binding
