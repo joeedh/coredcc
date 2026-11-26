@@ -35,6 +35,21 @@ Status checkNames(const ParsedFile &file, const Runtime &rt, const NameTable &kn
       uses.append(Use{IdDomain::Type, n.type.value, n.text});
     }
   }
+  /* The current names of renamed types (TypeAliases), which the table doesn't hold. */
+  const auto current = [&uses](std::string_view text, TypeId id) {
+    if (!text.empty()) {
+      uses.append(Use{IdDomain::Type, id.value, text});
+    }
+  };
+  for (const ParsedRecord &r : file.records) {
+    current(r.type, r.typeId);
+  }
+  for (const ParsedAttachment &a : file.attachments) {
+    current(a.type, a.typeId);
+  }
+  for (const ParsedSlot &s : file.slots) {
+    current(s.nsName, s.ns);
+  }
   const auto clash = [](std::string_view a, std::string_view b) {
     return Status::error(StatusCode::InvalidArgument,
                          ("the library section: the name '" + std::string(a) +

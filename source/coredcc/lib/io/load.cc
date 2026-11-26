@@ -20,10 +20,26 @@ string own(std::string_view s)
   return string(std::string(s).c_str());
 }
 
-/* Renamed types are read by their current names (TypeAliases), so that is what the
- * library keeps and saves. */
-void canonicalizeTypes(const Runtime &rt, ParsedFile &file)
+/* One block's slots or attachments can share a name once aliases are applied. */
+template <class T, class Key> bool repeats(const Vector<T> &items, Range range, Key key)
 {
+  Vector<decltype(key(items[0]))> keys;
+  for (uint32_t i = 0; i < range.count; i++) {
+    keys.append(key(items[int(range.begin + i)]));
+  }
+  std::sort(first(keys), last(keys));
+  return std::adjacent_find(first(keys), last(keys)) != last(keys);
+}
+
+/* Renamed types are read by their current names (TypeAliases), so that is what the
+ * library keeps and saves. The parser's checks for a slot or an attachment twice are
+ * made again on the current names. */
+Status canonicalizeTypes(const Runtime &rt, ParsedFile &file)
+{
+  CDCC_TRY(checkTypeAliases(rt));
+  if (!rt.findExt<TypeAliases>()) {
+    return Status();
+  }
   for (ParsedRecord &r : file.records) {
     r.type = canonicalTypeName(rt, TypeNameKind::Block, r.type);
     r.typeId = typeNamed(r.type);
@@ -38,6 +54,27 @@ void canonicalizeTypes(const Runtime &rt, ParsedFile &file)
       s.ns = typeNamed(s.nsName);
     }
   }
+  for (const ParsedRecord &r : file.records) {
+    if (repeats(file.slots,
+                r.slots,
+                [](const ParsedSlot &s) {
+                  return std::pair<uint64_t, int64_t>(s.ns.value, s.key);
+                }))
+    {
+      return Status::error(StatusCode::InvalidArgument,
+                           "the library section: a block has one slot twice, once by "
+                           "an old name");
+    }
+    if (repeats(file.attachments,
+                r.attachments,
+                [](const ParsedAttachment &a) { return a.typeId.value; }))
+    {
+      return Status::error(StatusCode::InvalidArgument,
+                           "the library section: a block has one attachment twice, once "
+                           "by an old name");
+    }
+  }
+  return Status();
 }
 
 /* Takes the blob out of the file. */
@@ -203,7 +240,7 @@ loadLibrary(Library &lib, std::span<const uint8_t> bytes, const LoadOptions &opt
   if (!file.ok()) {
     return file.status();
   }
-  canonicalizeTypes(lib.runtime(), **file);
+  CDCC_TRY(canonicalizeTypes(lib.runtime(), **file));
   const auto rekey =
       [&lib](const ParsedRecord &r, BlockId id, const RekeyContext &context) {
         return rekeyRecord(lib, r, id, context);
@@ -224,7 +261,7 @@ appendLibrary(Library &lib, std::span<const uint8_t> bytes, const AppendOptions 
   if (!file.ok()) {
     return file.status();
   }
-  canonicalizeTypes(lib.runtime(), **file);
+  CDCC_TRY(canonicalizeTypes(lib.runtime(), **file));
   const auto rekey =
       [&lib](const ParsedRecord &r, BlockId id, const RekeyContext &context) {
         return rekeyRecord(lib, r, id, context);

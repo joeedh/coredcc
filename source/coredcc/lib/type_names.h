@@ -45,6 +45,9 @@ public:
    * the table's copy (valid while the Runtime lives) or of `name`. */
   std::string_view current(TypeNameKind kind, std::string_view name) const;
 
+  /** checkTypeAliases. */
+  Status checkOldNames(const Runtime &rt) const;
+
 private:
   struct Alias {
     TypeNameKind kind = TypeNameKind::Block;
@@ -58,7 +61,13 @@ private:
 
 /** The current name of a stored type name (TypeAliases::current), without creating the
  * extension. */
-std::string_view canonicalTypeName(const Runtime &rt, TypeNameKind kind, std::string_view name);
+std::string_view
+canonicalTypeName(const Runtime &rt, TypeNameKind kind, std::string_view name);
+
+/** FailedPrecondition if an alias's old name is still a registered type of its kind:
+ * every stored use of it would load as the current type. loadLibrary and appendLibrary
+ * check this before they read a file. */
+Status checkTypeAliases(const Runtime &rt);
 
 } // namespace coredcc
 

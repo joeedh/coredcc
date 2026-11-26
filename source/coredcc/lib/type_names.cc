@@ -68,4 +68,30 @@ std::string_view canonicalTypeName(const Runtime &rt, TypeNameKind kind, std::st
   return aliases ? aliases->current(kind, name) : name;
 }
 
+Status TypeAliases::checkOldNames(const Runtime &rt) const
+{
+  for (const Alias *a : aliases_) {
+    /* The name each registry registers its types under (graph/node_type.cc,
+     * graph/socket_type.cc). */
+    const char *prefix = a->kind == TypeNameKind::Node     ? "node:"
+                         : a->kind == TypeNameKind::Socket ? "socket:"
+                                                           : "";
+    const std::string registered = prefix + std::string(viewOf(a->old));
+    if (rt.nameOf(IdDomain::Type, TypeId::of(registered).value)) {
+      return Status::error(StatusCode::FailedPrecondition,
+                           ("type alias '" + std::string(viewOf(a->old)) + "' -> '" +
+                            std::string(viewOf(a->current)) +
+                            "': the old name is still a registered type")
+                               .c_str());
+    }
+  }
+  return Status();
+}
+
+Status checkTypeAliases(const Runtime &rt)
+{
+  const TypeAliases *aliases = rt.findExt<TypeAliases>();
+  return aliases ? aliases->checkOldNames(rt) : Status();
+}
+
 } // namespace coredcc

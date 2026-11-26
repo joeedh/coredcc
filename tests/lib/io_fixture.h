@@ -157,19 +157,19 @@ inline const ClientId kAcme = ClientId::of("acme");
 inline void registerNote(Runtime &rt,
                          NoteHost &host,
                          uint32_t version = 2,
-                         DuplicatePolicy onDuplicate = DuplicatePolicy::Drop)
+                         DuplicatePolicy onDuplicate = DuplicatePolicy::Drop,
+                         const char *name = "test.Note")
 {
   host.rt = &rt;
-  test_assert(
-      (registerImpl<AttachmentProvider, NoteProvider>(rt, "test.Note#provider").ok()));
+  const std::string impl = std::string(name) + "#provider";
+  test_assert((registerImpl<AttachmentProvider, NoteProvider>(rt, impl).ok()));
   NoteProvider *p = litestl::alloc::New<NoteProvider>("provider");
   p->host = &host;
   AttachmentTypeInfo info;
-  info.name = "test.Note";
+  info.name = name;
   info.payloadVersion = version;
   info.onDuplicate = onDuplicate;
-  Result<Owned<AttachmentProvider>> owned =
-      own<AttachmentProvider>(rt, "test.Note#provider", p);
+  Result<Owned<AttachmentProvider>> owned = own<AttachmentProvider>(rt, impl, p);
   test_assert(owned.ok() &&
               rt.ext<AttachmentTypeRegistry>().add(info, std::move(owned).value()).ok());
 }

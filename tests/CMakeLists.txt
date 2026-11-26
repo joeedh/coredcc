@@ -76,6 +76,7 @@ coredcc_test(test_lib_library_load SOURCES lib/test_library_load.cc DEPS coredcc
 coredcc_test(test_lib_append SOURCES lib/test_append.cc DEPS coredcc_lib)
 coredcc_test(test_lib_duplicate SOURCES lib/test_duplicate.cc DEPS coredcc_lib)
 coredcc_test(test_lib_io_review SOURCES lib/test_io_review.cc DEPS coredcc_lib)
+coredcc_test(test_lib_type_aliases SOURCES lib/test_type_aliases.cc DEPS coredcc_lib)
 coredcc_test(test_lib_io_review_save SOURCES lib/test_io_review_save.cc DEPS coredcc_lib)
 coredcc_test(test_lib_adopt SOURCES lib/test_adopt.cc DEPS coredcc_lib)
 coredcc_test(test_lib_library_hostile SOURCES lib/test_library_hostile.cc DEPS coredcc_lib)
