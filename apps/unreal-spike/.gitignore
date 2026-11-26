@@ -1,0 +1,6 @@
+# What UBT and the editor write into the project (Config/ too: the editor makes it).
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+Config/

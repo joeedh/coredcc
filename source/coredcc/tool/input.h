@@ -144,8 +144,9 @@ struct InputEvent {
   static litestl::binding::types::Struct<InputEvent> *defineBindings();
 
   /** Public, so that the struct is standard-layout (its members are bound by offset);
-   * scripts use the methods. */
-  litestl::util::Vector<PointerSample, 0> samples_;
+   * scripts use the methods. One inline, not 0: litestl keeps them in an array, and a
+   * zero-size array is an extension that MSVC refuses in a std::span of these. */
+  litestl::util::Vector<PointerSample, 1> samples_;
 };
 
 } // namespace coredcc
