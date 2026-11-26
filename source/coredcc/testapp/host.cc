@@ -17,6 +17,8 @@
 #include "coredcc/lib/library.h"
 #include "coredcc/scene/commands.h"
 #include "coredcc/testapp/items.h"
+#include "coredcc/tool/builtins.h"
+#include "coredcc/tool/manager.h"
 
 #include "litestl/binding/binding.h"
 #include "litestl/binding/manager.h"
@@ -99,9 +101,12 @@ public:
   explicit Host(bool items) : lib_(&rt_), ctx_(makeContext(items))
   {
     ctx_.setExecutor(&ex_);
+    ctx_.setTools(&tools_);
   }
   ~Host()
   {
+    tools_.shutdown(ctx_);
+    ctx_.setTools(nullptr);
     history_.clear();
     rt_.takeStickyError().ignore(); /* a script discard that threw during clear() */
   }
@@ -186,6 +191,7 @@ private:
     CDCC_CHECK(registerSceneCommands(rt_).ok(), "testapp: registering scenes");
     CDCC_CHECK(registerDriveTypes(rt_).ok(), "testapp: registering drivers");
     addDriverGraphsMember(s);
+    CDCC_CHECK(registerToolBuiltins(rt_).ok(), "testapp: registering tools");
     PointerAccessor scene;
     scene.target = StructId::of(kSceneType);
     scene.get = [](const PointerRef &, Context &ctx) {
@@ -207,6 +213,7 @@ private:
   LinearHistory history_;
   CommandExecutor ex_{&rt_, &history_};
   Context ctx_;
+  ToolManager tools_{rt_};
 };
 
 Host *create()

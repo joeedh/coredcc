@@ -12,6 +12,7 @@
 #include "coredcc/bind/path_reader.h"
 #include "coredcc/bind/run_facades.h"
 #include "coredcc/bind/scene_facades.h"
+#include "coredcc/bind/tool_facades.h"
 #include "coredcc/bvh/any_source.h"
 #include "coredcc/command/command.h"
 #include "coredcc/scene/evaluated.h"
@@ -518,6 +519,7 @@ void addBindings(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::enableDrivers", script::enableDrivers, MARGS("ctx"));
   BIND_FACADE(mgr, "coredcc::disableDrivers", script::disableDrivers, MARGS("ctx"));
   BIND_FACADE(mgr, "coredcc::driverDiagnostics", script::driverDiagnostics, MARGS("ctx"));
+  addToolBindings(mgr);
 }
 
 litestl::binding::BindingManager *bindings()

@@ -421,7 +421,7 @@ void testGates()
   test_assert(host.allReleasedOnce());
 }
 
-/* From a script command's slots: exec may, the others not. */
+/* From a script command's slots: exec may, the others only read. */
 void testCommandSlots()
 {
   fakehost::Host host;
@@ -471,8 +471,10 @@ void testCommandSlots()
       fprintf(stderr, "%s\n", ran.status.message());
     }
     test_assert(ran.status.ok() && inCanRun.size() >= 6 && inExec.size() == 6);
-    for (const Status &s : inCanRun) {
-      test_assert(s.code() == StatusCode::Busy);
+    /* Reads (blockIdText, worldMatrix) are allowed in every slot; the rest are Busy. */
+    for (size_t i = 0; i < inCanRun.size(); i++) {
+      const bool read = i % 6 == 2 || i % 6 == 4;
+      test_assert(read ? inCanRun[i].ok() : inCanRun[i].code() == StatusCode::Busy);
     }
     for (const Status &s : inExec) {
       if (!s.ok()) {

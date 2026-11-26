@@ -17,6 +17,7 @@
 #include "litestl/binding/binding.h"
 #include "litestl/util/alloc.h"
 
+#include <cstring>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -80,14 +81,49 @@ Status detail::kernelGate(Context &ctx, const char *what)
   return Status();
 }
 
+namespace {
+
+/* The innermost frame is `slot` of the interface named `iface`. By name, as
+ * inForeignSlot does: tool/ isn't a dependency of the gate's callers. */
+bool frameIs(const ForeignBindings::Frame &f, const char *iface, const char *slot)
+{
+  return strcmp(f.iface->name.c_str(), iface) == 0 &&
+         strcmp(f.method->name.c_str(), slot) == 0;
+}
+
+/* The slots of tools in which a script may do what its top level may. */
+bool toolEventSlot(const ForeignBindings::Frame &f)
+{
+  return frameIs(f, "coredcc::Tool", "activate") ||
+         frameIs(f, "coredcc::Tool", "onEvent") ||
+         frameIs(f, "coredcc::Tool", "settingsChanged") ||
+         frameIs(f, "coredcc::Modal", "onEvent") ||
+         frameIs(f, "coredcc::Gizmo", "beginDrag");
+}
+
+bool allows(std::initializer_list<const char *> allowed, const char *slot)
+{
+  for (const char *a : allowed) {
+    if (strcmp(a, slot) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+} // namespace
+
 Status detail::slotGate(Context &ctx,
                         const char *what,
-                        std::initializer_list<const char *> allowed)
+                        std::initializer_list<const char *> allowed,
+                        Gate kind)
 {
   CDCC_TRY(kernelGate(ctx, what));
   const ForeignBindings *fb = ctx.runtime().findExt<ForeignBindings>();
   const ForeignBindings::Frame *frame = fb ? fb->currentFrame() : nullptr;
-  if (!frame ||
+  if (!frame || kind == Gate::Read || toolEventSlot(*frame) ||
+      (allows(allowed, "undo") &&
+       frameIs(*frame, "coredcc::TransformableElements", "setPositions")) ||
       (allowed.size() > 0 &&
        inForeignSlot(ctx.runtime(), coredcc::detail::ifaceDesc<Command>(), allowed)))
   {
@@ -108,8 +144,8 @@ Result<PropertyBag>
 detail::runCommand(Context &ctx, const CommandDef &def, PropertyBag inputs)
 {
   CommandExecutor *ex = ctx.executor();
-  return inForeignCall(ctx.runtime()) ? ex->runSub(ctx, def, std::move(inputs))
-                                      : ex->run(ctx, def, std::move(inputs));
+  return ex->running() ? ex->runSub(ctx, def, std::move(inputs))
+                       : ex->run(ctx, def, std::move(inputs));
 }
 
 /* ---- Status ---- */

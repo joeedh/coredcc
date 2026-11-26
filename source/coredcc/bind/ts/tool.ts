@@ -1,0 +1,433 @@
+/**
+ * Tools for scripts (bind/tool_facades.h): defining tools, modals and gizmos as plain
+ * objects, the script half of drags, and driving the context's ToolManager as a viewport
+ * host does. Exported by index.ts, whose rules hold here too.
+ *
+ * Events are plain objects (`ToolEvent`). A tool's `onEvent`, a modal's `onEvent` and a
+ * gizmo's `beginDrag` may do what a script's top level may: run commands, begin a drag,
+ * push a modal. Draw and hit-test slots, and a gizmo's `update`, may only read.
+ */
+import {getBindingBackend} from '@litestl/typescript-runtime'
+import type {Context} from 'coredcc-gen/coredcc/Context'
+import type {DrawList} from 'coredcc-gen/coredcc/DrawList'
+import * as cd from 'coredcc-gen/coredcc/functions'
+import type {GizmoHit as BoundHit} from 'coredcc-gen/coredcc/GizmoHit'
+import type {InputEvent as BoundEvent} from 'coredcc-gen/coredcc/InputEvent'
+import type {Status} from 'coredcc-gen/coredcc/Status'
+import {StatusCode} from 'coredcc-gen/coredcc/StatusCode'
+import type {TransformDelta as BoundDelta} from 'coredcc-gen/coredcc/TransformDelta'
+import type {View as BoundView} from 'coredcc-gen/coredcc/View'
+import type {ViewMath} from 'coredcc-gen/coredcc/ViewMath'
+
+import {check, checkCtx, inSlot, statusOf, sync, take, withValue, type Writable} from './core.ts'
+import {decodeDrawList, Drawer, readDrawList, type DecodedDrawList} from './drawlist.ts'
+import type {TransformDelta, ViewSpec} from './scene.ts'
+
+export type {ViewMath}
+
+/* ---- events ---- */
+
+export type ToolEventType =
+  | 'pointerdown' | 'pointermove' | 'pointerup' | 'wheel' | 'keydown' | 'keyup' | 'cancel' | 'focuslost'
+const eventTypes: readonly ToolEventType[] = [
+  'pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown', 'keyup', 'cancel', 'focuslost',
+]
+const pointerTypes = ['mouse', 'pen', 'touch'] as const
+
+/** Bits of `ToolEvent.modifiers`. */
+export const Modifiers = {shift: 1, ctrl: 2, alt: 4, meta: 8} as const
+/** Keys that aren't characters (a character is its code point without Shift: 'g'.codePointAt(0)). */
+export const Keys = {
+  escape: 0x110001, enter: 0x110002, tab: 0x110003, backspace: 0x110004, delete: 0x110005,
+  left: 0x110006, right: 0x110007, up: 0x110008, down: 0x110009, home: 0x11000a, end: 0x11000b,
+  pageUp: 0x11000c, pageDown: 0x11000d, shift: 0x11000e, ctrl: 0x11000f, alt: 0x110010, meta: 0x110011,
+  f1: 0x110020,
+} as const
+
+export interface PointerSample {
+  x: number
+  y: number
+  pressure: number
+  tiltX: number
+  tiltY: number
+  twist: number
+  time: number
+}
+
+/** What coredcc/tool/input.h's InputEvent says. Positions in device pixels, y down. */
+export interface ToolEvent extends PointerSample {
+  type: ToolEventType
+  /** The button that went down or up: 0 left, 1 middle, 2 right. */
+  button: number
+  /** Held, as DOM's `buttons`: 1 left, 2 right, 4 middle. */
+  buttons: number
+  pointer: (typeof pointerTypes)[number]
+  pointerId: number
+  wheelX: number
+  wheelY: number
+  key: number
+  repeat: boolean
+  modifiers: number
+  /** A move's coalesced positions, oldest first; the event's own is the newest. */
+  samples: PointerSample[]
+}
+
+const sampleOf = (s: {x: number; y: number; pressure: number; tiltX: number; tiltY: number; twist: number; time: number}) => ({
+  x: s.x, y: s.y, pressure: s.pressure, tiltX: s.tiltX, tiltY: s.tiltY, twist: s.twist, time: s.time,
+})
+
+function eventOf(e: BoundEvent): ToolEvent {
+  const samples: PointerSample[] = []
+  for (let i = 0; i < e.sampleCount(); i++) {
+    const s = e.sampleAt(i)
+    samples.push(sampleOf(s))
+    ;(s as unknown as {[Symbol.dispose]?: () => void})[Symbol.dispose]?.()
+  }
+  return {
+    ...sampleOf(e),
+    type: eventTypes[e.typeValue()],
+    button: e.button,
+    buttons: e.buttons,
+    pointer: pointerTypes[e.pointerValue()],
+    pointerId: e.pointerId,
+    wheelX: e.wheelX,
+    wheelY: e.wheelY,
+    key: e.key,
+    repeat: e.repeat,
+    modifiers: e.modifiers,
+    samples,
+  }
+}
+
+function withEvent<R>(event: Partial<ToolEvent> & {type: ToolEventType}, fn: (e: BoundEvent) => R): R {
+  const backend = getBindingBackend()
+  const e = backend.construct('coredcc::InputEvent') as BoundEvent
+  try {
+    const type = eventTypes.indexOf(event.type)
+    if (type < 0) throw new TypeError(`ToolEvent: no type '${event.type}'`)
+    e.setType(type)
+    e.setPointer(Math.max(0, pointerTypes.indexOf(event.pointer ?? 'mouse')))
+    e.x = event.x ?? 0
+    e.y = event.y ?? 0
+    e.button = event.button ?? 0
+    e.buttons = event.buttons ?? (event.type === 'pointerdown' || event.type === 'pointermove' ? 1 : 0)
+    e.pointerId = event.pointerId ?? 0
+    e.pressure = event.pressure ?? 0.5
+    e.tiltX = event.tiltX ?? 0
+    e.tiltY = event.tiltY ?? 0
+    e.twist = event.twist ?? 0
+    e.wheelX = event.wheelX ?? 0
+    e.wheelY = event.wheelY ?? 0
+    e.key = event.key ?? 0
+    e.repeat = event.repeat ?? false
+    e.modifiers = event.modifiers ?? 0
+    e.time = event.time ?? 0
+    for (const s of event.samples ?? []) {
+      const b = backend.construct('coredcc::PointerSample') as Parameters<BoundEvent['addSample']>[0]
+      try {
+        Object.assign(b, sampleOf(s))
+        e.addSample(b)
+      } finally {
+        ;(b as unknown as {[Symbol.dispose](): void})[Symbol.dispose]()
+      }
+    }
+    return fn(e)
+  } finally {
+    e[Symbol.dispose]()
+  }
+}
+
+/* ---- views (as scene.ts's, which keeps its own private) ---- */
+
+function fill(what: string, e: {put(i: number, v: number): void}, values: ArrayLike<number>, count: number) {
+  if (values.length !== count) throw new TypeError(`${what} has ${count} numbers, not ${values.length}`)
+  for (let i = 0; i < count; i++) e.put(i, values[i])
+}
+
+function withView<R>(spec: ViewSpec, fn: (v: BoundView) => R): R {
+  const v = getBindingBackend().construct('coredcc::View') as BoundView
+  try {
+    fill('viewport', {put: (i, x) => v.putViewport(i, x)}, spec.viewport, 4)
+    fill('view', v.view, spec.view, 16)
+    fill('proj', v.proj, spec.proj, 16)
+    v.setConventions(spec.depth === '-1..1' ? 1 : 0, spec.handedness === 'left' ? 1 : 0, spec.up === 'y' ? 0 : 1)
+    v.reversedZ = spec.reversedZ ?? false
+    v.infiniteFar = spec.infiniteFar ?? false
+    v.ortho = spec.ortho ?? false
+    v.dpiScale = spec.dpiScale ?? 1
+    return fn(v)
+  } finally {
+    v[Symbol.dispose]()
+  }
+}
+
+/* ---- deltas ---- */
+
+const deltaKinds = ['translate', 'rotate', 'scale'] as const
+
+function putDelta(d: BoundDelta, delta: Partial<TransformDelta>) {
+  const kind = deltaKinds.indexOf(delta.kind ?? 'translate')
+  if (kind < 0) throw new TypeError(`TransformDelta: no kind '${delta.kind}'`)
+  d.setKind(kind)
+  fill('basis', d.basis, delta.basis ?? [0, 0, 0, 1], 4)
+  const vec = (what: string, v: Parameters<typeof cd.vec3Put>[0], values: ArrayLike<number>) => {
+    if (values.length !== 3) throw new TypeError(`${what} has 3 numbers, not ${values.length}`)
+    for (let i = 0; i < 3; i++) cd.vec3Put(v, i, values[i])
+  }
+  vec('pivot', d.pivot, delta.pivot ?? [0, 0, 0])
+  vec('vector', d.vector, delta.vector ?? (kind === 2 ? [1, 1, 1] : [0, 0, 0]))
+  vec('axis', d.axis, delta.axis ?? [0, 0, 1])
+  d.angle = delta.angle ?? 0
+}
+
+function withDelta<R>(delta: Partial<TransformDelta>, fn: (d: BoundDelta) => R): R {
+  const d = getBindingBackend().construct('coredcc::TransformDelta') as BoundDelta
+  try {
+    putDelta(d, delta)
+    return fn(d)
+  } finally {
+    d[Symbol.dispose]()
+  }
+}
+
+/** The open core.object.dragDelta's objects move by `delta`, the total since the drag began. */
+export function dragUpdate(ctx: Context, delta: Partial<TransformDelta>) {
+  withDelta(delta, (d) => check(cd.dragUpdate(ctx, d)))
+}
+/** The same, with one delta for each of the drag's objects (`dragCount`), in its order. */
+export function dragUpdateEach(ctx: Context, deltas: readonly Partial<TransformDelta>[]) {
+  const numbers: number[] = []
+  for (const delta of deltas) {
+    const kind = deltaKinds.indexOf(delta.kind ?? 'translate')
+    if (kind < 0) throw new TypeError(`TransformDelta: no kind '${delta.kind}'`)
+    const vector = delta.vector ?? (kind === 2 ? [1, 1, 1] : [0, 0, 0])
+    numbers.push(kind, ...(delta.basis ?? [0, 0, 0, 1]), ...(delta.pivot ?? [0, 0, 0]), ...vector,
+      ...(delta.axis ?? [0, 0, 1]), delta.angle ?? 0, 0)
+  }
+  check(cd.dragUpdateEach(ctx, numbers))
+}
+/** The open core.elements.dragDelta's points move by `delta`. */
+export function elementsDragUpdate(ctx: Context, delta: Partial<TransformDelta>) {
+  withDelta(delta, (d) => check(cd.elementsDragUpdate(ctx, d)))
+}
+/** How many objects the open drag moves. */
+export function dragCount(ctx: Context): number {
+  return take(cd.dragCount(ctx), Number)
+}
+
+/* ---- tools ---- */
+
+export interface ToolSpec {
+  /** Dotted. The `core.` namespace is reserved. */
+  id: string
+  uiName?: string
+  description?: string
+  /** Settings by name, typed by their defaults as a command's inputs; `{keys}` for an enum. */
+  settings?: Record<string, Writable | {keys: readonly string[]}>
+  /** The settings panel, as layout XML. */
+  layout?: string
+  activate?(ctx: Context): void
+  deactivate?(ctx: Context): void
+  /** Return true when the event was used. */
+  onEvent(ctx: Context, event: ToolEvent, view: ViewMath): boolean | void
+  drawOverlay?(draw: Drawer, view: ViewMath): void
+  settingsChanged?(ctx: Context): void
+}
+
+const isKeys = (v: unknown): v is {keys: readonly string[]} =>
+  typeof v === 'object' && v !== null && Array.isArray((v as {keys?: unknown}).keys)
+
+/* A throw from a draw slot is reported (the Runtime's sticky error); the manager keeps the drag. */
+function guarded(what: string, fn: () => void) {
+  inSlot(() => sync(what, fn()))
+}
+
+class ToolAdapter {
+  constructor(private spec: ToolSpec) {}
+  activate(ctx: Context): Status | undefined {
+    return inSlot(() => {
+      try {
+        sync('activate', this.spec.activate?.(ctx))
+        return undefined
+      } catch (e) {
+        return statusOf(StatusCode.Internal, e)
+      }
+    })
+  }
+  deactivate(ctx: Context) {
+    inSlot(() => sync('deactivate', this.spec.deactivate?.(ctx)))
+  }
+  onEvent(ctx: Context, _tm: unknown, view: ViewMath, e: BoundEvent): number {
+    return inSlot(() => (sync('onEvent', this.spec.onEvent(ctx, eventOf(e), view)) ? 1 : 0))
+  }
+  drawOverlay(view: ViewMath, out: DrawList) {
+    guarded('drawOverlay', () => this.spec.drawOverlay!(new Drawer(out), view))
+  }
+  settingsChanged(ctx: Context) {
+    inSlot(() => sync('settingsChanged', this.spec.settingsChanged?.(ctx)))
+  }
+}
+
+/** Registers tool `spec.id`: each activation makes a new instance of its slots' state. */
+export function defineTool(ctx: Context, spec: ToolSpec) {
+  checkCtx(ctx)
+  if (typeof spec.onEvent !== 'function') throw new TypeError(`defineTool: ${spec.id}: onEvent must be a function`)
+  const def = cd.newToolDef(spec.id)
+  if (!def) throw new Error(`defineTool: no def for ${spec.id}`)
+  try {
+    if (spec.uiName !== undefined) check(cd.toolDefUiName(def, spec.uiName))
+    if (spec.description !== undefined) check(cd.toolDefDescription(def, spec.description))
+    for (const [name, v] of Object.entries(spec.settings ?? {})) {
+      if (isKeys(v)) check(cd.toolDefEnumSetting(def, name, v.keys.join(' ')))
+      else withValue(ctx, v, (pv) => check(cd.toolDefSetting(def, name, pv)))
+    }
+    if (spec.layout !== undefined) check(cd.toolDefLayout(def, spec.layout))
+    const slots = ['activate', 'onEvent']
+    if (spec.deactivate) slots.push('deactivate')
+    if (spec.drawOverlay) slots.push('drawOverlay')
+    if (spec.settingsChanged) slots.push('settingsChanged')
+    const backend = getBindingBackend()
+    const factory = {make: () => backend.foreignHandle(new ToolAdapter(spec))}
+    check(cd.registerForeignTool(ctx, def, backend.foreignHandle(factory), slots.join(' ')))
+  } finally {
+    def[Symbol.dispose]()
+  }
+}
+
+/* ---- modals ---- */
+
+export type ModalResult = 'continue' | 'pass' | 'finish' | 'cancel'
+const modalResults: readonly ModalResult[] = ['continue', 'pass', 'finish', 'cancel']
+
+export interface ModalSpec {
+  /** 'finish' commits the drag it owns, 'cancel' cancels it; 'pass' keeps the grab and lets the host
+   * have the event. A throw cancels. */
+  onEvent(ctx: Context, event: ToolEvent, view: ViewMath): ModalResult
+  drawOverlay?(draw: Drawer, view: ViewMath): void
+  /** It is gone; `committed` says whether its drag was committed. */
+  end?(ctx: Context, committed: boolean): void
+}
+
+class ModalAdapter {
+  constructor(private spec: ModalSpec) {}
+  onEvent(ctx: Context, _tm: unknown, view: ViewMath, e: BoundEvent): number {
+    return inSlot(() => {
+      const r = sync('onEvent', this.spec.onEvent(ctx, eventOf(e), view))
+      const n = modalResults.indexOf(r)
+      if (n < 0) throw new TypeError(`a modal's onEvent returned '${String(r)}', not one of ${modalResults.join(', ')}`)
+      return n
+    })
+  }
+  drawOverlay(view: ViewMath, out: DrawList) {
+    guarded('drawOverlay', () => this.spec.drawOverlay!(new Drawer(out), view))
+  }
+  end(ctx: Context, committed: boolean) {
+    inSlot(() => sync('end', this.spec.end?.(ctx, committed)))
+  }
+}
+
+/** From a tool's or a gizmo's event slot: `modal` gets every event until it finishes. With
+ * `ownsInteractive` (the default), the open drag is its: committed or cancelled when it ends. */
+export function pushModal(ctx: Context, modal: ModalSpec, opts: {ownsInteractive?: boolean} = {}) {
+  const slots = ['onEvent']
+  if (modal.drawOverlay) slots.push('drawOverlay')
+  if (modal.end) slots.push('end')
+  const handle = getBindingBackend().foreignHandle(new ModalAdapter(modal))
+  check(cd.toolPushModal(ctx, handle, slots.join(' '), opts.ownsInteractive ?? true))
+}
+
+/* ---- gizmos ---- */
+
+export interface GizmoHit {
+  part: number
+  /** Logical pixels from the cursor. */
+  distance: number
+  depth: number
+}
+
+export interface GizmoSpec {
+  /** Places it from the document before each hit test and draw, outside gestures. Reads only. */
+  update?(ctx: Context): void
+  /** The part nearest to the pixel, or undefined for none. */
+  hitTest(view: ViewMath, x: number, y: number): GizmoHit | undefined
+  /** `hover` and `active` are parts or -1; a record's id is `idBase + part`. */
+  draw(draw: Drawer, view: ViewMath, hover: number, active: number, idBase: number): void
+  /** A press on `part`: begins the drag and pushes a modal. */
+  beginDrag(ctx: Context, view: ViewMath, event: ToolEvent, part: number): void
+}
+
+class GizmoAdapter {
+  private hit = getBindingBackend().construct('coredcc::GizmoHit') as BoundHit
+  constructor(private spec: GizmoSpec) {}
+  update(ctx: Context) {
+    inSlot(() => sync('update', this.spec.update?.(ctx)))
+  }
+  hitTest(view: ViewMath, x: number, y: number): BoundHit {
+    return inSlot(() => {
+      const h = sync('hitTest', this.spec.hitTest(view, x, y))
+      this.hit.part = h ? h.part : -1
+      this.hit.distance = h?.distance ?? 0
+      this.hit.depth = h?.depth ?? 0
+      return this.hit
+    })
+  }
+  draw(view: ViewMath, hover: number, active: number, idBase: number, out: DrawList) {
+    guarded('draw', () => this.spec.draw(new Drawer(out), view, hover, active, idBase))
+  }
+  beginDrag(ctx: Context, _tm: unknown, view: ViewMath, e: BoundEvent, part: number): Status | undefined {
+    return inSlot(() => {
+      try {
+        sync('beginDrag', this.spec.beginDrag(ctx, view, eventOf(e), part))
+        return undefined
+      } catch (e) {
+        return statusOf(StatusCode.Internal, e)
+      }
+    })
+  }
+}
+
+/** From a tool's slot: a gizmo, `'transform'` for the built-in one that follows core.tool.transform's
+ * settings. Its id. */
+export function addGizmo(ctx: Context, gizmo: 'transform' | GizmoSpec): number {
+  if (typeof gizmo === 'string') return take(cd.toolAddGizmo(ctx, gizmo), Number)
+  const handle = getBindingBackend().foreignHandle(new GizmoAdapter(gizmo))
+  return take(cd.toolAddForeignGizmo(ctx, handle, 'update hitTest draw beginDrag'), Number)
+}
+export function removeGizmo(ctx: Context, id: number) {
+  check(cd.toolRemoveGizmo(ctx, id))
+}
+
+/* ---- the viewport's side ---- */
+
+export function setActiveTool(ctx: Context, id: string) {
+  check(cd.toolSetActive(ctx, id))
+}
+/** The active tool's id; undefined for none. */
+export function activeTool(ctx: Context): string | undefined {
+  return take(cd.toolActive(ctx), (s) => s) || undefined
+}
+/** Hands the context's ToolManager an event in `view`. Whether it was used. */
+export function sendEvent(ctx: Context, view: ViewSpec, event: Partial<ToolEvent> & {type: ToolEventType}): boolean {
+  return withView(view, (v) => withEvent(event, (e) => take(cd.toolEvent(ctx, v, e), (r) => Number(r) !== 0)))
+}
+/** What the tools draw over `view` this frame: the scene's overlays, the gizmos, the modal's. */
+export function drawTools(ctx: Context, view: ViewSpec): {bytes: Uint8Array; decoded: DecodedDrawList} {
+  const list = getBindingBackend().construct('coredcc::DrawList') as DrawList
+  try {
+    withView(view, (v) => check(cd.toolDraw(ctx, v, list)))
+    const bytes = readDrawList(list)
+    return {bytes, decoded: decodeDrawList(bytes)}
+  } finally {
+    list[Symbol.dispose]()
+  }
+}
+/** Ends the gesture in progress with a cancel. */
+export function cancelTool(ctx: Context) {
+  check(cd.toolCancel(ctx))
+}
+export function toolStatus(ctx: Context): string {
+  return take(cd.toolStatus(ctx), (s) => s)
+}
+export function setToolStatus(ctx: Context, text: string) {
+  check(cd.toolSetStatus(ctx, text))
+}

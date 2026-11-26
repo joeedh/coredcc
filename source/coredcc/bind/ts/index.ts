@@ -55,6 +55,8 @@ export * from './library.ts'
 export * from './reader.ts'
 export * from './run.ts'
 export * from './scene.ts'
+export * from './tool.ts'
+export * from './drawlist.ts'
 export * from './typed.ts'
 
 /* ---- datapaths and commands ---- */

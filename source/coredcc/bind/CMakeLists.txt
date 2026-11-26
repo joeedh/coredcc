@@ -15,11 +15,13 @@ coredcc_library(coredcc_bind
     run_facades.cc
     scene_facades.cc
     script_table.cc
+    tool_facades.cc
   DEPS
     coredcc_drive
     coredcc_graph
     coredcc_layout
     coredcc_scene
+    coredcc_tool
 )
 
 # Hosts link the manager's export into their module (P1f step 5).

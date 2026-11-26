@@ -139,6 +139,7 @@ coredcc_test(test_bind_catalog SOURCES bind/test_bind_catalog.cc DEPS coredcc_bi
 coredcc_test(test_bind_graph SOURCES bind/test_bind_graph.cc DEPS coredcc_bind)
 coredcc_test(test_bind_graph_results SOURCES bind/test_bind_graph_results.cc DEPS coredcc_bind)
 coredcc_test(test_bind_scene SOURCES bind/test_bind_scene.cc DEPS coredcc_bind)
+coredcc_test(test_bind_tool SOURCES bind/test_bind_tool.cc DEPS coredcc_bind)
 coredcc_test(test_bind_scene_bulk SOURCES bind/test_bind_scene_bulk.cc DEPS coredcc_bind)
 coredcc_test(test_bind_spatial SOURCES bind/test_bind_spatial.cc DEPS coredcc_bind)
 if(WIN32)

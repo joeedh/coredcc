@@ -208,6 +208,12 @@ export class Session implements Disposable {
   }
 }
 
+/** The loaded module's memory now (it moves when memory grows): for zero-copy views. */
+export function moduleHeap(): Uint8Array | undefined {
+  const heap = (loaded?.module as {HEAPU8?: unknown} | undefined)?.HEAPU8
+  return heap instanceof Uint8Array ? heap : undefined
+}
+
 /** Throws unless `ctx` still addresses a live context. */
 export function checkCtx(ctx: Context) {
   if (!(ctx as unknown as {ptr?: number}).ptr) throw new Error('the context was disposed')

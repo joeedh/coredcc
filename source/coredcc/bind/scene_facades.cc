@@ -101,7 +101,7 @@ Status setScene(Context &ctx, const string &scene)
 
 StringResult blockIdText(Context &ctx, const string &block)
 {
-  if (Status s = slotGate(ctx, "blockIdText", {"exec"}); !s.ok()) {
+  if (Status s = slotGate(ctx, "blockIdText", {"exec"}, detail::Gate::Read); !s.ok()) {
     return failed<StringResult>(std::move(s));
   }
   Result<BlockHandle> h = blockAt(ctx, "blockIdText", block);
@@ -147,7 +147,7 @@ static Result<const Scene *> placesOf(Context &ctx,
 
 SceneTableResult sceneResults(Context &ctx, const Vector<int32_t> &places, bool all)
 {
-  if (Status s = slotGate(ctx, "sceneResults", {"exec"}); !s.ok()) {
+  if (Status s = slotGate(ctx, "sceneResults", {"exec"}, detail::Gate::Read); !s.ok()) {
     return failed<SceneTableResult>(std::move(s));
   }
   Vector<int32_t> at;
@@ -193,7 +193,7 @@ static string refText(const Context &ctx, BlockHandle h)
 
 RefListResult sceneRefs(Context &ctx, const Vector<int32_t> &places, bool all)
 {
-  if (Status s = slotGate(ctx, "sceneRefs", {"exec"}); !s.ok()) {
+  if (Status s = slotGate(ctx, "sceneRefs", {"exec"}, detail::Gate::Read); !s.ok()) {
     return failed<RefListResult>(std::move(s));
   }
   Vector<int32_t> at;
@@ -210,7 +210,7 @@ RefListResult sceneRefs(Context &ctx, const Vector<int32_t> &places, bool all)
 
 RefListResult sceneChildren(Context &ctx, const string &object)
 {
-  if (Status s = slotGate(ctx, "sceneChildren", {"exec"}); !s.ok()) {
+  if (Status s = slotGate(ctx, "sceneChildren", {"exec"}, detail::Gate::Read); !s.ok()) {
     return failed<RefListResult>(std::move(s));
   }
   const Scene *scene = activeScene(ctx);
@@ -235,7 +235,7 @@ RefListResult sceneChildren(Context &ctx, const string &object)
 
 MatrixResult worldMatrix(Context &ctx, const string &object)
 {
-  if (Status s = slotGate(ctx, "worldMatrix", {"exec"}); !s.ok()) {
+  if (Status s = slotGate(ctx, "worldMatrix", {"exec"}, detail::Gate::Read); !s.ok()) {
     return failed<MatrixResult>(std::move(s));
   }
   Result<BlockHandle> h = blockAt(ctx, "worldMatrix", object);

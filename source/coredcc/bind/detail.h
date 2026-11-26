@@ -54,15 +54,27 @@ template <class R> R failed(Status s)
   return r;
 }
 
-/** Busy unless no script slot is running, or the innermost one is one of Command's in
- * `allowed`: a script's discard, run while the host clears the history, must not push
- * into it. */
-Status
-slotGate(Context &ctx, const char *what, std::initializer_list<const char *> allowed);
+/** What a facade does: reads only, or may write. */
+enum class Gate { Write, Read };
+
+/**
+ * Busy unless no script slot is running, or the innermost one allows it:
+ * - one of Command's slots in `allowed`: a script's discard, run while the host clears
+ *   the history, must not push into it;
+ * - a tool's event slot (Tool.activate, onEvent and settingsChanged, Modal.onEvent,
+ *   Gizmo.beginDrag), which may do what a script's top level may;
+ * - TransformableElements.setPositions, for what Command's undo may (writeValue);
+ * - any slot but a graph kernel's or a transform model's, for a Read.
+ */
+Status slotGate(Context &ctx,
+                const char *what,
+                std::initializer_list<const char *> allowed,
+                Gate kind = Gate::Write);
 /** Busy while the innermost script slot is a graph kernel's or a transform model's. */
 Status kernelGate(Context &ctx, const char *what);
 
-/** Runs a command, as a sub-command from a script command's exec. */
+/** Runs a command: a sub-command while the executor runs one (a script command's exec),
+ * a top-level one otherwise (a tool's slot, or no slot). */
 Result<PropertyBag> runCommand(Context &ctx, const CommandDef &def, PropertyBag inputs);
 
 /** A def of `defaultValue`'s kind. `what` names the facade in errors. */
