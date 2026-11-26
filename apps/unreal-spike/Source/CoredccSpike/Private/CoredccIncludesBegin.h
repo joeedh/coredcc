@@ -1,3 +1,3 @@
 /* See CoredccIncludes.h. No include guard: it is included around each block. */
 #pragma warning(push)
-#pragma warning(disable : 4458 4668)
+#pragma warning(disable : 4668)

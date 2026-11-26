@@ -318,8 +318,7 @@ the plan's U-A and U-B notes have the findings). What a real integration takes f
 - **Build coredcc as Unreal builds:** `/EHsc /GR- /MD`, release CRT, `_ITERATOR_DEBUG_LEVEL=0`
   (`apps/unreal-spike/coredcc/CMakeLists.txt`). The include roots are `source/`, `extern/`, `extern/litestl/`
   and `extern/litestl/extern/`.
-- **Two warnings must not be errors around coredcc's headers:** C4458 (litestl's binding headers) and C4668
-  (Eigen). Unreal's engine headers can reach litestl's `math/` headers by name, because Windows' file system
+- **C4668 must not be an error around coredcc's headers:** Eigen tests GCC's macros in `#if`. Unreal's engine headers can reach litestl's `math/` headers by name, because Windows' file system
   ignores case and litestl's root answers `"Math/Vector.h"`. So C4668 has to be a warning for the whole module
   (`CppCompileWarningSettings.UndefinedIdentifierWarningLevel`), not only inside a push.
 - **History:** each coredcc command is one Unreal transaction holding an `FCommandChange` on a transactional
