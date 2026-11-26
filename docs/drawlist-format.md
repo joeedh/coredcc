@@ -62,12 +62,14 @@ The style fields of PushMatrix and PopMatrix are unused.
 - **Outside any push,** a point is stored as `float(p - origin)`, and a Shape's or the outermost PushMatrix's matrix
   has its translation stored minus the origin, in double. **Inside a push,** points are the floats of the pushed space,
   and matrices are stored as given.
-- So nothing far from the origin is ever a float. A host computes its view-projection relative to the origin in
-  double, `VP · T(origin)`, and multiplies the pushed matrices into it in double before it hands floats to the GPU.
+- So a point's float is relative to the origin: precision is best near it and falls with the distance from it.
+  A host computes its view-projection relative to the origin in double, `VP · T(origin)`, and multiplies the
+  pushed matrices into it in double before it hands floats to the GPU.
 - Matrices are column-major and apply to column vectors (as coredcc's `mat4d`): the translation is elements 12 to 14.
 - **2D records** are in device pixels, in the same space as `View::viewport` and pointer events, with y down. Their
   widths and radii are in logical pixels: multiply by `View::dpiScale`.
-- coredcc's tools set the origin to the camera's position.
+- coredcc's tools set the origin to the camera's position, where what is drawn largest is, unless the host sets
+  `ToolManager::drawOrigin` (a floating origin, say).
 
 ## Depth modes
 - **Test:** drawn where it is in front of the depth buffer.
@@ -92,7 +94,19 @@ geometry.
 Shapes are filled, in the record's color. Lines and outlines of shapes are drawn as separate records.
 
 ## Errors
-A list that breaks any rule above is invalid, and `DrawListReader` refuses it, naming the byte offset: a size or count
-that doesn't fit, a kind, depth mode or flag that doesn't exist, a number that isn't finite, an unbalanced pop, a
-record count or list size that differs from the header's. Writers refuse to make one: `DrawList`'s appends return
-InvalidArgument and append nothing.
+A list that breaks any rule above is invalid. `DrawListReader` (C++) and `decodeDrawList` (TS) check the same rules,
+and refuse it naming the byte offset:
+- the header: its magic, version, flags (0), size (the list's) and reserved word (0); an origin that isn't finite;
+- a record header past the end; a kind, depth mode or flag that this kind doesn't have; a width that is negative or
+  isn't finite;
+- a record size that isn't a multiple of 8, is past the end, or doesn't fit the count (Lines' even, Triangles' a
+  multiple of 3; a Shape's shape exists);
+- padding that isn't zeros;
+- a number that isn't finite; a Shape's or PushMatrix's matrix that isn't affine; a Circle2D's negative radius;
+- a pop without a push, or pushes left at the end; a record count that isn't the header's.
+
+Writers refuse to make one: `DrawList`'s appends return InvalidArgument and append nothing.
+
+## Record ids
+A gizmo's records have the id `gizmo id × 65,536 + part`. ToolManager gives each gizmo the smallest free id, and at
+most 65,535 of them at once, so every id fits in 32 bits. Hosts that pick by id read it back the same way.

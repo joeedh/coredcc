@@ -34,6 +34,7 @@ A fresh review of each feature's API, and what became of each finding.
 | P1 | [properties and parsers](reports/feature-report-props-parse-2026-11-21.md), [library and datapaths](reports/feature-report-lib-api-2026-11-21.md), [commands and undo](reports/feature-report-command-2026-11-21.md), [script bindings](reports/feature-report-bind-2026-11-22.md), [TypeScript spike](reports/feature-report-ts-spike-2026-11-22.md), [test app TA1](reports/feature-report-ta1-2026-11-23.md) |
 | P2 | [library IO](reports/feature-report-library-io-2026-11-24.md), [layout](reports/feature-report-layout-2026-11-25.md) |
 | P3 | [objects and transforms](reports/feature-report-scene-2026-11-25.md), [BVH, View and picking](reports/feature-report-bvh-2026-11-25.md) |
+| P4 | [tools and overlay](reports/feature-report-tools-overlay-2026-11-26.md) |
 | P5 | [graph](reports/feature-report-graph-2026-11-25.md) |
 | P5c | [scene evaluator](reports/feature-report-scene-evaluator-2026-11-25.md) |
 
