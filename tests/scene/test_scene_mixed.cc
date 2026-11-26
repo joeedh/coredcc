@@ -33,7 +33,7 @@ void testDetached()
   CommandDoc d;
   const BlockHandle a = d.object("a", 1.0), h = d.hostObject("h", 5.0);
   const BlockId id = d.idOf(h);
-  const auto hostX = [&] { return d.host(h).channels.get(0); };
+  const auto hostX = [&] { return d.hostRaw(h).channels.get(0); };
   int revived = 0;
   d.lib->addReviveListener(
       [&](Library &l, BlockHandle b) { revived += &l == d.lib.get() && b == h; });

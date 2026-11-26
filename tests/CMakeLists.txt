@@ -42,6 +42,7 @@ coredcc_test(test_scene_duplicate SOURCES scene/test_scene_duplicate.cc DEPS cor
 coredcc_test(test_scene_units SOURCES scene/test_scene_units.cc DEPS coredcc_scene)
 coredcc_test(test_scene_bvh SOURCES scene/test_scene_bvh.cc DEPS coredcc_scene)
 coredcc_test(test_scene_graphs SOURCES scene/test_scene_graphs.cc DEPS coredcc_scene)
+coredcc_test(test_scene_incremental SOURCES scene/test_scene_incremental.cc DEPS coredcc_scene)
 coredcc_test(test_drive_nodes SOURCES drive/test_drive_nodes.cc DEPS coredcc_drive)
 coredcc_test(test_drive_basic SOURCES drive/test_drive_basic.cc DEPS coredcc_drive)
 coredcc_test(test_drive_provider SOURCES drive/test_drive_provider.cc DEPS coredcc_drive)

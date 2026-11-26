@@ -227,6 +227,7 @@ void SceneEvaluator::lookUp(const Scene &scene, const Library &lib)
   hints_.clear();
   hints_.resize(members_.size());
   keepBoxes(lib);
+  indexPlaces(lib);
   lookups_++;
 }
 
@@ -428,14 +429,16 @@ bool SceneEvaluator::stillValid(const Scene &scene, const Library &lib) const
   return true;
 }
 
-void SceneEvaluator::markDriven(const Library &lib, const OverrideProvider::Driven &driven)
+bool SceneEvaluator::markDriven(const Library &lib,
+                                const OverrideProvider::Driven &driven)
 {
   if (driven.all) {
+    const bool was = drivenAll_;
     drivenAll_ = true;
-    return;
+    return !was;
   }
   if (!drivenAll_ && driven.version == drivenVersion_ && lookups_ == drivenLookups_) {
-    return;
+    return false;
   }
   for (SceneMember &m : members_) {
     m.driven = false;
@@ -449,6 +452,7 @@ void SceneEvaluator::markDriven(const Library &lib, const OverrideProvider::Driv
   drivenAll_ = false;
   drivenVersion_ = driven.version;
   drivenLookups_ = lookups_;
+  return true;
 }
 
 /* ---- evaluating ---- */
@@ -478,8 +482,10 @@ EvalStatus SceneEvaluator::evaluateOne(const Library &lib,
   return evaluateObject(rt, type, ctx, parent, out, foreign);
 }
 
-SceneEvaluator::Pass
-SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &foreign)
+SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
+                                                 const Library &lib,
+                                                 bool incremental,
+                                                 Status &foreign)
 {
   Runtime &rt = lib.runtime();
   const TransformRegistry &types = rt.ext<TransformRegistry>();
@@ -506,6 +512,54 @@ SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &fore
   if (batching) {
     batch_.resize(n);
   }
+  /* evaluateMany batches are made of whole levels: those passes are full ones. */
+  incremental = incremental && !others && !batching;
+  if (incremental) {
+    syncBack();
+    differs = true; /* the back store is the front one now, and is written in place */
+    boxStale_.resize(boxes_.size());
+    for (int b = 0; b < int(boxes_.size()); b++) {
+      boxStale_[b] = !boxes_[b].valid;
+    }
+  }
+  /* The bounds alone, of an object that is otherwise as it was. False: Stale. */
+  const auto boundsOnly = [&](int i) {
+    const SceneMember &m = members_[i];
+    const SceneBlockType &t = types_[m.type];
+    Spatial sp = spatialKept_[i] ? spatial_[i] : Spatial();
+    void *data = sp ? nullptr : dataOf(lib, m.handle, t);
+    if (!sp && (data == nullptr) != m.isNull) {
+      return false;
+    }
+    if (!sp && m.data) {
+      const SceneBlockType &dt = types_[m.dataType];
+      void *blockData = dataOf(lib, m.data, dt);
+      if ((blockData == nullptr) != m.dataIsNull) {
+        return false;
+      }
+      sp = get<Spatial>(lib, m.dataSpatial, dt.spatial, m.data, blockData);
+    }
+    if (!sp) {
+      sp = get<Spatial>(lib, m.spatial, t.spatial, m.handle, data);
+    }
+    Box3d local;
+    if (!takeError(rt, foreign) && sp) {
+      local = boundsOf(rt, m, sp, foreign);
+    }
+    const ObjectEval &was = old.objects[i];
+    if (memcmp(&local, &was.localBounds, sizeof(Box3d)) == 0) {
+      return true;
+    }
+    ObjectEval moved = was;
+    moved.localBounds = local;
+    moved.bounds = transformBox(local, static_cast<const double *>(moved.dataWorld()));
+    if (!moved.bounds.allFinite()) {
+      moved.bounds = Box3d();
+    }
+    out.objects[i] = moved;
+    differing_.append(i);
+    return true;
+  };
   int levelEnd = 0;
   for (int k = 0; k < n; k++) {
     const int i = order_[k];
@@ -516,6 +570,14 @@ SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &fore
       }
       evaluateLevel(
           lib, k, levelEnd, provider, time, differs ? out.objects : old.objects, foreign);
+    }
+    if (incremental && !dirty_[i] && old.objects[i].status != EvalStatus::ModelFailed &&
+        (m.parent < 0 || cyclic_[i] || !moved_[m.parent]))
+    {
+      if (boundsEachPass(m) && !boundsOnly(i)) {
+        return Pass::Stale;
+      }
+      continue;
     }
     if (k + kPrefetchAhead < n) {
       const PrefetchHint &ahead = hints_[order_[k + kPrefetchAhead]];
@@ -577,8 +639,14 @@ SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &fore
       if (!lastType || lastType->id() != info.transformType) {
         lastType = types.find(info.transformType);
       }
-      e.status = evaluateOne(
-          lib, m.handle, providerFor(i, provider), lastType, time, parent, e.state, foreign);
+      e.status = evaluateOne(lib,
+                             m.handle,
+                             providerFor(i, provider),
+                             lastType,
+                             time,
+                             parent,
+                             e.state,
+                             foreign);
       if (e.status == EvalStatus::Ok && cyclic_[i]) {
         e.status = EvalStatus::Cycle;
       }
@@ -587,6 +655,7 @@ SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &fore
     /* Bounds: the data block's, or its own. */
     e.localBounds = Box3d();
     Spatial sp;
+    bool table = false;
     if (m.data) {
       const SceneBlockType &dt = types_[m.dataType];
       void *blockData = dataOf(lib, m.data, dt);
@@ -596,10 +665,15 @@ SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &fore
         return Pass::Stale;
       }
       sp = get<Spatial>(lib, m.dataSpatial, dt.spatial, m.data, blockData);
+      table = sp && m.dataSpatial == CapMode::Table;
     }
     if (!sp) {
       sp = get<Spatial>(lib, m.spatial, t.spatial, m.handle, data);
+      table = sp && m.spatial == CapMode::Table;
     }
+    /* A table and its data stay until the epoch moves: incremental passes reuse them. */
+    spatial_[i] = table ? sp : Spatial();
+    spatialKept_[i] = table;
     if (!takeError(rt, foreign) && sp) {
       e.localBounds = boundsOf(rt, m, sp, foreign);
     }
@@ -608,6 +682,10 @@ SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &fore
       e.bounds = Box3d();
     }
 
+    if (incremental && memcmp(&e.state, &old.objects[i].state, sizeof(e.state)) != 0) {
+      moved_[i] = 1; /* its children are evaluated again */
+      movedList_.append(i);
+    }
     if (!others) {
       if (!e.same(old.objects[i])) {
         differing_.append(i);
@@ -625,6 +703,9 @@ SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &fore
     out.objects[i] = e;
   }
   out.index = index_;
+  if (incremental) {
+    return differing_.size() > 0 ? Pass::Changed : Pass::Same;
+  }
   return differs ? Pass::Changed : Pass::Same;
 }
 
@@ -643,17 +724,22 @@ Status SceneEvaluator::run(const Scene &scene,
                                             ChangeAspects(InvalidateKinds::Positions);
           if (!c.owner) {
             forgetBoxes();
-          } else if (c.owner->kind == OwnerKey::Kind::Block &&
-                     (c.aspects & kBounds) != 0) {
-            if (const int *box = boxOf_.lookup_ptr(c.owner->block)) {
+            full_ = true;
+          } else if (c.owner->kind == OwnerKey::Kind::Block) {
+            if (const int *box = (c.aspects & kBounds) != 0
+                                     ? boxOf_.lookup_ptr(c.owner->block)
+                                     : nullptr)
+            {
               boxes_[*box].valid = false;
             }
+            markDirty(c.owner->block);
           }
         });
     forgetBoxes();
   }
   if (!valid_ || key != key_) {
     forgetBoxes();
+    full_ = true;
     counters.revalidations++;
     if (key.tables != key_.tables) {
       types_.clear();
@@ -666,23 +752,56 @@ Status SceneEvaluator::run(const Scene &scene,
     valid_ = true;
     key_ = key;
   }
+  const SceneSettings &settings = lib.runtime().ext<SceneSettings>();
+  const double time = scene.time();
   for (int attempt = 0; attempt < 2; attempt++) {
-    markDriven(lib, driven);
+    const bool drivenMoved = markDriven(lib, driven);
+    const bool incremental =
+        settings.incremental && !full_ && !drivenMoved && time == lastTime_;
+    /* What was notified before the pass; what is notified during it stays dirty. */
+    const Vector<int> before = std::move(dirtyList_);
+    dirtyList_ = Vector<int>();
+    for (int p : before) {
+      dirty_[p] = 2;
+    }
     foreign = Status();
-    const Pass pass = evaluateAll(scene, lib, foreign);
+    const bool others = stores_[front_].index != index_;
+    const Pass pass = evaluateAll(scene, lib, incremental, foreign);
     if (pass != Pass::Stale) {
+      clearDirty(before);
+      full_ = false;
+      lastTime_ = time;
       changed = pass == Pass::Changed;
       if (changed) {
         changes.version++;
-        changes.all = stores_[front_].index != index_;
+        changes.all = others;
+        backDiff_ = differing_; /* the back store will be these results' front */
+        backAll_ = others;
         std::swap(changes.places, differing_);
         front_ = 1 - front_;
         frontLookups_ = lookups_;
       }
-      return changed || !bvh.valid()
-                 ? bvh.update(stores_[front_], lib.runtime().ext<SceneSettings>().bvh)
-                 : Status();
+      if (changed && incremental && !others && bvh.valid()) {
+        return bvh.update(stores_[front_],
+                          settings.bvh,
+                          {changes.places.data(), size_t(changes.places.size())});
+      }
+      return changed || !bvh.valid() ? bvh.update(stores_[front_], settings.bvh)
+                                     : Status();
     }
+    /* The back store has what the pass wrote. */
+    for (int32_t p : differing_) {
+      backDiff_.append(p);
+    }
+    backAll_ = backAll_ || others;
+    for (int p : before) {
+      dirtyList_.append(p);
+      dirty_[p] = 1;
+    }
+    for (int p : movedList_) {
+      moved_[p] = 0;
+    }
+    movedList_.clear();
     if (attempt == 0) {
       counters.rebuilds++;
       lookUp(scene, lib);

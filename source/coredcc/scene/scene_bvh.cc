@@ -17,6 +17,7 @@ Status SceneBvh::update(const detail::EvaluatedStore &results, const BvhOptions 
   index_ = results.index;
   if (sameObjects && boxes_.refit(source).ok() && boxes_.bvh().growth() <= 2.0) {
     counters_.refits++;
+    sinceGrowth_ = 0;
     return Status();
   }
   if (Status s = boxes_.build(std::move(source), options); !s.ok()) {
@@ -24,6 +25,38 @@ Status SceneBvh::update(const detail::EvaluatedStore &results, const BvhOptions 
     return s;
   }
   counters_.builds++;
+  return Status();
+}
+
+Status SceneBvh::update(const detail::EvaluatedStore &results,
+                        const BvhOptions &options,
+                        std::span<const int32_t> changed)
+{
+  /* Box by box only while they are few: a full refit costs about as much as 1% of the
+   * boxes refitted one by one. growth() is measured once 10% were. */
+  const int n = int(results.objects.size());
+  if (!index_ || index_ != results.index || int(changed.size()) * 100 > n) {
+    return update(results, options);
+  }
+  BoxSource moved;
+  moved.ensureCapacity(int(changed.size()));
+  Vector<int> primitives;
+  for (int32_t place : changed) {
+    const ObjectEval &e = results.objects[place];
+    moved.append(e.member && e.status != EvalStatus::Invalid ? e.bounds : Box3d());
+    primitives.append(place);
+  }
+  if (!boxes_.refit(moved, {primitives.data(), primitives.size()}).ok()) {
+    return update(results, options);
+  }
+  counters_.refits++;
+  sinceGrowth_ += int(changed.size());
+  if (sinceGrowth_ * 10 >= n) {
+    sinceGrowth_ = 0;
+    if (boxes_.bvh().growth() > 2.0) {
+      return update(results, options);
+    }
+  }
   return Status();
 }
 

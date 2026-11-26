@@ -217,8 +217,8 @@ void testEvaluated()
   bus.flush();
   int heard = 0;
   ScopedConnection l = bus.addListener([&](const OwnerKey *k) {
-    if (*k == OwnerKey::ofBlock(d.idOf(shape))) {
-      return;
+    if (k->kind == OwnerKey::Kind::Block) {
+      return; /* the edits' own notifications */
     }
     heard++;
     test_assert(*k == d.rt.ext<ApiRegistry>().runtimeOwner(kEvaluatedOwner).owner);

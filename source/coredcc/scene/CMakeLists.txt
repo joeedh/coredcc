@@ -8,6 +8,7 @@ coredcc_library(coredcc_scene
     evaluated.cc
     evaluator.cc
     evaluator_batch.cc
+    evaluator_dirty.cc
     fbx.cc
     host_channels.cc
     kept_worlds.cc

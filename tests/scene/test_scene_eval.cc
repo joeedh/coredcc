@@ -484,7 +484,7 @@ void testCapabilities()
   ChannelBlock ch = d.trs->defaults();
   put(ch, trs::kLocation, double3(8, 0, 0));
   must(writeTransform(*d.ctx, a, ch));
-  test_assert(d.obj(a).channels == ch && heard.size() == 3);
+  test_assert(d.objRaw(a).channels == ch && heard.size() == 3);
   must(writeTransformType(*d.ctx, a, d.matrix->id(), d.matrix->defaults()));
   test_assert(d.obj(a).transformTypeId() == d.matrix->id() &&
               d.obj(a).channels == d.matrix->defaults());
@@ -498,10 +498,10 @@ void testCapabilities()
   test_assert(isError(writeTransformType(*d.ctx, h, d.matrix->id(), ch),
                       StatusCode::Unsupported));
   test_assert(isError(writeParent(*d.ctx, h, d.idOf(a)), StatusCode::Unsupported));
-  d.host(h).onWrite = [] { return boom("refused"); };
+  d.hostRaw(h).onWrite = [] { return boom("refused"); };
   heard.clear();
   test_assert(isError(writeTransform(*d.ctx, h, ch), StatusCode::Internal, "refused"));
-  d.host(h).onWrite = [&] {
+  d.hostRaw(h).onWrite = [&] {
     d.rt.setStickyError(boom("threw"));
     return Status();
   };

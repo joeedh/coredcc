@@ -223,6 +223,7 @@ void testProvider()
   curves.before = [&](BlockHandle h) {
     return h == a ? Status::error(StatusCode::FailedPrecondition, "no value") : Status();
   };
+  d.rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(d.idOf(a))); /* its answers changed */
   test_assert(isError(evaluateScene(*d.ctx), StatusCode::FailedPrecondition, "no value"));
   test_assert(d.statusOf(a) == EvalStatus::ModelFailed &&
               d.statusOf(b) == EvalStatus::Ok && d.isAt(a, 0) && d.isAt(b, 2));
@@ -240,6 +241,7 @@ void testProvider()
     }
     return Status();
   };
+  d.rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(d.idOf(a))); /* its answers changed */
   test_assert(isError(evaluateScene(*d.ctx), StatusCode::Internal, "thrown"));
   test_assert(!d.rt.hasStickyError() && d.statusOf(a) == EvalStatus::ModelFailed);
   test_assert(
@@ -256,6 +258,7 @@ void testProvider()
     }
     return Status();
   };
+  d.rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(d.idOf(a))); /* its answers changed */
   d.evaluate();
   test_assert(busy.code() == StatusCode::Busy && edit.code() == StatusCode::Busy);
   curves.before = nullptr;
@@ -266,6 +269,7 @@ void testProvider()
   curves.curves.append(c);
   c.channel = -1;
   curves.curves.append(c);
+  d.rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(d.idOf(a))); /* its answers changed */
   d.evaluate();
   test_assert(d.statusOf(a) == EvalStatus::Invalid);
 

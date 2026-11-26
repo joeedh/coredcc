@@ -296,11 +296,24 @@ struct Doc {
   {
     return *static_cast<Slot *>(lib->get(h)->clientData());
   }
+  /** For changing it: it is notified, as hosts must (evaluateScene evaluates only what
+   * was). */
   Object &obj(BlockHandle h)
+  {
+    rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(idOf(h)));
+    return objRaw(h);
+  }
+  /** Nobody hears of it. */
+  Object &objRaw(BlockHandle h)
   {
     return *static_cast<Object *>(lib->get(h)->clientData());
   }
   Host &host(BlockHandle h)
+  {
+    rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(idOf(h)));
+    return hostRaw(h);
+  }
+  Host &hostRaw(BlockHandle h)
   {
     return *static_cast<Host *>(slot(h).data);
   }

@@ -133,8 +133,12 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
 - **Symptom:** `Scene::evaluated`, or `evaluated.objects[...]`, shows where an object was, or the
   bounds of geometry it had.
 - **Cause:** results are from the last `evaluateScene`. Hosts call it once a frame, before
-  drawing; nothing calls it by itself. It computes all transforms again, and needs no
-  notification for that.
+  drawing; nothing calls it by itself. It evaluates again only the objects whose blocks were
+  notified, what is below them, and the bounds it can't keep; a move of the epoch or of the
+  time, or `notifyAll`, evaluates everything.
+- **If it stays old after evaluateScene:** something changed an object without a notification
+  (embedding.md, "Objects and geometry of a host"). Set `SceneSettings::incremental = false`: if
+  that fixes it, find the write and notify the block after it.
 - **If the bounds stay old after it:** the evaluator keeps those of a type that implements Invalidation, and the
   data block may keep them too. Whoever changes a block's data
   directly must call `invalidateData(ctx, block, kinds)`, which calls the block's `Invalidation`

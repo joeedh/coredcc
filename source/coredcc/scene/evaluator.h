@@ -122,8 +122,10 @@ public:
 
 private:
   enum class Pass { Same, Changed, Stale };
-  /** Writes the back store, if anything differs from the front one. */
-  Pass evaluateAll(const Scene &scene, const Library &lib, Status &foreign);
+  /** Writes the back store, if anything differs from the front one. `incremental`: only
+   * what is dirty, below what moved, or has bounds that aren't kept. */
+  Pass
+  evaluateAll(const Scene &scene, const Library &lib, bool incremental, Status &foreign);
   EvalStatus evaluateOne(const Library &lib,
                          BlockHandle h,
                          OverrideProvider *provider,
@@ -145,8 +147,24 @@ private:
                      const litestl::util::Vector<ObjectEval> &results,
                      Status &foreign);
   bool stillValid(const Scene &scene, const Library &lib) const;
-  /** Sets SceneMember::driven, if the set or the lookups moved. */
-  void markDriven(const Library &lib, const OverrideProvider::Driven &driven);
+  /** Sets SceneMember::driven, if the set or the lookups moved. True if it did. */
+  bool markDriven(const Library &lib, const OverrideProvider::Driven &driven);
+
+  /* ---- part B: what changed since the last pass (evaluator_dirty.cc) ---- */
+
+  /** The listener's: a notification of a block. */
+  void markDirty(const BlockId &id);
+  /** After lookUp: the places by block id, nothing dirty, and a full pass next. */
+  void indexPlaces(const Library &lib);
+  /** Whether the bounds of member i are asked for in every pass. */
+  bool boundsEachPass(const SceneMember &m) const
+  {
+    return m.box >= 0 ? boxStale_[m.box] != 0 : m.data || m.spatial != CapMode::None;
+  }
+  /** Brings the back store up to the front one, at the places where they differ. */
+  void syncBack();
+  /** After a pass: what is dirty now is what was notified during it. */
+  void clearDirty(const litestl::util::Vector<int> &before);
   /** The provider for member i, or null if it doesn't drive it. */
   OverrideProvider *providerFor(int i, OverrideProvider *provider) const
   {
@@ -202,6 +220,28 @@ private:
   litestl::util::Vector<int32_t> differing_;
   EvaluatedStore stores_[2];
   int front_ = 0;
+
+  /* Part B. */
+  litestl::util::Map<BlockId, int> placeOf_;
+  litestl::util::Vector<uint8_t> dirty_;
+  litestl::util::Vector<int> dirtyList_;
+  /** The places whose state differs in this pass, for their children. */
+  litestl::util::Vector<uint8_t> moved_;
+  litestl::util::Vector<int> movedList_;
+  /** The next pass evaluates everything. */
+  bool full_ = true;
+  double lastTime_ = 0.0;
+  /** Where the back store differs from the front one; all of it if backAll_. */
+  litestl::util::Vector<int32_t> backDiff_;
+  bool backAll_ = true;
+  /** Kept boxes that weren't valid when the pass began: all who share one ask again. */
+  litestl::util::Vector<uint8_t> boxStale_;
+  /** Each member's Spatial, when it is a table's: it is kept until the lookups move. */
+  litestl::util::Vector<Spatial> spatial_;
+  litestl::util::Vector<uint8_t> spatialKept_;
+  /** The members that use a data block: the first, then each one's next, or -1. */
+  litestl::util::Map<BlockId, int> dataUsers_;
+  litestl::util::Vector<int> nextUser_;
 };
 
 } // namespace coredcc::detail

@@ -164,7 +164,7 @@ Unreal, coredcc is exactly one module, so they exist once.
 ## Objects and geometry of a host
 - A block type that implements `Transformable` is an object, and one that implements `Spatial` has
   geometry. coredcc asks them when it evaluates or picks, and keeps nothing that it can't ask again.
-- **Graphs don't ask again** unless they hear of a change. What a block answers to `queryBlock` (whether it
+- **Graphs and `evaluateScene` don't ask again** unless they hear of a change. What a block answers to `queryBlock` (whether it
   implements an interface, and everything the interface's slots return) may change only with one of:
   - a notification of the block: what `setValue` and the commands do, `writeTransform`, `writeParent`, and
     `ChangeBus::notify` with its owner after the host moved the object itself;
@@ -175,6 +175,9 @@ Unreal, coredcc is exactly one module, so they exist once.
     `onHostRestored`, `writeRef` and `noteRefsChanged`, overrides. A block's data pointer may change only
     between the two host calls.
   If a graph's result is old, `GraphInstance::setIncremental(false)` says whether a notification is missing.
+  If a scene's is, `SceneSettings::incremental = false` does the same: evaluateScene then evaluates every
+  object each time. The scene's time is compared in each evaluation, so writing `Scene::frame` needs no
+  notification.
 - **An object that the host takes away** (`onHostDestroyed`) isn't an error for undo, redo or a drag. What
   they would have written to it is written when it is back: `onHostRestored` calls its `writeChannels`, so
   its data must be there by then. If it can't be written just then (an evaluation is going on, an error is

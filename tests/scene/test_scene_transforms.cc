@@ -590,8 +590,8 @@ void testDelete()
   bool armed = true;
   ScopedConnection l = f.rt.ext<ChangeBus>().addListener([&](const OwnerKey *k) {
     if (armed && *k == OwnerKey::ofBlock(f.idOf(down)) &&
-        f.obj(down).parent.cell().isNull() &&
-        f.obj(down).channels.get(trs::kLocation) == 3.0)
+        f.objRaw(down).parent.cell().isNull() &&
+        f.objRaw(down).channels.get(trs::kLocation) == 3.0)
     {
       armed = false;
       f.rt.setStickyError(boom("left behind"));
@@ -627,7 +627,7 @@ void testDelete()
     ScopedConnection arm = k.rt.ext<ChangeBus>().addListener([&](const OwnerKey *key) {
       if (*key == OwnerKey::ofBlock(k.idOf(one))) {
         throws = by == 1;
-        k.host(kh).onRead = [&k, by](ObjectInfo &) {
+        k.hostRaw(kh).onRead = [&k, by](ObjectInfo &) {
           if (by == 0) {
             k.rt.setStickyError(boom("read"));
           }

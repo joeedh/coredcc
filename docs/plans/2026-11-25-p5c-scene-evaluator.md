@@ -665,8 +665,25 @@ Kept as the work goes; each item says what changed from the design above and why
 - **The wasm test (`tests/wasm/drive.test.ts`) wasn't run here:** this worktree has no emsdk, and only the
   pre-commit gate runs locally; CI runs the wasm suites. It was type-checked, with the TS layer, against the
   TS that the native `coredcc_gen_ts` generates (the test app's own types stubbed).
+- **Part B (step 8):**
+  - `evaluator.cc` (28 KB) isn't split: it stays under 35 KB. The dirty tracking is in `evaluator_dirty.cc`.
+  - The incremental walk is inside `evaluateAll`, with a flag: an object is evaluated if it was notified, its
+    parent's state moved in this pass, or it was ModelFailed; otherwise only its bounds, if they aren't kept.
+  - **A pass is full when evaluateMany types are registered:** their batches are whole levels. Such
+    documents keep P3's costs.
+  - **Each member's Spatial is kept** from its last full visit when it is a table's (the data pointer stays
+    until the epoch moves). A notification of a data block drops the kept Spatial of the objects that use
+    it, since P3's tests move a data pointer without an epoch move, with a notification.
+  - Kept boxes that weren't valid when a pass began are asked for by every object that shares them
+    (`boxStale_`): the first one's call makes the box valid again.
+  - Notifications that arrive while a pass runs leave their objects dirty for the next one.
+  - **P3's tests:** the fixture's `obj(h)` and `host(h)` notify, as `shape(h)` already did, and `objRaw`
+    and `hostRaw` don't. Listeners that read objects use the raw ones. `test_scene_cache` notifies the
+    blocks whose data it swaps; `test_scene_overrides` notifies when its provider's answers change.
+  - The box-by-box BVH refit is tested in `test_scene_incremental`'s growth case: the random documents are
+    too small for it (it needs fewer than 1% of the boxes).
 - **Not done yet:** a Scene made from a placeholder (B5) has code but no test; the foreach diagnostic has no
-  test.
+  test; the wasm suites haven't run with part B.
 
 ### Measured, part A (`node tools/bench.mjs drive -- --reps 15`, busy machine, provisional)
 | Case, 100,000 objects | Best ms | Target |

@@ -21,6 +21,10 @@ struct SceneSettings {
   /** Of every SceneBvh, from its next build on. Without `parallel`, evaluateScene doesn't
    * use litestl's task pool. */
   BvhOptions bvh;
+  /** evaluateScene evaluates again only what changed: the objects whose blocks were
+   * notified, what is below them, and the bounds that it can't keep. False evaluates
+   * everything each time, to find a change that wasn't notified. */
+  bool incremental = true;
 
   explicit SceneSettings(Runtime *)
   {
@@ -72,10 +76,16 @@ private:
   /** A refit if the objects are the same and none appears that had no bounds when it was
    * built, unless that makes the tree too loose. */
   Status update(const detail::EvaluatedStore &results, const BvhOptions &options);
+  /** The same, when only the places `changed` may differ from the last call's results. */
+  Status update(const detail::EvaluatedStore &results,
+                const BvhOptions &options,
+                std::span<const int32_t> changed);
 
   GeometryBvh<BoxSource> boxes_;
   std::shared_ptr<const detail::HandleIndex> index_;
   Counters counters_;
+  /** Boxes refitted one by one since growth() was last measured. */
+  int sinceGrowth_ = 0;
 };
 
 } // namespace coredcc

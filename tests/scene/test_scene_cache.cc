@@ -84,25 +84,31 @@ void testData()
   d.evaluate();
   test_assert(d.isAt(b, 11));
   const uint64_t epoch = d.lib->epoch();
+  /* The host notifies the block whose data it changed (evaluateScene evaluates only
+   * those). */
+  const auto swapIn = [&](BlockHandle h, void *data) {
+    d.slot(h).data = data;
+    d.rt.ext<ChangeBus>().notify(OwnerKey::ofBlock(d.idOf(h)));
+  };
   Host moved = d.host(a);
   moved.channels.set(trs::kLocation, 2.0);
   Shape bigger = d.shape(shape);
   bigger.box.max[0] = 7.0;
   void *oldHost = d.slot(a).data, *oldShape = d.slot(shape).data;
-  d.slot(a).data = &moved;
-  d.slot(shape).data = &bigger;
+  swapIn(a, &moved);
+  swapIn(shape, &bigger);
   d.evaluate();
   test_assert(d.isAt(b, 12) && d.result(b).localBounds.max[0] == 7.0);
   test_assert(d.sc().counters().rebuilds == 1);
 
-  d.slot(a).data = nullptr;
+  swapIn(a, nullptr);
   d.evaluate();
   test_assert(d.statusOf(a) == EvalStatus::NoTransform && d.isAt(b, 10));
-  d.slot(shape).data = nullptr;
+  swapIn(shape, nullptr);
   d.evaluate();
   test_assert(d.result(b).localBounds.empty());
-  d.slot(a).data = oldHost;
-  d.slot(shape).data = oldShape;
+  swapIn(a, oldHost);
+  swapIn(shape, oldShape);
   d.evaluate();
   test_assert(d.isAt(b, 11) && d.result(b).localBounds.max[0] == 1.0);
   test_assert(d.lib->epoch() == epoch);

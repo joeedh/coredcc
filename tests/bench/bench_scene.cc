@@ -6,7 +6,10 @@
  * One line per case: the best, the median and the worst of the repetitions, in ms. The
  * targets (P3's exit criteria) are for 100,000 objects, and include what evaluateScene
  * does to the scene's BVH: 20 ms when nothing structural changed, 40 when the epoch moved
- * and nothing differs, 80 after a structural change. */
+ * and nothing differs, 80 after a structural change. With P5c's part B (only what was
+ * notified is evaluated): 2 ms unchanged and for one object moved, 3 for a root with
+ * 1,000 below. */
+#include "coredcc/api/change_bus.h"
 #include "coredcc/api/resolve.h"
 #include "coredcc/lib/provider.h"
 #include "coredcc/scene/builtins.h"
@@ -114,7 +117,7 @@ int main(int argc, char **argv)
   int count = 100000, leaf = 0;
   for (int i = 1; i + 1 < argc; i += 2) {
     if (!strcmp(argv[i], "--count")) {
-      count = std::max(atoi(argv[i + 1]), 2);
+      count = std::max(atoi(argv[i + 1]), 2000);
     } else if (!strcmp(argv[i], "--leaf")) {
       leaf = atoi(argv[i + 1]);
     } else if (!strcmp(argv[i], "--reps")) {
@@ -145,7 +148,8 @@ int main(int argc, char **argv)
   Scene &scene = *Scene::of(lib, *sceneBlock);
   ctx.setScene(*sceneBlock);
 
-  /* Chains of four, moved and rotated. */
+  /* Chains of four, moved and rotated; at the end, a root with 1,000 children. */
+  const int star = count - 1001;
   std::vector<BlockHandle> all;
   std::vector<Object *> objects;
   for (int i = 0; i < count; i++) {
@@ -155,8 +159,8 @@ int main(int argc, char **argv)
     o->channels.set(trs::kLocation, i % 317);
     o->channels.set(trs::kLocation + 1, i / 317);
     o->channels.set(trs::kRotationEuler + 2, i * 0.01);
-    if (i % 4 != 0) {
-      must(lib.writeRef(o->parent.cell(), lib.get(all[i - 1])->id()));
+    if (i > star || (i < star && i % 4 != 0)) {
+      must(lib.writeRef(o->parent.cell(), lib.get(all[i > star ? star : i - 1])->id()));
     }
     Shape *s = litestl::alloc::New<Shape>("Shape");
     for (int k = 0; k < 3; k++) {
@@ -176,11 +180,19 @@ int main(int argc, char **argv)
   printf("%d objects, %d repetitions, ms\n", count, g_reps);
   evaluate();
   measure("unchanged", nothing, evaluate);
+  /* Hosts notify what they change: evaluateScene evaluates only that (P5c part B). */
+  ChangeBus &bus = rt.ext<ChangeBus>();
+  const auto move = [&](int k, int i) {
+    objects[k]->channels.set(trs::kLocation + 2, i);
+    bus.notify(OwnerKey::ofBlock(lib.get(all[k])->id()));
+  };
+  measure("one object moved", [&](int i) { move(5, i); }, evaluate);
+  measure("a root with 1000 below moved", [&](int i) { move(star, i); }, evaluate);
   measure(
       "every root moved",
       [&](int i) {
-        for (int k = 0; k < count; k += 4) {
-          objects[k]->channels.set(trs::kLocation + 2, i);
+        for (int k = 0; k < star; k += 4) {
+          move(k, i);
         }
       },
       evaluate);
