@@ -2,8 +2,7 @@
 
 #include "CoredccDocument.h"
 
-#include "CoredccIncludes.h"
-COREDCC_INCLUDES_START
+#include "CoredccIncludesBegin.h"
 #include "coredcc/api/ref_text.h"
 #include "coredcc/api/struct.h"
 #include "coredcc/scene/commands.h"
@@ -11,7 +10,7 @@ COREDCC_INCLUDES_START
 #include "coredcc/scene/scene.h"
 #include "coredcc/tool/builtins.h"
 #include "coredcc/tool/manager.h"
-COREDCC_INCLUDES_END
+#include "CoredccIncludesEnd.h"
 
 using namespace coredcc;
 

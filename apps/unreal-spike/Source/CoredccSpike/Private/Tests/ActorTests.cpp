@@ -13,9 +13,8 @@
 #include "GameFramework/Actor.h"
 #include "Misc/AutomationTest.h"
 
-#include "../CoredccIncludes.h"
 #include "../SpikeDoc.h"
-COREDCC_INCLUDES_START
+#include "../CoredccIncludesBegin.h"
 #include "coredcc/base/iface/owned.h"
 #include "coredcc/base/iface/registry.h"
 #include "coredcc/lib/registry.h"
@@ -25,7 +24,7 @@ COREDCC_INCLUDES_START
 #include "coredcc/scene/scene.h"
 #include "coredcc/scene/transform_registry.h"
 #include "litestl/util/alloc.h"
-COREDCC_INCLUDES_END
+#include "../CoredccIncludesEnd.h"
 
 using namespace coredcc;
 namespace lbt = litestl::binding::types;

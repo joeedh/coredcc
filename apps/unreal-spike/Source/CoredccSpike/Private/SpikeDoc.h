@@ -10,12 +10,11 @@
 
 #include "UnrealHistory.h"
 
-#include "CoredccIncludes.h"
-COREDCC_INCLUDES_START
+#include "CoredccIncludesBegin.h"
 #include "coredcc/api/context.h"
 #include "coredcc/command/executor.h"
 #include "coredcc/lib/library.h"
-COREDCC_INCLUDES_END
+#include "CoredccIncludesEnd.h"
 
 #include <initializer_list>
 #include <memory>

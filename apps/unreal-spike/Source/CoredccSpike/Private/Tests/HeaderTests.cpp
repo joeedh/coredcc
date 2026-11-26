@@ -1,14 +1,14 @@
 /*
  * S11 of docs/plans/2026-11-25-p4-tools.md: coredcc's public headers, and the litestl headers
- * they include, compile inside an Unreal translation unit with an Editor module's flags
- * (/W4, /we4668, the shadowing errors /we4456 /we4458 /we4459, exceptions on, RTTI off). The
- * list is tests/compile_embed.cc's; the test passes once the module compiles.
+ * they include, compile inside an Unreal translation unit with an Editor module's flags: /W4,
+ * C4668 as a warning (see CoredccSpike.Build.cs), the shadowing errors /we4456 /we4458 /we4459,
+ * exceptions on, RTTI off. The list is tests/compile_embed.cc's; the test passes once the module
+ * compiles.
  */
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 
-#include "../CoredccIncludes.h"
-COREDCC_INCLUDES_START
+#include "../CoredccIncludesBegin.h"
 #include "coredcc/api/attachments.h"
 #include "coredcc/api/change_bus.h"
 #include "coredcc/api/context.h"
@@ -136,7 +136,7 @@ COREDCC_INCLUDES_START
 #include "coredcc/tool/scene_overlay.h"
 #include "coredcc/tool/settings.h"
 #include "coredcc/tool/tool.h"
-COREDCC_INCLUDES_END
+#include "../CoredccIncludesEnd.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCoredccS11, "Coredcc.Build.S11 headers in a UE translation unit",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

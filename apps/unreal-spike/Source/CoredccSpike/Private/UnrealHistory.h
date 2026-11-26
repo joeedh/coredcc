@@ -10,10 +10,9 @@
 #include "CoreMinimal.h"
 #include "Misc/Change.h"
 
-#include "CoredccIncludes.h"
-COREDCC_INCLUDES_START
+#include "CoredccIncludesBegin.h"
 #include "coredcc/command/executor.h"
-COREDCC_INCLUDES_END
+#include "CoredccIncludesEnd.h"
 
 class UCoredccDocument;
 class FRecordChange;

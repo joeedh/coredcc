@@ -7,10 +7,9 @@
 #include "Editor/Transactor.h"
 #include "ScopedTransaction.h"
 
-#include "CoredccIncludes.h"
-COREDCC_INCLUDES_START
+#include "CoredccIncludesBegin.h"
 #include "coredcc/api/context.h"
-COREDCC_INCLUDES_END
+#include "CoredccIncludesEnd.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogCoredccHistory, Log, All);
 

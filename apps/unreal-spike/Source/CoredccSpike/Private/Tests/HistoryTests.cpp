@@ -12,14 +12,13 @@
 #include "../CoredccDocument.h"
 #include "../SpikeDoc.h"
 
-#include "../CoredccIncludes.h"
-COREDCC_INCLUDES_START
+#include "../CoredccIncludesBegin.h"
 #include "coredcc/command/set_property.h"
 #include "coredcc/scene/commands.h"
 #include "coredcc/scene/transform.h"
 
 #include "litestl/util/alloc.h"
-COREDCC_INCLUDES_END
+#include "../CoredccIncludesEnd.h"
 
 using namespace coredcc;
 
