@@ -340,6 +340,7 @@ void testScriptBrush()
     ToolDoc d;
     const BlockHandle a = d.box("a", 0, 0, 0, 1.0);
     d.select({a});
+    const std::string aName = nameOf(d, a);
     int made = 0, begins = 0, applies = 0, undos = 0;
     std::vector<Status> inApply;
     Obj factory;
@@ -356,6 +357,7 @@ void testScriptBrush()
           Context &ctx = *static_cast<Context *>(args[0]);
           inApply.push_back(sc::writeValue(ctx, "nothing.here", sc::makeFloat(1.0)));
           inApply.push_back(sc::invoke(ctx, "core.scene.new").status);
+          inApply.push_back(sc::notifyChanged(ctx, string(aName.c_str())));
         }
         new (r) Status();
         return true;
@@ -389,7 +391,8 @@ void testScriptBrush()
     must(d.send(EventType::PointerMove, c.x + 20, c.y).status());
     must(d.send(EventType::PointerUp, c.x + 20, c.y).status());
     test_assert(made == 1 && begins == 1 && applies > 2 && d.history->size() == 1);
-    test_assert(inApply.size() == 2);
+    test_assert(inApply.size() == 3);
+    must(inApply[2]); /* notifyChanged is allowed where values may be written */
     test_assert(isCode(inApply[0], StatusCode::NotFound)); /* past the gate: no such path */
     test_assert(isCode(inApply[1], StatusCode::Busy));
     const int first = applies;

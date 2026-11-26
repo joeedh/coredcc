@@ -199,6 +199,9 @@ struct StrokeTarget {
  * - `apply`: one sample, once for the stroke and once for each mirror (`mirror` set). It may
  *   only write values: it runs where commands can't be.
  * - `undo`: put back what begin and apply wrote, as a Command's undo.
+ * - What they change must be notified, as any write: through values (setValue, writeValue),
+ *   `invalidateData` for geometry, or ChangeBus::notify (`notifyChanged` in scripts). The scene's
+ *   evaluation is incremental, so an unnotified block keeps its old result.
  * - `memSize`: its undo data, in bytes.
  */
 struct StrokeBrush : IfaceRef {

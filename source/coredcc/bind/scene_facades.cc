@@ -250,7 +250,8 @@ MatrixResult worldMatrix(Context &ctx, const string &object)
 
 Status notifyChanged(Context &ctx, const string &block)
 {
-  CDCC_TRY(slotGate(ctx, "notifyChanged", {"exec"}));
+  /* Where values may be written: a brush or setPositions that changes a host's block. */
+  CDCC_TRY(slotGate(ctx, "notifyChanged", {"exec", "undo", "redo"}));
   Result<BlockHandle> h = blockAt(ctx, "notifyChanged", block);
   CDCC_TRY(h.status());
   ctx.runtime().ext<ChangeBus>().notify(OwnerKey::ofBlock(ctx.library()->get(*h)->id()));

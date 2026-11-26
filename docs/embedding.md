@@ -304,6 +304,9 @@ are `keys::*` in `tool/input.h` (`Keys` in TS):
   `begin` and `apply` wrote. On redo, `begin` runs again and the recorded samples are applied again, so a
   brush must give the same result from the same samples.
 - **`apply` may only write values.** It runs inside the open gesture, where commands can't run.
+- **Notify what a brush changes:** values notify by themselves; geometry needs `invalidateData`, and any other
+  write `ChangeBus::notify` (`notifyChanged` in scripts, allowed in a brush's slots). `evaluateScene` is
+  incremental since P5c, so an unnotified block keeps its old result.
 - **Rays hit the stroke's object only**, through `pickScene`, so the scene must have been evaluated, as for
   any pick. Off the object, samples lie on the plane through the last hit.
 - **Symmetry** of the object's data block (or of the object) mirrors the samples when the `symmetry` setting

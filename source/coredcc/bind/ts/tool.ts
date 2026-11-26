@@ -437,6 +437,8 @@ export interface StrokeTarget {
 /**
  * One stroke's brush. `begin` and `apply` may write values (`write`), not run commands;
  * `undo` puts back what they wrote. `begin` runs again before a redo replays the samples.
+ * A block they change in another way must be notified (`notifyChanged`), or the scene's
+ * incremental evaluation keeps its old result.
  */
 export interface StrokeBrush {
   begin?(ctx: Context, target: StrokeTarget): void
