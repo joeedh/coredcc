@@ -47,7 +47,7 @@ public:
   /** Null if there is none. */
   const RefCell *find(std::string_view name) const;
   /** Visits every cell. */
-  void visit(RefVisitor &visitor);
+  void forEachRef(RefVisitor &visitor);
 
 private:
   struct Entry {

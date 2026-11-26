@@ -132,7 +132,7 @@ void PendingWrites::flush(Library &lib)
   }
 }
 
-int PendingWrites::count(const Library &lib) const
+int PendingWrites::writeCount(const Library &lib) const
 {
   const PerLibrary *p = const_cast<PendingWrites *>(this)->find(lib);
   return p ? int(p->entries.size()) : 0;

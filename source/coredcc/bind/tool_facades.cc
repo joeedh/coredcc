@@ -495,14 +495,14 @@ Status updateDragEach(Context &ctx, const Vector<double> &numbers)
 {
   return updateOpen<ApplyDelta>(ctx, "updateDragEach", [&](Context &c, ApplyDelta &d) {
     constexpr int kEach = 16;
-    if (int(numbers.size()) != kEach * d.count()) {
+    if (int(numbers.size()) != kEach * d.objectCount()) {
       return error(StatusCode::InvalidArgument,
                    "updateDragEach: " + std::to_string(kEach) + " numbers for each of " +
-                       std::to_string(d.count()) + " objects, not " +
+                       std::to_string(d.objectCount()) + " objects, not " +
                        std::to_string(numbers.size()));
     }
     Vector<TransformDelta> deltas;
-    for (int i = 0; i < d.count(); i++) {
+    for (int i = 0; i < d.objectCount(); i++) {
       const double *n = numbers.data() + kEach * i;
       if (!(n[0] == 0.0 || n[0] == 1.0 || n[0] == 2.0)) {
         return error(StatusCode::InvalidArgument,
@@ -540,7 +540,7 @@ IntResult dragCount(Context &ctx)
   CommandExecutor *ex = ctx.executor();
   Command *cmd = ex ? ex->interactiveCommand() : nullptr;
   const ApplyDelta *a = cmd ? cmd->as<ApplyDelta>() : nullptr;
-  return ok<IntResult>(int64_t(a ? a->count() : 0));
+  return ok<IntResult>(int64_t(a ? a->objectCount() : 0));
 }
 
 Status drawListRead(const DrawList &list, int64_t offset, std::span<uint8_t> out)

@@ -166,10 +166,10 @@ struct ObjectProvider {
                                             *static_cast<Object *>(src.clientData())));
     return Status();
   }
-  uint64_t memSize(const Datablock &b) const
+  uint64_t byteSize(const Datablock &b) const
   {
     const Object *o = static_cast<Object *>(b.clientData());
-    return o ? o->memSize() : 0;
+    return o ? o->byteSize() : 0;
   }
   static lbt::Struct<ObjectProvider> *defineBindings()
   {
@@ -181,7 +181,7 @@ struct ObjectProvider {
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
     BIND_STRUCT_METHOD(st, duplicate, MARGS("src", "out"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS("block"));
+    BIND_STRUCT_METHOD(st, byteSize, MARGS("block"));
     return st;
   }
 };

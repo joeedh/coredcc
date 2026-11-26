@@ -250,7 +250,7 @@ struct Frame {
   }
   NodePath pathOf(NodeId node) const;
   /** This frame and the groups below it. */
-  int count() const;
+  int frameCount() const;
 };
 
 } // namespace coredcc::graph

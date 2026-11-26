@@ -60,7 +60,7 @@ public:
   }
 
   /** Bytes held for undo, sub-commands included. */
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
   Status exec(Context &ctx);
   /** Sub-commands in reverse, then the command. */
   void undo(Context &ctx);
@@ -99,7 +99,7 @@ private:
   Runtime *rt_ = nullptr;
   bool fromFactory_ = false;
   std::optional<StableRef> prefix_;
-  /** memSize() when the history took it, for the budget's running total. */
+  /** byteSize() when the history took it, for the budget's running total. */
   uint64_t cachedSize_ = 0;
 };
 
@@ -142,7 +142,7 @@ public:
  *   undone or redone since it was pushed, neither record has sub-commands, and both ran
  * with the same path prefix.
  * - Past the memory budget the oldest commands are discarded; the newest always stays.
- *   A record's memSize is read when it is pushed or folded into, and after its undo and
+ *   A record's byteSize is read when it is pushed or folded into, and after its undo and
  * redo (what it holds changes); the budget is applied at the next push.
  * - Barriers stop undo.
  * - A failed redo has undone its own partial work; that command and everything after it

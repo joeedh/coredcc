@@ -208,7 +208,9 @@ void Library::noticeWeakLost(const Vector<BlockHandle> &lost)
         continue;
       }
       hit.clear();
-      visitRefs(u, note, [&](RefVisitor &v) { ap.forEachRef(u, a.data, v); }).ignore();
+      forEachRefWith(u, note, [&](RefVisitor &v) {
+        ap.forEachRef(u, a.data, v);
+      }).ignore();
       for (BlockHandle l : hit) {
         ap.onWeakTargetLost(u, a.data, *rec(l));
       }

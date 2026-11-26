@@ -28,7 +28,7 @@ struct Evaluates {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }

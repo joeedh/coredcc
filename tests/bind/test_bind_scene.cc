@@ -133,9 +133,9 @@ void testRegistration()
     CommandDoc d;
     TransformRegistry &reg = d.rt.ext<TransformRegistry>();
     const int tables = d.rt.ifaces().tableCount();
-    const int types = reg.count();
+    const int types = reg.size();
     const auto nothingNew = [&] {
-      return d.rt.ifaces().tableCount() == tables && reg.count() == types &&
+      return d.rt.ifaces().tableCount() == tables && reg.size() == types &&
              !d.rt.ext<ApiRegistry>().find(StructId::of("js.a")) && !reg.find("js.a");
     };
     struct Case {
@@ -452,7 +452,7 @@ void testCommandSlots()
     };
     command.methods["undo"] = [](void **, void *, string *) { return true; };
     command.methods["discard"] = [](void **, void *, string *) { return true; };
-    command.methods["memSize"] = [](void **, void *ret, string *) {
+    command.methods["byteSize"] = [](void **, void *ret, string *) {
       *static_cast<uint64_t *>(ret) = 0;
       return true;
     };
@@ -463,7 +463,7 @@ void testCommandSlots()
     };
     CommandDef *def = sc::newCommandDef("js.cmd");
     must(sc::registerForeignCommand(
-        ctx, *def, host.add(factory), "canRun exec undo memSize discard"));
+        ctx, *def, host.add(factory), "canRun exec undo byteSize discard"));
     litestl::alloc::Delete(def);
     const std::string before = CommandDoc::liveOnly(d.describe());
     const sc::BagResult ran = sc::invoke(ctx, "js.cmd");

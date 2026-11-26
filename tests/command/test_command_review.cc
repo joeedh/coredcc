@@ -39,7 +39,7 @@ struct Inc {
   {
     setCount(ctx, count(ctx) - 1);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     g_memCalls++;
     return 0;
@@ -75,7 +75,7 @@ struct UndoRuns {
   {
     return ctx.executor()->run(ctx, "review.inc", PropertyBag()).status();
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -99,7 +99,7 @@ struct SubThenFail {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -126,7 +126,7 @@ struct SubRedoFail {
   {
     return g_flag ? Status::error(StatusCode::Internal, "redo failed") : Status();
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -149,7 +149,7 @@ struct FoldSub {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -168,7 +168,7 @@ struct FoldSub {
            BIND_STRUCT_METHOD(st, foldFrom, MARGS("next")))
 };
 
-/* B8: sticky errors from exec and from memSize (as a throwing foreign slot leaves). */
+/* B8: sticky errors from exec and from byteSize (as a throwing foreign slot leaves). */
 struct StickyFail {
   Status canRun(Context &) const
   {
@@ -182,7 +182,7 @@ struct StickyFail {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -203,10 +203,10 @@ struct MemFail {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     if (g_flag) {
-      g_rt->setStickyError(Status::error(StatusCode::Internal, "foreign memSize threw"));
+      g_rt->setStickyError(Status::error(StatusCode::Internal, "foreign byteSize threw"));
     }
     return 0;
   }
@@ -229,7 +229,7 @@ struct KeyOnly {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -256,7 +256,7 @@ struct SetsInside {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -282,7 +282,7 @@ struct Recurse {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -491,7 +491,7 @@ static void test_sticky_errors()
     g_flag = true;
     Status a = s.ex.run(s.ctx, "review.memFail", PropertyBag()).status();
     g_flag = false;
-    test_assert(hasMsg(a, "foreign memSize threw") && hasMsg(a, "upkeep"));
+    test_assert(hasMsg(a, "foreign byteSize threw") && hasMsg(a, "upkeep"));
     test_assert(s.history.size() == 1 && s.runAdd(1).ok());
   }
   {
@@ -691,7 +691,7 @@ struct GrandParent {
   {
     g_log += "grandparent-undo;";
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -702,7 +702,7 @@ struct GrandParent {
 };
 
 /* Counts instances and discards; fails each one discarded twice. `refuse`, `fail`
- * and `key` (fold, 0 never) come from the inputs; `mem` is its memSize. */
+ * and `key` (fold, 0 never) come from the inputs; `mem` is its byteSize. */
 static int g_made = 0;
 static int g_discards = 0;
 struct Counted {
@@ -729,7 +729,7 @@ struct Counted {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return uint64_t(mem);
   }

@@ -33,7 +33,7 @@ std::vector<BlockId> cellsOf(BagRefs &refs)
         static_cast<std::vector<BlockId> *>(to)->push_back(c.target);
       },
       &out);
-  refs.visit(v);
+  refs.forEachRef(v);
   return out;
 }
 

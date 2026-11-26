@@ -116,7 +116,7 @@ struct SetProperty {
   {
     return writeStatus(ctx, newValue, newTarget, newStored.restore);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     uint64_t n = sizeof(*this) + uint64_t(ref.key.size()) * 32 +
                  uint64_t(pins.size()) * sizeof(HistoryBlock) + oldStored.bytes +
@@ -225,7 +225,7 @@ struct SetProperty {
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     BIND_STRUCT_METHOD(st, discard, MARGS());
     BIND_STRUCT_METHOD(st, foldKey, MARGS());
     BIND_STRUCT_METHOD(st, foldFrom, MARGS("next"));

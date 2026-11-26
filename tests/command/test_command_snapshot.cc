@@ -134,7 +134,7 @@ struct AddNine {
     g_state->value = after;
     return Status();
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 8;
   }
@@ -189,9 +189,9 @@ struct Opaque {
   {
     return snap.redo(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return snap.memSize();
+    return snap.byteSize();
   }
   void discard()
   {
@@ -238,9 +238,9 @@ struct SnapDrag {
   {
     return snap.redo(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return snap.memSize();
+    return snap.byteSize();
   }
   void discard()
   {
@@ -276,9 +276,9 @@ struct Step {
   {
     return snap.redo(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return snap.memSize();
+    return snap.byteSize();
   }
   void discard()
   {
@@ -627,13 +627,13 @@ static void test_budget()
   /* An empty blob is a blob. */
   SnapshotUndo s("state");
   SnapshotUndo moved;
-  test_assert(s.memSize() > 0 && s.begin(w.s.ctx).ok() && s.memSize() > 100000);
+  test_assert(s.byteSize() > 0 && s.begin(w.s.ctx).ok() && s.byteSize() > 100000);
   moved = std::move(s);
   w.state.value = 3;
   moved.undo(w.s.ctx);
   test_assert(w.state.value == 109 && !w.s.w.rt.hasStickyError());
   moved.discard();
-  test_assert(moved.memSize() < 1000);
+  test_assert(moved.byteSize() < 1000);
 }
 
 static void test_targets()
@@ -652,14 +652,14 @@ static void test_targets()
   test_assert(s.begin(w.s.ctx).ok() && lib.get(*a)->pins(PinKind::History) == 1);
   w.state.ref = lib.get(*b)->id();
   test_assert(s.end(w.s.ctx).ok() && lib.get(*b)->pins(PinKind::History) == 1);
-  const uint64_t size = s.memSize();
+  const uint64_t size = s.byteSize();
   {
     const BlockId ref = w.state.ref;
     SnapshotUndo without("state"), with("state");
     test_assert(with.begin(w.s.ctx).ok() && with.end(w.s.ctx).ok());
     w.state.ref = BlockId();
     test_assert(without.begin(w.s.ctx).ok() && without.end(w.s.ctx).ok());
-    test_assert(with.memSize() == without.memSize() + 2 * sizeof(HistoryBlock));
+    test_assert(with.byteSize() == without.byteSize() + 2 * sizeof(HistoryBlock));
     w.state.ref = ref;
   }
   w.state.ref = BlockId();
@@ -679,7 +679,8 @@ static void test_targets()
               lib.get(*c)->pins() == 1);
   w.state.ref = BlockId();
   s.discard();
-  test_assert(lib.get(*a)->pins() == 0 && lib.get(*c)->pins() == 0 && s.memSize() < size);
+  test_assert(lib.get(*a)->pins() == 0 && lib.get(*c)->pins() == 0 &&
+              s.byteSize() < size);
   test_assert(*lib.collect() == 3);
 
   /* A provider without forEachRef, and a Context without a Library. */

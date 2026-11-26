@@ -229,13 +229,13 @@ void CreatedBlocks::discard(Library &lib)
   blocks_.clear();
 }
 
-uint64_t CreatedBlocks::memSize() const
+uint64_t CreatedBlocks::byteSize() const
 {
   uint64_t n = uint64_t(blocks_.size()) * sizeof(Made);
   for (int i = 0; undone_ && i < int(blocks_.size()); i++) {
     const Made &m = blocks_[i];
     if (const Library *lib = m.block.library()) {
-      n += lib->memSize(m.adopted ? m.kept.handle() : m.block.get());
+      n += lib->byteSize(m.adopted ? m.kept.handle() : m.block.get());
     }
   }
   return n;
@@ -356,12 +356,12 @@ struct DeleteBlock {
     applied = true;
     return Status();
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     uint64_t n = sizeof(*this) + uint64_t(deleted.size()) * sizeof(HistoryBlock);
     const Library *l = lib.get();
     for (int i = 0; l && applied && i < int(deleted.size()); i++) {
-      n += l->memSize(deleted[i].get());
+      n += l->byteSize(deleted[i].get());
     }
     return n;
   }
@@ -383,7 +383,7 @@ struct DeleteBlock {
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     BIND_STRUCT_METHOD(st, discard, MARGS());
     return st;
   }
@@ -407,7 +407,7 @@ struct Purge {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -420,7 +420,7 @@ struct Purge {
     BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     BIND_STRUCT_METHOD(st, discard, MARGS());
     return st;
   }

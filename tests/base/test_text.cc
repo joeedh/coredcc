@@ -36,18 +36,18 @@ int main()
     Suggester s("ab");
     s.consider("zz");
     s.consider("ab"); /* the name itself is not a suggestion */
-    test_assert(s.count() == 0);
+    test_assert(s.candidateCount() == 0);
   }
   {
     /* Short names get no suggestions; empty candidates never appear. */
     Suggester z("Z");
     z.consider("A");
     z.consider("B");
-    test_assert(z.count() == 0);
+    test_assert(z.candidateCount() == 0);
     Suggester x("cmx");
     x.consider("");
     x.consider("cm");
-    test_assert(x.count() == 1);
+    test_assert(x.candidateCount() == 1);
   }
   {
     /* At most three, closest first. */
@@ -57,7 +57,7 @@ int main()
     s.consider("aaaaaaaa");
     s.consider("aaaaaabbb");
     s.consider("aaaaaaaaaa");
-    test_assert(s.count() == 3);
+    test_assert(s.candidateCount() == 3);
     Status st = Status::error(StatusCode::NotFound, "x");
     s.addTo(st);
     test_assert(strcmp(st.suggestions()[2].c_str(), "aaaaaaaaaa") == 0);

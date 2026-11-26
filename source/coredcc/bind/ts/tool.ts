@@ -488,7 +488,7 @@ export interface StrokeBrush {
   apply(ctx: Context, sample: StrokeSample): void
   undo(ctx: Context): void
   /** Bytes held for undo. */
-  memSize?(): number
+  byteSize?(): number
 }
 
 const vec3Of = (v: Parameters<typeof cd.vec3At>[0]) => [0, 1, 2].map((i) => cd.vec3At(v, i))
@@ -520,14 +520,14 @@ class BrushAdapter {
   undo(ctx: Context) {
     inSlot(() => sync('undo', this.brush.undo(ctx)))
   }
-  memSize(): number {
+  byteSize(): number {
     return inSlot(() => {
       try {
-        const n = Number(sync('memSize', this.brush.memSize?.() ?? 0))
+        const n = Number(sync('byteSize', this.brush.byteSize?.() ?? 0))
         return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), Number.MAX_SAFE_INTEGER) : 0
       } catch (e) {
         if (isFatal(e)) throw e
-        console.warn(`${this.name}: memSize failed, counted as 0:`, e)
+        console.warn(`${this.name}: byteSize failed, counted as 0:`, e)
         return 0
       }
     })
@@ -559,7 +559,7 @@ export function defineStrokeBrush(ctx: Context, name: string, create: () => Stro
       return backend.foreignHandle(new BrushAdapter(name, brush))
     },
   }
-  check(cd.registerForeignStrokeBrush(ctx, name, backend.foreignHandle(factory), 'begin apply undo memSize'))
+  check(cd.registerForeignStrokeBrush(ctx, name, backend.foreignHandle(factory), 'begin apply undo byteSize'))
 }
 
 /* ---- the viewport's side ---- */

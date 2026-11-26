@@ -64,7 +64,7 @@ private:
  * host data), one that `context.isFree`. A null id refuses the import. `imported` isn't a
  * record yet; it has the id the file has, the type and the name. The id of a MissingBlock
  * is free: the import then fills it.
- * - `memSize` (optional) is about what the block's data takes in memory, in bytes. The
+ * - `byteSize` (optional) is about what the block's data takes in memory, in bytes. The
  * undo history counts it for blocks that only the history holds.
  */
 struct BlockProvider : IfaceRef {
@@ -128,13 +128,13 @@ struct BlockProvider : IfaceRef {
   {
     return CDCC_CALL(rekey, imported, context);
   }
-  bool hasMemSize() const
+  bool hasByteSize() const
   {
-    return CDCC_HAS(memSize);
+    return CDCC_HAS(byteSize);
   }
-  uint64_t memSize(const Datablock &block) const
+  uint64_t byteSize(const Datablock &block) const
   {
-    return CDCC_CALL(memSize, block);
+    return CDCC_CALL(byteSize, block);
   }
 
   CDCC_INTERFACE(BlockProvider, "coredcc::BlockProvider")
@@ -148,7 +148,7 @@ struct BlockProvider : IfaceRef {
     BIND_OPTIONAL_METHOD(st, deserialize, MARGS("block", "in"));
     BIND_OPTIONAL_METHOD(st, duplicate, MARGS("src", "out"));
     BIND_OPTIONAL_METHOD(st, rekey, MARGS("imported", "context"));
-    BIND_OPTIONAL_METHOD(st, memSize, MARGS("block"));
+    BIND_OPTIONAL_METHOD(st, byteSize, MARGS("block"));
   }
 };
 

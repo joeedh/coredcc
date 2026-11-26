@@ -94,7 +94,7 @@ bool BagRefs::isSet(const PropertyBag &bag, int index) const
   return bag.wasSet(index) || (c && !c->isNull());
 }
 
-void BagRefs::visit(RefVisitor &visitor)
+void BagRefs::forEachRef(RefVisitor &visitor)
 {
   for (Entry &e : entries_) {
     visitor.visit(e.cell);

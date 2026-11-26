@@ -145,7 +145,7 @@ public:
       forEachCellOf(file_->unread, fn);
     }
   }
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
 
   explicit Object(Runtime *rt) : rt_(rt)
   {

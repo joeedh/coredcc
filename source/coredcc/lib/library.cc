@@ -442,9 +442,9 @@ Status Library::removeSlot(BlockHandle owner, TypeId ns, int64_t key)
   return Status::error(StatusCode::NotFound, "removeSlot: no such slot");
 }
 
-Status Library::visitRefs(const Datablock &b,
-                          litestl::util::function<void(RefCell &)> &fn,
-                          litestl::util::function<void(RefVisitor &)> visit) const
+Status Library::forEachRefWith(const Datablock &b,
+                               litestl::util::function<void(RefCell &)> &fn,
+                               litestl::util::function<void(RefVisitor &)> visit) const
 {
   const bool stickyBefore = rt_.hasStickyError();
   RefVisitor visitor(
@@ -482,7 +482,7 @@ Status Library::forEachDataRef(BlockHandle h,
   if (!p) {
     return Status();
   }
-  return visitRefs(*b, fn, [&](RefVisitor &v) { p.forEachRef(*b, v); });
+  return forEachRefWith(*b, fn, [&](RefVisitor &v) { p.forEachRef(*b, v); });
 }
 
 Status Library::forEachRef(BlockHandle h,
@@ -496,7 +496,8 @@ Status Library::forEachRef(BlockHandle h,
   for (const Datablock::Attachment &a : b->attachments_) {
     const AttachmentProvider p = attachmentTypes_.find(a.type)->provider.get();
     if (p.hasForeachRef()) {
-      CDCC_TRY(visitRefs(*b, fn, [&](RefVisitor &v) { p.forEachRef(*b, a.data, v); }));
+      CDCC_TRY(
+          forEachRefWith(*b, fn, [&](RefVisitor &v) { p.forEachRef(*b, a.data, v); }));
     }
   }
   if (b->opaque_) {
@@ -724,7 +725,7 @@ void Library::adoptData(BlockHandle h, void *data, bool keep)
   }
 }
 
-uint64_t Library::memSize(BlockHandle h) const
+uint64_t Library::byteSize(BlockHandle h) const
 {
   const Datablock *b = rec(h);
   if (!b) {
@@ -733,8 +734,8 @@ uint64_t Library::memSize(BlockHandle h) const
   uint64_t n = sizeof(Datablock) + uint64_t(b->placeholderData_.bytes.size()) +
                uint64_t(b->placeholderData_.refs.size()) * sizeof(RefCell);
   const BlockProvider p = types_.provider(b->type_);
-  return p && p.hasMemSize() && b->dataState() == BlockState::Live ? n + p.memSize(*b)
-                                                                   : n;
+  return p && p.hasByteSize() && b->dataState() == BlockState::Live ? n + p.byteSize(*b)
+                                                                    : n;
 }
 
 /* ---- validation ---- */

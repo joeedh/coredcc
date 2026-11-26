@@ -51,7 +51,7 @@ struct MadeBlocks {
   BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));                                            \
-  BIND_STRUCT_METHOD(st, memSize, MARGS());                                              \
+  BIND_STRUCT_METHOD(st, byteSize, MARGS());                                             \
   BIND_STRUCT_METHOD(st, discard, MARGS())
 
 struct DuplicateBlock {
@@ -94,9 +94,9 @@ struct DuplicateBlock {
   {
     return made.redo(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return sizeof(*this) + made.created.memSize();
+    return sizeof(*this) + made.created.byteSize();
   }
   void discard()
   {
@@ -124,7 +124,7 @@ struct AppendBlocks {
   MadeBlocks made;
   /* MissingBlock records: kept for a redo, but not undone. */
   Vector<HistoryBlock> missing;
-  /* The file's, for data whose provider has no memSize. */
+  /* The file's, for data whose provider has no byteSize. */
   uint64_t size = 0;
 
   Status canRun(Context &) const
@@ -163,9 +163,9 @@ struct AppendBlocks {
   {
     return made.redo(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return sizeof(*this) + size + made.created.memSize() +
+    return sizeof(*this) + size + made.created.byteSize() +
            uint64_t(missing.size()) * sizeof(HistoryBlock);
   }
   void discard()

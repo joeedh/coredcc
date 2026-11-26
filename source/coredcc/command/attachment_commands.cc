@@ -136,7 +136,7 @@ struct AttachmentEdit {
     notify(ctx);
     return Status();
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     uint64_t n = uint64_t(targets.size()) * sizeof(HistoryBlock);
     if (held->opaque) {
@@ -162,7 +162,7 @@ struct AttachmentEdit {
   BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));                                            \
-  BIND_STRUCT_METHOD(st, memSize, MARGS());                                              \
+  BIND_STRUCT_METHOD(st, byteSize, MARGS());                                             \
   BIND_STRUCT_METHOD(st, discard, MARGS())
 
 template <bool Attach> struct EditCommand {
@@ -223,9 +223,9 @@ template <bool Attach> struct EditCommand {
   {
     return apply(ctx, Attach);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return sizeof(*this) + edit.memSize();
+    return sizeof(*this) + edit.byteSize();
   }
   void discard()
   {
@@ -271,9 +271,9 @@ struct AttachData {
   {
     return edit.attach(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return sizeof(*this) + edit.memSize();
+    return sizeof(*this) + edit.byteSize();
   }
   void discard()
   {

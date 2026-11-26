@@ -14,7 +14,7 @@ namespace coredcc::detail {
   BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));                                            \
-  BIND_STRUCT_METHOD(st, memSize, MARGS());                                              \
+  BIND_STRUCT_METHOD(st, byteSize, MARGS());                                             \
   BIND_STRUCT_METHOD(st, discard, MARGS())
 
 /* The parts that all of them share. */
@@ -29,9 +29,9 @@ struct ChangesCommand {
   {
     return changes.redo(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return sizeof(*this) + changes.memSize();
+    return sizeof(*this) + changes.byteSize();
   }
   void discard()
   {

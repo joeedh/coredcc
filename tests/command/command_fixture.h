@@ -25,7 +25,7 @@ inline std::string g_log;
   BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));                                          \
   BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));                                            \
-  BIND_STRUCT_METHOD(st, memSize, MARGS());                                              \
+  BIND_STRUCT_METHOD(st, byteSize, MARGS());                                             \
   BIND_STRUCT_METHOD(st, discard, MARGS())
 
 inline int64_t inputInt(Context &ctx, const char *name)
@@ -69,7 +69,7 @@ struct AddCount {
     setCount(ctx, before);
     g_log += "undo;";
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return uint64_t(mem);
   }
@@ -115,7 +115,7 @@ struct Parent {
   {
     g_log += "parent-undo;";
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -144,7 +144,7 @@ struct Refuse {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -178,7 +178,7 @@ struct Foldable {
   {
     setCount(ctx, before);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -226,7 +226,7 @@ struct Drag {
   {
     return setValue(ctx, "tool.strength", PropValue::ofFloat(after));
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 16;
   }
@@ -272,7 +272,7 @@ struct CreateMesh {
   {
     return created.redo(*lib);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 8;
   }

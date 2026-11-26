@@ -104,9 +104,9 @@ inline Obj commandObj(Script *s)
     const int64_t amount = *sc::commandInput(ctx, "amount").value.tryInt();
     return ok(ret, sc::writeValue(ctx, "tool.count", sc::makeInt(*before + amount)));
   };
-  o.methods["memSize"] = [s](void **, void *ret, string *err) {
+  o.methods["byteSize"] = [s](void **, void *ret, string *err) {
     if (s->failMemSize) {
-      *err = "memSize: TypeError: expected a number or bigint";
+      *err = "byteSize: TypeError: expected a number or bigint";
       return false;
     }
     *static_cast<uint64_t *>(ret) = 16;
@@ -140,7 +140,7 @@ inline Obj factoryObj(Host &host, Script *s)
   return f;
 }
 
-inline constexpr const char *kCore = "canRun exec undo memSize discard";
+inline constexpr const char *kCore = "canRun exec undo byteSize discard";
 
 /* Registers command `id` (input `amount`, output `result`) with a new factory. */
 inline Status registerScript(Setup &s,

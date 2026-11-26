@@ -233,7 +233,7 @@ bool SnapshotUndo::foldFrom(SnapshotUndo &next)
   return true;
 }
 
-uint64_t SnapshotUndo::memSize() const
+uint64_t SnapshotUndo::byteSize() const
 {
   return sizeof(*this) + uint64_t(before_.bytes.size()) + uint64_t(after_.bytes.size()) +
          (uint64_t(before_.targets.size()) + uint64_t(after_.targets.size())) *

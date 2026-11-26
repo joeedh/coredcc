@@ -53,9 +53,9 @@ private:
  * - exec calls `begin` first and `end` last, after its sub-commands. An Interactive
  * command's tool calls `end` (again, if it likes) before `commit`. When exec fails after
  * `begin`, a failed `end` included, it calls `rollback` and returns the error.
- * - Forward the command's undo, redo, memSize, discard and foldFrom to it. Without `end`,
- * undo works and redo is FailedPrecondition.
- * - Both blobs are there when the history asks for memSize, compressed with lz4.
+ * - Forward the command's undo, redo, byteSize, discard and foldFrom to it. Without
+ * `end`, undo works and redo is FailedPrecondition.
+ * - Both blobs are there when the history asks for byteSize, compressed with lz4.
  * - A restore is followed by Library::noteRefsChanged and ChangeBus::notifyAll,
  *   also when it failed: an opaque blob can't say what it changed.
  *
@@ -90,7 +90,7 @@ public:
   /** Takes what `next` captured after, so that redo does both steps. False, with nothing
    * done, if they use different providers or one has no `end`. */
   bool foldFrom(SnapshotUndo &next);
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
   void discard();
 
 private:

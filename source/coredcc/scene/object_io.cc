@@ -245,7 +245,7 @@ void Object::takeLocks(const TransformType *type)
   file_->locks = string(rest.c_str());
 }
 
-uint64_t Object::memSize() const
+uint64_t Object::byteSize() const
 {
   return sizeof(Object) + uint64_t(channels.size()) * sizeof(double) +
          (file_ ? sizeof(FileData) + detail::fieldsMemSize(file_->unread) +

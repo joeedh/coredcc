@@ -208,7 +208,7 @@ void testNoData()
     test_assert(!duplicateBlocks(*d.lib, std::span<const BlockHandle>(&h, 1)).ok());
     test_assert(d.rt.ext<BlockTypeRegistry>()
                     .find(d.lib->get(h)->type())
-                    ->provider->memSize(*d.lib->get(h)) == 0);
+                    ->provider->byteSize(*d.lib->get(h)) == 0);
   }
 }
 
@@ -257,7 +257,7 @@ void testMissingType()
   must(ids.status());
   Object &copy =
       *static_cast<Object *>(l.lib.get(l.lib.find(ids->find(a.idOf(h))))->clientData());
-  test_assert(copy.unread().size() == 8 && copy.memSize() > sizeof(Object));
+  test_assert(copy.unread().size() == 8 && copy.byteSize() > sizeof(Object));
   /* Changing the type, and back as an undo does. */
   ObjectInfo info;
   ChannelBlock none;
@@ -596,7 +596,7 @@ void testMemory()
   const BlockTypeRegistry &types = d.rt.ext<BlockTypeRegistry>();
   const auto size = [&](BlockHandle h) {
     const Datablock &b = *d.lib->get(h);
-    return types.find(b.type())->provider->memSize(b);
+    return types.find(b.type())->provider->byteSize(b);
   };
   test_assert(size(a) >= sizeof(Object) + 10 * sizeof(double));
   const uint64_t one = size(d.scene);

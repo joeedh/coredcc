@@ -485,7 +485,7 @@ void registerHooks(Doc &d, Host &host, Hooks *hooks)
       hooks->undo(*static_cast<Context *>(args[0]));
       return true;
     };
-    o.methods["memSize"] = [](void **, void *r, string *) {
+    o.methods["byteSize"] = [](void **, void *r, string *) {
       *static_cast<uint64_t *>(r) = 0;
       return true;
     };
@@ -495,7 +495,7 @@ void registerHooks(Doc &d, Host &host, Hooks *hooks)
   };
   CommandDef *def = sc::newCommandDef("js.cmd");
   test_assert(sc::registerForeignCommand(
-                  d.ctx, *def, host.add(factory), "canRun exec undo memSize discard")
+                  d.ctx, *def, host.add(factory), "canRun exec undo byteSize discard")
                   .ok());
   litestl::alloc::Delete(def);
 }

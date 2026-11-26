@@ -162,7 +162,7 @@ Scene *Scene::duplicate() const
   return s;
 }
 
-uint64_t Scene::memSize() const
+uint64_t Scene::byteSize() const
 {
   return sizeof(Scene) + (uint64_t(cells_.size()) + selection_.size()) * sizeof(RefCell) +
          detail::fieldsMemSize(fields_);

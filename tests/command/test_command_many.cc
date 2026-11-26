@@ -307,7 +307,7 @@ static void test_memory()
   w.doc(1, "a");
   w.doc(2, "b");
   w.link(w.at(2), w.at(1));
-  test_assert(w.lib.memSize(w.at(1)) > 1000000 && w.lib.memSize(BlockHandle()) == 0);
+  test_assert(w.lib.byteSize(w.at(1)) > 1000000 && w.lib.byteSize(BlockHandle()) == 0);
   const auto used = [&]() { return c.history.memoryUsed() / 1000000; };
   test_assert(c.run(kDeleteBlockCommand, cid(1), "").ok() && used() == 2);
   test_assert(c.ex.undo(c.ctx).ok() && used() == 0 && c.history.validate().ok());
@@ -328,10 +328,10 @@ static void test_memory()
   info.payload.bytes.resize(5000);
   info.payload.refs.append(RefCell(RefKind::Weak));
   Result<BlockHandle> h = w.lib.addPlaceholder(cid(50), info);
-  test_assert(w.lib.memSize(*h) == sizeof(Datablock) + 5000 + sizeof(RefCell));
+  test_assert(w.lib.byteSize(*h) == sizeof(Datablock) + 5000 + sizeof(RefCell));
   /* A block without its data has none to count. */
   test_assert(w.lib.onHostDestroyed(cid(2)).code() == StatusCode::FailedPrecondition ||
-              w.lib.memSize(w.at(2)) < 1000000);
+              w.lib.byteSize(w.at(2)) < 1000000);
   /* An attachment that couldn't be read is the detach command's. */
   OpaqueAttachment o;
   o.typeName = "x.Other";
@@ -389,9 +389,9 @@ struct Adopt {
   {
     return created.redo(*lib);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return created.memSize();
+    return created.byteSize();
   }
   void discard()
   {
@@ -404,7 +404,7 @@ struct Adopt {
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     BIND_STRUCT_METHOD(st, discard, MARGS());
     return st;
   }

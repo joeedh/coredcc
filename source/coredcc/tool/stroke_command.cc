@@ -232,9 +232,9 @@ Status StrokeCommand::redo(Context &ctx)
   return Status();
 }
 
-uint64_t StrokeCommand::memSize() const
+uint64_t StrokeCommand::byteSize() const
 {
-  return sizeof(*this) + (brush_ ? brush_->memSize() : 0) +
+  return sizeof(*this) + (brush_ ? brush_->byteSize() : 0) +
          uint64_t(applied_.size()) * sizeof(StrokeSample);
 }
 
@@ -248,7 +248,7 @@ lbt::Struct<StrokeCommand> *StrokeCommand::defineBindings()
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     BIND_STRUCT_METHOD(st, discard, MARGS());
     BIND_STRUCT_METHOD(st, sampleCount, MARGS());
     BIND_STRUCT_METHOD(st, sampleAt, MARGS("i"));

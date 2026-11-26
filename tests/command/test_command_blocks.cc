@@ -136,7 +136,7 @@ static void test_undo_strategies()
                     [&log]() { log += "x"; },
                     64);
     d.undo();
-    test_assert(d.redo().ok() && d.memSize() == 64);
+    test_assert(d.redo().ok() && d.byteSize() == 64);
     DelegatedUndo moved = std::move(d);
     moved.discard();
     moved.discard(); /* once */

@@ -108,7 +108,7 @@ Status ApplyDelta::exec(Context &ctx)
       bases_.append(std::move(b));
     }
   }
-  unusable_ = skips.count();
+  unusable_ = skips.skipCount();
   CDCC_TRY(skips.outcome(int(bases_.size())));
   Status done = update(ctx, delta);
   skips.output(ctx);
@@ -153,7 +153,7 @@ Status ApplyDelta::update(Context &ctx, const TransformDelta &delta)
 
 Status ApplyDelta::update(Context &ctx, std::span<const TransformDelta> deltas)
 {
-  return deltas.size() == size_t(count())
+  return deltas.size() == size_t(objectCount())
              ? updateWith(ctx, deltas)
              : Status::error(
                    StatusCode::InvalidArgument,
@@ -209,7 +209,7 @@ Status ApplyDelta::updateWith(Context &ctx, std::span<const TransformDelta> delt
     }
     channels.append(c.ok() ? std::move(*c) : last);
   }
-  CDCC_TRY(skips.outcome(int(bases_.size()) - skips.count()));
+  CDCC_TRY(skips.outcome(int(bases_.size()) - skips.skipCount()));
   Vector<ChannelBlock> previous;
   for (int i = 0; i < int(bases_.size()); i++) {
     if (first) {
@@ -226,7 +226,7 @@ Status ApplyDelta::updateWith(Context &ctx, std::span<const TransformDelta> delt
       return detail::about(lib, bases_[i].object, s);
     }
   }
-  skipped_ = unusable_ + skips.count();
+  skipped_ = unusable_ + skips.skipCount();
   locked_ = driven_ = 0;
   for (const Base &b : bases_) {
     locked_ += b.fixed.locked ? 1 : 0;

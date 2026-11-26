@@ -57,7 +57,7 @@ struct Recorder {
   {
     gCalls.push_back({'u', StrokeSample(), ""});
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 100;
   }
@@ -67,7 +67,7 @@ struct Recorder {
     BIND_STRUCT_METHOD(st, begin, MARGS("ctx", "target"));
     BIND_STRUCT_METHOD(st, apply, MARGS("ctx", "s"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     return st;
   }
 };
@@ -323,7 +323,7 @@ void testReplay()
     test_assert(same(again[i].world, first[i].world) && again[i].pressure == first[i].pressure);
   }
   /* head() is null after an undo: the record by its place. */
-  test_assert(d.history->at(0).memSize() >= 100 + first.size() * sizeof(StrokeSample));
+  test_assert(d.history->at(0).byteSize() >= 100 + first.size() * sizeof(StrokeSample));
 
   /* Escape cancels: the brush undoes, nothing is recorded. */
   gCalls.clear();

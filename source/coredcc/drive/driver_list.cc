@@ -187,7 +187,7 @@ DriverList *DriverList::duplicate() const
   return d;
 }
 
-uint64_t DriverList::memSize() const
+uint64_t DriverList::byteSize() const
 {
   return sizeof(DriverList) + uint64_t(cells_.size()) * sizeof(RefCell) +
          detail::fieldsMemSize(fields_);
@@ -235,10 +235,10 @@ struct DriverListProvider {
     out.setData(static_cast<DriverList *>(src.clientData())->duplicate());
     return Status();
   }
-  uint64_t memSize(const Datablock &b) const
+  uint64_t byteSize(const Datablock &b) const
   {
     const auto *d = static_cast<DriverList *>(b.clientData());
-    return d ? d->memSize() : 0;
+    return d ? d->byteSize() : 0;
   }
   static lbt::Struct<DriverListProvider> *defineBindings()
   {
@@ -250,7 +250,7 @@ struct DriverListProvider {
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
     BIND_STRUCT_METHOD(st, duplicate, MARGS("src", "out"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS("block"));
+    BIND_STRUCT_METHOD(st, byteSize, MARGS("block"));
     return st;
   }
 };

@@ -44,7 +44,7 @@ struct RunsScript {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -261,7 +261,7 @@ static void test_can_undo_and_redo()
   test_assert(sc::canRedo(bare).status.code() == StatusCode::FailedPrecondition);
 }
 
-/* Test gaps: canRun and memSize failures, and releases on the history's other paths. */
+/* Test gaps: canRun and byteSize failures, and releases on the history's other paths. */
 static void test_slot_failures_and_history_paths()
 {
   Host host;
@@ -273,7 +273,7 @@ static void test_slot_failures_and_history_paths()
                                host,
                                &k,
                                "js.drag",
-                               "canRun exec undo redo memSize discard",
+                               "canRun exec undo redo byteSize discard",
                                uint32_t(CommandFlags::Interactive))
                     .ok());
     ForeignBindings &fb = bindingsOf(s);
@@ -289,7 +289,7 @@ static void test_slot_failures_and_history_paths()
     test_assert(r.status.code() == StatusCode::FailedPrecondition);
     test_assert(count(s.ctx) == c0 && s.history.size() == 0 && fb.liveInstances() == 0);
 
-    /* memSize failing: applied and recorded, and reported (left to the TS adapter, B3).
+    /* byteSize failing: applied and recorded, and reported (left to the TS adapter, B3).
      */
     k.failMemSize = true;
     r = sc::invoke(s.ctx, "js.add(amount=1)");

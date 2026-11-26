@@ -25,11 +25,13 @@ static void test_registration_refusals()
     };
     const std::string core = kCore;
     const Case cases[] = {
-        {"canRun exec memSize discard", 0, StatusCode::TypeMismatch}, /* no undo */
-        {"canRun exec undo memSize discard foldKey foldFrom", 0, StatusCode::Unsupported},
-        {"canRun exec undo memSize discard foldKey", 0, StatusCode::InvalidArgument},
+        {"canRun exec byteSize discard", 0, StatusCode::TypeMismatch}, /* no undo */
+        {"canRun exec undo byteSize discard foldKey foldFrom",
+         0,
+         StatusCode::Unsupported},
+        {"canRun exec undo byteSize discard foldKey", 0, StatusCode::InvalidArgument},
         {kCore, uint32_t(CommandFlags::Interactive), StatusCode::InvalidArgument},
-        {"canRun exec undo memSize discard bogus", 0, StatusCode::TypeMismatch},
+        {"canRun exec undo byteSize discard bogus", 0, StatusCode::TypeMismatch},
     };
     for (const Case &c : cases) {
       fakehost::lf::Handle f = 0;
@@ -113,7 +115,7 @@ static void test_run_undo_redo()
 
     /* With a redo slot, redo calls it. */
     test_assert(
-        registerScript(s, host, &k, "js.addr", "canRun exec undo redo memSize discard")
+        registerScript(s, host, &k, "js.addr", "canRun exec undo redo byteSize discard")
             .ok());
     test_assert(sc::invoke(s.ctx, "js.addr(amount=2)").status.ok());
     test_assert(sc::undo(s.ctx).ok() && sc::redo(s.ctx).ok());
@@ -133,7 +135,7 @@ static void test_failing_slots()
     Setup s;
     test_assert(registerScript(s, host, &k, "js.add", kCore).ok());
     test_assert(
-        registerScript(s, host, &k, "js.addr", "canRun exec undo redo memSize discard")
+        registerScript(s, host, &k, "js.addr", "canRun exec undo redo byteSize discard")
             .ok());
     const int64_t c0 = count(s.ctx);
     const int liveBefore = host.live();

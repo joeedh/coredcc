@@ -470,10 +470,10 @@ struct SceneProvider {
     out.setData(static_cast<Scene *>(src.clientData())->duplicate());
     return Status();
   }
-  uint64_t memSize(const Datablock &b) const
+  uint64_t byteSize(const Datablock &b) const
   {
     const Scene *s = static_cast<Scene *>(b.clientData());
-    return s ? s->memSize() : 0;
+    return s ? s->byteSize() : 0;
   }
   static lbt::Struct<SceneProvider> *defineBindings()
   {
@@ -485,7 +485,7 @@ struct SceneProvider {
     BIND_STRUCT_METHOD(st, serialize, MARGS("block", "out"));
     BIND_STRUCT_METHOD(st, deserialize, MARGS("block", "in"));
     BIND_STRUCT_METHOD(st, duplicate, MARGS("src", "out"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS("block"));
+    BIND_STRUCT_METHOD(st, byteSize, MARGS("block"));
     return st;
   }
 };

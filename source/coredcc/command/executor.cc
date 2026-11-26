@@ -140,11 +140,11 @@ void RecordDeleter::operator()(CommandRecord *r) const
   litestl::alloc::Delete(r);
 }
 
-uint64_t CommandRecord::memSize() const
+uint64_t CommandRecord::byteSize() const
 {
-  uint64_t n = const_cast<Owned<Command> &>(cmd_).get().memSize();
+  uint64_t n = const_cast<Owned<Command> &>(cmd_).get().byteSize();
   for (const CommandRecord *s : subs_) {
-    n += s->memSize();
+    n += s->byteSize();
   }
   return n;
 }
@@ -300,13 +300,13 @@ void LinearHistory::push(RecordPtr rec)
       head->adoptBags(*rec);
       rec->discard();
       used_ -= head->cachedSize_;
-      head->cachedSize_ = head->memSize();
+      head->cachedSize_ = head->byteSize();
       used_ += head->cachedSize_;
       enforceBudget();
       return;
     }
   }
-  rec->cachedSize_ = rec->memSize();
+  rec->cachedSize_ = rec->byteSize();
   used_ += rec->cachedSize_;
   entries_.append(rec.release());
   cursor_ = int(entries_.size());
@@ -341,7 +341,7 @@ void LinearHistory::enforceBudget()
 void LinearHistory::measure(CommandRecord &rec)
 {
   used_ -= rec.cachedSize_;
-  rec.cachedSize_ = rec.memSize();
+  rec.cachedSize_ = rec.byteSize();
   used_ += rec.cachedSize_;
 }
 
@@ -630,7 +630,7 @@ Result<PropertyBag> CommandExecutor::finish(Context &, RecordPtr rec)
     }
   }
   if (rt_.hasStickyError()) {
-    /* From the history's upkeep (memSize, folding, discarding old entries). */
+    /* From the history's upkeep (byteSize, folding, discarding old entries). */
     Status s = rt_.takeStickyError();
     return Status::error(s.code(),
                          ("'" + std::string(def.name().c_str()) +

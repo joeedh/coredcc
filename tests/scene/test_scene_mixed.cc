@@ -18,7 +18,7 @@ const PropValue kStep = PropValue::ofVec3(10, 0, 0);
 
 int waiting(CommandDoc &d)
 {
-  return d.rt.ext<detail::PendingWrites>().count(*d.lib);
+  return d.rt.ext<detail::PendingWrites>().writeCount(*d.lib);
 }
 
 double xOf(const CommandDoc &d, BlockHandle h)
@@ -210,7 +210,7 @@ void testDetachedFields()
     StoredFields f;
     f.channels = true;
     w.add(other, d.idOf(a), f, StoredObject());
-    test_assert(w.count(other) == 1 && waiting(d) == 0);
+    test_assert(w.writeCount(other) == 1 && waiting(d) == 0);
   }
   must(d.lib->markDeleted(a));
   d.redo();

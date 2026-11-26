@@ -40,7 +40,7 @@ class AddCount implements ScriptCommand {
   undo(ctx: Context) {
     cdcc.write(ctx, 'count', this.before)
   }
-  memSize() {
+  byteSize() {
     return 8
   }
 }
@@ -454,13 +454,13 @@ describe('coredcc wasm-st spike', () => {
     assert.equal(spike.historySize(hostOf(ctx)), 0)
   })
 
-  test('T3: a throwing memSize or discard is ignored, with a warning', (t) => {
+  test('T3: a throwing byteSize or discard is ignored, with a warning', (t) => {
     const warn = t.mock.method(console, 'warn', () => {})
     cdcc.defineCommand(
       ctx,
       addSpec,
       class extends AddCount {
-        memSize(): number {
+        byteSize(): number {
           throw new Error('no size')
         }
         discard() {
@@ -468,8 +468,8 @@ describe('coredcc wasm-st spike', () => {
         }
       }
     )
-    cdcc.invoke(ctx, 'ts.add(amount=1)') /* recorded, memSize counted as 0 */
-    cdcc.undo(ctx) /* memSize is read again */
+    cdcc.invoke(ctx, 'ts.add(amount=1)') /* recorded, byteSize counted as 0 */
+    cdcc.undo(ctx) /* byteSize is read again */
     assert.equal(warn.mock.callCount(), 2)
     cdcc.set(ctx, 'strength', 0.1) /* truncates the redo side: discard throws */
     assert.equal(cdcc.get(ctx, 'strength'), 0.1)

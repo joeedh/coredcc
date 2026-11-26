@@ -149,7 +149,7 @@ public:
   {
     return changes_[i].after.channels;
   }
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
 
 private:
   struct Change {
@@ -194,7 +194,7 @@ public:
 
   /** The objects that it changes: those that aren't below another, and were usable at the
    * start. */
-  int count() const
+  int objectCount() const
   {
     return int(bases_.size());
   }
@@ -243,9 +243,9 @@ public:
   {
     return changes_.redo(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return sizeof(*this) + changes_.memSize();
+    return sizeof(*this) + changes_.byteSize();
   }
   void discard()
   {
@@ -323,7 +323,7 @@ public:
   /** The error, if it isn't one for leaving an object out: an exception of a script, say.
    */
   Status add(const Library &lib, BlockHandle h, const Status &why);
-  int count() const
+  int skipCount() const
   {
     return count_;
   }

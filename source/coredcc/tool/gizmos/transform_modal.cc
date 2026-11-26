@@ -169,7 +169,7 @@ Status TransformModal::perObject(Context &ctx,
       settings.pivot == PivotMode::Individual && d.kind != DeltaKind::Translate;
   const bool local = settings.orientation == Orientation::Local;
   const quatd toGizmo = frame.basis.conjugated();
-  for (int i = 0; i < cmd.count(); i++) {
+  for (int i = 0; i < cmd.objectCount(); i++) {
     TransformDelta t = d;
     if (individual) {
       Result<double3> pv = cmd.startPivot(ctx, i);

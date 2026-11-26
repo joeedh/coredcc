@@ -377,7 +377,7 @@ void testScriptBrush()
         undos++;
         return true;
       };
-      b.methods["memSize"] = [](void **, void *r, string *) {
+      b.methods["byteSize"] = [](void **, void *r, string *) {
         *static_cast<uint64_t *>(r) = 0;
         return true;
       };
@@ -385,12 +385,14 @@ void testScriptBrush()
       return true;
     };
     must(sc::registerForeignStrokeBrush(
-        *d.ctx, "js.brush", host.add(factory), "begin apply undo memSize"));
-    test_assert(isCode(sc::registerForeignStrokeBrush(*d.ctx, "core.b", host.add(Obj()), "begin"),
-                       StatusCode::InvalidArgument,
-                       "reserved"));
-    test_assert(isCode(sc::registerForeignStrokeBrush(*d.ctx, "js.brush", host.add(Obj()), "begin"),
-                       StatusCode::AlreadyExists));
+        *d.ctx, "js.brush", host.add(factory), "begin apply undo byteSize"));
+    test_assert(
+        isCode(sc::registerForeignStrokeBrush(*d.ctx, "core.b", host.add(Obj()), "begin"),
+               StatusCode::InvalidArgument,
+               "reserved"));
+    test_assert(isCode(
+        sc::registerForeignStrokeBrush(*d.ctx, "js.brush", host.add(Obj()), "begin"),
+        StatusCode::AlreadyExists));
     test_assert(isCode(sc::registerForeignStrokeBrush(*d.ctx, "js.none", 0, "begin"),
                        StatusCode::InvalidArgument));
     const ToolDef *def = d.rt.ext<ToolRegistry>().find(kStrokeTool);

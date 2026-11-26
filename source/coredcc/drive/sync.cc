@@ -496,7 +496,7 @@ Status SceneDrivers::State::sync(Library &lib, bool force)
     k.epoch = lib.epoch();
     k.clients = rt->ext<ClientRegistry>().generation();
     k.tables = rt->ifaces().tableCount();
-    k.transformTypes = rt->ext<TransformRegistry>().count();
+    k.transformTypes = rt->ext<TransformRegistry>().size();
     /* Less those that syncing registers, which change nothing a scan saw. */
     k.nodeTypes = rt->ext<NodeTypeRegistry>().size() - ownTransformTypeCount(*rt);
     k.lastEdit = rt->lastEdit();

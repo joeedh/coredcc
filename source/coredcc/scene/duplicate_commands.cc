@@ -108,7 +108,7 @@ struct Composite {
   {
     return Status();
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return sizeof(*this);
   }
@@ -122,7 +122,7 @@ struct Composite {
   BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));                                            \
-  BIND_STRUCT_METHOD(st, memSize, MARGS());                                              \
+  BIND_STRUCT_METHOD(st, byteSize, MARGS());                                             \
   BIND_STRUCT_METHOD(st, discard, MARGS())
 
 /* ---- objects ---- */

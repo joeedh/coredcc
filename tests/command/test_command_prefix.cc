@@ -29,7 +29,7 @@ struct Grow {
   {
     test_assert(setValue(ctx, "radius", PropValue::ofFloat(before)).ok());
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -77,7 +77,7 @@ struct GrowTwice {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -106,7 +106,7 @@ struct Named {
   {
     test_assert(resolve(ctx, Path()).ok());
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }
@@ -136,7 +136,7 @@ struct Folder {
   void undo(Context &)
   {
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }

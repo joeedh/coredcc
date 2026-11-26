@@ -46,7 +46,7 @@ struct DocHost {
   /** What rekey answers; by default, another id of the same client. */
   litestl::util::function<BlockId(const Datablock &, const RekeyContext &)> onRekey;
   int duplicated = 0;
-  /** What memSize answers. */
+  /** What byteSize answers. */
   uint64_t dataSize = 0;
   litestl::util::function<void()> onSerialize;
   litestl::util::function<void()> onDuplicate;
@@ -110,7 +110,7 @@ template <bool Extras> struct DocProviderT {
         v.visit(c);
       }
     }
-    d->bagRefs.visit(v);
+    d->bagRefs.forEachRef(v);
     for (BlockEntry &e : d->unread) {
       for (RefCell &c : e.refs) {
         v.visit(c);
@@ -232,7 +232,7 @@ template <bool Extras> struct DocProviderT {
     id.local.hi ^= 1;
     return id;
   }
-  uint64_t memSize(const Datablock &) const
+  uint64_t byteSize(const Datablock &) const
   {
     return host->dataSize;
   }
@@ -248,7 +248,7 @@ template <bool Extras> struct DocProviderT {
     if constexpr (Extras) {
       BIND_STRUCT_METHOD(st, duplicate, MARGS("src", "out"));
       BIND_STRUCT_METHOD(st, rekey, MARGS("imported", "context"));
-      BIND_STRUCT_METHOD(st, memSize, MARGS("block"));
+      BIND_STRUCT_METHOD(st, byteSize, MARGS("block"));
     }
     return st;
   }

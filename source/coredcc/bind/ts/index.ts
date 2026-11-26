@@ -202,7 +202,7 @@ export function setCommandOutput(ctx: Context, name: string, value: Writable) {
  *   Internal, with the error in the message (undo has no Status to carry one), and so
  *   is a throw from the constructor.
  * - `redo` is optional: without it, redo runs `exec` again.
- * - `memSize` (bytes held for undo) and `discard` are optional; a throw from either is
+ * - `byteSize` (bytes held for undo) and `discard` are optional; a throw from either is
  *   ignored (reported with console.warn).
  */
 export interface ScriptCommand {
@@ -210,7 +210,7 @@ export interface ScriptCommand {
   exec(ctx: Context): void
   undo(ctx: Context): void
   redo?(ctx: Context): void
-  memSize?(): number
+  byteSize?(): number
   discard?(): void
 }
 
@@ -275,15 +275,15 @@ class Adapter {
       }
     })
   }
-  /* A failing memSize or discard would report an unrelated applied run as failed. */
-  memSize(): number {
+  /* A failing byteSize or discard would report an unrelated applied run as failed. */
+  byteSize(): number {
     return inSlot(() => {
       try {
-        const n = Number(sync('memSize', this.cmd.memSize?.() ?? 0))
+        const n = Number(sync('byteSize', this.cmd.byteSize?.() ?? 0))
         return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), Number.MAX_SAFE_INTEGER) : 0
       } catch (e) {
         if (isFatal(e)) throw e
-        console.warn(`${this.id}: memSize failed, counted as 0:`, e)
+        console.warn(`${this.id}: byteSize failed, counted as 0:`, e)
         return 0
       }
     })
@@ -327,7 +327,7 @@ export function defineCommand(ctx: Context, spec: CommandSpec, Cls: new () => Sc
     /* The adapter supplies every required slot; redo only when the class has one, so
      * a class without it keeps redo-by-exec. */
     const hasRedo = typeof Cls.prototype.redo === 'function'
-    const slots = ['canRun', 'exec', 'undo', 'memSize', 'discard']
+    const slots = ['canRun', 'exec', 'undo', 'byteSize', 'discard']
     if (hasRedo) slots.push('redo')
     const id = spec.id
     const factory = {make: () => backend.foreignHandle(new Adapter(new Cls(), id, hasRedo))}

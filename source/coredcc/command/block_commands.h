@@ -48,7 +48,7 @@ public:
   Status redo(Library &lib);
   void discard(Library &lib);
   /** What the history holds for it: the blocks' data too, while they are undone. */
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
 
 private:
   struct Made {

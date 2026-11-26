@@ -36,12 +36,12 @@ Vector<double> TransformBatch::parents() const
 
 Status TransformBatch::setStates(const Vector<double> &states)
 {
-  if (int(states.size()) != count() * kStateSize) {
+  if (int(states.size()) != size() * kStateSize) {
     return Status::error(StatusCode::InvalidArgument,
                          "evaluateMany: there must be 23 numbers for each object");
   }
   states_.clear();
-  for (int k = 0; k < count(); k++) {
+  for (int k = 0; k < size(); k++) {
     const double *from = states.data() + size_t(k) * kStateSize;
     TransformState s;
     double *m = s.world;
@@ -66,7 +66,7 @@ lbt::Struct<TransformBatch> *TransformBatch::defineBindings()
     litestl::alloc::PermanentGuard guard;
     st = new lbt::Struct<TransformBatch>("coredcc::TransformBatch",
                                          sizeof(TransformBatch));
-    BIND_STRUCT_METHOD(st, count, MARGS());
+    BIND_STRUCT_METHOD(st, size, MARGS());
     BIND_STRUCT_METHOD(st, channelCount, MARGS());
     BIND_STRUCT_METHOD(st, time, MARGS());
     BIND_STRUCT_METHOD(st, channels, MARGS());
@@ -152,7 +152,7 @@ void SceneEvaluator::evaluateLevel(const Library &lib,
     if (rt.hasStickyError()) {
       s = rt.takeStickyError();
     }
-    if (s.ok() && int(g.batch->states().size()) != g.batch->count()) {
+    if (s.ok() && int(g.batch->states().size()) != g.batch->size()) {
       s = Status::error(StatusCode::Internal, "evaluateMany gave no states");
     }
     if (!s.ok() && foreign.ok()) {

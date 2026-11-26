@@ -131,7 +131,7 @@ public:
     return evaluateMany_;
   }
   /** In registration order. */
-  int32_t count() const
+  int32_t size() const
   {
     return int32_t(types_.size());
   }

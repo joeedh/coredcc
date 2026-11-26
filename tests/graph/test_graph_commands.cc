@@ -364,7 +364,7 @@ struct RunInside {
   {
     return Status(); /* the inner one's */
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return sizeof(*this);
   }
@@ -378,7 +378,7 @@ struct RunInside {
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     BIND_STRUCT_METHOD(st, discard, MARGS());
     return st;
   }

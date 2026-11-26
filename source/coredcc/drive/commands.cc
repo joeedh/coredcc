@@ -137,7 +137,7 @@ struct GraphCells {
   {
     ctx.runtime().ext<ChangeBus>().notify(OwnerKey::ofBlock(l.list.id()), "graphs");
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     uint64_t n = sizeof(*this) + uint64_t(lists.size()) * sizeof(ListCells);
     for (const ListCells &l : lists) {
@@ -214,9 +214,9 @@ struct AddGraph {
     }
     return cells.add(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return cells.memSize() + created.memSize();
+    return cells.byteSize() + created.byteSize();
   }
   void discard()
   {
@@ -233,7 +233,7 @@ struct AddGraph {
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     BIND_STRUCT_METHOD(st, discard, MARGS());
     return st;
   }
@@ -284,9 +284,9 @@ struct RemoveGraph {
   {
     return cells.remove(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return cells.memSize();
+    return cells.byteSize();
   }
   void discard()
   {
@@ -300,7 +300,7 @@ struct RemoveGraph {
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     BIND_STRUCT_METHOD(st, discard, MARGS());
     return st;
   }

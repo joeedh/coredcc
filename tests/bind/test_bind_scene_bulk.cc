@@ -150,7 +150,7 @@ struct Plane {
       TransformBatch &b = *static_cast<TransformBatch *>(args[0]);
       const Vector<double> c = b.channels();
       Vector<double> out;
-      for (int i = 0; i < b.count(); i++) {
+      for (int i = 0; i < b.size(); i++) {
         TransformState s;
         put(s, b.parent(i), c[i * 2], c[i * 2 + 1]);
         const double *m = s.world;

@@ -28,7 +28,7 @@ public:
   void consider(std::string_view candidate);
   /** Adds the candidates to `status` as suggestions. */
   void addTo(Status &status) const;
-  int count() const
+  int candidateCount() const
   {
     return count_;
   }

@@ -63,7 +63,7 @@ struct GraphOp {
 
   /** Does it again (`forward`), or takes it back. */
   Status apply(GraphDef &def, bool forward) const;
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
 };
 
 /**
@@ -82,7 +82,7 @@ public:
   /** Makes them again; a failure takes back what it did first. The same precondition. */
   Status redo(Context &ctx);
   void discard();
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
   int size() const
   {
     return int(ops_.size());

@@ -32,7 +32,7 @@ struct Grow {
   {
     test_assert(setValue(ctx, "radius", PropValue::ofFloat(before)).ok());
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return 0;
   }

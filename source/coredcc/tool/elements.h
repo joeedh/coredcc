@@ -120,7 +120,7 @@ public:
   Status exec(Context &ctx);
   void undo(Context &ctx);
   Status redo(Context &ctx);
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
   void discard()
   {
   }

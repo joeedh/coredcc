@@ -65,11 +65,11 @@ void testEach()
     d.sc().setSelection(*d.lib, ids);
     const std::string before = d.describe();
     ApplyDelta *drag = beginDrag(d);
-    test_assert(drag->count() > 0 && drag->count() <= int(ids.size()));
+    test_assert(drag->objectCount() > 0 && drag->objectCount() <= int(ids.size()));
     Vector<TransformDelta> deltas;
     for (int step = 0; step < 3; step++) {
       deltas.clear();
-      for (int i = 0; i < drag->count(); i++) {
+      for (int i = 0; i < drag->objectCount(); i++) {
         TransformDelta t = translate(r.range(-2, 2), r.range(-2, 2), r.range(-2, 2));
         if (r.coin()) {
           t = TransformDelta();
@@ -92,7 +92,7 @@ void testEach()
     test_assert(update(d, few).code() == StatusCode::InvalidArgument);
 
     /* As if each had been moved by itself. */
-    for (int i = 0; i < drag->count(); i++) {
+    for (int i = 0; i < drag->objectCount(); i++) {
       int at = 0;
       while (!(all[at] == drag->object(i))) {
         at++;
@@ -103,7 +103,7 @@ void testEach()
           computeParentState(*one.lib, others[at], one.sc().time());
       test_assert(above.ok() && sameBits(*above, drag->startParent(i)));
     }
-    for (int i = 0; i < drag->count(); i++) {
+    for (int i = 0; i < drag->objectCount(); i++) {
       int at = 0;
       while (!(all[at] == drag->object(i))) {
         at++;
@@ -137,7 +137,7 @@ void testEach()
   const BlockHandle a = d.object("a", 1), b = d.object("b", 5);
   d.select({a, b});
   ApplyDelta *drag = beginDrag(d);
-  test_assert(drag->count() == 2 && drag->object(0) == a && drag->object(1) == b);
+  test_assert(drag->objectCount() == 2 && drag->object(0) == a && drag->object(1) == b);
   TransformDelta turn;
   turn.kind = DeltaKind::Rotate;
   turn.axis = double3(0, 0, 1);

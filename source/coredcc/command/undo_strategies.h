@@ -31,9 +31,9 @@ public:
   using ReleaseFn = litestl::util::function<void()>;
 
   DelegatedUndo() = default;
-  DelegatedUndo(UndoFn undo, RedoFn redo, ReleaseFn release, uint64_t memSize = 0)
+  DelegatedUndo(UndoFn undo, RedoFn redo, ReleaseFn release, uint64_t byteSize = 0)
       : undo_(std::move(undo)), redo_(std::move(redo)), release_(std::move(release)),
-        memSize_(memSize)
+        memSize_(byteSize)
   {
   }
   DelegatedUndo(const DelegatedUndo &) = delete;
@@ -79,7 +79,7 @@ public:
       r();
     }
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return memSize_;
   }

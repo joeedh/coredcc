@@ -84,7 +84,7 @@ namespace {
   BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));                                            \
-  BIND_STRUCT_METHOD(st, memSize, MARGS());                                              \
+  BIND_STRUCT_METHOD(st, byteSize, MARGS());                                             \
   BIND_STRUCT_METHOD(st, discard, MARGS())
 
 struct RenameBlock {
@@ -126,7 +126,7 @@ struct RenameBlock {
   {
     return apply(ctx, after);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return sizeof(*this) + before.size() + after.size();
   }
@@ -207,7 +207,7 @@ struct UnlinkRef {
   {
     return apply(ctx, BlockId());
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return sizeof(*this);
   }

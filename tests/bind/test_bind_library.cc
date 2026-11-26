@@ -282,7 +282,7 @@ static void test_slots()
     *err = "discard: Error: not today";
     return false;
   };
-  cmd.methods["memSize"] = [](void **, void *ret, litestl::util::string *) {
+  cmd.methods["byteSize"] = [](void **, void *ret, litestl::util::string *) {
     *static_cast<uint64_t *>(ret) = 0;
     return true;
   };
@@ -293,7 +293,7 @@ static void test_slots()
   };
   CommandDef *def = sc::newCommandDef("js.append");
   test_assert(sc::registerForeignCommand(
-                  c.ctx, *def, host.add(factory), "canRun exec undo memSize discard")
+                  c.ctx, *def, host.add(factory), "canRun exec undo byteSize discard")
                   .ok());
   litestl::alloc::Delete(def);
   test_assert(sc::invoke(c.ctx, "js.append()").status.ok());

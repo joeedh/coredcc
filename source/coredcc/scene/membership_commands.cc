@@ -241,7 +241,7 @@ Result<BlockHandle> memberOf(Context &ctx, const char *input)
   BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));                                            \
   BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));                                            \
-  BIND_STRUCT_METHOD(st, memSize, MARGS());                                              \
+  BIND_STRUCT_METHOD(st, byteSize, MARGS());                                             \
   BIND_STRUCT_METHOD(st, discard, MARGS())
 
 /* ---- new ---- */
@@ -279,9 +279,9 @@ struct NewScene {
     Result<Library *> l = detail::libraryOf(ctx, lib);
     return l.ok() ? created.redo(**l) : l.status();
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return sizeof(*this) + created.memSize();
+    return sizeof(*this) + created.byteSize();
   }
   void discard()
   {
@@ -384,7 +384,7 @@ struct Link {
     scene.changed(ctx, kObjects);
     return Status();
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return sizeof(*this) + uint64_t(objects.size()) * sizeof(HistoryBlock);
   }
@@ -459,7 +459,7 @@ struct Unlink {
   {
     return apply(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return sizeof(*this) + uint64_t(objects.size()) * sizeof(HistoryBlock) +
            uint64_t(places.size()) * sizeof(Scene::Place);
@@ -514,7 +514,7 @@ struct SetActive {
   {
     return write(ctx, after);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return sizeof(*this);
   }
@@ -641,7 +641,7 @@ struct Select {
   {
     return write(ctx, after);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
     return sizeof(*this) + uint64_t(before.size() + after.size()) * sizeof(BlockId);
   }
@@ -812,9 +812,9 @@ struct AddObject {
     }
     return Status();
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return sizeof(*this) + created.memSize() +
+    return sizeof(*this) + created.byteSize() +
            uint64_t(selected.size()) * sizeof(BlockId);
   }
   void discard()

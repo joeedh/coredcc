@@ -59,7 +59,7 @@ public:
   void write(BlockWriter &out) const;
   void readFrom(BlockReader &in);
   DriverList *duplicate() const;
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
   template <class Fn> void forEachCell(Fn &&fn)
   {
     for (RefCell &c : cells_) {

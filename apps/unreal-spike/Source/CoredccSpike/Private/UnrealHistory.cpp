@@ -47,7 +47,7 @@ public:
 		if (History) History->RevertChange(*this);
 	}
 	bool HasExpired(UObject*) const override { return !Rec; }
-	SIZE_T GetSize() const override { return Rec ? SIZE_T(Rec->memSize()) : 0; }
+	SIZE_T GetSize() const override { return Rec ? SIZE_T(Rec->byteSize()) : 0; }
 	FString ToString() const override
 	{
 		return Rec ? FString(UTF8_TO_TCHAR(Rec->def().name().c_str())) : FString(TEXT("(expired)"));

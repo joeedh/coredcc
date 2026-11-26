@@ -60,7 +60,7 @@ public:
   void flush(Library &lib, const BlockId &object);
   /** The same for all objects of a Library. */
   void flush(Library &lib);
-  int count(const Library &lib) const;
+  int writeCount(const Library &lib) const;
 
 private:
   struct Entry {

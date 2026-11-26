@@ -50,11 +50,11 @@ NodePath Frame::pathOf(NodeId node) const
   return p;
 }
 
-int Frame::count() const
+int Frame::frameCount() const
 {
   int n = 1;
   for (const Group &g : groups) {
-    n += g.child ? g.child->count() : 0;
+    n += g.child ? g.child->frameCount() : 0;
   }
   return n;
 }
@@ -73,7 +73,7 @@ ErrorPtr Evaluator::makeError(const Frame &f,
 
 void Evaluator::dropFrame(Frame *f)
 {
-  f->top->frames -= f->count();
+  f->top->frames -= f->frameCount();
   litestl::alloc::Delete(f);
 }
 

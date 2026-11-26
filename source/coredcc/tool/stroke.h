@@ -217,10 +217,11 @@ struct StrokeTarget {
  * - `apply`: one sample, once for the stroke and once for each mirror (`mirror` set). It may
  *   only write values: it runs where commands can't be.
  * - `undo`: put back what begin and apply wrote, as a Command's undo.
- * - What they change must be notified, as any write: through values (setValue, writeValue),
- *   `invalidateData` for geometry, or ChangeBus::notify (`notifyChanged` in scripts). The scene's
- *   evaluation is incremental, so an unnotified block keeps its old result.
- * - `memSize`: its undo data, in bytes.
+ * - What they change must be notified, as any write: through values (setValue,
+ * writeValue), `invalidateData` for geometry, or ChangeBus::notify (`notifyChanged` in
+ * scripts). The scene's evaluation is incremental, so an unnotified block keeps its old
+ * result.
+ * - `byteSize`: its undo data, in bytes.
  */
 struct StrokeBrush : IfaceRef {
   Status begin(Context &ctx, const StrokeTarget &target)
@@ -235,9 +236,9 @@ struct StrokeBrush : IfaceRef {
   {
     CDCC_CALL(undo, ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return CDCC_CALL(memSize);
+    return CDCC_CALL(byteSize);
   }
 
   CDCC_INTERFACE(StrokeBrush, "coredcc::StrokeBrush")
@@ -245,7 +246,7 @@ struct StrokeBrush : IfaceRef {
     BIND_STRUCT_METHOD(st, begin, MARGS("ctx", "target"));
     BIND_STRUCT_METHOD(st, apply, MARGS("ctx", "s"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
   }
 };
 
@@ -307,7 +308,7 @@ public:
   Status exec(Context &ctx);
   void undo(Context &ctx);
   Status redo(Context &ctx);
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
   void discard()
   {
   }

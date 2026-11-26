@@ -33,7 +33,7 @@ namespace coredcc {
  * - `undo`, and the optional `redo`. Without `redo`, redo runs `exec` again: right
  *   only for commands whose result depends on their inputs alone. Interactive
  *   commands must have `redo`.
- * - `memSize`: bytes held for undo, for the history's budget.
+ * - `byteSize`: bytes held for undo, for the history's budget.
  * - `discard`: the command leaves the history for good (redo truncation, the budget);
  *   release journal steps and the like. The object is destroyed after.
  * - `foldKey` (optional; 0 means never) and `foldFrom`: a command pushed with the same
@@ -61,9 +61,9 @@ struct Command : IfaceRef {
   {
     return CDCC_CALL(redo, ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return CDCC_CALL(memSize);
+    return CDCC_CALL(byteSize);
   }
   void discard()
   {
@@ -88,7 +88,7 @@ struct Command : IfaceRef {
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
     BIND_OPTIONAL_METHOD(st, redo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     BIND_STRUCT_METHOD(st, discard, MARGS());
     BIND_OPTIONAL_METHOD(st, foldKey, MARGS());
     BIND_OPTIONAL_METHOD(st, foldFrom, MARGS("next"));

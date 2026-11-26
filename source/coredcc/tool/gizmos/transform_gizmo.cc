@@ -312,7 +312,7 @@ double3 pivotOfDrag(Context &ctx, const TransformSettings &s, const Placement &p
   const BlockHandle active = scene->active(*lib);
   double3 sum(0.0, 0.0, 0.0);
   int n = 0;
-  for (int i = 0; i < a->count(); i++) {
+  for (int i = 0; i < a->objectCount(); i++) {
     Result<TransformState> st = a->startState(ctx, i);
     if (!st.ok()) {
       continue;

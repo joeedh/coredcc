@@ -113,20 +113,20 @@ struct BaseOf<T> {
 };
 
 template <class I> struct UpcastsOf {
-  template <class F> static void each(F &&)
+  template <class F> static void forEach(F &&)
   {
   }
 };
 template <class I>
   requires requires { typename I::CdccUpcasts; }
 struct UpcastsOf<I> {
-  template <class F, class... U> static void eachIn(IfaceList<U...>, F &f)
+  template <class F, class... U> static void forEachIn(IfaceList<U...>, F &f)
   {
     (f.template operator()<U>(), ...);
   }
-  template <class F> static void each(F &&f)
+  template <class F> static void forEach(F &&f)
   {
-    eachIn(typename I::CdccUpcasts{}, f);
+    forEachIn(typename I::CdccUpcasts{}, f);
   }
 };
 
@@ -137,7 +137,7 @@ template <class I, class F> void forEachRelated(F &&f)
   if constexpr (!std::is_void_v<Base>) {
     f.template operator()<Base>();
   }
-  UpcastsOf<I>::each(f);
+  UpcastsOf<I>::forEach(f);
 }
 
 /** Every interface related to I, transitively, without duplicates or I itself. */

@@ -166,7 +166,7 @@ void testObjectFields()
   must(ids.status());
   const BlockHandle copy = d.lib->find(ids->find(d.idOf(h)));
   test_assert(d.obj(copy).unreadFields().size() == 9);
-  test_assert(d.obj(copy).memSize() >= sizeof(Object) + 9 * sizeof(BlockEntry));
+  test_assert(d.obj(copy).byteSize() >= sizeof(Object) + 9 * sizeof(BlockEntry));
   d.lib->setFlag(h2, BlockFlags::Root, true);
   Loaded l(d, save(*d.lib)); /* with the copy, whose FakeUser flag is a copy too */
   int found = 0;
@@ -255,8 +255,8 @@ void testSceneFields()
   test_assert(last("massUnit") == PropValue::ofInt(1) && last("factorUnit").tryString());
 
   Scene *copy = s2.duplicate();
-  test_assert(copy->unreadFields().size() == 15 && copy->memSize() == s2.memSize());
-  test_assert(s2.memSize() >= sizeof(Scene) + 15 * sizeof(BlockEntry));
+  test_assert(copy->unreadFields().size() == 15 && copy->byteSize() == s2.byteSize());
+  test_assert(s2.byteSize() >= sizeof(Scene) + 15 * sizeof(BlockEntry));
   litestl::alloc::Delete(copy);
   d.lib->setFlag(h2, BlockFlags::Root, true);
   d.sc().remove(*d.lib, d.idOf(kept)).status().ignore();
@@ -413,13 +413,13 @@ void testVersions()
       sizeof(Object) + 2 * sizeof(double); /* nothing of a file is kept */
   {
     Loaded l(now, v0);
-    test_assert(l.obj("v").memSize() > small);
+    test_assert(l.obj("v").byteSize() > small);
     test_assert(now.upgrader->calls == 0 &&
                 l.obj("v").channels.size() == 0); /* when it's asked for */
     test_assert(same(save(l.lib), v0));
     test_assert(xOf(l.lib, l.byName("v")) == 6.0 && now.upgrader->calls == 1);
     test_assert(l.obj("v").channels.get(1) == 5.0 && l.obj("v").unread().empty());
-    test_assert(l.obj("v").memSize() == small);
+    test_assert(l.obj("v").byteSize() == small);
     test_assert(xOf(l.lib, l.byName("v")) == 6.0 && now.upgrader->calls == 1);
     /* It is of the new version then. */
     Loaded again(now, save(l.lib));
@@ -432,7 +432,7 @@ void testVersions()
   {
     Loaded l(now, v2);
     test_assert(l.obj("v").channels.size() == 2 && now.upgrader->calls == 2);
-    test_assert(l.obj("v").memSize() == small);
+    test_assert(l.obj("v").byteSize() == small);
   }
   /* Without the slot, by name. */
   {

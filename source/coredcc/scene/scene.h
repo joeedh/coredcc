@@ -176,7 +176,7 @@ public:
   void readFrom(BlockReader &in);
   /** A copy for another block, not evaluated. */
   Scene *duplicate() const;
-  uint64_t memSize() const;
+  uint64_t byteSize() const;
   std::span<const BlockEntry> unreadFields() const
   {
     return std::span<const BlockEntry>(fields_.data(), size_t(fields_.size()));

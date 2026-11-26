@@ -219,7 +219,7 @@ class ModelAdapter {
   evaluateMany(batch: BoundBatch): Status | undefined {
     return inSlot(() => {
       try {
-        const count = batch.count()
+        const count = batch.size()
         const states = sync(
           'evaluateMany',
           this.spec.evaluateMany!({count, time: batch.time(), channels: batch.channels(), parents: batch.parents()})

@@ -402,7 +402,7 @@ struct Many {
   {
     Many &self = *const_cast<Many *>(this);
     self.batches++;
-    self.objects += b.count();
+    self.objects += b.size();
     if (mode == 1) {
       return Status::error(StatusCode::Internal, "refused");
     }
@@ -414,10 +414,10 @@ struct Many {
       return Status(); /* no states */
     }
     const Vector<double> c = b.channels(), p = b.parents();
-    test_assert(b.channelCount() == 3 && int(c.size()) == 3 * b.count() &&
-                int(p.size()) == 23 * b.count());
+    test_assert(b.channelCount() == 3 && int(c.size()) == 3 * b.size() &&
+                int(p.size()) == 23 * b.size());
     Vector<double> out;
-    for (int i = 0; i < b.count(); i++) {
+    for (int i = 0; i < b.size(); i++) {
       TransformState parent;
       double *m = parent.world;
       for (int k = 0; k < 16; k++) {

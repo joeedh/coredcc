@@ -95,7 +95,7 @@ public:
     parents_.append(parent);
   }
 
-  int32_t count() const
+  int32_t size() const
   {
     return int32_t(parents_.size());
   }

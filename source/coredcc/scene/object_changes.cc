@@ -162,7 +162,7 @@ bool ObjectChanges::channelsChanged() const
   return false;
 }
 
-uint64_t ObjectChanges::memSize() const
+uint64_t ObjectChanges::byteSize() const
 {
   uint64_t n = uint64_t(changes_.size()) * sizeof(Change);
   for (const Change &c : changes_) {

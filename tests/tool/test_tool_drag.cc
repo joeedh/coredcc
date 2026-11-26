@@ -255,9 +255,9 @@ void testPivotAndSize()
   const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs()));
   ApplyDelta *drag = d.ex->interactiveCommand()->as<ApplyDelta>();
-  test_assert(drag->count() == 2);
+  test_assert(drag->objectCount() == 2);
   double3 sum(0, 0, 0);
-  for (int i = 0; i < drag->count(); i++) {
+  for (int i = 0; i < drag->objectCount(); i++) {
     sum = sum + *drag->startPivot(*d.ctx, i);
   }
   test_assert(sum[0] / 2 == f.pivot[0] && sum[1] / 2 == f.pivot[1]);

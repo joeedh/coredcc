@@ -433,7 +433,7 @@ Status ElementsDelta::redo(Context &ctx)
   return Status();
 }
 
-uint64_t ElementsDelta::memSize() const
+uint64_t ElementsDelta::byteSize() const
 {
   uint64_t n = sizeof(*this);
   for (const Block &b : blocks_) {
@@ -452,7 +452,7 @@ lbt::Struct<ElementsDelta> *ElementsDelta::defineBindings()
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, redo, MARGS("ctx"));
-    BIND_STRUCT_METHOD(st, memSize, MARGS());
+    BIND_STRUCT_METHOD(st, byteSize, MARGS());
     BIND_STRUCT_METHOD(st, discard, MARGS());
     BIND_STRUCT_METHOD(st, changed, MARGS());
     BIND_STRUCT_METHOD(st, moved, MARGS());

@@ -365,8 +365,8 @@ public:
   }
 
   /** What `h` takes: its record, and its data if the provider says
-   * (BlockProvider::memSize). */
-  uint64_t memSize(BlockHandle h) const;
+   * (BlockProvider::byteSize). */
+  uint64_t byteSize(BlockHandle h) const;
 
   /** At most one record per BlockId, and the index matches the records. */
   Status validate() const;
@@ -434,9 +434,9 @@ private:
   void adoptData(BlockHandle h, void *data, bool keep);
   /** Calls `visit` with a visitor over `fn`, and turns a new sticky error into a Status.
    */
-  Status visitRefs(const Datablock &b,
-                   litestl::util::function<void(RefCell &)> &fn,
-                   litestl::util::function<void(RefVisitor &)> visit) const;
+  Status forEachRefWith(const Datablock &b,
+                        litestl::util::function<void(RefCell &)> &fn,
+                        litestl::util::function<void(RefVisitor &)> visit) const;
 
   Runtime &rt_;
   BlockTypeRegistry &types_;

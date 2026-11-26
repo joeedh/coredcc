@@ -370,7 +370,7 @@ void testRegistry()
   Types t;
   TransformRegistry &reg = t.rt.ext<TransformRegistry>();
   ApiRegistry &api = t.rt.ext<ApiRegistry>();
-  test_assert(registerTransformTypes(t.rt).ok() && reg.count() == 3);
+  test_assert(registerTransformTypes(t.rt).ok() && reg.size() == 3);
   test_assert(t.trs->channelCount() == trs::kCount &&
               t.fbx->channelCount() == fbx::kCount);
   test_assert(t.matrix->channelCount() == matrix_transform::kCount);
@@ -456,11 +456,11 @@ void testRegistry()
   test_assert(block.get(10) == 1.0);
 
   /* Refused, with nothing registered. */
-  const int count = reg.count();
+  const int count = reg.size();
   const auto refused = [&](TransformTypeInfo i, StatusCode code) {
     const std::string name = i.name.c_str();
     const Status s = reg.add(std::move(i), offsetModel(t.rt)).status();
-    return s.code() == code && reg.count() == count &&
+    return s.code() == code && reg.size() == count &&
            (code == StatusCode::AlreadyExists || !api.find(StructId::of(name)));
   };
   const PropertyDef f = PropertyDef::floatProp("f");

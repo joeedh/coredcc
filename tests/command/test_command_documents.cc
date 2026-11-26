@@ -135,9 +135,9 @@ struct SetState {
   {
     return undo_.redo(ctx);
   }
-  uint64_t memSize() const
+  uint64_t byteSize() const
   {
-    return undo_.memSize();
+    return undo_.byteSize();
   }
   void discard()
   {
