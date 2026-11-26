@@ -7,6 +7,7 @@
 #include "coredcc/api/library_io.h"
 #include "coredcc/graph/instance.h"
 #include "coredcc/lib/duplicate.h"
+#include "coredcc/lib/type_names.h"
 
 using namespace fixture;
 
@@ -670,6 +671,70 @@ void testNames()
   test_assert(sockets.find(kTwinSockets[0]) && !sockets.find(kTwinSockets[1]));
 }
 
+bool is(const litestl::util::string &s, const char *text)
+{
+  return strcmp(s.c_str(), text) == 0;
+}
+
+/* Renamed node and socket types: a file with the old names loads as the new ones, and
+ * saves the new ones. */
+void testAliases()
+{
+  Doc a;
+  Graph g = newGraph(a.lib, "g");
+  a.lib.setFlag(g.h, BlockFlags::Root, true);
+  NodeState old;
+  old.id = NodeId{5};
+  old.typeName = "old.sum";
+  old.inputs.append(SocketInfo{"a", "a", "old.float"});
+  old.inputs.append(SocketInfo{"b", "b", "old.float"});
+  old.outputs.append(SocketInfo{"value", "value", "old.type"});
+  test_assert(g.def->insertNode(old).ok());
+  const Bytes bytes = save(a.lib);
+
+  IoDoc b;
+  TypeAliases &aliases = b.rt.ext<TypeAliases>();
+  test_assert(aliases.add(TypeNameKind::Node, "old.sum", "t.sum").ok());
+  test_assert(aliases.add(TypeNameKind::Socket, "old.type", "new.type").ok());
+  test_assert(aliases.add(TypeNameKind::Socket, "old.float", "float").ok());
+  test_assert(hasCode(aliases.add(TypeNameKind::Node, "old.sum", "t.other"),
+                      StatusCode::AlreadyExists));
+  test_assert(hasCode(aliases.add(TypeNameKind::Node, "t.sum", "t.next"),
+                      StatusCode::AlreadyExists)); /* no chains */
+  test_assert(hasCode(aliases.add(TypeNameKind::Node, "same", "same"),
+                      StatusCode::InvalidArgument));
+  test_assert(aliases.current(TypeNameKind::Block, "old.sum") == "old.sum");
+  test_assert(load(b.ctx, bytes).issues.total == 0);
+  const Graph read = byName(b.lib, "g");
+  const GraphNode &n = *read.def->node(NodeId{5});
+  test_assert(is(n.typeName(), "t.sum") && n.type());
+
+  /* A node of a type that isn't there keeps its sockets, by their new names. */
+  Doc c;
+  test_assert(c.rt.ext<TypeAliases>().add(TypeNameKind::Socket, "old.type", "new.type").ok());
+  test_assert(c.rt.ext<TypeAliases>().add(TypeNameKind::Socket, "old.float", "float").ok());
+  load(c.ctx, bytes);
+  const Graph late = byName(c.lib, "g");
+  const GraphNode &m = *late.def->node(NodeId{5});
+  test_assert(is(m.typeName(), "old.sum") && !m.type());
+  const SocketInfos &outs = late.def->sockets(m, SocketSide::Output);
+  const SocketInfos &ins = late.def->sockets(m, SocketSide::Input);
+  test_assert(outs.size() == 1 && is(outs[0].typeName, "new.type"));
+  test_assert(ins.size() == 2 && is(ins[0].typeName, "float"));
+
+  /* Saved under the new names: a build with no aliases reads them. */
+  IoDoc d;
+  load(d.ctx, save(b.lib));
+  const GraphNode &again = *byName(d.lib, "g").def->node(NodeId{5});
+  test_assert(is(again.typeName(), "t.sum") && again.type());
+  Doc e;
+  load(e.ctx, save(c.lib));
+  const Graph resaved = byName(e.lib, "g");
+  const GraphNode &k = *resaved.def->node(NodeId{5});
+  test_assert(is(resaved.def->sockets(k, SocketSide::Output)[0].typeName, "new.type"));
+  test_assert(is(resaved.def->sockets(k, SocketSide::Input)[1].typeName, "float"));
+}
+
 } // namespace
 
 int main()
@@ -687,5 +752,6 @@ int main()
   testAppend();
   testLimits();
   testNames();
+  testAliases();
   return test_end();
 }

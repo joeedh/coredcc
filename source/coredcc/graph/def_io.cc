@@ -2,6 +2,7 @@
 
 #include "coredcc/base/text.h"
 #include "coredcc/lib/library.h"
+#include "coredcc/lib/type_names.h"
 #include "coredcc/props/value_io.h"
 
 #include <algorithm>
@@ -207,10 +208,13 @@ private:
    * with the id of another, which would be taken for it. */
   string typeName(const char *kind)
   {
-    const string name = text();
+    Library &lib = in_.library();
+    const TypeNameKind aliasKind =
+        strcmp(kind, "node") == 0 ? TypeNameKind::Node : TypeNameKind::Socket;
+    const string stored = text();
+    const string name = lsString(canonicalTypeName(lib.runtime(), aliasKind, stored.c_str()));
     const std::string idName = std::string(kind) + ":" + name.c_str();
     const uint64_t id = TypeId::of(idName).value;
-    Library &lib = in_.library();
     const char *known = lib.runtime().nameOf(IdDomain::Type, id);
     if (!known && !lib.fileNames().add(IdDomain::Type, idName)) {
       known = lib.fileNames().nameOf(IdDomain::Type, id); /* null: the table is full */

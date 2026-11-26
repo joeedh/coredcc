@@ -77,17 +77,18 @@ struct IoDoc : CommandDoc {
   {
     lib->setAuditRelations(true);
   }
-  void addEveryKind(int version = 0)
+  void addEveryKind(int version = 0, const char *name = "io.type")
   {
-    const char *impl = "io.type#impl";
+    const std::string implName = std::string(name) + "#impl";
+    const char *impl = implName.c_str();
     must(registerImpl<TransformModel, FnModel>(rt, impl));
     FnModel *m = litestl::alloc::New<FnModel>("FnModel");
     m->fn = [](const EvalCtx &, const TransformState &p) { return p; };
     Result<Owned<TransformModel>> owned = own<TransformModel>(rt, impl, m);
     must(owned.status());
-    must(rt.ext<TransformRegistry>()
-             .add(everyKind(version), std::move(owned).value())
-             .status());
+    TransformTypeInfo info = everyKind(version);
+    info.name = name;
+    must(rt.ext<TransformRegistry>().add(std::move(info), std::move(owned).value()).status());
   }
   BlockHandle byName(const char *name)
   {

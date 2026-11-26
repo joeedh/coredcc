@@ -36,6 +36,8 @@ struct Range {
 
 struct ParsedSlot {
   TypeId ns;
+  /** The namespace's name, or empty for a raw id. */
+  std::string_view nsName;
   int64_t key = 0;
   RefCell cell;
 };

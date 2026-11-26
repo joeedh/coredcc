@@ -18,6 +18,7 @@ coredcc_library(coredcc_lib
     lifetime.cc
     placeholder.cc
     registry.cc
+    type_names.cc
   DEPS
     coredcc_props
     io

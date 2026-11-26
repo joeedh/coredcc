@@ -390,6 +390,7 @@ private:
       if (FileName *n = name(in)) {
         n->asType = true;
         s.ns = n->type;
+        s.nsName = n->isRaw ? std::string_view() : n->text;
       }
       s.key = in.i64();
       s.cell = row(in);

@@ -4,6 +4,8 @@
 #include "coredcc/scene/object.h"
 #include "coredcc/scene/payload_fields.h"
 
+#include "coredcc/lib/type_names.h"
+
 #include <algorithm>
 #include <string>
 
@@ -119,6 +121,7 @@ void Object::readFrom(BlockReader &in)
     return detail::takeRef(e, kParent, parent.cell()) ||
            detail::takeRef(e, kData, data.cell());
   });
+  type = std::string(canonicalTypeName(*rt_, TypeNameKind::Transform, type));
   const TransformType *known = rt_->ext<TransformRegistry>().find(std::string_view(type));
   if (known && known->version() != version) {
     known = nullptr; /* resolve() may know what to do */

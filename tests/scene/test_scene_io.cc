@@ -4,6 +4,7 @@
 #include "io_doc.h"
 
 #include "coredcc/lib/duplicate.h"
+#include "coredcc/lib/type_names.h"
 #include "coredcc/scene/channel_io.h"
 
 #include <cmath>
@@ -605,6 +606,34 @@ void testMemory()
   test_assert(size(d.scene) == one + 2 * sizeof(RefCell));
 }
 
+/* A renamed transform type: a file with the old name loads as the new one, with its
+ * channels, and saves the new name. */
+void testTypeAlias()
+{
+  IoDoc a;
+  a.addEveryKind();
+  const Object &from = a.obj(addOfType(a, "odd"));
+  const Bytes bytes = save(*a.lib);
+
+  IoDoc b;
+  b.addEveryKind(0, "io.renamed");
+  must(b.rt.ext<TypeAliases>().add(TypeNameKind::Transform, "io.type", "io.renamed"));
+  Loaded l(b, bytes);
+  const Object &o = l.obj("odd");
+  test_assert(strcmp(o.transformType().c_str(), "io.renamed") == 0);
+  test_assert(o.unread().size() == 0 && o.channels.size() == from.channels.size());
+  for (int32_t i = 0; i < from.channels.size(); i++) {
+    test_assert(o.channels.get(i) == from.channels.get(i));
+  }
+
+  IoDoc c;
+  c.addEveryKind(0, "io.renamed");
+  Loaded again(c, save(l.lib));
+  const Object &p = again.obj("odd");
+  test_assert(strcmp(p.transformType().c_str(), "io.renamed") == 0);
+  test_assert(p.unread().size() == 0 && p.channels.size() == from.channels.size());
+}
+
 } // namespace
 
 int main()
@@ -619,6 +648,7 @@ int main()
   testDuplicate();
   testAppend();
   testAliases();
+  testTypeAlias();
   testHostile();
   testMemory();
   return test_end();

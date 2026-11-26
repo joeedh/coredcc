@@ -1,6 +1,7 @@
 #include "coredcc/lib/io/load.h"
 #include "coredcc/lib/io/fill.h"
 #include "coredcc/lib/io/parse.h"
+#include "coredcc/lib/type_names.h"
 
 #include <algorithm>
 #include <string>
@@ -17,6 +18,26 @@ namespace {
 string own(std::string_view s)
 {
   return string(std::string(s).c_str());
+}
+
+/* Renamed types are read by their current names (TypeAliases), so that is what the
+ * library keeps and saves. */
+void canonicalizeTypes(const Runtime &rt, ParsedFile &file)
+{
+  for (ParsedRecord &r : file.records) {
+    r.type = canonicalTypeName(rt, TypeNameKind::Block, r.type);
+    r.typeId = typeNamed(r.type);
+  }
+  for (ParsedAttachment &a : file.attachments) {
+    a.type = canonicalTypeName(rt, TypeNameKind::Attachment, a.type);
+    a.typeId = typeNamed(a.type);
+  }
+  for (ParsedSlot &s : file.slots) {
+    if (!s.nsName.empty()) {
+      s.nsName = canonicalTypeName(rt, TypeNameKind::Slot, s.nsName);
+      s.ns = typeNamed(s.nsName);
+    }
+  }
 }
 
 /* Takes the blob out of the file. */
@@ -182,6 +203,7 @@ loadLibrary(Library &lib, std::span<const uint8_t> bytes, const LoadOptions &opt
   if (!file.ok()) {
     return file.status();
   }
+  canonicalizeTypes(lib.runtime(), **file);
   const auto rekey =
       [&lib](const ParsedRecord &r, BlockId id, const RekeyContext &context) {
         return rekeyRecord(lib, r, id, context);
@@ -202,6 +224,7 @@ appendLibrary(Library &lib, std::span<const uint8_t> bytes, const AppendOptions 
   if (!file.ok()) {
     return file.status();
   }
+  canonicalizeTypes(lib.runtime(), **file);
   const auto rekey =
       [&lib](const ParsedRecord &r, BlockId id, const RekeyContext &context) {
         return rekeyRecord(lib, r, id, context);
