@@ -655,6 +655,16 @@ Kept as the work goes; each item says what changed from the design above and why
 - **`test_drive_random`'s oracle** is the same document saved, loaded and given a `SceneDrivers` of its own,
   instead of a naive evaluator: it checks the incremental sync against a sync from scratch, and the states of
   `G` against the direct pass, bitwise.
+- **The description has the driven objects' transform types,** so a channel that a type lacks, or of
+  another kind, is a diagnostic for every driven object, not only those of `G`, and a type change is seen.
+  A driven object whose type isn't registered gets a diagnostic, but isn't failed: it is MissingModel, as
+  in the direct pass.
+- **Bindings (step 6):** `bind/drive_facades.{h,cc}` keep the drivers in a Runtime extension
+  (`ScriptDrivers`); a TS `Session` calls `disableDrivers` when it closes. `addSceneGraph` and
+  `removeSceneGraph` run the commands. `test_drive_facades` tests the facades natively.
+- **The wasm test (`tests/wasm/drive.test.ts`) wasn't run here:** this worktree has no emsdk, and only the
+  pre-commit gate runs locally; CI runs the wasm suites. It was type-checked, with the TS layer, against the
+  TS that the native `coredcc_gen_ts` generates (the test app's own types stubbed).
 - **Not done yet:** a Scene made from a placeholder (B5) has code but no test; the foreach diagnostic has no
   test.
 

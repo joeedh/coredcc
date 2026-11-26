@@ -82,7 +82,7 @@ bool channelOf(const TransformType &type, std::string_view name, DriveKind &kind
 bool drive::Description::operator==(const Description &b) const
 {
   if (graphs.size() != b.graphs.size() || !sameList(objects, b.objects) ||
-      !sameList(notes, b.notes))
+      !sameList(driven, b.driven) || !sameList(notes, b.notes))
   {
     return false;
   }
@@ -222,6 +222,33 @@ drive::Description SceneDrivers::State::describe(Library &lib)
       o.parent = BlockId();
     }
   }
+  litestl::util::Map<BlockId, char> seen;
+  for (const GraphDesc &g : d.graphs) {
+    for (const Adapter &a : g.adapters) {
+      if (a.kind != AdapterKind::Drive || a.object.isNull() || !seen.add(a.object, 0)) {
+        continue;
+      }
+      ObjectDesc o;
+      o.id = a.object;
+      const BlockHandle h = lib.find(a.object);
+      const Datablock *b = lib.get(h);
+      const Transformable tr = b && b->state() == BlockState::Live
+                                   ? lib.query<Transformable>(h)
+                                   : Transformable();
+      o.transformable = bool(tr);
+      if (tr) {
+        ObjectInfo info;
+        ChannelBlock channels;
+        tr.read(info, channels);
+        if (rt->hasStickyError()) {
+          (void)rt->takeStickyError();
+        }
+        const TransformType *type = types.find(info.transformType);
+        o.type = type ? type->name().c_str() : "";
+      }
+      d.driven.append(std::move(o));
+    }
+  }
   return d;
 }
 
@@ -302,6 +329,13 @@ void SceneDrivers::State::rebuild(Library &lib)
 
   /* Then readers, time and drivers, one at a time in order: those that would close a
    * cycle are left out. */
+  litestl::util::Map<BlockId, const ObjectDesc *> typeOf;
+  for (const ObjectDesc &o : desc.driven) {
+    typeOf.add(o.id, &o);
+  }
+  for (const ObjectDesc &o : desc.objects) {
+    typeOf.add_overwrite(o.id, &o);
+  }
   litestl::util::Map<litestl::util::string, int> channelUses;
   for (int gi = 0; gi < int(desc.graphs.size()); gi++) {
     for (const Adapter &a : desc.graphs[gi].adapters) {
@@ -378,13 +412,11 @@ void SceneDrivers::State::rebuild(Library &lib)
         problem(a.object, why);
         continue;
       }
-      if (!target) {
-        continue; /* only the direct pass applies it: its type is checked then */
+      const ObjectDesc *const *found = typeOf.lookup_ptr(a.object);
+      if (!found || !(*found)->transformable) {
+        continue; /* nothing asks for its overrides */
       }
-      const ObjectDesc *o = nullptr;
-      for (const ObjectDesc &x : desc.objects) {
-        o = x.id == a.object ? &x : o;
-      }
+      const ObjectDesc *o = *found;
       const TransformType *type = o->type.empty() ? nullptr : types.find(o->type);
       DriveKind kind = DriveKind::None;
       if (!type || !channelOf(*type, a.channel.c_str(), kind) || kind != a.driveKind) {
@@ -397,8 +429,13 @@ void SceneDrivers::State::rebuild(Library &lib)
                       kindName(kind) + ", and a graph drives it with a " +
                       kindName(a.driveKind);
         diagnose(g.id, at, why);
-        problem(a.object, why);
+        if (type) { /* without a type it is MissingModel, as in the direct pass */
+          problem(a.object, why);
+        }
         continue;
+      }
+      if (!target) {
+        continue; /* only the direct pass applies it */
       }
       const std::string from = interiorKey(a, "value");
       const std::string to = std::string(kChannelPrefix) + a.channel.c_str();

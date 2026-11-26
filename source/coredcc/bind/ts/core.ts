@@ -200,6 +200,7 @@ export class Session implements Disposable {
     if (scriptSlots.depth > 0) throw new Error("Session: can't close the document from inside a command")
     for (const owned of [...(owners.get(this.ctx) ?? [])]) owned[Symbol.dispose]()
     owners.delete(this.ctx)
+    cd.disableDrivers(this.ctx)[Symbol.dispose]() /* before the Library goes */
     ;(this.ctx as unknown as {ptr: number}).ptr = 0
     const host = this.host
     this.host = undefined

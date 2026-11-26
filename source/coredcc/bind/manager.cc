@@ -2,6 +2,7 @@
 
 #include "coredcc/bind/catalog.h"
 #include "coredcc/bind/checked.h"
+#include "coredcc/bind/drive_facades.h"
 #include "coredcc/bind/facades.h"
 #include "coredcc/bind/foreign_command.h"
 #include "coredcc/bind/foreign_transform.h"
@@ -512,6 +513,9 @@ void addBindings(litestl::binding::BindingManager *mgr)
   addLayoutFacades(mgr);
   addLibraryFacades(mgr);
   addSceneFacades(mgr);
+  BIND_FACADE(mgr, "coredcc::enableDrivers", script::enableDrivers, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::disableDrivers", script::disableDrivers, MARGS("ctx"));
+  BIND_FACADE(mgr, "coredcc::driverDiagnostics", script::driverDiagnostics, MARGS("ctx"));
 }
 
 litestl::binding::BindingManager *bindings()

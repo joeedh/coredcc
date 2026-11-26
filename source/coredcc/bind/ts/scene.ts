@@ -672,3 +672,31 @@ export class Bvh {
     this.bvh[Symbol.dispose]()
   }
 }
+
+/* ---- graphs that drive objects ---- */
+
+/** Gives the document's Library drivers: the graphs its scenes list drive its objects. A Session takes them
+ * away when it closes. */
+export function enableDrivers(ctx: Context) {
+  check(cd.enableDrivers(ctx))
+}
+export function disableDrivers(ctx: Context) {
+  check(cd.disableDrivers(ctx))
+}
+/** The scene lists a graph block, undoably: it drives the document's objects. */
+export function addSceneGraph(ctx: Context, graph: Ref) {
+  invokeHere(ctx, `core.scene.addGraph(graph="${graph.text}")`)
+}
+export function removeSceneGraph(ctx: Context, graph: Ref) {
+  invokeHere(ctx, `core.scene.removeGraph(graph="${graph.text}")`)
+}
+/** Something in the listed graphs that can't work. `node` is a node path, "" for the graph. */
+export interface DriverDiagnostic {
+  graph: string
+  node: string
+  message: string
+}
+export function driverDiagnostics(ctx: Context): DriverDiagnostic[] {
+  return take(cd.driverDiagnostics(ctx), (s) => JSON.parse(s) as DriverDiagnostic[])
+}
+const invokeHere = (ctx: Context, invocation: string) => take(cd.invoke(ctx, invocation), (bag) => bagToJs(ctx, bag))

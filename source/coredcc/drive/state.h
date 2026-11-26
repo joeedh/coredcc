@@ -30,6 +30,8 @@ struct ObjectDesc {
   /** The transform type's name; empty for one that isn't registered. */
   std::string type;
   bool cycle = false;
+  /** Driven objects only: false if it isn't there, or isn't Transformable. */
+  bool transformable = true;
 
   bool operator==(const ObjectDesc &b) const = default;
 };
@@ -44,6 +46,9 @@ struct GraphDesc {
 struct Description {
   litestl::util::Vector<GraphDesc> graphs;
   litestl::util::Vector<ObjectDesc> objects;
+  /** The driven objects, with their types, so that a channel is checked when they change.
+   */
+  litestl::util::Vector<ObjectDesc> driven;
   /** What the scan found wrong, as text: part of what must be the same. */
   litestl::util::Vector<std::string> notes;
 

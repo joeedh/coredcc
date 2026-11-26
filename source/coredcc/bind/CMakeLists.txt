@@ -1,6 +1,7 @@
 coredcc_library(coredcc_bind
   SOURCES
     catalog.cc
+    drive_facades.cc
     facades.cc
     foreign_command.cc
     foreign_transform.cc
@@ -15,6 +16,7 @@ coredcc_library(coredcc_bind
     scene_facades.cc
     script_table.cc
   DEPS
+    coredcc_drive
     coredcc_graph
     coredcc_layout
     coredcc_scene
