@@ -52,7 +52,8 @@ void writeXml(const Layout &l, int i, std::string &out)
   out += std::string("<") + layoutKindName(n.kind);
   for (uint32_t j = 0; j < n.attrCount; j++) {
     const LayoutAttr &a = l.attrs()[n.attrBegin + j];
-    if (a.id == Id::Text || (a.id == Id::Label && n.kind == LayoutKind::Tool && i % 2)) {
+    if (a.id == Id::Text || (a.id == Id::Label && n.kind == LayoutKind::Command && i % 2))
+    {
       text = a.value.c_str();
       continue;
     }
@@ -169,10 +170,10 @@ bool check(std::string_view xml)
 
 const char *const kCorpus[] = {
     R"x(<?xml version="1.0"?><layout path="a.b" id="r"><panel label="x" closed="true"><prop path="c"
- visibleIf="!d" widget="w"/><row><tool invocation="x.y(z='W')">T &amp; U</tool><sep/></row></panel>
+ visibleIf="!d" widget="w"/><row><command invocation="x.y(z='W')">T &amp; U</command><sep/></row></panel>
 <tabs path="/q"><tab label="1"><label>t</label></tab></tabs></layout>)x",
     R"(<layout><custom tag="t" a="1"><b><c x='y'/> </b><d> text </d></custom><!-- c --></layout>)",
-    R"(<layout><toolOptions target="a.b" enabledIf="e[F]"/><column expand="false"/></layout>)",
+    R"(<layout><commandOptions target="a.b" enabledIf="e[F]"/><column expand="false"/></layout>)",
 };
 
 const char *const kPieces[] = {
@@ -285,7 +286,7 @@ static void test_random_layouts()
         s = s.prop(paths[rng.below(2)]);
         break;
       case 4:
-        s = s.tool("a.b(c='<&>')", rng.below(2) ? "x &<" : "");
+        s = s.command("a.b(c='<&>')", rng.below(2) ? "x &<" : "");
         break;
       case 5:
         s = s.custom("t").set("free", text()).set("z.z-z", text());
@@ -375,7 +376,7 @@ static void test_bounds()
           true,
           10);
   bounded("long prefixes of tools",
-          in(repeated("<tool invocation='a'/>", 1 << 18), segments),
+          in(repeated("<command invocation='a'/>", 1 << 18), segments),
           false,
           10);
   bounded("skipped", "<layout version='2'>" + repeated("<x a='1'>", room / 2), false, 5);
@@ -410,7 +411,7 @@ static void test_bounds()
   bounded("a long value", in("<label label='" + repeated("&lt;", room) + "'/>"), true, 5);
   bounded("a long path", in("<prop path='" + repeated("a.", room) + "a'/>"), false, 5);
   bounded("a long invocation",
-          in("<tool invocation='a(" + repeated("b=1 ", room) + ")'/>"),
+          in("<command invocation='a(" + repeated("b=1 ", room) + ")'/>"),
           false,
           5);
   bounded("a long name", in("<" + repeated("panel", room) + "/>"), false, 5);

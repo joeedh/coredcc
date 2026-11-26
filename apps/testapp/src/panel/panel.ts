@@ -69,9 +69,9 @@ export class Panel {
   /** By the reader's index. */
   private readonly shows: Show[][] = []
   private last: PathChange[] = []
-  private readonly tools: cdcc.ToolChecks
-  /** By ToolChecks' index. */
-  private readonly toolEntries: Entry[] = []
+  private readonly checks: cdcc.InvocationChecks
+  /** By InvocationChecks' index. */
+  private readonly commandEntries: Entry[] = []
   /** In preorder, as the issues count nodes. */
   private nodes = 0
   private readonly indices = new Map<string, number>()
@@ -91,16 +91,16 @@ export class Panel {
     const layout = cdcc.parseLayout(xml)
     this.issues = cdcc.validateLayout(ctx, xml)
     this.reader = new cdcc.PathReader(ctx)
-    this.tools = new cdcc.ToolChecks(ctx)
+    this.checks = new cdcc.InvocationChecks(ctx)
     try {
       this.takeIds(layout)
       this.root = this.build(layout, undefined)
       this.reader.watch()
       for (const v of this.reader.takeAll({names: true})) this.show(v, true)
-      this.checkTools()
+      this.checkCommands()
     } catch (e) {
       this.reader[Symbol.dispose]()
-      this.tools[Symbol.dispose]()
+      this.checks[Symbol.dispose]()
       throw e
     }
     container.replaceChildren(this.root.el)
@@ -117,7 +117,7 @@ export class Panel {
   dispose() {
     clearInterval(this.timer)
     this.reader[Symbol.dispose]()
-    this.tools[Symbol.dispose]()
+    this.checks[Symbol.dispose]()
     this.root.el.remove()
   }
 
@@ -125,13 +125,13 @@ export class Panel {
   refresh() {
     cdcc.flushChanges(this.ctx)
     for (const v of this.reader.takeChanges({names: true})) this.show(v, v.metaChanged)
-    this.checkTools()
+    this.checkCommands()
   }
 
   /* What a tool's canRun looks at isn't known, so each is asked. */
-  private checkTools() {
-    for (const {index, reason} of this.tools.changed()) {
-      const e = this.toolEntries[index]
+  private checkCommands() {
+    for (const {index, reason} of this.checks.changed()) {
+      const e = this.commandEntries[index]
       e.reason = reason
       e.button!.title = reason ?? e.title ?? ''
       this.applyEnabled(e)
@@ -161,9 +161,9 @@ export class Panel {
     const el = document.createElement('div')
     const id = node.id ?? this.newId(node.kind)
     const e: Entry = {id, node, el, parent, children: [], enabled: true, enabledHere: true, wanted: true, there: true}
-    /* The props of a toolOptions aren't the layout's. */
+    /* The props of a commandOptions aren't the layout's. */
     const issues = this.issues.filter((i) => i.node === this.nodes && i.severity === 'Error')
-    if (parent?.node.kind !== 'toolOptions') this.nodes++
+    if (parent?.node.kind !== 'commandOptions') this.nodes++
     el.className = ['node', node.kind, node.expand ? 'expand' : '', node.class ?? ''].filter((c) => c).join(' ')
     el.dataset.id = id
     if (node.description) el.title = node.description
@@ -181,11 +181,11 @@ export class Panel {
       case 'prop':
         this.prop(e, node.effectivePath!)
         break
-      case 'tool':
-        this.tool(e)
+      case 'command':
+        this.command(e)
         break
-      case 'toolOptions':
-        this.toolOptions(e)
+      case 'commandOptions':
+        this.commandOptions(e)
         break
       case 'label':
         caption(el, node.icon, node.label ?? '')
@@ -306,7 +306,7 @@ export class Panel {
     })
   }
 
-  private tool(e: Entry) {
+  private command(e: Entry) {
     const button = document.createElement('button')
     const id = e.node.invocation!.split('(')[0].trim()
     caption(button, e.node.icon, e.node.label ?? this.commandName(id), e.node.iconsOnly)
@@ -316,7 +316,7 @@ export class Panel {
     e.button = button
     e.title = button.title
     e.el.append(button)
-    this.toolEntries[this.tools.add(e.node.prefix ?? '', e.node.invocation!)] = e
+    this.commandEntries[this.checks.add(e.node.prefix ?? '', e.node.invocation!)] = e
   }
 
   private commandName(id: string): string {
@@ -338,7 +338,7 @@ export class Panel {
   }
 
   /* The command's last-used inputs. */
-  private toolOptions(e: Entry) {
+  private commandOptions(e: Entry) {
     const path = e.node.optionsPath!
     let members: string[]
     try {
@@ -383,7 +383,7 @@ export class Panel {
   private applyEnabled(e: Entry) {
     e.enabled = (e.parent?.enabled ?? true) && e.enabledHere
     e.el.classList.toggle('disabled', !e.enabled)
-    if (e.button && e.node.kind === 'tool') e.button.disabled = !e.enabled || e.reason !== undefined
+    if (e.button && e.node.kind === 'command') e.button.disabled = !e.enabled || e.reason !== undefined
     for (const input of e.widget?.inputs.values() ?? []) {
       input.disabled = !e.enabled || e.meta?.readOnly === true
     }

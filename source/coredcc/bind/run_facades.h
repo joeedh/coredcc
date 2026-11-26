@@ -48,32 +48,33 @@ Status canRunAt(Context &ctx,
                 const string &id,
                 const RunInputs &inputs,
                 bool lastUsed);
-/** canRunAt, for an invocation: a layout's tool. */
+/** canRunAt, for an invocation: a layout's command. */
 Status canInvokeAt(Context &ctx, const string &prefix, const string &invocation);
 
 /** canInvokeAt of many at once. Copies share it. */
-class ToolChecks {
+class InvocationChecks {
 public:
   struct Core;
-  ToolChecks();
+  InvocationChecks();
   Core &core() const
   {
     return *core_;
   }
-  static const litestl::binding::types::Struct<ToolChecks> *defineBindings();
+  static const litestl::binding::types::Struct<InvocationChecks> *defineBindings();
 
 private:
   std::shared_ptr<Core> core_;
 };
 
-ToolChecks newToolChecks();
+InvocationChecks newInvocationChecks();
 /** Its index. An error for a prefix or an invocation that doesn't parse. */
-IntResult
-toolChecksAdd(const ToolChecks &tools, const string &prefix, const string &invocation);
+IntResult invocationChecksAdd(const InvocationChecks &checks,
+                              const string &prefix,
+                              const string &invocation);
 /** Asks of each. A JSON array of `[index, reason]` of those whose answer isn't what it
  * was at the last call, or that are new; `reason` is the error's message, or null if it
  * can run. */
-StringResult toolChecksRun(Context &ctx, const ToolChecks &tools);
+StringResult invocationChecksRun(Context &ctx, const InvocationChecks &checks);
 
 /** Starts an Interactive command. Not from a script's slot, as the calls below. */
 Status beginInteractiveAt(Context &ctx,

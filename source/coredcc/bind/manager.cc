@@ -53,7 +53,7 @@ void addTypes(litestl::binding::BindingManager *mgr)
   mgr->add(Bind<GraphResult>());
   mgr->add(Bind<PathReader>());
   mgr->add(Bind<RunInputs>());
-  mgr->add(Bind<ToolChecks>());
+  mgr->add(Bind<InvocationChecks>());
   mgr->add(Bind<ScriptBytes>());
   mgr->add(Bind<SaveResult>());
   mgr->add(Bind<mat4d>());
@@ -198,13 +198,15 @@ void addLayoutFacades(litestl::binding::BindingManager *mgr)
               "coredcc::canInvokeAt",
               script::canInvokeAt,
               MARGS("ctx", "prefix", "invocation"));
-  BIND_FACADE(mgr, "coredcc::newToolChecks", script::newToolChecks, MARGS());
+  BIND_FACADE(mgr, "coredcc::newInvocationChecks", script::newInvocationChecks, MARGS());
   BIND_FACADE(mgr,
-              "coredcc::toolChecksAdd",
-              script::toolChecksAdd,
-              MARGS("tools", "prefix", "invocation"));
-  BIND_FACADE(
-      mgr, "coredcc::toolChecksRun", script::toolChecksRun, MARGS("ctx", "tools"));
+              "coredcc::invocationChecksAdd",
+              script::invocationChecksAdd,
+              MARGS("checks", "prefix", "invocation"));
+  BIND_FACADE(mgr,
+              "coredcc::invocationChecksRun",
+              script::invocationChecksRun,
+              MARGS("ctx", "checks"));
   BIND_FACADE(mgr,
               "coredcc::beginInteractiveAt",
               script::beginInteractiveAt,

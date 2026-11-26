@@ -31,7 +31,7 @@ describe('coredcc wasm-st UI', () => {
   test('layouts: nodes, issues, and a tool under a prefix', () => {
     const xml = `<layout path="items['Cube']">
   <prop path="weight" enabledIf="!/enabled"/>
-  <tool invocation="ts.weigh(by=2)">Weigh</tool>
+  <command invocation="ts.weigh(by=2)">Weigh</command>
 </layout>`
     const root = cdcc.parseLayout(xml)
     assert.equal(root.kind, 'layout')
@@ -406,7 +406,7 @@ describe('coredcc wasm-st UI', () => {
     assert.match(cdcc.canInvoke(ctx, '', 'ts.weigh(')!, /./)
     assert.equal(cdcc.get(ctx, cube), 1)
 
-    const tools = new cdcc.ToolChecks(ctx)
+    const tools = new cdcc.InvocationChecks(ctx)
     assert.equal(tools.add('/items["Cube"]', 'ts.weigh(by=5)'), 0)
     assert.equal(tools.add('/items["Ball"]', 'ts.weigh(by=50)'), 1)
     assert.throws(() => tools.add('a..b', 'ts.weigh'), ScriptError)
@@ -424,10 +424,10 @@ describe('coredcc wasm-st UI', () => {
     tools[Symbol.dispose]()
     assert.throws(() => tools.changed(), /disposed/)
     const other = open()
-    const late = new cdcc.ToolChecks(other.ctx)
+    const late = new cdcc.InvocationChecks(other.ctx)
     other[Symbol.dispose]()
     assert.throws(() => late.add('', 'ts.weigh'), /disposed/)
-    assert.throws(() => new cdcc.ToolChecks(other.ctx), /disposed/)
+    assert.throws(() => new cdcc.InvocationChecks(other.ctx), /disposed/)
   })
 
   test('what is made for a call is given back by its end', async () => {
@@ -453,9 +453,9 @@ describe('coredcc wasm-st UI', () => {
     assert.equal(await bytes(() => assert.throws(() => cdcc.run(ctx, 'ts.weigh', {'': 1}))), 0)
     const odd = {note: 'x', by: {} as never} /* refused before it runs */
     assert.equal(await bytes(() => assert.throws(() => cdcc.run(ctx, 'ts.weigh', odd), TypeError)), 0)
-    const checks = (end: (tools: cdcc.ToolChecks, other: Session) => void) => () => {
+    const checks = (end: (tools: cdcc.InvocationChecks, other: Session) => void) => () => {
       const other = open()
-      const tools = new cdcc.ToolChecks(other.ctx)
+      const tools = new cdcc.InvocationChecks(other.ctx)
       tools.add('', 'ts.weigh(by=1)')
       tools.changed()
       end(tools, other)

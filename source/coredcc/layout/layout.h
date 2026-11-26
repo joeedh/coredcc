@@ -1,7 +1,7 @@
 #pragma once
 
 /** \file
- * UI layouts: a tree of panels, properties and tools that frontends draw (architecture
+ * UI layouts: a tree of panels, properties and commands that frontends draw (architecture
  * §12). Layouts come from XML (layout/xml.h) or from C++ (layout/builder.h).
  */
 
@@ -34,9 +34,9 @@ enum class LayoutKind : uint8_t {
   /** A property: `path`. */
   Prop,
   /** A button that runs a command: `invocation`. */
-  Tool,
-  /** The options of a command or tool: `target`. */
-  ToolOptions,
+  Command,
+  /** The options of a command: `target`. */
+  CommandOptions,
   /** Text: `label`. */
   Label,
   Separator,
@@ -47,8 +47,8 @@ enum class LayoutKind : uint8_t {
 enum class LayoutAttrId : uint8_t {
   /** Layout: the version of the format it is written for, from 1 (the default). */
   Version,
-  /** Of a Prop, the property. Of a container, the prefix of what is in it. Of a Tool or a
-   * ToolOptions, the prefix its command runs with, instead of that around it. */
+  /** Of a Prop, the property. Of a container, the prefix of what is in it. Of a Command
+   * or a CommandOptions, the prefix its command runs with, instead of that around it. */
   Path,
   Label,
   Icon,
@@ -60,9 +60,9 @@ enum class LayoutAttrId : uint8_t {
   /** A condition: a path, with `!` before it to negate it. See LayoutCondition. */
   VisibleIf,
   EnabledIf,
-  /** Tool: as in parse/invocation.h. */
+  /** Command: as in parse/invocation.h. */
   Invocation,
-  /** ToolOptions: a command's id. */
+  /** CommandOptions: a command's id. */
   Target,
   /** Prop: a hint for the frontend, of any form. */
   Widget,
@@ -70,7 +70,7 @@ enum class LayoutAttrId : uint8_t {
   Closed,
   /** Column, Row and Prop: a bool, fill the space there is. */
   Expand,
-  /** Prop and Tool: a bool. */
+  /** Prop and Command: a bool. */
   IconsOnly,
   /** Prop: a bool, true by default. */
   ShowLabel,
@@ -159,8 +159,8 @@ struct LayoutLimits {
   static constexpr size_t kMaxBytes = 1u << 20;
   /** Of a path joined with the prefixes around it. */
   static constexpr size_t kMaxPathBytes = 1024;
-  /** Of all joined paths, as text: those of `path`s and conditions, and tools' prefixes.
-   * It bounds the JSON to a few times that and the text. */
+  /** Of all joined paths, as text: those of `path`s and conditions, and commands'
+   * prefixes. It bounds the JSON to a few times that and the text. */
   static constexpr size_t kMaxJoinedBytes = 2u << 20;
   /** More of LayoutSkipped aren't kept. */
   static constexpr int kMaxSkipped = 1000;
@@ -176,20 +176,21 @@ struct LayoutLimits {
  * unknown names are skipped, with what is in them, and are in `skipped`. Otherwise they
  * are errors. A later version that gives a name another meaning, or takes other values
  * for an attribute, uses another name. `list`, `menu`, `include` and `slot` are reserved
- * for elements of later versions, also in a Custom. `data-` attributes are the host's
- * own, and no version defines one.
+ * for elements of later versions, also in a Custom. `tool` and `toolOptions`, the old
+ * names of `command` and `commandOptions`, are errors that name the new element, in the
+ * text of any version. `data-` attributes are the host's own, and no version defines one.
  *
  * **Prefixes:** the `path` of a container is a prefix, joined with those of the
  * containers it is in, unless it starts with `/`, which means the Context's root. All of
  * a node's own paths, its `path` and its conditions, are relative to the prefix of its
- * parent. A Tool's command runs with that prefix, or with the Tool's own `path`, as the
- * Context's.
+ * parent. A Command's command runs with that prefix, or with the Command's own `path`, as
+ * the Context's.
  *
  * **What isn't there:** a container whose own `path` names nothing now (a null pointer,
  * an item that is gone: containerIsThere) is to be hidden, as if its VisibleIf were
  * false, unless validateLayout has an Error about that path, which is to be shown. A
- * Custom is the host's to decide about. A Prop without a value shows why, and a Tool is
- * disabled if canInvoke says so.
+ * Custom is the host's to decide about. A Prop without a value shows why, and a Command
+ * is disabled if canInvoke says so.
  */
 class Layout {
 public:
@@ -232,9 +233,9 @@ public:
    * with the Layout. */
   const Path &prefixOf(int node) const;
   /** The node's `path`, joined: a property's, or the prefix of a container's children, or
-   * of a Tool's command. With no `path`, its prefixOf. */
+   * of a Command's command. With no `path`, its prefixOf. */
   const Path &effectivePath(int node) const;
-  /** Of a ToolOptions: the struct of its command's last-used inputs,
+  /** Of a CommandOptions: the struct of its command's last-used inputs,
    * `/commandDefaults["id"]`. The Context's root needs LastUsedStore::addCollectionTo. */
   Path optionsPath(int node) const;
   /** Its VisibleIf or EnabledIf, joined. False without one. */
@@ -266,10 +267,11 @@ joinLayoutPath(const Path &prefix, std::string_view path, size_t *errorOffset = 
  * - its attributes by name, the bools as booleans. The free ones are in `attrs`;
  * - `effectivePath` of a node with a `path`: the joined path. Joined paths start with
  * `/`;
- * - `optionsPath` of a ToolOptions: what has its command's inputs as members;
+ * - `optionsPath` of a CommandOptions: what has its command's inputs as members;
  * - `visibleIf` and `enabledIf`: objects with the joined `path`, and `not` if it is
  * negated;
- * - `prefix` of a Tool or ToolOptions, unless it is the root: what its command runs with;
+ * - `prefix` of a Command or CommandOptions, unless it is the root: what its command runs
+ * with;
  * - `children`, if there are any.
  */
 std::string layoutToJson(const Layout &layout);

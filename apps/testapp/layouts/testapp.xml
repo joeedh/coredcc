@@ -26,11 +26,11 @@
       <prop path="name" id="itemName"/>
       <prop path="weight" id="weight"/>
       <prop path="other" id="other"/>
-      <tool invocation="testapp.weigh(by=2)" id="weigh" enabledIf="/enabled">Weigh</tool>
+      <command invocation="testapp.weigh(by=2)" id="weigh" enabledIf="/enabled">Weigh</command>
     </tab>
     <tab label="Tools" id="toolTab">
-      <tool invocation="testapp.addCount(amount=3)" id="addThree"/>
-      <toolOptions target="testapp.addCount" id="addOptions"/>
+      <command invocation="testapp.addCount(amount=3)" id="addThree"/>
+      <commandOptions target="testapp.addCount" id="addOptions"/>
     </tab>
   </tabs>
   <separator/>

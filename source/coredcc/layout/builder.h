@@ -6,7 +6,7 @@
  *     LayoutBuilder b;
  *     LayoutScope panel = b.root().panel("Transform").path("objects.active");
  *     panel.prop("location");
- *     panel.row().tool("object.clearLocation()", "Clear").visibleIf("!locked");
+ *     panel.row().command("object.clearLocation()", "Clear").visibleIf("!locked");
  *     Result<Layout> layout = b.finish();
  */
 
@@ -33,8 +33,8 @@ public:
   LayoutScope tabs();
   LayoutScope tab(std::string_view label);
   LayoutScope prop(std::string_view path);
-  LayoutScope tool(std::string_view invocation, std::string_view label = {});
-  LayoutScope toolOptions(std::string_view target);
+  LayoutScope command(std::string_view invocation, std::string_view label = {});
+  LayoutScope commandOptions(std::string_view target);
   LayoutScope label(std::string_view text);
   LayoutScope separator();
   LayoutScope custom(std::string_view tag);

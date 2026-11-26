@@ -5,7 +5,7 @@ import type {Context} from 'coredcc-gen/coredcc/Context'
 import * as cd from 'coredcc-gen/coredcc/functions'
 import type {RunInputs} from 'coredcc-gen/coredcc/RunInputs'
 import type {Status} from 'coredcc-gen/coredcc/Status'
-import type {ToolChecks as RawChecks} from 'coredcc-gen/coredcc/ToolChecks'
+import type {InvocationChecks as RawChecks} from 'coredcc-gen/coredcc/InvocationChecks'
 
 import {
   bagToJs,
@@ -80,25 +80,25 @@ export function canInvoke(ctx: Context, prefix: string, invocation: string): str
   return reason(cd.canInvokeAt(ctx, prefix, invocation))
 }
 
-/** The tools of a UI: canInvoke of each in one call. Disposed of with the session at the latest. */
-export class ToolChecks implements Disposable {
+/** The invocations of a UI: canInvoke of each in one call. Disposed of with the session at the latest. */
+export class InvocationChecks implements Disposable {
   private raw: RawChecks | undefined
   constructor(private readonly ctx: Context) {
     checkCtx(ctx)
     disposeWith(ctx, this)
-    this.raw = cd.newToolChecks()
+    this.raw = cd.newInvocationChecks()
   }
   private get checks(): RawChecks {
-    if (!this.raw) throw new Error('the ToolChecks were disposed')
+    if (!this.raw) throw new Error('the InvocationChecks were disposed')
     return this.raw
   }
   /** Its index. Throws if the prefix or the invocation doesn't parse. */
   add(prefix: string, invocation: string): number {
-    return take(cd.toolChecksAdd(this.checks, prefix, invocation), Number)
+    return take(cd.invocationChecksAdd(this.checks, prefix, invocation), Number)
   }
   /** Those whose answer changed since the last call, or that are new, with why they can't run. */
   changed(): {index: number; reason?: string}[] {
-    const json = take(cd.toolChecksRun(this.ctx, this.checks), (s) => s)
+    const json = take(cd.invocationChecksRun(this.ctx, this.checks), (s) => s)
     return (JSON.parse(json) as [number, string | null][]).map(([index, why]) =>
       why === null ? {index} : {index, reason: why}
     )

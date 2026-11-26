@@ -61,6 +61,8 @@ bool mayHave(LayoutKind kind, LayoutAttrId id);
 bool isContainer(LayoutKind kind);
 /** Of an element of a later version. */
 bool isReservedName(std::string_view name);
+/** The current name of an element that was renamed, or empty. */
+std::string_view renamedTo(std::string_view name);
 /** `name` as an attribute of `kind`: Free for the host's own, else an error. */
 Result<LayoutAttrId> attrOf(LayoutKind kind, std::string_view name);
 /** [A-Za-z_], and [0-9.-] if it isn't the first. */

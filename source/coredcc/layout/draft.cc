@@ -34,8 +34,8 @@ constexpr KindInfo kKinds[] = {
     {"tabs", true, Id::Free},
     {"tab", true, Id::Free},
     {"prop", false, Id::Path},
-    {"tool", false, Id::Invocation},
-    {"toolOptions", false, Id::Target},
+    {"command", false, Id::Invocation},
+    {"commandOptions", false, Id::Target},
     {"label", false, Id::Label},
     {"separator", false, Id::Free},
     {"custom", true, Id::Tag},
@@ -54,8 +54,8 @@ constexpr uint32_t kAll = (1u << (uint32_t(Kind::Custom) + 1)) - 1;
 constexpr uint32_t kTexts = bits(Kind::Panel,
                                  Kind::Tab,
                                  Kind::Prop,
-                                 Kind::Tool,
-                                 Kind::ToolOptions,
+                                 Kind::Command,
+                                 Kind::CommandOptions,
                                  Kind::Label,
                                  Kind::Custom);
 
@@ -77,8 +77,8 @@ constexpr AttrInfo kAttrs[] = {
           Kind::Tabs,
           Kind::Tab,
           Kind::Prop,
-          Kind::Tool,
-          Kind::ToolOptions,
+          Kind::Command,
+          Kind::CommandOptions,
           Kind::Custom)},
     {"label", Form::Text, kTexts},
     {"icon", Form::Text, kTexts},
@@ -87,12 +87,12 @@ constexpr AttrInfo kAttrs[] = {
     {"class", Form::Text, kAll},
     {"visibleIf", Form::Condition, kAll & ~bit(Kind::Layout)},
     {"enabledIf", Form::Condition, kAll & ~bit(Kind::Layout)},
-    {"invocation", Form::Invocation, bit(Kind::Tool)},
-    {"target", Form::NonEmpty, bit(Kind::ToolOptions)},
+    {"invocation", Form::Invocation, bit(Kind::Command)},
+    {"target", Form::NonEmpty, bit(Kind::CommandOptions)},
     {"widget", Form::NonEmpty, bit(Kind::Prop)},
     {"closed", Form::Bool, bit(Kind::Panel)},
     {"expand", Form::Bool, bits(Kind::Column, Kind::Row, Kind::Prop)},
-    {"iconsOnly", Form::Bool, bits(Kind::Prop, Kind::Tool)},
+    {"iconsOnly", Form::Bool, bits(Kind::Prop, Kind::Command)},
     {"showLabel", Form::Bool, bit(Kind::Prop)},
     {"tag", Form::NonEmpty, bit(Kind::Custom)},
     {"text", Form::Text, bit(Kind::Custom)},
@@ -100,6 +100,12 @@ constexpr AttrInfo kAttrs[] = {
 };
 
 constexpr std::string_view kReserved[] = {"include", "list", "menu", "slot"};
+
+/* Elements that were renamed: old name, new name. */
+constexpr std::string_view kRenamed[][2] = {
+    {"tool", "command"},
+    {"toolOptions", "commandOptions"},
+};
 
 /* Of the host's own attributes, on any kind. */
 bool isData(std::string_view name)
@@ -338,7 +344,7 @@ private:
       }
     }
     const DraftNode &n = nodes_[i];
-    return (n.kind != Kind::Tool && n.kind != Kind::ToolOptions) ||
+    return (n.kind != Kind::Command && n.kind != Kind::CommandOptions) ||
            total(i, n.offset, prefix_[i].size());
   }
 
@@ -394,6 +400,16 @@ bool isReservedName(std::string_view name)
 {
   return std::find(std::begin(kReserved), std::end(kReserved), name) !=
          std::end(kReserved);
+}
+
+std::string_view renamedTo(std::string_view name)
+{
+  for (const auto &r : kRenamed) {
+    if (r[0] == name) {
+      return r[1];
+    }
+  }
+  return {};
 }
 
 std::vector<std::string_view> kindNames()

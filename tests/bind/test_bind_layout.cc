@@ -79,12 +79,12 @@ static void test_issues()
   test_assert(is(
       sc::validateLayout(s.ctx,
                          "<layout>\n <prop path='tool.strenth'/>\n"
-                         "<tool label='\xC3\xA9' invocation='test.ad'/></layout>"),
+                         "<command label='\xC3\xA9' invocation='test.ad'/></layout>"),
       "[{\"severity\":\"Error\",\"line\":2,\"column\":8,\"node\":1,\"code\":\"NotFound\","
       "\"message\":\"<prop> path: no member 'strenth' in Tool (at offset 4)\","
       "\"suggestions\":[\"strength\"]},"
-      "{\"severity\":\"Error\",\"line\":3,\"column\":17,\"node\":2,\"code\":\"NotFound\","
-      "\"message\":\"<tool> invocation: no command 'test.ad'\","
+      "{\"severity\":\"Error\",\"line\":3,\"column\":20,\"node\":2,\"code\":\"NotFound\","
+      "\"message\":\"<command> invocation: no command 'test.ad'\","
       "\"suggestions\":[\"test.add\"]}]"));
   test_assert(!sc::validateLayout(s.ctx, "<layout>").status.ok());
   /* The root is the Context's, whatever its prefix. */

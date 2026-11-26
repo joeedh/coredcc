@@ -7,7 +7,7 @@
  *       <panel label="Transform">
  *         <prop path="location"/>
  *         <row visibleIf="!locked">
- *           <tool invocation="object.clearLocation()">Clear</tool>
+ *           <command invocation="object.clearLocation()">Clear</command>
  *         </row>
  *       </panel>
  *     </layout>
@@ -16,8 +16,9 @@
  * named as layoutAttrName says, or start with `data-`. Others are errors, except on a
  * `custom` and in one, where an element of another name is a Custom with that tag, and in
  * the text of a newer version, where they are skipped (see Layout).
- * - Text is allowed in `label` and `tool`, where it is the label, and in `custom`. Space
- * around it is dropped; in `label` and `tool`, space inside it becomes one blank.
+ * - Text is allowed in `label` and `command`, where it is the label, and in `custom`.
+ * Space around it is dropped; in `label` and `command`, space inside it becomes one
+ * blank.
  * - Comments, the five entities, a byte order mark and an `<?xml?>` declaration are
  * allowed. DOCTYPE, CDATA, numeric references, namespaces and processing instructions
  * aren't.

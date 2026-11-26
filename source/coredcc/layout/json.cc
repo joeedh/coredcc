@@ -65,10 +65,11 @@ writeNode(JsonWriter &out, const Layout &layout, int i, const std::string &aroun
   if (free) {
     out.endObject();
   }
-  if (n.kind == LayoutKind::ToolOptions) {
+  if (n.kind == LayoutKind::CommandOptions) {
     out.key("optionsPath").string(layout.optionsPath(i).toString());
   }
-  if ((n.kind == LayoutKind::Tool || n.kind == LayoutKind::ToolOptions) && within != "/")
+  if ((n.kind == LayoutKind::Command || n.kind == LayoutKind::CommandOptions) &&
+      within != "/")
   {
     out.key("prefix").string(within);
   }

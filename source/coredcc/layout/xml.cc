@@ -21,7 +21,7 @@ bool isSpace(char c)
 
 bool hasText(LayoutKind kind)
 {
-  return kind == LayoutKind::Label || kind == LayoutKind::Tool ||
+  return kind == LayoutKind::Label || kind == LayoutKind::Command ||
          kind == LayoutKind::Custom;
 }
 
@@ -312,6 +312,14 @@ private:
     }
     const bool inCustom = n.parent >= 0 && nodes_[n.parent].kind == LayoutKind::Custom;
     const bool known = layout_detail::isKindName(tag, n.kind);
+    if (const std::string_view now = layout_detail::renamedTo(tag); !now.empty()) {
+      /* In any version, and in a Custom: a skip would hide the rename. */
+      return fail(
+          from,
+          Status::error(
+              StatusCode::InvalidArgument,
+              ("<" + std::string(tag) + "> is now <" + std::string(now) + ">").c_str()));
+    }
     if (!known) {
       const bool reserved = layout_detail::isReservedName(tag);
       if (!inCustom || reserved) {

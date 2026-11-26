@@ -24,20 +24,20 @@ struct RunInputs::Core {
   std::vector<std::pair<std::string, PropValue>> values;
 };
 
-struct ToolChecks::Core {
-  struct Tool {
+struct InvocationChecks::Core {
+  struct Entry {
     Path prefix;
     Invocation invocation;
     /** Nothing before the first call; "" if it can run. */
     std::optional<std::string> answer;
   };
-  std::vector<Tool> tools;
+  std::vector<Entry> entries;
 };
 
 RunInputs::RunInputs() : core_(std::make_shared<Core>())
 {
 }
-ToolChecks::ToolChecks() : core_(std::make_shared<Core>())
+InvocationChecks::InvocationChecks() : core_(std::make_shared<Core>())
 {
 }
 
@@ -57,9 +57,10 @@ const litestl::binding::types::Struct<RunInputs> *RunInputs::defineBindings()
   return shared<RunInputs>("coredcc::RunInputs");
 }
 
-const litestl::binding::types::Struct<ToolChecks> *ToolChecks::defineBindings()
+const litestl::binding::types::Struct<InvocationChecks> *
+InvocationChecks::defineBindings()
 {
-  return shared<ToolChecks>("coredcc::ToolChecks");
+  return shared<InvocationChecks>("coredcc::InvocationChecks");
 }
 
 RunInputs newRunInputs()
@@ -185,46 +186,47 @@ Status canInvokeAt(Context &ctx, const string &prefix, const string &invocation)
   return under(ctx, prefix, [&]() -> Status { return canInvoke(ctx, view(invocation)); });
 }
 
-ToolChecks newToolChecks()
+InvocationChecks newInvocationChecks()
 {
-  return ToolChecks();
+  return InvocationChecks();
 }
 
-IntResult
-toolChecksAdd(const ToolChecks &tools, const string &prefix, const string &invocation)
+IntResult invocationChecksAdd(const InvocationChecks &checks,
+                              const string &prefix,
+                              const string &invocation)
 {
-  ToolChecks::Core::Tool tool;
+  InvocationChecks::Core::Entry entry;
   if (prefix.size() > 0) {
     Result<Path> path = parsePath(view(prefix));
     if (!path.ok()) {
       return failed<IntResult>(path.status());
     }
-    tool.prefix = std::move(path).value();
+    entry.prefix = std::move(path).value();
   }
   Result<Invocation> inv = parseInvocation(view(invocation));
   if (!inv.ok()) {
     return failed<IntResult>(inv.status());
   }
-  tool.invocation = std::move(inv).value();
-  tools.core().tools.push_back(std::move(tool));
-  return ok<IntResult>(int64_t(tools.core().tools.size()) - 1);
+  entry.invocation = std::move(inv).value();
+  checks.core().entries.push_back(std::move(entry));
+  return ok<IntResult>(int64_t(checks.core().entries.size()) - 1);
 }
 
-StringResult toolChecksRun(Context &ctx, const ToolChecks &tools)
+StringResult invocationChecksRun(Context &ctx, const InvocationChecks &checks)
 {
   if (Status s = slotGate(ctx, "canInvoke", {}); !s.ok()) {
     return failed<StringResult>(std::move(s));
   }
   JsonWriter out;
   out.beginArray();
-  /* By index: a script's canRun may add tools. */
-  for (size_t i = 0; i < tools.core().tools.size(); i++) {
-    const Path prefix = tools.core().tools[i].prefix;
-    const Invocation invocation = tools.core().tools[i].invocation;
+  /* By index: a script's canRun may add more. */
+  for (size_t i = 0; i < checks.core().entries.size(); i++) {
+    const Path prefix = checks.core().entries[i].prefix;
+    const Invocation invocation = checks.core().entries[i].invocation;
     PrefixScope scope(ctx, prefix.size() > 0 ? &prefix : nullptr);
     const Status s = canInvoke(ctx, invocation);
     std::string answer = s.message(); /* an error has one */
-    if (tools.core().tools[i].answer == answer) {
+    if (checks.core().entries[i].answer == answer) {
       continue;
     }
     out.beginArray().integer(int64_t(i));
@@ -234,7 +236,7 @@ StringResult toolChecksRun(Context &ctx, const ToolChecks &tools)
       out.string(answer);
     }
     out.endArray();
-    tools.core().tools[i].answer = std::move(answer);
+    checks.core().entries[i].answer = std::move(answer);
   }
   out.endArray();
   return ok<StringResult>(string(out.take().c_str()));

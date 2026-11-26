@@ -1,5 +1,7 @@
 /* Layouts from XML: what the subset takes, what it refuses and where, prefixes, and JSON.
  */
+#include "xml_check.h"
+
 #include "coredcc/layout/layout.h"
 #include "coredcc/layout/xml.h"
 #include "coredcc/props/value.h"
@@ -14,59 +16,9 @@
 test_init;
 
 using namespace coredcc;
+using namespace xmlcheck;
 
 namespace {
-
-bool equals(const std::string &got, const std::string &want)
-{
-  if (got != want) {
-    fprintf(stderr, "got  %s\nwant %s\n", got.c_str(), want.c_str());
-  }
-  return got == want;
-}
-
-Layout parsed(std::string_view xml)
-{
-  Result<Layout> r = parseLayout(xml);
-  if (!r.ok()) {
-    fprintf(stderr, "%s\n", r.status().message());
-  }
-  test_assert(r.ok());
-  return r.ok() ? std::move(*r) : Layout();
-}
-
-std::string json(std::string_view xml)
-{
-  return layoutToJson(parsed(xml));
-}
-
-/* The error is `what`, at `line` and `column`. */
-bool fails(std::string_view xml,
-           const std::string &what,
-           int line,
-           int column,
-           StatusCode code = StatusCode::InvalidArgument)
-{
-  LayoutPosition p;
-  Result<Layout> r = parseLayout(xml, &p);
-  const std::string want =
-      "layout " + std::to_string(line) + ":" + std::to_string(column) + ": " + what;
-  const bool ok = !r.ok() && r.status().code() == code && want == r.status().message() &&
-                  p.line == line && p.column == column && p.offset <= xml.size();
-  if (!ok) {
-    fprintf(stderr,
-            "got  %s\nwant %s\n",
-            r.ok() ? "a layout" : r.status().message(),
-            want.c_str());
-  }
-  return ok;
-}
-
-/* ... in the root. */
-bool failsIn(const std::string &inner, const std::string &what, int column)
-{
-  return fails("<layout>" + inner + "</layout>", what, 1, 8 + column);
-}
 
 std::string repeated(const char *s, int n)
 {
@@ -87,9 +39,9 @@ static const char *const kExample = R"x(<?xml version="1.0" encoding="utf-8"?>
     <prop path="/scene.frame" visibleIf="!locked" enabledIf='mode[EDIT]' iconsOnly="false"
           icon="clock" description="d"/>
     <row expand="false"><column expand="true"/><sep/><separator id="s"/></row>
-    <tool invocation="object.clear(what='LOC')" iconsOnly="true">Clear &lt;all&gt;</tool>
-    <tool invocation="a.b" label="L" icon="i"/>
-    <toolOptions target="mesh.extrude" label="Extrude"/>
+    <command invocation="object.clear(what='LOC')" iconsOnly="true">Clear &lt;all&gt;</command>
+    <command invocation="a.b" label="L" icon="i"/>
+    <commandOptions target="mesh.extrude" label="Extrude"/>
   </panel>
   <tabs path="/" visibleIf="/a.b[2]">
     <tab label="One" path="x['a\'b']"><label>Some
@@ -119,11 +71,11 @@ static void test_golden()
       R"x("enabledIf":{"path":"/objects.active.transform.mode[EDIT]"},"iconsOnly":false},)x"
       R"x({"kind":"row","expand":false,"children":[{"kind":"column","expand":true},)x"
       R"x({"kind":"separator"},{"kind":"separator","id":"s"}]},)x"
-      R"x({"kind":"tool","label":"Clear <all>","invocation":"object.clear(what='LOC')",)x"
+      R"x({"kind":"command","label":"Clear <all>","invocation":"object.clear(what='LOC')",)x"
       R"x("iconsOnly":true,"prefix":"/objects.active.transform"},)x"
-      R"x({"kind":"tool","label":"L","icon":"i","invocation":"a.b",)x"
+      R"x({"kind":"command","label":"L","icon":"i","invocation":"a.b",)x"
       R"x("prefix":"/objects.active.transform"},)x"
-      R"x({"kind":"toolOptions","label":"Extrude","target":"mesh.extrude",)x"
+      R"x({"kind":"commandOptions","label":"Extrude","target":"mesh.extrude",)x"
       R"x("optionsPath":"/commandDefaults[\"mesh.extrude\"]",)x"
       R"x("prefix":"/objects.active.transform"}]},)x"
       R"x({"kind":"tabs","path":"/","effectivePath":"/","visibleIf":{"path":"/a.b[2]"},"children":[)x"
@@ -136,9 +88,9 @@ static void test_golden()
       R"x({"kind":"custom","tag":"inner","text":"keep\u000a   this"}]}]})x"));
   test_assert(equals(json("<layout/>"), R"({"kind":"layout","version":1})"));
   test_assert(
-      equals(json("<layout><row path='a'/><tool invocation='x'/></layout>"),
+      equals(json("<layout><row path='a'/><command invocation='x'/></layout>"),
              R"({"kind":"layout","version":1,"children":[{"kind":"row","path":"a",)"
-             R"("effectivePath":"/a"},{"kind":"tool","invocation":"x"}]})"));
+             R"("effectivePath":"/a"},{"kind":"command","invocation":"x"}]})"));
   test_assert(layoutToJson(Layout()) == R"({"kind":"layout","version":1})" &&
               Layout() == parsed("<layout></layout>"));
 }
@@ -161,7 +113,7 @@ static void test_nodes()
       const std::string attr =
           a.id == LayoutAttrId::Free ? a.name.c_str() : layoutAttrName(a.id);
       test_assert(at.substr(0, attr.size() + 1) == attr + "=" ||
-                  n.kind == LayoutKind::Tool || n.kind == LayoutKind::Label ||
+                  n.kind == LayoutKind::Command || n.kind == LayoutKind::Label ||
                   n.kind == LayoutKind::Custom);
       test_assert(j == 0 || l.attrs()[n.attrBegin + j - 1].id <= a.id);
     }
@@ -386,11 +338,11 @@ static void test_refuses_content()
       failsIn("<prop path='a'><row/></prop>", "a <prop> can't hold elements", 16));
   test_assert(
       failsIn("<label label='a'><row/></label>", "a <label> can't hold elements", 18));
-  test_assert(
-      failsIn("<tool invocation='a'><row/></tool>", "a <tool> can't hold elements", 22));
-  test_assert(failsIn("<toolOptions target='a'><row/></toolOptions>",
-                      "a <toolOptions> can't hold elements",
-                      25));
+  test_assert(failsIn(
+      "<command invocation='a'><row/></command>", "a <command> can't hold elements", 25));
+  test_assert(failsIn("<commandOptions target='a'><row/></commandOptions>",
+                      "a <commandOptions> can't hold elements",
+                      28));
   test_assert(failsIn("<sep><row/></sep>", "a <separator> can't hold elements", 6));
   test_assert(failsIn("<tab/>", "a <tab> must be in a <tabs>", 1));
   test_assert(
@@ -401,12 +353,13 @@ static void test_refuses_content()
   test_assert(failsIn(
       "<custom tag='x'><row/>a</custom>", "text and elements can't be mixed", 17));
   test_assert(failsIn("<label label=''>a</label>", "there is a label and text", 17));
-  test_assert(failsIn(
-      "<tool invocation='a' label='b'>c d</tool>", "there is a label and text", 32));
+  test_assert(failsIn("<command invocation='a' label='b'>c d</command>",
+                      "there is a label and text",
+                      35));
   /* What an element needs. */
   test_assert(failsIn("<prop/>", "a <prop> needs 'path'", 1));
-  test_assert(failsIn("<tool>a</tool>", "a <tool> needs 'invocation'", 1));
-  test_assert(failsIn("<toolOptions/>", "a <toolOptions> needs 'target'", 1));
+  test_assert(failsIn("<command>a</command>", "a <command> needs 'invocation'", 1));
+  test_assert(failsIn("<commandOptions/>", "a <commandOptions> needs 'target'", 1));
   test_assert(failsIn("<label> </label>", "a <label> needs text", 1));
   test_assert(failsIn("<label label=''/>", "a <label> needs text", 1));
   test_assert(failsIn("<custom/>", "a <custom> needs 'tag'", 1));
@@ -441,7 +394,7 @@ static void test_refuses_content()
   test_assert(offsetOf("<layout><row visibleIf='!'/></layout>") == 25);
   test_assert(offsetOf("<layout><row enabledIf=''/></layout>") == 24);
   test_assert(offsetOf("<layout><row enabledIf='!!a'/></layout>") == 25);
-  test_assert(offsetOf("<layout><tool invocation='a.b(c='/></layout>") == 32);
+  test_assert(offsetOf("<layout><command invocation='a.b(c='/></layout>") == 35);
   test_assert(!parseLayout("<layout><custom tag='a' path='.'/></layout>").ok());
   Result<Layout> r = parseLayout("<layout path='a.'/>");
   test_assert(strstr(r.status().message(), "layout 1:17: path: expected a member name"));
@@ -533,103 +486,6 @@ static void test_positions()
 }
 
 /* What a later version may have. */
-static void test_versions()
-{
-  test_assert(Layout().version() == 1 && parsed("<layout/>").version() == 1);
-  test_assert(parsed("<layout version='1'/>").version() == 1);
-  test_assert(parsed("<layout version='999999999'/>").version() == 999999999);
-  test_assert(json("<layout version='7' id='a'/>") == json("<layout id='a'/>"));
-  for (const char *bad : {"", "0", "01", "-1", "1.0", "x", " 1", "1234567890"}) {
-    test_assert(fails("<layout version='" + std::string(bad) + "'/>",
-                      "version: it isn't a number from 1",
-                      1,
-                      18));
-  }
-  test_assert(failsIn("<row version='1'/>", "a <row> has no 'version'", 6));
-  /* Unknown things, in this version and in a newer one. */
-  const std::string body =
-      " foo='1'><row bar='2' id='r'><gone a='&lt;' x='1'>some text<row><prop/></row>"
-      "<!-- c --></gone><prop path='a'/></row><tabs><nope/><tab id='t'/></tabs></layout>";
-  test_assert(fails("<layout" + body, "there is no attribute 'foo'", 1, 9));
-  test_assert(fails("<layout version='1'" + body, "there is no attribute 'foo'", 1, 21));
-  test_assert(fails("<layout foo='1' bar='2'/>", "there is no attribute 'foo'", 1, 9));
-  for (const std::string &head : {"<layout version='2'", "<layout foo='1' version='2'"}) {
-    const std::string rest = head.size() > 19 ? body.substr(8) : body;
-    Result<Layout> r = parseLayout(head + rest);
-    test_assert(r.ok());
-    if (!r.ok()) {
-      continue;
-    }
-    test_assert(*r ==
-                parsed("<layout version='2'><row id='r'><prop path='a'/></row><tabs>"
-                       "<tab id='t'/></tabs></layout>"));
-    const auto &skipped = r->skipped();
-    test_assert(skipped.size() == 4);
-    const char *const what[] = {"there is no attribute 'foo'",
-                                "there is no attribute 'bar'",
-                                "there is no element <gone>",
-                                "there is no element <nope>"};
-    const char *const at[] = {"foo=", "bar=", "<gone", "<nope"};
-    const int nodes[] = {0, 1, 1, 3};
-    for (int i = 0; i < int(skipped.size()) && i < 4; i++) {
-      test_assert(strcmp(skipped[i].what.c_str(), what[i]) == 0 &&
-                  skipped[i].node == nodes[i]);
-      test_assert((head + rest).compare(skipped[i].offset, strlen(at[i]), at[i]) == 0);
-    }
-  }
-  /* What is skipped is still XML, and what is known is checked. */
-  const auto newer = [](const std::string &inner) {
-    return "<layout version='2'>" + inner + "</layout>";
-  };
-  test_assert(fails(newer("<x><y></x>"), "</x> can't close <y>", 1, 27));
-  test_assert(fails(newer("<x a=1/>"), "expected a quote, not '1'", 1, 26));
-  test_assert(
-      fails(newer("<x a='1'b='2'/>"), "expected '>' or an attribute, not 'b'", 1, 29));
-  test_assert(fails(
-      newer("<x>&y;</x>"), "'&' must start one of &lt; &gt; &amp; &quot; &apos;", 1, 24));
-  test_assert(fails("<layout version='2'><x>", "the <x> in line 1 isn't closed", 1, 24));
-  test_assert(fails(
-      newer("text<x/>"), "a <layout> can't hold text: write it in a <label>", 1, 21));
-  test_assert(!parseLayout(newer("<row><tab/></row>")).ok());
-  test_assert(!parseLayout(newer("<row closed='maybe' expand='maybe'/>")).ok());
-  test_assert(!parseLayout("<other version='2'/>").ok());
-  /* An attribute of another kind's is one it doesn't know here. */
-  test_assert(parseLayout(newer("<row closed='maybe'/>"))->skipped().size() == 1);
-  /* Reserved names, which a Custom can't hold either. */
-  for (const std::string name : {"list", "menu", "include", "slot"}) {
-    const std::string e = "<" + name + " a='1'/>",
-                      what = "<" + name + "> is reserved for a later version";
-    test_assert(fails("<layout>" + e + "</layout>", what, 1, 9));
-    test_assert(
-        fails("<layout><custom tag='a'>" + e + "</custom></layout>", what, 1, 25));
-    const Result<Layout> r =
-        parseLayout(newer("<custom tag='a'><b>" + e + "</b></custom>"));
-    test_assert(r.ok() && r->nodeCount() == 3 && r->skipped().size() == 1 &&
-                r->skipped()[0].node == 2);
-    test_assert(what == r->skipped()[0].what.c_str());
-    test_assert(parsed("<layout><custom tag='" + name + "'/></layout>").nodeCount() == 2);
-  }
-  /* Not more than that many. */
-  std::string many;
-  for (int i = 0; i < LayoutLimits::kMaxSkipped + 5; i++) {
-    many += "<x/>";
-  }
-  test_assert(parseLayout(newer(many))->skipped().size() == LayoutLimits::kMaxSkipped);
-  test_assert(fails(newer("<row" +
-                          [] {
-                            std::string attrs;
-                            for (int i = 0; i < 65; i++) {
-                              attrs += " x='1'";
-                            }
-                            return attrs;
-                          }() +
-                          "/>"),
-                    "an element has more than 64 attributes",
-                    1,
-                    26 + 64 * 6,
-                    StatusCode::OutOfRange));
-}
-
 static void test_conditions()
 {
   const auto holds = [](const PropValue &v) {
@@ -679,15 +535,16 @@ static void test_data()
 static void test_tool_prefix()
 {
   test_assert(equals(
-      json("<layout path='a'><tool invocation='x' path='b' visibleIf='c'/>"
-           "<tool invocation='x' path='/'/><toolOptions target='x' path='/d'/></layout>"),
+      json("<layout path='a'><command invocation='x' path='b' visibleIf='c'/>"
+           "<command invocation='x' path='/'/><commandOptions target='x' "
+           "path='/d'/></layout>"),
       R"({"kind":"layout","version":1,"path":"a","effectivePath":"/a","children":[)"
-      R"({"kind":"tool","path":"b","effectivePath":"/a.b","visibleIf":{"path":"/a.c"},)"
+      R"({"kind":"command","path":"b","effectivePath":"/a.b","visibleIf":{"path":"/a.c"},)"
       R"("invocation":"x","prefix":"/a.b"},)"
-      R"({"kind":"tool","path":"/","effectivePath":"/","invocation":"x"},)"
-      R"({"kind":"toolOptions","path":"/d","effectivePath":"/d","target":"x",)"
+      R"({"kind":"command","path":"/","effectivePath":"/","invocation":"x"},)"
+      R"({"kind":"commandOptions","path":"/d","effectivePath":"/d","target":"x",)"
       R"("optionsPath":"/commandDefaults[\"x\"]","prefix":"/d"}]})"));
-  const Layout l = parsed("<layout path='a'><row id='b'/><tool id='a' invocation='x' "
+  const Layout l = parsed("<layout path='a'><row id='b'/><command id='a' invocation='x' "
                           "path='b'/><row id='c'/></layout>");
   test_assert(l.effectivePath(2).toString() == "/a.b" &&
               l.prefixOf(2).toString() == "/a");
@@ -713,15 +570,14 @@ static void test_tool_prefix()
   test_assert(size(fits, "<row visibleIf='bbbbbb'/>").ok() &&
               !size(fits + 1, "<row visibleIf='bbbbbb'/>").ok());
   const int tools = int((LayoutLimits::kMaxJoinedBytes - 1001) / 1001);
-  test_assert(size(tools, "<tool invocation='x'/>").ok() &&
-              !size(tools + 1, "<tool invocation='x'/>").ok());
-  test_assert(size(tools, "<toolOptions target='x'/>").ok() &&
-              !size(tools + 1, "<toolOptions target='x'/>").ok());
+  test_assert(size(tools, "<command invocation='x'/>").ok() &&
+              !size(tools + 1, "<command invocation='x'/>").ok());
+  test_assert(size(tools, "<commandOptions target='x'/>").ok() &&
+              !size(tools + 1, "<commandOptions target='x'/>").ok());
 }
 
 int main()
 {
-  test_versions();
   test_conditions();
   test_data();
   test_tool_prefix();

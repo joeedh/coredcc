@@ -211,16 +211,18 @@ static void test_checks()
   test_assert(hasMsg(sc::canInvokeAt(ctx, "", "test.refuse"), "nothing selected"));
   test_assert(!sc::canInvokeAt(ctx, "a..b", "test.add").ok() &&
               !sc::canInvokeAt(ctx, "", "a(").ok());
-  sc::ToolChecks tools = sc::newToolChecks();
-  test_assert(sc::toolChecksAdd(tools, "", "test.add(amount=1)").value == 0);
-  test_assert(sc::toolChecksAdd(tools, "objects[0].data", "test.dragRadius").value == 1);
-  test_assert(sc::toolChecksAdd(tools, "/", "test.dragRadius").value == 2);
-  test_assert(sc::toolChecksAdd(tools, "", "test.\"").status.code() != StatusCode::Ok);
-  test_assert(sc::toolChecksAdd(tools, "a..", "test.add").status.code() !=
+  sc::InvocationChecks tools = sc::newInvocationChecks();
+  test_assert(sc::invocationChecksAdd(tools, "", "test.add(amount=1)").value == 0);
+  test_assert(
+      sc::invocationChecksAdd(tools, "objects[0].data", "test.dragRadius").value == 1);
+  test_assert(sc::invocationChecksAdd(tools, "/", "test.dragRadius").value == 2);
+  test_assert(sc::invocationChecksAdd(tools, "", "test.\"").status.code() !=
               StatusCode::Ok);
-  test_assert(sc::toolChecksAdd(tools, "", "test.refuse").value == 3);
+  test_assert(sc::invocationChecksAdd(tools, "a..", "test.add").status.code() !=
+              StatusCode::Ok);
+  test_assert(sc::invocationChecksAdd(tools, "", "test.refuse").value == 3);
   const auto run = [&] {
-    sc::StringResult r = sc::toolChecksRun(ctx, tools);
+    sc::StringResult r = sc::invocationChecksRun(ctx, tools);
     test_assert(r.status.ok());
     return std::string(r.value.c_str());
   };
@@ -232,7 +234,7 @@ static void test_checks()
     test_assert(false);
   }
   test_assert(run() == "[]");
-  test_assert(sc::toolChecksAdd(tools, "", "test.parent").value == 4 &&
+  test_assert(sc::invocationChecksAdd(tools, "", "test.parent").value == 4 &&
               run() == "[[4,null]]");
   test_assert(sc::beginInteractiveAt(ctx, "", "test.drag", inputs({}), true).ok());
   const std::string busy = run();
@@ -309,7 +311,7 @@ static void test_slots()
   const auto all = [&](Context &c) {
     got = {sc::canRunAt(c, "", "test.add", inputs({}), true),
            sc::canInvokeAt(c, "", "test.add"),
-           sc::toolChecksRun(c, sc::newToolChecks()).status,
+           sc::invocationChecksRun(c, sc::newInvocationChecks()).status,
            sc::beginInteractiveAt(c, "", "test.drag", inputs({}), true),
            sc::writeInteractive(c, "tool.count", sc::makeInt(1)),
            sc::commitInteractive(c),

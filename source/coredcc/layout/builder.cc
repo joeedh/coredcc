@@ -197,9 +197,9 @@ LayoutScope LayoutScope::prop(std::string_view path)
   return add(LayoutKind::Prop).set(LayoutAttrId::Path, path);
 }
 
-LayoutScope LayoutScope::tool(std::string_view invocation, std::string_view label)
+LayoutScope LayoutScope::command(std::string_view invocation, std::string_view label)
 {
-  LayoutScope s = add(LayoutKind::Tool);
+  LayoutScope s = add(LayoutKind::Command);
   s.set(LayoutAttrId::Invocation, invocation);
   if (!label.empty()) {
     s.set(LayoutAttrId::Label, label);
@@ -207,9 +207,9 @@ LayoutScope LayoutScope::tool(std::string_view invocation, std::string_view labe
   return s;
 }
 
-LayoutScope LayoutScope::toolOptions(std::string_view target)
+LayoutScope LayoutScope::commandOptions(std::string_view target)
 {
-  return add(LayoutKind::ToolOptions).set(LayoutAttrId::Target, target);
+  return add(LayoutKind::CommandOptions).set(LayoutAttrId::Target, target);
 }
 
 LayoutScope LayoutScope::label(std::string_view text)

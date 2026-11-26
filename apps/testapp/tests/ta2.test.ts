@@ -282,7 +282,7 @@ describe('TA2: the panel of a layout', () => {
       xml: `<layout>
         <column id="active" path="activeItem" visibleIf="enabled"><prop id="w" path="weight"/></column>
         <row id="nine" path="items[9]"/><panel id="zero" path="items[0]"/>
-        <toolOptions target="testapp.addCount"/>
+        <commandOptions target="testapp.addCount"/>
         <row id="wrong" path="activeItm"/><row id="odd" path="items[9]" enabledIf="nope"/><custom tag="x" id="custom" path="items[9]"/>
         <label id="some" visibleIf="label">x</label><label id="none" visibleIf="!label">x</label>
         <label id="has" visibleIf="/activeItem">x</label><label id="lots" visibleIf="items.length">x</label>
@@ -464,7 +464,7 @@ describe('TA2: the panel of a layout', () => {
         <prop id="strength" path="strength"/>
         <prop id="bare" path="strength" icon="x" iconsOnly="true" description="mine"/>
         <prop id="flags" path="flags"/><prop id="focus" path="focus"/>
-        <tool id="t" invocation="testapp.addCount" icon="plus" iconsOnly="true"/>
+        <command id="t" invocation="testapp.addCount" icon="plus" iconsOnly="true"/>
         <label id="l" icon="info">Hello</label>
         <prop id="prop" path="count"/><prop path="count"/><prop path="big"/></layout>`,
     })
@@ -502,7 +502,7 @@ describe('TA2: the panel of a layout', () => {
     await shows('count', 5)
     /* One that names what isn't there is shown, with its issues. */
     const {issues} = await value('panel', {
-      xml: `<layout><prop id="a" path="cuont"/><tool id="b" invocation="testapp.nope()"/><prop id="c" path="count"/></layout>`,
+      xml: `<layout><prop id="a" path="cuont"/><command id="b" invocation="testapp.nope()"/><prop id="c" path="count"/></layout>`,
     })
     assert.deepEqual(issues.map((i: any) => [i.severity, i.node]), [['Error', 1], ['Error', 2]])
     assert.match((await node('a')).error!, /did you mean.*count/)

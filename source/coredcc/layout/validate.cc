@@ -195,7 +195,7 @@ private:
                "a Bool, an enum's key, a pointer, a length or a String");
         break;
       case Id::Invocation:
-        tool(i, a);
+        command(i, a);
         break;
       case Id::Target:
         options(i, a, value);
@@ -261,7 +261,7 @@ private:
     }
   }
 
-  void tool(int i, const LayoutAttr &a)
+  void command(int i, const LayoutAttr &a)
   {
     Result<Invocation> inv = parseInvocation(a.value.c_str());
     if (!inv.ok()) {
@@ -336,8 +336,8 @@ private:
   const Layout &layout_;
   StaticResolver resolver_;
   StaticStructs root_;
-  /** Of a container, for the paths in it, and of a Tool, for its command's. Nothing, and
-   * not unknown, if it was wrong. */
+  /** Of a container, for the paths in it, and of a Command, for its command's. Nothing,
+   * and not unknown, if it was wrong. */
   std::vector<StaticStructs> prefixes_;
   Vector<LayoutIssue> issues_;
   /** There are more than that: it stops. */

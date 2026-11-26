@@ -203,7 +203,7 @@ static void test_prefixes()
              "objects.active"));
   /* A mistake in a prefix is one issue. */
   test_assert(w.one("<row path='nothing'><prop path='a'/><row path='b' visibleIf='c'>"
-                    "<tool invocation=\"test.take(any='a')\"/></row></row>",
+                    "<command invocation=\"test.take(any='a')\"/></row></row>",
                     "<row> path: no member 'nothing' in LayoutRoot (at offset 0)",
                     "path="));
   test_assert(w.one("<row path='tool.strength'><prop path='a'/></row>",
@@ -218,7 +218,7 @@ static void test_prefixes()
                     "path="));
   /* An unknown one is a warning, once. */
   test_assert(w.one("<row path='gone'><prop path='a'/><row path='b.c' enabledIf='d'>"
-                    "<tool invocation=\"test.take(brush='a')\"/></row></row>",
+                    "<command invocation=\"test.take(brush='a')\"/></row></row>",
                     std::string("<row> path: ") + kUnknown,
                     "path=",
                     LayoutSeverity::Warning));
@@ -265,14 +265,15 @@ static void test_tools()
 {
   LayoutWorld w;
   const auto tool = [](const std::string &args) {
-    return "<tool invocation=\"test.take(" + args + ")\"/>";
+    return "<command invocation=\"test.take(" + args + ")\"/>";
   };
-  test_assert(w.fine("<tool invocation='test.add'/><toolOptions target='test.add'/>"));
+  test_assert(
+      w.fine("<command invocation='test.add'/><commandOptions target='test.add'/>"));
   test_assert(w.fine(tool("amount=3 offset=(1,2,3) mode=FAST")));
-  test_assert(w.one("<tool invocation='test.ad'/>",
-                    "<tool> invocation: no command 'test.ad'",
+  test_assert(w.one("<command invocation='test.ad'/>",
+                    "<command> invocation: no command 'test.ad'",
                     "invocation="));
-  test_assert(w.suggestion("<tool invocation='test.ad'/>") == "test.add");
+  test_assert(w.suggestion("<command invocation='test.ad'/>") == "test.add");
   /* A pointer's path from the root, whatever is around it. */
   test_assert(w.fine(tool("any='/objects[0]'"), "tool"));
   test_assert(w.one(tool("brush='/tool.brushes[0]'"),
@@ -281,7 +282,7 @@ static void test_tools()
                     LayoutSeverity::Warning,
                     "gone"));
   test_assert(w.one(tool("base='/objcts[0]'"),
-                    std::string("<tool> invocation: ") +
+                    std::string("<command> invocation: ") +
                         "no member 'objcts' in LayoutRoot (at offset 1)",
                     "invocation=",
                     LayoutSeverity::Error,
@@ -294,17 +295,18 @@ static void test_tools()
       w.issues("<layout><row path='nope'>" + tool("any='objcts[0]'") + "</row></layout>")
           .size() == 1);
   /* A tool's own path is the prefix of its arguments. */
-  test_assert(w.fine("<tool path='tool' invocation=\"test.take(brush='brushes[0]')\"/>"));
-  test_assert(w.one("<tool path='tool' invocation=\"test.take(brush='objects[0]')\"/>",
-                    "<tool> invocation: no member 'objects' in Tool (at offset 0)",
+  test_assert(
+      w.fine("<command path='tool' invocation=\"test.take(brush='brushes[0]')\"/>"));
+  test_assert(w.one("<command path='tool' invocation=\"test.take(brush='objects[0]')\"/>",
+                    "<command> invocation: no member 'objects' in Tool (at offset 0)",
                     "invocation="));
   test_assert(
-      w.fine("<tool path='/' invocation=\"test.take(any='objects[0]')\"/>", "tool"));
-  test_assert(w.one("<tool path='nope' invocation=\"test.take(brush='gone')\"/>",
-                    "<tool> path: no member 'nope' in LayoutRoot (at offset 0)",
+      w.fine("<command path='/' invocation=\"test.take(any='objects[0]')\"/>", "tool"));
+  test_assert(w.one("<command path='nope' invocation=\"test.take(brush='gone')\"/>",
+                    "<command> path: no member 'nope' in LayoutRoot (at offset 0)",
                     "path="));
-  test_assert(w.one("<tool path='tool.count' invocation='test.add'/>",
-                    "<tool> path: 'tool.count' isn't a struct",
+  test_assert(w.one("<command path='tool.count' invocation='test.add'/>",
+                    "<command> path: 'tool.count' isn't a struct",
                     "path="));
   /* Conditions. */
   test_assert(
@@ -339,42 +341,42 @@ static void test_tools()
     test_assert(found[2].severity == LayoutSeverity::Error && !layoutIsValid(found));
   }
   /* What isn't for a button that invokes it, or not for users. */
-  test_assert(w.one("<tool invocation='test.drag'/>",
-                    "<tool> invocation: 'test.drag' is interactive: it is begun with "
+  test_assert(w.one("<command invocation='test.drag'/>",
+                    "<command> invocation: 'test.drag' is interactive: it is begun with "
                     "beginInteractive, not invoked",
                     "invocation=",
                     LayoutSeverity::Warning));
-  test_assert(w.fine("<toolOptions target='test.drag'/>"));
+  test_assert(w.fine("<commandOptions target='test.drag'/>"));
   test_assert(
       addNativeCommand<Nothing>(w.rt, CommandDef("test.own").flags(CommandFlags::Private))
           .ok());
   const char *priv = "'test.own' is private: it isn't for users";
-  test_assert(w.one("<tool invocation='test.own'/>",
-                    std::string("<tool> invocation: ") + priv,
+  test_assert(w.one("<command invocation='test.own'/>",
+                    std::string("<command> invocation: ") + priv,
                     "invocation=",
                     LayoutSeverity::Warning));
-  test_assert(w.one("<toolOptions target='test.own'/>",
-                    std::string("<toolOptions> target: ") + priv,
+  test_assert(w.one("<commandOptions target='test.own'/>",
+                    std::string("<commandOptions> target: ") + priv,
                     "target=",
                     LayoutSeverity::Warning));
   /* A root without the last-used inputs. */
   const Vector<LayoutIssue> bare = validateLayout(
-      w.rt, kScene, *parseLayout("<layout><toolOptions target='test.add'/></layout>"));
+      w.rt, kScene, *parseLayout("<layout><commandOptions target='test.add'/></layout>"));
   test_assert(
       bare.size() == 1 && bare[0].severity == LayoutSeverity::Error &&
       strstr(
           bare[0].status.message(),
           "the root needs LastUsedStore::addCollectionTo: no member 'commandDefaults'"));
-  test_assert(w.one("<toolOptions target='test.ad'/>",
-                    "<toolOptions> target: no command 'test.ad'",
+  test_assert(w.one("<commandOptions target='test.ad'/>",
+                    "<commandOptions> target: no command 'test.ad'",
                     "target="));
   test_assert(w.one(tool("amout=3"),
-                    "<tool> invocation: test.take has no input 'amout' (at offset "
+                    "<command> invocation: test.take has no input 'amout' (at offset "
                     "10)",
                     "invocation="));
   test_assert(w.suggestion(tool("amout=3")) == "amount");
   test_assert(w.one(tool("offset=(1,2)"),
-                    "<tool> invocation: offset: expected a tuple of 3 numbers",
+                    "<command> invocation: offset: expected a tuple of 3 numbers",
                     "invocation="));
   test_assert(w.issues("<layout>" + tool("mode=OTHER") + "</layout>").size() == 1);
   test_assert(
@@ -385,16 +387,16 @@ static void test_tools()
   test_assert(w.fine(tool("brush='tool.brushes[0]' any='' base=' '")));
   test_assert(w.fine(tool("base='data' any='mod'"), "objects.active"));
   test_assert(w.one(tool("any='tool.strength'"),
-                    "<tool> invocation: 'tool.strength' isn't a struct",
+                    "<command> invocation: 'tool.strength' isn't a struct",
                     "invocation="));
   test_assert(w.one(tool("brush='tool'"),
-                    "<tool> invocation: brush: 'tool' isn't a Brush",
+                    "<command> invocation: brush: 'tool' isn't a Brush",
                     "invocation="));
   test_assert(w.one(tool("any='data'"),
-                    "<tool> invocation: no member 'data' in LayoutRoot (at offset 0)",
+                    "<command> invocation: no member 'data' in LayoutRoot (at offset 0)",
                     "invocation="));
   test_assert(w.one(tool("brush='gone'"),
-                    std::string("<tool> invocation: ") + kUnknown,
+                    std::string("<command> invocation: ") + kUnknown,
                     "invocation=",
                     LayoutSeverity::Warning));
   test_assert(w.fine(tool("any='gone'")));
@@ -525,7 +527,7 @@ static void test_hostile()
     nested += "</row>";
   }
   test_assert(timed(nested + "</layout>") == kMaxLayoutIssues);
-  std::string tool = "<layout><tool invocation=\"test.take(";
+  std::string tool = "<layout><command invocation=\"test.take(";
   for (int i = 0; tool.size() < 1000 * 1000; i++) {
     tool += "a" + std::to_string(i) + "=1 ";
   }

@@ -101,7 +101,7 @@ Unreal, coredcc is exactly one module, so they exist once.
   struct that is registered later only gives warnings.
 - **It knows static defs only.** An enum key that only a dynamic hook adds is a warning, and a path that
   it accepts can still fail in a given document.
-- **`toolOptions` needs the last-used inputs at the root:** `LastUsedStore::addCollectionTo`, with its
+- **`commandOptions` needs the last-used inputs at the root:** `LastUsedStore::addCollectionTo`, with its
   default name. Its members are at the JSON's `optionsPath`.
 - **A tool of an Interactive command** is a warning: the frontend begins it with `beginInteractive` under
   the tool's prefix, and changes it with `updateInteractive`.
@@ -122,7 +122,7 @@ Unreal, coredcc is exactly one module, so they exist once.
 - **What isn't there.** A container whose own `path` names nothing now is hidden (`containerIsThere`),
   unless `validateLayout` has an Error about it. A prop shows why it has no value, and a tool is
   disabled when `canInvoke` gives a reason.
-- **`canInvoke` and `ToolChecks`** ask each command's `canRun`, so keep those cheap. An open
+- **`canInvoke` and `InvocationChecks`** ask each command's `canRun`, so keep those cheap. An open
   interactive command, or a stray error, is a reason for every tool.
 - **The active item as a prop** is the collection's own pointer member (`activeItem`), not
   `items.active`, which can't be null.

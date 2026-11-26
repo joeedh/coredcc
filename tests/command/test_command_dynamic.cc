@@ -179,7 +179,7 @@ static void test_layouts()
   DynWorld w;
   const auto issues = [&](const char *invocation) {
     const std::string xml =
-        "<layout><tool invocation='" + std::string(invocation) + "'/></layout>";
+        "<layout><command invocation='" + std::string(invocation) + "'/></layout>";
     Result<Layout> layout = parseLayout(xml);
     test_assert(layout.ok());
     litestl::util::Vector<LayoutIssue> out =

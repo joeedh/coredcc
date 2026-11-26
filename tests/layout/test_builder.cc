@@ -52,9 +52,9 @@ static void test_same()
   LayoutScope row = panel.row();
   row.separator();
   row.column().setFlag(Id::Expand, false);
-  panel.tool("a.b(c=1)", "Run").setFlag(Id::IconsOnly, true);
-  panel.tool("a.b");
-  panel.toolOptions("a.b");
+  panel.command("a.b(c=1)", "Run").setFlag(Id::IconsOnly, true);
+  panel.command("a.b");
+  panel.commandOptions("a.b");
   tabs.tab("Two");
   LayoutScope custom =
       root.custom("host").set("size", "3").set("b", "x").set("label", "L");
@@ -67,8 +67,8 @@ static void test_same()
     <panel closed="true" label="Transform" path="transform" icon="move">
       <prop path="location" enabledIf="a" visibleIf="!locked"/>
       <row><sep/><column expand="false"/><prop path="last" widget="slider"/></row>
-      <tool invocation="a.b(c=1)" iconsOnly="true">Run</tool><tool invocation="a.b"/>
-      <toolOptions target="a.b"/>
+      <command invocation="a.b(c=1)" iconsOnly="true">Run</command><command invocation="a.b"/>
+      <commandOptions target="a.b"/>
     </panel>
     <tabs><tab label="One"><label>text</label></tab><tab label="Two"/></tabs>
     <custom b="x" tag="host" label="L" size="3"><inner>text
@@ -162,8 +162,8 @@ static void test_refuses()
                     "layout: node 1 (tab): a <tab> must be in a <tabs>"));
   test_assert(fails([](LayoutBuilder &b) { b.root().label(""); },
                     "layout: node 1 (label): a <label> needs text"));
-  test_assert(fails([](LayoutBuilder &b) { b.root().add(LayoutKind::Tool); },
-                    "layout: node 1 (tool): a <tool> needs 'invocation'"));
+  test_assert(fails([](LayoutBuilder &b) { b.root().add(LayoutKind::Command); },
+                    "layout: node 1 (command): a <command> needs 'invocation'"));
   test_assert(fails([](LayoutBuilder &b) { b.root().row().setFlag(Id::Closed, true); },
                     "layout: node 1 (row): a <row> has no 'closed'"));
   test_assert(

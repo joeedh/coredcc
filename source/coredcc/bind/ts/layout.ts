@@ -1,5 +1,5 @@
 /**
- * Layouts in TS: a layout's nodes, and its issues. `cdcc.invokeAt` runs a tool of one.
+ * Layouts in TS: a layout's nodes, and its issues. `cdcc.invokeAt` runs a command of one.
  */
 import type {Context} from 'coredcc-gen/coredcc/Context'
 import * as cd from 'coredcc-gen/coredcc/functions'
@@ -9,7 +9,7 @@ import {take} from './core.ts'
 import type {PathChange} from './reader.ts'
 
 export type LayoutKind =
-  | 'layout' | 'column' | 'row' | 'panel' | 'tabs' | 'tab' | 'prop' | 'tool' | 'toolOptions'
+  | 'layout' | 'column' | 'row' | 'panel' | 'tabs' | 'tab' | 'prop' | 'command' | 'commandOptions'
   | 'label' | 'separator' | 'custom'
 
 /** A path that a node is shown or enabled by. `not` negates it. */
@@ -30,14 +30,14 @@ export interface LayoutNode {
   /** As written. */
   path?: string
   effectivePath?: string
-  /** Of a toolOptions: what has the inputs that its command last ran with as members. */
+  /** Of a commandOptions: what has the inputs that its command last ran with as members. */
   optionsPath?: string
   visibleIf?: LayoutCondition
   enabledIf?: LayoutCondition
   widget?: string
   /** The root's: the JSON's, 1. */
   version?: number
-  /** Of a tool: for `invokeAt(ctx, node.prefix ?? '', node.invocation)`. */
+  /** Of a command: for `invokeAt(ctx, node.prefix ?? '', node.invocation)`. */
   invocation?: string
   target?: string
   prefix?: string
