@@ -22,6 +22,7 @@ Each phase has one, pressure-tested before it was implemented, with notes on wha
 - [P5: graph and instancing](plans/2026-11-24-p5-graph.md). It also has what P5c needs of it.
 - [P5c: the scene evaluator](plans/2026-11-25-p5c-scene-evaluator.md): graphs that drive objects, and an
   incremental evaluation.
+- [The naming pass](plans/2026-11-26-naming-pass.md): consistent names before P6 binds the API for N-API.
 - [Integration test app](plans/2026-11-19-test-app.md)
 - [Build cache and worktrees](plans/2026-11-23-build-cache-worktrees.md)
 
@@ -35,6 +36,7 @@ A fresh review of each feature's API, and what became of each finding.
 | P2 | [library IO](reports/feature-report-library-io-2026-11-24.md), [layout](reports/feature-report-layout-2026-11-25.md) |
 | P3 | [objects and transforms](reports/feature-report-scene-2026-11-25.md), [BVH, View and picking](reports/feature-report-bvh-2026-11-25.md) |
 | P4 | [tools and overlay](reports/feature-report-tools-overlay-2026-11-26.md) |
+| Naming | [naming audit](reports/naming-audit-2026-11-26.md) (the pass's input) |
 | P5 | [graph](reports/feature-report-graph-2026-11-25.md) |
 | P5c | [scene evaluator](reports/feature-report-scene-evaluator-2026-11-25.md) |
 
