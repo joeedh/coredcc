@@ -233,10 +233,10 @@ Evaluator::checkGroup(const Frame &f, const GraphNode &node, const GraphDef *def
       return Status::error(StatusCode::FailedPrecondition, "the graph contains itself");
     }
   }
-  if (f.depth + 1 > kMaxDepth) {
+  if (f.depth + 1 > kMaxGraphDepth) {
     return Status::error(
         StatusCode::OutOfRange,
-        ("graphs are nested deeper than " + std::to_string(kMaxDepth)).c_str());
+        ("graphs are nested deeper than " + std::to_string(kMaxGraphDepth)).c_str());
   }
   return Status();
 }

@@ -4,7 +4,7 @@
 import {getBindingBackend} from '@litestl/typescript-runtime'
 import type {Context} from 'coredcc-gen/coredcc/Context'
 import * as cd from 'coredcc-gen/coredcc/functions'
-import type {NodeExecContext} from 'coredcc-gen/coredcc/NodeExecContext'
+import type {NodeExecContext as RawNode} from 'coredcc-gen/coredcc/NodeExecContext'
 import type {NodeTypeDef} from 'coredcc-gen/coredcc/NodeTypeDef'
 import type {PropValue} from 'coredcc-gen/coredcc/PropValue'
 import type {ScriptGraph} from 'coredcc-gen/coredcc/ScriptGraph'
@@ -97,12 +97,12 @@ function withTable<R>(table: Table, fn: (t: ScriptTable) => R): R {
  * A node being evaluated, valid during its `evaluate`. A kernel computes its outputs from its
  * inputs and params alone; inside it, everything that takes a Context fails (Busy).
  */
-export class NodeContext {
-  private node: NodeExecContext | undefined
-  constructor(node: NodeExecContext) {
+export class NodeExecContext {
+  private node: RawNode | undefined
+  constructor(node: RawNode) {
     this.node = node
   }
-  private get raw(): NodeExecContext {
+  private get raw(): RawNode {
     if (!this.node) throw new Error('the node was already evaluated')
     return this.node
   }
@@ -207,7 +207,7 @@ export interface NodeTypeSpec {
   outputAdapter?: boolean
   /** Sets every output. Synchronous. A throw fails the node (Internal, or a ScriptError's
    * code). One function for all nodes of the type: it keeps no state. */
-  evaluate(node: NodeContext): void
+  evaluate(node: NodeExecContext): void
 }
 
 function fill(def: NodeTypeDef, spec: NodeTypeSpec) {
@@ -245,8 +245,8 @@ function register(what: string, ctx: Context, spec: NodeTypeSpec, enter: Registe
   try {
     fill(def, spec)
     const kernel = {
-      evaluate(raw: NodeExecContext): Status | undefined {
-        const node = new NodeContext(raw)
+      evaluate(raw: RawNode): Status | undefined {
+        const node = new NodeExecContext(raw)
         scriptSlots.callDepth++
         try {
           sync('evaluate', spec.evaluate(node))

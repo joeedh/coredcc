@@ -453,7 +453,7 @@ struct DeleteObjects : ChangesCommand {
       c.object = h;
       c.parent = place->cycle ? BlockHandle() : above->outside;
       c.world = *world;
-      c.depth = place->depth;
+      c.depth = place->parentDepth;
       out.append(c);
     }
     std::stable_sort(out.data(),

@@ -195,11 +195,11 @@ private:
     }
     DraftNode &p = nodes_[n.parent];
     depth_[i] = depth_[n.parent] + 1;
-    if (depth_[i] > LayoutLimits::kMaxDepth) {
+    if (depth_[i] > LayoutLimits::kMaxElementDepth) {
       return fail(i,
                   n.offset,
                   tooMany("the elements are nested more than " +
-                          std::to_string(LayoutLimits::kMaxDepth) + " deep"));
+                          std::to_string(LayoutLimits::kMaxElementDepth) + " deep"));
     }
     if (!info(p.kind).container) {
       return fail(i, n.offset, invalid("a " + element(p.kind) + " can't hold elements"));

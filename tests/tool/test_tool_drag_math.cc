@@ -113,7 +113,7 @@ void testCase(const Convention &c, Rand &r, int oi)
       const double s = m.pixelSizeAt(pivot) * 100.0;
       const double alpha = r.range(0.05, 0.5) * (r.coin() ? 1.0 : -1.0);
       const quatd q = quatd::fromAxisAngle(axis, alpha);
-      Pixel centre;
+      Pixel center;
       /* The whole circle must be in view: a projection of one that goes behind the eye
        * has no orientation. */
       bool whole = true;
@@ -122,11 +122,11 @@ void testCase(const Convention &c, Rand &r, int oi)
         const quatd step = quatd::fromAxisAngle(axis, 2.0 * std::numbers::pi * i / 16.0);
         whole = seen(m, pivot + step.rotate(u) * s, ignored);
       }
-      if (whole && seen(m, pivot, centre) && seen(m, pivot + u * s, press) &&
+      if (whole && seen(m, pivot, center) && seen(m, pivot + u * s, press) &&
           seen(m, pivot + q.rotate(u) * s, now))
       {
         g_turns++;
-        AngleTracker t(centre, press);
+        AngleTracker t(center, press);
         const double turned = t.update(now) * screenHandedness(m, pivot);
         const double a = axis.dot(eye) >= 0.0 ? turned : -turned;
         test_assert((a > 0.0) == (alpha > 0.0));
@@ -164,21 +164,21 @@ void testConventions()
 
 void testTurnsAccumulate()
 {
-  const Pixel centre{400, 300};
-  AngleTracker t(centre, Pixel{500, 300});
+  const Pixel center{400, 300};
+  AngleTracker t(center, Pixel{500, 300});
   for (int i = 1; i <= 200; i++) {
     const double a = 4.0 * std::numbers::pi * i / 200.0;
-    t.update(Pixel{centre.x + 100 * std::cos(a), centre.y - 100 * std::sin(a)});
+    t.update(Pixel{center.x + 100 * std::cos(a), center.y - 100 * std::sin(a)});
   }
   test_assert(std::abs(t.total() - 4.0 * std::numbers::pi) < 1e-9); /* 720° */
   /* And back, clockwise, through the start. */
   for (int i = 199; i >= -50; i--) {
     const double a = 4.0 * std::numbers::pi * i / 200.0;
-    t.update(Pixel{centre.x + 100 * std::cos(a), centre.y - 100 * std::sin(a)});
+    t.update(Pixel{center.x + 100 * std::cos(a), center.y - 100 * std::sin(a)});
   }
   test_assert(std::abs(t.total() + std::numbers::pi) < 1e-9);
-  /* On the centre: the last angle stays. */
-  test_assert(std::abs(t.update(centre) + std::numbers::pi) < 1e-9);
+  /* On the center: the last angle stays. */
+  test_assert(std::abs(t.update(center) + std::numbers::pi) < 1e-9);
 }
 
 void testScaleAndSnap()
@@ -218,9 +218,9 @@ void testHidden()
     test_assert(f.onScreen && f.axisShown[0] == 0.0 && f.planeShown[1] == 0.0 &&
                 f.planeShown[2] == 0.0);
     const double inf = std::numeric_limits<double>::infinity();
-    test_assert(f.distance(m, part::kX, f.centre) == inf);
-    test_assert(f.distance(m, part::kPlaneY, f.centre) == inf);
-    test_assert(f.distance(m, part::kPlaneX, f.centre) < inf);
+    test_assert(f.distance(m, part::kX, f.center) == inf);
+    test_assert(f.distance(m, part::kPlaneY, f.center) == inf);
+    test_assert(f.distance(m, part::kPlaneX, f.center) < inf);
     DrawList out;
     test_assert(out.begin(p.pivot).ok());
     f.draw(m, part::kX, false, 1, out);

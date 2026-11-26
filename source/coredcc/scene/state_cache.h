@@ -57,7 +57,7 @@ public:
     /** It is its own ancestor. */
     bool cycle = false;
     /** How many are above it. 0 on a cycle, which counts as one for those below it. */
-    int depth = 0;
+    int parentDepth = 0;
     /** It, if it isn't in the set, or else its nearest ancestor that isn't. */
     BlockHandle outside;
   };

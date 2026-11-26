@@ -157,7 +157,7 @@ struct GizmoHit {
 
 /**
  * A handle on the screen that starts a drag: one gizmo with numbered parts (the arrows,
- * planes and centre of a translate gizmo, say).
+ * planes and center of a translate gizmo, say).
  *
  * - `update` places it from the document, before each hit test and draw, but not during
  *   a gesture: then the gesture's modal draws what moves. It may only read.

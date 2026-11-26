@@ -60,7 +60,7 @@ struct SceneMember {
   /** Into boxes_, if the bounds of the block that has them are kept, or -1. */
   int box = -1;
   /** How many are above it; 0 on a cycle. */
-  int depth = 0;
+  int parentDepth = 0;
   /** The transform type it had last. */
   TypeId transformType;
 };

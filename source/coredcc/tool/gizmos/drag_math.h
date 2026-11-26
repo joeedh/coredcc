@@ -44,14 +44,14 @@ Result<double3> planePoint(const ViewMath &view,
 double screenHandedness(const ViewMath &view, const double3 &p);
 
 /**
- * Accumulates the angle of the cursor about a centre on the screen, counter-clockwise
+ * Accumulates the angle of the cursor about a center on the screen, counter-clockwise
  * with y up, unwrapped across ±π: a cursor that goes round twice gives 4π.
  */
 class AngleTracker {
 public:
   AngleTracker() = default;
-  AngleTracker(Pixel centre, Pixel start);
-  /** The angle from the start to `p`. A cursor on the centre keeps the last angle. */
+  AngleTracker(Pixel center, Pixel start);
+  /** The angle from the start to `p`. A cursor on the center keeps the last angle. */
   double update(Pixel p);
   double total() const
   {
@@ -59,17 +59,17 @@ public:
   }
 
 private:
-  Pixel centre_;
+  Pixel center_;
   double last_ = 0.0;
   double total_ = 0.0;
 };
 
 /**
- * The factor of a scale along a screen direction `axis` (unit length) from `centre`:
+ * The factor of a scale along a screen direction `axis` (unit length) from `center`:
  * the cursor's distance along it over the start's. Without an axis (0, 0), the ratio of
- * the distances. 1 when the start is within a pixel of the centre.
+ * the distances. 1 when the start is within a pixel of the center.
  */
-double scaleFactor(Pixel centre, Pixel start, Pixel now, Pixel axis);
+double scaleFactor(Pixel center, Pixel start, Pixel now, Pixel axis);
 
 /** `v` rounded to a multiple of `step`; `v` for a step that isn't positive. */
 double snap(double v, double step);

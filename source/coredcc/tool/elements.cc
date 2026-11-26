@@ -396,7 +396,7 @@ int32_t ElementsDelta::mirrored() const
   return n;
 }
 
-bool ElementsDelta::centre(double3 &out) const
+bool ElementsDelta::center(double3 &out) const
 {
   double3 sum(0, 0, 0);
   int n = 0;

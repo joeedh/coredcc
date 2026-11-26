@@ -244,7 +244,7 @@ public:
   /**
    * Why `run`, or `beginInteractive` of an Interactive command, would refuse it now: its
    * canRun's answer, or what is wrong with its inputs or the prefix. An instance is made
-   * and discarded, and nothing else changes: a stray sticky error stays. For greying out
+   * and discarded, and nothing else changes: a stray sticky error stays. For graying out
    * a button: canRun slots should be cheap.
    */
   Status canRun(Context &ctx, const CommandDef &def, PropertyBag inputs);

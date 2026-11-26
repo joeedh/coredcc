@@ -58,7 +58,7 @@ void TransformModal::begin(const ViewMath &view)
       pressPoint = q.ok() ? *q : f.pivot;
     }
   } else if (f.mode == Mode::Rotate) {
-    angle = AngleTracker(f.centre, press);
+    angle = AngleTracker(f.center, press);
     handedness = screenHandedness(view, f.pivot);
   }
   last = TransformDelta();
@@ -135,13 +135,13 @@ bool TransformModal::deltaAt(const ViewMath &view,
     if (!toPixel(view, f.pivot + f.axes[part] * f.unit, tip)) {
       return false;
     }
-    const double len = std::hypot(tip.x - f.centre.x, tip.y - f.centre.y);
+    const double len = std::hypot(tip.x - f.center.x, tip.y - f.center.y);
     if (!(len > 1.0)) {
       return false;
     }
-    dir = Pixel{(tip.x - f.centre.x) / len, (tip.y - f.centre.y) / len};
+    dir = Pixel{(tip.x - f.center.x) / len, (tip.y - f.center.y) / len};
   }
-  double k = scaleFactor(f.centre, press, p, dir);
+  double k = scaleFactor(f.center, press, p, dir);
   k = snapping ? snap(k, settings.scaleStep) : k;
   out.kind = DeltaKind::Scale;
   out.basis = f.basis;

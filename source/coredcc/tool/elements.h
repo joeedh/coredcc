@@ -114,7 +114,7 @@ public:
   int32_t moved() const;
   int32_t mirrored() const;
   /** The mean position, in the world, of the points it moves: the gizmo's pivot. */
-  bool centre(double3 &out) const;
+  bool center(double3 &out) const;
 
   Status canRun(Context &ctx) const;
   Status exec(Context &ctx);

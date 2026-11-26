@@ -109,7 +109,7 @@ CDCC_FLAG_OPERATORS(PropAccess)
 
 enum class SliderStyle : uint8_t { Default, Slider, Number };
 
-/** UI hints. They never affect behaviour. */
+/** UI hints. They never affect behavior. */
 struct PropUi {
   bool iconsOnly = false;
   bool expand = false;

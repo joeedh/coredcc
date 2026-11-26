@@ -239,7 +239,7 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   lists them.
 
 ### The test app's screenshot shows only the background
-- **Symptom:** in TA3, `shot()` gave a canvas of the background colour, although `frame()` had drawn the
+- **Symptom:** in TA3, `shot()` gave a canvas of the background color, although `frame()` had drawn the
   gizmo without a WebGPU error.
 - **Cause:** the test app runs in a hidden NW.js window. A hidden window doesn't composite frames that were
   drawn outside `requestAnimationFrame`, and rAF doesn't run there, so `capturePage` returns an old frame.

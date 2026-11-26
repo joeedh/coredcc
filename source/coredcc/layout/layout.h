@@ -152,7 +152,7 @@ bool containerIsThere(const Result<PropValue> &value);
 /** What a layout may hold, from text and from the builder. */
 struct LayoutLimits {
   /** The root is at depth 1. */
-  static constexpr int kMaxDepth = 64;
+  static constexpr int kMaxElementDepth = 64;
   static constexpr int kMaxNodes = 16384;
   static constexpr int kMaxAttrs = 64;
   /** Of the text. From the builder, of the attributes together. */

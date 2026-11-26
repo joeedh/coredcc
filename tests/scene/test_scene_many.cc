@@ -384,10 +384,10 @@ void testCaches()
       test_assert(place.ok() && place->parent == naive.parentOf(h) &&
                   place->cycle == cycle);
       test_assert(place->within == (inSet || in) && place->outside == outside);
-      test_assert(cycle || belowCycle || place->depth == int(above.size()));
-      test_assert(!cycle || place->depth == 0);
+      test_assert(cycle || belowCycle || place->parentDepth == int(above.size()));
+      test_assert(!cycle || place->parentDepth == 0);
       test_assert(!belowCycle ||
-                  place->depth == ancestry.place(place->parent)->depth + 1);
+                  place->parentDepth == ancestry.place(place->parent)->parentDepth + 1);
       cycles += cycle;
       belowCycles += belowCycle;
       within += inSet;
@@ -422,7 +422,7 @@ void testCacheErrors()
   test_assert(isError(ancestry.below(a).status(), StatusCode::Internal, "read"));
   test_assert(!d.rt.hasStickyError());
   d.host(h).onRead = nullptr;
-  test_assert(states.state(a).ok() && ancestry.place(a)->depth == 1);
+  test_assert(states.state(a).ok() && ancestry.place(a)->parentDepth == 1);
   d.addFnModel("test.fn", [&](const EvalContext &, const TransformState &p) {
     d.rt.setStickyError(boom("model"));
     return p;

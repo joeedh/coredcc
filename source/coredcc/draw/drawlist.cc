@@ -304,7 +304,7 @@ DrawList::circle2d(const DrawStyle &style, double x, double y, double radius, bo
 {
   CDCC_TRY(checkStyle(style, "circle2d"));
   if (!fitsFloat(x) || !fitsFloat(y) || !fitsFloat(radius) || radius < 0.0) {
-    return bad("circle2d", "the centre or the radius isn't a finite float (radius >= 0)");
+    return bad("circle2d", "the center or the radius isn't a finite float (radius >= 0)");
   }
   CDCC_TRY(room(kRecordHeaderBytes + 16, "circle2d"));
   uint8_t *p = append(

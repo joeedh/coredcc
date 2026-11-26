@@ -27,7 +27,7 @@ Pixel alongAxis(ToolDoc &d, int axis, Pixel from, double px)
 {
   const Frame f = d.gizmoFrame();
   const Pixel tip = d.pixelOf(f.pivot + f.axes[axis] * f.unit);
-  const double dx = tip.x - f.centre.x, dy = tip.y - f.centre.y, len = std::hypot(dx, dy);
+  const double dx = tip.x - f.center.x, dy = tip.y - f.center.y, len = std::hypot(dx, dy);
   return Pixel{from.x + dx / len * px, from.y + dy / len * px};
 }
 
@@ -82,14 +82,14 @@ void testTranslate()
   const double moved = d.position(a)[0] - 1.0;
   test_assert(moved == std::round(moved) && moved >= 1.0);
 
-  /* In the view plane: the centre. The object ends under the cursor's move. */
+  /* In the view plane: the center. The object ends under the cursor's move. */
   must(d.ex->undo(*d.ctx));
   d.evaluate();
   const Frame g = d.gizmoFrame();
-  drag(d, g.centre, Pixel{g.centre.x + 60, g.centre.y + 20});
+  drag(d, g.center, Pixel{g.center.x + 60, g.center.y + 20});
   const Pixel now = d.pixelOf(d.position(a));
-  test_assert(std::abs(now.x - (g.centre.x + 60)) < 1e-6 &&
-              std::abs(now.y - (g.centre.y + 20)) < 1e-6);
+  test_assert(std::abs(now.x - (g.center.x + 60)) < 1e-6 &&
+              std::abs(now.y - (g.center.y + 20)) < 1e-6);
 }
 
 void testClickAndCancel()
@@ -145,8 +145,8 @@ void testRotate()
   frontArc(d.vm, f.pivot, f.axes[2], f.unit, pts, arcs);
   test_assert(pts.size() > 16);
   const Pixel start = d.pixelOf(pts[int(pts.size() / 2)]);
-  const double r = std::hypot(start.x - f.centre.x, start.y - f.centre.y);
-  const double a0 = std::atan2(f.centre.y - start.y, start.x - f.centre.x);
+  const double r = std::hypot(start.x - f.center.x, start.y - f.center.y);
+  const double a0 = std::atan2(f.center.y - start.y, start.x - f.center.x);
   /* Round the pivot on the screen, counter-clockwise, 720° and then 90° more. */
   must(d.send(EventType::PointerDown, start.x, start.y).status());
   test_assert(d.tm.activePart() == part::kZ);
@@ -155,14 +155,14 @@ void testRotate()
   for (int i = 1; i <= steps; i++) {
     const double ang = a0 + total * i / steps;
     must(d.send(EventType::PointerMove,
-                f.centre.x + r * std::cos(ang),
-                f.centre.y - r * std::sin(ang))
+                f.center.x + r * std::cos(ang),
+                f.center.y - r * std::sin(ang))
              .status());
   }
   test_assert(std::string(d.tm.status().c_str()).find("Rotate 810") == 0);
   must(d.send(EventType::PointerUp,
-              f.centre.x + r * std::cos(a0 + total),
-              f.centre.y - r * std::sin(a0 + total))
+              f.center.x + r * std::cos(a0 + total),
+              f.center.y - r * std::sin(a0 + total))
            .status());
   test_assert(d.history->size() == 1);
   /* Seen from above, counter-clockwise is +z: b went from (2, 0) to about (1, 1). */
@@ -176,8 +176,8 @@ void testRotate()
   d.settingKey("pivot", "INDIVIDUAL");
   d.evaluate();
   must(d.send(EventType::PointerDown, start.x, start.y).status());
-  must(d.send(EventType::PointerMove, f.centre.x - r, f.centre.y).status());
-  must(d.send(EventType::PointerUp, f.centre.x - r, f.centre.y).status());
+  must(d.send(EventType::PointerMove, f.center.x - r, f.center.y).status());
+  must(d.send(EventType::PointerUp, f.center.x - r, f.center.y).status());
   test_assert(d.history->size() == 1);
   test_assert(d.isAt(b, 2.0) && d.isAt(a, 0.0));
   test_assert(d.describe().size() > 0);
@@ -191,11 +191,11 @@ void testScale()
   d.settingKey("mode", "SCALE");
   d.useTool(kTransformTool);
   const Frame f = d.gizmoFrame();
-  /* Press on the X axis's handle, and drag to twice its distance from the centre. */
+  /* Press on the X axis's handle, and drag to twice its distance from the center. */
   const Pixel press = onAxis(d, 0, 0.8);
-  const double dx = press.x - f.centre.x, dy = press.y - f.centre.y;
+  const double dx = press.x - f.center.x, dy = press.y - f.center.y;
   drag(
-      d, press, Pixel{f.centre.x + dx * 2.0, f.centre.y + dy * 2.0}, 4, modifiers::kCtrl);
+      d, press, Pixel{f.center.x + dx * 2.0, f.center.y + dy * 2.0}, 4, modifiers::kCtrl);
   test_assert(d.history->size() == 1);
   const double *w = d.result(a).state.world;
   test_assert(std::abs(w[0] - 2.0) < 1e-12 && std::abs(w[5] - 1.0) < 1e-12);
@@ -270,7 +270,7 @@ void testPivotAndSize()
     d.lookFrom(f.pivot + double3(6.0, -8.0, 5.0) * k, f.pivot);
     const Frame g = d.gizmoFrame();
     const Pixel tip = d.pixelOf(g.pivot + g.axes[0] * g.unit);
-    lengths[z] = std::hypot(tip.x - g.centre.x, tip.y - g.centre.y);
+    lengths[z] = std::hypot(tip.x - g.center.x, tip.y - g.center.y);
   }
   test_assert(std::abs(lengths[1] - lengths[0]) < 1e-6 * lengths[0]);
   test_assert(std::abs(lengths[2] - lengths[0]) < 1e-6 * lengths[0]);
@@ -286,7 +286,7 @@ void testDraw()
   must(d.tm.draw(*d.ctx, d.view, out));
   DrawListReader rd;
   must(rd.read(out.bytes()));
-  /* Three arrows, three planes and the centre; ids of gizmo 1. */
+  /* Three arrows, three planes and the center; ids of gizmo 1. */
   test_assert(rd.records().size() == 7);
   for (const DrawRecord &it : rd.records()) {
     test_assert(it.style.id / ToolManager::kIdStride == 1);
@@ -312,16 +312,20 @@ void testPivotAfterCommand()
   d.useTool(kTransformTool);
   const Frame f = d.gizmoFrame();
   const Pixel press = d.pixelOf(f.pivot + f.axes[0] * (f.unit * 0.8));
-  const double dx = press.x - f.centre.x, dy = press.y - f.centre.y;
+  const double dx = press.x - f.center.x, dy = press.y - f.center.y;
   d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(3, 0, 0)}});
   must(d.send(EventType::PointerDown, press.x, press.y).status());
   for (int i = 1; i <= 4; i++) {
     const double t = 1.0 + double(i) / 4;
-    must(d.send(EventType::PointerMove, f.centre.x + dx * t, f.centre.y + dy * t,
+    must(d.send(EventType::PointerMove,
+                f.center.x + dx * t,
+                f.center.y + dy * t,
                 modifiers::kCtrl)
              .status());
   }
-  must(d.send(EventType::PointerUp, f.centre.x + dx * 2, f.centre.y + dy * 2,
+  must(d.send(EventType::PointerUp,
+              f.center.x + dx * 2,
+              f.center.y + dy * 2,
               modifiers::kCtrl)
            .status());
   const double3 p = d.position(a);

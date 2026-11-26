@@ -2,7 +2,7 @@
  * Spawns the test app under NW.js and finds its CDP port. Used by the `launch.mjs` CLI
  * and by the test harness.
  *
- * Pressure-tested behaviour this relies on (docs/plans/2026-11-19-test-app.md):
+ * Pressure-tested behavior this relies on (docs/plans/2026-11-19-test-app.md):
  * - `--remote-debugging-port=0` makes Chromium pick a port and write it to
  *   `<profile>/DevToolsActivePort`, and print `DevTools listening on ws://...` to stderr.
  * - A launch on a profile that is already in use prints `Opening in existing browser

@@ -319,8 +319,8 @@ void testToolDrag()
   test_assert(f.onScreen && near(f.pivot, double3(2, 0, 0)));
   const Pixel press = d.pixelOf(f.pivot + f.axes[0] * (f.unit * 0.7));
   const Pixel tip = d.pixelOf(f.pivot + f.axes[0] * f.unit);
-  const Pixel to{press.x + (tip.x - f.centre.x) * 0.5,
-                 press.y + (tip.y - f.centre.y) * 0.5};
+  const Pixel to{press.x + (tip.x - f.center.x) * 0.5,
+                 press.y + (tip.y - f.center.y) * 0.5};
   const double t0 = *axisParameter(d.vm, press.x, press.y, f.pivot, f.axes[0]);
   const double t1 = *axisParameter(d.vm, to.x, to.y, f.pivot, f.axes[0]);
   must(d.send(EventType::PointerDown, press.x, press.y).status());

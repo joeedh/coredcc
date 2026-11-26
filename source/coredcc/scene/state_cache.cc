@@ -122,7 +122,7 @@ Ancestry::Place Ancestry::under(BlockHandle object, BlockHandle parent) const
   p.parent = parent;
   const bool in = set_.lookup_ptr(object) != nullptr;
   p.within = in || (above && above->within);
-  p.depth = above ? above->depth + 1 : 0;
+  p.parentDepth = above ? above->parentDepth + 1 : 0;
   p.outside = !in ? object : above ? above->outside : BlockHandle();
   return p;
 }

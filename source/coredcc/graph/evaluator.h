@@ -54,7 +54,7 @@ Status unknownType();
 class Evaluator {
 public:
   /** Groups and elements nested deeper than this fail. The root is at depth 0. */
-  static constexpr int kMaxDepth = 64;
+  static constexpr int kMaxGraphDepth = 64;
 
   Evaluator(Runtime *rt, Library *lib, GraphSource source);
   ~Evaluator();

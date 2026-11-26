@@ -34,7 +34,7 @@ namespace part {
 inline constexpr int32_t kX = 0, kY = 1, kZ = 2;
 inline constexpr int32_t kPlaneX = 3, kPlaneY = 4, kPlaneZ = 5;
 /** Translate: the view plane; scale: uniform. */
-inline constexpr int32_t kCentre = 6;
+inline constexpr int32_t kCenter = 6;
 /** Rotate: about the view direction. */
 inline constexpr int32_t kView = 7;
 inline constexpr int32_t kCount = 8;
@@ -101,7 +101,7 @@ double polygonDistance(Pixel p, const litestl::util::Vector<Pixel> &poly);
  * in arcs: a run of points that are adjacent. `arcs` gets the index each arc starts at.
  */
 void frontArc(const ViewMath &view,
-              const double3 &centre,
+              const double3 &center,
               const double3 &normal,
               double radius,
               litestl::util::Vector<double3> &points,

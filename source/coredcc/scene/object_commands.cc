@@ -192,7 +192,7 @@ struct SetWorld : ChangesCommand {
       if (!place.ok()) {
         return detail::about(lib, t.object, place.status());
       }
-      t.depth = place->depth;
+      t.depth = place->parentDepth;
       out.append(t);
     }
     std::stable_sort(out.data(),
@@ -250,9 +250,10 @@ struct SetWorld : ChangesCommand {
                            "its transform type isn't registered");
     }
     Result<ChannelBlock> c =
-        solveWorld(*r->type, r->solveCtx(), t.matrix, *parent, SetWorldMode::Exact);
+        solveWorld(*r->type, r->solveContext(), t.matrix, *parent, SetWorldMode::Exact);
     if (!c.ok() && closest && c.status().code() == StatusCode::FailedPrecondition) {
-      c = solveWorld(*r->type, r->solveCtx(), t.matrix, *parent, SetWorldMode::Closest);
+      c = solveWorld(
+          *r->type, r->solveContext(), t.matrix, *parent, SetWorldMode::Closest);
       approximate += c.ok() ? 1 : 0;
     }
     return c;

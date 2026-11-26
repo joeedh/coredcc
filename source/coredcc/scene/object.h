@@ -262,7 +262,7 @@ struct ObjectRead {
                            : EvalContext(channels, time);
   }
   /** What a tool that moves it gives to a solver: the same, with its locks. */
-  EvalContext solveCtx() const
+  EvalContext solveContext() const
   {
     return ctx().withLocks(info.locks);
   }

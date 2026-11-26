@@ -86,8 +86,8 @@ export function graphTests(env: Env) {
   })
 
   test('a TS kernel that throws, or misuses what it has', () => {
-    let body: (node: cdcc.NodeContext) => unknown = () => {}
-    let kept: cdcc.NodeContext | undefined
+    let body: (node: cdcc.NodeExecContext) => unknown = () => {}
+    let kept: cdcc.NodeExecContext | undefined
     cdcc.defineNodeType(ctx, {
       id: 'ts.odd',
       inputs: {a: cdcc.float(1)},

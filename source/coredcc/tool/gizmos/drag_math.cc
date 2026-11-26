@@ -107,14 +107,14 @@ double screenHandedness(const ViewMath &view, const double3 &p)
   return cross >= 0.0 ? 1.0 : -1.0;
 }
 
-AngleTracker::AngleTracker(Pixel centre, Pixel start) : centre_(centre)
+AngleTracker::AngleTracker(Pixel center, Pixel start) : center_(center)
 {
-  last_ = std::atan2(centre.y - start.y, start.x - centre.x);
+  last_ = std::atan2(center.y - start.y, start.x - center.x);
 }
 
 double AngleTracker::update(Pixel p)
 {
-  const double dx = p.x - centre_.x, dy = centre_.y - p.y;
+  const double dx = p.x - center_.x, dy = center_.y - p.y;
   if (dx * dx + dy * dy < 1e-12) {
     return total_;
   }
@@ -131,10 +131,10 @@ double AngleTracker::update(Pixel p)
   return total_;
 }
 
-double scaleFactor(Pixel centre, Pixel start, Pixel now, Pixel axis)
+double scaleFactor(Pixel center, Pixel start, Pixel now, Pixel axis)
 {
-  const double sx = start.x - centre.x, sy = start.y - centre.y;
-  const double nx = now.x - centre.x, ny = now.y - centre.y;
+  const double sx = start.x - center.x, sy = start.y - center.y;
+  const double nx = now.x - center.x, ny = now.y - center.y;
   if (axis.x == 0.0 && axis.y == 0.0) {
     const double s = std::hypot(sx, sy);
     return s < 1.0 ? 1.0 : std::hypot(nx, ny) / s;

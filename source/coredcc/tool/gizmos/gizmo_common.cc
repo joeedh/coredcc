@@ -249,7 +249,7 @@ double polygonDistance(Pixel p, const Vector<Pixel> &poly)
 }
 
 void frontArc(const ViewMath &view,
-              const double3 &centre,
+              const double3 &center,
               const double3 &normal,
               double radius,
               Vector<double3> &points,
@@ -266,7 +266,7 @@ void frontArc(const ViewMath &view,
   u = u - n * u.dot(n);
   u.normalize();
   const double3 v = n.cross(u);
-  const double3 eye = towardEye(view, centre);
+  const double3 eye = towardEye(view, center);
   /* Start where the circle goes behind, so that the front is one run. */
   double start = std::atan2(-eye.dot(u), eye.dot(v)) - std::numbers::pi * 0.5;
   bool inRun = false;
@@ -278,7 +278,7 @@ void frontArc(const ViewMath &view,
         arcs.append(int32_t(points.size()));
         inRun = true;
       }
-      points.append(centre + dir * radius);
+      points.append(center + dir * radius);
     } else {
       inRun = false;
     }

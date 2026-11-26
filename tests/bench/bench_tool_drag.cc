@@ -111,7 +111,7 @@ void run(int count)
   Pixel press, tip;
   toPixel(d.vm, f.pivot + f.axes[0] * (f.unit * 0.7), press);
   toPixel(d.vm, f.pivot + f.axes[0] * f.unit, tip);
-  const double dx = tip.x - f.centre.x, dy = tip.y - f.centre.y;
+  const double dx = tip.x - f.center.x, dy = tip.y - f.center.y;
   const double len = std::sqrt(dx * dx + dy * dy);
   must(d.tm->dispatch(*d.ctx, d.view, d.event(EventType::PointerDown, press)).status());
   if (!d.tm->modalOpen()) {

@@ -412,7 +412,7 @@ Result<ChannelBlock> setWorldOf(const Library &lib,
   if (!r->type) {
     return failed("setWorldOf: the object's transform type isn't registered");
   }
-  return solveWorld(*r->type, r->solveCtx(), target, *parent, mode);
+  return solveWorld(*r->type, r->solveContext(), target, *parent, mode);
 }
 
 bool isSelfOrAncestor(const Library &lib, BlockHandle ancestor, BlockHandle object)

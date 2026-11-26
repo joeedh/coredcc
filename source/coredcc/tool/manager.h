@@ -86,7 +86,7 @@ public:
    * can't pop that, and what it leaves pushed is popped after it. */
   Status draw(Context &ctx, const View &view, DrawList &out);
   /** The DrawLists' origin: unset (the default), the camera's position. A host that
-   * renders relative to another point (a floating origin, a tile's centre) sets it. */
+   * renders relative to another point (a floating origin, a tile's center) sets it. */
   std::optional<double3> drawOrigin;
   /** Ends the gesture in progress, cancelling its command. Nothing without one. */
   Status cancel(Context &ctx);

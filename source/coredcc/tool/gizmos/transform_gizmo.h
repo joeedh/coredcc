@@ -48,7 +48,7 @@ struct Frame {
   /** How much of each axis, and each plane, is shown (0 hidden). */
   double axisShown[3] = {0, 0, 0};
   double planeShown[3] = {0, 0, 0};
-  Pixel centre;
+  Pixel center;
   bool onScreen = false;
   /** Logical pixels: the gizmo's size, and device pixels per logical pixel. */
   double size = look::kSize;

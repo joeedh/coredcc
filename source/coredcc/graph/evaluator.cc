@@ -390,7 +390,7 @@ bool Evaluator::exists(const SocketPath &path) const
     }
     above.append(def);
     def = def->groupTarget(*n);
-    if (!def || above.contains(def) || above.size() > kMaxDepth) {
+    if (!def || above.contains(def) || above.size() > kMaxGraphDepth) {
       return true;
     }
   }

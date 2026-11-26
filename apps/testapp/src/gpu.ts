@@ -1,7 +1,7 @@
 /**
  * WebGPU setup: pick an adapter, report it, and render the viewport every frame. Until the
- * backend sets a renderer (TA3's overlay, src/overlay/), a frame is the clear colour, so
- * screenshots show a known colour.
+ * backend sets a renderer (TA3's overlay, src/overlay/), a frame is the clear color, so
+ * screenshots show a known color.
  */
 
 export interface AdapterReport {

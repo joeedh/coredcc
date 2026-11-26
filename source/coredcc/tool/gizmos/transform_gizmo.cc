@@ -24,7 +24,7 @@ constexpr double kInf = std::numeric_limits<double>::infinity();
 /* In units of the gizmo's size. */
 constexpr double kAxisStart = 0.25;
 constexpr double kPlaneMid = 0.35, kPlaneHalf = 0.1;
-constexpr double kCentreRadius = 0.2;
+constexpr double kCenterRadius = 0.2;
 constexpr double kViewRing = 1.2;
 constexpr double kScaleHead = 0.95, kScaleCube = 0.1;
 
@@ -130,7 +130,7 @@ Frame makeFrame(const ViewMath &view,
   f.dpi = view.view().dpiScale > 0.0 ? view.view().dpiScale : 1.0;
   f.unit = unitAt(view, f.pivot, s.size);
   f.eye = towardEye(view, f.pivot);
-  f.onScreen = placement.visible && f.unit > 0.0 && toPixel(view, f.pivot, f.centre);
+  f.onScreen = placement.visible && f.unit > 0.0 && toPixel(view, f.pivot, f.center);
   for (int i = 0; i < 3; i++) {
     double3 e(0, 0, 0);
     e[i] = 1.0;
@@ -191,9 +191,9 @@ double Frame::distance(const ViewMath &view, int32_t p, Pixel px) const
     }
     return polygonDistance(px, poly) / dpi;
   }
-  const double d = std::hypot(px.x - centre.x, px.y - centre.y) / dpi;
-  if (p == part::kCentre) {
-    return std::max(0.0, d - kCentreRadius * size);
+  const double d = std::hypot(px.x - center.x, px.y - center.y) / dpi;
+  if (p == part::kCenter) {
+    return std::max(0.0, d - kCenterRadius * size);
   }
   if (p == part::kView) {
     return std::max(0.0, std::abs(d - kViewRing * size) - look::kRingWidth);
@@ -264,11 +264,11 @@ void Frame::draw(
         .ignore();
     return;
   }
-  if (p == part::kCentre || p == part::kView) {
-    const double r = (p == part::kCentre ? kCentreRadius : kViewRing) * size;
+  if (p == part::kCenter || p == part::kView) {
+    const double r = (p == part::kCenter ? kCenterRadius : kViewRing) * size;
     out.circle2d(styleOf(withAlpha(look::kWhite, alpha), look::kLineWidth, id),
-                 centre.x,
-                 centre.y,
+                 center.x,
+                 center.y,
                  r,
                  false)
         .ignore();
@@ -301,7 +301,7 @@ double3 pivotOfDrag(Context &ctx, const TransformSettings &s, const Placement &p
   Command *cmd = ex ? ex->interactiveCommand() : nullptr;
   if (const ElementsDelta *el = cmd ? cmd->as<ElementsDelta>() : nullptr) {
     double3 c;
-    return el->centre(c) ? c : placement.pivot;
+    return el->center(c) ? c : placement.pivot;
   }
   const ApplyDelta *a = cmd ? cmd->as<ApplyDelta>() : nullptr;
   Library *lib = ctx.library();
@@ -351,8 +351,8 @@ GizmoHit TransformGizmo::hitTest(const ViewMath &view, double x, double y) const
   if (!f.onScreen) {
     return hit;
   }
-  /* Ties go to the first: the centre, then the axes, the planes and the view ring. */
-  static constexpr int32_t kOrder[part::kCount] = {part::kCentre,
+  /* Ties go to the first: the center, then the axes, the planes and the view ring. */
+  static constexpr int32_t kOrder[part::kCount] = {part::kCenter,
                                                    part::kX,
                                                    part::kY,
                                                    part::kZ,

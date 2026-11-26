@@ -291,10 +291,10 @@ void SceneEvaluator::sortByDepth()
 {
   for (int i : order_) {
     SceneMember &m = members_[i];
-    m.depth = m.parent < 0 || cyclic_[i] ? 0 : members_[m.parent].depth + 1;
+    m.parentDepth = m.parent < 0 || cyclic_[i] ? 0 : members_[m.parent].parentDepth + 1;
   }
   std::stable_sort(order_.data(), order_.data() + order_.size(), [this](int a, int b) {
-    return members_[a].depth < members_[b].depth;
+    return members_[a].parentDepth < members_[b].parentDepth;
   });
   byDepth_ = true;
 }
@@ -565,7 +565,7 @@ SceneEvaluator::Pass SceneEvaluator::evaluateAll(const Scene &scene,
     const int i = order_[k];
     const SceneMember &m = members_[i];
     if (batching && k == levelEnd) {
-      while (levelEnd < n && members_[order_[levelEnd]].depth == m.depth) {
+      while (levelEnd < n && members_[order_[levelEnd]].parentDepth == m.parentDepth) {
         levelEnd++;
       }
       evaluateLevel(

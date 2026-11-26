@@ -12,7 +12,7 @@ using litestl::util::Vector;
 
 namespace {
 
-constexpr int kMaxDepth = 64;
+constexpr int kMaxGraphDepth = 64;
 
 const PropValue *paramOf(const GraphNode &n, const char *name)
 {
@@ -123,7 +123,7 @@ void AdapterScan::expand(const Library &lib,
   if (!def) {
     return;
   }
-  if (depth > kMaxDepth) {
+  if (depth > kMaxGraphDepth) {
     issues.append(issueAt(prefix, NodeId(), "groups nested deeper than 64 are left out"));
     return;
   }
