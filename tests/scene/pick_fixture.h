@@ -42,23 +42,27 @@ inline ViewMath viewOf(const ViewCase &c)
   v.viewport[2] = 1920.0;
   v.viewport[3] = 1080.0;
   v.dpiScale = c.dpiScale;
-  v.depth = c.minusOne ? DepthRange::MinusOneToOne : DepthRange::ZeroToOne;
+  v.depthRange = c.minusOne ? DepthRange::MinusOneToOne : DepthRange::ZeroToOne;
   v.reversedZ = c.reversed;
   v.ortho = c.ortho;
   v.infiniteFar = c.infinite && !c.ortho;
   v.view = litestl::math::lookAt(c.eye, c.target, c.up);
   const double aspect = 16.0 / 9.0, far = c.zFar;
-  v.proj =
-      c.ortho
-          ? litestl::math::orthographic(
-                -3.0 * aspect, 3.0 * aspect, -3.0, 3.0, c.zNear, far, v.depth, c.reversed)
-          : litestl::math::perspective(
-                1.0,
-                aspect,
-                c.zNear,
-                v.infiniteFar ? std::numeric_limits<double>::infinity() : far,
-                v.depth,
-                c.reversed);
+  v.proj = c.ortho ? litestl::math::orthographic(-3.0 * aspect,
+                                                 3.0 * aspect,
+                                                 -3.0,
+                                                 3.0,
+                                                 c.zNear,
+                                                 far,
+                                                 v.depthRange,
+                                                 c.reversed)
+                   : litestl::math::perspective(
+                         1.0,
+                         aspect,
+                         c.zNear,
+                         v.infiniteFar ? std::numeric_limits<double>::infinity() : far,
+                         v.depthRange,
+                         c.reversed);
   ViewMath m;
   const Status s = m.set(v);
   if (!s.ok()) {

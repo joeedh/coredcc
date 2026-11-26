@@ -129,7 +129,7 @@ lbt::Struct<GizmoHit> *GizmoHit::defineBindings()
     BIND_STRUCT_COPY_CONSTRUCTOR(st);
     BIND_STRUCT_MEMBER(st, part);
     BIND_STRUCT_MEMBER(st, distance);
-    BIND_STRUCT_MEMBER(st, depth);
+    BIND_STRUCT_MEMBER(st, viewDistance);
   }
   return st;
 }

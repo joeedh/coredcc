@@ -159,7 +159,7 @@ Status DrawListReader::read(std::span<const uint8_t> bytes)
     item.style.width = get<float>(r + 12);
     item.style.id = get<uint32_t>(r + 16);
     item.aux = get<uint32_t>(r + 20);
-    item.style.depth = DepthMode(depthMode);
+    item.style.depthMode = DepthMode(depthMode);
     item.offset = uint32_t(at);
     if (depthMode > uint8_t(DepthMode::XRay)) {
       return bad(at, "no such depth mode");

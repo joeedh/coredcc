@@ -31,7 +31,7 @@ void drawCursor(const ViewMath &view, double x, double y, double radius, DrawLis
 {
   DrawStyle style;
   style.color = 0xe0ffffffu;
-  style.depth = DepthMode::Always;
+  style.depthMode = DepthMode::Always;
   out.circle2d(style, x, y, radius, false).ignore();
   (void)view;
 }

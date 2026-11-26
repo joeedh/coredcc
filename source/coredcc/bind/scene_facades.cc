@@ -291,7 +291,7 @@ pick(Context &ctx, const View &view, double x, double y, const PickOptions &opti
     p.domain = h.domain;
     p.element = h.element;
     p.distance = h.distance;
-    p.depth = h.depth;
+    p.viewDistance = h.viewDistance;
     p.point = h.point;
     p.instance = h.instance;
     p.normal = h.normal;
@@ -315,7 +315,7 @@ const lbt::Struct<PickedObject> *PickedObject::defineBindings()
     BIND_STRUCT_MEMBER(st, domain);
     BIND_STRUCT_MEMBER(st, element);
     BIND_STRUCT_MEMBER(st, distance);
-    BIND_STRUCT_MEMBER(st, depth);
+    BIND_STRUCT_MEMBER(st, viewDistance);
     BIND_STRUCT_MEMBER(st, point);
     BIND_STRUCT_MEMBER(st, instance);
     BIND_STRUCT_MEMBER(st, normal);

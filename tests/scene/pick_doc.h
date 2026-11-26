@@ -287,7 +287,7 @@ inline Prim face(const double3 &a, const double3 &b, const double3 &c)
 struct Expected {
   bool visible = false;
   double distance = 0.0;
-  double depth = 0.0;
+  double viewDistance = 0.0;
   /** Whether the depth is worth comparing: not of triangles seen edge on. */
   bool depthKnown = true;
 };
@@ -354,7 +354,7 @@ expectTriangle(const ViewMath &view, const double3 (&w)[3], double x, double y)
   e.depthKnown = std::fabs(det) > 1e-4 * lengthOf(ab) * lengthOf(ac);
   if (inside && e.depthKnown) {
     const double t = ac.dot((ray.origin - w[0]).cross(ab)) / det;
-    e.depth = view.viewDistance(ray.origin + ray.dir * t);
+    e.viewDistance = view.viewDistance(ray.origin + ray.dir * t);
   }
   return e;
 }

@@ -34,7 +34,7 @@ DrawStyle style(uint32_t id = 0, DepthMode depth = DepthMode::Test)
   DrawStyle s;
   s.color = 0x80402010u;
   s.width = 2.5f;
-  s.depth = depth;
+  s.depthMode = depth;
   s.id = id;
   return s;
 }
@@ -89,9 +89,9 @@ void testRoundTrip()
               it[0].style.width == 2.5f);
   /* Outside a push: relative to the origin. */
   test_assert(it[0].vertex(0, 0) == 1.0f && it[0].vertex(1, 1) == 2.0f);
-  test_assert(it[1].style.depth == DepthMode::Always);
+  test_assert(it[1].style.depthMode == DepthMode::Always);
   test_assert(it[2].flags == drawflags::kCornerColors && it[2].cornerColor(2) == 3 &&
-              it[2].style.depth == DepthMode::XRay);
+              it[2].style.depthMode == DepthMode::XRay);
   /* A shape outside a push: its translation minus the origin. */
   mat4d sm = it[3].matrix();
   test_assert(it[3].aux == uint32_t(ShapeKind::Arrow) && sm[3][0] == 0.0 &&
@@ -153,7 +153,7 @@ void testRefusals()
   const double3 huge[1] = {double3(1e39, 0, 0)};
   test_assert(!d.points(style(), huge).ok());
   DrawStyle s = style();
-  s.depth = DepthMode(3);
+  s.depthMode = DepthMode(3);
   test_assert(d.points(style(), std::span<const double3>()).ok());
   test_assert(!d.points(s, std::span<const double3>(odd, 1)).ok());
   s = style();
@@ -173,7 +173,7 @@ void testRefusals()
 
   /* end pops what is left, and says so. */
   test_assert(d.pushMatrix(translation(1, 2, 3)).ok());
-  test_assert(d.end().code() == StatusCode::InvalidArgument && d.depth() == 0);
+  test_assert(d.end().code() == StatusCode::InvalidArgument && d.matrixDepth() == 0);
   DrawListReader r;
   test_assert(r.read(d.bytes()).ok());
   /* Frozen. */
@@ -285,11 +285,13 @@ void testFloor()
   {
     DrawSlotScope slot(d);
     test_assert(d.floor() == 1);
-    test_assert(d.popMatrix().code() == StatusCode::InvalidArgument && d.depth() == 1);
+    test_assert(d.popMatrix().code() == StatusCode::InvalidArgument &&
+                d.matrixDepth() == 1);
     test_assert(d.pushMatrix(translation(0, 1, 0)).ok());
     test_assert(d.pushMatrix(translation(0, 0, 1)).ok() && d.popMatrix().ok());
     const Status s = slot.close("the slot");
-    test_assert(s.code() == StatusCode::InvalidArgument && d.depth() == 1 && d.floor() == 0);
+    test_assert(s.code() == StatusCode::InvalidArgument && d.matrixDepth() == 1 &&
+                d.floor() == 0);
     test_assert(slot.close("again").ok());
   }
   test_assert(d.popMatrix().ok() && d.end().ok());

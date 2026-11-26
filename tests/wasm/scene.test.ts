@@ -312,7 +312,7 @@ const suite = () => {
     assert.deepEqual(cdcc.pick(ctx, view, 50, 50, {radius: 100}), [])
     assert.throws(() => cdcc.pick(ctx, {...view, viewport: [0, 0, 0, 0]}, 1, 1), fails(StatusCode.InvalidArgument, /./))
     assert.throws(() => cdcc.pick(ctx, {...view, reversedZ: true}, 1, 1), fails(StatusCode.InvalidArgument, /./))
-    assert.throws(() => cdcc.pick(ctx, {...view, depth: '-1..1'}, 1, 1, {radius: -1}), fails(StatusCode.InvalidArgument, /./))
+    assert.throws(() => cdcc.pick(ctx, {...view, depthRange: '-1..1'}, 1, 1, {radius: -1}), fails(StatusCode.InvalidArgument, /./))
     assert.throws(() => cdcc.pick(ctx, {...view, proj: [1]}, 1, 1), /proj has 16 numbers, not 1/)
     cdcc.setScene(ctx, null)
     assert.throws(() => cdcc.pick(ctx, view, 1, 1), fails(StatusCode.FailedPrecondition, /no scene/))

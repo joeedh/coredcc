@@ -247,14 +247,14 @@ function register(what: string, ctx: Context, spec: NodeTypeSpec, enter: Registe
     const kernel = {
       evaluate(raw: NodeExecContext): Status | undefined {
         const node = new NodeContext(raw)
-        scriptSlots.depth++
+        scriptSlots.callDepth++
         try {
           sync('evaluate', spec.evaluate(node))
           return undefined
         } catch (e) {
           return statusOf(StatusCode.Internal, e)
         } finally {
-          scriptSlots.depth--
+          scriptSlots.callDepth--
           node.close()
         }
       },

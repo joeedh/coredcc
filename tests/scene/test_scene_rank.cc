@@ -71,8 +71,8 @@ ranked(std::vector<Shape1> all, const ViewMath &view, const PickOptions &o)
   double depth = std::numeric_limits<double>::infinity(), behind = depth;
   if (o.occlusion) {
     for (const Shape1 &s : all) {
-      if (!s.hit.thin && s.hit.distance == 0.0 && s.hit.depth < depth) {
-        depth = s.hit.depth;
+      if (!s.hit.thin && s.hit.distance == 0.0 && s.hit.viewDistance < depth) {
+        depth = s.hit.viewDistance;
         const double reach = std::fmax(o.radius + o.shapeRadius, 1.0);
         behind = depth + o.slope * reach * view.pixelSizeAt(s.hit.point);
       }
@@ -81,7 +81,9 @@ ranked(std::vector<Shape1> all, const ViewMath &view, const PickOptions &o)
   std::vector<Shape1> left, out;
   for (Shape1 s : all) {
     if ((o.domains >> s.hit.domain & 1) != 0) {
-      s.group = s.hit.thin && s.hit.depth <= behind ? 0 : s.hit.distance == 0.0 ? 1 : 2;
+      s.group = s.hit.thin && s.hit.viewDistance <= behind ? 0
+                : s.hit.distance == 0.0                    ? 1
+                                                           : 2;
       left.push_back(s);
     }
   }
@@ -95,7 +97,9 @@ ranked(std::vector<Shape1> all, const ViewMath &view, const PickOptions &o)
     if (a.group == 0 && a.dimension != b.dimension) {
       return a.dimension < b.dimension;
     }
-    return a.hit.depth != b.hit.depth ? a.hit.depth < b.hit.depth : a.place < b.place;
+    return a.hit.viewDistance != b.hit.viewDistance
+               ? a.hit.viewDistance < b.hit.viewDistance
+               : a.place < b.place;
   };
   while (!left.empty() && (o.maxHits == 0 || int(out.size()) < o.maxHits)) {
     size_t best = 0;
@@ -123,7 +127,7 @@ bool same(const Vector<PickHit> &hits, const std::vector<Shape1> &want)
   for (int i = 0; i < int(want.size()); i++) {
     const PickHit &a = hits[i], &b = want[size_t(i)].hit;
     if (!(a.object == b.object) || a.domain != b.domain || a.distance != b.distance ||
-        a.depth != b.depth || a.thin != b.thin)
+        a.viewDistance != b.viewDistance || a.thin != b.thin)
     {
       return false;
     }
@@ -454,7 +458,7 @@ void testHit()
       continue;
     }
     expect(hit.u >= 0.0 && hit.u <= 1.0, "u of a capsule");
-    if (!hit.covers() || lengthOf(hit.normal) == 0.0 || hit.depth < 1e-6) {
+    if (!hit.covers() || lengthOf(hit.normal) == 0.0 || hit.viewDistance < 1e-6) {
       continue;
     }
     solids++;
@@ -670,7 +674,7 @@ void testLimits()
     const PickQuery all(cursor, identity());
     test_assert(inside(all, -9.99) && inside(all, -10.01) == infinite &&
                 !inside(all, 9.95));
-    test_assert(all.limitDepth() > 1e300 && all.surfaceRadiusDevicePixels() == 20.0);
+    test_assert(all.maxViewDistance() > 1e300 && all.surfaceRadiusDevicePixels() == 20.0);
     test_assert(infinite ? all.ray().tMax > 1e300
                          : std::fabs(all.ray().tMax - 19.9) < 1e-6);
     /* The near plane is at z = 9.9. */

@@ -141,11 +141,11 @@ class PickQuery {
 public:
   PickQuery() = default;
   /** For an object with the matrix `world`. `cursor` must outlive it. What is more than
-   * `limitDepth` behind the near plane, in world units, isn't wanted. Surfaces that are
-   * near the pixel but don't cover it are wanted only if `nearSurfaces`. */
+   * `maxViewDistance` behind the near plane, in world units, isn't wanted. Surfaces that
+   * are near the pixel but don't cover it are wanted only if `nearSurfaces`. */
   PickQuery(const PickCursor &cursor,
             const mat4d &world,
-            double limitDepth = (std::numeric_limits<double>::infinity)(),
+            double maxViewDistance = (std::numeric_limits<double>::infinity)(),
             bool nearSurfaces = true);
 
   const RegionQuery &region() const
@@ -161,8 +161,8 @@ public:
   {
     return hasRay_;
   }
-  /** From the near plane to the far plane, or to limitDepth(). Its t is the distance in
-   * the world. */
+  /** From the near plane to the far plane, or to maxViewDistance(). Its t is the distance
+   * in the world. */
   const Ray &ray() const
   {
     return ray_;
@@ -198,9 +198,9 @@ public:
     return surfaceRadius_;
   }
   /** World units behind the near plane; infinite for no limit. */
-  double limitDepth() const
+  double maxViewDistance() const
   {
-    return limitDepth_;
+    return maxViewDistance_;
   }
   /**
    * An object-space length that is at least a logical pixel at `p`, in whichever
@@ -254,7 +254,7 @@ private:
   const PickCursor *cursor_ = nullptr;
   double radius_ = 0.0;
   double surfaceRadius_ = 0.0;
-  double limitDepth_ = (std::numeric_limits<double>::infinity)();
+  double maxViewDistance_ = (std::numeric_limits<double>::infinity)();
   double dpiScale_ = 1.0;
 };
 
@@ -269,7 +269,7 @@ struct PickHit {
    * radius. 0 if it covers the cursor. */
   double distance = 0.0;
   /** Of `point` (ViewMath::viewDistance). */
-  double depth = 0.0;
+  double viewDistance = 0.0;
   /** In the world: where the ray through the cursor hits the shape, or the shape's point
    * that is nearest to the cursor on the screen. */
   double3 point;

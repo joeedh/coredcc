@@ -186,7 +186,8 @@ void testSame()
       test_assert(a.size() == b.size());
       for (int i = 0; i < int((std::min)(a.size(), b.size())); i++) {
         test_assert(a[i].element == b[i].element && a[i].domain == b[i].domain &&
-                    a[i].distance == b[i].distance && a[i].depth == b[i].depth);
+                    a[i].distance == b[i].distance &&
+                    a[i].viewDistance == b[i].viewDistance);
         hits++;
       }
       NearestOptions n;

@@ -80,11 +80,11 @@ Status bad(const char *what)
 
 double nearDepthOf(const View &v)
 {
-  return v.reversedZ ? 1.0 : v.depth == DepthRange::ZeroToOne ? 0.0 : -1.0;
+  return v.reversedZ ? 1.0 : v.depthRange == DepthRange::ZeroToOne ? 0.0 : -1.0;
 }
 double farDepthOf(const View &v)
 {
-  return !v.reversedZ ? 1.0 : v.depth == DepthRange::ZeroToOne ? 0.0 : -1.0;
+  return !v.reversedZ ? 1.0 : v.depthRange == DepthRange::ZeroToOne ? 0.0 : -1.0;
 }
 
 /* What a projection has that a float one can't have more exactly. */
@@ -188,7 +188,8 @@ Status checkView(View &v)
   if (!(v.dpiScale > 0.0) || !bvh::finite(v.dpiScale)) {
     return bad("dpiScale isn't a positive number");
   }
-  if ((v.depth != DepthRange::ZeroToOne && v.depth != DepthRange::MinusOneToOne) ||
+  if ((v.depthRange != DepthRange::ZeroToOne &&
+       v.depthRange != DepthRange::MinusOneToOne) ||
       (v.handedness != Handedness::Right && v.handedness != Handedness::Left) ||
       (v.up != UpAxis::Y && v.up != UpAxis::Z))
   {
@@ -257,9 +258,9 @@ void View::putViewport(int32_t i, double value)
   }
 }
 
-void View::setConventions(int32_t depthRange)
+void View::setConventions(int32_t value)
 {
-  depth = DepthRange(depthRange);
+  depthRange = DepthRange(value);
 }
 
 double ViewRegion::planeAt(int32_t plane, int32_t i) const
@@ -283,11 +284,13 @@ Status ViewMath::set(const View &given)
     m.clip_[r] = rowOf(v.proj, r);
   }
   const double4 &cx = m.clip_[0], &cy = m.clip_[1], &cz = m.clip_[2], &cw = m.clip_[3];
-  m.nearView_ = v.reversedZ ? cw - cz : v.depth == DepthRange::ZeroToOne ? cz : cw + cz;
-  m.farView_ = farAtInfinity(v)                   ? double4(0.0, 0.0, 0.0, 1.0)
-               : !v.reversedZ                     ? cw - cz
-               : v.depth == DepthRange::ZeroToOne ? cz
-                                                  : cw + cz;
+  m.nearView_ = v.reversedZ                             ? cw - cz
+                : v.depthRange == DepthRange::ZeroToOne ? cz
+                                                        : cw + cz;
+  m.farView_ = farAtInfinity(v)                        ? double4(0.0, 0.0, 0.0, 1.0)
+               : !v.reversedZ                          ? cw - cz
+               : v.depthRange == DepthRange::ZeroToOne ? cz
+                                                       : cw + cz;
   m.nearPlane_ = planeToLocal(v.view, m.nearView_);
   m.farPlane_ = planeToLocal(v.view, m.farView_);
   m.nearScale_ = 1.0 / length3(m.nearPlane_);
@@ -317,7 +320,7 @@ ViewPoint ViewMath::project(const double3 &p) const
   ViewPoint r;
   const double4 v = transformHomogeneous(view_.view, double4(p[0], p[1], p[2], 1.0));
   const double w = dot4(clip_[3], v), nearSide = dot4(nearView_, v);
-  r.distance = nearSide * nearScale_;
+  r.viewDistance = nearSide * nearScale_;
   r.behind = !(w > 0.0);
   r.visible = !r.behind && nearSide >= 0.0 && dot4(farView_, v) >= 0.0;
   if (!r.behind) {

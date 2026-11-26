@@ -50,7 +50,7 @@ expectObject(const ViewMath &view, const Geo &g, const mat4d &world, double x, d
       best = keep ? best : e;
     } else if (e.distance == 0.0 && best.distance == 0.0) {
       best.depthKnown = best.depthKnown && e.depthKnown;
-      best.depth = std::fmin(best.depth, e.depth);
+      best.viewDistance = std::fmin(best.viewDistance, e.viewDistance);
     }
   }
   return best;
@@ -72,9 +72,10 @@ void checkEntry(const ViewMath &view,
                 double y)
 {
   const ViewPoint at = view.project(hit.point);
-  expect(hit.depth >= 0.0, "no depth is negative");
+  expect(hit.viewDistance >= 0.0, "no depth is negative");
   expect(std::hypot(at.x - x, at.y - y) < 0.02, "the point of a hit is under the cursor");
-  expect(std::fabs(view.viewDistance(hit.point) - hit.depth) < 1e-6 * (1.0 + hit.depth),
+  expect(std::fabs(view.viewDistance(hit.point) - hit.viewDistance) <
+             1e-6 * (1.0 + hit.viewDistance),
          "depth");
   const Prim &p = g.prims[size_t(hit.element)];
   mat4d inverse;
@@ -84,7 +85,7 @@ void checkEntry(const ViewMath &view,
   const double3 q = transformPoint(inverse, hit.point);
   const double off = lengthOf(q - bvh::closestOnSegment(q, p.q[0], p.q[1])) - p.radius;
   expect(off < 1e-7, "the point of a hit is in the solid");
-  if (hit.depth > 1e-5) {
+  if (hit.viewDistance > 1e-5) {
     const Ray ray = view.rayFromPixel(x, y);
     const double t = (hit.point - ray.origin).dot(ray.dir);
     expect(off > -1e-7, "the point of a hit is on the solid's surface");
@@ -140,13 +141,14 @@ void testLoop(bool ortho, bool behindEye)
         expect(hits[0].size() == hits[1].size(), "all shapes, and those from the BVH");
         for (size_t i = 0; i < std::min(hits[0].size(), hits[1].size()); i++) {
           const PickHit &a = hits[0][int(i)], &b = hits[1][int(i)];
-          expect(a.object == b.object && a.distance == b.distance && a.depth == b.depth,
+          expect(a.object == b.object && a.distance == b.distance &&
+                     a.viewDistance == b.viewDistance,
                  "the same hit from the BVH");
         }
         for (size_t i = 1; i < hits[0].size(); i++) {
           const PickHit &a = hits[0][int(i) - 1], &b = hits[0][int(i)];
           expect(a.distance < b.distance ||
-                     (a.distance == b.distance && a.depth <= b.depth),
+                     (a.distance == b.distance && a.viewDistance <= b.viewDistance),
                  "the order");
         }
         for (BlockHandle h : objects) {
@@ -179,12 +181,13 @@ void testLoop(bool ortho, bool behindEye)
             checkEntry(view, g, world, *hit, x, y);
             if (e.depthKnown) {
               depths++;
-              expect(std::fabs(hit->depth - e.depth) < 1e-5 * (1.0 + e.depth),
+              expect(std::fabs(hit->viewDistance - e.viewDistance) <
+                         1e-5 * (1.0 + e.viewDistance),
                      "the depth");
             }
           } else {
             near++;
-            expect(hit->depth >= 0.0, "no depth is negative");
+            expect(hit->viewDistance >= 0.0, "no depth is negative");
             const ViewPoint at = view.project(hit->point);
             expect(std::fabs(std::hypot(at.x - x, at.y - y) - e.distance) < 1e-3,
                    "the point");
@@ -221,7 +224,7 @@ void testBounds()
   Vector<PickHit> hits = d.picks(view, mid.x, mid.y, within(0.0));
   test_assert(hits.size() == 1 && hits[0].object == a && hits[0].covers());
   test_assert(hits[0].element == -1 && hits[0].domain == -1);
-  test_assert(std::fabs(hits[0].depth - 8.5) < 1e-9 &&
+  test_assert(std::fabs(hits[0].viewDistance - 8.5) < 1e-9 &&
               std::fabs(hits[0].point[2] - 1.0) < 1e-9);
   /* In the object's space. */
   put(d.obj(a).channels, trs::kRotationEuler, double3(0.0, 0.0, 0.7));
@@ -247,7 +250,7 @@ void testBounds()
   c.target = double3(0.0, 0.0, -5.0);
   const ViewMath inside = viewOf(c);
   hits = d.picks(inside, 1000.0, 560.0, within(0.0));
-  test_assert(hits.size() == 1 && std::fabs(hits[0].depth - 0.8) < 1e-9);
+  test_assert(hits.size() == 1 && std::fabs(hits[0].viewDistance - 0.8) < 1e-9);
   /* Flat, and a point. */
   for (int axes = 1; axes <= 3; axes++) {
     Box3d flat;
@@ -302,7 +305,7 @@ void testThin()
   hits = d.picks(view, at.x, at.y - 8.0, within(10.0, false));
   test_assert(hits.size() == 2 && hits[0].object == thin && hits[0].covers() &&
               hits[1].covers());
-  test_assert(hits[0].depth < hits[1].depth);
+  test_assert(hits[0].viewDistance < hits[1].viewDistance);
   /* Its end is where the matrix says: a ball a thousand pixels long. */
   const ViewPoint end = view.project(double3(2.0 + 1000.0 * pixel, 8.0 * pixel, 1.0));
   hits = d.picks(view, end.x - 5.0, end.y, within(0.0));
@@ -462,7 +465,7 @@ void testSink()
 
   /* For scripts. */
   test_assert(q.planeCount() == 6 && q.hasRay() && q.radiusDevicePixels() == 4.0);
-  test_assert(q.surfaceRadiusDevicePixels() == 4.0 && q.limitDepth() == inf &&
+  test_assert(q.surfaceRadiusDevicePixels() == 4.0 && q.maxViewDistance() == inf &&
               q.occlusion());
   test_assert(q.domains() == ~0u && q.wants(-1) && q.wants(31) && q.wants(40));
   const Vector<double> values = q.planeValues();
@@ -530,9 +533,10 @@ void testBulk()
     const auto &a = one.kept(), &b = many.kept();
     test_assert(a.size() == b.size() && a.size() >= 3);
     for (int i = 0; i < int((std::min)(a.size(), b.size())); i++) {
-      test_assert(
-          a[i].hit.element == b[i].hit.element && a[i].hit.domain == b[i].hit.domain &&
-          a[i].hit.distance == b[i].hit.distance && a[i].hit.depth == b[i].hit.depth);
+      test_assert(a[i].hit.element == b[i].hit.element &&
+                  a[i].hit.domain == b[i].hit.domain &&
+                  a[i].hit.distance == b[i].hit.distance &&
+                  a[i].hit.viewDistance == b[i].hit.viewDistance);
     }
   }
 }
@@ -555,7 +559,9 @@ void testQuery()
                : solve::affine(randomLinear(r, int(r.below(kLinearKinds))), r.vec(3.0));
     const double3 local = pivot + r.vec(1.0), at = transformPoint(world, local);
     const ViewPoint p = view.project(at);
-    if (!p.visible || p.distance < 1e-9 || std::fabs(p.x) > 1e6 || std::fabs(p.y) > 1e6) {
+    if (!p.visible || p.viewDistance < 1e-9 || std::fabs(p.x) > 1e6 ||
+        std::fabs(p.y) > 1e6)
+    {
       continue;
     }
     const double x = p.x + (border ? 3.0 : r.range(-3.0, 3.0)),

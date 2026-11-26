@@ -453,7 +453,7 @@ export interface ViewSpec {
   view: ArrayLike<number>
   /** View to clip space. */
   proj: ArrayLike<number>
-  depth?: '0..1' | '-1..1'
+  depthRange?: '0..1' | '-1..1'
   reversedZ?: boolean
   infiniteFar?: boolean
   ortho?: boolean
@@ -469,7 +469,8 @@ export interface PickedObject {
   element: number
   /** Logical pixels from the cursor. 0 if it covers the cursor. */
   distance: number
-  depth: number
+  /** From the near plane, along the view direction, in world units. */
+  viewDistance: number
   point: number[]
   /** -1 for none. */
   instance: number
@@ -504,7 +505,7 @@ function withView<R>(spec: ViewSpec, fn: (v: BoundView) => R): R {
     for (let i = 0; i < 4; i++) v.putViewport(i, spec.viewport[i])
     fill('view', v.view, spec.view, 16)
     fill('proj', v.proj, spec.proj, 16)
-    v.setConventions(spec.depth === '-1..1' ? 1 : 0)
+    v.setConventions(spec.depthRange === '-1..1' ? 1 : 0)
     v.handedness = spec.handedness === 'left' ? Handedness.Left : Handedness.Right
     v.up = spec.up === 'y' ? UpAxis.Y : UpAxis.Z
     v.reversedZ = spec.reversedZ ?? false
@@ -549,7 +550,7 @@ export function pick(ctx: Context, view: ViewSpec, x: number, y: number, options
           domain: p.domain,
           element: p.element,
           distance: p.distance,
-          depth: p.depth,
+          viewDistance: p.viewDistance,
           point: readVec3(p.point),
           instance: p.instance,
           normal: readVec3(p.normal),

@@ -62,7 +62,7 @@ lbt::Struct<PickQuery> *PickQuery::defineBindings()
     BIND_STRUCT_METHOD(st, occlusion, MARGS());
     BIND_STRUCT_METHOD(st, radiusDevicePixels, MARGS());
     BIND_STRUCT_METHOD(st, surfaceRadiusDevicePixels, MARGS());
-    BIND_STRUCT_METHOD(st, limitDepth, MARGS());
+    BIND_STRUCT_METHOD(st, maxViewDistance, MARGS());
     BIND_STRUCT_METHOD(st, pixelSizeAt, MARGS("p"));
   }
   return st;

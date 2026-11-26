@@ -69,7 +69,7 @@ public:
               void *ret);
   /** Foreign calls in progress. While it is above 0, facades that would reenter the
    * executor or the history are Busy, per slot (see facades.h). */
-  int depth() const
+  int callDepth() const
   {
     return int(frames_.size());
   }

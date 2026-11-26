@@ -140,14 +140,15 @@ struct Modal : IfaceRef {
   }
 };
 
-/** What Gizmo::hitTest found: a part, how far the cursor is from it, and its depth. */
+/** What Gizmo::hitTest found: a part, how far the cursor is from it, and its view
+ * distance. */
 struct GizmoHit {
   /** -1 for none. */
   int32_t part = -1;
   /** Logical pixels from the cursor to the part. */
   double distance = 0.0;
   /** ViewMath::viewDistance of the nearest point of the part. */
-  double depth = 0.0;
+  double viewDistance = 0.0;
 
   static litestl::binding::types::Struct<GizmoHit> *defineBindings();
 };
@@ -159,7 +160,7 @@ struct GizmoHit {
  * - `update` places it from the document, before each hit test and draw, but not during
  *   a gesture: then the gesture's modal draws what moves. It may only read.
  * - `hitTest`: the part nearest to a pixel. The manager takes the best of all gizmos'
- *   within ToolManager::hitRadius, by distance, then depth.
+ *   within ToolManager::hitRadius, by distance, then view distance.
  * - `draw`: `hover` and `active` are parts or -1. Records' ids are `idBase + part`.
  * - `beginDrag`: a press on `part`. It begins the command and pushes a modal.
  */

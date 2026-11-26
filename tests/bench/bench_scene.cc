@@ -247,7 +247,7 @@ int main(int argc, char **argv)
   v.viewport[3] = 1080.0;
   v.view = litestl::math::lookAt(
       double3(150.0, -100.0, 100.0), double3(150.0, 150.0, 0.0), double3(0.0, 0.0, 1.0));
-  v.proj = litestl::math::perspective(1.0, 16.0 / 9.0, 0.1, 10000.0, v.depth, false);
+  v.proj = litestl::math::perspective(1.0, 16.0 / 9.0, 0.1, 10000.0, v.depthRange, false);
   ViewMath view;
   must(view.set(v));
   for (double radius : {10.0, 200.0}) {

@@ -165,7 +165,7 @@ struct PickedObject {
   int32_t domain = -1;
   int32_t element = -1;
   double distance = 0.0;
-  double depth = 0.0;
+  double viewDistance = 0.0;
   double3 point;
   int32_t instance = -1;
   double3 normal;

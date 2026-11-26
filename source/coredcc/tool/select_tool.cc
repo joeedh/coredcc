@@ -138,7 +138,7 @@ void SelectModal::drawOverlay(const ViewMath &, DrawList &out) const
   DrawStyle st;
   st.color = 0xccffffffu;
   st.width = 1.0f;
-  st.depth = DepthMode::Always;
+  st.depthMode = DepthMode::Always;
   const double xy[10] = {
       press.x, press.y, now.x, press.y, now.x, now.y, press.x, now.y, press.x, press.y};
   out.line2d(st, std::span<const double>(xy, 10)).ignore();

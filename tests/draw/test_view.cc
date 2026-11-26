@@ -102,7 +102,7 @@ Case makeCase(const Convention &c, Rand &r, double offset)
   v.viewport[2] = std::round(r.range(50, 4000));
   v.viewport[3] = std::round(r.range(50, 3000));
   v.dpiScale = r.coin() ? 1.0 : 2.0;
-  v.depth = c.minusOne ? DepthRange::MinusOneToOne : DepthRange::ZeroToOne;
+  v.depthRange = c.minusOne ? DepthRange::MinusOneToOne : DepthRange::ZeroToOne;
   v.reversedZ = c.reversed;
   v.infiniteFar = c.infinite;
   v.ortho = c.ortho;
@@ -118,8 +118,9 @@ Case makeCase(const Convention &c, Rand &r, double offset)
   const double n = k.zNear * k.scale, f = k.zFar * k.scale;
   const double h = r.range(0.5, 5.0) * k.scale;
   mat4d proj =
-      c.ortho ? orthographic(-h * aspect, h * aspect, -h, h, n, f, v.depth, c.reversed)
-              : perspective(r.range(0.2, 2.0), aspect, n, f, v.depth, c.reversed);
+      c.ortho
+          ? orthographic(-h * aspect, h * aspect, -h, h, n, f, v.depthRange, c.reversed)
+          : perspective(r.range(0.2, 2.0), aspect, n, f, v.depthRange, c.reversed);
   if (r.coin()) { /* off-center, and scaled as a whole (w isn't -z then) */
     if (c.ortho) {
       proj[3][0] = r.range(-1.0, 1.0);
@@ -182,9 +183,11 @@ void testCase(const Convention &c, Rand &r, double offset)
       expect(std::fabs(-q[2] - k.zNear - distance) <
                  1e-6 * (1 + distance + offset * 1e-3),
              "the distance is wrong");
-      expect(std::fabs(at.distance - distance) < 1e-6 * (1 + distance + offset * 1e-3),
+      expect(std::fabs(at.viewDistance - distance) <
+                 1e-6 * (1 + distance + offset * 1e-3),
              "project's distance is wrong");
-      expect(std::fabs(m.viewDistance(p) - at.distance) == 0.0, "viewDistance differs");
+      expect(std::fabs(m.viewDistance(p) - at.viewDistance) == 0.0,
+             "viewDistance differs");
       const double wantX = vp[0] + (0.5 + 0.5 * x) * vp[2];
       const double wantY = vp[1] + (0.5 - 0.5 * y) * vp[3];
       expect(std::fabs(at.x - wantX) < px && std::fabs(at.y - wantY) < px,
@@ -281,7 +284,7 @@ void testCase(const Convention &c, Rand &r, double offset)
     const double3 backward = double3(d[2], d[6], d[10]) * (1.0 / k.scale);
     if (offset == 0.0) {
       const ViewPoint b = m.project(k.eye + backward * 2.0);
-      expect(b.behind && !b.visible && b.distance < 0.0, "a point behind the eye");
+      expect(b.behind && !b.visible && b.viewDistance < 0.0, "a point behind the eye");
       expect(m.pixelSizeAt(k.eye + backward * 2.0) == 0.0,
              "the pixel size behind the eye");
     }
@@ -359,10 +362,10 @@ void testRegion(const Convention &c, Rand &r, double offset)
       if (offset <= 1e3 && !at.behind) {
         const bool farOut = std::fabs(at.x - cx) > wantX * 1.01 + 0.01 ||
                             std::fabs(at.y - cy) > wantY * 1.01 + 0.01 ||
-                            at.distance < -1e-6 ||
-                            at.distance > (k.zFar - k.zNear) * (1.0 + 1e-6);
+                            at.viewDistance < -1e-6 ||
+                            at.viewDistance > (k.zFar - k.zNear) * (1.0 + 1e-6);
         expect(!(farOut && inside), "the region is larger than the square");
-        g_past += at.distance > k.zFar - k.zNear;
+        g_past += at.viewDistance > k.zFar - k.zNear;
       }
     }
   }
@@ -609,7 +612,7 @@ void testValidate()
       {"depth range is wrong",
        [](View &v) {
          v.proj = perspective(1.0, 1.0, 0.1, 100.0, DepthRange::ZeroToOne, true);
-         v.depth = DepthRange::MinusOneToOne;
+         v.depthRange = DepthRange::MinusOneToOne;
          v.reversedZ = true;
        }},
       {"contradict handedness", [](View &v) { v.handedness = Handedness::Left; }},
@@ -685,9 +688,9 @@ void testScripts()
   v.putViewport(2, 640);
   v.putViewport(4, 1);
   v.putViewport(-1, 1);
-  test_assert(v.depthRange() == 0);
+  test_assert(v.depthRangeValue() == 0);
   v.setConventions(1);
-  test_assert(v.depthRange() == 1 && v.depth == DepthRange::MinusOneToOne);
+  test_assert(v.depthRangeValue() == 1 && v.depthRange == DepthRange::MinusOneToOne);
   ViewMath m;
   for (int i : {-1, 4}) {
     test_assert(m.nearPlaneAt(i) == 0.0 && m.farPlaneAt(i) == 0.0 &&

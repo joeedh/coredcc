@@ -39,7 +39,7 @@ struct View {
    * it: by 1e-6 of what is in its column. It then counts as 0.
    */
   mat4d proj;
-  DepthRange depth = DepthRange::ZeroToOne;
+  DepthRange depthRange = DepthRange::ZeroToOne;
   /** The near plane has the largest depth, 1. */
   bool reversedZ = false;
   /** The far plane is at infinity (perspective only). */
@@ -62,10 +62,10 @@ struct View {
   double viewportAt(int32_t i) const;
   void putViewport(int32_t i, double value);
   /* The depth range as a number, until litestl binds ClipDepth. */
-  void setConventions(int32_t depthRange);
-  int32_t depthRange() const
+  void setConventions(int32_t value);
+  int32_t depthRangeValue() const
   {
-    return int32_t(depth);
+    return int32_t(depthRange);
   }
   static litestl::binding::types::Struct<View> *defineBindings();
 };
@@ -77,7 +77,7 @@ struct ViewPoint {
   /** In normalized device coordinates. Meaningless when `behind`. */
   double depth = 0.0;
   /** ViewMath::viewDistance. */
-  double distance = 0.0;
+  double viewDistance = 0.0;
   /** Perspective: on the eye's plane or behind it. */
   bool behind = false;
   /** Between the near and the far plane, or on them. It may be outside the viewport. */

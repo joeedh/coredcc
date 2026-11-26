@@ -56,7 +56,7 @@ struct DrawStyle {
   uint32_t color = 0xffffffffu;
   /** Lines and outlines: logical pixels. Points: their diameter. */
   float width = 1.0f;
-  DepthMode depth = DepthMode::Test;
+  DepthMode depthMode = DepthMode::Test;
   /** What the record draws (a gizmo's part, an element), for hosts and tests; 0 for none.
    */
   uint32_t id = 0;
@@ -115,20 +115,21 @@ public:
     return records_;
   }
   /** How deep the matrix stack is now. */
-  int32_t depth() const
+  int32_t matrixDepth() const
   {
     return depth_;
   }
-  /** A pop to below this depth is refused, so that a slot lent the list can't pop its
-   * caller's pushes (DrawSlotScope sets it). 0 after `begin`; clamped to 0 to `depth()`.
+  /** A pop to below this matrix depth is refused, so that a slot lent the list can't pop
+   * its caller's pushes (DrawSlotScope sets it). 0 after `begin`; clamped to 0 to
+   * `matrixDepth()`.
    */
   int32_t floor() const
   {
     return floor_;
   }
-  void setFloor(int32_t depth)
+  void setFloor(int32_t matrixDepth)
   {
-    floor_ = depth < 0 ? 0 : depth > depth_ ? depth_ : depth;
+    floor_ = matrixDepth < 0 ? 0 : matrixDepth > depth_ ? depth_ : matrixDepth;
   }
 
   /* ---- 3D ---- */
@@ -210,7 +211,7 @@ private:
 class DrawSlotScope {
 public:
   explicit DrawSlotScope(DrawList &list)
-      : list_(list), depth_(list.depth()), floor_(list.floor())
+      : list_(list), depth_(list.matrixDepth()), floor_(list.floor())
   {
     list.setFloor(depth_);
   }
@@ -251,8 +252,9 @@ struct DrawItem {
 };
 
 /**
- * Reads and checks a list: the header, every record's size, alignment, kind, depth and
- * counts, and that pushes and pops balance. It never reads past the bytes it is given.
+ * Reads and checks a list: the header, every record's size, alignment, kind, depth mode
+ * and counts, and that pushes and pops balance. It never reads past the bytes it is
+ * given.
  */
 class DrawListReader {
 public:

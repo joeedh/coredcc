@@ -77,7 +77,7 @@ lbt::Struct<View> *View::defineBindings()
     BIND_STRUCT_MEMBER(st, handedness);
     BIND_STRUCT_MEMBER(st, up);
     BIND_STRUCT_METHOD(st, setConventions, MARGS("depthRange"));
-    BIND_STRUCT_METHOD(st, depthRange, MARGS());
+    BIND_STRUCT_METHOD(st, depthRangeValue, MARGS());
     BIND_STRUCT_METHOD(st, validate, MARGS());
   }
   return st;
@@ -94,7 +94,7 @@ lbt::Struct<ViewPoint> *ViewPoint::defineBindings()
     BIND_STRUCT_MEMBER(st, x);
     BIND_STRUCT_MEMBER(st, y);
     BIND_STRUCT_MEMBER(st, depth);
-    BIND_STRUCT_MEMBER(st, distance);
+    BIND_STRUCT_MEMBER(st, viewDistance);
     BIND_STRUCT_MEMBER(st, behind);
     BIND_STRUCT_MEMBER(st, visible);
   }
@@ -150,7 +150,7 @@ lbt::Struct<DrawStyle> *DrawStyle::defineBindings()
     BIND_STRUCT_COPY_CONSTRUCTOR(st);
     BIND_STRUCT_MEMBER(st, color);
     BIND_STRUCT_MEMBER(st, width);
-    BIND_STRUCT_MEMBER(st, depth);
+    BIND_STRUCT_MEMBER(st, depthMode);
     BIND_STRUCT_MEMBER(st, id);
   }
   return st;
@@ -173,7 +173,7 @@ lbt::Struct<DrawList> *DrawList::defineBindings()
     BIND_STRUCT_METHOD(st, circle2d, MARGS("style", "x", "y", "radius", "filled"));
     BIND_STRUCT_METHOD(st, line2dXy, MARGS("style", "xy"));
     BIND_STRUCT_METHOD(st, recordCount, MARGS());
-    BIND_STRUCT_METHOD(st, depth, MARGS());
+    BIND_STRUCT_METHOD(st, matrixDepth, MARGS());
     BIND_STRUCT_METHOD(st, frozen, MARGS());
     BIND_STRUCT_METHOD(st, address, MARGS());
     BIND_STRUCT_METHOD(st, size, MARGS());

@@ -587,7 +587,8 @@ void testPick()
     test_assert(r.status.ok() && r.value.size() == 2);
     test_assert(isText(r.value.at(0).object, textOf(d, high)));
     test_assert(isText(r.value.at(1).object, textOf(d, low)));
-    test_assert(r.value.at(0).distance == 0 && r.value.at(0).depth < r.value.at(1).depth);
+    test_assert(r.value.at(0).distance == 0 &&
+                r.value.at(0).viewDistance < r.value.at(1).viewDistance);
     test_assert(std::abs(sc::vec3At(r.value.at(0).point, 0) - 3) < 1e-9);
     test_assert(r.value.at(2).object.size() == 0 && r.value.at(-1).domain == -1);
     /* It evaluates. */

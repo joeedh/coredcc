@@ -132,7 +132,7 @@ void ForeignBindings::dropHandle(lf::Handle h)
 bool inForeignCall(const Runtime &rt)
 {
   const ForeignBindings *fb = rt.findExt<ForeignBindings>();
-  return fb && fb->depth() > 0;
+  return fb && fb->callDepth() > 0;
 }
 
 bool inForeignSlot(const Runtime &rt,

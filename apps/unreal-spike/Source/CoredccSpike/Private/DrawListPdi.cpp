@@ -153,7 +153,7 @@ FDrawListStats DrawDrawListPdi(const coredcc::DrawList& List, FPrimitiveDrawInte
 	for (const DrawItem& It : Reader.items())
 	{
 		const M4& Cur = Stack.back();
-		const uint8 Group = GroupOf(It.style.depth);
+		const uint8 Group = GroupOf(It.style.depthMode);
 		const FLinearColor Color = ColorOf(It.style.color);
 		auto V = [&](uint32 I) { return Apply(Cur, It.vertex(I, 0), It.vertex(I, 1), It.vertex(I, 2)); };
 		switch (It.kind)

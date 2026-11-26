@@ -168,7 +168,7 @@ export function load(module: object, getManager = 'CDCC_GetManager', opts: {repl
 
 /* Script slots (of commands and graph kernels) in progress: a document can't close under
  * one. */
-export const scriptSlots = {depth: 0}
+export const scriptSlots = {callDepth: 0}
 
 /* What goes with a session's context, before its host. */
 const owners = new WeakMap<Context, Set<Disposable>>()
@@ -203,7 +203,7 @@ export class Session implements Disposable {
   /** Closes the document. Not from inside a script command's slot. */
   [Symbol.dispose]() {
     if (!this.host) return
-    if (scriptSlots.depth > 0) throw new Error("Session: can't close the document from inside a command")
+    if (scriptSlots.callDepth > 0) throw new Error("Session: can't close the document from inside a command")
     for (const owned of [...(owners.get(this.ctx) ?? [])]) owned[Symbol.dispose]()
     owners.delete(this.ctx)
     cd.disableDrivers(this.ctx)[Symbol.dispose]() /* before the Library goes */
@@ -394,10 +394,10 @@ export function sync<T>(slot: string, r: T): T {
 
 /** Runs a slot's body. */
 export function inSlot<T>(fn: () => T): T {
-  scriptSlots.depth++
+  scriptSlots.callDepth++
   try {
     return fn()
   } finally {
-    scriptSlots.depth--
+    scriptSlots.callDepth--
   }
 }

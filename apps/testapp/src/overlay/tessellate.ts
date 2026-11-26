@@ -95,7 +95,7 @@ export function tessellate(list: DecodedDrawList, viewProj: ArrayLike<number>, v
 
   for (const r of list.records) {
     const cur = stack[stack.length - 1]
-    const dst = out[r.depth === 'always' ? 'always' : r.depth === 'xray' ? 'xray' : 'test']
+    const dst = out[r.depthMode === 'always' ? 'always' : r.depthMode === 'xray' ? 'xray' : 'test']
     const col = rgba(r.color)
     const half = (Math.max(r.width, 1) * vp.dpiScale) / 2
     const p = r.positions ?? []

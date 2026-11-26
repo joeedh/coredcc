@@ -37,7 +37,7 @@ export interface DrawStyle {
   color?: number
   /** Logical pixels: of lines and outlines; a point's diameter. */
   width?: number
-  depth?: DepthMode
+  depthMode?: DepthMode
   /** What it draws: a gizmo's `idBase + part`. */
   id?: number
 }
@@ -46,7 +46,7 @@ export interface DrawStyle {
  * pushed matrix. */
 export interface DrawRecord {
   kind: RecordKind
-  depth: DepthMode
+  depthMode: DepthMode
   color: number
   width: number
   id: number
@@ -73,9 +73,9 @@ function withStyle<R>(style: DrawStyle, fn: (s: BoundStyle) => R): R {
   try {
     s.color = style.color ?? 0xffffffff
     s.width = style.width ?? 1
-    const depth = keyOf(depthModes, style.depth ?? 'test')
-    if (depth === undefined) throw new TypeError(`DrawStyle: no depth mode '${style.depth}'`)
-    s.depth = depth
+    const depthMode = keyOf(depthModes, style.depthMode ?? 'test')
+    if (depthMode === undefined) throw new TypeError(`DrawStyle: no depth mode '${style.depthMode}'`)
+    s.depthMode = depthMode
     s.id = style.id ?? 0
     return fn(s)
   } finally {
@@ -190,7 +190,7 @@ export function decodeDrawList(bytes: Uint8Array): DecodedDrawList {
   const pad8 = (n: number) => (n + 7) & ~7
   const records: DrawRecord[] = []
   let at = 48
-  let depth = 0
+  let matrixDepth = 0
   while (at < total) {
     if (total - at < 24) fail(at, 'a record header past the end')
     const kindNo = dv.getUint16(at, true)
@@ -204,7 +204,7 @@ export function decodeDrawList(bytes: Uint8Array): DecodedDrawList {
     const size = dv.getUint32(at + 4, true)
     if (size % 8 !== 0 || size < 24 || size > total - at) fail(at, `a record size of ${size}`)
     const aux = dv.getUint32(at + 20, true)
-    const rec: DrawRecord = {kind, depth: mode, color: dv.getUint32(at + 8, true), width, id: dv.getUint32(at + 16, true)}
+    const rec: DrawRecord = {kind, depthMode: mode, color: dv.getUint32(at + 8, true), width, id: dv.getUint32(at + 16, true)}
     const multiple = kind === 'lines' ? 2 : kind === 'triangles' ? 3 : 1
     if ((kind === 'lines' || kind === 'triangles') && aux % multiple !== 0) {
       fail(at, `a vertex count that isn't a multiple of ${multiple}`)
@@ -238,10 +238,10 @@ export function decodeDrawList(bytes: Uint8Array): DecodedDrawList {
         break
       case 'push':
         rec.matrix = numbers
-        depth++
+        matrixDepth++
         break
       case 'pop':
-        if (--depth < 0) fail(at, 'a pop without a push')
+        if (--matrixDepth < 0) fail(at, 'a pop without a push')
         break
       case 'circle2d':
         if (numbers[2] < 0) fail(at, 'a negative radius')
@@ -256,6 +256,6 @@ export function decodeDrawList(bytes: Uint8Array): DecodedDrawList {
     at += size
   }
   if (records.length !== count) fail(8, `a record count of ${count} for ${records.length} records`)
-  if (depth !== 0) fail(total, `${depth} pushes without a pop`)
+  if (matrixDepth !== 0) fail(total, `${matrixDepth} pushes without a pop`)
   return {origin, records}
 }

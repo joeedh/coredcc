@@ -89,7 +89,7 @@ DrawStyle styleOf(uint32_t color, float width, uint32_t id)
   DrawStyle s;
   s.color = color;
   s.width = width;
-  s.depth = DepthMode::Always;
+  s.depthMode = DepthMode::Always;
   s.id = id;
   return s;
 }
@@ -370,7 +370,7 @@ GizmoHit TransformGizmo::hitTest(const ViewMath &view, double x, double y) const
   }
   if (hit.part >= 0) {
     hit.distance = best;
-    hit.depth = view.viewDistance(f.pivot);
+    hit.viewDistance = view.viewDistance(f.pivot);
   }
   return hit;
 }

@@ -117,21 +117,21 @@ double PickCursor::reachAt(const double3 &p) const
 
 PickQuery::PickQuery(const PickCursor &cursor,
                      const mat4d &world,
-                     double limitDepth,
+                     double maxViewDistance,
                      bool nearSurfaces)
     : world_(world), worldDir_(cursor.ray_.dir), options_(cursor.options_),
       cursor_(&cursor), radius_(cursor.options_.radius * cursor.view_.view().dpiScale),
-      surfaceRadius_(nearSurfaces ? radius_ : 0.0), limitDepth_(limitDepth),
+      surfaceRadius_(nearSurfaces ? radius_ : 0.0), maxViewDistance_(maxViewDistance),
       dpiScale_(cursor.view_.view().dpiScale)
 {
   const double4 *pixels = cursor.view_.pixelRows();
   const double4 &front = cursor.front_, &back = cursor.back_;
   ViewRegion region = cursor.region_;
-  const bool limited = bvh::finite(limitDepth);
+  const bool limited = bvh::finite(maxViewDistance);
   if (limited) {
     BvhPlane nearer;
     nearer.n = double3(-front[0], -front[1], -front[2]);
-    nearer.w = limitDepth * (1.0 + 1e-9) - front[3] + std::fabs(front[3]) * 1e-12;
+    nearer.w = maxViewDistance * (1.0 + 1e-9) - front[3] + std::fabs(front[3]) * 1e-12;
     const bool noFar = back[0] == 0.0 && back[1] == 0.0 && back[2] == 0.0;
     if (noFar || nearer.w < back[3]) {
       region.planes[ViewRegion::kFar] = nearer;
@@ -160,7 +160,7 @@ PickQuery::PickQuery(const PickCursor &cursor,
     ray_.origin = transformPoint(inverse, cursor.ray_.origin);
     ray_.dir = transformVector(inverse, cursor.ray_.dir);
     if (limited && cursor.along_ > 0.0) {
-      ray_.tMax = std::fmin(ray_.tMax, limitDepth / cursor.along_ * (1.0 + 1e-9));
+      ray_.tMax = std::fmin(ray_.tMax, maxViewDistance / cursor.along_ * (1.0 + 1e-9));
     }
     hasRay_ = ray_.valid();
   }
@@ -197,7 +197,7 @@ void rankPicks(const PickOptions &options,
 {
   /* What covers comes before the rest, since its distance is 0. */
   const auto group = [&](const PickCandidate &c) {
-    return c.hit.thin && c.hit.depth <= occluder.behind ? 0 : 1;
+    return c.hit.thin && c.hit.viewDistance <= occluder.behind ? 0 : 1;
   };
   std::stable_sort(hits.data(),
                    hits.data() + hits.size(),
@@ -212,8 +212,9 @@ void rankPicks(const PickOptions &options,
                      if (ga == 0 && a.dimension != b.dimension) {
                        return a.dimension < b.dimension;
                      }
-                     return a.hit.depth != b.hit.depth ? a.hit.depth < b.hit.depth
-                                                       : a.place < b.place;
+                     return a.hit.viewDistance != b.hit.viewDistance
+                                ? a.hit.viewDistance < b.hit.viewDistance
+                                : a.place < b.place;
                    });
   litestl::util::Map<uint64_t, char> seen;
   int n = 0;
@@ -250,9 +251,9 @@ void PickSink::take(const Found &f)
   hit.element = element_;
   hit.instance = instance_;
   hit.distance = distance / query_.dpiScale_;
-  hit.depth = std::fmax(0.0, detail::dotPoint(query_.map_.front, f.at.point));
+  hit.viewDistance = std::fmax(0.0, detail::dotPoint(query_.map_.front, f.at.point));
   hit.point = transformPoint(query_.world_, f.at.point);
-  if (!finite(hit.point) || hit.depth > query_.limitDepth_) {
+  if (!finite(hit.point) || hit.viewDistance > query_.maxViewDistance_) {
     return;
   }
   hit.thin = f.thin;
@@ -264,8 +265,9 @@ void PickSink::take(const Found &f)
   hit.backFacing = hit.normal.dot(query_.worldDir_) > 0.0;
   if (query_.options_.occlusion && !hit.thin && hit.covers()) {
     detail::Occluder o;
-    o.depth = hit.depth;
-    o.behind = hit.depth + query_.options_.slope * query_.cursor_->reachAt(hit.point);
+    o.depth = hit.viewDistance;
+    o.behind =
+        hit.viewDistance + query_.options_.slope * query_.cursor_->reachAt(hit.point);
     occluder_.include(o);
   }
   if (query_.wants(domain_)) {
@@ -283,12 +285,12 @@ void PickSink::keep(const detail::PickCandidate &c)
   const auto beats = [](const detail::PickCandidate &a, const detail::PickCandidate &b) {
     if (a.hit.distance != b.hit.distance) {
       return a.hit.distance < b.hit.distance &&
-             (!a.hit.thin || a.hit.depth <= b.hit.depth);
+             (!a.hit.thin || a.hit.viewDistance <= b.hit.viewDistance);
     }
     if (!a.hit.thin || a.dimension == b.dimension) {
-      return a.hit.depth <= b.hit.depth;
+      return a.hit.viewDistance <= b.hit.viewDistance;
     }
-    return a.dimension < b.dimension && a.hit.depth <= b.hit.depth;
+    return a.dimension < b.dimension && a.hit.viewDistance <= b.hit.viewDistance;
   };
   int n = 0;
   for (int i = 0; i < int(kept_.size()); i++) {

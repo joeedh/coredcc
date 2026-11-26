@@ -20,10 +20,10 @@ constexpr double kNoLimit = (std::numeric_limits<double>::infinity)();
 struct Near {
   int place = 0;
   /* Nothing of it is nearer to the near plane. */
-  double depth = 0.0;
+  double viewDistance = 0.0;
 };
 
-double leastDepth(const double4 &front, const Box3d &box)
+double leastViewDistance(const double4 &front, const Box3d &box)
 {
   double sum = front[3], size = std::fabs(front[3]);
   for (int i = 0; i < 3; i++) {
@@ -44,8 +44,8 @@ struct Best {
 
   /* Behind this is nothing that comes first: a thin shape is behind the occluder there,
    * and what covers comes after the frontmost that does. Without an occluder there is no
-   * such depth. */
-  double limitDepth() const
+   * such view distance. */
+  double maxViewDistance() const
   {
     return options.maxHits == 1 ? std::fmax(occluder.behind, covered) : kNoLimit;
   }
@@ -62,7 +62,7 @@ struct Best {
     for (const detail::PickCandidate &c : sink.kept()) {
       thin = thin || c.hit.thin;
       if (c.hit.covers()) {
-        covered = std::fmin(covered, c.hit.depth);
+        covered = std::fmin(covered, c.hit.viewDistance);
       }
     }
   }
@@ -96,7 +96,7 @@ Status pickScene(Context &ctx,
     if (scene.evaluated(scene.bvh().object(place), e)) {
       Near n;
       n.place = place;
-      n.depth = leastDepth(front, e.bounds);
+      n.viewDistance = leastViewDistance(front, e.bounds);
       candidates.append(n);
     }
     return true;
@@ -104,13 +104,14 @@ Status pickScene(Context &ctx,
   std::sort(candidates.data(),
             candidates.data() + candidates.size(),
             [](const Near &a, const Near &b) {
-              return a.depth != b.depth ? a.depth < b.depth : a.place < b.place;
+              return a.viewDistance != b.viewDistance ? a.viewDistance < b.viewDistance
+                                                      : a.place < b.place;
             });
 
   Best best{options, {}};
   Vector<detail::PickCandidate> found;
   for (const Near &n : candidates) {
-    if (n.depth > best.limitDepth()) {
+    if (n.viewDistance > best.maxViewDistance()) {
       break; /* so are those after it */
     }
     const BlockHandle object = scene.bvh().object(n.place);
@@ -119,7 +120,8 @@ Status pickScene(Context &ctx,
     if (!s || !scene.evaluated(object, e)) {
       continue;
     }
-    const PickQuery query(cursor, e.dataWorld(), best.limitDepth(), best.nearSurfaces());
+    const PickQuery query(
+        cursor, e.dataWorld(), best.maxViewDistance(), best.nearSurfaces());
     PickSink sink(query);
     if (s.hasPick()) {
       s.pick(query, sink);

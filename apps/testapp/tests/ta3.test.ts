@@ -16,7 +16,7 @@ interface Rec {
   kind: string
   id: number
   color: number
-  depth: string
+  depthMode: string
   matrix?: number[]
 }
 

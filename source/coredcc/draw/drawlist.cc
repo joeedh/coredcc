@@ -50,8 +50,8 @@ template <class T> T get(const uint8_t *p)
 
 Status checkStyle(const DrawStyle &s, const char *what)
 {
-  if (int32_t(s.depth) < 0 || int32_t(s.depth) > int32_t(DepthMode::XRay)) {
-    return bad(what, "no such depth mode " + std::to_string(int32_t(s.depth)));
+  if (int32_t(s.depthMode) < 0 || int32_t(s.depthMode) > int32_t(DepthMode::XRay)) {
+    return bad(what, "no such depth mode " + std::to_string(int32_t(s.depthMode)));
   }
   if (!std::isfinite(s.width) || s.width < 0.0f) {
     return bad(what, "the width isn't a number of 0 or more");
@@ -134,7 +134,7 @@ uint8_t *DrawList::append(DrawKind kind,
   words_.resize(size_t((at + rec) / 8));
   uint8_t *p = reinterpret_cast<uint8_t *>(words_.data()) + at;
   put<uint16_t>(p, uint16_t(kind));
-  put<uint8_t>(p + 2, uint8_t(style.depth));
+  put<uint8_t>(p + 2, uint8_t(style.depthMode));
   put<uint8_t>(p + 3, flags);
   put<uint32_t>(p + 4, uint32_t(rec));
   put<uint32_t>(p + 8, style.color);
@@ -283,8 +283,8 @@ Status DrawSlotScope::close(const char *who)
     return Status();
   }
   closed_ = true;
-  const int32_t left = list_.depth() - depth_;
-  while (list_.depth() > depth_) {
+  const int32_t left = list_.matrixDepth() - depth_;
+  while (list_.matrixDepth() > depth_) {
     if (!list_.popMatrix().ok()) {
       break; /* a frozen list: end popped them */
     }

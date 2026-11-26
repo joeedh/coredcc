@@ -88,7 +88,7 @@ inline Case makeCase(const Convention &c, Rand &r, double offset)
   v.viewport[2] = std::round(r.range(50, 4000));
   v.viewport[3] = std::round(r.range(50, 3000));
   v.dpiScale = r.coin() ? 1.0 : 2.0;
-  v.depth = c.minusOne ? DepthRange::MinusOneToOne : DepthRange::ZeroToOne;
+  v.depthRange = c.minusOne ? DepthRange::MinusOneToOne : DepthRange::ZeroToOne;
   v.reversedZ = c.reversed;
   v.infiniteFar = c.infinite;
   v.ortho = c.ortho;
@@ -104,8 +104,9 @@ inline Case makeCase(const Convention &c, Rand &r, double offset)
   const double n = k.zNear * k.scale, f = k.zFar * k.scale;
   const double h = r.range(0.5, 5.0) * k.scale;
   mat4d proj =
-      c.ortho ? orthographic(-h * aspect, h * aspect, -h, h, n, f, v.depth, c.reversed)
-              : perspective(r.range(0.2, 2.0), aspect, n, f, v.depth, c.reversed);
+      c.ortho
+          ? orthographic(-h * aspect, h * aspect, -h, h, n, f, v.depthRange, c.reversed)
+          : perspective(r.range(0.2, 2.0), aspect, n, f, v.depthRange, c.reversed);
   if (r.coin()) { /* off-center, and scaled as a whole (w isn't -z then) */
     if (c.ortho) {
       proj[3][0] = r.range(-1.0, 1.0);

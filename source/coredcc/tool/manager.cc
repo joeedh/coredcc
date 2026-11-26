@@ -272,7 +272,7 @@ int ToolManager::bestHit(
       continue;
     }
     if (best < 0 || h.distance < found.distance ||
-        (h.distance == found.distance && h.depth < found.depth))
+        (h.distance == found.distance && h.viewDistance < found.viewDistance))
     {
       best = i;
       found = h;

@@ -30,7 +30,8 @@ class CommandExecutor;
  * Dispatches an event to, in this order:
  * 1. the top modal;
  * 2. on a left press, the gizmo part under the cursor (the best `hitTest` of all gizmos
- *    within `hitRadius`, by distance, then depth), whose `beginDrag` should push a modal;
+ *    within `hitRadius`, by distance, then view distance), whose `beginDrag` should push
+ * a modal;
  * 3. the active tool;
  * 4. nobody: the event is Unhandled, for the host.
  *

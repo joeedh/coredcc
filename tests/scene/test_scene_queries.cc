@@ -397,7 +397,7 @@ void testRegion()
                 sides[1] = sides[1] && v.visible && v.x > right + 1.0;
                 sides[2] = sides[2] && v.visible && v.y < top - 1.0;
                 sides[3] = sides[3] && v.visible && v.y > bottom + 1.0;
-                sides[4] = sides[4] && v.distance < -1e-6;
+                sides[4] = sides[4] && v.viewDistance < -1e-6;
                 sides[5] = sides[5] && past < -1e-6;
               }
               outside = false;

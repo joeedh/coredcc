@@ -124,7 +124,7 @@ test('a script gizmo: reads in update, a drag from beginDrag, its draw in the li
         seen.write = e
       }
     },
-    hitTest: (_view, x, y) => (Math.hypot(x - 50, y - 50) < 5 ? {part: 0, distance: Math.hypot(x - 50, y - 50), depth: 1} : undefined),
+    hitTest: (_view, x, y) => (Math.hypot(x - 50, y - 50) < 5 ? {part: 0, distance: Math.hypot(x - 50, y - 50), viewDistance: 1} : undefined),
     draw(draw, _view, hover, _active, idBase) {
       draw.circle2d(50, 50, 5, {color: hover === 0 ? 0xff00ffff : 0xff0000ff, id: idBase}, true)
     },
@@ -146,7 +146,7 @@ test('a script gizmo: reads in update, a drag from beginDrag, its draw in the li
     },
     onEvent: () => false,
     drawOverlay(draw) {
-      draw.lines([0, 0, 0, 1, 0, 0], {width: 2, depth: 'always'})
+      draw.lines([0, 0, 0, 1, 0, 0], {width: 2, depthMode: 'always'})
     },
   })
   cdcc.setActiveTool(ctx, 'ts.handle')
@@ -159,7 +159,7 @@ test('a script gizmo: reads in update, a drag from beginDrag, its draw in the li
   const circle = decoded.records.find((r) => r.kind === 'circle2d')
   assert.ok(circle && circle.filled && circle.color === 0xff00ffff && circle.id > 0)
   const line = decoded.records.find((r) => r.kind === 'lines')
-  assert.ok(line && line.depth === 'always' && line.width === 2)
+  assert.ok(line && line.depthMode === 'always' && line.width === 2)
   assert.equal(new DataView(bytes.buffer, bytes.byteOffset).getUint32(0, true), cdcc.kDrawListMagic)
 
   send({type: 'pointerdown', x: 50, y: 50})

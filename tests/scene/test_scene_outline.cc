@@ -267,7 +267,7 @@ void testWatertight()
     const double3 on =
         hub + (rim[r.below(n)] - hub) * (r.coin() ? 0.0 : r.range(0.0, 0.9));
     const ViewPoint at = view.project(litestl::math::transformPoint(world, on));
-    if (!at.visible || at.distance < 1e-6) {
+    if (!at.visible || at.viewDistance < 1e-6) {
       continue;
     }
     const ScreenMap map = mapOf(view, world, at.x, at.y);

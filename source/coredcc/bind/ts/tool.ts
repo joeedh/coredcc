@@ -168,7 +168,7 @@ function withView<R>(spec: ViewSpec, fn: (v: BoundView) => R): R {
     fill('viewport', {put: (i, x) => v.putViewport(i, x)}, spec.viewport, 4)
     fill('view', v.view, spec.view, 16)
     fill('proj', v.proj, spec.proj, 16)
-    v.setConventions(spec.depth === '-1..1' ? 1 : 0)
+    v.setConventions(spec.depthRange === '-1..1' ? 1 : 0)
     v.handedness = spec.handedness === 'left' ? Handedness.Left : Handedness.Right
     v.up = spec.up === 'y' ? UpAxis.Y : UpAxis.Z
     v.reversedZ = spec.reversedZ ?? false
@@ -378,7 +378,8 @@ export interface GizmoHit {
   part: number
   /** Logical pixels from the cursor. */
   distance: number
-  depth: number
+  /** From the near plane, along the view direction, in world units. */
+  viewDistance: number
 }
 
 export interface GizmoSpec {
@@ -403,7 +404,7 @@ class GizmoAdapter {
       const h = sync('hitTest', this.spec.hitTest(view, x, y))
       this.hit.part = h ? h.part : -1
       this.hit.distance = h?.distance ?? 0
-      this.hit.depth = h?.depth ?? 0
+      this.hit.viewDistance = h?.viewDistance ?? 0
       return this.hit
     })
   }
