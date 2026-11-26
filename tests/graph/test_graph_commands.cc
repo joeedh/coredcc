@@ -106,7 +106,7 @@ void testCommands()
   Doc d;
   addTypes(d.rt);
   test_assert(registerGraphCommands(d.rt).ok()); /* again */
-  Result<PropertyBag> made = d.run(kGraphCreateCommand, {{"name", str("g")}});
+  Result<PropertyBag> made = d.run(kNewGraphCommand, {{"name", str("g")}});
   test_assert(made.ok());
   const StableRef *ref = made->get("graph")->tryPointer();
   test_assert(ref && ref->owner.kind == OwnerKey::Kind::Block);
@@ -118,7 +118,7 @@ void testCommands()
   GraphDef &def = *g.def;
   test_assert(d.undo().ok() && d.lib.get(g.h)->state() == BlockState::InHistory);
   test_assert(
-      hasCode(d.run(kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.add")}}),
+      hasCode(d.run(kAddGraphNodeCommand, {{"graph", gp}, {"type", str("t.add")}}),
               StatusCode::FailedPrecondition));
   test_assert(d.redo().ok() && graphDefOf(d.lib, g.h) == &def);
   GraphInstance inst(&d.rt, &d.lib, g.id);
@@ -127,7 +127,7 @@ void testCommands()
   const double at[2] = {1, 2};
   const NodeId a{
       d.runFor("node",
-               kGraphNodeAddCommand,
+               kAddGraphNodeCommand,
                {{"graph", gp},
                 {"type", str("t.add")},
                 {"position", PropValue::ofComponents(PropValue::Type::Vec2, at)},
@@ -136,13 +136,13 @@ void testCommands()
   test_assert(strcmp(def.node(a)->label().c_str(), "A") == 0);
   roundTrip(d, def, before);
   const NodeId b{
-      d.runFor("node", kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.add")}})};
+      d.runFor("node", kAddGraphNodeCommand, {{"graph", gp}, {"type", str("t.add")}})};
   const NodeId v{d.runFor(
-      "node", kGraphNodeAddCommand, {{"graph", gp}, {"type", str("value.float")}})};
+      "node", kAddGraphNodeCommand, {{"graph", gp}, {"type", str("value.float")}})};
 
   auto link = [&](NodeId from, NodeId to, const char *key) {
     return LinkId{d.runFor("link",
-                           kGraphLinkCommand,
+                           kAddGraphLinkCommand,
                            {{"graph", gp},
                             {"from", in(from.value)},
                             {"fromSocket", str("value")},
@@ -177,7 +177,8 @@ void testCommands()
   test_assert(d.undo().ok() && def.node(b)->linkInto("a")->id == ab && value() == 12);
 
   before = describe(def);
-  test_assert(d.run(kGraphUnlinkCommand, {{"graph", gp}, {"link", in(ab.value)}}).ok());
+  test_assert(
+      d.run(kRemoveGraphLinkCommand, {{"graph", gp}, {"link", in(ab.value)}}).ok());
   test_assert(value() == 6);
   roundTrip(d, def, before);
   test_assert(d.undo().ok() && value() == 12);
@@ -187,7 +188,7 @@ void testCommands()
   test_assert(d.set("graphs[\"g\"].nodes[\"A\"].inputs.a", fl(5)).ok());
   before = describe(def);
   test_assert(
-      d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(a.value)}}).ok());
+      d.run(kRemoveGraphNodeCommand, {{"graph", gp}, {"node", in(a.value)}}).ok());
   test_assert(!def.node(a) && def.linkCount() == 0 && value() == 0);
   roundTrip(d, def, before);
   test_assert(d.undo().ok() && value() == 12 && def.linkCount() == 4);
@@ -199,14 +200,14 @@ void testCommands()
   before = describe(def);
   const uint64_t version = def.contentVersion();
   const int steps = d.history.size();
-  test_assert(hasCode(d.run(kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.no")}}),
+  test_assert(hasCode(d.run(kAddGraphNodeCommand, {{"graph", gp}, {"type", str("t.no")}}),
                       StatusCode::NotFound));
-  test_assert(hasCode(d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(4)}}),
+  test_assert(hasCode(d.run(kRemoveGraphNodeCommand, {{"graph", gp}, {"node", in(4)}}),
                       StatusCode::NotFound));
-  test_assert(hasCode(d.run(kGraphUnlinkCommand, {{"graph", gp}, {"link", in(4)}}),
+  test_assert(hasCode(d.run(kRemoveGraphLinkCommand, {{"graph", gp}, {"link", in(4)}}),
                       StatusCode::NotFound));
   test_assert(
-      hasCode(d.run(kGraphNodeAddCommand,
+      hasCode(d.run(kAddGraphNodeCommand,
                     {{"graph", PropValue::nullPointer()}, {"type", str("t.add")}}),
               StatusCode::FailedPrecondition));
   test_assert(describe(def) == before && def.contentVersion() == version);
@@ -222,7 +223,7 @@ void testInterface()
   const PropValue gp = pointerTo(g);
   auto add = [&](int side, const char *name, int index) {
     return d.runFor("socket",
-                    kGraphInterfaceAddCommand,
+                    kAddGraphInterfaceCommand,
                     {{"graph", gp},
                      {"side", PropValue::ofEnum(side)},
                      {"name", str(name)},
@@ -260,24 +261,24 @@ void testInterface()
   roundTrip(d, def, before);
   before = describe(def);
   test_assert(
-      d.run(kGraphInterfaceRemoveCommand, {{"graph", gp}, {"socket", in(x)}}).ok());
+      d.run(kRemoveGraphInterfaceCommand, {{"graph", gp}, {"socket", in(x)}}).ok());
   test_assert(is(0));
   roundTrip(d, def, before);
   test_assert(d.undo().ok() && is(6));
 
   before = describe(def);
-  test_assert(d.run(kGraphInterfaceMoveCommand,
+  test_assert(d.run(kMoveGraphInterfaceCommand,
                     {{"graph", gp}, {"socket", in(x)}, {"index", in(0)}})
                   .ok());
   test_assert(def.interfaceSockets(SocketSide::Input)[0].id == x);
   roundTrip(d, def, before);
-  test_assert(hasCode(d.run(kGraphInterfaceMoveCommand,
+  test_assert(hasCode(d.run(kMoveGraphInterfaceCommand,
                             {{"graph", gp}, {"socket", in(x)}, {"index", in(2)}}),
                       StatusCode::OutOfRange));
 
   before = describe(def);
   auto setType = [&](const char *type) {
-    return d.run(kGraphInterfaceSetTypeCommand,
+    return d.run(kSetGraphInterfaceTypeCommand,
                  {{"graph", gp}, {"socket", in(x)}, {"type", str(type)}});
   };
   test_assert(setType("bool").ok() && def.interfaceSocket(x)->defaultValue.isNone() &&
@@ -286,7 +287,7 @@ void testInterface()
   test_assert(d.undo().ok() && def.interfaceSocket(x)->defaultValue == fl(2) && is(6));
   test_assert(hasCode(setType("no"), StatusCode::NotFound));
   test_assert(
-      hasCode(d.run(kGraphInterfaceRemoveCommand, {{"graph", gp}, {"socket", in(3)}}),
+      hasCode(d.run(kRemoveGraphInterfaceCommand, {{"graph", gp}, {"socket", in(3)}}),
               StatusCode::NotFound));
   /* Without a literal in the way, the default is restored for instances too. */
   test_assert(o.def->setLiteral(group, key(x), PropValue()).ok() && is(2));
@@ -482,7 +483,7 @@ void testRunGraphEdit()
   Context bare(&d.rt, &d.lib, d.rt.ext<ApiRegistry>().runtimeOwner("doc"));
   test_assert(
       hasCode(runGraphEdit(bare, g.id, "x", nothing), StatusCode::FailedPrecondition));
-  Result<PropertyBag> direct = d.run("graph.edit", {{"name", str("x")}});
+  Result<PropertyBag> direct = d.run("core.graph.edit", {{"name", str("x")}});
   test_assert(hasCode(direct, StatusCode::FailedPrecondition));
   test_assert(strstr(direct.status().message(), "runGraphEdit"));
 
@@ -505,7 +506,7 @@ void testGone()
   const Graph g = makeGraph(d.lib, "g");
   const PropValue gp = pointerTo(g);
   auto addOne = [&]() {
-    return d.run(kGraphNodeAddCommand, {{"graph", gp}, {"type", str("t.add")}}).ok();
+    return d.run(kAddGraphNodeCommand, {{"graph", gp}, {"type", str("t.add")}}).ok();
   };
   test_assert(addOne() && d.lib.markDeleted(g.h).ok());
   test_assert(
@@ -572,7 +573,7 @@ void testRecursive()
   g.def->foreachRef(v);
   const PropValue gp = pointerTo(g);
   test_assert(
-      d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(n.value)}}).ok());
+      d.run(kRemoveGraphNodeCommand, {{"graph", gp}, {"node", in(n.value)}}).ok());
   test_assert(d.undo().ok() && g.def->node(n)->group().target == g.id);
   NodeState s = g.def->stateOf(*g.def->node(n));
   s.id = NodeId{9};
@@ -638,7 +639,7 @@ void testCollect()
   test_assert(g.def->setParam(n, "thing", pointerTo(idOf(d.lib, t))).ok());
   const PropValue gp = pointerTo(g);
   test_assert(
-      d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(n.value)}}).ok());
+      d.run(kRemoveGraphNodeCommand, {{"graph", gp}, {"node", in(n.value)}}).ok());
   test_assert(d.lib.collect().ok() && d.lib.get(t) && !d.lib.get(u));
   test_assert(d.lib.get(t)->pins(PinKind::History) == 1 &&
               d.lib.get(t)->pins(PinKind::Host) == 0);
@@ -680,7 +681,7 @@ void testCollect()
   const NodeId other = add(*g.def, "graph.group");
   test_assert(g.def->setGroup(other, c.id).ok());
   test_assert(
-      d.run(kGraphNodeRemoveCommand, {{"graph", gp}, {"node", in(other.value)}}).ok());
+      d.run(kRemoveGraphNodeCommand, {{"graph", gp}, {"node", in(other.value)}}).ok());
   test_assert(d.lib.collect().ok() && d.lib.get(c.h) && d.undo().ok());
   d.lib.setFlag(g.h, BlockFlags::Root, false);
   test_assert(d.lib.collect().ok() && d.lib.get(g.h) && d.redo().ok());

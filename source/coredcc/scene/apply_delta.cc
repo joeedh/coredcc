@@ -249,8 +249,9 @@ lbt::Struct<ApplyDelta> *ApplyDelta::defineBindings()
 
 Status detail::registerDeltaCommands(Runtime &rt)
 {
-  CDCC_TRY(addCommandOnce<ApplyDelta>(rt, deltaDef(kApplyDeltaCommand, "Transform")));
-  CommandDef drag = deltaDef(kDragDeltaCommand, "Transform (Drag)");
+  CDCC_TRY(
+      addCommandOnce<ApplyDelta>(rt, deltaDef(kApplyObjectDeltaCommand, "Transform")));
+  CommandDef drag = deltaDef(kDragObjectDeltaCommand, "Transform (Drag)");
   drag.flags(CommandFlags::Interactive | CommandFlags::Private);
   return addCommandOnce<ApplyDelta>(rt, std::move(drag));
 }

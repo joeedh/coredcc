@@ -53,7 +53,7 @@ void testCommands()
   const BlockHandle g = d.graph("g", false), h = d.graph("h", false);
   d.driveLocation(g, a, 5);
   test_assert(DriverList::find(*d.lib).isNull());
-  d.ok(kAddGraphCommand, {{"graph", d.ptr(g)}});
+  d.ok(kAddDriverGraphCommand, {{"graph", d.ptr(g)}});
   const BlockHandle made = DriverList::find(*d.lib);
   test_assert(!made.isNull() && d.lib->get(made)->hasFlag(BlockFlags::Root));
   d.evaluate();
@@ -66,7 +66,7 @@ void testCommands()
   test_assert(DriverList::find(*d.lib) == made);
   d.evaluate();
   test_assert(d.evaluatedAt(a, 5));
-  test_assert(d.fails(kAddGraphCommand, {{"graph", d.ptr(a)}}).code() ==
+  test_assert(d.fails(kAddDriverGraphCommand, {{"graph", d.ptr(a)}}).code() ==
               StatusCode::InvalidArgument);
 
   /* A second list, as an append brings: both are read; the commands see both. */
@@ -79,17 +79,17 @@ void testCommands()
   test_assert(DriverList::find(*d.lib) == made); /* the Root one */
   d.evaluate();
   test_assert(d.evaluatedAt(a, 5) && !d.hasDiagnostic("driven twice"));
-  test_assert(d.fails(kAddGraphCommand, {{"graph", d.ptr(g)}}).code() ==
+  test_assert(d.fails(kAddDriverGraphCommand, {{"graph", d.ptr(g)}}).code() ==
               StatusCode::AlreadyExists);
 
   DriverList &first = *DriverList::of(*d.lib, made);
   must(first.insertCell(*d.lib, d.idOf(h), 0));
   must(first.insertCell(*d.lib, d.idOf(g), 0)); /* g twice: [g, h, g] */
-  d.ok(kRemoveGraphCommand, {{"graph", d.ptr(g)}});
+  d.ok(kRemoveDriverGraphCommand, {{"graph", d.ptr(g)}});
   test_assert(first.cells().size() == 1 && other.cells().size() == 1);
   d.evaluate();
   test_assert(d.evaluatedAt(a, 0));
-  test_assert(d.fails(kRemoveGraphCommand, {{"graph", d.ptr(g)}}).code() ==
+  test_assert(d.fails(kRemoveDriverGraphCommand, {{"graph", d.ptr(g)}}).code() ==
               StatusCode::NotFound);
   must(d.ex->undo(*d.ctx));
   test_assert(first.cells().size() == 3 && other.cells().size() == 2);

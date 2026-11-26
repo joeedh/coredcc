@@ -699,11 +699,11 @@ export function disableDrivers(ctx: Context) {
 }
 /** The document's list of drivers names a graph block, undoably: it drives the document's objects. */
 export function addDriverGraph(ctx: Context, graph: Ref) {
-  run(ctx, 'core.drivers.addGraph', {graph})
+  run(ctx, 'core.driver.add', {graph})
 }
 /** No list of drivers names the graph any more. */
 export function removeDriverGraph(ctx: Context, graph: Ref) {
-  run(ctx, 'core.drivers.removeGraph', {graph})
+  run(ctx, 'core.driver.remove', {graph})
 }
 /** Something in the listed graphs that can't work. `node` is a node path, "" for the graph. */
 export interface DriverDiagnostic {

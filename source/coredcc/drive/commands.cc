@@ -1,4 +1,4 @@
-/* core.drivers.addGraph and core.drivers.removeGraph: the document's list of drivers. */
+/* core.driver.add and core.driver.remove: the document's list of drivers. */
 #include "coredcc/drive/commands.h"
 #include "coredcc/api/change_bus.h"
 #include "coredcc/command/block_commands.h"
@@ -310,12 +310,12 @@ struct RemoveGraph {
 
 Status registerCommands(Runtime &rt)
 {
-  CommandDef add(kAddGraphCommand);
+  CommandDef add(kAddDriverGraphCommand);
   add.uiName("Add Driver Graph")
       .description("The graph drives the document's objects.")
       .input(PropertyDef::pointerProp("graph", StructId()));
   CDCC_TRY(detail::addCommandOnce<AddGraph>(rt, std::move(add)));
-  CommandDef remove(kRemoveGraphCommand);
+  CommandDef remove(kRemoveDriverGraphCommand);
   remove.uiName("Remove Driver Graph")
       .input(PropertyDef::pointerProp("graph", StructId()));
   return detail::addCommandOnce<RemoveGraph>(rt, std::move(remove));

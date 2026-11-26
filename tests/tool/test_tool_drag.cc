@@ -252,7 +252,7 @@ void testPivotAndSize()
   /* The median of what a drag moves: hidden objects aren't. */
   const Frame f = d.gizmoFrame();
   test_assert(f.pivot[0] == 2.0 && f.pivot[1] == 1.0 && f.pivot[2] == 0.0);
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs()));
   ApplyDelta *drag = d.ex->interactiveCommand()->as<ApplyDelta>();
   test_assert(drag->count() == 2);
@@ -313,7 +313,7 @@ void testPivotAfterCommand()
   const Frame f = d.gizmoFrame();
   const Pixel press = d.pixelOf(f.pivot + f.axes[0] * (f.unit * 0.8));
   const double dx = press.x - f.centre.x, dy = press.y - f.centre.y;
-  d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(3, 0, 0)}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(3, 0, 0)}});
   must(d.send(EventType::PointerDown, press.x, press.y).status());
   for (int i = 1; i <= 4; i++) {
     const double t = 1.0 + double(i) / 4;

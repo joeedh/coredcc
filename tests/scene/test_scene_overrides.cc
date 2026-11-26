@@ -230,7 +230,7 @@ void testProvider()
   test_assert(
       isError(computeState(*d.lib, b, 0.0).status(), StatusCode::FailedPrecondition));
   test_assert(isError(
-      d.fails(kApplyDeltaCommand,
+      d.fails(kApplyObjectDeltaCommand,
               {{"objects", PropValue::ofString(formatBlockId(d.rt, d.idOf(a)).c_str())}}),
       StatusCode::FailedPrecondition,
       "no value"));
@@ -335,7 +335,7 @@ void testDrag()
     const double time = d.sc().time();
     const Result<TransformState> from = computeState(*d.lib, h, time);
     const auto drag = [&](Random &doc, BlockHandle target, int &driven) {
-      const CommandDef *def = doc.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+      const CommandDef *def = doc.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
       doc.select({target});
       const Status s = doc.ex->beginInteractive(*doc.ctx, *def, def->newInputs());
       if (s.ok()) {
@@ -410,7 +410,7 @@ void testDragSteps()
   curves.curves.append(c);
   must(setOverrideProvider(*d.lib, curves));
   d.select({a});
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs()));
   ApplyDelta *drag = d.ex->interactiveCommand()->as<ApplyDelta>();
   for (int i = 1; i < 5; i++) {
@@ -424,11 +424,12 @@ void testDragSteps()
   must(drag->update(*d.ctx, translate(3, 0, 1)));
   test_assert(drag->driven() == 0);
   must(d.ex->commit(*d.ctx));
-  PropertyBag out = d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(0, 4, 0)}});
+  PropertyBag out =
+      d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(0, 4, 0)}});
   test_assert(out.get("driven")->asInt() == 1 && out.get("skipped")->asInt() == 0);
   test_assert(lengthOf(get(d.obj(a).channels, trs::kLocation) - double3(4, 2, 4)) == 0.0);
   /* About the place where it is. */
-  out = d.ok(kApplyDeltaCommand,
+  out = d.ok(kApplyObjectDeltaCommand,
              {{"kind", PropValue::ofEnum(int64_t(DeltaKind::Scale))},
               {"vector", PropValue::ofVec3(2, 2, 2)},
               {"pivot", PropValue::ofVec3(4, 50, 4)}});
@@ -547,13 +548,13 @@ void testTime()
   const double3 at = solve::translationOf(d.result(child).state.world);
   test_assert(lengthOf(at - double3(15 + 2, -1, 3)) < 1e-12);
   d.select({child});
-  d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(10, 20, 30)}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(10, 20, 30)}});
   d.evaluate();
   test_assert(lengthOf(solve::translationOf(d.result(child).state.world) -
                        double3(27, 19, 33)) < 1e-12);
   d.undo();
 
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs()));
   ApplyDelta *drag = d.ex->interactiveCommand()->as<ApplyDelta>();
   for (int i = 1; i < 4; i++) {

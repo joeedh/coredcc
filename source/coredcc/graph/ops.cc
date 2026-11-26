@@ -602,8 +602,8 @@ Status GraphEdit::setInterfaceDefault(int64_t id, const PropValue &value)
 
 namespace {
 
-constexpr const char *kEditCommand = "graph.edit";
-constexpr const char *kEditImpl = "graph.edit#impl";
+constexpr const char *kEditGraphCommand = "core.graph.edit";
+constexpr const char *kEditImpl = "core.graph.edit#impl";
 
 struct RunGraphEdit {
   BlockId graph;
@@ -614,7 +614,7 @@ struct RunGraphEdit {
   {
     return fn ? Status()
               : Status::error(StatusCode::FailedPrecondition,
-                              "graph.edit: use runGraphEdit");
+                              "core.graph.edit: use runGraphEdit");
   }
   Status exec(Context &ctx)
   {
@@ -661,14 +661,14 @@ struct RunGraphEdit {
 
 Result<const CommandDef *> editDef(Runtime &rt)
 {
-  if (const CommandDef *d = rt.ext<CommandRegistry>().find(kEditCommand)) {
+  if (const CommandDef *d = rt.ext<CommandRegistry>().find(kEditGraphCommand)) {
     if (d->implType() != TypeId::of(kEditImpl)) {
       return Status::error(StatusCode::AlreadyExists,
-                           "graph.edit is registered with another implementation");
+                           "core.graph.edit is registered with another implementation");
     }
     return d;
   }
-  CommandDef def(kEditCommand);
+  CommandDef def(kEditGraphCommand);
   def.uiName("Edit Graph")
       .flags(CommandFlags::Private)
       .input(PropertyDef::stringProp("name"));

@@ -1,5 +1,5 @@
-/* core.tool.stroke: a press begins core.stroke on the active object, moves feed it, a
- * release commits it. */
+/* core.tool.stroke: a press begins core.stroke.apply on the active object, moves feed it,
+ * a release commits it. */
 #include "coredcc/command/command.h"
 #include "coredcc/command/executor.h"
 #include "coredcc/scene/commands.h"
@@ -49,7 +49,7 @@ double radiusOf(Runtime &rt, const ToolDef &def)
 
 namespace tools {
 
-/** The stroke's grab: it owns core.stroke. */
+/** The stroke's grab: it owns core.stroke.apply. */
 struct StrokeModal {
   double x = 0.0, y = 0.0, radius = 25.0;
 
@@ -76,7 +76,8 @@ struct StrokeModal {
     Status s = ex->updateInteractive(ctx, [&](Context &c, Command &cmd) {
       StrokeCommand *stroke = cmd.as<StrokeCommand>();
       if (!stroke) {
-        return Status::error(StatusCode::Internal, "the open command isn't core.stroke");
+        return Status::error(StatusCode::Internal,
+                             "the open command isn't core.stroke.apply");
       }
       Status u = release ? stroke->finish(c, view) : stroke->update(c, view, e);
       samples = stroke->sampleCount();
@@ -176,10 +177,11 @@ struct StrokeTool {
       return Status::error(StatusCode::FailedPrecondition, "no active object");
     }
     CommandExecutor *ex = ctx.executor();
-    const CommandDef *cdef = ctx.runtime().ext<CommandRegistry>().find(kStrokeCommand);
+    const CommandDef *cdef =
+        ctx.runtime().ext<CommandRegistry>().find(kApplyStrokeCommand);
     if (!ex || !cdef) {
       return Status::error(StatusCode::FailedPrecondition,
-                           "the stroke tool needs an executor and core.stroke");
+                           "the stroke tool needs an executor and core.stroke.apply");
     }
     PropertyBag inputs = cdef->newInputs();
     ToolSettingsStore &store = ctx.runtime().ext<ToolSettingsStore>();

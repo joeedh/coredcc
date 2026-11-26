@@ -92,7 +92,7 @@ A module uses those above it, and no others.
 - `tool.h`: `Tool`, `Modal` and `Gizmo`, and `ToolDef`. `builtins.h`: `core.tool.select` and
   `core.tool.transform`; `gizmos/` has the transform gizmo.
 - `elements.h`: `TransformableElements` and `Symmetry`, and the element commands.
-- `stroke.h`: `StrokeSampler`, `StrokeBrush`, `core.stroke` and `core.tool.stroke`.
+- `stroke.h`: `StrokeSampler`, `StrokeBrush`, `core.stroke.apply` and `core.tool.stroke`.
 
 ### `graph/`
 - `node_type.h`: node types and `GraphKernel`. `def.h`: `GraphDef`, a graph's nodes and links.

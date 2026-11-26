@@ -82,7 +82,7 @@ bool FCoredccS2::RunTest(const FString&)
 	FSpikeDoc D;
 	TestEqual(TEXT("scene.new"), D.Run(kNewSceneCommand, {{"name", PropValue::ofString("Second")}}), FString());
 	const BlockHandle A = D.AddObject("a", 1, 2, 3);
-	TestEqual(TEXT("applyDelta"), D.Run(kApplyDeltaCommand, {{"vector", Move(10, 0, 0)}}), FString());
+	TestEqual(TEXT("applyDelta"), D.Run(kApplyObjectDeltaCommand, {{"vector", Move(10, 0, 0)}}), FString());
 	TestEqual(TEXT("three transactions"), Buffer()->GetQueueLength(), 3);
 	AddInfo(FString::Printf(TEXT("titles: %s | %s | %s"), *TitleAt(2), *TitleAt(1), *TitleAt(0)));
 	TestFalse(TEXT("named"), TitleAt(0).IsEmpty());
@@ -110,9 +110,9 @@ bool FCoredccS3::RunTest(const FString&)
 	Other->AddToRoot();
 	const BlockHandle A = D.AddObject("a", 0, 0, 0);
 	ResetBuffer(); /* only the three below */
-	D.Run(kApplyDeltaCommand, {{"vector", Move(1, 0, 0)}});
+	D.Run(kApplyObjectDeltaCommand, {{"vector", Move(1, 0, 0)}});
 	UnrealEdit(Other, 5);
-	D.Run(kApplyDeltaCommand, {{"vector", Move(0, 1, 0)}});
+	D.Run(kApplyObjectDeltaCommand, {{"vector", Move(0, 1, 0)}});
 	TestEqual(TEXT("three transactions"), Buffer()->GetQueueLength(), 3);
 
 	GEditor->UndoTransaction();
@@ -161,7 +161,7 @@ namespace
 /* Begins a drag of the selection and makes ten updates, to (10, 0, 0) in all. */
 FString Drag(FSpikeDoc& D)
 {
-	const CommandDef* Def = D.Rt->ext<CommandRegistry>().find(kDragDeltaCommand);
+	const CommandDef* Def = D.Rt->ext<CommandRegistry>().find(kDragObjectDeltaCommand);
 	Status S = D.Ex->beginInteractive(*D.Ctx, *Def, Def->newInputs());
 	if (!S.ok()) return FString(UTF8_TO_TCHAR(S.toString().c_str()));
 	for (int I = 1; I <= 10; I++)
@@ -210,7 +210,7 @@ bool FCoredccS5::RunTest(const FString&)
 	TestEqual(TEXT("the drag joined the adapter's transaction"), Buffer()->GetQueueLength(), 1);
 	ResetBuffer();
 	GEditor->UndoTransaction(); /* nothing: the buffer was reset */
-	D.Run(kApplyDeltaCommand, {{"vector", Move(-10, 0, 0)}});
+	D.Run(kApplyObjectDeltaCommand, {{"vector", Move(-10, 0, 0)}});
 	ResetBuffer();
 
 	/* Without it: OnBeforeRedoUndo cancels the drag, then UE undoes its own step. */
@@ -231,7 +231,7 @@ bool FCoredccS6::RunTest(const FString&)
 	ResetBuffer();
 	FSpikeDoc D;
 	D.AddObject("a", 0, 0, 0);
-	for (int I = 0; I < 3; I++) D.Run(kApplyDeltaCommand, {{"vector", Move(1, 0, 0)}});
+	for (int I = 0; I < 3; I++) D.Run(kApplyObjectDeltaCommand, {{"vector", Move(1, 0, 0)}});
 	AddInfo(FString::Printf(TEXT("UE's undo size: %llu bytes"), uint64(Buffer()->GetUndoSize())));
 	TestTrue(TEXT("the buffer's size counts the records"), Buffer()->GetUndoSize() > 0);
 
@@ -239,7 +239,7 @@ bool FCoredccS6::RunTest(const FString&)
 	const int32 Before = D.History->DiscardCount();
 	GEditor->UndoTransaction();
 	GEditor->UndoTransaction();
-	D.Run(kApplyDeltaCommand, {{"vector", Move(0, 1, 0)}});
+	D.Run(kApplyObjectDeltaCommand, {{"vector", Move(0, 1, 0)}});
 	TestEqual(TEXT("each truncated record discarded once"), D.History->DiscardCount() - Before, 2);
 
 	const int32 Live = D.History->LiveChanges();
@@ -258,9 +258,9 @@ bool FCoredccS7::RunTest(const FString&)
 	UCoredccDocument* Other = NewObject<UCoredccDocument>(GetTransientPackage(), NAME_None, RF_Transactional);
 	Other->AddToRoot();
 	const BlockHandle A = D.AddObject("a", 0, 0, 0);
-	D.Run(kApplyDeltaCommand, {{"vector", Move(1, 0, 0)}});
+	D.Run(kApplyObjectDeltaCommand, {{"vector", Move(1, 0, 0)}});
 	TestNotNull(TEXT("head"), D.History->head());
-	const CommandDef* Def = D.Rt->ext<CommandRegistry>().find(kApplyDeltaCommand);
+	const CommandDef* Def = D.Rt->ext<CommandRegistry>().find(kApplyObjectDeltaCommand);
 	PropertyBag In = Def->newInputs();
 	In.set("vector", Move(5, 0, 0)).ignore();
 	const Status S = D.Ex->rerunHead(*D.Ctx, std::move(In));

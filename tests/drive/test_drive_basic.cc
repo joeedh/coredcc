@@ -161,12 +161,12 @@ void testCommands()
   d.driveLocation(g, a, 5);
   d.evaluate();
   test_assert(d.evaluatedAt(a, 1));
-  d.ok(kAddGraphCommand, {{"graph", d.ptr(g)}});
+  d.ok(kAddDriverGraphCommand, {{"graph", d.ptr(g)}});
   d.evaluate();
   test_assert(d.evaluatedAt(a, 5));
-  test_assert(d.fails(kAddGraphCommand, {{"graph", d.ptr(g)}}).code() ==
+  test_assert(d.fails(kAddDriverGraphCommand, {{"graph", d.ptr(g)}}).code() ==
               StatusCode::AlreadyExists);
-  test_assert(d.fails(kAddGraphCommand, {{"graph", d.ptr(a)}}).code() ==
+  test_assert(d.fails(kAddDriverGraphCommand, {{"graph", d.ptr(a)}}).code() ==
               StatusCode::InvalidArgument);
   must(d.ex->undo(*d.ctx));
   d.evaluate();
@@ -175,10 +175,10 @@ void testCommands()
   d.evaluate();
   test_assert(d.evaluatedAt(a, 5));
 
-  d.ok(kRemoveGraphCommand, {{"graph", d.ptr(g)}});
+  d.ok(kRemoveDriverGraphCommand, {{"graph", d.ptr(g)}});
   d.evaluate();
   test_assert(d.evaluatedAt(a, 1));
-  test_assert(d.fails(kRemoveGraphCommand, {{"graph", d.ptr(g)}}).code() ==
+  test_assert(d.fails(kRemoveDriverGraphCommand, {{"graph", d.ptr(g)}}).code() ==
               StatusCode::NotFound);
   must(d.ex->undo(*d.ctx));
   d.evaluate();

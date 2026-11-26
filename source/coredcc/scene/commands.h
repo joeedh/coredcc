@@ -81,9 +81,9 @@ inline constexpr const char *kSetRotationModeCommand = "core.object.setRotationM
  * another of them move with it, and aren't changed themselves. With a `gesture`
  * (beginGesture), one that follows another of the same gesture, on the same objects, is
  * one step with it: for the arrow keys. Outputs `locked` and `driven`: see ApplyDelta. */
-inline constexpr const char *kApplyDeltaCommand = "core.object.applyDelta";
+inline constexpr const char *kApplyObjectDeltaCommand = "core.object.applyDelta";
 /** The same as an Interactive command: see ApplyDelta. */
-inline constexpr const char *kDragDeltaCommand = "core.object.dragDelta";
+inline constexpr const char *kDragObjectDeltaCommand = "core.object.dragDelta";
 /** `matrices`: 16 numbers, column by column, for each of `objects`, which must be given
  * and name none twice: where they are to be, parents first. `mode`: EXACT, or CLOSEST,
  * which the output `approximate` counts. Locked channels stay. */
@@ -164,9 +164,9 @@ private:
 };
 
 /**
- * The instance of kApplyDeltaCommand and kDragDeltaCommand. A tool begins the second one,
- * calls `update` with the total delta since then as often as it likes, and commits or
- * cancels:
+ * The instance of kApplyObjectDeltaCommand and kDragObjectDeltaCommand. A tool begins the
+ * second one, calls `update` with the total delta since then as often as it likes, and
+ * commits or cancels:
  *
  *     executor.beginInteractive(ctx, def, def.newInputs());
  *     executor.updateInteractive(ctx, [&](Context &c, Command &cmd) {

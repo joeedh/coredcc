@@ -233,7 +233,7 @@ struct SetProperty {
   }
 };
 
-constexpr const char *kImpl = "core.setProperty#impl";
+constexpr const char *kImpl = "core.property.set#impl";
 
 /* The last gesture's id. */
 struct Gestures {
@@ -249,7 +249,7 @@ Result<const CommandDef *> setPropertyDef(Runtime &rt)
   if (const CommandDef *d = rt.ext<CommandRegistry>().find(kSetPropertyCommand)) {
     if (d->implType() != TypeId::of(kImpl)) {
       return Status::error(StatusCode::AlreadyExists,
-                           "core.setProperty is registered with another implementation");
+                           "core.property.set is registered with another implementation");
     }
     return d;
   }

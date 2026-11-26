@@ -220,7 +220,7 @@ void testOrder()
   };
   auto remove = [&](int i) {
     return d
-        .run(kGraphNodeRemoveCommand,
+        .run(kRemoveGraphNodeCommand,
              {{"graph", pointerTo(d.g)}, {"node", PropValue::ofInt(ids[i].value)}})
         .ok();
   };
@@ -387,7 +387,7 @@ void testExtras()
               is("ui.width", fl(90)));
   test_assert(d.redo().ok() && d.redo().ok() && is("ui.width", fl(3)) &&
               is("ui.new", fl(4)));
-  test_assert(d.run(kGraphNodeRemoveCommand,
+  test_assert(d.run(kRemoveGraphNodeCommand,
                     {{"graph", pointerTo(d.g)}, {"node", PropValue::ofInt(d.n.value)}})
                   .ok());
   test_assert(d.undo().ok() && is("ui.width", fl(3)) && is("ui.new", fl(4)));
@@ -426,7 +426,7 @@ struct Two {
   void act(bool create)
   {
     if (create) {
-      const CommandDef *def = rt.ext<CommandRegistry>().find(kGraphCreateCommand);
+      const CommandDef *def = rt.ext<CommandRegistry>().find(kNewGraphCommand);
       test_assert(executor.run(in1, *def, def->newInputs()).ok());
       return;
     }
@@ -493,7 +493,7 @@ void testLibraries()
 void testMemory()
 {
   Doc d;
-  test_assert(d.run(kGraphCreateCommand, {}).ok());
+  test_assert(d.run(kNewGraphCommand, {}).ok());
   const uint64_t done = d.history.memoryUsed();
   test_assert(d.undo().ok() && d.history.memoryUsed() > done);
   test_assert(d.redo().ok() && d.history.memoryUsed() == done);

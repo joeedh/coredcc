@@ -77,7 +77,7 @@ struct Random {
       break;
     case 2: {
       const BlockHandle g = graphs[pick(int(graphs.size()))];
-      (void)d.run(pick(2) ? kAddGraphCommand : kRemoveGraphCommand,
+      (void)d.run(pick(2) ? kAddDriverGraphCommand : kRemoveDriverGraphCommand,
                   {{"graph", d.ptr(g)}});
       break;
     }
@@ -112,7 +112,8 @@ struct Random {
       break;
     default:
       d.select({any()});
-      (void)d.run(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(pick(3), 0, 0)}});
+      (void)d.run(kApplyObjectDeltaCommand,
+                  {{"vector", PropValue::ofVec3(pick(3), 0, 0)}});
       break;
     }
     if (d.rt.hasStickyError()) {

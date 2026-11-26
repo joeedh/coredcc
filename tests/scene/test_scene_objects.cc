@@ -80,7 +80,7 @@ std::vector<Case> cases()
       {kSetParentCommand, {{"keepWorld", PropValue::ofBool(false)}}},
       {kSetTransformTypeCommand, {{"type", text(kMatrixTransform)}}},
       {kSetRotationModeCommand, {{"mode", PropValue::ofEnum(trs::kQuaternionMode)}}},
-      {kApplyDeltaCommand, {{"vector", PropValue::ofVec3(1, 2, 3)}}},
+      {kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(1, 2, 3)}}},
       {kDeleteObjectsCommand, {}},
       {kDeleteObjectsCommand, {{"keepChildrenWorld", PropValue::ofBool(false)}}},
   };
@@ -231,7 +231,7 @@ void testSelect()
 void testOthers()
 {
   Five d;
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   PropertyBag in = def->newInputs();
   must(in.set("objects", text(ids(d, {d.e, d.a}))));
   must(d.ex->beginInteractive(*d.ctx, *def, std::move(in)));

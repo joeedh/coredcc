@@ -1,4 +1,5 @@
-/* core.stroke: a brush's stroke as one Interactive command that replays its samples on redo. */
+/* core.stroke.apply: a brush's stroke as one Interactive command that replays its samples
+ * on redo. */
 #include "coredcc/api/ref_text.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/scene/commands.h"
@@ -77,13 +78,13 @@ Status StrokeCommand::exec(Context &ctx)
   Result<BlockHandle> object = detail::blockOf(ctx, "object");
   CDCC_TRY(object.status());
   if (!*object) {
-    return Status::error(StatusCode::FailedPrecondition, "core.stroke: no object");
+    return Status::error(StatusCode::FailedPrecondition, "core.stroke.apply: no object");
   }
   Result<TransformState> st = computeState(*s.lib, *object, s.scene->time());
   CDCC_TRY(st.status());
   if (!litestl::math::tryInverse(st->world, inverse_)) {
     return Status::error(StatusCode::FailedPrecondition,
-                         "core.stroke: the object's matrix can't be inverted");
+                         "core.stroke.apply: the object's matrix can't be inverted");
   }
   const PropertyBag &in = *ctx.inputs();
   StrokeSettings settings;
@@ -130,7 +131,8 @@ Status StrokeCommand::exec(Context &ctx)
 Status StrokeCommand::update(Context &ctx, const ViewMath &view, const InputEvent &e)
 {
   if (!view.valid()) {
-    return Status::error(StatusCode::InvalidArgument, "core.stroke: the view isn't valid");
+    return Status::error(StatusCode::InvalidArgument,
+                         "core.stroke.apply: the view isn't valid");
   }
   view_ = view;
   sampler_.setView(view);
@@ -219,7 +221,7 @@ void StrokeCommand::undo(Context &ctx)
 Status StrokeCommand::redo(Context &ctx)
 {
   if (!brush_) {
-    return Status::error(StatusCode::FailedPrecondition, "core.stroke: no brush");
+    return Status::error(StatusCode::FailedPrecondition, "core.stroke.apply: no brush");
   }
   CDCC_TRY(brush_->begin(ctx, target_));
   CDCC_TRY(ctx.runtime().takeStickyError());
@@ -278,7 +280,7 @@ PropertyDef strokeMethodProp()
 Status registerStrokeCommand(Runtime &rt)
 {
   const StrokeSettings d;
-  CommandDef def(kStrokeCommand);
+  CommandDef def(kApplyStrokeCommand);
   def.uiName("Stroke")
       .flags(CommandFlags::Interactive | CommandFlags::Private)
       .input(PropertyDef::stringProp("brush"))

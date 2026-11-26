@@ -130,7 +130,7 @@ bool FCoredccS10::RunTest(const FString&)
 		TestTrue(TEXT("in the scene"), Scene::of(*D.Lib, D.Scene)->add(*D.Lib, *H).ok());
 		TestTrue(TEXT("reads the actor"), D.Where(*H).Equals(FVector(100, 0, 0), 1e-9));
 
-		const FString E = D.Run(kApplyDeltaCommand,
+		const FString E = D.Run(kApplyObjectDeltaCommand,
 			{{"vector", PropValue::ofVec3(0, 50, 0)}, {"objects", PropValue::ofString(D.Objects({*H}).c_str())}});
 		TestEqual(TEXT("applyDelta"), E, FString());
 		TestTrue(TEXT("the actor moved"), Actor->GetActorLocation().Equals(FVector(100, 50, 0), 1e-6));

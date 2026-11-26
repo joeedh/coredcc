@@ -577,18 +577,18 @@ void testCommand()
   const mat4d was = d.stateOf(a).world, child = d.stateOf(c).world;
   const Inputs mirror = {{"kind", PropValue::ofEnum(2)},
                          {"vector", PropValue::ofVec3(-1, 1, 1)}};
-  d.cycle(kApplyDeltaCommand, mirror);
+  d.cycle(kApplyObjectDeltaCommand, mirror);
   mat4d m;
   m.identity();
   m[0][0] = -1.0;
   test_assert(difference(d.stateOf(a).world, m * was) < 1e-14);
   test_assert(difference(d.stateOf(c).world, m * child) < 1e-14); /* it goes along */
   d.select({c});
-  d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(1, 0, 0)}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(1, 0, 0)}});
   test_assert(std::fabs(d.obj(c).channels.get(trs::kLocation)) < 3.0);
   d.undo();
   d.select({a});
-  d.ok(kApplyDeltaCommand, mirror);
+  d.ok(kApplyObjectDeltaCommand, mirror);
   test_assert(difference(d.stateOf(a).world, was) < 1e-14);
 }
 

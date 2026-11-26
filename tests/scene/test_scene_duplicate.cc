@@ -161,7 +161,7 @@ void testObjects()
   /* Then a drag, as two steps. */
   d.select({a});
   d.ok(kDuplicateObjectsCommand);
-  d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(5, 0, 0)}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(5, 0, 0)}});
   test_assert(d.obj(a).channels.get(0) == 1.0 &&
               d.obj(d.sc().selected(*d.lib)[0]).channels.get(0) == 6.0);
 }

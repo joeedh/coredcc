@@ -395,7 +395,7 @@ Status TransformGizmo::beginDrag(
 {
   CommandExecutor *ex = ctx.executor();
   const CommandDef *def = ctx.runtime().ext<CommandRegistry>().find(
-      settings.elements ? kElementsDragDeltaCommand : kDragDeltaCommand);
+      settings.elements ? kDragElementDeltaCommand : kDragObjectDeltaCommand);
   if (!ex || !def) {
     return Status::error(
         StatusCode::FailedPrecondition,

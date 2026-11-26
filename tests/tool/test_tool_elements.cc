@@ -1,4 +1,4 @@
-/* core.elements.applyDelta and dragDelta on a points block: weights, the object's
+/* core.element.applyDelta and dragDelta on a points block: weights, the object's
  * matrix, symmetry partners and their conflicts, points on mirror planes, undo and redo,
  * a topoStamp that changed, invalidateData; and the transform tool's ELEMENTS target. */
 #include "tool_fixture.h"
@@ -164,7 +164,7 @@ struct ElementsDoc : ToolDoc {
   }
   PropertyBag apply(Inputs in)
   {
-    return ok(kElementsApplyDeltaCommand, in);
+    return ok(kApplyElementDeltaCommand, in);
   }
   std::vector<BlockHandle> blocks;
 };
@@ -209,9 +209,9 @@ void testObjectMatrix()
   d.pointsOf(0).selected = {1, 1};
   /* Scale the object by 2 and turn it, so that W isn't a translation. */
   d.select({o});
-  d.ok(kApplyDeltaCommand,
+  d.ok(kApplyObjectDeltaCommand,
        {{"kind", PropValue::ofEnum(2)}, {"vector", PropValue::ofVec3(2, 2, 2)}});
-  d.ok(kApplyDeltaCommand,
+  d.ok(kApplyObjectDeltaCommand,
        {{"kind", PropValue::ofEnum(1)},
         {"axis", PropValue::ofVec3(0, 0, 1)},
         {"angle", PropValue::ofFloat(0.5)}});
@@ -301,7 +301,7 @@ void testSkipsAndDetail()
   test_assert(out.get("skipped")->asInt() == 1 && out.get("points")->asInt() == 1);
   /* Nothing selected in the block: nothing to do. */
   d.pointsOf(0).selected = {0};
-  test_assert(d.fails(kElementsApplyDeltaCommand).code() ==
+  test_assert(d.fails(kApplyElementDeltaCommand).code() ==
               StatusCode::FailedPrecondition);
 }
 
@@ -350,7 +350,7 @@ void testReviewFixes()
   p.selected = {1, 1, 1};
   d.select({o});
   d.evaluate();
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kElementsDragDeltaCommand);
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragElementDeltaCommand);
   PropertyBag in = def->newInputs();
   must(in.set("symmetry", PropValue::ofBool(true)));
   must(d.ex->beginInteractive(*d.ctx, *def, std::move(in)));

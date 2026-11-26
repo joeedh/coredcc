@@ -53,9 +53,9 @@ Status registerForeignTool(Context &ctx,
                            uint32_t factory,
                            const string &slots);
 /**
- * Registers a script StrokeBrush named `name` for core.stroke's `brush` input: `factory`
- * makes one instance per stroke, implementing the StrokeBrush slots in `slots`. Takes one
- * count of `factory` either way. The `core.` namespace is reserved.
+ * Registers a script StrokeBrush named `name` for core.stroke.apply's `brush` input:
+ * `factory` makes one instance per stroke, implementing the StrokeBrush slots in `slots`.
+ * Takes one count of `factory` either way. The `core.` namespace is reserved.
  */
 Status registerForeignStrokeBrush(Context &ctx,
                                   const string &name,
@@ -100,7 +100,7 @@ Status updateDrag(Context &ctx, const TransformDelta &delta);
  * w), pivot (3), vector (3), axis (3), angle, and one that is ignored.
  */
 Status updateDragEach(Context &ctx, const litestl::util::Vector<double> &numbers);
-/** ElementsDelta::update on the open core.elements.dragDelta. */
+/** ElementsDelta::update on the open core.element.dragDelta. */
 Status updateElementsDrag(Context &ctx, const TransformDelta &delta);
 /** How many objects the open drag moves; 0 for none. */
 IntResult dragCount(Context &ctx);

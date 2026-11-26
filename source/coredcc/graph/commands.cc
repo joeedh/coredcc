@@ -233,24 +233,24 @@ Status registerGraphCommands(Runtime &rt)
 {
   CDCC_TRY(registerGraphBlocks(rt));
 
-  CommandDef create(kGraphCreateCommand);
+  CommandDef create(kNewGraphCommand);
   create.uiName("New Graph")
       .input(PropertyDef::stringProp("name").defaultValue(PropValue::ofString("Graph")))
       .output(PropertyDef::pointerProp("graph", StructId::of(kGraphDefType)));
   CDCC_TRY(addOnce<CreateGraph>(rt, create));
 
-  CommandDef add = graphCommand(kGraphNodeAddCommand, "Add Node");
+  CommandDef add = graphCommand(kAddGraphNodeCommand, "Add Node");
   add.input(PropertyDef::stringProp("type"))
       .input(PropertyDef::vecProp("position", 2))
       .input(PropertyDef::stringProp("label"))
       .output(PropertyDef::intProp("node"));
   CDCC_TRY(addOnce<GraphCommand<addNode>>(rt, add));
 
-  CommandDef remove = graphCommand(kGraphNodeRemoveCommand, "Remove Node");
+  CommandDef remove = graphCommand(kRemoveGraphNodeCommand, "Remove Node");
   remove.input(PropertyDef::intProp("node"));
   CDCC_TRY(addOnce<GraphCommand<removeNode>>(rt, remove));
 
-  CommandDef linkDef = graphCommand(kGraphLinkCommand, "Link");
+  CommandDef linkDef = graphCommand(kAddGraphLinkCommand, "Link");
   linkDef.input(PropertyDef::intProp("from"))
       .input(PropertyDef::stringProp("fromSocket"))
       .input(PropertyDef::intProp("to"))
@@ -258,11 +258,11 @@ Status registerGraphCommands(Runtime &rt)
       .output(PropertyDef::intProp("link"));
   CDCC_TRY(addOnce<GraphCommand<link>>(rt, linkDef));
 
-  CommandDef unlinkDef = graphCommand(kGraphUnlinkCommand, "Unlink");
+  CommandDef unlinkDef = graphCommand(kRemoveGraphLinkCommand, "Unlink");
   unlinkDef.input(PropertyDef::intProp("link"));
   CDCC_TRY(addOnce<GraphCommand<unlink>>(rt, unlinkDef));
 
-  CommandDef ifaceAdd = graphCommand(kGraphInterfaceAddCommand, "Add Interface Socket");
+  CommandDef ifaceAdd = graphCommand(kAddGraphInterfaceCommand, "Add Interface Socket");
   ifaceAdd.input(PropertyDef::enumProp("side").item("INPUT", 0).item("OUTPUT", 1))
       .input(PropertyDef::stringProp("name"))
       .input(PropertyDef::stringProp("type").defaultValue(PropValue::ofString("float")))
@@ -273,17 +273,17 @@ Status registerGraphCommands(Runtime &rt)
   CDCC_TRY(addOnce<GraphCommand<addInterface>>(rt, ifaceAdd));
 
   CommandDef ifaceRemove =
-      graphCommand(kGraphInterfaceRemoveCommand, "Remove Interface Socket");
+      graphCommand(kRemoveGraphInterfaceCommand, "Remove Interface Socket");
   ifaceRemove.input(PropertyDef::intProp("socket"));
   CDCC_TRY(addOnce<GraphCommand<removeInterface>>(rt, ifaceRemove));
 
   CommandDef ifaceMove =
-      graphCommand(kGraphInterfaceMoveCommand, "Move Interface Socket");
+      graphCommand(kMoveGraphInterfaceCommand, "Move Interface Socket");
   ifaceMove.input(PropertyDef::intProp("socket")).input(PropertyDef::intProp("index"));
   CDCC_TRY(addOnce<GraphCommand<moveInterface>>(rt, ifaceMove));
 
   CommandDef ifaceType =
-      graphCommand(kGraphInterfaceSetTypeCommand, "Set Interface Socket Type");
+      graphCommand(kSetGraphInterfaceTypeCommand, "Set Interface Socket Type");
   ifaceType.input(PropertyDef::intProp("socket")).input(PropertyDef::stringProp("type"));
   return addOnce<GraphCommand<setInterfaceType>>(rt, ifaceType);
 }

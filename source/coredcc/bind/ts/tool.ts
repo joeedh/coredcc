@@ -228,7 +228,7 @@ export function updateDragEach(ctx: Context, deltas: readonly Partial<TransformD
   }
   check(cd.updateDragEach(ctx, numbers))
 }
-/** The open core.elements.dragDelta's points move by `delta`. */
+/** The open core.element.dragDelta's points move by `delta`. */
 export function updateElementsDrag(ctx: Context, delta: Partial<TransformDelta>) {
   withDelta(delta, (d) => check(cd.updateElementsDrag(ctx, d)))
 }
@@ -544,7 +544,7 @@ class BrushAdapter {
   }
 }
 
-/** Registers a brush for core.stroke and core.tool.stroke's `brush` setting: `create` makes one
+/** Registers a brush for core.stroke.apply and core.tool.stroke's `brush` setting: `create` makes one
  * for each stroke, which its undo step keeps. */
 export function defineStrokeBrush(ctx: Context, name: string, create: () => StrokeBrush) {
   checkCtx(ctx)

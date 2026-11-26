@@ -3,7 +3,7 @@
 /** \file
  * Transforming elements (points, or the points of edges and faces) of the selected
  * objects' data blocks: the capabilities a block implements, TransformableElements and
- * Symmetry, and the commands core.elements.applyDelta and core.elements.dragDelta.
+ * Symmetry, and the commands core.element.applyDelta and core.element.dragDelta.
  */
 
 #include "coredcc/base/iface/iface.h"
@@ -99,9 +99,9 @@ struct Symmetry : IfaceRef {
  * aren't moved themselves (see `docs/plans/2026-11-25-p4-tools.md` for conflicts), and
  * points on a mirror plane stay on it. Outputs `skipped` and `points`.
  */
-inline constexpr const char *kElementsApplyDeltaCommand = "core.elements.applyDelta";
+inline constexpr const char *kApplyElementDeltaCommand = "core.element.applyDelta";
 /** The same, Interactive: a tool updates it with ElementsDelta::update. */
-inline constexpr const char *kElementsDragDeltaCommand = "core.elements.dragDelta";
+inline constexpr const char *kDragElementDeltaCommand = "core.element.dragDelta";
 
 /** The instance of both commands. */
 class ElementsDelta {

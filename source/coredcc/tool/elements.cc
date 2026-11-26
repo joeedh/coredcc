@@ -500,8 +500,8 @@ CommandDef elementsDef(const char *name, const char *uiName)
 Status registerElementCommands(Runtime &rt)
 {
   CDCC_TRY(detail::addCommandOnce<ElementsDelta>(
-      rt, elementsDef(kElementsApplyDeltaCommand, "Transform Elements")));
-  CommandDef drag = elementsDef(kElementsDragDeltaCommand, "Transform Elements (Drag)");
+      rt, elementsDef(kApplyElementDeltaCommand, "Transform Elements")));
+  CommandDef drag = elementsDef(kDragElementDeltaCommand, "Transform Elements (Drag)");
   drag.flags(CommandFlags::Interactive | CommandFlags::Private);
   return detail::addCommandOnce<ElementsDelta>(rt, std::move(drag));
 }

@@ -14,7 +14,7 @@ namespace coredcc {
 struct Path;
 
 /**
- * Sets a datapath value through `ctx`'s executor, as a `core.setProperty` command that
+ * Sets a datapath value through `ctx`'s executor, as a `core.property.set` command that
  * undo can reverse.
  *
  * - The command keeps the canonical path and the whole member's old and new values, so
@@ -44,6 +44,6 @@ bool isGesture(const Runtime &rt, uint64_t gestureId);
 Status cancelGesture(Context &ctx, uint64_t gestureId);
 
 /** The id of the command setValueUndo runs. */
-inline constexpr const char *kSetPropertyCommand = "core.setProperty";
+inline constexpr const char *kSetPropertyCommand = "core.property.set";
 
 } // namespace coredcc

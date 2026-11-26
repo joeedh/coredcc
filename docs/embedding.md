@@ -214,8 +214,8 @@ Unreal, coredcc is exactly one module, so they exist once.
   Library that should be driven: `SceneDrivers::make(lib)` makes it the Library's `OverrideProvider`.
 - **Destroy it before the Library,** as any graph instance. If the Library goes first, it does nothing more.
 - **The document's list of drivers** (`drive/driver_list.h`, a block named "Drivers") names the graph blocks
-  that drive the document's objects. `core.drivers.addGraph` makes it when there is none;
-  `core.drivers.removeGraph` takes a graph out of every list. Scenes don't list graphs, so a duplicated scene
+  that drive the document's objects. `core.driver.add` makes it when there is none;
+  `core.driver.remove` takes a graph out of every list. Scenes don't list graphs, so a duplicated scene
   drives nothing twice. An appended file may bring a second list: every list drives, each graph once.
 - **For paths,** give the root struct `addDriverGraphsMember(root)`: the collection `driverGraphs`.
 - In them: `scene.drive.<kind>` drives a channel of an object, `scene.object.state` reads an object's evaluated

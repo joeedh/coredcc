@@ -46,7 +46,8 @@ void testCommands()
 
   /* Moving it: the driven channels are counted, the stored ones change. */
   d.select({a});
-  PropertyBag out = d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(1, 1, 1)}});
+  PropertyBag out =
+      d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(1, 1, 1)}});
   test_assert(out.get("driven")->asInt() == 1);
   test_assert(lengthOf(get(d.obj(a).channels, trs::kLocation) - double3(1, 2, 3)) == 0.0);
   d.evaluate();
@@ -64,7 +65,7 @@ void testReadAfterWrite()
   d.follow(g, a, leader, 10);
   test_assert(d.stateAt(a)[0] == 11);
   d.select({leader});
-  d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(4, 0, 0)}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(4, 0, 0)}});
   test_assert(d.stateAt(a)[0] == 15);
   must(d.ex->undo(*d.ctx));
   test_assert(d.stateAt(a)[0] == 11);

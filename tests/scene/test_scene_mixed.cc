@@ -38,7 +38,7 @@ void testDetached()
   d.lib->addReviveListener(
       [&](Library &l, BlockHandle b) { revived += &l == d.lib.get() && b == h; });
   d.select({a, h});
-  d.ok(kApplyDeltaCommand, {{"vector", kStep}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", kStep}});
   must(d.lib->onHostDestroyed(id));
   d.undo();
   test_assert(d.obj(a).channels.get(0) == 1.0 && waiting(d) == 1 && d.history->canRedo());
@@ -135,7 +135,7 @@ void testDetachedDrag()
     const BlockHandle a = d.object("a", 1.0), h = d.hostObject("h", 5.0);
     const BlockId id = d.idOf(h);
     d.select({a, h});
-    const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+    const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
     must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs()));
     ApplyDelta *drag = d.ex->interactiveCommand()->as<ApplyDelta>();
     TransformDelta t;
@@ -172,7 +172,7 @@ void testDetachedFields()
   d.select({a});
   d.ok(kSetParentCommand, {{"parent", d.ptr(p)}});
   d.ok(kSetTransformTypeCommand, {{"type", PropValue::ofString(kMatrixTransform)}});
-  d.ok(kApplyDeltaCommand, {{"vector", kStep}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", kStep}});
   test_assert(xOf(d, a) == 11.0);
   must(d.lib->markDeleted(a));
   d.undo();
@@ -194,7 +194,7 @@ void testDetachedFields()
   /* Two objects, and one at a time. */
   const BlockHandle b = d.object("b", 2.0);
   d.select({a, b});
-  d.ok(kApplyDeltaCommand, {{"vector", kStep}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", kStep}});
   must(d.lib->markDeleted(a));
   must(d.lib->markDeleted(b));
   d.undo();
@@ -233,13 +233,13 @@ void testSkips()
   d.obj(flat).channels.set(trs::kScale, 0.0);
   d.obj(odd).setTransformType("gone.type");
   d.select({a, under, odd, below, shape});
-  PropertyBag out = d.cycle(kApplyDeltaCommand, {{"vector", kStep}});
+  PropertyBag out = d.cycle(kApplyObjectDeltaCommand, {{"vector", kStep}});
   /* `below` moves by itself: the one above it doesn't. */
   test_assert(out.get("skipped")->asInt() == 3 && xOf(d, a) == 11.0 &&
               xOf(d, below) == 13.0);
   for (BlockHandle h : {under, odd, shape}) {
     d.select({h});
-    test_assert(d.fails(kApplyDeltaCommand, {{"vector", kStep}}).code() ==
+    test_assert(d.fails(kApplyObjectDeltaCommand, {{"vector", kStep}}).code() ==
                 StatusCode::FailedPrecondition);
   }
   d.select({shape});
@@ -263,7 +263,7 @@ void testSkips()
   }
   d.select({a, far, odd});
   const double a0 = xOf(d, a);
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs()));
   ApplyDelta *drag = d.ex->interactiveCommand()->as<ApplyDelta>();
   test_assert(drag->skipped() == 1);
@@ -300,7 +300,8 @@ void testSkips()
   d.host(h).onRead = [&](ObjectInfo &) {
     d.rt.setStickyError(Status::error(StatusCode::Internal, "threw"));
   };
-  test_assert(isError(d.run(kApplyDeltaCommand).status(), StatusCode::Internal, "threw"));
+  test_assert(
+      isError(d.run(kApplyObjectDeltaCommand).status(), StatusCode::Internal, "threw"));
   test_assert(isError(d.run(kSetParentCommand).status(), StatusCode::Internal, "threw"));
   test_assert(isError(
       d.run(kSetTransformTypeCommand, {{"type", PropValue::ofString(kFbxTransform)}})
@@ -323,7 +324,7 @@ void testOutOfReach()
   d.obj(a).flags = ObjectFlags::Hidden;
   d.obj(b).flags = ObjectFlags::Unselectable;
   d.host(h).info.flags = uint32_t(ObjectFlags::Hidden);
-  d.ok(kApplyDeltaCommand, {{"vector", kStep}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", kStep}});
   test_assert(xOf(d, a) == 1.0 && xOf(d, b) == 2.0 && xOf(d, c) == 13.0 &&
               xOf(d, h) == 4.0);
   test_assert(d.sc().selected(*d.lib).size() == 4);
@@ -334,7 +335,7 @@ void testOutOfReach()
   }
   const PropValue named =
       PropValue::ofString(formatBlockIds(d.rt, {ids.data(), size_t(3)}).c_str());
-  d.ok(kApplyDeltaCommand, {{"vector", kStep}, {"objects", named}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", kStep}, {"objects", named}});
   test_assert(xOf(d, a) == 11.0 && xOf(d, b) == 12.0 && xOf(d, c) == 13.0 &&
               xOf(d, h) == 14.0);
   d.ok(kDeleteObjectsCommand);

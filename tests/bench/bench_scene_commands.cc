@@ -200,8 +200,8 @@ void transforms(int count)
   Doc d(count);
   d.run(kSelectCommand, {{"mode", PropValue::ofEnum(kAll)}});
   d.evaluate();
-  cycle(d, "applyDelta, all", kApplyDeltaCommand, {{"vector", kStep}});
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  cycle(d, "applyDelta, all", kApplyObjectDeltaCommand, {{"vector", kStep}});
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   timed("drag of all: begin",
         [&] { must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs())); });
   TransformDelta t;
@@ -243,7 +243,7 @@ void chains(int longest)
     printf(" %d\n", n);
     timed("evaluate", [&] { d.evaluate(); });
     d.run(kSelectCommand, {{"mode", PropValue::ofEnum(kAll)}});
-    cycle(d, "applyDelta, all", kApplyDeltaCommand, {{"vector", kStep}});
+    cycle(d, "applyDelta, all", kApplyObjectDeltaCommand, {{"vector", kStep}});
     cycle(d, "setParent to none, all", kSetParentCommand, {});
     cycle(d,
           "setTransformType, all",

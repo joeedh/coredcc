@@ -466,7 +466,7 @@ ValueResult newGraph(Context &ctx, const string &name)
 {
   Result<PropertyBag> out = runGraph(ctx,
                                      "newGraph",
-                                     kGraphCreateCommand,
+                                     kNewGraphCommand,
                                      nullptr,
                                      {{"name", PropValue::ofString(view(name))}});
   return out.ok() ? ok<ValueResult>(*out->get("graph"))
@@ -479,7 +479,7 @@ IntResult graphAddNode(
   return intOutput(
       runGraph(ctx,
                "graphAddNode",
-               kGraphNodeAddCommand,
+               kAddGraphNodeCommand,
                &graphPath,
                {{"type", PropValue::ofString(view(type))}, {"position", makeVec2(x, y)}}),
       "node");
@@ -489,7 +489,7 @@ Status graphRemoveNode(Context &ctx, const string &graphPath, int64_t node)
 {
   return runGraph(ctx,
                   "graphRemoveNode",
-                  kGraphNodeRemoveCommand,
+                  kRemoveGraphNodeCommand,
                   &graphPath,
                   {{"node", makeInt(node)}})
       .status();
@@ -504,7 +504,7 @@ IntResult graphLink(Context &ctx,
 {
   return intOutput(runGraph(ctx,
                             "graphLink",
-                            kGraphLinkCommand,
+                            kAddGraphLinkCommand,
                             &graphPath,
                             {{"from", makeInt(from)},
                              {"fromSocket", PropValue::ofString(view(fromSocket))},
@@ -517,7 +517,7 @@ Status graphUnlink(Context &ctx, const string &graphPath, int64_t link)
 {
   return runGraph(ctx,
                   "graphUnlink",
-                  kGraphUnlinkCommand,
+                  kRemoveGraphLinkCommand,
                   &graphPath,
                   {{"link", makeInt(link)}})
       .status();
@@ -531,7 +531,7 @@ IntResult graphAddInterface(Context &ctx,
 {
   return intOutput(runGraph(ctx,
                             "graphAddInterface",
-                            kGraphInterfaceAddCommand,
+                            kAddGraphInterfaceCommand,
                             &graphPath,
                             {{"side", PropValue::ofEnum(output ? 1 : 0)},
                              {"name", PropValue::ofString(view(name))},

@@ -188,7 +188,8 @@ void testScriptDrag()
       if (e.type != EventType::PointerDown) {
         return EventResult::Unhandled;
       }
-      must(sc::beginInteractiveAt(ctx, "", kDragDeltaCommand, sc::newRunInputs(), false));
+      must(sc::beginInteractiveAt(
+          ctx, "", kDragObjectDeltaCommand, sc::newRunInputs(), false));
       must(sc::pushModal(ctx, host.add(modalObj(&s)), "onEvent end", true));
       return EventResult::Handled;
     };
@@ -213,8 +214,8 @@ void testScriptDrag()
     /* updateDrag without a drag, and updateDragEach with the wrong count. */
     test_assert(
         isCode(sc::updateDrag(*d.ctx, moveBy(1)), StatusCode::FailedPrecondition));
-    must(
-        sc::beginInteractiveAt(*d.ctx, "", kDragDeltaCommand, sc::newRunInputs(), false));
+    must(sc::beginInteractiveAt(
+        *d.ctx, "", kDragObjectDeltaCommand, sc::newRunInputs(), false));
     litestl::util::Vector<double> numbers;
     for (int i = 0; i < 16; i++) {
       numbers.append(0.0);

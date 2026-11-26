@@ -2,7 +2,7 @@
 
 /** \file
  * Graphs that drive objects, for scripts (drive/drive.h). The rules of facades.h hold
- * here too. Listing a graph as a driver is the command `core.drivers.addGraph`.
+ * here too. Listing a graph as a driver is the command `core.driver.add`.
  */
 
 #include "coredcc/bind/facades.h"

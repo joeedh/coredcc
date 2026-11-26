@@ -509,7 +509,7 @@ void testDocument()
   StableRef ref;
   ref.owner = OwnerKey::ofBlock(g.id);
   ref.type = StructId::of(kGraphDefType);
-  test_assert(d.run(kGraphNodeAddCommand,
+  test_assert(d.run(kAddGraphNodeCommand,
                     {{"graph", PropValue::ofPointer(ref)},
                      {"type", PropValue::ofString(kGraphForeachType)}})
                   .ok());

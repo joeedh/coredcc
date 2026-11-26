@@ -3,7 +3,7 @@
 /** \file
  * Strokes (P4b): StrokeSampler turns pointer samples into evenly spaced samples along a
  * centripetal Catmull-Rom spline; a client's StrokeBrush applies them; the command
- * core.stroke records every sample it applied, so that redo replays them; the tool
+ * core.stroke.apply records every sample it applied, so that redo replays them; the tool
  * core.tool.stroke connects the three.
  *
  * StrokeSampler is a port of sculptcore's `brush/stroke_driver`. What differs is in
@@ -252,7 +252,7 @@ struct StrokeBrush : IfaceRef {
 /** Makes a brush for one stroke. */
 using StrokeBrushFactory = litestl::util::function<Result<Owned<StrokeBrush>>(Runtime &rt)>;
 
-/** Brushes by name, for core.stroke's `brush` input. A Runtime extension. */
+/** Brushes by name, for core.stroke.apply's `brush` input. A Runtime extension. */
 class StrokeBrushRegistry {
 public:
   static constexpr const char *kExtName = "coredcc.StrokeBrushRegistry";
@@ -274,12 +274,13 @@ private:
 template <class Impl> Status addNativeStrokeBrush(Runtime &rt, std::string_view name);
 
 /**
- * The Interactive command `core.stroke`. Inputs: `brush` (a StrokeBrushRegistry name),
- * `object` (the target; a Pointer), the StrokeSettings (`space`, `method`, `spacing`,
- * `radius`, `radiusIsWorld`) and `symmetry`. exec makes the brush and begins it; a tool then
- * feeds it with `update` and `finish` from updateInteractive. Output: `samples`.
+ * The Interactive command `core.stroke.apply`. Inputs: `brush` (a StrokeBrushRegistry
+ * name), `object` (the target; a Pointer), the StrokeSettings (`space`, `method`,
+ * `spacing`, `radius`, `radiusIsWorld`) and `symmetry`. exec makes the brush and begins
+ * it; a tool then feeds it with `update` and `finish` from updateInteractive. Output:
+ * `samples`.
  */
-inline constexpr const char *kStrokeCommand = "core.stroke";
+inline constexpr const char *kApplyStrokeCommand = "core.stroke.apply";
 inline constexpr const char *kStrokeTool = "core.tool.stroke";
 
 class StrokeCommand {
@@ -325,9 +326,9 @@ private:
   litestl::util::Vector<StrokeSample> applied_;
 };
 
-/** Registers core.stroke (idempotent). Needs the scene's commands. */
+/** Registers core.stroke.apply (idempotent). Needs the scene's commands. */
 Status registerStrokeCommand(Runtime &rt);
-/** core.stroke and core.tool.stroke (idempotent); registerToolBuiltins calls it. */
+/** core.stroke.apply and core.tool.stroke (idempotent); registerToolBuiltins calls it. */
 Status registerStrokeBuiltins(Runtime &rt);
 
 } // namespace coredcc

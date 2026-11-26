@@ -122,7 +122,7 @@ void testFailingWrites()
                     b = d.object("b", 3.0);
   const PropValue move = PropValue::ofVec3(10, 0, 0);
   d.select({a, h, b});
-  d.ok(kApplyDeltaCommand, {{"vector", move}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", move}});
   d.evaluate();
   test_assert(d.isAt(a, 11) && d.isAt(h, 12) && d.isAt(b, 13));
   d.host(h).onWrite = [] { return boom("no"); };
@@ -132,24 +132,25 @@ void testFailingWrites()
   test_assert(!d.ex->history()->canRedo());
 
   d.host(h).onWrite = nullptr;
-  d.ok(kApplyDeltaCommand, {{"vector", move}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", move}});
   d.undo();
   const std::string before = d.describe();
   d.host(h).onWrite = [] { return boom("no"); };
   test_assert(isError(d.ex->redo(*d.ctx), StatusCode::Internal, "no"));
   test_assert(d.describe() == before);
   test_assert(isError(
-      d.fails(kApplyDeltaCommand, {{"vector", move}}), StatusCode::Internal, "no"));
+      d.fails(kApplyObjectDeltaCommand, {{"vector", move}}), StatusCode::Internal, "no"));
   d.host(h).onWrite = [&] {
     d.rt.setStickyError(boom("threw"));
     return Status();
   };
-  test_assert(isError(
-      d.fails(kApplyDeltaCommand, {{"vector", move}}), StatusCode::Internal, "threw"));
+  test_assert(isError(d.fails(kApplyObjectDeltaCommand, {{"vector", move}}),
+                      StatusCode::Internal,
+                      "threw"));
   d.host(h).onWrite = nullptr;
 
   /* One that its host took away in between isn't a failure. */
-  d.ok(kApplyDeltaCommand, {{"vector", move}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", move}});
   must(d.lib->onHostDestroyed(d.idOf(b)));
   d.undo();
   d.evaluate();
@@ -301,13 +302,13 @@ void testApplyDelta()
   d.setParent(low, mid);
   /* Below a selected one through one that isn't. */
   d.select({low, top, other});
-  d.cycle(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(0, 5, 0)}});
+  d.cycle(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(0, 5, 0)}});
   d.evaluate();
   test_assert(d.isAt(top, 1, 5) && d.isAt(mid, 11, 5) && d.isAt(low, 111, 5) &&
               d.isAt(other, 1000, 5));
   test_assert(d.obj(low).channels.get(trs::kLocation + 1) == 0.0);
   d.select({low});
-  d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(0, 1, 0)}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(0, 1, 0)}});
   d.evaluate();
   test_assert(d.isAt(low, 111, 6));
   d.undo();
@@ -326,7 +327,7 @@ void testApplyDelta()
     t.angle = r.range(-7.0, 7.0);
     const mat4d before = d.stateOf(top).world;
     d.select({top});
-    d.cycle(kApplyDeltaCommand,
+    d.cycle(kApplyObjectDeltaCommand,
             {{"kind", PropValue::ofEnum(i % 3)},
              {"basis", PropValue::ofQuat(t.basis[0], t.basis[1], t.basis[2], t.basis[3])},
              {"pivot", PropValue::ofVec3(t.pivot[0], t.pivot[1], t.pivot[2])},
@@ -352,7 +353,7 @@ void testApplyDelta()
   /* Objects on a cycle have no parent: each of them moves. */
   d.setParent(top, low);
   d.select({top, mid, low});
-  d.cycle(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(0, 0, 2)}});
+  d.cycle(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(0, 0, 2)}});
   d.evaluate();
   test_assert(d.isAt(top, 1, 0, 2) && d.isAt(mid, 10, 0, 2) && d.isAt(low, 100, 0, 2));
   d.undo();
@@ -360,8 +361,8 @@ void testApplyDelta()
 
   d.obj(other).setTransformType("test.missing");
   d.select({other});
-  test_assert(
-      isError(d.fails(kApplyDeltaCommand), StatusCode::FailedPrecondition, "'other'"));
+  test_assert(isError(
+      d.fails(kApplyObjectDeltaCommand), StatusCode::FailedPrecondition, "'other'"));
 }
 
 void testDrag()
@@ -370,8 +371,8 @@ void testDrag()
   const BlockHandle a = d.object("a", 1.0), h = d.hostObject("h", 5.0),
                     b = d.object("b", 2.0);
   d.setParent(b, a);
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
-  test_assert(!d.run(kDragDeltaCommand).ok()); /* interactive only */
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
+  test_assert(!d.run(kDragObjectDeltaCommand).ok()); /* interactive only */
   test_assert(d.ex->beginInteractive(*d.ctx, *def, def->newInputs()).code() ==
               StatusCode::FailedPrecondition);
   d.select({a, b, h});

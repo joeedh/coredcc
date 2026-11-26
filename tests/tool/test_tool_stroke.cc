@@ -1,5 +1,6 @@
 /* StrokeSampler against sculptcore's driver (stroke_golden.inc), its properties, and
- * core.stroke and core.tool.stroke with a recording brush: replay, mirrors, methods. */
+ * core.stroke.apply and core.tool.stroke with a recording brush: replay, mirrors,
+ * methods. */
 #include "tool_fixture.h"
 
 #include "coredcc/api/ref_text.h"
@@ -462,7 +463,7 @@ void testHostDragKept()
   d.select({b});
   d.set("brush", PropValue::ofString("test.recorder"));
   d.useTool(kStrokeTool);
-  const CommandDef *drag = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  const CommandDef *drag = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   must(d.ex->beginInteractive(*d.ctx, *drag, drag->newInputs()));
   const uint64_t serial = d.ex->interactiveSerial();
   InputEvent e;

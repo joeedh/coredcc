@@ -174,11 +174,11 @@ void testCommand()
 
   /* A drag. Undo of the lock isn't in its way. */
   d.select({a, b});
-  out = d.cycle(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(10, 20, 30)}});
+  out = d.cycle(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(10, 20, 30)}});
   test_assert(out.get("locked")->asInt() == 1 && out.get("driven")->asInt() == 0);
   test_assert(lengthOf(get(d.obj(a).channels, 0) - double3(1, 22, 3)) == 0.0);
   test_assert(lengthOf(get(d.obj(b).channels, 0) - double3(15, 20, 30)) == 0.0);
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs()));
   ApplyDelta *drag = d.ex->interactiveCommand()->as<ApplyDelta>();
   test_assert(drag->locked() == 0);
@@ -626,7 +626,7 @@ void testErrors()
   const BlockHandle shape = d.shapeBlock("shape", 1.0), a = d.object("a");
   must(d.sc().add(*d.lib, shape));
   d.select({shape});
-  Status s = d.fails(kApplyDeltaCommand);
+  Status s = d.fails(kApplyObjectDeltaCommand);
   test_assert(!strcmp(s.message(), "'shape' isn't Transformable"));
   must(d.lib->markDeleted(a));
   test_assert(isError(

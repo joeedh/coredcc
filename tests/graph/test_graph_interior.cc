@@ -667,7 +667,7 @@ void testPlaces()
   const PropValue path = pointerTo(g);
   auto number = [](NodeId id) { return PropValue::ofInt(id.value); };
   const std::string out = interior({m}, "value"), into = interior({m}, "a");
-  test_assert(hasCode(doc.run(kGraphLinkCommand,
+  test_assert(hasCode(doc.run(kAddGraphLinkCommand,
                               {{"graph", path},
                                {"from", number(group)},
                                {"fromSocket", PropValue::ofString(out)},

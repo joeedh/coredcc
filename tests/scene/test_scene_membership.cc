@@ -107,7 +107,7 @@ void testLink()
                         kSetParentCommand,
                         kSetTransformTypeCommand,
                         kSetRotationModeCommand,
-                        kApplyDeltaCommand,
+                        kApplyObjectDeltaCommand,
                         kDeleteObjectsCommand})
   {
     Result<PropertyBag> r = d.run(c);

@@ -146,7 +146,7 @@ void testChains()
       [](Many &d) {
         const PropValue all = d.list();
         return secondsOf([&]() {
-          d.ok(kApplyDeltaCommand,
+          d.ok(kApplyObjectDeltaCommand,
                {{"objects", all}, {"vector", PropValue::ofVec3(1, 0, 0)}});
         });
       },

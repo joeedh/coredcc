@@ -21,7 +21,7 @@ TransformDelta translate(double x, double y, double z)
 
 ApplyDelta *beginDrag(CommandDoc &d)
 {
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs()));
   return d.ex->interactiveCommand()->as<ApplyDelta>();
 }
@@ -112,7 +112,7 @@ void testEach()
       one.select({others[at]});
       const BlockId id = one.idOf(others[at]);
       PropertyBag out =
-          one.ok(kApplyDeltaCommand,
+          one.ok(kApplyObjectDeltaCommand,
                  {{"kind", PropValue::ofEnum(int64_t(t.kind))},
                   {"vector", PropValue::ofVec3(t.vector[0], t.vector[1], t.vector[2])},
                   {"axis", PropValue::ofVec3(t.axis[0], t.axis[1], t.axis[2])},
@@ -267,7 +267,7 @@ void testNudges()
   const std::string start = d.describe();
   const auto nudge = [&](int64_t gesture, double x) {
     d.ok(
-        kApplyDeltaCommand,
+        kApplyObjectDeltaCommand,
         {{"vector", PropValue::ofVec3(x, 0, 0)}, {"gesture", PropValue::ofInt(gesture)}});
     return d.history->size();
   };
@@ -283,7 +283,7 @@ void testNudges()
   test_assert(nudge(g, 1) == n + 2); /* not into one that was redone */
   test_assert(nudge(g2, 1) == n + 3);
   test_assert(nudge(0, 1) == n + 4 && nudge(0, 1) == n + 5);
-  d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(1, 0, 0)}});
+  d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(1, 0, 0)}});
   test_assert(d.history->size() == n + 6);
 
   /* Other objects, or what isn't what it was, are another step. */

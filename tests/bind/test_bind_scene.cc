@@ -285,7 +285,7 @@ void testModel()
     const sc::MatrixResult m = sc::worldMatrix(*d.ctx, str(textOf(d, a)));
     test_assert(m.status.ok() &&
                 lengthOf(solve::translationOf(m.value) - double3(3, 4, 3)) < 1e-12);
-    d.cycle(kApplyDeltaCommand,
+    d.cycle(kApplyObjectDeltaCommand,
             {{"vector", PropValue::ofVec3(1, 1, 0)},
              {"objects",
               PropValue::ofString(
@@ -334,7 +334,7 @@ void testModel()
     must(registerPolar(d, host, model, "js.delta", "evaluate setWorld applyDelta"));
     d.select({a});
     d.cycle(kSetTransformTypeCommand, {{"type", PropValue::ofString("js.delta")}});
-    d.cycle(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(-1, 0, 0)}});
+    d.cycle(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(-1, 0, 0)}});
     d.evaluate();
     test_assert(isNear(d, a, 3, 5, 3) && model.deltas == 1);
 
@@ -415,7 +415,7 @@ void testGates()
     model.onEvaluate = nullptr;
     model.onSetWorld = all;
     d.select({o});
-    d.ok(kApplyDeltaCommand, {{"vector", PropValue::ofVec3(1, 0, 0)}});
+    d.ok(kApplyObjectDeltaCommand, {{"vector", PropValue::ofVec3(1, 0, 0)}});
     test_assert(asked == 3 && ctx.scene() == d.scene);
   }
   test_assert(host.allReleasedOnce());

@@ -72,7 +72,7 @@ struct Placement {
  */
 Placement computePlacement(Context &ctx, PivotMode pivot, Orientation orientation);
 
-/** The same for the elements of `domain` that core.elements.dragDelta moves: their mean
+/** The same for the elements of `domain` that core.element.dragDelta moves: their mean
  * position in the world. The basis is as for objects. */
 Placement computeElementPlacement(Context &ctx, int32_t domain, Orientation orientation);
 

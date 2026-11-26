@@ -63,7 +63,8 @@ Status nodeTypeOutputAdapter(NodeTypeDef &def);
  *
  * - Takes one count of `kernel`, whatever the outcome, and releases it on failure, else
  *   with the Runtime.
- * - The `core.`, `graph.` and `scene.` namespaces are reserved.
+ * - The `core.`, `graph.`, `scene.`, `math.`, `vec.`, `mat4.`, `value.` and `elements.`
+ *   namespaces are reserved.
  * - A refused registration leaves nothing behind.
  */
 Status registerForeignNodeType(Context &ctx,

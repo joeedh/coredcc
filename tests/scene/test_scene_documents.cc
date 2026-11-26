@@ -58,7 +58,7 @@ struct Documents : CommandDoc {
   }
   void drag()
   {
-    const CommandDef *def = rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+    const CommandDef *def = rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
     must(ex->beginInteractive(*ctx, *def, def->newInputs()));
     must(ex->interactiveCommand()->as<ApplyDelta>()->update(*ctx, moved()));
     must(ex->commit(*ctx));
@@ -113,15 +113,15 @@ std::vector<Case> cases()
        [](Documents &d) {
          d.ok(kSetRotationModeCommand, {{"mode", PropValue::ofString("QUATERNION")}});
        }},
-      {kApplyDeltaCommand,
+      {kApplyObjectDeltaCommand,
        [](Documents &d) {
-         d.ok(kApplyDeltaCommand,
+         d.ok(kApplyObjectDeltaCommand,
               {{"vector",
                 PropValue::ofComponents(
                     PropValue::Type::Vec3,
                     std::initializer_list<double>{1.0, 2.0, 3.0}.begin())}});
        }},
-      {kDragDeltaCommand, [](Documents &d) { d.drag(); }},
+      {kDragObjectDeltaCommand, [](Documents &d) { d.drag(); }},
       {kDeleteObjectsCommand, [](Documents &d) { d.ok(kDeleteObjectsCommand); }},
   };
 }
@@ -188,7 +188,7 @@ void testGone()
 void testDrag()
 {
   Documents d;
-  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragDeltaCommand);
+  const CommandDef *def = d.rt.ext<CommandRegistry>().find(kDragObjectDeltaCommand);
   must(d.ex->beginInteractive(*d.ctx, *def, def->newInputs()));
   ApplyDelta *drag = d.ex->interactiveCommand()->as<ApplyDelta>();
   const std::string own = d.describe(), other = d.other();
