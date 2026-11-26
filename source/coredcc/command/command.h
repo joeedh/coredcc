@@ -19,6 +19,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace coredcc {
 
@@ -229,10 +230,19 @@ public:
    * Interactive command needs `redo`, and `foldKey` comes with `foldFrom`. */
   static Status
   checkSlots(const CommandDef &def, bool hasRedo, bool hasFoldKey, bool hasFoldFrom);
+  /** By id, or by an old id (addAlias). */
   const CommandDef *find(CommandId id) const;
   const CommandDef *find(std::string_view id) const;
   /** NotFound for `id`, with suggestions. */
   Status unknown(std::string_view id) const;
+  /**
+   * `old` is a former id of the command `current`, which may be registered later: find,
+   * and so invocations, layouts and last-used lines, take `old` for `current`, and what
+   * is saved again has `current`. InvalidArgument for an empty or equal pair;
+   * AlreadyExists if `old` is registered or an alias already, or if either id is the
+   * other side of an alias (aliases don't chain).
+   */
+  Status addAlias(std::string_view old, std::string_view current);
   int size() const
   {
     return int(defs_.size());
@@ -245,9 +255,15 @@ public:
   Status validate() const;
 
 private:
+  struct Alias {
+    std::string old, current;
+  };
+  const Alias *aliasOf(uint64_t id) const;
+
   Runtime &rt_;
   litestl::util::Vector<CommandDef *> defs_;
   litestl::util::Map<uint64_t, CommandDef *> byId_;
+  std::vector<Alias> aliases_;
 };
 
 struct InvocationArg;

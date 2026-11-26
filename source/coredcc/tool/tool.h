@@ -21,6 +21,8 @@
 #include "litestl/util/vector.h"
 
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace coredcc {
 
@@ -298,9 +300,13 @@ public:
   /** add's checks without registering the def. A def with a layout registers the struct
    * its layout is checked against, once for each set of settings' names and kinds. */
   Status checkDef(const ToolDef &def) const;
+  /** By id, or by an old id (addAlias). */
   const ToolDef *find(std::string_view id) const;
   /** NotFound for `id`, with suggestions. */
   Status unknown(std::string_view id) const;
+  /** `old` is a former id of the tool `current`, as CommandRegistry::addAlias: find, and
+   * so setActiveTool and the tool settings' lines, take `old` for `current`. */
+  Status addAlias(std::string_view old, std::string_view current);
   int size() const
   {
     return int(defs_.size());
@@ -311,9 +317,13 @@ public:
   }
 
 private:
+  const ToolDef *findOwn(std::string_view id) const;
+
   Runtime &rt_;
   litestl::util::Vector<ToolDef *> defs_;
   litestl::util::Map<uint64_t, ToolDef *> byId_;
+  /* Old id, current id. */
+  std::vector<std::pair<std::string, std::string>> aliases_;
 };
 
 /** Registers a bound C++ class as a tool's implementation, and the def. */

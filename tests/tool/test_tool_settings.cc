@@ -101,9 +101,33 @@ static void test_layouts()
                   .code() == StatusCode::InvalidArgument);
 }
 
+/* An old tool id is taken for the current one by find, and so by the settings' lines and
+ * paths; what is saved again has the current id. */
+static void test_aliases()
+{
+  Setup s;
+  Runtime &rt = s.w.rt;
+  ToolRegistry &tools = rt.ext<ToolRegistry>();
+  Result<const ToolDef *> tool = addNativeTool<NopTool>(
+      rt, ToolDef("test.tool.nop").setting(PropertyDef::floatProp("radius")));
+  test_assert(tool.ok() && tools.addAlias("test.tool.old", "test.tool.nop").ok());
+  test_assert(tools.find("test.tool.old") == *tool);
+  ToolSettingsStore &st = rt.ext<ToolSettingsStore>();
+  test_assert(st.load("test.tool.old(radius=3)\n").ok());
+  test_assert(st.get(**tool, "radius")->asFloat() == 3.0);
+  test_assert(st.serialize() == "test.tool.nop(radius=3)\n");
+  test_assert(tools.addAlias("test.tool.nop", "test.tool.x").code() ==
+              StatusCode::AlreadyExists);
+  test_assert(tools.addAlias("test.tool.older", "test.tool.old").code() ==
+              StatusCode::AlreadyExists);
+  test_assert(tools.checkDef(ToolDef("test.tool.old")).code() ==
+              StatusCode::AlreadyExists);
+}
+
 int main()
 {
   test_paths();
+  test_aliases();
   test_layouts();
   return test_end();
 }

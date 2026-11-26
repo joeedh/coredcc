@@ -133,6 +133,11 @@ Status CommandRegistry::checkDef(const CommandDef &def) const
     }
     start = dot + 1;
   }
+  if (const Alias *a = aliasOf(CommandId::of(name).value)) {
+    return Status::error(
+        StatusCode::AlreadyExists,
+        ("command '" + name + "': an old id of '" + a->current + "' (addAlias)").c_str());
+  }
   if (find(name)) {
     return Status::error(StatusCode::AlreadyExists,
                          ("command '" + name + "': already registered").c_str());
@@ -203,7 +208,44 @@ Result<const CommandDef *> CommandRegistry::add(CommandDef def)
 const CommandDef *CommandRegistry::find(CommandId id) const
 {
   CommandDef *const *d = byId_.lookup_ptr(id.value);
+  if (d) {
+    return *d;
+  }
+  const Alias *a = aliases_.empty() ? nullptr : aliasOf(id.value);
+  d = a ? byId_.lookup_ptr(CommandId::of(a->current).value) : nullptr;
   return d ? *d : nullptr;
+}
+
+const CommandRegistry::Alias *CommandRegistry::aliasOf(uint64_t id) const
+{
+  for (const Alias &a : aliases_) {
+    if (CommandId::of(a.old).value == id) {
+      return &a;
+    }
+  }
+  return nullptr;
+}
+
+Status CommandRegistry::addAlias(std::string_view old, std::string_view current)
+{
+  const std::string what =
+      "command alias '" + std::string(old) + "' -> '" + std::string(current) + "'";
+  if (old.empty() || current.empty() || old == current) {
+    return Status::error(StatusCode::InvalidArgument,
+                         (what + ": the ids must differ and not be empty").c_str());
+  }
+  if (byId_.lookup_ptr(CommandId::of(old).value)) {
+    return Status::error(StatusCode::AlreadyExists,
+                         (what + ": the old id is registered").c_str());
+  }
+  for (const Alias &a : aliases_) {
+    if (a.old == old || a.old == current || a.current == old) {
+      return Status::error(StatusCode::AlreadyExists,
+                           (what + ": an id is already in an alias").c_str());
+    }
+  }
+  aliases_.push_back(Alias{std::string(old), std::string(current)});
+  return Status();
 }
 
 const CommandDef *CommandRegistry::find(std::string_view id) const

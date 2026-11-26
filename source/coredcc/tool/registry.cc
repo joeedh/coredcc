@@ -129,6 +129,13 @@ Status ToolRegistry::checkDef(const ToolDef &def) const
     }
     start = dot + 1;
   }
+  for (const auto &[old, current] : aliases_) {
+    if (old == name) {
+      return Status::error(
+          StatusCode::AlreadyExists,
+          ("tool '" + name + "': an old id of '" + current + "' (addAlias)").c_str());
+    }
+  }
   if (find(name)) {
     return Status::error(StatusCode::AlreadyExists,
                          ("tool '" + name + "' exists").c_str());
@@ -173,10 +180,45 @@ Result<const ToolDef *> ToolRegistry::add(ToolDef def)
   return static_cast<const ToolDef *>(d);
 }
 
-const ToolDef *ToolRegistry::find(std::string_view id) const
+const ToolDef *ToolRegistry::findOwn(std::string_view id) const
 {
   ToolDef *const *d = byId_.lookup_ptr(TypeId::of(id).value);
   return d && id == (*d)->name().c_str() ? *d : nullptr;
+}
+
+const ToolDef *ToolRegistry::find(std::string_view id) const
+{
+  if (const ToolDef *d = findOwn(id)) {
+    return d;
+  }
+  for (const auto &[old, current] : aliases_) {
+    if (old == id) {
+      return findOwn(current);
+    }
+  }
+  return nullptr;
+}
+
+Status ToolRegistry::addAlias(std::string_view old, std::string_view current)
+{
+  const std::string what =
+      "tool alias '" + std::string(old) + "' -> '" + std::string(current) + "'";
+  if (old.empty() || current.empty() || old == current) {
+    return Status::error(StatusCode::InvalidArgument,
+                         (what + ": the ids must differ and not be empty").c_str());
+  }
+  if (findOwn(old)) {
+    return Status::error(StatusCode::AlreadyExists,
+                         (what + ": the old id is registered").c_str());
+  }
+  for (const auto &[o, c] : aliases_) {
+    if (o == old || o == current || c == old) {
+      return Status::error(StatusCode::AlreadyExists,
+                           (what + ": an id is already in an alias").c_str());
+    }
+  }
+  aliases_.emplace_back(std::string(old), std::string(current));
+  return Status();
 }
 
 Status ToolRegistry::unknown(std::string_view id) const

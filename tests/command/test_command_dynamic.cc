@@ -195,9 +195,38 @@ static void test_layouts()
   test_assert(strstr(issues("x.dyn(many=x)").c_str(), "true or false"));
 }
 
+/* An old id is taken for the current one by invocations, layouts and last-used lines,
+ * and what is saved again has the current id. */
+static void test_aliases()
+{
+  DynWorld w;
+  CommandRegistry &reg = w.s.w.rt.ext<CommandRegistry>();
+  test_assert(reg.addAlias("x.old", "x.dyn").ok());
+  test_assert(reg.find("x.old") == w.def && reg.find(CommandId::of("x.old")) == w.def);
+  test_assert(w.run("x.old(mode=A)") == "0;#1;\"\";false;");
+  LastUsedStore &lu = w.s.w.rt.ext<LastUsedStore>();
+  lu.clear();
+  test_assert(lu.load("x.old(amount=0.5)\n").ok() &&
+              lu.get(*w.def, "amount")->asFloat() == 0.5);
+  test_assert(lu.serialize().rfind("x.dyn(", 0) == 0);
+  Result<Layout> layout =
+      parseLayout("<layout><command invocation='x.old(mode=A)'/></layout>");
+  test_assert(layout.ok() &&
+              validateLayout(w.s.w.rt, w.s.ctx.root().type, *layout).size() == 0);
+  /* No chains, no old id that is registered, and an old id can't be registered. */
+  test_assert(reg.addAlias("x.dyn", "x.other").code() == StatusCode::AlreadyExists);
+  test_assert(reg.addAlias("x.old", "x.other").code() == StatusCode::AlreadyExists);
+  test_assert(reg.addAlias("x.older", "x.old").code() == StatusCode::AlreadyExists);
+  test_assert(reg.addAlias("x.a", "x.a").code() == StatusCode::InvalidArgument);
+  test_assert(reg.checkDef(CommandDef("x.old")).code() == StatusCode::AlreadyExists);
+  /* An alias of a command that isn't registered (yet) finds nothing. */
+  test_assert(reg.addAlias("x.gone", "x.later").ok() && !reg.find("x.gone"));
+}
+
 int main()
 {
   test_invocations();
+  test_aliases();
   test_last_used();
   test_defaults();
   test_layouts();
