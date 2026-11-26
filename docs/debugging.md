@@ -147,6 +147,17 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   moved since are where they were. An object without bounds (no Spatial, or an empty
   `localBounds`) can't be picked at all.
 
+### An object doesn't follow its driver graph
+- **Is there a `SceneDrivers` for the Library,** and does a Live scene list the graph (`Scene::graphs`)?
+  Without one the graph is data and drives nothing.
+- **Look at `SceneDrivers::diagnostics()`:** a channel the transform type doesn't have, an adapter of another
+  kind, a channel driven twice (also by one subgraph used twice), a link that would make a cycle, an
+  adapter inside a foreach body.
+- **The object is ModelFailed:** `computeState` and the commands give the reason (FailedPrecondition, "its
+  drivers: ..."). A graph that reads an object whose driver failed fails too.
+- **It moves only after another edit:** the host changed something that a graph reads without a notification
+  or an epoch move. `SceneDrivers` re-reads the document when the edit counter, the epoch or the time moves.
+
 ### A benchmark's numbers don't fit the code
 - **Symptom:** `bench_scene` gave 15 ms, and the same commit gave 21 ms elsewhere. Targets seemed met for hours.
 - **Cause:** the program was old. The benchmarks aren't in `all`, so building and gating the rest doesn't

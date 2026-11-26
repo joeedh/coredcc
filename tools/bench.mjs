@@ -9,7 +9,7 @@
 //
 // `--against` waits until other programs leave the machine alone, and says how busy it was.
 //
-// Names: graph, scene, scene_commands. tools/bench-bvh.mjs is for the BVH. Run it on an idle machine.
+// Names: drive, graph, scene, scene_commands. tools/bench-bvh.mjs is for the BVH. Run it on an idle machine.
 
 import {spawnSync} from 'node:child_process'
 import fs from 'node:fs'
@@ -19,7 +19,7 @@ import {parseArgs} from 'node:util'
 import {fileURLToPath, pathToFileURL} from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const NAMES = ['graph', 'scene', 'scene_commands']
+const NAMES = ['drive', 'graph', 'scene', 'scene_commands']
 
 function sh(args) {
   const devshell = path.join(root, 'tools', 'devshell.cmd')

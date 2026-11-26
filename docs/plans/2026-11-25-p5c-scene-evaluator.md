@@ -622,6 +622,55 @@ Recorded in the architecture when the phase is done.
 - §7: the apply phase is `OverrideProvider::prepare`, and the evaluated state of an object comes from the
   direct pass.
 
+## What was built differently
+Kept as the work goes; each item says what changed from the design above and why.
+- **Files:** `drive/` has `node_types`, `adapters`, `sync.cc` (the description and the generated def),
+  `provider.cc`, `commands`, `builtins.cc` and an internal `state.h`. There is no `transform_nodes` or
+  `generated` file: the kernels are small enough for `node_types.cc`.
+- **Steps 2 to 4 are one commit.** The node types, the scan and the provider were written together and
+  tested together.
+- **The generated def is made again from scratch** whenever its description differs, instead of being
+  edited by difference. The description is the listed graphs with their adapters, the objects of `G` with
+  their parents, types and cycles, and the scan's diagnostics. Equal descriptions give the same graph, so a
+  document gives the same graph whatever the order of its edits (B4 holds by construction). It is cheap at
+  the sizes planned (400 objects of `G`); an object moved or the time changed doesn't rebuild.
+- **Links are made one at a time, in the fixed order** (parents and time with `linkAll`, then readers and
+  drivers by graph and node), not as one batch with a retry. A link that would close a cycle is left out and
+  reported.
+- **Transform nodes have a String param `error`.** When `SceneDrivers` fails an object of `G` (a channel the
+  type lacks, another kind, driven twice, a cycle), its node fails with that message, so a graph that reads it
+  fails too (decision 5). The direct pass fails it with the same message.
+- **Readers have an Int input `status`,** linked from the transform node's `status`, so `scene.object.state`
+  gives the object's EvalStatus.
+- **The inner provider is asked by the transform kernel too** (through `GraphInstance::setUserData`), so the
+  states of `G` agree with the direct pass when animation drives an object that a graph reads. A failure of
+  the inner provider fails the node.
+- **`SceneDrivers::update(time)`, `generatedState(id)`, `transformNode(id)`, `transformCount()` and
+  `rebuilds()`** are there for tests, tools and benchmarks. `instance().value()` gives only the sockets that
+  were asked for, so the states of `G` are asked for too.
+- **The sync key** is the Library's epoch and size and removed count, the client generation, the number of
+  interface tables, the transform and node type counts, and the edit counter. A notification moves the edit
+  counter, so a sync after an edit reads the description again (a few cells and the cached scans), and
+  rebuilds only if it differs.
+- **`test_drive_random`'s oracle** is the same document saved, loaded and given a `SceneDrivers` of its own,
+  instead of a naive evaluator: it checks the incremental sync against a sync from scratch, and the states of
+  `G` against the direct pass, bitwise.
+- **Not done yet:** a Scene made from a placeholder (B5) has code but no test; the foreach diagnostic has no
+  test.
+
+### Measured, part A (`node tools/bench.mjs drive -- --reps 15`, busy machine, provisional)
+| Case, 100,000 objects | Best ms | Target |
+|---|---|---|
+| No drivers: unchanged; epoch moved | 15.7; 22.4 | P3's numbers |
+| `SceneDrivers` without graphs: unchanged; epoch moved | 15.5; 21.9 | +0.1; +0.3 |
+| With the drivers (G 400 objects, 1,000 driven): unchanged | 15.8 | P3's + 1 |
+| A read object moved | 16.8 | P3's + 1 |
+| The time changed | 19.6 | P3's + 3 |
+| Epoch moved | 22.1 | P3's epoch moved + 3 |
+| `computeState` of a driven object, nothing moved | 0.0004 | 0.005 |
+
+- `test_drive_random` passes 1,000 seeds in clang Release (`COREDCC_TEST_SCALE=25`, 5 s).
+
 ## Risks
 - **`G` can be all objects,** if a graph reads every object (a constraint on all of them). Then the graph's
   costs above apply: about 70 ms per epoch move at 100,000. Readers of many objects need M7 and a cheaper

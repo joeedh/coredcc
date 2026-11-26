@@ -9,6 +9,13 @@ foreach(bench bvh graph scene)
   endif()
 endforeach()
 
+add_executable(bench_drive EXCLUDE_FROM_ALL bench_drive.cc)
+target_link_libraries(bench_drive PRIVATE coredcc_drive)
+coredcc_target_flags(bench_drive)
+if(EMSCRIPTEN)
+  target_link_options(bench_drive PRIVATE -sENVIRONMENT=node -sEXIT_RUNTIME=1)
+endif()
+
 add_executable(bench_scene_commands EXCLUDE_FROM_ALL bench_scene_commands.cc)
 target_link_libraries(bench_scene_commands PRIVATE coredcc_scene)
 coredcc_target_flags(bench_scene_commands)
@@ -18,4 +25,4 @@ endif()
 
 # All of them, for tools/gate.mjs.
 add_custom_target(benchmarks)
-add_dependencies(benchmarks bench_bvh bench_graph bench_scene bench_scene_commands)
+add_dependencies(benchmarks bench_bvh bench_drive bench_graph bench_scene bench_scene_commands)

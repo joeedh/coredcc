@@ -20,6 +20,7 @@ A module uses those above it, and no others.
 | `layout/` | `coredcc_layout` | `command` | descriptions of UIs | 12 |
 | `graph/` | `coredcc_graph` | `command` | the dependency graph | 7 |
 | `scene/` | `coredcc_scene` | `command`, `bvh`, `draw` | objects, transforms, scenes, picking | 8, 9 |
+| `drive/` | `coredcc_drive` | `graph`, `scene` | graphs that drive objects: `SceneDrivers` | 7, 8 |
 | `bind/` | `coredcc_bind` | `graph`, `layout`, `scene` | bindings for scripts | 13 |
 | `testapp/` | `coredcc_testapp` | `bind` | the test app's backend. Not part of the library | — |
 
@@ -85,6 +86,12 @@ A module uses those above it, and no others.
 - `instance.h`: `GraphInstance`, evaluation. Only what a change reaches is evaluated again.
 - `foreach.h`: a group for each element of a table. `interior.h`: links into groups, for programs that
   build graphs around a user's.
+
+### `drive/`
+- `drive.h`: `SceneDrivers`, the Library's `OverrideProvider` for the graphs that scenes list
+  (`Scene::graphs`), and `registerDriveTypes`.
+- `node_types.h`: the adapters of users' graphs (`scene.time`, `scene.object.state`, `scene.drive.<kind>`)
+  and the transform node types. `sync.cc` makes the generated graph; `provider.cc` answers from it.
 
 ### `bind/`
 - `facades.h` and the other `*_facades.h`: the functions that scripts call. `manager.h` registers all of it.

@@ -3,7 +3,7 @@
 /* A scene document with graphs and the drive types, and (unless asked not to) a
  * SceneDrivers. Helpers make users' graphs with adapters. */
 
-#include "../scene/command_doc.h"
+#include "../scene/io_doc.h"
 
 #include "coredcc/api/ref_text.h"
 #include "coredcc/drive/drive.h"
@@ -37,7 +37,7 @@ inline bool sameState(const TransformState &a, const TransformState &b)
   return memcmp(&a, &b, sizeof(TransformState)) == 0;
 }
 
-struct DriveDoc : CommandDoc {
+struct DriveDoc : IoDoc {
   std::unique_ptr<SceneDrivers> drivers;
 
   explicit DriveDoc(bool withDrivers = true)
@@ -146,6 +146,32 @@ struct DriveDoc : CommandDoc {
       }
     }
     return false;
+  }
+};
+
+/* A saved document, loaded with drivers of its own: what a sync from scratch gives. */
+struct Reloaded {
+  Loaded loaded;
+  std::unique_ptr<SceneDrivers> drivers;
+
+  explicit Reloaded(DriveDoc &d) : loaded(d, save(*d.lib))
+  {
+    Result<std::unique_ptr<SceneDrivers>> s = SceneDrivers::make(loaded.lib);
+    must(s.status());
+    drivers = std::move(s).value();
+  }
+  ~Reloaded()
+  {
+    drivers.reset();
+  }
+  Status evaluate()
+  {
+    return evaluateScene(loaded.ctx);
+  }
+  bool evaluated(const char *name, ObjectEval &out) const
+  {
+    return Scene::of(loaded.lib, loaded.byName("Scene"))
+        ->evaluated(loaded.byName(name), out);
   }
 };
 

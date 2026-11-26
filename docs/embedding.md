@@ -206,6 +206,19 @@ Unreal, coredcc is exactly one module, so they exist once.
     `setSelection` and `activeCell` when the host's change.
 - **For drawing:** `Scene::results()`, with `lastChanges` for what is different. Scripts have `sceneResults`.
 
+## Graphs that drive objects
+- `registerDriveTypes(rt)`, after the scene's and the graph's types and commands. Then one `SceneDrivers` per
+  Library that should be driven: `SceneDrivers::make(lib)` makes it the Library's `OverrideProvider`.
+- **Destroy it before the Library,** as any graph instance. If the Library goes first, it does nothing more.
+- A scene lists graph blocks (`core.scene.addGraph`, `core.scene.removeGraph`, `Scene::graphs`). The graphs of all
+  Live scenes drive the document's objects; each graph once.
+- In them: `scene.drive.<kind>` drives a channel of an object, `scene.object.state` reads an object's evaluated
+  state, `scene.time` gives the time. A graph evaluated by itself has no states to read.
+- **Another provider** (animation) goes through `SceneDrivers::setInner`. It is asked first; the graphs win where
+  both drive a channel.
+- What can't work is in `SceneDrivers::diagnostics()`; the objects concerned are ModelFailed, and so is what
+  a graph computes from them.
+
 ## Scenes in files
 - Objects and scenes are saved with the library. The Context's scene isn't: set it after a load.
 - Register transform types before loading. The objects of a type that isn't there stand where their

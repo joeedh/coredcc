@@ -46,6 +46,8 @@ coredcc_test(test_drive_nodes SOURCES drive/test_drive_nodes.cc DEPS coredcc_dri
 coredcc_test(test_drive_basic SOURCES drive/test_drive_basic.cc DEPS coredcc_drive)
 coredcc_test(test_drive_provider SOURCES drive/test_drive_provider.cc DEPS coredcc_drive)
 coredcc_test(test_drive_sync SOURCES drive/test_drive_sync.cc DEPS coredcc_drive)
+coredcc_test(test_drive_files SOURCES drive/test_drive_files.cc DEPS coredcc_drive)
+coredcc_test(test_drive_random SOURCES drive/test_drive_random.cc DEPS coredcc_drive)
 coredcc_test(test_draw_view SOURCES draw/test_view.cc DEPS coredcc_draw)
 coredcc_test(test_props_value SOURCES props/test_value.cc DEPS coredcc_props)
 coredcc_test(test_props_def SOURCES props/test_def.cc DEPS coredcc_props)
