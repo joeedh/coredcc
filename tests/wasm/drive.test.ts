@@ -82,6 +82,7 @@ const suite = () => {
     const found = cdcc.driverDiagnostics(ctx)
     assert.ok(found.length > 0, JSON.stringify(found))
     assert.ok(found.some((d) => /cycle|nowhere/.test(d.message)), JSON.stringify(found))
+    assert.ok(found.every((d) => d.graph instanceof cdcc.Ref && d.graph.text === graph.text), JSON.stringify(found))
     cdcc.disableDrivers(ctx)
     cdcc.evaluateScene(ctx)
     cdcc.disableDrivers(ctx) /* nothing to do */

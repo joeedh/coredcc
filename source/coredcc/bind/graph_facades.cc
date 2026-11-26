@@ -183,10 +183,12 @@ static Status
 registerWith(Runtime &rt, const NodeTypeDef &def, lf::Handle kernel, const string &slots)
 {
   const std::string name = def.name().c_str();
-  if (name.rfind("core.", 0) == 0 || name.rfind("graph.", 0) == 0) {
+  if (name.rfind("core.", 0) == 0 || name.rfind("graph.", 0) == 0 ||
+      name.rfind("scene.", 0) == 0)
+  {
     return error(StatusCode::InvalidArgument,
                  "node type '" + name +
-                     "': the 'core.' and 'graph.' namespaces are reserved "
+                     "': the 'core.', 'graph.' and 'scene.' namespaces are reserved "
                      "for coredcc");
   }
   NodeTypeRegistry &types = rt.ext<NodeTypeRegistry>();

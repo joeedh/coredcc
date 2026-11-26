@@ -21,6 +21,7 @@ import type {TransformState as BoundState} from 'coredcc-gen/coredcc/TransformSt
 import type {PickOptions as BoundPickOptions} from 'coredcc-gen/coredcc/PickOptions'
 import type {View as BoundView} from 'coredcc-gen/coredcc/View'
 import type {ViewMath} from 'coredcc-gen/coredcc/ViewMath'
+import {run} from './run.ts'
 import {
   bagToJs, check, checkCtx, inSlot, statusOf, sync, take, withValue, Ref, toJs, type Value, type Writable,
 } from './core.ts'
@@ -683,20 +684,26 @@ export function enableDrivers(ctx: Context) {
 export function disableDrivers(ctx: Context) {
   check(cd.disableDrivers(ctx))
 }
-/** The scene lists a graph block, undoably: it drives the document's objects. */
-export function addSceneGraph(ctx: Context, graph: Ref) {
-  invokeHere(ctx, `core.scene.addGraph(graph="${graph.text}")`)
+/** The scene lists a graph block, undoably: it drives the document's objects. `scene` is the Context's
+ * scene by default. */
+export function addSceneGraph(ctx: Context, graph: Ref, scene?: Ref) {
+  run(ctx, 'core.scene.addGraph', {graph, scene})
 }
-export function removeSceneGraph(ctx: Context, graph: Ref) {
-  invokeHere(ctx, `core.scene.removeGraph(graph="${graph.text}")`)
+export function removeSceneGraph(ctx: Context, graph: Ref, scene?: Ref) {
+  run(ctx, 'core.scene.removeGraph', {graph, scene})
 }
 /** Something in the listed graphs that can't work. `node` is a node path, "" for the graph. */
 export interface DriverDiagnostic {
-  graph: string
+  graph: Ref | null
   node: string
   message: string
 }
 export function driverDiagnostics(ctx: Context): DriverDiagnostic[] {
-  return take(cd.driverDiagnostics(ctx), (s) => JSON.parse(s) as DriverDiagnostic[])
+  return take(cd.driverDiagnostics(ctx), (s) =>
+    (JSON.parse(s) as {graph: string; node: string; message: string}[]).map((d) => ({
+      graph: d.graph ? new Ref(d.graph) : null,
+      node: d.node,
+      message: d.message,
+    }))
+  )
 }
-const invokeHere = (ctx: Context, invocation: string) => take(cd.invoke(ctx, invocation), (bag) => bagToJs(ctx, bag))

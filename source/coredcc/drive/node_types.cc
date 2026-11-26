@@ -1,13 +1,15 @@
 #include "coredcc/drive/node_types.h"
 
+#include "coredcc/api/change_bus.h"
 #include "coredcc/api/ref_text.h"
-#include "coredcc/base/invalidate.h"
 #include "coredcc/scene/capabilities.h"
 #include "coredcc/scene/object.h"
 #include "coredcc/scene/overrides.h"
 #include "coredcc/scene/transform_registry.h"
 
+#include <algorithm>
 #include <string>
+#include <vector>
 
 namespace coredcc::drive {
 
@@ -123,7 +125,8 @@ Status transformKernel(NodeExecContext &ctx)
   Runtime &rt = ctx.runtime();
   const std::string_view name(ctx.type().name.c_str());
   const bool missing = name == kMissingTransform;
-  const BlockUse use = ctx.paramBlock("object", kAllAspects & ~kDrivenAspect);
+  /* Every aspect, kDrivenAspect too: an inner provider's change says so. */
+  const BlockUse use = ctx.paramBlock("object");
   const Transformable tr =
       use.handle ? ctx.queryBlock<Transformable>(use.handle) : Transformable();
   if (!use.data || !tr) {
@@ -164,8 +167,8 @@ Status transformKernel(NodeExecContext &ctx)
   } else {
     ChannelOverrides overrides;
     overrides.reset(type->channelCount());
-    /* SceneDrivers' inner provider, asked first as overridesOf does; it notifies the
-     * objects whose answers change, so it needn't be a dependency. */
+    /* SceneDrivers' inner provider, asked first as overridesOf does. It notifies the
+     * objects whose answers change, which `object` follows. */
     if (auto *inner = static_cast<OverrideProvider *>(ctx.userData())) {
       const Status s =
           ctx.library()
@@ -215,6 +218,16 @@ NodeTypeDef transformDef(std::string_view name)
 }
 
 constexpr const char *kTransformKernel = "scene.transform#kernel";
+
+/* The transform node types that drive/ registered: one of another's isn't used. */
+struct OwnTypes {
+  static constexpr const char *kExtName = "coredcc.drive.OwnTypes";
+  explicit OwnTypes(Runtime *rt)
+  {
+    rt->ext<NodeTypeRegistry>(); /* made first, so it goes after this */
+  }
+  std::vector<const NodeType *> types;
+};
 
 } // namespace
 
@@ -359,7 +372,14 @@ Status registerNodeTypes(Runtime &rt)
 
   NodeTypeDef missing = transformDef(kMissingTransform);
   missing.uiName("Transform (missing type)");
-  return addType<transformKernel>(rt, std::move(missing), kTransformKernel);
+  CDCC_TRY(addType<transformKernel>(rt, std::move(missing), kTransformKernel));
+  rt.ext<OwnTypes>().types.push_back(rt.ext<NodeTypeRegistry>().find(kMissingTransform));
+  return Status();
+}
+
+int ownTransformTypeCount(Runtime &rt)
+{
+  return int(rt.ext<OwnTypes>().types.size());
 }
 
 Result<const NodeType *> transformNodeType(Runtime &rt, const TransformType *type)
@@ -368,6 +388,12 @@ Result<const NodeType *> transformNodeType(Runtime &rt, const TransformType *typ
   const std::string name =
       type ? std::string(kTransformPrefix) + type->name().c_str() : kMissingTransform;
   if (const NodeType *t = reg.find(name)) {
+    const std::vector<const NodeType *> &own = rt.ext<OwnTypes>().types;
+    if (std::find(own.begin(), own.end(), t) == own.end()) {
+      return Status::error(
+          StatusCode::AlreadyExists,
+          ("node type '" + name + "' wasn't registered by drive/").c_str());
+    }
     return t;
   }
   NodeTypeDef d = transformDef(name);
@@ -386,7 +412,11 @@ Result<const NodeType *> transformNodeType(Runtime &rt, const TransformType *typ
       makeKernel<FnKernel<transformKernel>>(rt, kTransformKernel);
   CDCC_TRY(k.status());
   d.kernel(std::move(k).value());
-  return reg.add(std::move(d));
+  Result<const NodeType *> added = reg.add(std::move(d));
+  if (added.ok()) {
+    rt.ext<OwnTypes>().types.push_back(*added);
+  }
+  return added;
 }
 
 } // namespace coredcc::drive

@@ -32,8 +32,8 @@ Status registerDriveTypes(Runtime &rt);
 
 /** Something in the listed graphs that can't work as it is. */
 struct DriverDiagnostic {
-  /** The listed graph, and the node in it (with its groups); a null node for the graph.
-   */
+  /** The listed graph, and the node in it (with its groups). A null node is about the
+   * graph, or about the last of its groups. */
   BlockId graph;
   NodePath node;
   litestl::util::string message;
@@ -46,14 +46,24 @@ struct DriverDiagnostic {
  * - Its answers are those of the document as it is, at the time asked for. Outside an
  * evaluation it evaluates the graphs first, if anything moved; inside one it answers for
  * what `prepare` computed, and fails with FailedPrecondition for another time.
- * - Driven objects whose values move are notified with the aspect kDrivenAspect.
+ * - Driven objects whose values move are notified with the aspect kDrivenAspect. When
+ * the evaluation as a whole starts or stops failing, all of them are.
+ * - **Notifications come when the graphs are evaluated,** not when they are edited: by
+ * `prepare` (evaluateScene calls it first), `update`, or `overridesOf` outside an
+ * evaluation (computeState, the commands). A cache that relies on notifications of
+ * driven objects calls `update` first, as evaluateScene does once a frame. So
+ * computeState and a command's `canRun` may post notifications.
  * - A driver that fails makes `overridesOf` fail with FailedPrecondition, so that
  * commands leave its objects out. What a graph reads downstream of it fails too.
+ * - An inner provider notifies its objects with kDrivenAspect (or any aspect): graphs
+ * that read them are evaluated again.
  */
 class SceneDrivers final : public OverrideProvider {
 public:
   /** Becomes the Library's provider; fails as setOverrideProvider does. */
   static Result<std::unique_ptr<SceneDrivers>> make(Library &lib);
+  /** The Library's SceneDrivers, whoever made it (a host, or enableDrivers), or null. */
+  static SceneDrivers *of(const Library &lib);
   ~SceneDrivers() override;
   SceneDrivers(const SceneDrivers &) = delete;
   SceneDrivers &operator=(const SceneDrivers &) = delete;
@@ -64,13 +74,15 @@ public:
   /** Brings the generated graph up to date, and evaluates it at `time`. What
    * `overridesOf` does outside an evaluation. Busy while one runs. */
   Status update(double time);
-  /** After `update`: what is wrong in the listed graphs. */
-  const litestl::util::Vector<DriverDiagnostic> &diagnostics() const;
+  /** What is wrong in the listed graphs, as they are (it syncs first, unless an
+   * evaluation runs). Returned by value, so later calls don't change it. */
+  litestl::util::Vector<DriverDiagnostic> diagnostics();
 
-  /** For tests and tools: the generated graph, its instance, the transform node of an
-   * object (null if it has none) and how many objects have one. */
-  const GraphDef &generated() const;
-  const GraphInstance &instance() const;
+  /** For tests and tools: the generated graph and its instance (null before the first
+   * sync), the transform node of an object (null if it has none) and how many objects
+   * have one. */
+  const GraphDef *generated() const;
+  const GraphInstance *instance() const;
   NodeId transformNode(const BlockId &object) const;
   /** What the object's transform node gave last; null if it has none, or it failed. */
   const TransformState *generatedState(const BlockId &object) const;
@@ -85,9 +97,8 @@ public:
                      double time,
                      ChannelOverrides &out) override;
 
-  struct State;
-
 private:
+  struct State;
   explicit SceneDrivers(Library &lib);
   std::unique_ptr<State> s_;
 };

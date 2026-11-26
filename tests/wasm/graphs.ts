@@ -329,6 +329,7 @@ export function graphTests(env: Env) {
   test('node type registration errors; an instance outlives its document', () => {
     const spec = {id: 'ts.n', outputs: {value: 'float'}, evaluate() {}}
     assert.throws(() => cdcc.defineNodeType(ctx, {...spec, id: 'graph.n'}), fails(StatusCode.InvalidArgument, /reserved/))
+    assert.throws(() => cdcc.defineNodeType(ctx, {...spec, id: 'scene.transform.trs'}), fails(StatusCode.InvalidArgument, /reserved/))
     assert.throws(() => cdcc.defineNodeType(ctx, {...spec, outputs: {}}), fails(StatusCode.InvalidArgument, /output/))
     assert.throws(
       () => cdcc.defineNodeType(ctx, {...spec, inputs: {m: cdcc.payload('no.Mesh')}}),

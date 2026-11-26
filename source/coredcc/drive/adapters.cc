@@ -2,6 +2,7 @@
 
 #include "coredcc/graph/interior.h"
 #include "coredcc/graph/provider.h"
+#include "coredcc/lib/registry.h"
 
 #include <string>
 
@@ -65,7 +66,8 @@ AdapterScan::entryOf(const Library &lib, const GraphDef &def, const BlockId &id)
   e.own.clear();
   e.issues.clear();
   e.children.clear();
-  const Vector<NodeId, 2> none;
+  /* By canonical id, as SceneDrivers asks: an alias's id names the same block. */
+  const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
   def.forEachNode([&](const GraphNode &n) {
     const NodeType *t = n.type();
     if (!t) {
@@ -87,13 +89,20 @@ AdapterScan::entryOf(const Library &lib, const GraphDef &def, const BlockId &id)
       a.kind = AdapterKind::Time;
     } else if (name == kStateNode) {
       a.kind = AdapterKind::State;
-      a.object = n.blockTarget("object");
+      a.object = clients.canonical(n.blockTarget("object"));
     } else if (kindOfDriveType(name) != DriveKind::None) {
       a.kind = AdapterKind::Drive;
-      a.object = n.blockTarget("object");
+      a.object = clients.canonical(n.blockTarget("object"));
       a.driveKind = kindOfDriveType(name);
       const PropValue *channel = paramOf(n, "channel");
       a.channel = channel ? channel->asString() : litestl::util::string();
+    } else if (name.rfind(kTransformPrefix, 0) == 0 || name == kMissingTransform) {
+      const Vector<NodeId, 2> none;
+      e.issues.append(issueAt(none,
+                              n.id(),
+                              "a transform node is for the graph SceneDrivers makes; "
+                              "it does nothing here"));
+      return;
     } else {
       return; /* a script's type may have the flags too: names count */
     }

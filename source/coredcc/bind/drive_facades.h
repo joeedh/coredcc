@@ -10,14 +10,15 @@
 namespace coredcc::script {
 
 /** Gives the Context's Library a SceneDrivers, kept by the Runtime. AlreadyExists if it
- * has one, or another OverrideProvider. */
+ * has one (a host's too), or another OverrideProvider. */
 Status enableDrivers(Context &ctx);
 /** Destroys the Library's SceneDrivers; nothing if it has none. Hosts call it before the
  * Library goes (a TS Session does). */
 Status disableDrivers(Context &ctx);
 /** What can't work in the listed graphs, as JSON: an array of objects with `graph` (a
- * block id as text), `node` (a node path, "" for the graph) and `message`. Brings the
- * drivers up to date at the scene's time first. FailedPrecondition without drivers. */
+ * pointer's text, as a Ref has it), `node` (a node path, "" for the graph) and
+ * `message`. Of the Library's SceneDrivers, whoever made them. Brings them up to date at
+ * the scene's time first. FailedPrecondition without drivers. */
 StringResult driverDiagnostics(Context &ctx);
 
 } // namespace coredcc::script

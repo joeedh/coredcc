@@ -410,6 +410,14 @@ Status Scene::insertGraph(Library &lib, const BlockId &id, int index)
       return Status::error(StatusCode::AlreadyExists, "the graph is in the scene's list");
     }
   }
+  return insertGraphCell(lib, id, index);
+}
+
+Status Scene::insertGraphCell(Library &lib, const BlockId &id, int index)
+{
+  if (lib.find(id).isNull()) {
+    return Status::error(StatusCode::NotFound, "Scene::insertGraph: no such block");
+  }
   RefCell cell(RefKind::OptStrong);
   CDCC_TRY(lib.writeRef(cell, id));
   const int n = int(graphs_.size());
@@ -636,8 +644,8 @@ CollectionAccessor collectionOf(bool selectedOnly)
   return c;
 }
 
-/* The graphs that the scene lists, read-only: drive/'s commands change them. Their struct is
- * named, not linked: scene/ doesn't use graph/. */
+/* The graphs that the scene lists, read-only: drive/'s commands change them. Their struct
+ * is named, not linked: scene/ doesn't use graph/. */
 CollectionAccessor graphsOf()
 {
   CollectionAccessor c;
@@ -696,8 +704,9 @@ ApiStruct sceneStruct()
   st.addCollection(PropertyDef::collectionProp("objects", object), std::move(objects));
   st.addCollection(PropertyDef::collectionProp("selectedObjects", object),
                    collectionOf(true));
-  st.addCollection(PropertyDef::collectionProp("graphs", StructId::of("coredcc.GraphDef")),
-                   graphsOf());
+  st.addCollection(
+      PropertyDef::collectionProp("graphs", StructId::of("coredcc.GraphDef")),
+      graphsOf());
 
   PointerAccessor active;
   active.target = object;

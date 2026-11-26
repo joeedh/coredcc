@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace coredcc {
 
@@ -37,6 +38,24 @@ int32_t offsetOf(const TransformType &type, std::string_view name, DriveKind &ki
   return -1;
 }
 
+/* The Library's SceneDrivers, for SceneDrivers::of. */
+struct AllDrivers {
+  static constexpr const char *kExtName = "coredcc.drive.AllDrivers";
+  explicit AllDrivers(Runtime *)
+  {
+  }
+  struct Entry {
+    LibraryRef lib;
+    SceneDrivers *drivers = nullptr;
+  };
+  std::vector<Entry> entries;
+};
+
+bool sameStatus(const Status &a, const Status &b)
+{
+  return a.code() == b.code() && strcmp(a.message(), b.message()) == 0;
+}
+
 } // namespace
 
 /* ---- evaluating ---- */
@@ -54,12 +73,10 @@ drive::EvalKey SceneDrivers::State::keyOf(const Library &lib, double time) const
 
 Status SceneDrivers::State::evaluate(Library &lib, double time)
 {
-  if (Status s = inst->setInput("time", GraphValue::ofFloat(time)); !s.ok()) {
-    callError = s;
-    return s;
-  }
+  const Status was = callError;
   Vector<BlockId> moved;
-  for (int attempt = 0; attempt < 2; attempt++) {
+  callError = inst->setInput("time", GraphValue::ofFloat(time));
+  for (int attempt = 0; attempt < 2 && callError.ok(); attempt++) {
     Vector<int> changed;
     Status s = inst->evaluate(
         std::span<const SocketHandle>(handles.data(), handles.size()), changed);
@@ -77,8 +94,10 @@ Status SceneDrivers::State::evaluate(Library &lib, double time)
       stale = stale || (v && v->asInt() == kStaleStatus);
     }
     if (stale && attempt == 0) {
-      CDCC_TRY(sync(lib, true));
-      CDCC_TRY(inst->setInput("time", GraphValue::ofFloat(time)));
+      callError = sync(lib, true);
+      if (callError.ok()) {
+        callError = inst->setInput("time", GraphValue::ofFloat(time));
+      }
       continue;
     }
     callError = stale ? failed("an object's Transformable answers otherwise each time it "
@@ -106,6 +125,13 @@ Status SceneDrivers::State::evaluate(Library &lib, double time)
       e.error = error;
     }
     break;
+  }
+  /* The call as a whole stands for every driven object: all of them changed. */
+  if (!sameStatus(was, callError)) {
+    moved.clear();
+    for (auto &pair : drivesOf) {
+      moved.append(pair.key);
+    }
   }
   /* Outside any evaluation: whoever evaluates a scene hears of it. */
   ChangeBus &bus = rt->ext<ChangeBus>();
@@ -152,11 +178,26 @@ Result<std::unique_ptr<SceneDrivers>> SceneDrivers::make(Library &lib)
       s->rescan = true;
     }
   });
+  lib.runtime().ext<AllDrivers>().entries.push_back(
+      AllDrivers::Entry{lib.ref(), d.get()});
   return d;
+}
+
+SceneDrivers *SceneDrivers::of(const Library &lib)
+{
+  for (const AllDrivers::Entry &e : lib.runtime().ext<AllDrivers>().entries) {
+    if (e.lib.get() == &lib) {
+      return e.drivers;
+    }
+  }
+  return nullptr;
 }
 
 SceneDrivers::~SceneDrivers()
 {
+  std::erase_if(s_->rt->ext<AllDrivers>().entries, [this](const AllDrivers::Entry &e) {
+    return e.drivers == this || !e.lib.get();
+  });
   if (Library *lib = s_->lib.get()) {
     clearOverrideProvider(*lib, *this);
   }
@@ -182,19 +223,23 @@ Status SceneDrivers::update(double time)
   return s_->ensure(*lib, time);
 }
 
-const Vector<DriverDiagnostic> &SceneDrivers::diagnostics() const
+Vector<DriverDiagnostic> SceneDrivers::diagnostics()
 {
+  Library *lib = s_->lib.get();
+  if (lib && !s_->rt->evaluating()) {
+    (void)s_->sync(*lib, false);
+  }
   return s_->diagnostics;
 }
 
-const GraphDef &SceneDrivers::generated() const
+const GraphDef *SceneDrivers::generated() const
 {
-  return *s_->def;
+  return s_->def.get();
 }
 
-const GraphInstance &SceneDrivers::instance() const
+const GraphInstance *SceneDrivers::instance() const
 {
-  return *s_->inst;
+  return s_->inst.get();
 }
 
 NodeId SceneDrivers::transformNode(const BlockId &object) const

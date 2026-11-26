@@ -22,6 +22,9 @@ namespace coredcc {
  * InvalidateKinds. The others are the client's, whose owners it is. */
 using ChangeAspects = uint32_t;
 inline constexpr ChangeAspects kAllAspects = ~ChangeAspects(0);
+/** An aspect beside InvalidateKinds (base/invalidate.h): an object's driven channels
+ * (OverrideProvider) have other values. Its stored data didn't change. */
+inline constexpr ChangeAspects kDrivenAspect = 1u << 15;
 
 /** What a change listener is told. */
 struct BusChange {

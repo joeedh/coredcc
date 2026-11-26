@@ -120,19 +120,22 @@ public:
 
   /* ---- graphs that drive objects ---- */
 
-  /** The Live blocks that the graph cells name, in order, each once. Valid until something
-   * changes. The scene doesn't look at their type: drive/ lists graphs here, and drives
-   * the document's objects with the graphs of all its scenes. */
+  /** The Live blocks that the graph cells name, in order, each once. Valid until
+   * something changes. The scene doesn't look at their type: drive/ lists graphs here,
+   * and drives the document's objects with the graphs of all its scenes. */
   const litestl::util::Vector<BlockHandle> &graphs(const Library &lib) const;
   /** The cells, with those that aren't Live. */
   const litestl::util::Vector<RefCell> &graphCells() const
   {
     return graphs_;
   }
-  /** Puts an OptStrong cell to `id` at `index` (-1 or past the end: last). NotFound for no
-   * record, AlreadyExists if a cell names it. */
+  /** Puts an OptStrong cell to `id` at `index` (-1 or past the end: last). NotFound for
+   * no record, AlreadyExists if a cell names it. */
   Status insertGraph(Library &lib, const BlockId &id, int index = -1);
-  /** Removes the cells that name `id`. Returns the first one's place; NotFound for none. */
+  /** The same without the AlreadyExists check: for undo, which brings back what a file
+   * had. */
+  Status insertGraphCell(Library &lib, const BlockId &id, int index);
+  /** Removes the cells that name `id`. Returns the first one's place, or NotFound. */
   Result<int> removeGraph(Library &lib, const BlockId &id);
 
   /* ---- time ---- */

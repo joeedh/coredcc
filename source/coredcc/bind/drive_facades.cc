@@ -5,6 +5,7 @@
 #include "coredcc/bind/detail.h"
 #include "coredcc/drive/drive.h"
 #include "coredcc/graph/node_type.h"
+#include "coredcc/scene/commands.h"
 #include "coredcc/scene/scene.h"
 
 #include <memory>
@@ -45,6 +46,30 @@ public:
   }
 };
 
+/* A pointer's text, as TS's Ref has it; "" for none. */
+std::string graphRef(const Context &ctx, const BlockId &id)
+{
+  const Library &lib = *ctx.library();
+  const BlockHandle h = lib.find(id);
+  if (!lib.get(h)) {
+    return "";
+  }
+  return formatRef(ctx.runtime(), *coredcc::detail::pointerTo(lib, h).tryPointer());
+}
+
+/* `3/7`; a path that ends at a group, with a null node, is the groups alone. */
+std::string nodeText(const NodePath &p)
+{
+  if (!p.node.isNull()) {
+    return p.toString();
+  }
+  std::string s;
+  for (NodeId g : p.groups) {
+    s += (s.empty() ? "" : "/") + std::to_string(g.value);
+  }
+  return s;
+}
+
 Status noLibrary(const char *what)
 {
   return Status::error(StatusCode::FailedPrecondition,
@@ -61,7 +86,7 @@ Status enableDrivers(Context &ctx)
     return noLibrary("enableDrivers");
   }
   ScriptDrivers &all = ctx.runtime().ext<ScriptDrivers>();
-  if (all.find(lib)) {
+  if (all.find(lib) || SceneDrivers::of(*lib)) {
     return Status::error(StatusCode::AlreadyExists, "enableDrivers: they are enabled");
   }
   Result<std::unique_ptr<SceneDrivers>> d = SceneDrivers::make(*lib);
@@ -87,8 +112,7 @@ StringResult driverDiagnostics(Context &ctx)
   if (Status s = kernelGate(ctx, "driverDiagnostics"); !s.ok()) {
     return failed<StringResult>(s);
   }
-  SceneDrivers *d =
-      ctx.library() ? ctx.runtime().ext<ScriptDrivers>().find(ctx.library()) : nullptr;
+  SceneDrivers *d = ctx.library() ? SceneDrivers::of(*ctx.library()) : nullptr;
   if (!d) {
     return failed<StringResult>(Status::error(
         StatusCode::FailedPrecondition, "driverDiagnostics: drivers aren't enabled"));
@@ -103,9 +127,8 @@ StringResult driverDiagnostics(Context &ctx)
   out.beginArray();
   for (const DriverDiagnostic &dg : d->diagnostics()) {
     out.beginObject();
-    out.key("graph").string(dg.graph.isNull() ? ""
-                                              : formatBlockId(ctx.runtime(), dg.graph));
-    out.key("node").string(dg.node.node.isNull() ? "" : dg.node.toString());
+    out.key("graph").string(graphRef(ctx, dg.graph));
+    out.key("node").string(nodeText(dg.node));
     out.key("message").string(dg.message.c_str());
     out.endObject();
   }

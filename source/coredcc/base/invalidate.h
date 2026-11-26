@@ -17,8 +17,4 @@ enum class InvalidateKinds : uint32_t {
 };
 CDCC_FLAG_OPERATORS(InvalidateKinds)
 
-/** A ChangeBus aspect (api/change_bus.h), beside the kinds above: an object's driven
- * channels (OverrideProvider) have other values. Its stored data didn't change. */
-inline constexpr uint32_t kDrivenAspect = 1u << 15;
-
 } // namespace coredcc

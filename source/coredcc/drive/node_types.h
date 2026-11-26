@@ -35,7 +35,8 @@ inline constexpr const char *kStateNode = "scene.object.state";
 inline constexpr const char *kDrivePrefix = "scene.drive.";
 /** `scene.transform.<transform type>`, and the one for a type that isn't registered. */
 inline constexpr const char *kTransformPrefix = "scene.transform.";
-inline constexpr const char *kMissingTransform = "scene.transform.missing";
+/** Not under kTransformPrefix, so that no transform type's name can give it. */
+inline constexpr const char *kMissingTransform = "scene.missingTransform";
 /** The struct that `object` params point to. */
 inline constexpr const char *kObjectStruct = "coredcc.SceneObject";
 
@@ -67,8 +68,11 @@ inline constexpr int64_t kStaleStatus = -1;
  * transform node for a missing type. Once per Runtime; AlreadyExists after. */
 Status registerNodeTypes(Runtime &rt);
 /** The transform node type of a transform type, registered when first asked for. Null
- * for null, which is kMissingTransform. */
+ * for null, which is kMissingTransform. AlreadyExists if a type of that name is someone
+ * else's. Users can place these in a graph; the scan of listed graphs reports them. */
 Result<const NodeType *> transformNodeType(Runtime &rt, const TransformType *type);
+/** How many transform node types drive/ registered, the missing type's included. */
+int ownTransformTypeCount(Runtime &rt);
 
 } // namespace drive
 } // namespace coredcc

@@ -46,6 +46,7 @@ coredcc_test(test_scene_incremental SOURCES scene/test_scene_incremental.cc DEPS
 coredcc_test(test_drive_nodes SOURCES drive/test_drive_nodes.cc DEPS coredcc_drive)
 coredcc_test(test_drive_basic SOURCES drive/test_drive_basic.cc DEPS coredcc_drive)
 coredcc_test(test_drive_provider SOURCES drive/test_drive_provider.cc DEPS coredcc_drive)
+coredcc_test(test_drive_review SOURCES drive/test_drive_review.cc DEPS coredcc_drive)
 coredcc_test(test_drive_sync SOURCES drive/test_drive_sync.cc DEPS coredcc_drive)
 coredcc_test(test_drive_files SOURCES drive/test_drive_files.cc DEPS coredcc_drive)
 coredcc_test(test_drive_random SOURCES drive/test_drive_random.cc DEPS coredcc_drive)
