@@ -15,6 +15,8 @@ namespace {
 constexpr const char *kObjects = "objects";
 constexpr const char *kSelected = "selected";
 constexpr const char *kActive = "active";
+/* Graphs that drive objects (drive/). Written only when there are some. */
+constexpr const char *kGraphs = "graphs";
 constexpr const char *kFrame = "frame";
 constexpr const char *kStartFrame = "startFrame";
 constexpr const char *kFrameRate = "frameRate";
@@ -124,6 +126,9 @@ void Scene::write(BlockWriter &out) const
   fields.append(cellsField(kObjects, cells_));
   fields.append(detail::refField(kActive, std::span<const RefCell>(&active_.cell(), 1)));
   fields.append(cellsField(kSelected, selection_));
+  if (withoutNulls(graphs_).size() > 0) {
+    fields.append(cellsField(kGraphs, graphs_));
+  }
   setting(kFrame, PropValue::ofFloat(frame), frame == 0.0);
   setting(kStartFrame, PropValue::ofFloat(units.startFrame), units.startFrame == 0.0);
   const double rate[] = {double(units.rate.num()), double(units.rate.den())};
@@ -144,6 +149,7 @@ void Scene::readFrom(BlockReader &in)
   detail::readFields(in, fields_, [&](const BlockEntry &e) {
     return takeCells(lib, e, kObjects, RefKind::OptStrong, cells_) ||
            takeCells(lib, e, kSelected, RefKind::Weak, selection_) ||
+           takeCells(lib, e, kGraphs, RefKind::OptStrong, graphs_) ||
            detail::takeRef(e, kActive, active_.cell()) || takeNumber(e, kFrame, frame) ||
            takeNumber(e, kStartFrame, units.startFrame) ||
            takeRate(e, kFrameRate, units.rate) || takeUnit(e, units);
@@ -155,6 +161,7 @@ Scene *Scene::duplicate() const
   Scene *s = litestl::alloc::New<Scene>("coredcc::Scene");
   s->cells_ = cells_;
   s->selection_ = selection_;
+  s->graphs_ = graphs_;
   s->active_ = active_;
   s->frame = frame;
   s->units = units;
@@ -164,7 +171,7 @@ Scene *Scene::duplicate() const
 
 uint64_t Scene::memSize() const
 {
-  return sizeof(Scene) + (uint64_t(cells_.size()) + selection_.size()) * sizeof(RefCell) +
+  return sizeof(Scene) + (uint64_t(cells_.size()) + selection_.size() + graphs_.size()) * sizeof(RefCell) +
          detail::fieldsMemSize(fields_);
 }
 

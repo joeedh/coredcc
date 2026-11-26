@@ -68,6 +68,19 @@ void clearOverrideProvider(Library &lib, OverrideProvider &provider)
   }
 }
 
+void detail::prepareOverrides(const Library &lib,
+                               double time,
+                               OverrideProvider::Driven &driven)
+{
+  driven = OverrideProvider::Driven();
+  if (OverrideProvider *provider = overrideProvider(lib)) {
+    (void)provider->prepare(lib, time, driven);
+    if (lib.runtime().hasStickyError()) {
+      (void)lib.runtime().takeStickyError();
+    }
+  }
+}
+
 Status detail::overridesOf(OverrideProvider *provider,
                            const Library &lib,
                            BlockHandle object,

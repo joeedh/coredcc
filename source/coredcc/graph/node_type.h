@@ -145,6 +145,9 @@ enum class NodeTypeFlags : uint32_t {
    * as those may wait for the main thread.
    */
   ThreadSafe = 1 << 1,
+  /** Its nodes read something from outside the graph, which a program that evaluates it
+   * links into them (the scene's objects and time, for drive/). */
+  InputAdapter = 1 << 2,
 };
 constexpr NodeTypeFlags operator|(NodeTypeFlags a, NodeTypeFlags b)
 {

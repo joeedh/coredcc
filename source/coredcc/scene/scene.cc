@@ -378,6 +378,69 @@ void Scene::setSelection(Library &lib, const Vector<BlockId> &ids)
   lib.noteRefsChanged();
 }
 
+/* ---- graphs ---- */
+
+const Vector<BlockHandle> &Scene::graphs(const Library &lib) const
+{
+  const uint64_t clients = lib.runtime().ext<ClientRegistry>().generation();
+  if (graphsEpoch_ != lib.epoch() || graphsGeneration_ != clients) {
+    liveGraphs_.clear();
+    litestl::util::Map<BlockHandle, char> seen;
+    for (const RefCell &c : graphs_) {
+      const BlockHandle h = lib.resolveRef(c);
+      const Datablock *b = lib.get(h);
+      if (b && b->state() == BlockState::Live && seen.add(h, 0)) {
+        liveGraphs_.append(h);
+      }
+    }
+    graphsEpoch_ = lib.epoch();
+    graphsGeneration_ = clients;
+  }
+  return liveGraphs_;
+}
+
+Status Scene::insertGraph(Library &lib, const BlockId &id, int index)
+{
+  const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
+  if (lib.find(id).isNull()) {
+    return Status::error(StatusCode::NotFound, "Scene::insertGraph: no such block");
+  }
+  for (const RefCell &c : graphs_) {
+    if (clients.canonical(c.target) == clients.canonical(id)) {
+      return Status::error(StatusCode::AlreadyExists, "the graph is in the scene's list");
+    }
+  }
+  RefCell cell(RefKind::OptStrong);
+  CDCC_TRY(lib.writeRef(cell, id));
+  const int n = int(graphs_.size());
+  graphs_.append(cell);
+  if (index >= 0 && index < n) {
+    for (int i = n; i > index; i--) {
+      graphs_[i] = graphs_[i - 1];
+    }
+    graphs_[index] = cell;
+  }
+  lib.noteRefsChanged();
+  return Status();
+}
+
+Result<int> Scene::removeGraph(Library &lib, const BlockId &id)
+{
+  const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
+  int first = -1;
+  for (int i = int(graphs_.size()) - 1; i >= 0; i--) {
+    if (clients.canonical(graphs_[i].target) == clients.canonical(id)) {
+      graphs_.remove_at(i);
+      first = i;
+    }
+  }
+  if (first < 0) {
+    return Status::error(StatusCode::NotFound, "the graph isn't in the scene's list");
+  }
+  lib.noteRefsChanged();
+  return first;
+}
+
 /* ---- evaluation ---- */
 
 bool Scene::evaluated(BlockHandle h, ObjectEval &out) const
@@ -573,6 +636,44 @@ CollectionAccessor collectionOf(bool selectedOnly)
   return c;
 }
 
+/* The graphs that the scene lists, read-only: drive/'s commands change them. Their struct is
+ * named, not linked: scene/ doesn't use graph/. */
+CollectionAccessor graphsOf()
+{
+  CollectionAccessor c;
+  c.itemStruct = StructId::of("coredcc.GraphDef");
+  c.length = [](const PointerRef &p, Context &ctx) {
+    return ctx.library() ? int64_t(self(p).graphs(*ctx.library()).size()) : int64_t(0);
+  };
+  c.at = [](const PointerRef &p, Context &ctx, int64_t i) {
+    if (!ctx.library()) {
+      return PointerRef();
+    }
+    const Vector<BlockHandle> &l = self(p).graphs(*ctx.library());
+    return i >= 0 && i < int64_t(l.size()) ? blockRoot(ctx, l[int(i)]) : PointerRef();
+  };
+  c.lookup = [](const PointerRef &p, Context &ctx, const KeySegment &key) {
+    const Library *lib = ctx.library();
+    if (!lib) {
+      return PointerRef();
+    }
+    for (BlockHandle h : self(p).graphs(*lib)) {
+      const bool match = key.kind == KeySegment::Kind::Handle
+                             ? packed(h) == key.handle
+                             : lib->get(h)->name() == key.text;
+      if (match) {
+        return blockRoot(ctx, h);
+      }
+    }
+    return PointerRef();
+  };
+  c.keyOf = [](const PointerRef &, Context &ctx, const PointerRef &item) {
+    return KeySegment::ofHandle(
+        ctx.library() ? packed(ctx.library()->find(item.owner.block)) : 0);
+  };
+  return c;
+}
+
 ApiStruct sceneStruct()
 {
   ApiStruct st(kSceneType);
@@ -595,6 +696,8 @@ ApiStruct sceneStruct()
   st.addCollection(PropertyDef::collectionProp("objects", object), std::move(objects));
   st.addCollection(PropertyDef::collectionProp("selectedObjects", object),
                    collectionOf(true));
+  st.addCollection(PropertyDef::collectionProp("graphs", StructId::of("coredcc.GraphDef")),
+                   graphsOf());
 
   PointerAccessor active;
   active.target = object;

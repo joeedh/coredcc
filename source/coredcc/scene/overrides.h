@@ -64,11 +64,34 @@ private:
  * first one; a command fails with it, or leaves the object out if the code is
  * FailedPrecondition.
  *
+ * - When its answers change, it notifies the objects' blocks (or calls notifyAll):
+ * evaluateScene evaluates only what was notified (SceneSettings::incremental).
+ * - `prepare` (optional) is called by evaluateScene before its pass, outside the
+ * EvaluationScope, with the scene's time: the provider may compute its answers there. It
+ * also says which objects it drives, and evaluateScene then asks only about those.
+ *
  * A driven channel's stored value stays what it is: the commands don't write it.
  */
 class OverrideProvider {
 public:
+  /** The objects a provider drives: with `all`, any may be. `version` moves when the set
+   * does. */
+  struct Driven {
+    bool all = true;
+    uint64_t version = 0;
+    litestl::util::Vector<BlockId> ids;
+  };
+
   virtual ~OverrideProvider() = default;
+  /** The default drives anything, and computes nothing ahead. An error is kept by the
+   * provider, which gives it for the objects it concerns. */
+  virtual Status prepare(const Library &lib, double time, Driven &driven)
+  {
+    (void)lib;
+    (void)time;
+    driven.all = true;
+    return Status();
+  }
   virtual Status overridesOf(const Library &lib,
                              BlockHandle object,
                              const TransformType &type,
@@ -87,6 +110,10 @@ namespace detail {
 
 /** The Library's provider, or null. */
 OverrideProvider *overrideProvider(const Library &lib);
+
+/** Calls the provider's `prepare`, if there is one. A sticky error it leaves is dropped:
+ * the provider reports its errors through overridesOf. */
+void prepareOverrides(const Library &lib, double time, OverrideProvider::Driven &driven);
 
 /** What drives an object. The only caller of the provider: an exception that it left is
  * the error. */

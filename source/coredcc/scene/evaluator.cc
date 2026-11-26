@@ -428,6 +428,29 @@ bool SceneEvaluator::stillValid(const Scene &scene, const Library &lib) const
   return true;
 }
 
+void SceneEvaluator::markDriven(const Library &lib, const OverrideProvider::Driven &driven)
+{
+  if (driven.all) {
+    drivenAll_ = true;
+    return;
+  }
+  if (!drivenAll_ && driven.version == drivenVersion_ && lookups_ == drivenLookups_) {
+    return;
+  }
+  for (SceneMember &m : members_) {
+    m.driven = false;
+  }
+  for (const BlockId &id : driven.ids) {
+    const int i = index_ ? index_->find(lib.find(id)) : -1;
+    if (i >= 0) {
+      members_[i].driven = true;
+    }
+  }
+  drivenAll_ = false;
+  drivenVersion_ = driven.version;
+  drivenLookups_ = lookups_;
+}
+
 /* ---- evaluating ---- */
 
 /* One object's state, of the channels in scratch_. */
@@ -554,8 +577,8 @@ SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &fore
       if (!lastType || lastType->id() != info.transformType) {
         lastType = types.find(info.transformType);
       }
-      e.status =
-          evaluateOne(lib, m.handle, provider, lastType, time, parent, e.state, foreign);
+      e.status = evaluateOne(
+          lib, m.handle, providerFor(i, provider), lastType, time, parent, e.state, foreign);
       if (e.status == EvalStatus::Ok && cyclic_[i]) {
         e.status = EvalStatus::Cycle;
       }
@@ -607,6 +630,7 @@ SceneEvaluator::evaluateAll(const Scene &scene, const Library &lib, Status &fore
 
 Status SceneEvaluator::run(const Scene &scene,
                            const Library &lib,
+                           const OverrideProvider::Driven &driven,
                            bool &changed,
                            Status &foreign)
 {
@@ -643,6 +667,7 @@ Status SceneEvaluator::run(const Scene &scene,
     key_ = key;
   }
   for (int attempt = 0; attempt < 2; attempt++) {
+    markDriven(lib, driven);
     foreign = Status();
     const Pass pass = evaluateAll(scene, lib, foreign);
     if (pass != Pass::Stale) {
@@ -698,9 +723,16 @@ Status evaluateScene(Context &ctx, BlockHandle h, EvaluateResult *result)
   {
     /* The pin keeps the scene's data if a foreign capability deletes it. */
     const LibraryPin pin(*lib, h);
+    /* Before the scope, so that a provider may evaluate a graph. Its error is its own to
+     * give, for the objects it concerns. */
+    OverrideProvider::Driven driven;
+    detail::prepareOverrides(*lib, scene->time(), driven);
+    if (!Scene::of(*lib, h)) {
+      return Status::error(StatusCode::NotFound, "evaluateScene: the scene went away");
+    }
     lib->beginNoCollect();
     scene->evaluator_->counters.evaluations++;
-    status = scene->evaluator_->run(*scene, *lib, changed, foreign);
+    status = scene->evaluator_->run(*scene, *lib, driven, changed, foreign);
     lib->endNoCollect();
   }
   if (changed) {

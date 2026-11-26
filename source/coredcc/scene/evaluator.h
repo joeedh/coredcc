@@ -4,6 +4,7 @@
 
 #include "coredcc/base/signal.h"
 #include "coredcc/lib/provider.h"
+#include "coredcc/scene/overrides.h"
 #include "coredcc/scene/scene.h"
 
 namespace coredcc::detail {
@@ -47,6 +48,8 @@ struct SceneMember {
   int type = -1;
   int dataType = -1;
   bool member = false;
+  /** The provider drives it (OverrideProvider::Driven), and is asked about it. */
+  bool driven = false;
   /** Whether the block's data, and the data block's, was null; every evaluation compares
    * it. */
   bool isNull = false;
@@ -102,7 +105,11 @@ public:
   /** Evaluates, and makes the results the last ones if they differ, with their BVH. Opens
    * the EvaluationScope; the no-collect is the caller's. The first foreign exception goes
    * to `foreign`. */
-  Status run(const Scene &scene, const Library &lib, bool &changed, Status &foreign);
+  Status run(const Scene &scene,
+             const Library &lib,
+             const OverrideProvider::Driven &driven,
+             bool &changed,
+             Status &foreign);
   /** Of the last results. */
   std::span<const BlockHandle> children(BlockHandle h) const;
   const litestl::util::Vector<BlockHandle> &recorded(const Library &lib) const;
@@ -138,6 +145,13 @@ private:
                      const litestl::util::Vector<ObjectEval> &results,
                      Status &foreign);
   bool stillValid(const Scene &scene, const Library &lib) const;
+  /** Sets SceneMember::driven, if the set or the lookups moved. */
+  void markDriven(const Library &lib, const OverrideProvider::Driven &driven);
+  /** The provider for member i, or null if it doesn't drive it. */
+  OverrideProvider *providerFor(int i, OverrideProvider *provider) const
+  {
+    return provider && (drivenAll_ || members_[i].driven) ? provider : nullptr;
+  }
   void lookUp(const Scene &scene, const Library &lib);
   /** `before` is what was found for it last time, if anything. */
   SceneMember
@@ -178,6 +192,10 @@ private:
   std::shared_ptr<const HandleIndex> index_;
   LookupKey key_;
   bool valid_ = false;
+  /* What markDriven last saw. */
+  bool drivenAll_ = true;
+  uint64_t drivenVersion_ = 0;
+  uint64_t drivenLookups_ = ~uint64_t(0);
   ChannelBlock scratch_;
   ChannelOverrides overrides_;
   /** The places that differ, of the pass that runs. */

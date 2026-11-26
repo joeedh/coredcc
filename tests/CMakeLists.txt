@@ -41,6 +41,7 @@ coredcc_test(test_scene_bulk SOURCES scene/test_scene_bulk.cc DEPS coredcc_scene
 coredcc_test(test_scene_duplicate SOURCES scene/test_scene_duplicate.cc DEPS coredcc_scene)
 coredcc_test(test_scene_units SOURCES scene/test_scene_units.cc DEPS coredcc_scene)
 coredcc_test(test_scene_bvh SOURCES scene/test_scene_bvh.cc DEPS coredcc_scene)
+coredcc_test(test_scene_graphs SOURCES scene/test_scene_graphs.cc DEPS coredcc_scene)
 coredcc_test(test_draw_view SOURCES draw/test_view.cc DEPS coredcc_draw)
 coredcc_test(test_props_value SOURCES props/test_value.cc DEPS coredcc_props)
 coredcc_test(test_props_def SOURCES props/test_def.cc DEPS coredcc_props)

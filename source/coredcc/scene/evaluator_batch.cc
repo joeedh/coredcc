@@ -126,7 +126,8 @@ void SceneEvaluator::evaluateLevel(const Library &lib,
       }
       continue;
     }
-    if (provider && !overridesOf(provider, lib, m.handle, type, time, overrides_).ok()) {
+    OverrideProvider *const asked = providerFor(i, provider);
+    if (asked && !overridesOf(asked, lib, m.handle, type, time, overrides_).ok()) {
       continue;
     }
     Group *group = nullptr;
@@ -139,7 +140,7 @@ void SceneEvaluator::evaluateLevel(const Library &lib,
       group->type = type;
       group->batch = std::make_unique<TransformBatch>(type->channelCount(), time);
     }
-    const EvalCtx ctx = provider
+    const EvalCtx ctx = asked
                             ? EvalCtx(scratch_, time, overrides_.values, overrides_.mask)
                             : EvalCtx(scratch_, time);
     group->batch->add(ctx, parentOf(i));
