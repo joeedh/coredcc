@@ -1018,7 +1018,7 @@ The reasons are in the P4 plan's notes (`docs/plans/2026-11-25-p4-tools.md`).
 - **`UndoHistory` has no interactive hooks.** The executor holds the open command; Unreal's adapter opens its
   own transaction for a gesture.
 - **§2 for Unreal:** Unreal's editor builds have exceptions on. coredcc's library for Unreal is built with
-  Unreal's flags (`/EHsc /GR- /MD`, release CRT), and C4668 is a warning in the module that includes it.
+  Unreal's flags (`/EHsc /GR- /MD`, release CRT), and C4668 is disabled around its includes.
 - **TransformableElements and Symmetry are in `tool/`,** not `scene/`.
 - **Strokes:** a `StrokeBrush` is begun with its target (the object, its world matrix and the mirror axes).
   Brushes are named through a registry. A stroke's record keeps the samples as applied, mirrored copies

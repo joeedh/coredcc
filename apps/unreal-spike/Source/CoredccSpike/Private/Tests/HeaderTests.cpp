@@ -1,7 +1,7 @@
 /*
  * S11 of docs/plans/2026-11-25-p4-tools.md: coredcc's public headers, and the litestl headers
  * they include, compile inside an Unreal translation unit with an Editor module's flags: /W4,
- * C4668 as a warning (see CoredccSpike.Build.cs), the shadowing errors /we4456 /we4458 /we4459,
+ * C4668 an error outside CoredccIncludesBegin.h, the shadowing errors /we4456 /we4458 /we4459,
  * exceptions on, RTTI off. The list is tests/compile_embed.cc's; the test passes once the module
  * compiles.
  */

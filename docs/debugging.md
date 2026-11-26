@@ -276,8 +276,9 @@ took real effort to find, or when you learn a diagnostic technique worth reusing
   because Windows' file system ignores case. litestl's math, and Eigen with it, came in outside the push.
   Moving litestl's root to the system path broke litestl instead: its own `"math/matrix.h"` then found
   Unreal's.
-- **Fix:** C4668 is a warning for the whole module (`CoredccSpike.Build.cs`). The real fix belongs in
-  litestl: it should include its own headers by a prefixed path.
+- **Fix:** litestl includes its own headers, and Eigen, by relative path, so the module's include roots
+  are only `source/` and `extern/`, and C4668 is an error again outside the push. Don't put
+  `extern/litestl/` back on a host's include path.
 - **How to spot it next time:** compile the failing file with `/showIncludes` from `Engine\Source` (where
   UBT runs the compiler) and look for an `extern\litestl` path under an engine header.
 

@@ -316,11 +316,11 @@ are `keys::*` in `tool/input.h` (`Keys` in TS):
 `apps/unreal-spike/` is an Editor module that hosts coredcc's history and tools (`node tools/unreal-spike.mjs`;
 the plan's U-A and U-B notes have the findings). What a real integration takes from it:
 - **Build coredcc as Unreal builds:** `/EHsc /GR- /MD`, release CRT, `_ITERATOR_DEBUG_LEVEL=0`
-  (`apps/unreal-spike/coredcc/CMakeLists.txt`). The include roots are `source/`, `extern/`, `extern/litestl/`
-  and `extern/litestl/extern/`.
-- **C4668 must not be an error around coredcc's headers:** Eigen tests GCC's macros in `#if`. Unreal's engine headers can reach litestl's `math/` headers by name, because Windows' file system
-  ignores case and litestl's root answers `"Math/Vector.h"`. So C4668 has to be a warning for the whole module
-  (`CppCompileWarningSettings.UndefinedIdentifierWarningLevel`), not only inside a push.
+  (`apps/unreal-spike/coredcc/CMakeLists.txt`). The include roots are `source/` and `extern/`. litestl includes its own
+  headers, and Eigen, by relative path, so don't put `extern/litestl/` on the path: on Windows its root
+  answers engine headers' `"Math/Vector.h"` with litestl's `math/vector.h`.
+- **C4668 must not be an error around coredcc's headers:** Eigen tests GCC's macros in `#if`. Push and
+  disable it around coredcc's includes (`CoredccIncludesBegin.h`, `CoredccIncludesEnd.h`).
 - **History:** each coredcc command is one Unreal transaction holding an `FCommandChange` on a transactional
   UObject (`UnrealHistory.cpp`). Expire the changes before the Runtime goes, and root the document object.
 - **Tools:** one `UInteractiveTool` adapter forwards ITF's click-drag and hover behaviors as InputEvents, holds
