@@ -18,9 +18,9 @@ States: `todo`, `planning`, `pressure-tested`, `in progress`, `done`, `reviewed`
 | 5 | [P1 application spine: library, props, datapath, commands](plans/2026-11-20-p1-application-spine.md) | P1 | 3 | reviewed | [props and parsers](reports/feature-report-props-parse-2026-11-21.md); [library and datapath](reports/feature-report-lib-api-2026-11-21.md); [commands and undo](reports/feature-report-command-2026-11-21.md); [script bindings](reports/feature-report-bind-2026-11-22.md); [TS spike](reports/feature-report-ts-spike-2026-11-22.md); [TA1](reports/feature-report-ta1-2026-11-23.md) |
 | 6 | [P2 library IO and layout](plans/2026-11-24-p2-layout-library-io.md) | P2 | 5 | reviewed | [library IO](reports/feature-report-library-io-2026-11-24.md); [layout](reports/feature-report-layout-2026-11-25.md) |
 | 7 | [P3 objects, transforms and BVH](plans/2026-11-24-p3-objects-bvh.md) | P3 | 5 | reviewed; timings to be confirmed on an idle machine | [objects and transforms](reports/feature-report-scene-2026-11-25.md); [BVH, View and picking](reports/feature-report-bvh-2026-11-25.md) |
-| 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | todo | tools and overlay |
+| 8 | P4 tools, overlay rendering, Unreal spike | P4 | 7 | planning (worktree `p4-tools`) | tools and overlay |
 | 9 | [P5 graph and instancing](plans/2026-11-24-p5-graph.md) | P5 | 5 | reviewed | [graph](reports/feature-report-graph-2026-11-25.md) |
-| 10 | P5c scene evaluator | P5c | 7, 9 | todo | scene evaluator |
+| 10 | P5c scene evaluator | P5c | 7, 9 | planning (worktree `p5c-evaluator`) | scene evaluator |
 | 11 | P6 integration: N-API addon, faberforge and ubertopo spikes | P6 | 8, 10, litestl N-API PR | todo | integration |
 
 Each plan file is created in `docs/plans/` when its phase starts, and its row is linked
