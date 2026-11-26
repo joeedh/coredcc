@@ -246,6 +246,23 @@ void testNotifiedOnEvaluation()
   test_assert(heard == 1);
 }
 
+/* A pointer typed as the object's own struct (coredcc.Object, as TS's Refs are) is
+ * accepted by a param whose target is coredcc.SceneObject, which it inherits from. */
+void testDerivedPointer()
+{
+  DriveDoc d;
+  const BlockHandle a = d.object("a");
+  const BlockHandle g = d.graph("g");
+  const NodeId r = d.node(g, kStateNode);
+  StableRef ref;
+  ref.owner = OwnerKey::ofBlock(d.idOf(a));
+  ref.type = StructId::of(kObjectType);
+  must(d.def(g).setParam(r, "object", PropValue::ofPointer(ref)));
+  ref.type = StructId::of(kSceneType);
+  test_assert(d.def(g).setParam(r, "object", PropValue::ofPointer(ref)).code() ==
+              StatusCode::TypeMismatch);
+}
+
 } // namespace
 
 int main()
@@ -258,5 +275,6 @@ int main()
   testAliasIds();
   testAccessors();
   testNotifiedOnEvaluation();
+  testDerivedPointer();
   return test_end();
 }

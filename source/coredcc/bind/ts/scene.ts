@@ -432,6 +432,11 @@ export function setWorld(ctx: Context, objects: readonly Ref[], matrices: ArrayL
 export function worldMatrix(ctx: Context, object: Ref): number[] {
   return take(cd.worldMatrix(ctx, object.text), (m) => read(m, 16))
 }
+/** A block changed other than through `set` or a command (a transform model of yours answers otherwise):
+ * the scene evaluates it again. The incremental pass evaluates only what is notified. */
+export function notifyChanged(ctx: Context, block: Ref) {
+  check(cd.notifyChanged(ctx, block.text))
+}
 
 /* ---- picking ---- */
 

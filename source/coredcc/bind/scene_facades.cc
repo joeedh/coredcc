@@ -1,5 +1,6 @@
 #include "coredcc/bind/scene_facades.h"
 
+#include "coredcc/api/change_bus.h"
 #include "coredcc/api/ref_text.h"
 #include "coredcc/bind/detail.h"
 #include "coredcc/command/executor.h"
@@ -245,6 +246,15 @@ MatrixResult worldMatrix(Context &ctx, const string &object)
   Result<TransformState> s =
       computeState(*ctx.library(), *h, scene ? scene->time() : 0.0);
   return s.ok() ? ok<MatrixResult>(s->world) : failed<MatrixResult>(s.status());
+}
+
+Status notifyChanged(Context &ctx, const string &block)
+{
+  CDCC_TRY(slotGate(ctx, "notifyChanged", {"exec"}));
+  Result<BlockHandle> h = blockAt(ctx, "notifyChanged", block);
+  CDCC_TRY(h.status());
+  ctx.runtime().ext<ChangeBus>().notify(OwnerKey::ofBlock(ctx.library()->get(*h)->id()));
+  return Status();
 }
 
 PickResult

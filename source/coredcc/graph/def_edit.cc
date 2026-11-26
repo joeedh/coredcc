@@ -1,4 +1,5 @@
 /* GraphDef's edits. Each is checked completely before it changes anything. */
+#include "coredcc/api/struct.h"
 #include "coredcc/base/text.h"
 #include "coredcc/graph/def.h"
 #include "coredcc/graph/interior.h"
@@ -337,7 +338,19 @@ Status
 GraphDef::setParamRef(GraphNode *n, const NodeParamDef &param, const PropValue &value)
 {
   Library *lib = lib_.get();
-  Result<PropValue> c = coerce(param.def, value);
+  /* A pointer to a struct that inherits from the target is one to the target: coerce
+   * compares struct ids exactly, and has no registry to ask. */
+  PropValue widened = value;
+  const StructId want = param.def.target()->target;
+  if (const StableRef *r = value.tryPointer(); r && !r->isNull() && r->type &&
+                                               r->type != want &&
+                                               rt_.ext<ApiRegistry>().isA(r->type, want))
+  {
+    StableRef ref = *r;
+    ref.type = want;
+    widened = PropValue::ofPointer(ref);
+  }
+  Result<PropValue> c = coerce(param.def, widened);
   if (!c.ok()) {
     return c.status();
   }

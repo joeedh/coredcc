@@ -151,6 +151,11 @@ struct MatrixResult {
 /** Where an object is now, at the scene's time (computeState). */
 MatrixResult worldMatrix(Context &ctx, const string &object);
 
+/** Tells everyone that a block changed other than through the datapath or a command: a
+ * script's transform model or data that now answers otherwise. The incremental scene pass
+ * evaluates only what was notified (or failed last time). */
+Status notifyChanged(Context &ctx, const string &block);
+
 /* ---- picking ---- */
 
 /** A PickHit. */

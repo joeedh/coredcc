@@ -94,8 +94,8 @@ struct DriveEntry {
 
 struct SceneDrivers::State {
   Runtime *rt = nullptr;
-  LibraryRef lib;
-  OverrideProvider *inner = nullptr;
+  LibraryRef library;
+  OverrideProvider *innerProvider = nullptr;
   ScopedConnection listener;
   bool rescan = true;
 

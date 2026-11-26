@@ -499,6 +499,8 @@ void addSceneFacades(litestl::binding::BindingManager *mgr)
       mgr, "coredcc::sceneChildren", script::sceneChildren, MARGS("ctx", "object"));
   BIND_FACADE(mgr, "coredcc::worldMatrix", script::worldMatrix, MARGS("ctx", "object"));
   BIND_FACADE(
+      mgr, "coredcc::notifyChanged", script::notifyChanged, MARGS("ctx", "block"));
+  BIND_FACADE(
       mgr, "coredcc::pick", script::pick, MARGS("ctx", "view", "x", "y", "options"));
 }
 

@@ -54,7 +54,8 @@ const suite = () => {
     cdcc.enableDrivers(ctx)
     assert.throws(() => cdcc.enableDrivers(ctx), fails(StatusCode.AlreadyExists, /enabled/))
     const a = add('name="a" location=(3, 4, 5)')
-    const b = add('name="b"')
+    /* add remembers its inputs: without a location, b would be where a is. */
+    const b = add('name="b" location=(0, 0, 0)')
     const {graph} = follow(a, b)
     assert.deepEqual(evaluatedAt(b), [0, 0, 0])
     cdcc.addDriverGraph(ctx, graph)

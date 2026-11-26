@@ -265,7 +265,7 @@ void SceneDrivers::State::rebuild(Library &lib)
   inst.reset(); /* before its def */
   def = std::make_unique<GraphDef>(rt, &lib);
   inst = std::make_unique<GraphInstance>(rt, &lib, GraphSource(def.get()));
-  inst->setUserData(inner);
+  inst->setUserData(innerProvider);
   nodeOf.clear();
   stateOf.clear();
   statusHandles.clear();

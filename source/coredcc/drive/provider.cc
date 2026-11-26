@@ -165,7 +165,7 @@ Status SceneDrivers::State::ensure(Library &lib, double time)
 SceneDrivers::SceneDrivers(Library &lib) : s_(std::make_unique<State>())
 {
   s_->rt = &lib.runtime();
-  s_->lib = lib.ref();
+  s_->library = lib.ref();
 }
 
 Result<std::unique_ptr<SceneDrivers>> SceneDrivers::make(Library &lib)
@@ -198,7 +198,7 @@ SceneDrivers::~SceneDrivers()
   std::erase_if(s_->rt->ext<AllDrivers>().entries, [this](const AllDrivers::Entry &e) {
     return e.drivers == this || !e.lib.get();
   });
-  if (Library *lib = s_->lib.get()) {
+  if (Library *lib = s_->library.get()) {
     clearOverrideProvider(*lib, *this);
   }
   s_->inst.reset();
@@ -207,7 +207,7 @@ SceneDrivers::~SceneDrivers()
 
 void SceneDrivers::setInner(OverrideProvider *inner)
 {
-  s_->inner = inner;
+  s_->innerProvider = inner;
   s_->built = false; /* its kernels ask it */
   s_->evaluated = false;
   s_->rt->ext<ChangeBus>().notifyAll();
@@ -216,7 +216,7 @@ void SceneDrivers::setInner(OverrideProvider *inner)
 Status SceneDrivers::update(double time)
 {
   CDCC_TRY(s_->rt->busyIfEvaluating("SceneDrivers::update"));
-  Library *lib = s_->lib.get();
+  Library *lib = s_->library.get();
   if (!lib) {
     return failed("the Library is gone");
   }
@@ -225,7 +225,7 @@ Status SceneDrivers::update(double time)
 
 Vector<DriverDiagnostic> SceneDrivers::diagnostics()
 {
-  Library *lib = s_->lib.get();
+  Library *lib = s_->library.get();
   if (lib && !s_->rt->evaluating()) {
     (void)s_->sync(*lib, false);
   }
@@ -267,14 +267,14 @@ int SceneDrivers::rebuilds() const
 
 Status SceneDrivers::prepare(const Library &lib, double time, Driven &driven)
 {
-  Library *own = s_->lib.get();
+  Library *own = s_->library.get();
   driven.ids.clear();
   if (own != &lib) {
     driven.all = true;
     return failed("SceneDrivers: another Library");
   }
   const Status s = s_->ensure(*own, time);
-  driven.all = s_->inner != nullptr;
+  driven.all = s_->innerProvider != nullptr;
   driven.version = s_->drivenVersion;
   for (auto &pair : s_->drivesOf) {
     driven.ids.append(pair.key);
@@ -288,10 +288,10 @@ Status SceneDrivers::overridesOf(const Library &lib,
                                  double time,
                                  ChannelOverrides &out)
 {
-  if (s_->inner) {
-    CDCC_TRY(s_->inner->overridesOf(lib, object, type, time, out));
+  if (s_->innerProvider) {
+    CDCC_TRY(s_->innerProvider->overridesOf(lib, object, type, time, out));
   }
-  Library *own = s_->lib.get();
+  Library *own = s_->library.get();
   const Datablock *b = lib.get(object);
   if (own != &lib || !b) {
     return Status();

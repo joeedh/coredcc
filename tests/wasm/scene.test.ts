@@ -210,8 +210,10 @@ const suite = () => {
     })
     const o = add('type="ts.odd"')
     const other = add('type="core.transform.trs" name="other" location=(7, 0, 0)')
+    /* The model answers otherwise: the scene hears of it, or its incremental pass keeps the result. */
     const run = (f: () => unknown) => {
       body = f
+      cdcc.notifyChanged(ctx, o)
       cdcc.evaluateScene(ctx)
     }
     run(() => ({}))
