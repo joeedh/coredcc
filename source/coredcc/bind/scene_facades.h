@@ -17,7 +17,7 @@ namespace coredcc::script {
 
 /* ---- double3 ---- */
 
-double3 vec3(double x, double y, double z);
+double3 newVec3(double x, double y, double z);
 /** 0 out of range. */
 double vec3At(const double3 &v, int32_t i);
 /** Nothing out of range. */

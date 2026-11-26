@@ -68,7 +68,7 @@ Status transformTypeDefVersion(TransformTypeInfo &type, int32_t version)
   return Status();
 }
 
-Status transformEnumChannel(TransformTypeInfo &type, const string &name)
+Status transformTypeDefEnumChannel(TransformTypeInfo &type, const string &name)
 {
   Result<PropertyDef> p = detail::scriptProp(
       "transformTypeDefChannel", name, PropValue::ofBool(false), false);

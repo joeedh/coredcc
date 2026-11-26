@@ -126,8 +126,8 @@ Unreal, coredcc is exactly one module, so they exist once.
   negated. `conditionHolds` is the rule, in C++ and in TS.
 - **What isn't there.** A container whose own `path` names nothing now is hidden (`containerIsThere`),
   unless `validateLayout` has an Error about it. A prop shows why it has no value, and a `command` element
-  is disabled when `canInvoke` gives a reason.
-- **`canInvoke` and `InvocationChecks`** ask each command's `canRun`, so keep those cheap. An open
+  is disabled when `canInvokeAt` gives a reason.
+- **`canInvokeAt` and `InvocationChecks`** ask each command's `canRun`, so keep those cheap. An open
   interactive command, or a stray error, is a reason for every `command` element.
 - **The active item as a prop** is the collection's own pointer member (`activeItem`), not
   `items.active`, which can't be null.

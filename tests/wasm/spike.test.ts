@@ -33,9 +33,9 @@ class AddCount implements ScriptCommand {
   }
   exec(ctx: Context) {
     this.before = cdcc.get(ctx, 'count') as number
-    const after = this.before + (cdcc.input(ctx, 'amount') as number)
+    const after = this.before + (cdcc.commandInput(ctx, 'amount') as number)
     cdcc.write(ctx, 'count', after)
-    cdcc.output(ctx, 'result', after)
+    cdcc.setCommandOutput(ctx, 'result', after)
   }
   undo(ctx: Context) {
     cdcc.write(ctx, 'count', this.before)
@@ -126,7 +126,7 @@ describe('coredcc wasm-st spike', () => {
           const ball = cdcc.get(c, 'items["Ball"]') as Ref
           cdcc.set(c, 'activeItem', ball)
           seen.push(ball)
-          cdcc.output(c, 'label', ball.text)
+          cdcc.setCommandOutput(c, 'label', ball.text)
         }
         undo() {}
       }
@@ -483,7 +483,7 @@ describe('coredcc wasm-st spike', () => {
       {id: 'ts.scale', inputs: {factor: cdcc.float(1)}},
       class implements ScriptCommand {
         exec(c: Context) {
-          cdcc.write(c, 'strength', cdcc.input(c, 'factor') as number)
+          cdcc.write(c, 'strength', cdcc.commandInput(c, 'factor') as number)
         }
         undo() {}
       }
@@ -517,7 +517,7 @@ describe('coredcc wasm-st spike', () => {
       {id: 'ts.proto', outputs},
       class implements ScriptCommand {
         exec(c: Context) {
-          cdcc.output(c, '__proto__', 3)
+          cdcc.setCommandOutput(c, '__proto__', 3)
         }
         undo() {}
       }

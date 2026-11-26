@@ -102,7 +102,7 @@ const suite = () => {
     const a = add('name="a" location=(1, 2, 3)')
     near(cdcc.worldMatrix(ctx, a), at(1, 2, 3))
     cdcc.evaluateScene(ctx)
-    const key = cdcc.blockIds(ctx, [a])
+    const key = cdcc.blockIdText(ctx, [a])
     near(cdcc.get(ctx, `evaluated.objects["${key}"].world`) as number[], at(1, 2, 3))
     assert.throws(() => cdcc.worldMatrix(ctx, second), fails(StatusCode.FailedPrecondition, /./))
     cdcc.undo(ctx)
@@ -128,8 +128,8 @@ const suite = () => {
     near(where(o), [3, 4, 7])
 
     /* Moved through setWorld, with the parent moving it too. */
-    const both = cdcc.blockIds(ctx, [root, o])
-    cdcc.invoke(ctx, `core.object.applyDelta(vector=(1, 0, 0) objects="${cdcc.blockIds(ctx, [o])}")`)
+    const both = cdcc.blockIdText(ctx, [root, o])
+    cdcc.invoke(ctx, `core.object.applyDelta(vector=(1, 0, 0) objects="${cdcc.blockIdText(ctx, [o])}")`)
     near(where(o), [4, 4, 7])
     cdcc.invoke(ctx, `core.object.applyDelta(vector=(0, 1, 0) objects="${both}")`)
     near(where(o), [4, 5, 7])
@@ -138,7 +138,7 @@ const suite = () => {
     cdcc.undo(ctx)
     near(where(o), [3, 4, 7])
     /* As a TRS object, and back. */
-    const only = cdcc.blockIds(ctx, [o])
+    const only = cdcc.blockIdText(ctx, [o])
     assert.equal(cdcc.invoke(ctx, `core.object.setTransformType(objects="${only}")`).approximate, 0)
     near(where(o), [3, 4, 7])
     cdcc.invoke(ctx, `core.object.setTransformType(type="ts.polar" objects="${only}")`)
@@ -168,7 +168,7 @@ const suite = () => {
     cdcc.set(ctx, 'scene.units.fps', 10)
     cdcc.set(ctx, 'scene.frame', 5)
     near(where(o), [1, 2, 3.5])
-    const only = cdcc.blockIds(ctx, [o])
+    const only = cdcc.blockIdText(ctx, [o])
     cdcc.invoke(
       ctx,
       `core.object.applyDelta(kind='TRANSLATE' vector=(1, 2, 3) pivot=(4, 5, 6) axis=(0, 1, 0) angle=0.5 objects="${only}")`
@@ -236,7 +236,7 @@ const suite = () => {
     run(() => ({}))
     near(where(o), [0, 0, 0])
 
-    const only = cdcc.blockIds(ctx, [o])
+    const only = cdcc.blockIdText(ctx, [o])
     const move = (f: () => unknown) => {
       solve = f
       cdcc.invoke(ctx, `core.object.applyDelta(vector=(1, 0, 0) objects="${only}")`)
@@ -292,14 +292,14 @@ const suite = () => {
     const b = add('name="b"')
     const selected = () => [0, 1].slice(0, cdcc.get(ctx, 'scene.selectedObjects.length') as number)
       .map((i) => cdcc.get(ctx, `scene.selectedObjects[${i}].name`))
-    cdcc.invoke(ctx, `core.scene.select(objects="${cdcc.blockIds(ctx, [b, a, b])}")`)
+    cdcc.invoke(ctx, `core.scene.select(objects="${cdcc.blockIdText(ctx, [b, a, b])}")`)
     assert.deepEqual(selected(), ['b', 'a'])
-    cdcc.invoke(ctx, `core.scene.select(mode='REMOVE' objects="${cdcc.blockIds(ctx, [b])}")`)
+    cdcc.invoke(ctx, `core.scene.select(mode='REMOVE' objects="${cdcc.blockIdText(ctx, [b])}")`)
     assert.deepEqual(selected(), ['a'])
-    assert.equal(cdcc.invoke(ctx, `core.object.delete(objects="${cdcc.blockIds(ctx, [b])}")`).count, 1)
-    assert.throws(() => cdcc.blockIds(ctx, [b]), fails(StatusCode.NotFound, /no block/))
+    assert.equal(cdcc.invoke(ctx, `core.object.delete(objects="${cdcc.blockIdText(ctx, [b])}")`).count, 1)
+    assert.throws(() => cdcc.blockIdText(ctx, [b]), fails(StatusCode.NotFound, /no block/))
     cdcc.undo(ctx)
-    assert.equal(cdcc.blockIds(ctx, [a, b]).split(';').length, 2)
+    assert.equal(cdcc.blockIdText(ctx, [a, b]).split(';').length, 2)
     assert.throws(
       () => cdcc.invoke(ctx, 'core.object.delete(objects="nonsense")'),
       fails(StatusCode.InvalidArgument, /objects/)
@@ -431,7 +431,7 @@ const suite = () => {
       },
     })
     const o = add('name="o" location=(0, 2, 0)')
-    const only = cdcc.blockIds(ctx, [o])
+    const only = cdcc.blockIdText(ctx, [o])
     cdcc.invoke(ctx, `core.object.setTransformType(type="ts.more" objects="${only}")`)
     const path = 'scene.objects["o"].transform'
     cdcc.set(ctx, `${path}.offset`, 4)

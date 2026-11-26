@@ -59,7 +59,7 @@ const litestl::binding::types::Struct<SaveResult> *SaveResult::defineBindings()
   return st;
 }
 
-int64_t bytesSize(const ScriptBytes &bytes)
+int64_t bytesByteSize(const ScriptBytes &bytes)
 {
   return int64_t(bytes.bytes().size());
 }

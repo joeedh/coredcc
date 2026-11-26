@@ -300,7 +300,7 @@ const channelTexts = ['uiName', 'description', 'icon', 'subtype', 'unit', 'displ
 function addChannel(type: TransformTypeInfo, name: string, spec: ChannelSpec, distance: boolean) {
   if (spec.items) {
     if (typeof spec.default !== 'string') throw new TypeError(`channel ${name}: an enum's default is a key`)
-    check(cd.transformEnumChannel(type, name))
+    check(cd.transformTypeDefEnumChannel(type, name))
     for (const i of spec.items) {
       check(cd.transformTypeDefChannelItem(type, name, i.key, i.value, i.uiName ?? '', i.description ?? ''))
     }
@@ -364,7 +364,7 @@ export function setScene(ctx: Context, scene: Ref | null) {
   check(cd.setScene(ctx, scene === null ? '' : scene.text))
 }
 /** For the `objects` input of commands. */
-export function blockIds(ctx: Context, blocks: readonly Ref[]): string {
+export function blockIdText(ctx: Context, blocks: readonly Ref[]): string {
   return blocks.map((b) => take(cd.blockIdText(ctx, b.text), (s) => s)).join(';')
 }
 /** Computes the states of the scene's objects: `evaluated` has them. */
@@ -428,7 +428,7 @@ export function setWorld(ctx: Context, objects: readonly Ref[], matrices: ArrayL
   const mode = exact ? 'EXACT' : 'CLOSEST'
   const numbers = Array.from(matrices, String).join(' ')
   const out = take(
-    cd.invoke(ctx, `core.object.setWorld(objects="${blockIds(ctx, objects)}" matrices="${numbers}" mode="${mode}")`),
+    cd.invoke(ctx, `core.object.setWorld(objects="${blockIdText(ctx, objects)}" matrices="${numbers}" mode="${mode}")`),
     (bag) => bagToJs(ctx, bag)
   )
   return out as {approximate: number; skipped: number}
@@ -618,7 +618,7 @@ export interface BvhHit {
 
 function withVec3<R>(v: ArrayLike<number>, what: string, fn: (p: Vec3) => R): R {
   checkNumbers(what, v, 3)
-  const p = cd.vec3(v[0], v[1], v[2])
+  const p = cd.newVec3(v[0], v[1], v[2])
   try {
     return fn(p)
   } finally {

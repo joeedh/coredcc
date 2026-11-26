@@ -204,7 +204,7 @@ void testChannels()
         StatusCode::InvalidArgument,
         "distance"));
     must(sc::transformTypeDefChannel(*type, "len", sc::makeFloat(2), true));
-    must(sc::transformEnumChannel(*type, "mode"));
+    must(sc::transformTypeDefEnumChannel(*type, "mode"));
     must(sc::transformTypeDefChannelItem(*type, "mode", "SLOW", 1, "Slow", "Less"));
     must(sc::transformTypeDefChannelItem(*type, "mode", "FAST", -5, "Fast", ""));
     must(sc::transformTypeDefChannelText(*type, "mode", "default", "FAST"));
@@ -297,8 +297,9 @@ void testChannels()
       test_assert(host.releasesOf(h) == 1);
       litestl::alloc::Delete(info);
     };
-    refused(
-        [](TransformTypeInfo &info) { must(sc::transformEnumChannel(info, "mode")); });
+    refused([](TransformTypeInfo &info) {
+      must(sc::transformTypeDefEnumChannel(info, "mode"));
+    });
     refused([](TransformTypeInfo &info) {
       must(sc::transformTypeDefChannelNumbers(info, "x", "range", 2, 1));
     });

@@ -18,10 +18,11 @@ namespace sc = coredcc::script;
 
 static void test_status()
 {
-  Status e = sc::statusError(StatusCode::NotFound, "gone");
+  Status e = sc::newErrorStatus(StatusCode::NotFound, "gone");
   test_assert(e.code() == StatusCode::NotFound && strcmp(e.message(), "gone") == 0);
   /* Ok isn't an error code: still an error, never an abort. */
-  test_assert(sc::statusError(StatusCode::Ok, "x").code() == StatusCode::InvalidArgument);
+  test_assert(sc::newErrorStatus(StatusCode::Ok, "x").code() ==
+              StatusCode::InvalidArgument);
 }
 
 static void test_values()
@@ -81,9 +82,9 @@ struct Doubler {
     sc::ValueResult in = sc::commandInput(ctx, "amount");
     test_assert(in.status.ok());
     test_assert(sc::commandInput(ctx, "nope").status.code() == StatusCode::NotFound);
-    test_assert(sc::commandSetOutput(ctx, "nope", in.value).code() ==
+    test_assert(sc::setCommandOutput(ctx, "nope", in.value).code() ==
                 StatusCode::NotFound);
-    CDCC_TRY(sc::commandSetOutput(ctx, "result", sc::makeInt(2 * *in.value.tryInt())));
+    CDCC_TRY(sc::setCommandOutput(ctx, "result", sc::makeInt(2 * *in.value.tryInt())));
     test_assert(sc::commandOutput(ctx, "result").value ==
                 sc::makeInt(2 * *in.value.tryInt()));
     return Status();
@@ -117,7 +118,7 @@ static void test_command_bags()
   /* Outside a slot there are no bags. */
   test_assert(sc::commandInput(s.ctx, "amount").status.code() ==
               StatusCode::FailedPrecondition);
-  test_assert(sc::commandSetOutput(s.ctx, "result", sc::makeInt(1)).code() ==
+  test_assert(sc::setCommandOutput(s.ctx, "result", sc::makeInt(1)).code() ==
               StatusCode::FailedPrecondition);
   test_assert(sc::commandOutput(s.ctx, "result").status.code() ==
               StatusCode::FailedPrecondition);

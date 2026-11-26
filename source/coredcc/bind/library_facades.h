@@ -34,7 +34,7 @@ private:
   std::shared_ptr<const litestl::util::Vector<uint8_t>> bytes_;
 };
 
-int64_t bytesSize(const ScriptBytes &bytes);
+int64_t bytesByteSize(const ScriptBytes &bytes);
 /** Fills `out` with those from `offset`. OutOfRange unless there are as many. */
 Status bytesRead(const ScriptBytes &bytes, int64_t offset, std::span<uint8_t> out);
 

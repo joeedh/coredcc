@@ -52,8 +52,8 @@ export function graphTests(env: Env) {
       evaluate(node) {
         runs++
         const a = node.input('a') as number
-        node.output('value', a * (node.param('factor') as number) + (node.input('offset') as number))
-        node.output('text', `${node.param('label')}${a}`)
+        node.setOutput('value', a * (node.param('factor') as number) + (node.input('offset') as number))
+        node.setOutput('text', `${node.param('label')}${a}`)
         node.pass('a', 'copy')
       },
     })
@@ -117,7 +117,7 @@ export function graphTests(env: Env) {
     assert.throws(() => run(() => {}), fails(StatusCode.Internal, /value/)) /* no output */
     assert.throws(() => run(async () => {}), fails(StatusCode.Internal, /Promise/))
     assert.throws(() => run((n) => n.input('b')), fails(StatusCode.NotFound, /'b'/))
-    assert.throws(() => run((n) => n.output('value', 'x')), fails(StatusCode.TypeMismatch, /./))
+    assert.throws(() => run((n) => n.setOutput('value', 'x')), fails(StatusCode.TypeMismatch, /./))
     /* The document is out of reach, and it can't be closed. */
     assert.throws(() => run(() => cdcc.get(ctx, 'count')), fails(StatusCode.Busy, /kernel/))
     assert.throws(() => run(() => cdcc.set(ctx, 'count', 1)), fails(StatusCode.Busy, /kernel/))
@@ -125,7 +125,7 @@ export function graphTests(env: Env) {
     assert.throws(() => run(() => session[Symbol.dispose]()), fails(StatusCode.Internal, /from inside/))
     assert.equal(cdcc.get(ctx, 'count'), 0)
     /* And it works again. */
-    assert.equal(run((n) => n.output('value', (n.input('a') as number) + 0.5)), value + 0.5)
+    assert.equal(run((n) => n.setOutput('value', (n.input('a') as number) + 0.5)), value + 0.5)
     assert.equal(graph.errorText('out'), '')
     assert.throws(() => kept!.input('a'), /already evaluated/)
   })
@@ -149,14 +149,14 @@ export function graphTests(env: Env) {
       outputAdapter: true,
       evaluate(node) {
         if (stop || node.cancelled) node.cancel()
-        node.progress(0.5, 'half')
+        node.reportProgress(0.5, 'half')
         assert.equal(node.useBlock('item'), '')
         assert.deepEqual(node.param('turn'), [0, 0, 1, 0])
         assert.equal(node.param('bits'), 2)
         assert.equal(node.param('wide'), 2n ** 63n + 2n ** 40n + 2n ** 31n)
         const m = node.input('m') as number[]
         const linked = node.isLinked('a') ? 100 : 0
-        node.output('value', (node.param('mode') as number) * factor + m[13] + linked)
+        node.setOutput('value', (node.param('mode') as number) * factor + m[13] + linked)
       },
     })
     cdcc.defineNodeType(ctx, spec(1))
@@ -226,11 +226,11 @@ export function graphTests(env: Env) {
       inputs: {t: cdcc.payload('elements'), factor: cdcc.float(2)},
       outputs: {t: 'elements', value: 'float'},
       evaluate(node) {
-        const t = node.table('t')
+        const t = node.inputTable('t')
         const factor = node.input('factor') as number
         const c = (t.columns.c ?? []).map((x) => cdcc.float((x as number) * factor))
-        node.output('t', new cdcc.Table(t.keys, {c, label: t.keys.map((k) => `k${k}`)} as never))
-        node.output('value', t.keys.length)
+        node.setOutput('t', new cdcc.Table(t.keys, {c, label: t.keys.map((k) => `k${k}`)} as never))
+        node.setOutput('value', t.keys.length)
       },
     })
     const path = 'graphs["g"]'
@@ -271,8 +271,8 @@ export function graphTests(env: Env) {
       inputs: {t: cdcc.payload('elements')},
       outputs: {t: 'elements'},
       evaluate(node) {
-        const t = node.table('t')
-        node.output('t', new cdcc.Table(t.keys, t.columns))
+        const t = node.inputTable('t')
+        node.setOutput('t', new cdcc.Table(t.keys, t.columns))
       },
     })
     cdcc.newGraph(ctx, 'g')[Symbol.dispose]()
@@ -315,7 +315,7 @@ export function graphTests(env: Env) {
       outputs: {value: 'float'},
       evaluate(node) {
         graph?.[Symbol.dispose]()
-        node.output('value', 7)
+        node.setOutput('value', 7)
       },
     })
     const {path} = makeGraph('ts.dispose')

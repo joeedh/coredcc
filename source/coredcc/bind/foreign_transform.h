@@ -26,7 +26,7 @@ Status transformTypeDefChannel(TransformTypeInfo &type,
                                const PropValue &defaultValue,
                                bool distance);
 /** An Enum channel without items. */
-Status transformEnumChannel(TransformTypeInfo &type, const string &name);
+Status transformTypeDefEnumChannel(TransformTypeInfo &type, const string &name);
 /** An item of one. `value` is a whole number within +-2^53. */
 Status transformTypeDefChannelItem(TransformTypeInfo &type,
                                    const string &name,

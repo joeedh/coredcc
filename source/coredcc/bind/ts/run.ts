@@ -76,11 +76,11 @@ export function canRun(
 }
 
 /** As canRun, for `invokeAt(ctx, prefix, invocation)`. */
-export function canInvoke(ctx: Context, prefix: string, invocation: string): string | undefined {
+export function canInvokeAt(ctx: Context, prefix: string, invocation: string): string | undefined {
   return reason(cd.canInvokeAt(ctx, prefix, invocation))
 }
 
-/** The invocations of a UI: canInvoke of each in one call. Disposed of with the session at the latest. */
+/** The invocations of a UI: canInvokeAt of each in one call. Disposed of with the session at the latest. */
 export class InvocationChecks implements Disposable {
   private raw: RawChecks | undefined
   constructor(private readonly ctx: Context) {
@@ -131,7 +131,7 @@ export function beginInteractive(
   )
 }
 /** The open command's id. */
-export function interactive(ctx: Context): string | undefined {
+export function interactiveId(ctx: Context): string | undefined {
   return take(cd.interactiveId(ctx), (id) => id) || undefined
 }
 /** An unrecorded write as if from the open command, so under its prefix. */

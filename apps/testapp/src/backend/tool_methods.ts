@@ -88,7 +88,7 @@ export function installToolMethods(method: DefineMethod, ctx: () => Context, gpu
     }
     const a = box('a', 0)
     const b = box('b', 3)
-    cdcc.invoke(c, `core.scene.select(objects="${cdcc.blockIds(c, [a])}")`)
+    cdcc.invoke(c, `core.scene.select(objects="${cdcc.blockIdText(c, [a])}")`)
     cdcc.setActiveTool(c, 'core.tool.transform')
     camera = DEFAULT_CAMERA
     cdcc.evaluateScene(c)
@@ -143,7 +143,7 @@ export function installToolMethods(method: DefineMethod, ctx: () => Context, gpu
   method('pixel', async (x: number, y: number) => (await gpu?.readPixel(x, y)) ?? null)
   /** An object's world matrix, by `{$ref}`. */
   method('worldMatrix', (o: {$ref: string}) => cdcc.worldMatrix(ctx(), new cdcc.Ref(o.$ref)))
-  method('status', () => ({tool: cdcc.activeTool(ctx()) ?? null, status: cdcc.toolStatus(ctx()), interactive: cdcc.interactive(ctx()) ?? null}))
+  method('status', () => ({tool: cdcc.activeTool(ctx()) ?? null, status: cdcc.toolStatus(ctx()), interactive: cdcc.interactiveId(ctx()) ?? null}))
 
   return () => {
     last = undefined

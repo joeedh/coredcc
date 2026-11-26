@@ -74,7 +74,7 @@ struct BagResult {
 /* ---- Status ---- */
 
 /** An error Status. `Ok`, and a number that is no StatusCode, become InvalidArgument. */
-Status statusError(StatusCode code, const string &message);
+Status newErrorStatus(StatusCode code, const string &message);
 /** "Code: message (did you mean: a, b?)", or "Ok": the message with the suggestions. */
 string statusText(const Status &s);
 
@@ -118,7 +118,7 @@ IntResult readFlags(const PropValue &v);
 StringResult pointerText(Context &ctx, const PropValue &v);
 /** A readable form for display and debugging (PropValue::toString): not an invocation
  * literal. */
-string valueToString(const PropValue &v);
+string valueText(const PropValue &v);
 
 /* ---- PropertyBag: read-only ---- */
 
@@ -131,7 +131,7 @@ StringResult bagName(const PropertyBag &bag, int32_t i);
 /* ---- the running command's bags: FailedPrecondition outside a command slot ---- */
 
 ValueResult commandInput(Context &ctx, const string &name);
-Status commandSetOutput(Context &ctx, const string &name, const PropValue &value);
+Status setCommandOutput(Context &ctx, const string &name, const PropValue &value);
 ValueResult commandOutput(Context &ctx, const string &name);
 
 /* ---- datapaths and commands ---- */

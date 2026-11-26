@@ -76,7 +76,7 @@ inline Obj commandObj(Script *s)
     const PropValue v = sc::makeInt(*before + amount);
     Status st = s->useSetValue ? sc::setValue(ctx, "tool.count", v)
                                : sc::writeValue(ctx, "tool.count", v);
-    test_assert(sc::commandSetOutput(ctx, "result", v).ok());
+    test_assert(sc::setCommandOutput(ctx, "result", v).ok());
     return ok(ret, std::move(st));
   };
   o.methods["undo"] = [s, before](void **args, void *, string *err) {

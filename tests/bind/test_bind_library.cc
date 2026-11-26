@@ -67,14 +67,15 @@ const char *const kA = "coredcc,00000000000000070000000000000001";
 static void test_bytes()
 {
   const sc::ScriptBytes none;
-  test_assert(sc::bytesSize(none) == 0 && sc::bytesRead(none, 0, {}).ok());
+  test_assert(sc::bytesByteSize(none) == 0 && sc::bytesRead(none, 0, {}).ok());
   Bytes b;
   for (uint8_t i = 0; i < 10; i++) {
     b.append(i);
   }
   const sc::ScriptBytes bytes{Bytes(b)};
   const sc::ScriptBytes copy = bytes;
-  test_assert(sc::bytesSize(copy) == 10 && copy.bytes().data() == bytes.bytes().data());
+  test_assert(sc::bytesByteSize(copy) == 10 &&
+              copy.bytes().data() == bytes.bytes().data());
   uint8_t out[10] = {};
   test_assert(sc::bytesRead(bytes, 7, std::span(out, 3)).ok() && out[0] == 7 &&
               out[2] == 9 && out[3] == 0);
@@ -93,7 +94,7 @@ static void test_save()
   const BlockHandle pinned = c.w.doc(3, "pinned");
   const LibraryPin pin(c.w.lib, pinned);
   sc::SaveResult r = sc::saveLibrary(c.ctx);
-  test_assert(r.status.ok() && sc::bytesSize(r.value) == int64_t(c.w.save().size()));
+  test_assert(r.status.ok() && sc::bytesByteSize(r.value) == int64_t(c.w.save().size()));
   SaveReport report;
   c.w.save(&report);
   test_assert(shows(r.report, "\"blocks\":3,"));
@@ -110,7 +111,7 @@ static void test_save()
   }
   c.w.docs.fault = DocFault::Error;
   r = sc::saveLibrary(c.ctx);
-  test_assert(!r.status.ok() && sc::bytesSize(r.value) == 0 && r.report.size() == 0);
+  test_assert(!r.status.ok() && sc::bytesByteSize(r.value) == 0 && r.report.size() == 0);
   c.w.docs.fault = DocFault::None;
   Context none(&c.w.rt, nullptr, PointerRef());
   test_assert(sc::saveLibrary(none).status.code() == StatusCode::FailedPrecondition);

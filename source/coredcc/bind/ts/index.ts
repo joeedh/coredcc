@@ -29,7 +29,7 @@ import {
   bagToJs,
   check,
   checkCtx,
-  errorStatus,
+  newErrorStatus,
   inSlot,
   isFatal,
   ScriptError,
@@ -113,12 +113,12 @@ export function meta(ctx: Context, path: string): PathMeta {
   return JSON.parse(take(cd.pathMeta(ctx, path), (json) => json)) as PathMeta
 }
 /** `value` as text in its meta's display unit: "1.25 m". Of a meta without a unit, the number. */
-export function formatNumber(value: number, meta: Pick<PathMeta, 'unit' | 'displayUnit' | 'precision'>): string {
+export function formatUnit(value: number, meta: Pick<PathMeta, 'unit' | 'displayUnit' | 'precision'>): string {
   return take(cd.formatUnit(value, meta.unit ?? '', meta.displayUnit ?? '', meta.precision ?? 3), (s) => s)
 }
 /** The number that a user typed, in base units: "1.5", in the meta's display unit, or "2 cm".
  * Throws a ScriptError if it is none. */
-export function parseNumber(text: string, meta: Pick<PathMeta, 'unit' | 'displayUnit'>): number {
+export function parseUnit(text: string, meta: Pick<PathMeta, 'unit' | 'displayUnit'>): number {
   return take(cd.parseUnit(text, meta.unit ?? '', meta.displayUnit ?? ''), (x) => x)
 }
 /** With `names`, an enum reads as its key and flags as their keys; a number without an item
@@ -181,12 +181,12 @@ export function canRedo(ctx: Context): boolean {
   return take(cd.canRedo(ctx), (x) => x)
 }
 /** The running command's input `name` (inside a slot). */
-export function input(ctx: Context, name: string): Value {
+export function commandInput(ctx: Context, name: string): Value {
   return take(cd.commandInput(ctx, name), (v) => toJs(ctx, v))
 }
 /** Sets the running command's output `name` (inside a slot). */
-export function output(ctx: Context, name: string, value: Writable) {
-  withValue(ctx, value, (v) => check(cd.commandSetOutput(ctx, name, v)))
+export function setCommandOutput(ctx: Context, name: string, value: Writable) {
+  withValue(ctx, value, (v) => check(cd.setCommandOutput(ctx, name, v)))
 }
 
 /* ---- script commands ---- */
@@ -244,8 +244,8 @@ class Adapter {
     return inSlot(() => {
       try {
         const r = sync('canRun', this.cmd.canRun?.(ctx))
-        if (typeof r === 'string') return errorStatus(StatusCode.FailedPrecondition, r)
-        if (r === false) return errorStatus(StatusCode.FailedPrecondition, 'refused')
+        if (typeof r === 'string') return newErrorStatus(StatusCode.FailedPrecondition, r)
+        if (r === false) return newErrorStatus(StatusCode.FailedPrecondition, 'refused')
         return undefined
       } catch (e) {
         return statusOf(StatusCode.FailedPrecondition, e)

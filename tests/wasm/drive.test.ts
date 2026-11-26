@@ -34,7 +34,7 @@ const suite = () => {
   const where = (o: Ref) => cdcc.worldMatrix(ctx, o).slice(12, 15)
   const evaluatedAt = (o: Ref) => {
     cdcc.evaluateScene(ctx)
-    return (cdcc.get(ctx, `evaluated.objects["${cdcc.blockIds(ctx, [o])}"].world`) as number[]).slice(12, 15)
+    return (cdcc.get(ctx, `evaluated.objects["${cdcc.blockIdText(ctx, [o])}"].world`) as number[]).slice(12, 15)
   }
 
   /* graphs["g"]: `follower`'s location is `leader`'s. */
@@ -61,7 +61,7 @@ const suite = () => {
     cdcc.addDriverGraph(ctx, graph)
     assert.deepEqual(evaluatedAt(b), [3, 4, 5])
     assert.deepEqual(where(b), [3, 4, 5])
-    cdcc.invoke(ctx, `core.object.applyDelta(vector=(1, 0, 0) objects="${cdcc.blockIds(ctx, [a])}")`)
+    cdcc.invoke(ctx, `core.object.applyDelta(vector=(1, 0, 0) objects="${cdcc.blockIdText(ctx, [a])}")`)
     assert.deepEqual(evaluatedAt(b), [4, 4, 5])
     cdcc.undo(ctx)
     cdcc.undo(ctx)

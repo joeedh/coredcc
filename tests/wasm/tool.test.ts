@@ -44,7 +44,7 @@ afterEach(() => {
 
 const add = (args: string) => cdcc.invoke(ctx, `core.object.add(${args})`).object as Ref
 const where = (o: Ref) => cdcc.worldMatrix(ctx, o).slice(12, 15)
-const select = (...objects: Ref[]) => cdcc.invoke(ctx, `core.scene.select(objects="${cdcc.blockIds(ctx, objects)}")`)
+const select = (...objects: Ref[]) => cdcc.invoke(ctx, `core.scene.select(objects="${cdcc.blockIdText(ctx, objects)}")`)
 /** As a host's frame: the event, then an evaluation. */
 const send = (event: Partial<cdcc.ToolEvent> & {type: cdcc.ToolEventType}) => {
   const used = cdcc.sendToolEvent(ctx, view, event)
@@ -97,7 +97,7 @@ test('a script tool drags through a modal: one undo step, and a cancel', () => {
   assert.equal(cdcc.toolStatus(ctx), 'moving 2')
   send({type: 'pointerup', x: 60, y: 50})
   assert.deepEqual(ended, [true])
-  assert.equal(cdcc.interactive(ctx), undefined)
+  assert.equal(cdcc.interactiveId(ctx), undefined)
   assert.equal(cdcc.toolStatus(ctx), '')
   cdcc.undo(ctx)
   near(where(a), [1, 2, 0])

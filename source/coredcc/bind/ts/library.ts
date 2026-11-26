@@ -76,7 +76,7 @@ export function saveLibrary(ctx: Context): {bytes: Uint8Array; report: SaveRepor
   const r = cd.saveLibrary(ctx)
   try {
     if (!r.status.ok()) throw ScriptError.from(r.status)
-    const bytes = new Uint8Array(Number(cd.bytesSize(r.value)))
+    const bytes = new Uint8Array(Number(cd.bytesByteSize(r.value)))
     for (let at = 0; at < bytes.length; at += CHUNK) {
       check(cd.bytesRead(r.value, BigInt(at), bytes.subarray(at, at + CHUNK)))
     }

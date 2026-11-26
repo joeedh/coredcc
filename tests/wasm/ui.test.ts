@@ -52,7 +52,7 @@ describe('coredcc wasm-st UI', () => {
       before = 0
       exec(c: Context) {
         this.before = cdcc.get(c, 'weight') as number
-        cdcc.write(c, 'weight', this.before + (cdcc.input(c, 'by') as number))
+        cdcc.write(c, 'weight', this.before + (cdcc.commandInput(c, 'by') as number))
       }
       undo(c: Context) {
         cdcc.write(c, 'weight', this.before)
@@ -211,13 +211,13 @@ describe('coredcc wasm-st UI', () => {
   class Weigh implements ScriptCommand {
     before = 0
     canRun(c: Context) {
-      const after = (cdcc.get(c, 'weight') as number) + (cdcc.input(c, 'by') as number)
+      const after = (cdcc.get(c, 'weight') as number) + (cdcc.commandInput(c, 'by') as number)
       if (after > 10) throw new Error(`${after} is too heavy`)
     }
     exec(c: Context) {
       this.before = cdcc.get(c, 'weight') as number
-      cdcc.write(c, 'weight', this.before + (cdcc.input(c, 'by') as number))
-      cdcc.output(c, 'weight', cdcc.get(c, 'weight') as number)
+      cdcc.write(c, 'weight', this.before + (cdcc.commandInput(c, 'by') as number))
+      cdcc.setCommandOutput(c, 'weight', cdcc.get(c, 'weight') as number)
     }
     undo(c: Context) {
       cdcc.write(c, 'weight', this.before)
@@ -368,13 +368,13 @@ describe('coredcc wasm-st UI', () => {
 
   test('numbers in units, and the parts of a vector', () => {
     const length = {unit: 'Length', displayUnit: 'cm', precision: 1}
-    assert.equal(cdcc.formatNumber(0.0126, length), '1.3 cm')
-    assert.equal(cdcc.parseNumber('1.5', length), 0.015)
-    assert.equal(cdcc.parseNumber('2 m', length), 2)
-    assert.throws(() => cdcc.parseNumber('2 kg', length), fails(StatusCode.InvalidArgument, /kg/))
+    assert.equal(cdcc.formatUnit(0.0126, length), '1.3 cm')
+    assert.equal(cdcc.parseUnit('1.5', length), 0.015)
+    assert.equal(cdcc.parseUnit('2 m', length), 2)
+    assert.throws(() => cdcc.parseUnit('2 kg', length), fails(StatusCode.InvalidArgument, /kg/))
     const strength = cdcc.meta(ctx, 'strength')
-    assert.equal(cdcc.formatNumber(0.25, strength), '0.25')
-    assert.equal(cdcc.parseNumber(' 0.25 ', strength), 0.25)
+    assert.equal(cdcc.formatUnit(0.25, strength), '0.25')
+    assert.equal(cdcc.parseUnit(' 0.25 ', strength), 0.25)
     assert.deepEqual(cdcc.meta(ctx, 'offset').components, ['X', 'Y', 'Z'])
     const y = cdcc.meta(ctx, 'offset[1]')
     assert.deepEqual([y.uiName, y.default, y.component], ['Y', 0, 1])
@@ -401,9 +401,9 @@ describe('coredcc wasm-st UI', () => {
 
   test('canInvoke, and of many invocations at once', () => {
     weigh()
-    assert.equal(cdcc.canInvoke(ctx, '/items["Cube"]', 'ts.weigh(by=9)'), undefined)
-    assert.equal(cdcc.canInvoke(ctx, '/items["Cube"]', 'ts.weigh(by=10)'), '11 is too heavy')
-    assert.match(cdcc.canInvoke(ctx, '', 'ts.weigh(')!, /./)
+    assert.equal(cdcc.canInvokeAt(ctx, '/items["Cube"]', 'ts.weigh(by=9)'), undefined)
+    assert.equal(cdcc.canInvokeAt(ctx, '/items["Cube"]', 'ts.weigh(by=10)'), '11 is too heavy')
+    assert.match(cdcc.canInvokeAt(ctx, '', 'ts.weigh(')!, /./)
     assert.equal(cdcc.get(ctx, cube), 1)
 
     const checks = new cdcc.InvocationChecks(ctx)
@@ -468,7 +468,7 @@ describe('coredcc wasm-st UI', () => {
   test('interactive commands', () => {
     cdcc.defineCommand(ctx, {id: 'ts.drag', inputs: {note: ''}, flags: CommandFlags.Interactive}, Drag)
     weigh()
-    assert.equal(cdcc.interactive(ctx), undefined)
+    assert.equal(cdcc.interactiveId(ctx), undefined)
     assert.throws(() => cdcc.run(ctx, 'ts.drag'), ScriptError)
     assert.throws(() => cdcc.beginInteractive(ctx, 'ts.weigh'), ScriptError)
     assert.throws(() => cdcc.writeInteractive(ctx, 'weight', 1), ScriptError)
@@ -476,13 +476,13 @@ describe('coredcc wasm-st UI', () => {
     assert.throws(() => cdcc.cancelInteractive(ctx), ScriptError)
     for (const end of [cdcc.cancelInteractive, cdcc.commitInteractive]) {
       cdcc.beginInteractive(ctx, 'ts.drag', {note: 'x'}, {prefix: '/items["Ball"]'})
-      assert.equal(cdcc.interactive(ctx), 'ts.drag')
+      assert.equal(cdcc.interactiveId(ctx), 'ts.drag')
       assert.throws(() => cdcc.set(ctx, 'count', 1), fails(StatusCode.Busy, /./))
-      assert.ok(cdcc.canInvoke(ctx, '', 'ts.drag'))
+      assert.ok(cdcc.canInvokeAt(ctx, '', 'ts.drag'))
       for (const w of [2, 3]) cdcc.writeInteractive(ctx, 'weight', w)
       assert.equal(cdcc.get(ctx, ball), 3)
       end(ctx)
-      assert.equal(cdcc.interactive(ctx), undefined)
+      assert.equal(cdcc.interactiveId(ctx), undefined)
       assert.equal(cdcc.get(ctx, ball), end === cdcc.commitInteractive ? 3 : 1)
     }
     assert.equal(spike.historySize(hostOf(ctx)), 1)

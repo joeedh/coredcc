@@ -153,7 +153,7 @@ detail::runCommand(Context &ctx, const CommandDef &def, PropertyBag inputs)
 
 /* ---- Status ---- */
 
-Status statusError(StatusCode code, const string &message)
+Status newErrorStatus(StatusCode code, const string &message)
 {
   const bool valid =
       code != StatusCode::Ok && uint32_t(code) <= uint32_t(StatusCode::Internal);
@@ -298,7 +298,7 @@ FloatResult parseUnit(const string &text, const string &family, const string &un
   Result<double> v = f.ok() ? units::parse(view(text), *f, view(unit)) : f.status();
   return v.ok() ? ok<FloatResult>(*v) : failed<FloatResult>(v.status());
 }
-string valueToString(const PropValue &v)
+string valueText(const PropValue &v)
 {
   return string(v.toString().c_str());
 }
@@ -335,11 +335,11 @@ ValueResult commandInput(Context &ctx, const string &name)
   }
   return lookup(*ctx.inputs(), name);
 }
-Status commandSetOutput(Context &ctx, const string &name, const PropValue &value)
+Status setCommandOutput(Context &ctx, const string &name, const PropValue &value)
 {
-  CDCC_TRY(detail::kernelGate(ctx, "commandSetOutput"));
+  CDCC_TRY(detail::kernelGate(ctx, "setCommandOutput"));
   if (!ctx.outputs()) {
-    return notInSlot("commandSetOutput");
+    return notInSlot("setCommandOutput");
   }
   return ctx.outputs()->set(view(name), value);
 }

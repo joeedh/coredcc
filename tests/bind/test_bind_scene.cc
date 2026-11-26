@@ -560,7 +560,7 @@ void testFacades()
       isError(sc::worldMatrix(none, str(textOf(d, a))).status, StatusCode::NotFound));
   test_assert(isError(sc::evaluateScene(none), StatusCode::FailedPrecondition));
 
-  double3 v = sc::vec3(1, 2, 3);
+  double3 v = sc::newVec3(1, 2, 3);
   sc::vec3Put(v, 1, 5);
   sc::vec3Put(v, 3, 9);
   sc::vec3Put(v, -1, 9);

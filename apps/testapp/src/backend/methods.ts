@@ -41,9 +41,9 @@ class AddCount implements ScriptCommand {
   before = 0
   exec(ctx: Context) {
     this.before = cdcc.get(ctx, 'count') as number
-    const after = this.before + (cdcc.input(ctx, 'amount') as number)
+    const after = this.before + (cdcc.commandInput(ctx, 'amount') as number)
     cdcc.write(ctx, 'count', after)
-    cdcc.output(ctx, 'result', after)
+    cdcc.setCommandOutput(ctx, 'result', after)
   }
   undo(ctx: Context) {
     cdcc.write(ctx, 'count', this.before)
@@ -55,7 +55,7 @@ class Weigh implements ScriptCommand {
   before = 0
   exec(ctx: Context) {
     this.before = cdcc.get(ctx, 'weight') as number
-    cdcc.write(ctx, 'weight', this.before + (cdcc.input(ctx, 'by') as number))
+    cdcc.write(ctx, 'weight', this.before + (cdcc.commandInput(ctx, 'by') as number))
   }
   undo(ctx: Context) {
     cdcc.write(ctx, 'weight', this.before)

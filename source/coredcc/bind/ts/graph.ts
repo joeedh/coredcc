@@ -113,7 +113,7 @@ export class NodeContext {
   param(name: string): Value {
     return take(cd.nodeParam(this.raw, name), (v) => toJs(undefined, v))
   }
-  table(name: string): Table {
+  inputTable(name: string): Table {
     return take(cd.nodeInputTable(this.raw, name), tableToJs)
   }
   isLinked(name: string): boolean {
@@ -134,11 +134,11 @@ export class NodeContext {
     throw new ScriptError(StatusCode.Cancelled, 'cancelled')
   }
   /** Says how far the kernel is, 0 to 1. */
-  progress(fraction: number, text = '') {
+  reportProgress(fraction: number, text = '') {
     check(cd.nodeProgress(this.raw, fraction, text))
   }
   /** Converted to the output's type, as `set` converts to a member's. */
-  output(name: string, value: Writable | Table) {
+  setOutput(name: string, value: Writable | Table) {
     const raw = this.raw
     if (value instanceof Table) withTable(value, (t) => check(cd.nodeSetOutputTable(raw, name, t)))
     else withValue(undefined, value, (v) => check(cd.nodeSetOutput(raw, name, v)))

@@ -159,9 +159,9 @@ describe('TA1: the wasm-st backend over CDP', () => {
       {outputs: {v: [0, 0, 0], b: false, s: ''}},
       `class {
         exec(ctx) {
-          cdcc.output(ctx, 'v', [1, 2, 3])
-          cdcc.output(ctx, 'b', true)
-          cdcc.output(ctx, 's', 'text')
+          cdcc.setCommandOutput(ctx, 'v', [1, 2, 3])
+          cdcc.setCommandOutput(ctx, 'b', true)
+          cdcc.setCommandOutput(ctx, 's', 'text')
         }
         undo() {}
       }`
@@ -189,7 +189,7 @@ describe('TA1: the wasm-st backend over CDP', () => {
       'defineCommand',
       'ta1.reads',
       {outputs: {name: ''}},
-      `class { exec(ctx) { cdcc.output(ctx, 'name', cdcc.get(ctx, 'activeItem').text) } undo() {} }`
+      `class { exec(ctx) { cdcc.setCommandOutput(ctx, 'name', cdcc.get(ctx, 'activeItem').text) } undo() {} }`
     )
     await value('set', 'activeItem', cube)
     assert.deepEqual(await value('exec', 'ta1.reads'), {name: cube.$ref})
@@ -250,7 +250,7 @@ describe('TA1: the wasm-st backend over CDP', () => {
       'defineCommand',
       'ta1.scale',
       {inputs: {factor: {$float: 1}}},
-      `class { exec(ctx) { cdcc.write(ctx, 'strength', cdcc.input(ctx, 'factor')) } undo() {} }`
+      `class { exec(ctx) { cdcc.write(ctx, 'strength', cdcc.commandInput(ctx, 'factor')) } undo() {} }`
     )
     await value('exec', 'ta1.scale(factor=0.25)')
     assert.equal(await value('get', 'strength'), 0.25)
@@ -261,7 +261,7 @@ describe('TA1: the wasm-st backend over CDP', () => {
       'defineCommand',
       'ta1.proto',
       {outputs: JSON.parse('{"__proto__": 0}')},
-      `class { exec(ctx) { cdcc.output(ctx, '__proto__', 3) } undo() {} }`
+      `class { exec(ctx) { cdcc.setCommandOutput(ctx, '__proto__', 3) } undo() {} }`
     )
     const out = await value('exec', 'ta1.proto')
     assert.equal(Object.getOwnPropertyDescriptor(out, '__proto__')?.value, 3)

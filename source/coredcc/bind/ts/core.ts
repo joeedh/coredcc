@@ -368,16 +368,16 @@ export function bagToJs(ctx: Context, bag: PropertyBag): Record<string, Value> {
 /* ---- slots ---- */
 
 /** An error Status for a slot's return, disposed of after C++ copies it. */
-export function errorStatus(code: StatusCode, message: string): Status {
-  const s = cd.statusError(code, message)
+export function newErrorStatus(code: StatusCode, message: string): Status {
+  const s = cd.newErrorStatus(code, message)
   queueMicrotask(() => s[Symbol.dispose]())
   return s
 }
 
 export function statusOf(code: StatusCode, e: unknown): Status {
   if (isFatal(e)) throw e
-  if (e instanceof ScriptError) return errorStatus(e.code, e.detail)
-  return errorStatus(code, e instanceof Error ? e.message : String(e))
+  if (e instanceof ScriptError) return newErrorStatus(e.code, e.detail)
+  return newErrorStatus(code, e instanceof Error ? e.message : String(e))
 }
 
 const isThenable = (v: unknown) =>

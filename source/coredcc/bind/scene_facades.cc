@@ -19,7 +19,7 @@ using detail::view;
 using litestl::util::Vector;
 namespace lbt = litestl::binding::types;
 
-double3 vec3(double x, double y, double z)
+double3 newVec3(double x, double y, double z)
 {
   return double3(x, y, z);
 }

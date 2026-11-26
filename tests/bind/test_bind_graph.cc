@@ -357,7 +357,7 @@ void testGates()
              sc::formatValue(d.ctx, name).status,
              sc::parseValue(d.ctx, name, "x").status,
              sc::commandInput(d.ctx, "x").status,
-             sc::commandSetOutput(d.ctx, "x", sc::makeInt(1)),
+             sc::setCommandOutput(d.ctx, "x", sc::makeInt(1)),
              sc::commandOutput(d.ctx, "x").status,
              sc::setValue(d.ctx, name, sc::makeString("x").value),
              sc::writeValue(d.ctx, name, sc::makeString("x").value),

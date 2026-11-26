@@ -94,7 +94,8 @@ void addTypes(litestl::binding::BindingManager *mgr)
 /* Those that return a def they make check their id themselves. */
 void addFacades(litestl::binding::BindingManager *mgr)
 {
-  BIND_FACADE(mgr, "coredcc::statusError", script::statusError, MARGS("code", "message"));
+  BIND_FACADE(
+      mgr, "coredcc::newErrorStatus", script::newErrorStatus, MARGS("code", "message"));
   BIND_FACADE(mgr, "coredcc::statusText", script::statusText, MARGS("s"));
 
   BIND_FACADE(mgr, "coredcc::makeBool", script::makeBool, MARGS("v"));
@@ -123,15 +124,15 @@ void addFacades(litestl::binding::BindingManager *mgr)
   BIND_FACADE(mgr, "coredcc::readEnum", script::readEnum, MARGS("v"));
   BIND_FACADE(mgr, "coredcc::readFlags", script::readFlags, MARGS("v"));
   BIND_FACADE(mgr, "coredcc::pointerText", script::pointerText, MARGS("ctx", "v"));
-  BIND_FACADE(mgr, "coredcc::valueToString", script::valueToString, MARGS("v"));
+  BIND_FACADE(mgr, "coredcc::valueText", script::valueText, MARGS("v"));
 
   BIND_FACADE(mgr, "coredcc::bagGet", script::bagGet, MARGS("bag", "name"));
   BIND_FACADE(mgr, "coredcc::bagSize", script::bagSize, MARGS("bag"));
   BIND_FACADE(mgr, "coredcc::bagName", script::bagName, MARGS("bag", "i"));
   BIND_FACADE(mgr, "coredcc::commandInput", script::commandInput, MARGS("ctx", "name"));
   BIND_FACADE(mgr,
-              "coredcc::commandSetOutput",
-              script::commandSetOutput,
+              "coredcc::setCommandOutput",
+              script::setCommandOutput,
               MARGS("ctx", "name", "value"));
   BIND_FACADE(mgr, "coredcc::commandOutput", script::commandOutput, MARGS("ctx", "name"));
 
@@ -254,7 +255,7 @@ void addLayoutFacades(litestl::binding::BindingManager *mgr)
 
 void addLibraryFacades(litestl::binding::BindingManager *mgr)
 {
-  BIND_FACADE(mgr, "coredcc::bytesSize", script::bytesSize, MARGS("bytes"));
+  BIND_FACADE(mgr, "coredcc::bytesByteSize", script::bytesByteSize, MARGS("bytes"));
   BIND_FACADE(
       mgr, "coredcc::bytesRead", script::bytesRead, MARGS("bytes", "offset", "out"));
   BIND_FACADE(mgr, "coredcc::saveLibrary", script::saveLibrary, MARGS("ctx"));
@@ -472,7 +473,7 @@ void addGraphFacades(litestl::binding::BindingManager *mgr)
 
 void addSceneFacades(litestl::binding::BindingManager *mgr)
 {
-  BIND_FACADE(mgr, "coredcc::vec3", script::vec3, MARGS("x", "y", "z"));
+  BIND_FACADE(mgr, "coredcc::newVec3", script::newVec3, MARGS("x", "y", "z"));
   BIND_FACADE(mgr, "coredcc::vec3At", script::vec3At, MARGS("v", "i"));
   BIND_FACADE(mgr, "coredcc::vec3Put", script::vec3Put, MARGS("v", "i", "x"));
 
@@ -492,8 +493,8 @@ void addSceneFacades(litestl::binding::BindingManager *mgr)
               script::transformTypeDefVersion,
               MARGS("type", "version"));
   BIND_FACADE(mgr,
-              "coredcc::transformEnumChannel",
-              script::transformEnumChannel,
+              "coredcc::transformTypeDefEnumChannel",
+              script::transformTypeDefEnumChannel,
               MARGS("type", "name"));
   BIND_FACADE(mgr,
               "coredcc::transformTypeDefChannelItem",

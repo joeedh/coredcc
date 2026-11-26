@@ -195,7 +195,7 @@ static void test_enum_flags_and_pointer_values()
   test_assert(sc::readFlags(sc::getValue(ctx, "objects[0].flags").value).value == 3);
   test_assert(sc::readFlags(sc::makeInt(3)).status.code() == StatusCode::InvalidArgument);
   test_assert(sc::readEnum(sc::makeInt(3)).status.code() == StatusCode::InvalidArgument);
-  test_assert(strcmp(sc::valueToString(sc::makeVec2(1, 2)).c_str(), "(1, 2)") == 0);
+  test_assert(strcmp(sc::valueText(sc::makeVec2(1, 2)).c_str(), "(1, 2)") == 0);
   sc::ValueResult brush = sc::getValue(ctx, "tool.activeBrush");
   test_assert(brush.status.ok() && brush.value.type() == PropValue::Type::Pointer);
   test_assert(sc::setValue(ctx, "tool.activeBrush", brush.value).ok());
@@ -243,8 +243,9 @@ static void test_registration_checks()
   }
   test_assert(host.allReleasedOnce());
   /* B11. */
-  test_assert(sc::statusError(StatusCode(99), "x").code() == StatusCode::InvalidArgument);
-  test_assert(sc::statusError(StatusCode::Busy, "x").code() == StatusCode::Busy);
+  test_assert(sc::newErrorStatus(StatusCode(99), "x").code() ==
+              StatusCode::InvalidArgument);
+  test_assert(sc::newErrorStatus(StatusCode::Busy, "x").code() == StatusCode::Busy);
 }
 
 static void test_can_undo_and_redo()
