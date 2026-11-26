@@ -3,6 +3,7 @@
  * document gives the same graph whatever the order of its edits. */
 #include "coredcc/api/ref_text.h"
 #include "coredcc/base/iface/registry.h"
+#include "coredcc/drive/driver_list.h"
 #include "coredcc/drive/state.h"
 #include "coredcc/graph/interior.h"
 #include "coredcc/graph/provider.h"
@@ -100,18 +101,16 @@ bool drive::Description::operator==(const Description &b) const
   return true;
 }
 
-void SceneDrivers::State::scanScenes(Library &lib)
+void SceneDrivers::State::scanLists(Library &lib)
 {
-  const TypeId sceneType = TypeId::of(kSceneType);
+  const TypeId listType = TypeId::of(kDriverListType);
   if (rescan || int64_t(lib.size()) != scannedSize ||
       lib.removedCount() != scannedRemoved)
   {
-    scenes.clear();
+    lists = DriverList::allLists(lib); /* by id, not by the Library's order */
     placeholders.clear();
     lib.forEach([&](BlockHandle h, const Datablock &b) {
-      if (b.type() == sceneType) {
-        scenes.append(h);
-      } else if (b.state() == BlockState::Placeholder) {
+      if (b.type() != listType && b.state() == BlockState::Placeholder) {
         placeholders.append(h);
       }
     });
@@ -124,8 +123,8 @@ void SceneDrivers::State::scanScenes(Library &lib)
   for (int i = int(placeholders.size()) - 1; i >= 0; i--) {
     const Datablock *b = lib.get(placeholders[i]);
     if (!b || b->state() != BlockState::Placeholder) {
-      if (b && b->type() == sceneType) {
-        scenes.append(placeholders[i]);
+      if (b && b->type() == listType) {
+        lists = DriverList::allLists(lib);
       }
       placeholders.remove_at(i);
     }
@@ -138,12 +137,21 @@ drive::Description SceneDrivers::State::describe(Library &lib)
   diagnostics.clear();
   litestl::util::Map<BlockId, char> listed;
   Vector<AdapterIssue> issues;
-  for (BlockHandle sh : scenes) {
-    const Scene *scene = Scene::of(lib, sh);
-    if (!scene) {
+  /* Every list: a graph that two name counts once. */
+  for (BlockHandle lh : lists) {
+    const Datablock *lb = lib.get(lh);
+    if (lb && lb->state() == BlockState::Placeholder) {
+      diagnostics.append(DriverDiagnostic{lb->id(),
+                                          NodePath(),
+                                          "a list of drivers isn't readable: its type "
+                                          "wasn't registered when it was loaded"});
+    }
+    const DriverList *list =
+        lb && lb->state() == BlockState::Live ? DriverList::of(lib, lh) : nullptr;
+    if (!list) {
       continue;
     }
-    for (BlockHandle gh : scene->graphs(lib)) {
+    for (BlockHandle gh : list->graphs(lib)) {
       const BlockId id = lib.get(gh)->id();
       if (!listed.add(id, 0)) {
         continue;
@@ -151,8 +159,8 @@ drive::Description SceneDrivers::State::describe(Library &lib)
       if (!graphDefOf(lib, gh)) {
         diagnostics.append(DriverDiagnostic{id,
                                             NodePath(),
-                                            "the scene lists a block that "
-                                            "isn't a graph"});
+                                            "the list of drivers names a block "
+                                            "that isn't a graph"});
         continue;
       }
       GraphDesc g;
@@ -499,7 +507,7 @@ Status SceneDrivers::State::sync(Library &lib, bool force)
   if (built && !force && keyNow() == synced) {
     return Status();
   }
-  scanScenes(lib);
+  scanLists(lib);
   Vector<DriverDiagnostic> before = std::move(diagnostics);
   Description d = describe(lib);
   if (!built || force || !(d == desc)) {

@@ -1,8 +1,10 @@
-/* core.scene.addGraph and core.scene.removeGraph: the graphs a scene lists. */
+/* core.drivers.addGraph and core.drivers.removeGraph: the document's list of drivers. */
 #include "coredcc/drive/commands.h"
 #include "coredcc/api/change_bus.h"
+#include "coredcc/command/block_commands.h"
 #include "coredcc/command/block_edits.h"
 #include "coredcc/command/history_block.h"
+#include "coredcc/drive/driver_list.h"
 #include "coredcc/graph/provider.h"
 #include "coredcc/lib/registry.h"
 #include "coredcc/scene/commands.h"
@@ -21,54 +23,20 @@ Status failed(const char *why)
   return Status::error(StatusCode::FailedPrecondition, why);
 }
 
-/* The input `scene`, or the Context's scene. */
-Result<detail::SceneOf> sceneFrom(Context &ctx)
+/* The Library, unless a list of drivers is a placeholder: editing another list then
+ * would leave it to drive again once it is read. */
+Result<Library *> libraryIn(Context &ctx)
 {
-  Result<BlockHandle> h = detail::blockOf(ctx, "scene");
-  if (!h.ok()) {
-    return h.status();
+  if (!ctx.library()) {
+    return failed("the Context has no Library");
   }
-  if (!*h) {
-    return detail::sceneOf(ctx);
+  for (BlockHandle h : DriverList::allLists(*ctx.library())) {
+    if (ctx.library()->get(h)->state() == BlockState::Placeholder) {
+      return failed("the document's list of drivers isn't readable yet");
+    }
   }
-  detail::SceneOf s;
-  s.lib = ctx.library();
-  s.handle = *h;
-  s.scene = Scene::of(*s.lib, *h);
-  if (!s.scene) {
-    return Status::error(StatusCode::InvalidArgument, "scene: that isn't a scene");
-  }
-  return s;
+  return ctx.library();
 }
-
-/* The scene and the graph, as an undo record keeps them. */
-struct Held {
-  HistoryBlock scene;
-  HistoryBlock graph;
-
-  Result<Scene *> get(const Context &ctx, Library *&lib) const
-  {
-    Result<Library *> l = detail::libraryOf(ctx, scene.library());
-    if (!l.ok()) {
-      return l.status();
-    }
-    lib = *l;
-    Scene *s = Scene::of(*lib, scene.get());
-    if (!s) {
-      return failed("the scene is gone");
-    }
-    return s;
-  }
-  void changed(Context &ctx) const
-  {
-    ctx.runtime().ext<ChangeBus>().notify(OwnerKey::ofBlock(scene.id()), "graphs");
-  }
-  void release()
-  {
-    scene.release();
-    graph.release();
-  }
-};
 
 /* The input `graph`: a Live graph block. */
 Result<BlockHandle> graphInput(Context &ctx)
@@ -90,99 +58,177 @@ void report(Context &ctx, const Status &s)
   }
 }
 
-/* The places of the cells that name the graph, in order. */
-Vector<int> placesOf(const Library &lib, const Scene &scene, const BlockId &graph)
+/* The places of a list's cells that name the graph, ascending. */
+Vector<int> placesOf(const Library &lib, const DriverList &list, const BlockId &graph)
 {
   const ClientRegistry &clients = lib.runtime().ext<ClientRegistry>();
   Vector<int> places;
-  for (int i = 0; i < int(scene.graphCells().size()); i++) {
-    if (clients.canonical(scene.graphCells()[i].target) == clients.canonical(graph)) {
+  for (int i = 0; i < int(list.cells().size()); i++) {
+    if (clients.canonical(list.cells()[i].target) == clients.canonical(graph)) {
       places.append(i);
     }
   }
   return places;
 }
 
-/* Adds cells at `places` (ascending), or removes all that name the graph. */
-struct GraphCells {
-  Held held;
-  Vector<int> places;
+/* The Live lists that name the graph, in the Library's order. */
+Vector<BlockHandle> listsNaming(const Library &lib, const BlockId &graph)
+{
+  Vector<BlockHandle> out;
+  const TypeId type = TypeId::of(kDriverListType);
+  lib.forEach([&](BlockHandle h, const Datablock &b) {
+    const DriverList *l = b.type() == type && b.state() == BlockState::Live
+                              ? DriverList::of(lib, h)
+                              : nullptr;
+    if (l && placesOf(lib, *l, graph).size() > 0) {
+      out.append(h);
+    }
+  });
+  return out;
+}
 
+/* Cells of one list that name the graph, at `places` (ascending). */
+struct ListCells {
+  HistoryBlock list;
+  Vector<int> places;
+};
+
+/* The cells an add or a removal changed, in each list: put back, or removed again. */
+struct GraphCells {
+  LibraryRef lib;
+  HistoryBlock graph;
+  Vector<ListCells> lists;
+
+  static Result<DriverList *> listOf(const ListCells &l, Library &in)
+  {
+    DriverList *d = DriverList::of(in, l.list.get());
+    if (!d) {
+      return failed("the list of drivers is gone");
+    }
+    return d;
+  }
   Status add(Context &ctx) const
   {
-    Library *lib = nullptr;
-    Result<Scene *> s = held.get(ctx, lib);
-    CDCC_TRY(s.status());
-    for (int place : places) {
-      CDCC_TRY((*s)->insertGraphCell(*lib, held.graph.id(), place));
+    Result<Library *> in = detail::libraryOf(ctx, lib);
+    CDCC_TRY(in.status());
+    for (const ListCells &l : lists) {
+      Result<DriverList *> d = listOf(l, **in);
+      CDCC_TRY(d.status());
+      for (int place : l.places) {
+        CDCC_TRY((*d)->insertCell(**in, graph.id(), place));
+      }
+      changed(ctx, l);
     }
-    held.changed(ctx);
     return Status();
   }
   Status remove(Context &ctx) const
   {
-    Library *lib = nullptr;
-    Result<Scene *> s = held.get(ctx, lib);
-    CDCC_TRY(s.status());
-    CDCC_TRY((*s)->removeGraph(*lib, held.graph.id()).status());
-    held.changed(ctx);
+    Result<Library *> in = detail::libraryOf(ctx, lib);
+    CDCC_TRY(in.status());
+    for (const ListCells &l : lists) {
+      Result<DriverList *> d = listOf(l, **in);
+      CDCC_TRY(d.status());
+      CDCC_TRY((*d)->remove(**in, graph.id()).status());
+      changed(ctx, l);
+    }
     return Status();
+  }
+  static void changed(Context &ctx, const ListCells &l)
+  {
+    ctx.runtime().ext<ChangeBus>().notify(OwnerKey::ofBlock(l.list.id()), "graphs");
   }
   uint64_t memSize() const
   {
-    return sizeof(*this) + uint64_t(places.size()) * sizeof(int);
+    uint64_t n = sizeof(*this) + uint64_t(lists.size()) * sizeof(ListCells);
+    for (const ListCells &l : lists) {
+      n += uint64_t(l.places.size()) * sizeof(int);
+    }
+    return n;
   }
-  void discard()
+  void release()
   {
-    held.release();
+    graph.release();
+    for (ListCells &l : lists) {
+      l.list.release();
+    }
   }
 };
 
 struct AddGraph {
   GraphCells cells;
+  /* The list, when this made it. */
+  CreatedBlocks created;
 
   Status canRun(Context &ctx) const
   {
-    Result<detail::SceneOf> s = sceneFrom(ctx);
-    if (!s.ok()) {
-      return s.status();
+    Result<Library *> lib = libraryIn(ctx);
+    CDCC_TRY(lib.status());
+    Result<BlockHandle> g = graphInput(ctx);
+    CDCC_TRY(g.status());
+    if (listsNaming(**lib, (*lib)->get(*g)->id()).size() > 0) {
+      return Status::error(StatusCode::AlreadyExists,
+                           "graph: a list of drivers names it");
     }
-    return graphInput(ctx).status();
+    return Status();
   }
   Status exec(Context &ctx)
   {
-    Result<detail::SceneOf> s = sceneFrom(ctx);
-    CDCC_TRY(s.status());
-    Result<BlockHandle> g = graphInput(ctx);
-    CDCC_TRY(g.status());
-    CDCC_TRY(s->scene->insertGraph(*s->lib, s->lib->get(*g)->id()));
-    cells.places.clear();
-    cells.places.append(int(s->scene->graphCells().size()) - 1);
-    cells.held.scene = HistoryBlock(*s->lib, s->handle);
-    cells.held.graph = HistoryBlock(*s->lib, *g);
-    cells.held.changed(ctx);
+    CDCC_TRY(canRun(ctx));
+    Library &lib = *ctx.library();
+    const BlockHandle g = *graphInput(ctx);
+    BlockHandle h = DriverList::find(lib);
+    if (h.isNull()) {
+      Result<BlockHandle> made = newDriverList(lib);
+      CDCC_TRY(made.status());
+      h = *made;
+      created.add(lib, h);
+    }
+    DriverList &list = *DriverList::of(lib, h);
+    CDCC_TRY(list.insert(lib, lib.get(g)->id()));
+    ListCells l;
+    l.list = HistoryBlock(lib, h);
+    l.places.append(int(list.cells().size()) - 1);
+    cells.lib = lib.ref();
+    cells.graph = HistoryBlock(lib, g);
+    cells.lists.append(std::move(l));
+    GraphCells::changed(ctx, cells.lists[0]);
     return Status();
   }
   void undo(Context &ctx)
   {
     report(ctx, cells.remove(ctx));
+    if (created.size() > 0) {
+      Result<Library *> lib = detail::libraryOf(ctx, cells.lib);
+      if (lib.ok()) {
+        created.undo(**lib);
+      }
+      report(ctx, lib.status());
+    }
   }
   Status redo(Context &ctx)
   {
+    if (created.size() > 0) {
+      Result<Library *> lib = detail::libraryOf(ctx, cells.lib);
+      CDCC_TRY(lib.status());
+      CDCC_TRY(created.redo(**lib));
+    }
     return cells.add(ctx);
   }
   uint64_t memSize() const
   {
-    return cells.memSize();
+    return cells.memSize() + created.memSize();
   }
   void discard()
   {
-    cells.discard();
+    if (Library *lib = cells.lib.get()) {
+      created.discard(*lib);
+    }
+    cells.release();
   }
   static lbt::Struct<AddGraph> *defineBindings()
   {
     auto *st =
-        new lbt::Struct<AddGraph>("coredcc::AddSceneGraphCommand", sizeof(AddGraph));
+        new lbt::Struct<AddGraph>("coredcc::AddDriverGraphCommand", sizeof(AddGraph));
     BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, undo, MARGS("ctx"));
@@ -193,38 +239,41 @@ struct AddGraph {
   }
 };
 
-/* Removes every cell that names the graph (a file may have two); undo brings back each.
- */
+/* Removes every cell that names the graph, in every list; undo brings back each. */
 struct RemoveGraph {
   GraphCells cells;
 
   Status canRun(Context &ctx) const
   {
-    Result<detail::SceneOf> s = sceneFrom(ctx);
-    if (!s.ok()) {
-      return s.status();
-    }
+    Result<Library *> lib = libraryIn(ctx);
+    CDCC_TRY(lib.status());
     Result<BlockHandle> g = detail::blockOf(ctx, "graph");
     if (!g.ok() || !*g) {
       return g.ok() ? Status::error(StatusCode::InvalidArgument, "graph: none is given")
                     : g.status();
     }
-    if (placesOf(*s->lib, *s->scene, s->lib->get(*g)->id()).size() == 0) {
-      return Status::error(StatusCode::NotFound, "graph: the scene doesn't list it");
+    if (listsNaming(**lib, (*lib)->get(*g)->id()).size() == 0) {
+      return Status::error(StatusCode::NotFound, "graph: no list of drivers names it");
     }
     return Status();
   }
   Status exec(Context &ctx)
   {
     CDCC_TRY(canRun(ctx));
-    Result<detail::SceneOf> s = sceneFrom(ctx);
+    Library &lib = *ctx.library();
     const BlockHandle g = *detail::blockOf(ctx, "graph");
-    const BlockId id = s->lib->get(g)->id();
-    cells.places = placesOf(*s->lib, *s->scene, id);
-    CDCC_TRY(s->scene->removeGraph(*s->lib, id).status());
-    cells.held.scene = HistoryBlock(*s->lib, s->handle);
-    cells.held.graph = HistoryBlock(*s->lib, g);
-    cells.held.changed(ctx);
+    const BlockId id = lib.get(g)->id();
+    cells.lib = lib.ref();
+    cells.graph = HistoryBlock(lib, g);
+    for (BlockHandle h : listsNaming(lib, id)) {
+      DriverList &list = *DriverList::of(lib, h);
+      ListCells l;
+      l.list = HistoryBlock(lib, h);
+      l.places = placesOf(lib, list, id);
+      CDCC_TRY(list.remove(lib, id).status());
+      GraphCells::changed(ctx, l);
+      cells.lists.append(std::move(l));
+    }
     return Status();
   }
   void undo(Context &ctx)
@@ -241,11 +290,11 @@ struct RemoveGraph {
   }
   void discard()
   {
-    cells.discard();
+    cells.release();
   }
   static lbt::Struct<RemoveGraph> *defineBindings()
   {
-    auto *st = new lbt::Struct<RemoveGraph>("coredcc::RemoveSceneGraphCommand",
+    auto *st = new lbt::Struct<RemoveGraph>("coredcc::RemoveDriverGraphCommand",
                                             sizeof(RemoveGraph));
     BIND_STRUCT_METHOD(st, canRun, MARGS("ctx"));
     BIND_STRUCT_METHOD(st, exec, MARGS("ctx"));
@@ -257,25 +306,18 @@ struct RemoveGraph {
   }
 };
 
-PropertyDef sceneInput()
-{
-  return PropertyDef::pointerProp("scene", StructId()); /* the Context's when unset */
-}
-
 } // namespace
 
 Status registerCommands(Runtime &rt)
 {
   CommandDef add(kAddGraphCommand);
-  add.uiName("Add Graph to Scene")
-      .description("The scene lists the graph, which then drives the document's objects.")
-      .input(PropertyDef::pointerProp("graph", StructId()))
-      .input(sceneInput());
+  add.uiName("Add Driver Graph")
+      .description("The graph drives the document's objects.")
+      .input(PropertyDef::pointerProp("graph", StructId()));
   CDCC_TRY(detail::addCommandOnce<AddGraph>(rt, std::move(add)));
   CommandDef remove(kRemoveGraphCommand);
-  remove.uiName("Remove Graph from Scene")
-      .input(PropertyDef::pointerProp("graph", StructId()))
-      .input(sceneInput());
+  remove.uiName("Remove Driver Graph")
+      .input(PropertyDef::pointerProp("graph", StructId()));
   return detail::addCommandOnce<RemoveGraph>(rt, std::move(remove));
 }
 

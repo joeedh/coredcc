@@ -7,6 +7,7 @@
  * listed graphs, each with 10 readers of objects and 100 drivers of others' locations, a
  * tenth of them through the time. One line per case: best, median and worst, in ms. */
 #include "coredcc/drive/drive.h"
+#include "coredcc/drive/driver_list.h"
 #include "coredcc/drive/node_types.h"
 #include "coredcc/graph/commands.h"
 #include "coredcc/graph/provider.h"
@@ -206,6 +207,9 @@ int main(int argc, char **argv)
   measure("drivers, no graphs: unchanged", nothing, evaluate);
   measure("drivers, no graphs: epoch moved", selectOne, evaluate);
 
+  Result<BlockHandle> listBlock = newDriverList(lib);
+  must(listBlock.status());
+  DriverList &list = *DriverList::of(lib, *listBlock);
   /* Readers of the last object of a chain (so G has its three ancestors too); drivers of
    * roots far from them. */
   std::vector<int> read;
@@ -233,7 +237,7 @@ int main(int argc, char **argv)
         }
       }
     }
-    must(scene.insertGraph(lib, lib.get(*gb)->id()));
+    must(list.insert(lib, lib.get(*gb)->id()));
   }
   evaluate();
   printf("G has %d objects; %d driven\n", (*drivers)->transformCount(), 1000);

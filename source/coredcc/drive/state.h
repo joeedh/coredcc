@@ -99,8 +99,8 @@ struct SceneDrivers::State {
   ScopedConnection listener;
   bool rescan = true;
 
-  /* The Library's Scene records, and its placeholders, which may become scenes. */
-  litestl::util::Vector<BlockHandle> scenes;
+  /* The Library's lists of drivers, and its placeholders, which may become lists. */
+  litestl::util::Vector<BlockHandle> lists;
   litestl::util::Vector<BlockHandle> placeholders;
   int64_t scannedSize = -1;
   uint64_t scannedRemoved = 0;
@@ -132,7 +132,7 @@ struct SceneDrivers::State {
 
   /* sync.cc */
   Status sync(Library &lib, bool force);
-  void scanScenes(Library &lib);
+  void scanLists(Library &lib);
   drive::Description describe(Library &lib);
   void rebuild(Library &lib);
 

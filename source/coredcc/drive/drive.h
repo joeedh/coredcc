@@ -4,8 +4,8 @@
  * Graphs that drive the channels of objects, and read the states of others, in the same
  * evaluation (docs/plans/2026-11-25-p5c-scene-evaluator.md).
  *
- * - A scene lists graph blocks (Scene::graphs, `core.scene.addGraph`). The graphs of all
- * the Library's Live scenes drive the document's objects.
+ * - The document's list of drivers (drive/driver_list.h, `core.drivers.addGraph`) names
+ * graph blocks, which drive the document's objects. Scenes don't list graphs.
  * - In those graphs, `scene.drive.<kind>` nodes drive a channel of an object,
  * `scene.object.state` nodes read an object's evaluated state, and `scene.time` nodes the
  * time.
@@ -26,8 +26,9 @@
 
 namespace coredcc {
 
-/** Registers the payload type, the node types and the commands `core.scene.addGraph` and
- * `core.scene.removeGraph`. After the scene's and the graph's types and commands. */
+/** Registers the payload type, the node types, the block type of the list of drivers
+ * (drive/driver_list.h) and the commands `core.drivers.addGraph` and
+ * `core.drivers.removeGraph`. After the scene's and the graph's types and commands. */
 Status registerDriveTypes(Runtime &rt);
 
 /** Something in the listed graphs that can't work as it is. */

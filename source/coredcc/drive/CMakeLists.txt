@@ -3,6 +3,7 @@ coredcc_library(coredcc_drive
     adapters.cc
     builtins.cc
     commands.cc
+    driver_list.cc
     node_types.cc
     provider.cc
     sync.cc

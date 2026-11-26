@@ -684,13 +684,13 @@ export function enableDrivers(ctx: Context) {
 export function disableDrivers(ctx: Context) {
   check(cd.disableDrivers(ctx))
 }
-/** The scene lists a graph block, undoably: it drives the document's objects. `scene` is the Context's
- * scene by default. */
-export function addSceneGraph(ctx: Context, graph: Ref, scene?: Ref) {
-  run(ctx, 'core.scene.addGraph', {graph, scene})
+/** The document's list of drivers names a graph block, undoably: it drives the document's objects. */
+export function addDriverGraph(ctx: Context, graph: Ref) {
+  run(ctx, 'core.drivers.addGraph', {graph})
 }
-export function removeSceneGraph(ctx: Context, graph: Ref, scene?: Ref) {
-  run(ctx, 'core.scene.removeGraph', {graph, scene})
+/** No list of drivers names the graph any more. */
+export function removeDriverGraph(ctx: Context, graph: Ref) {
+  run(ctx, 'core.drivers.removeGraph', {graph})
 }
 /** Something in the listed graphs that can't work. `node` is a node path, "" for the graph. */
 export interface DriverDiagnostic {

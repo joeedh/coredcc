@@ -138,7 +138,7 @@ void testErrors()
   test_assert(!evaluateScene(*t.ctx).ok());
   test_assert(t.statusOf(x) == EvalStatus::ModelFailed &&
               t.hasDiagnostic("driven twice"));
-  must(t.sc().removeGraph(*t.lib, t.idOf(g2)).status());
+  must(t.list().remove(*t.lib, t.idOf(g2)).status());
   t.evaluate();
   test_assert(t.evaluatedAt(x, 1));
 
@@ -192,18 +192,16 @@ void testCommands()
   d.evaluate();
   test_assert(d.evaluatedAt(a, 5));
 
-  /* A graph listed by another scene drives this one's objects too. */
-  must(d.sc().removeGraph(*d.lib, d.idOf(g)).status());
-  const BlockHandle other = d.addScene("Other");
-  must(Scene::of(*d.lib, other)->insertGraph(*d.lib, d.idOf(g)));
-  d.evaluate();
-  test_assert(d.evaluatedAt(a, 5));
-  must(d.lib->markDeleted(other));
+  /* A deleted list drives nothing; restored, it does again. */
+  const BlockHandle list = DriverList::find(*d.lib);
+  must(d.lib->markDeleted(list));
   d.evaluate();
   test_assert(d.evaluatedAt(a, 1));
+  must(d.lib->restoreFromHistory(list));
+  d.evaluate();
+  test_assert(d.evaluatedAt(a, 5));
 
   /* The generated graph keeps nothing alive: a deleted reader's object is collected. */
-  must(d.lib->restoreFromHistory(other));
   const BlockHandle b = d.loose("b", double3(4, 0, 0));
   const BlockHandle c = d.object("c");
   d.follow(g, c, b);

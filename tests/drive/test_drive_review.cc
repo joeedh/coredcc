@@ -1,6 +1,7 @@
-﻿/* Regressions from the review of P5c (docs/reports/feature-report-scene-evaluator-
+/* Regressions from the review of P5c (docs/reports/feature-report-scene-evaluator-
  * 2026-11-25.md): an inner provider's notifications, a failure of the whole call under
- * the incremental pass, a type named "missing", alias ids, the commands' scene input. */
+ * the incremental pass, a type named "missing", alias ids. The list's commands are in
+ * test_drive_list. */
 #include "drive_doc.h"
 
 #include "coredcc/drive/commands.h"
@@ -245,29 +246,6 @@ void testNotifiedOnEvaluation()
   test_assert(heard == 1);
 }
 
-/* The commands take a scene; removeGraph removes every cell naming the graph, and undo
- * brings back each. */
-void testCommandScene()
-{
-  DriveDoc d;
-  const BlockHandle other = d.addScene("Other");
-  const BlockHandle g = d.graph("g", false);
-  d.ok(kAddGraphCommand,
-       {{"graph", pointerTo(d.idOf(g))}, {"scene", pointerTo(d.idOf(other))}});
-  test_assert(Scene::of(*d.lib, other)->graphCells().size() == 1);
-  test_assert(d.sc().graphCells().size() == 0);
-
-  must(d.sc().insertGraph(*d.lib, d.idOf(g)));
-  must(d.sc().insertGraphCell(*d.lib, d.idOf(g), 0)); /* as a file may have it */
-  test_assert(d.sc().graphCells().size() == 2);
-  d.ok(kRemoveGraphCommand, {{"graph", pointerTo(d.idOf(g))}});
-  test_assert(d.sc().graphCells().size() == 0);
-  must(d.ex->undo(*d.ctx));
-  test_assert(d.sc().graphCells().size() == 2);
-  must(d.ex->redo(*d.ctx));
-  test_assert(d.sc().graphCells().size() == 0);
-}
-
 } // namespace
 
 int main()
@@ -280,6 +258,5 @@ int main()
   testAliasIds();
   testAccessors();
   testNotifiedOnEvaluation();
-  testCommandScene();
   return test_end();
 }

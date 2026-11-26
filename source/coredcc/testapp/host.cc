@@ -11,6 +11,7 @@
 #include "coredcc/command/executor.h"
 #include "coredcc/command/last_used.h"
 #include "coredcc/drive/drive.h"
+#include "coredcc/drive/driver_list.h"
 #include "coredcc/graph/commands.h"
 #include "coredcc/graph/provider.h"
 #include "coredcc/lib/library.h"
@@ -184,6 +185,7 @@ private:
     rt_.ext<LastUsedStore>().addCollectionTo(s);
     CDCC_CHECK(registerSceneCommands(rt_).ok(), "testapp: registering scenes");
     CDCC_CHECK(registerDriveTypes(rt_).ok(), "testapp: registering drivers");
+    addDriverGraphsMember(s);
     PointerAccessor scene;
     scene.target = StructId::of(kSceneType);
     scene.get = [](const PointerRef &, Context &ctx) {

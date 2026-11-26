@@ -7,6 +7,7 @@
 
 #include "coredcc/api/ref_text.h"
 #include "coredcc/drive/drive.h"
+#include "coredcc/drive/driver_list.h"
 #include "coredcc/drive/node_types.h"
 #include "coredcc/graph/commands.h"
 #include "coredcc/graph/provider.h"
@@ -57,13 +58,24 @@ struct DriveDoc : IoDoc {
     drivers.reset();
   }
 
-  /** A graph block, listed by the scene unless `listed` is false. */
+  /** The document's list of drivers, made when there is none. */
+  DriverList &list()
+  {
+    BlockHandle h = DriverList::find(*lib);
+    if (h.isNull()) {
+      Result<BlockHandle> made = newDriverList(*lib);
+      must(made.status());
+      h = *made;
+    }
+    return *DriverList::of(*lib, h);
+  }
+  /** A graph block, in the document's list unless `listed` is false. */
   BlockHandle graph(const char *name, bool listed = true)
   {
     Result<BlockHandle> g = createGraph(*lib, name);
     must(g.status());
     if (listed) {
-      must(sc().insertGraph(*lib, idOf(*g)));
+      must(list().insert(*lib, idOf(*g)));
     }
     return *g;
   }

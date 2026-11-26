@@ -118,29 +118,8 @@ public:
   /** Replaces the selection. Duplicates are dropped. */
   void setSelection(Library &lib, const litestl::util::Vector<BlockId> &ids);
 
-  /* ---- graphs that drive objects ---- */
-
-  /** The Live blocks that the graph cells name, in order, each once. Valid until
-   * something changes. The scene doesn't look at their type: drive/ lists graphs here,
-   * and drives the document's objects with the graphs of all its scenes. */
-  const litestl::util::Vector<BlockHandle> &graphs(const Library &lib) const;
-  /** The cells, with those that aren't Live. */
-  const litestl::util::Vector<RefCell> &graphCells() const
-  {
-    return graphs_;
-  }
-  /** Puts an OptStrong cell to `id` at `index` (-1 or past the end: last). NotFound for
-   * no record, AlreadyExists if a cell names it. */
-  Status insertGraph(Library &lib, const BlockId &id, int index = -1);
-  /** The same without the AlreadyExists check: for undo, which brings back what a file
-   * had. */
-  Status insertGraphCell(Library &lib, const BlockId &id, int index);
-  /** Removes the cells that name `id`. Returns the first one's place, or NotFound. */
-  Result<int> removeGraph(Library &lib, const BlockId &id);
-
   /* ---- time ---- */
 
-  /** A write here doesn't notify; the datapath's does. */
   double frame = 0.0;
   /** Display units, the frame rate and the frame at time 0. */
   UnitSettings units;
@@ -213,9 +192,6 @@ public:
     for (RefCell &c : selection_) {
       fn(c);
     }
-    for (RefCell &c : graphs_) {
-      fn(c);
-    }
     for (BlockEntry &e : fields_) {
       for (RefCell &c : e.refs) {
         fn(c);
@@ -234,7 +210,6 @@ private:
 
   litestl::util::Vector<RefCell> cells_;
   litestl::util::Vector<RefCell> selection_;
-  litestl::util::Vector<RefCell> graphs_;
   WeakRef<Object> active_;
   litestl::util::Vector<BlockEntry> fields_;
 
@@ -258,10 +233,6 @@ private:
   mutable litestl::util::Vector<BlockHandle> selected_;
   mutable uint64_t selectedEpoch_ = 0;
   mutable uint64_t selectedGeneration_ = 0;
-
-  mutable litestl::util::Vector<BlockHandle> liveGraphs_;
-  mutable uint64_t graphsEpoch_ = 0;
-  mutable uint64_t graphsGeneration_ = 0;
 
   std::unique_ptr<detail::SceneEvaluator> evaluator_;
 };
