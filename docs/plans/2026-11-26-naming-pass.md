@@ -195,3 +195,23 @@ bindings also passed the wasm tests and the test app's typecheck. The Unreal spi
   so only their TS names changed (step 5), as planned.
 - **The final old-name grep** finds the renamed names only in `docs/plans/`, `docs/reports/`, the TS-only renames'
   C++ facades, and Unreal's `FCanvas::DrawItem`.
+
+### After the review (2026-11-26)
+A fresh agent reviewed the pass; [the feature report](../reports/feature-report-naming-2026-11-26.md) has each
+finding and what became of it. The fixes are `5d11289` to `eb2837f`. What changed from the above:
+- **The alias table checks more.** After the rewrite, a block that has a slot or an attachment under both names is
+  refused; an alias whose old name is still registered stops the load; and the id-collision check sees current
+  names.
+- **Command and tool ids have aliases:** `CommandRegistry::addAlias` and `ToolRegistry::addAlias`.
+- **`naming.md`'s rules were settled,** and the names they then flagged were renamed: the depth constants and
+  members, `centre`, TS's `NodeContext`, `solveCtx`, `ObjectChanges::size` and `registerClient`.
+- **Every command constant has its id's noun,** so the driver constants are `kAddDriverCommand` and
+  `kRemoveDriverCommand`, not as step 7 says. `core.object.add` is `core.object.new`.
+- **The layout JSON's kinds changed without a version bump,** because no frontend outside the tree exists.
+  `embedding.md` says so.
+- **Deferred to P6:**
+  - how the registered `coredcc::` facade names map to N-API export names;
+  - reporting a last-used line whose command is gone, instead of skipping it;
+  - `ClipDepth`, `SceneResults.status` and the enums that cross as strings (`PropKind`, `PropSubtype`,
+    `UnitFamily`, `LayoutSeverity`);
+  - the TS string unions that share a name with a generated enum (`DepthMode`, `ShapeKind`, `ModalResult`).

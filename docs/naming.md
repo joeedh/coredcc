@@ -81,7 +81,8 @@ How coredcc names things that scripts and hosts see. New code follows these rule
 - **Iteration** is `forEach<X>`: `forEachRef`, `forEachCell`. A plain `forEach` is for a container's items.
 - **Context types** are `XContext`: `EvalContext`, `NodeExecContext`.
 - **Registries** check a def with `checkDef`. A registry that takes something else checks it with
-  `check<Thing>` (`TransformRegistry::checkInfo`). A registry registers with `add`, or `add<Thing>` for a typed form (`SocketTypeRegistry::addPayloadType`).
+  `check<Thing>` (`TransformRegistry::checkInfo`). A registry registers with `add`, or
+  `add<Thing>` for a typed form (`SocketTypeRegistry::addPayloadType`).
 - **Removing:** `delete` makes a block go away, `remove` takes something out of a container or a list, and
   `unlink` drops a link or a reference.
 - **Booleans:** `has<Thing>` for presence (`hasPick`), `can<Verb>` for permission (`canRun`), and `is<State>`

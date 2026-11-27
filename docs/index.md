@@ -37,7 +37,7 @@ A fresh review of each feature's API, and what became of each finding.
 | P2 | [library IO](reports/feature-report-library-io-2026-11-24.md), [layout](reports/feature-report-layout-2026-11-25.md) |
 | P3 | [objects and transforms](reports/feature-report-scene-2026-11-25.md), [BVH, View and picking](reports/feature-report-bvh-2026-11-25.md) |
 | P4 | [tools and overlay](reports/feature-report-tools-overlay-2026-11-26.md) |
-| Naming | [naming audit](reports/naming-audit-2026-11-26.md) (the pass's input) |
+| Naming | [naming audit](reports/naming-audit-2026-11-26.md) (the pass's input), [naming pass](reports/feature-report-naming-2026-11-26.md) |
 | P5 | [graph](reports/feature-report-graph-2026-11-25.md) |
 | P5c | [scene evaluator](reports/feature-report-scene-evaluator-2026-11-25.md) |
 
