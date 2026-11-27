@@ -16,6 +16,7 @@ import type {EvalContext} from 'coredcc-gen/coredcc/EvalContext'
 import {DeltaKind} from 'coredcc-gen/coredcc/DeltaKind'
 import * as cd from 'coredcc-gen/coredcc/functions'
 import {Handedness} from 'coredcc-gen/coredcc/Handedness'
+import {ClipDepth} from 'coredcc-gen/litestl/math/ClipDepth'
 import type {Status} from 'coredcc-gen/coredcc/Status'
 import {StatusCode} from 'coredcc-gen/coredcc/StatusCode'
 import type {TransformDelta as BoundDelta} from 'coredcc-gen/coredcc/TransformDelta'
@@ -505,7 +506,7 @@ function withView<R>(spec: ViewSpec, fn: (v: BoundView) => R): R {
     for (let i = 0; i < 4; i++) v.putViewport(i, spec.viewport[i])
     fill('view', v.view, spec.view, 16)
     fill('proj', v.proj, spec.proj, 16)
-    v.setConventions(spec.depthRange === '-1..1' ? 1 : 0)
+    v.depthRange = spec.depthRange === '-1..1' ? ClipDepth.MinusOneToOne : ClipDepth.ZeroToOne
     v.handedness = spec.handedness === 'left' ? Handedness.Left : Handedness.Right
     v.up = spec.up === 'y' ? UpAxis.Y : UpAxis.Z
     v.reversedZ = spec.reversedZ ?? false

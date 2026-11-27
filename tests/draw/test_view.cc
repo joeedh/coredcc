@@ -555,7 +555,7 @@ void testValidate()
       {"viewport is empty", [](View &v) { v.viewport[3] = -1; }},
       {"dpiScale", [](View &v) { v.dpiScale = 0; }},
       {"dpiScale", [&](View &v) { v.dpiScale = nan; }},
-      {"no such value", [](View &v) { v.setConventions(2); }},
+      {"no such value", [](View &v) { v.depthRange = DepthRange(2); }},
       {"no such value", [](View &v) { v.handedness = Handedness(7); }},
       {"no such value", [](View &v) { v.up = UpAxis(-1); }},
       {"isn't finite", [&](View &v) { v.view[3][0] = nan; }},
@@ -688,9 +688,6 @@ void testScripts()
   v.putViewport(2, 640);
   v.putViewport(4, 1);
   v.putViewport(-1, 1);
-  test_assert(v.depthRangeValue() == 0);
-  v.setConventions(1);
-  test_assert(v.depthRangeValue() == 1 && v.depthRange == DepthRange::MinusOneToOne);
   ViewMath m;
   for (int i : {-1, 4}) {
     test_assert(m.nearPlaneAt(i) == 0.0 && m.farPlaneAt(i) == 0.0 &&

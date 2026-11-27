@@ -166,7 +166,7 @@ bindings also passed the wasm tests and the test app's typecheck. The Unreal spi
   `setConventions(int)`, which now takes only the depth range. Step 4's rename of the member `View::depth` to
   `depthRange` collided with the script accessor `depthRange()`, so the accessor is `depthRangeValue()` for now.
   - **The follow-up:** bind `View::depthRange` as a member, drop `setConventions` and `depthRangeValue`, and have
-    TS set `v.depthRange` directly.
+    TS set `v.depthRange` directly. *Done* after #17 merged: View binds `depthRange` as litestl's `ClipDepth`.
 - **`sendToolEvent` still returns an `IntResult` (step 3).** The value is the `EventResult` as a number. A result
   type for one enum wasn't worth adding.
 - **Enum binders share a helper (step 3):** `base/detail/enum_binding.h` (`detail::bindEnum`). A member whose type
@@ -212,6 +212,6 @@ finding and what became of it. The fixes are `5d11289` to `eb2837f`. What change
 - **Deferred to P6:**
   - how the registered `coredcc::` facade names map to N-API export names;
   - reporting a last-used line whose command is gone, instead of skipping it;
-  - `ClipDepth`, `SceneResults.status` and the enums that cross as strings (`PropKind`, `PropSubtype`,
+  - `SceneResults.status` and the enums that cross as strings (`PropKind`, `PropSubtype`,
     `UnitFamily`, `LayoutSeverity`);
   - the TS string unions that share a name with a generated enum (`DepthMode`, `ShapeKind`, `ModalResult`).

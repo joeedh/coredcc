@@ -61,12 +61,6 @@ struct View {
   /* For scripts. */
   double viewportAt(int32_t i) const;
   void putViewport(int32_t i, double value);
-  /* The depth range as a number, until litestl binds ClipDepth. */
-  void setConventions(int32_t value);
-  int32_t depthRangeValue() const
-  {
-    return int32_t(depthRange);
-  }
   static litestl::binding::types::Struct<View> *defineBindings();
 };
 

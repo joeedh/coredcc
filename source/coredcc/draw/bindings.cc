@@ -76,8 +76,7 @@ lbt::Struct<View> *View::defineBindings()
     BIND_STRUCT_METHOD(st, putViewport, MARGS("i", "value"));
     BIND_STRUCT_MEMBER(st, handedness);
     BIND_STRUCT_MEMBER(st, up);
-    BIND_STRUCT_METHOD(st, setConventions, MARGS("depthRange"));
-    BIND_STRUCT_METHOD(st, depthRangeValue, MARGS());
+    BIND_STRUCT_MEMBER(st, depthRange);
     BIND_STRUCT_METHOD(st, validate, MARGS());
   }
   return st;

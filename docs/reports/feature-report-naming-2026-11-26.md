@@ -109,8 +109,9 @@
     - `coredcc.ToolSettingsCheck:<tool>#<hash>` had a suffix no rule described. *Fixed* by documenting it.
     - The test app's `TestBox`, `TestApp` and `TestItem` have no namespace. *Rejected:* they belong to a test
       app, not to the library.
-    - `ClipDepth` crosses as an int, `SceneResults.status` as a `number[]`, and `PropKind`, `PropSubtype`,
-      `UnitFamily` and `LayoutSeverity` as strings. *Deferred* to P6, which binds the API.
+    - `ClipDepth` crossed as an int. *Fixed* once litestl PR #17 bound it: `View::depthRange` is a bound member.
+    - `SceneResults.status` crosses as a `number[]`, and `PropKind`, `PropSubtype`, `UnitFamily` and
+      `LayoutSeverity` as strings. *Deferred* to P6, which binds the API.
     - The TS string unions `DepthMode`, `ShapeKind` and `ModalResult` share names with the generated enums,
       so code imports the latter under an alias. *Deferred* to P6.
 

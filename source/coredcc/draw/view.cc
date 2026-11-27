@@ -258,11 +258,6 @@ void View::putViewport(int32_t i, double value)
   }
 }
 
-void View::setConventions(int32_t value)
-{
-  depthRange = DepthRange(value);
-}
-
 double ViewRegion::planeAt(int32_t plane, int32_t i) const
 {
   if (plane < 0 || plane >= kPlanes || i < 0 || i > 3) {

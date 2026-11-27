@@ -20,6 +20,7 @@ import {EventType} from 'coredcc-gen/coredcc/EventType'
 import * as cd from 'coredcc-gen/coredcc/functions'
 import type {GizmoHit as BoundHit} from 'coredcc-gen/coredcc/GizmoHit'
 import {Handedness} from 'coredcc-gen/coredcc/Handedness'
+import {ClipDepth} from 'coredcc-gen/litestl/math/ClipDepth'
 import type {InputEvent as BoundEvent} from 'coredcc-gen/coredcc/InputEvent'
 import {ModalResult as BoundModalResult} from 'coredcc-gen/coredcc/ModalResult'
 import {PointerType} from 'coredcc-gen/coredcc/PointerType'
@@ -168,7 +169,7 @@ function withView<R>(spec: ViewSpec, fn: (v: BoundView) => R): R {
     fill('viewport', {put: (i, x) => v.putViewport(i, x)}, spec.viewport, 4)
     fill('view', v.view, spec.view, 16)
     fill('proj', v.proj, spec.proj, 16)
-    v.setConventions(spec.depthRange === '-1..1' ? 1 : 0)
+    v.depthRange = spec.depthRange === '-1..1' ? ClipDepth.MinusOneToOne : ClipDepth.ZeroToOne
     v.handedness = spec.handedness === 'left' ? Handedness.Left : Handedness.Right
     v.up = spec.up === 'y' ? UpAxis.Y : UpAxis.Z
     v.reversedZ = spec.reversedZ ?? false
