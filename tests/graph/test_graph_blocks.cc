@@ -275,7 +275,7 @@ void testIds()
   s->value = 20;
   test_assert(w.lib.createWithId(kThing, g_use[0], "2", s).ok());
   test_assert(p.is(-80, 1)); /* 20 + absent */
-  test_assert(clients.registerClient(kCoredccClient, aliases).ok());
+  test_assert(clients.add(kCoredccClient, aliases).ok());
   test_assert(p.is(40, 1));
   w.notify(old); /* changes of the alias are changes of the block */
   test_assert(p.is(40, 1));

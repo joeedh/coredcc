@@ -624,7 +624,7 @@ static void test_alias_loser()
     k.acme = false;
     IoWorld w(k);
     const char *aliases[] = {"old"};
-    test_assert(w.rt.ext<ClientRegistry>().registerClient("acme", aliases).ok());
+    test_assert(w.rt.ext<ClientRegistry>().add("acme", aliases).ok());
     registerDoc(w.rt, w.docs, 1, "acme.Doc", kAcme);
     int asked = 0;
     w.docs.onRekey = [&](const Datablock &b, const RekeyContext &c) {
@@ -663,7 +663,7 @@ static void test_append_alias()
     test_assert(w.lib.addPlaceholder(cid(1, ClientId::of(client)), info).ok());
   }
   const char *aliases[] = {"old"};
-  test_assert(w.rt.ext<ClientRegistry>().registerClient("now", aliases).ok());
+  test_assert(w.rt.ext<ClientRegistry>().add("now", aliases).ok());
   /* Two records have one id now. */
   Result<AppendResult> r = w.append(bytes);
   test_assert(r.status().code() == StatusCode::FailedPrecondition && w.lib.size() == 2);
@@ -695,7 +695,7 @@ static void test_client_names()
   /* Against a registered client's. */
   f.records.pop_back();
   IoWorld known;
-  test_assert(known.rt.ext<ClientRegistry>().registerClient(other).ok());
+  test_assert(known.rt.ext<ClientRegistry>().add(other).ok());
   s = known.load(f.file());
   test_assert(s.code() == StatusCode::InvalidArgument &&
               hasMsg(s, "has the id of 'AjGW"));

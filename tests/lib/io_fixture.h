@@ -233,7 +233,7 @@ struct IoWorld {
     registerTransient(rt, things);
     registerBare(rt);
     if (k.acme) {
-      test_assert(rt.ext<ClientRegistry>().registerClient("acme").ok());
+      test_assert(rt.ext<ClientRegistry>().add("acme").ok());
       registerDoc(rt, docs, 1, "acme.Doc", kAcme);
       registerDoc<DocProviderT<false>>(rt, docs, 1, "acme.Plain", kAcme);
     }

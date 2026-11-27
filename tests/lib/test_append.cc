@@ -309,7 +309,7 @@ static void test_aliases()
   }
   IoWorld w;
   const char *aliases[] = {"c.old"};
-  test_assert(w.rt.ext<ClientRegistry>().registerClient(kCoredccClient, aliases).ok());
+  test_assert(w.rt.ext<ClientRegistry>().add(kCoredccClient, aliases).ok());
   Result<AppendResult> r = w.append(f.file());
   test_assert(r.ok() && w.lib.size() == 2 && r->ids.size() == 2);
   for (int i = 0; i < 2; i++) {

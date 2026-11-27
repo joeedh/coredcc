@@ -600,7 +600,7 @@ static void test_large()
   g.records.push_back(std::move(slots));
   IoWorld w;
   const char *aliases[] = {"c.old"};
-  test_assert(w.rt.ext<ClientRegistry>().registerClient("c.now", aliases).ok());
+  test_assert(w.rt.ext<ClientRegistry>().add("c.now", aliases).ok());
   LoadReport report;
   test_assert(w.load(g.file(), &report).ok() && report.blocks.size() == 40001);
   test_assert(report.issues.total >= 20000 &&

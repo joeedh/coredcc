@@ -115,8 +115,7 @@ Datablock const *blockOf(const PointerRef &self, Context &ctx)
 
 void registerItems(Runtime &rt)
 {
-  CDCC_CHECK(rt.ext<ClientRegistry>().registerClient("testapp").ok(),
-             "testapp: the client");
+  CDCC_CHECK(rt.ext<ClientRegistry>().add("testapp").ok(), "testapp: the client");
   const char *impl = "testapp.Item#provider";
   CDCC_CHECK((registerImpl<BlockProvider, ItemProvider>(rt, impl).ok()),
              "testapp: ItemProvider");

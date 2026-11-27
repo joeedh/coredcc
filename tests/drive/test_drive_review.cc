@@ -183,7 +183,7 @@ void testAliasIds()
 {
   DriveDoc d;
   const char *aliases[] = {"old.client"};
-  must(d.rt.ext<ClientRegistry>().registerClient(kCoredccClient, aliases).status());
+  must(d.rt.ext<ClientRegistry>().add(kCoredccClient, aliases).status());
   const BlockHandle a = d.object("a");
   BlockId old = d.idOf(a);
   old.client = ClientId::of("old.client");

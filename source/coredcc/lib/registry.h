@@ -33,8 +33,7 @@ public:
 
   /** Registers a client and its aliases. Registering the same client again with the
    * same aliases is fine; a name that is already another client's alias is not. */
-  Result<ClientId> registerClient(std::string_view name,
-                                  std::span<const char *const> aliases = {});
+  Result<ClientId> add(std::string_view name, std::span<const char *const> aliases = {});
   bool isRegistered(ClientId id) const;
   /** The canonical id for `id`: its client if `id` is an alias, else `id`. */
   ClientId canonical(ClientId id) const;

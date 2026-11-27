@@ -188,7 +188,7 @@ bool ApplyDelta::foldFrom(Command next)
 
 Status ApplyDelta::updateWith(Context &ctx, std::span<const TransformDelta> deltas)
 {
-  const bool first = changes_.size() == 0;
+  const bool first = changes_.objectCount() == 0;
   const Library &lib = *ctx.library();
   detail::Skips skips;
   Vector<ChannelBlock> channels;

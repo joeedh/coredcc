@@ -212,7 +212,7 @@ void testDrag()
   test_assert(says(changes.redo(*d.in2), "in another Library"));
   changes.undo(*d.in2);
   test_assert(says(d.rt.takeStickyError(), "in another Library"));
-  test_assert(d.describe() == now && d.other() == other && changes.size() == 1);
+  test_assert(d.describe() == now && d.other() == other && changes.objectCount() == 1);
   /* Nothing was written: nothing to undo, anywhere. */
   ObjectChanges none;
   none.undo(*d.in2);

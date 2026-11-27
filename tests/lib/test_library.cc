@@ -417,16 +417,14 @@ static void test_client_aliases()
   Runtime rt;
   ClientRegistry &clients = rt.ext<ClientRegistry>();
   const char *aliases[] = {"acme.old"};
-  Result<ClientId> c = clients.registerClient("acme.new", aliases);
+  Result<ClientId> c = clients.add("acme.new", aliases);
   test_assert(c.ok());
   test_assert(clients.canonical(ClientId::of("acme.old")) == *c);
   test_assert(clients.isRegistered(ClientId::of("acme.old")));
   const char *taken[] = {"acme.old"};
-  test_assert(clients.registerClient("other", taken).status().code() ==
-              StatusCode::AlreadyExists);
-  test_assert(clients.registerClient("acme.old").status().code() ==
-              StatusCode::AlreadyExists);
-  test_assert(clients.registerClient("acme.new", aliases).ok()); /* idempotent */
+  test_assert(clients.add("other", taken).status().code() == StatusCode::AlreadyExists);
+  test_assert(clients.add("acme.old").status().code() == StatusCode::AlreadyExists);
+  test_assert(clients.add("acme.new", aliases).ok()); /* idempotent */
 
   setup(rt);
   BlockTypeInfo info;
@@ -574,7 +572,7 @@ static void test_review_fixes()
     Result<BlockHandle> ph = lib.addPlaceholder(oldId, "acme.Gadget", "gadget", {});
     test_assert(ph.ok() && lib.find(oldId) == *ph);
     const char *aliases[] = {"acme.old"};
-    test_assert(rt.ext<ClientRegistry>().registerClient("acme.new", aliases).ok());
+    test_assert(rt.ext<ClientRegistry>().add("acme.new", aliases).ok());
     test_assert(lib.find(oldId) == *ph);
     test_assert(lib.find(BlockId{ClientId::of("acme.new"), oldId.local}) == *ph);
     test_assert(lib.get(*ph)->id().client == ClientId::of("acme.new"));

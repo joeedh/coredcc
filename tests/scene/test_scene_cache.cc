@@ -137,7 +137,7 @@ void testAlias()
   const uint64_t epoch = d.lib->epoch();
   const char *aliases[] = {"old.client"};
   test_assert(d.sc().selected(*d.lib).size() == 0);
-  must(clients.registerClient(kCoredccClient, aliases).status());
+  must(clients.add(kCoredccClient, aliases).status());
   test_assert(d.sc().selected(*d.lib).size() == 1 &&
               d.sc().selected(*d.lib)[0] == parent);
   d.evaluate();

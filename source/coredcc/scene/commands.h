@@ -136,7 +136,7 @@ public:
   /** Whether a channel that was written is different now. */
   bool channelsChanged() const;
 
-  int size() const
+  int objectCount() const
   {
     return int(changes_.size());
   }

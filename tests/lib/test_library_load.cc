@@ -154,7 +154,7 @@ static void test_unreadable()
     Knows no;
     no.acme = false;
     IoWorld w(no);
-    test_assert(w.rt.ext<ClientRegistry>().registerClient("usurper").ok());
+    test_assert(w.rt.ext<ClientRegistry>().add("usurper").ok());
     registerDoc(w.rt, w.docs, 1, "acme.Doc", ClientId::of("usurper"));
     LoadReport report;
     test_assert(w.load(acme, &report).ok() && report.missingType == 1);
@@ -416,7 +416,7 @@ static void test_aliases()
   const Bytes bytes = f.file();
   IoWorld w;
   const char *aliases[] = {"c.old1", "c.old2"};
-  test_assert(w.rt.ext<ClientRegistry>().registerClient("c.now", aliases).ok());
+  test_assert(w.rt.ext<ClientRegistry>().add("c.now", aliases).ok());
   LoadReport report;
   test_assert(w.load(bytes, &report).ok() && w.lib.size() == 3 &&
               report.blocks.size() == 3);
@@ -457,7 +457,7 @@ static void test_aliases()
       }
     }
     IoWorld many;
-    test_assert(many.rt.ext<ClientRegistry>().registerClient("c.now", aliases).ok());
+    test_assert(many.rt.ext<ClientRegistry>().add("c.now", aliases).ok());
     LoadOptions options;
     options.limits.maxBlocks = 24; /* none of them is missing */
     test_assert(many.load(more.file(), &report, options).ok() && many.lib.size() == 24);
@@ -468,7 +468,7 @@ static void test_aliases()
   /* Without the current one, the first in order keeps the id. */
   f.records.erase(f.records.begin() + 1);
   IoWorld w2;
-  test_assert(w2.rt.ext<ClientRegistry>().registerClient("c.now", aliases).ok());
+  test_assert(w2.rt.ext<ClientRegistry>().add("c.now", aliases).ok());
   test_assert(w2.load(f.file(), &report).ok());
   const int kept = int(w2.id(report.blocks[0]) == cid(1, ClientId::of("c.now"))) +
                    int(w2.id(report.blocks[1]) == cid(1, ClientId::of("c.now")));
@@ -481,7 +481,7 @@ static void test_aliases()
     f.records.push_back(std::move(r));
   }
   IoWorld w3;
-  test_assert(w3.rt.ext<ClientRegistry>().registerClient("c.now", aliases).ok());
+  test_assert(w3.rt.ext<ClientRegistry>().add("c.now", aliases).ok());
   w3.rt.setGuidSource([]() { return LocalId{7, 1}; });
   Status s = w3.load(f.file());
   test_assert(s.code() == StatusCode::Internal && w3.lib.size() == 0);
@@ -553,7 +553,7 @@ static void test_resolve_aliases()
   IoWorld w(k);
   test_assert(w.load(bytes).ok());
   const char *aliases[] = {"acme"};
-  test_assert(w.rt.ext<ClientRegistry>().registerClient("acme2", aliases).ok());
+  test_assert(w.rt.ext<ClientRegistry>().add("acme2", aliases).ok());
   registerDoc(w.rt, w.docs, 1, "acme.Doc", ClientId::of("acme2"));
   Result<LoadReport> r = detail::resolvePlaceholders(w.lib);
   test_assert(r.ok() && r->blocks.size() == 1 && r->issues.total == 0);
@@ -566,7 +566,7 @@ static void test_resolve_aliases()
   info.reason = PlaceholderReason::MissingBlock;
   info.typeName = "test.Doc";
   test_assert(w2.lib.addPlaceholder(cid(5), std::move(info)).ok());
-  test_assert(w2.rt.ext<ClientRegistry>().registerClient("acme").ok());
+  test_assert(w2.rt.ext<ClientRegistry>().add("acme").ok());
   registerDoc(w2.rt, w2.docs, 1, "acme.Doc", kAcme);
   r = detail::resolvePlaceholders(w2.lib);
   test_assert(r.ok() && r->blocks.size() == 0 && r->issues.total == 0 &&

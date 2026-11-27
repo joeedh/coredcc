@@ -342,7 +342,7 @@ static void test_alias()
    */
   IoWorld r;
   const char *aliases[] = {"old.acme"};
-  test_assert(r.rt.ext<ClientRegistry>().registerClient("new.acme", aliases).ok());
+  test_assert(r.rt.ext<ClientRegistry>().add("new.acme", aliases).ok());
   test_assert(r.load(bytes).ok());
   test_assert(r.at(3, ClientId::of("new.acme")) && r.at(3, ClientId::of("old.acme")));
   const Bytes renamed = r.save();

@@ -58,12 +58,12 @@ static void test_format()
 
   /* Names that aren't dotted identifiers are quoted, and ids without one are written. */
   for (const char *name : {"my client", "a..b", "1a", "a.", "#x"}) {
-    test_assert(rt.ext<ClientRegistry>().registerClient(name).ok());
+    test_assert(rt.ext<ClientRegistry>().add(name).ok());
     const std::string want =
         "@block(\"" + std::string(name) + "\", " + std::string(31, '0') + "1)";
     test_assert(formats(rt, blockRefOf(ClientId::of(name), 0, 1), want.c_str()));
   }
-  test_assert(rt.ext<ClientRegistry>().registerClient("acme.tools_2").ok());
+  test_assert(rt.ext<ClientRegistry>().add("acme.tools_2").ok());
   test_assert(formats(rt,
                       blockRefOf(ClientId::of("acme.tools_2"), 0, 1),
                       "@block(acme.tools_2, 00000000000000000000000000000001)"));
@@ -116,7 +116,7 @@ static void test_parse()
   }
   /* An alias is its client's current name. */
   const char *aliases[] = {"old.acme"};
-  test_assert(rt.ext<ClientRegistry>().registerClient("new.acme", aliases).ok());
+  test_assert(rt.ext<ClientRegistry>().add("new.acme", aliases).ok());
   test_assert(parseRef(rt, "@block(old.acme, " + hex + ")")->owner.block.client ==
               ClientId::of("new.acme"));
   /* Without any client registered, names are still ids. */
@@ -242,9 +242,9 @@ static void test_block_ids()
 {
   World w;
   Runtime &rt = w.rt;
-  test_assert(rt.ext<ClientRegistry>().registerClient("a b,c").ok());
+  test_assert(rt.ext<ClientRegistry>().add("a b,c").ok());
   const char *old[] = {"before.acme"};
-  test_assert(rt.ext<ClientRegistry>().registerClient("acme", old).ok());
+  test_assert(rt.ext<ClientRegistry>().add("acme", old).ok());
   const BlockId own{ClientId::of(kCoredccClient), {0x0123456789abcdef, 1}};
   const BlockId odd{ClientId::of("a b,c"), {0, 2}};
   const BlockId unknown{ClientId{0xabc}, {3, 0}};

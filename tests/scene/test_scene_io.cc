@@ -511,7 +511,7 @@ void testAliases()
 {
   IoDoc d;
   const char *const aliases[] = {"other.client"};
-  must(d.rt.ext<ClientRegistry>().registerClient(kCoredccClient, aliases).status());
+  must(d.rt.ext<ClientRegistry>().add(kCoredccClient, aliases).status());
   const BlockHandle a = d.object("a", 1.0);
   BlockId alias = d.idOf(a);
   alias.client = ClientId::of("other.client");

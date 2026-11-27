@@ -8,11 +8,11 @@ namespace coredcc {
 
 ClientRegistry::ClientRegistry(Runtime *rt) : rt_(*rt)
 {
-  CDCC_CHECK(registerClient(kCoredccClient).ok(), "registering the coredcc client");
+  CDCC_CHECK(add(kCoredccClient).ok(), "registering the coredcc client");
 }
 
-Result<ClientId> ClientRegistry::registerClient(std::string_view name,
-                                                std::span<const char *const> aliases)
+Result<ClientId> ClientRegistry::add(std::string_view name,
+                                     std::span<const char *const> aliases)
 {
   Result<ClientId> id = rt_.registerId<IdDomain::Client>(name);
   if (!id.ok()) {
