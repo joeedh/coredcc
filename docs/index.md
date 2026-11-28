@@ -24,6 +24,8 @@ Each phase has one, pressure-tested before it was implemented, with notes on wha
 - [P5c: the scene evaluator](plans/2026-11-25-p5c-scene-evaluator.md): graphs that drive objects, and an
   incremental evaluation.
 - [The naming pass](plans/2026-11-26-naming-pass.md): consistent names before P6 binds the API for N-API.
+- [P6a: the N-API addon](plans/2026-11-28-p6a-napi-addon.md): one `.node` for Node and NW.js, and the test app on both
+  backends; [risks and research](plans/2026-11-28-p6a-napi-addon-risks.md).
 - [Integration test app](plans/2026-11-19-test-app.md)
 - [Build cache and worktrees](plans/2026-11-23-build-cache-worktrees.md)
 
